@@ -164,6 +164,86 @@
                     </div>
                 </div>
 
+                <!-- Test markazi yuklanganligi statistikasi -->
+                @if($isSearched && !empty($testCenterLoad))
+                    @php
+                        $tcMaxTotal = 0;
+                        foreach ($testCenterLoad as $d) { if ($d['total'] > $tcMaxTotal) $tcMaxTotal = $d['total']; }
+                        // Sanani oraliqdagi umumiy holat
+                        $tcDaysWithLoad = collect($testCenterLoad)->where('total', '>', 0)->count();
+                        $tcEmptyDays = collect($testCenterLoad)->where('total', 0)->where('is_weekend', false)->count();
+                        $tcTotalGroups = collect($testCenterLoad)->sum('group_count');
+                    @endphp
+                    <div class="tc-load-wrap">
+                        <div class="tc-load-header">
+                            <div class="tc-load-title">
+                                <svg style="width:18px;height:18px;color:#1d4ed8;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19V6l12-3v13M9 19a3 3 0 11-6 0 3 3 0 016 0zm12-3a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+                                <span>Test markazi yuklanganligi</span>
+                                <span class="tc-load-sub">— bo'sh kunlarni tanlash uchun</span>
+                            </div>
+                            <div class="tc-load-stats">
+                                <span class="tc-stat-item"><b>{{ count($testCenterLoad) }}</b> kun</span>
+                                <span class="tc-stat-sep">•</span>
+                                <span class="tc-stat-item tc-stat-busy"><b>{{ $tcDaysWithLoad }}</b> band</span>
+                                <span class="tc-stat-sep">•</span>
+                                <span class="tc-stat-item tc-stat-free"><b>{{ $tcEmptyDays }}</b> bo'sh</span>
+                                @if($tcMaxTotal > 0)
+                                    <span class="tc-stat-sep">•</span>
+                                    <span class="tc-stat-item">Eng band kun: <b>{{ $tcMaxTotal }}</b> imtihon</span>
+                                @endif
+                            </div>
+                        </div>
+                        <div class="tc-load-strip" id="tcLoadStrip">
+                            @foreach($testCenterLoad as $d)
+                                @php
+                                    // Yuklanish darajasi: nisbiy (eng band kunga nisbatan)
+                                    $ratio = $tcMaxTotal > 0 ? ($d['total'] / $tcMaxTotal) : 0;
+                                    if ($d['total'] === 0) {
+                                        $bg = $d['is_weekend'] ? '#f1f5f9' : '#f0fdf4';
+                                        $border = $d['is_weekend'] ? '#e2e8f0' : '#bbf7d0';
+                                        $loadClass = 'tc-empty';
+                                    } elseif ($ratio < 0.34) {
+                                        $bg = '#fefce8'; $border = '#fde68a'; $loadClass = 'tc-low';
+                                    } elseif ($ratio < 0.67) {
+                                        $bg = '#ffedd5'; $border = '#fdba74'; $loadClass = 'tc-mid';
+                                    } else {
+                                        $bg = '#fee2e2'; $border = '#fca5a5'; $loadClass = 'tc-high';
+                                    }
+                                    $dCarbon = \Carbon\Carbon::parse($d['date']);
+                                    $tooltip = $dCarbon->format('d.m.Y') . ' (' . $dCarbon->isoFormat('dddd') . ")\n"
+                                        . 'Guruhlar: ' . $d['group_count']
+                                        . ' • OSKI: ' . $d['oski_count']
+                                        . ' • Test: ' . $d['test_count']
+                                        . ($d['student_count'] > 0 ? "\nTalabalar (asosiy YN): " . $d['student_count'] : '');
+                                @endphp
+                                <div class="tc-day {{ $loadClass }} {{ $d['is_weekend'] ? 'tc-weekend' : '' }}"
+                                     style="background:{{ $bg }};border-color:{{ $border }};"
+                                     title="{{ $tooltip }}">
+                                    <div class="tc-day-date">{{ $dCarbon->format('d.m') }}</div>
+                                    <div class="tc-day-wd">{{ $d['weekday'] }}</div>
+                                    @if($d['total'] > 0)
+                                        <div class="tc-day-total">{{ $d['total'] }}</div>
+                                        <div class="tc-day-detail">
+                                            @if($d['oski_count'] > 0)<span class="tc-pill tc-pill-o">O:{{ $d['oski_count'] }}</span>@endif
+                                            @if($d['test_count'] > 0)<span class="tc-pill tc-pill-t">T:{{ $d['test_count'] }}</span>@endif
+                                        </div>
+                                    @else
+                                        <div class="tc-day-total tc-day-empty">—</div>
+                                        <div class="tc-day-detail tc-day-empty-label">{{ $d['is_weekend'] ? 'Dam' : "Bo'sh" }}</div>
+                                    @endif
+                                </div>
+                            @endforeach
+                        </div>
+                        <div class="tc-load-legend">
+                            <span class="tc-leg"><span class="tc-leg-sw" style="background:#f0fdf4;border-color:#bbf7d0;"></span> Bo'sh</span>
+                            <span class="tc-leg"><span class="tc-leg-sw" style="background:#fefce8;border-color:#fde68a;"></span> Past</span>
+                            <span class="tc-leg"><span class="tc-leg-sw" style="background:#ffedd5;border-color:#fdba74;"></span> O'rta</span>
+                            <span class="tc-leg"><span class="tc-leg-sw" style="background:#fee2e2;border-color:#fca5a5;"></span> Yuqori</span>
+                            <span class="tc-leg"><span class="tc-leg-sw" style="background:#f1f5f9;border-color:#e2e8f0;"></span> Dam olish kuni</span>
+                        </div>
+                    </div>
+                @endif
+
                 <!-- Results -->
                 @if($scheduleData->count() > 0)
                 @php
@@ -230,6 +310,7 @@
                                     <th class="sortable" data-col="5" style="width:160px;text-align:center;">Dars boshlanish <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="6" style="width:160px;text-align:center;">Dars tugash <span class="sort-icon"></span></th>
                                     <th style="width:80px;text-align:center;">Urinish</th>
+                                    <th class="sortable" data-col="8" style="width:90px;text-align:center;" title="Ushbu urinishda imtihon topshiradigan talabalar soni">Talaba soni <span class="sort-icon"></span></th>
                                     <th style="width:190px;text-align:center;">OSKI sanasi</th>
                                     <th style="width:190px;text-align:center;">Test sanasi</th>
                                 </tr>
@@ -305,6 +386,14 @@
                                                 <span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;background:{{ $attemptBgs[$itemUrinish] }};color:{{ $attemptColors[$itemUrinish] }};">
                                                     {{ $itemUrinish }}-urinish
                                                 </span>
+                                            </td>
+                                            @php $stuCnt = (int) ($item['student_count'] ?? 0); @endphp
+                                            <td data-sort-value="{{ $stuCnt }}" style="text-align:center;padding:4px 8px;">
+                                                @if($stuCnt > 0)
+                                                    <span style="display:inline-block;min-width:28px;padding:2px 8px;border-radius:8px;font-size:12px;font-weight:600;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;" title="Ushbu urinishda imtihon topshiradigan talabalar soni">{{ $stuCnt }}</span>
+                                                @else
+                                                    <span style="color:#cbd5e1;font-size:12px;">—</span>
+                                                @endif
                                             </td>
                                             <td style="text-align:center;padding:4px 8px;">
                                                 @if(!$showOski)
@@ -538,6 +627,7 @@
                                                         @endphp
                                                         <span style="display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:{{ $stuBadgeBg }};color:{{ $stuBadgeFg }};">{{ $itemUrinish }}-urinish</span>
                                                     </td>
+                                                    <td></td>
                                                     <td style="text-align:center;padding:4px 8px;">
                                                         @if(!$showOski)
                                                             <span style="color:#cbd5e1;font-size:10px;">—</span>
@@ -589,7 +679,7 @@
                                 @endforeach
                             </tbody>
                             <tfoot>
-                                <tr><td colspan="9" style="padding:8px 16px;font-size:12px;color:#94a3b8;text-align:right;">Jami: {{ $scheduleData->flatten(1)->count() }} ta fan</td></tr>
+                                <tr><td colspan="10" style="padding:8px 16px;font-size:12px;color:#94a3b8;text-align:right;">Jami: {{ $scheduleData->flatten(1)->count() }} ta fan</td></tr>
                             </tfoot>
                         </table>
                     </div>
@@ -1029,6 +1119,38 @@
     </script>
 
     <style>
+        /* Test markazi yuklanganligi statistikasi */
+        .tc-load-wrap { padding: 12px 20px; background: #fff; border-bottom: 1px solid #e2e8f0; }
+        .tc-load-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; flex-wrap: wrap; gap: 8px; }
+        .tc-load-title { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 700; color: #0f172a; }
+        .tc-load-title .tc-load-sub { font-weight: 500; color: #64748b; font-size: 12px; }
+        .tc-load-stats { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #475569; flex-wrap: wrap; }
+        .tc-stat-item b { color: #0f172a; font-weight: 700; }
+        .tc-stat-item.tc-stat-busy b { color: #b45309; }
+        .tc-stat-item.tc-stat-free b { color: #15803d; }
+        .tc-stat-sep { color: #cbd5e1; }
+        .tc-load-strip { display: flex; gap: 4px; overflow-x: auto; padding: 4px 2px 8px; scrollbar-width: thin; }
+        .tc-load-strip::-webkit-scrollbar { height: 6px; }
+        .tc-load-strip::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .tc-day { flex: 0 0 auto; min-width: 56px; padding: 6px 4px; border: 1px solid; border-radius: 8px; text-align: center; cursor: default; transition: transform 0.12s, box-shadow 0.12s; }
+        .tc-day:hover { transform: translateY(-1px); box-shadow: 0 2px 4px rgba(0,0,0,0.08); }
+        .tc-day.tc-weekend { opacity: 0.7; }
+        .tc-day-date { font-size: 12px; font-weight: 700; color: #0f172a; line-height: 1.2; }
+        .tc-day-wd { font-size: 9px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; margin-top: 1px; }
+        .tc-day-total { font-size: 17px; font-weight: 800; color: #0f172a; margin-top: 4px; line-height: 1; }
+        .tc-day.tc-high .tc-day-total { color: #b91c1c; }
+        .tc-day.tc-mid .tc-day-total { color: #c2410c; }
+        .tc-day.tc-low .tc-day-total { color: #a16207; }
+        .tc-day-total.tc-day-empty { color: #cbd5e1; font-weight: 600; font-size: 14px; margin-top: 6px; }
+        .tc-day-detail { display: flex; gap: 2px; justify-content: center; margin-top: 3px; flex-wrap: wrap; }
+        .tc-day-detail.tc-day-empty-label { font-size: 9px; font-weight: 600; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; }
+        .tc-pill { display: inline-block; padding: 1px 4px; border-radius: 4px; font-size: 9px; font-weight: 700; line-height: 1.3; }
+        .tc-pill-o { background: rgba(29,78,216,0.12); color: #1d4ed8; }
+        .tc-pill-t { background: rgba(21,128,61,0.12); color: #15803d; }
+        .tc-load-legend { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 6px; font-size: 11px; color: #64748b; }
+        .tc-leg { display: inline-flex; align-items: center; gap: 4px; }
+        .tc-leg-sw { width: 12px; height: 12px; border-radius: 3px; border: 1px solid; display: inline-block; }
+
         .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; overflow: visible; position: relative; z-index: 20; }
         .filter-row { display: flex; gap: 10px; flex-wrap: nowrap; margin-bottom: 10px; align-items: flex-end; overflow: visible; }
         .filter-row:last-child { margin-bottom: 0; }

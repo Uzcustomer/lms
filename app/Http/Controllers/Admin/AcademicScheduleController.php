@@ -3397,8 +3397,10 @@ class AcademicScheduleController extends Controller
                     ->delete();
                 $assignmentsDeleted += (int) $deleted;
 
+                // test_assignment_mode is NOT NULL with default 'manual';
+                // reset to that so a future distribute() can reassign it.
                 $schedule->test_time = null;
-                $schedule->test_assignment_mode = null;
+                $schedule->test_assignment_mode = 'manual';
                 $schedule->save();
 
                 $clearedCount++;

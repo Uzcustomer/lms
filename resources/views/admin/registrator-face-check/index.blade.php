@@ -14,16 +14,6 @@
         </div>
     </div>
 
-    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-5 text-sm text-blue-800">
-        <strong>Tartib:</strong>
-        <ol class="mt-2 ml-4 list-decimal space-y-1 text-blue-700">
-            <li>Talabani ro'yxatdan toping va "Tekshirish" tugmasini bosing</li>
-            <li>Webcam'dan rasm oling — AI 85% qattiq solishtiruvi (HEMIS + Mark rasmi) o'tkaziladi</li>
-            <li>O'tsa: descriptor avtomatik Moodle'ga yuboriladi va test markazi simulyatsiyasi ishga tushadi</li>
-            <li>O'tmasa: rasm va descriptor saqlanmaydi — sifatliroq rasm olishni so'raydi</li>
-        </ol>
-    </div>
-
     <form method="GET" class="bg-white rounded-lg border p-4 mb-4 flex gap-3 items-end">
         <div class="flex-1">
             <label class="block text-xs text-gray-500 mb-1">Talaba (ism, ID raqam yoki passport)</label>

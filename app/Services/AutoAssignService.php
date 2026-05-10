@@ -58,8 +58,11 @@ class AutoAssignService
 
         $capacity = ExamCapacityService::getSettingsForDate($dateStr);
         $duration = max(1, (int) $capacity['test_duration_minutes']);
-        $buffer = max(0, (int) config('services.moodle.computer_buffer_minutes', 5));
-        $slotLength = $duration + $buffer;
+        // Slot spacing equals the test duration only — no extra buffer.
+        // Group settings carry "Davomiyligi" as the proctor-facing
+        // interval between groups; if a back-to-back gap is needed for
+        // computer cleanup, raise test_duration_minutes itself.
+        $slotLength = $duration;
 
         $workStart = Carbon::parse($dateStr . ' ' . $capacity['work_hours_start']);
         $workEnd = Carbon::parse($dateStr . ' ' . $capacity['work_hours_end']);

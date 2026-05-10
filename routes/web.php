@@ -489,6 +489,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])->name('notifications.mark-all-read');
         Route::get('/notifications-unread-count', [NotificationController::class, 'getUnreadCount'])->name('notifications.unread-count');
 
+        // Registrator ofisi: webcam orqali face-ID precheck (Moodle face-api modeli bilan)
+        Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|registrator_ofisi'])
+            ->prefix('registrator/face-check')
+            ->name('registrator.face-check.')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'index'])->name('index');
+                Route::get('/{studentIdNumber}', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'show'])->name('show');
+                Route::post('/{studentIdNumber}/verify', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'verify'])->name('verify');
+                Route::post('/{studentIdNumber}/precheck', [\App\Http\Controllers\Admin\RegistratorFaceCheckController::class, 'precheck'])->name('precheck');
+            });
+
         // Face ID boshqaruvi
         Route::prefix('face-id')->name('face-id.')->group(function () {
             Route::get('/settings', [FaceIdAdminController::class, 'settings'])->name('settings');

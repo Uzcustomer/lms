@@ -42,6 +42,23 @@ class ExamDateRoleService
     }
 
     /**
+     * Sahifani faqat ko'rish (read-only) huquqiga ega bo'lgan rollar.
+     * Ushbu rollarning barchasi barcha kurslarni ko'ra oladi.
+     * Sana qo'yish huquqi alohida (canEditAttempt) tekshiriladi.
+     *
+     * @return array<int, string>
+     */
+    public static function viewerRoles(): array
+    {
+        return [
+            ProjectRole::REGISTRAR_OFFICE->value,
+            ProjectRole::ACADEMIC_DEPARTMENT->value,
+            ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value,
+            ProjectRole::DEAN->value,
+        ];
+    }
+
+    /**
      * Ushbu sozlamalardan qat'i nazar har doim huquqqa ega bo'lgan admin rollari.
      *
      * @return array<int, string>
@@ -194,5 +211,75 @@ class ExamDateRoleService
         }
         $mapping = self::getMapping();
         return in_array($role, $mapping[(string) $levelCode] ?? [], true);
+    }
+
+    /**
+     * YN kunini belgilash sahifasini ko'rish huquqi.
+     * Admin, viewerRoles yoki sozlamalarda biror level uchun ruxsatli rol — ko'ra oladi.
+     */
+    public static function canViewPage(?string $role): bool
+    {
+        if (!$role) {
+            return false;
+        }
+        if (in_array($role, self::adminRoles(), true)) {
+            return true;
+        }
+        if (in_array($role, self::viewerRoles(), true)) {
+            return true;
+        }
+        return self::roleHasAnyAccess($role);
+    }
+
+    /**
+     * 2-urinish va undan keyingi (resit) sanalarini belgilash huquqi.
+     * Admin va registrator_ofisi qayta urinish sanalarini qo'yadi; boshqa rollar — yo'q.
+     */
+    public static function canEditResit(?string $role): bool
+    {
+        if (!$role) {
+            return false;
+        }
+        if (in_array($role, self::adminRoles(), true)) {
+            return true;
+        }
+        return $role === ProjectRole::REGISTRAR_OFFICE->value;
+    }
+
+    /**
+     * Berilgan urinish va kurs darajasi uchun rol sana qo'yishga ruxsatga egami.
+     *  - 1-urinish: sozlamalardagi mapping (canEditLevel) bo'yicha.
+     *  - 2+ urinish: faqat registrator_ofisi (yoki admin).
+     */
+    public static function canEditAttempt(?string $role, ?string $levelCode, int $attempt): bool
+    {
+        if (!$role) {
+            return false;
+        }
+        if (in_array($role, self::adminRoles(), true)) {
+            return true;
+        }
+        if ($attempt >= 2) {
+            return self::canEditResit($role);
+        }
+        return self::canEditLevel($role, $levelCode);
+    }
+
+    /**
+     * Foydalanuvchi biror sana belgilashga umuman ruxsatga egami (har qanday urinish/kurs).
+     * Store/saqlash endpoint'lariga top-level kirish uchun ishlatiladi.
+     */
+    public static function canEditAnything(?string $role): bool
+    {
+        if (!$role) {
+            return false;
+        }
+        if (in_array($role, self::adminRoles(), true)) {
+            return true;
+        }
+        if (self::canEditResit($role)) {
+            return true;
+        }
+        return self::roleHasAnyAccess($role);
     }
 }

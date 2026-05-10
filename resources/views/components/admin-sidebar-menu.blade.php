@@ -52,9 +52,9 @@
     }
     $activeRoleLabel = $roleLabels[$activeRole] ?? $activeRole;
 
-    // YN sanasini belgilash huquqi (sozlamalardan)
-    $canAccessExamDateSetting = in_array($activeRole, $adminRoles, true)
-        || \App\Services\ExamDateRoleService::roleHasAnyAccess($activeRole);
+    // YN sanasini belgilash sahifasini ko'rish huquqi:
+    // admin, registrator/dekanat/o'quv bo'limi yoki sozlamalarda biror level uchun ruxsatli rol.
+    $canAccessExamDateSetting = \App\Services\ExamDateRoleService::canViewPage($activeRole);
 
     // Foydalanuvchi rasmi
     $userAvatar = null;

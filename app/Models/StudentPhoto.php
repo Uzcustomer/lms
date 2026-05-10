@@ -10,6 +10,9 @@ class StudentPhoto extends Model
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
 
+    public const SOURCE_TEACHER_UPLOAD = 'teacher_upload';
+    public const SOURCE_REGISTRATOR_WEBCAM = 'registrator_webcam';
+
     protected $fillable = [
         'student_id_number',
         'full_name',
@@ -18,6 +21,7 @@ class StudentPhoto extends Model
         'uploaded_by',
         'uploaded_by_teacher_id',
         'photo_path',
+        'source',
         'status',
         'reviewed_by_name',
         'reviewed_at',
@@ -25,6 +29,9 @@ class StudentPhoto extends Model
         'similarity_score',
         'similarity_status',
         'similarity_checked_at',
+        'similarity_hemis',
+        'similarity_mark',
+        'captured_by_user_id',
         'quality_score',
         'quality_passed',
         'quality_issues',
@@ -52,6 +59,8 @@ class StudentPhoto extends Model
         'quality_checked_at' => 'datetime',
         'face_embedding' => 'array',
         'embedding_extracted_at' => 'datetime',
+        'similarity_hemis' => 'decimal:2',
+        'similarity_mark' => 'decimal:2',
         'moodle_synced_at' => 'datetime',
         'moodle_response' => 'array',
         'descriptor_confirmed_at' => 'datetime',

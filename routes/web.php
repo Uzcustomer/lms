@@ -658,18 +658,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/test-markazi-times', [ReportController::class, 'testMarkaziTimes'])->name('reports.test-markazi-times');
         Route::get('/reports/test-markazi-times/data', [ReportController::class, 'testMarkaziTimesData'])->name('reports.test-markazi-times.data');
 
-        // Guruh test jadvali — tyutor / dekan / registrator_ofisi uchun.
-        // Role-aware scoping va Excel eksport kontroller ichida amalga oshiriladi.
-        // POST autoTime kontroller ichida qo'shimcha cheklov bilan: faqat
-        // admin va registrator_ofisi vaqt yoza oladi.
+        // Guruh test jadvali — tyutor / dekan / registrator_ofisi uchun ko'rish.
+        // Vaqt belgilash bu sahifada YO'Q — uni faqat test_markazi YN jadval
+        // sahifasida bajaradi.
         Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|tyutor|dekan|registrator_ofisi'])
             ->group(function () {
                 Route::get('/group-test-schedule', [\App\Http\Controllers\Admin\GroupTestScheduleController::class, 'index'])
                     ->name('group-test-schedule.index');
                 Route::get('/group-test-schedule/export', [\App\Http\Controllers\Admin\GroupTestScheduleController::class, 'export'])
                     ->name('group-test-schedule.export');
-                Route::post('/group-test-schedule/auto-time', [\App\Http\Controllers\Admin\GroupTestScheduleController::class, 'autoTime'])
-                    ->name('group-test-schedule.auto-time');
             });
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
@@ -814,6 +811,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
             Route::get('/test-center/day-override', [AcademicScheduleController::class, 'getDayOverride'])->name('test-center.day-override.get');
             Route::post('/test-center/day-override', [AcademicScheduleController::class, 'saveDayOverride'])->name('test-center.day-override.save');
+            // Test markazi: vaqtsiz yozuvlarga bulk avto-vaqt belgilash.
+            // Kontroller ichida active_role test_markazi ekanligi tekshiriladi.
+            Route::post('/test-center/auto-time-all', [AcademicScheduleController::class, 'autoTimeAll'])->name('test-center.auto-time-all');
             Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');
             Route::get('/bandlik-kursatkichi/{date}', [AcademicScheduleController::class, 'bandlikKursatkichiShow'])->name('bandlik-kursatkichi.show')->where('date', '\d{4}-\d{2}-\d{2}');
         });
@@ -1388,6 +1388,9 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
             Route::get('/test-center/day-override', [AcademicScheduleController::class, 'getDayOverride'])->name('test-center.day-override.get');
             Route::post('/test-center/day-override', [AcademicScheduleController::class, 'saveDayOverride'])->name('test-center.day-override.save');
+            // Test markazi: vaqtsiz yozuvlarga bulk avto-vaqt belgilash.
+            // Kontroller ichida active_role test_markazi ekanligi tekshiriladi.
+            Route::post('/test-center/auto-time-all', [AcademicScheduleController::class, 'autoTimeAll'])->name('test-center.auto-time-all');
             Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');
             Route::get('/bandlik-kursatkichi/{date}', [AcademicScheduleController::class, 'bandlikKursatkichiShow'])->name('bandlik-kursatkichi.show')->where('date', '\d{4}-\d{2}-\d{2}');
         });

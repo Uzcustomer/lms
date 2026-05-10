@@ -129,15 +129,23 @@
                     $tcUser = auth()->user() ?? auth('teacher')->user();
                     $tcActiveRole = $tcUser ? session('active_role', $tcUser->getRoleNames()->first()) : null;
                     $tcIsTestMarkazi = $tcActiveRole === \App\Enums\ProjectRole::TEST_CENTER->value;
-                    // "Vaqtsiz" hisobi — joriy ekrandagi sanalar oralig'idagi yozuvlar
+                    // Joriy ekrandagi sanalar oralig'idagi yozuvlar:
+                    //   missing  = sana bor, vaqt yo'q (avto-vaqt uchun)
+                    //   withTime = sana bor, vaqt bor (tozalash uchun)
                     $tcMissingTimeCount = 0;
+                    $tcWithTimeCount = 0;
                     if (!empty($scheduleData)) {
                         foreach ($scheduleData as $items) {
                             foreach ($items as $it) {
                                 $ynType = strtolower($it['yn_type'] ?? '');
                                 $isTestUrinish = $ynType === 'test' && (int) ($it['attempt'] ?? 1) === 1;
-                                if ($isTestUrinish && !empty($it['test_date']) && empty($it['test_time']) && empty($it['test_na'])) {
+                                if (!$isTestUrinish || empty($it['test_date']) || !empty($it['test_na'])) {
+                                    continue;
+                                }
+                                if (empty($it['test_time'])) {
                                     $tcMissingTimeCount++;
+                                } else {
+                                    $tcWithTimeCount++;
                                 }
                             }
                         }
@@ -160,24 +168,51 @@
                     </div>
                 @endif
 
-                @if($tcIsTestMarkazi && $tcMissingTimeCount > 0)
-                    <form method="POST" action="{{ route($routePrefix . '.academic-schedule.test-center.auto-time-all') }}"
-                          style="margin:0 16px 12px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;"
-                          onsubmit="return confirm('{{ $tcMissingTimeCount }} ta vaqtsiz yozuvga avtomatik vaqt belgilansinmi? Sozlamalardagi ish vaqti boshlanishidan boshlab guruh slot\'larga taqsimlanadi.');">
-                        @csrf
-                        <input type="hidden" name="date_from" value="{{ $dateFrom ?? '' }}" />
-                        <input type="hidden" name="date_to"   value="{{ $dateTo ?? '' }}" />
+                @if($tcIsTestMarkazi && ($tcMissingTimeCount > 0 || $tcWithTimeCount > 0))
+                    <div style="margin:0 16px 12px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
                         <svg style="width:18px;height:18px;color:#d97706;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                         </svg>
                         <span style="color:#92400e;font-size:13px;">
-                            Joriy oraliqda <strong>{{ $tcMissingTimeCount }}</strong> ta yozuvda vaqt belgilanmagan.
+                            Joriy oraliqda
+                            @if($tcMissingTimeCount > 0)
+                                <strong>{{ $tcMissingTimeCount }}</strong> ta vaqtsiz
+                            @endif
+                            @if($tcMissingTimeCount > 0 && $tcWithTimeCount > 0) , @endif
+                            @if($tcWithTimeCount > 0)
+                                <strong>{{ $tcWithTimeCount }}</strong> ta vaqt belgilangan
+                            @endif
+                            yozuv bor.
                         </span>
-                        <button type="submit"
-                                style="margin-left:auto;height:34px;background:#d97706;color:#fff;border:0;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;">
-                            Hammasiga avto-vaqt belgilash
-                        </button>
-                    </form>
+                        <div style="margin-left:auto;display:flex;gap:8px;">
+                            @if($tcWithTimeCount > 0)
+                                <form method="POST" action="{{ route($routePrefix . '.academic-schedule.test-center.clear-times') }}"
+                                      style="display:inline;"
+                                      onsubmit="return confirm('{{ $tcWithTimeCount }} ta yozuvdagi vaqtlar va talaba slotlari tozalansinmi? Bu amalni qaytarib bo\'lmaydi — keyin qayta avto-vaqt belgilashingiz kerak. Faqat bugundan keyingi sanalar uchun ishlaydi (o\'tgan sanalar tarix sifatida saqlanadi).');">
+                                    @csrf
+                                    <input type="hidden" name="date_from" value="{{ $dateFrom ?? '' }}" />
+                                    <input type="hidden" name="date_to"   value="{{ $dateTo ?? '' }}" />
+                                    <button type="submit"
+                                            style="height:34px;background:#fff;color:#b91c1c;border:1px solid #fecaca;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;">
+                                        Vaqtlarni tozalash
+                                    </button>
+                                </form>
+                            @endif
+                            @if($tcMissingTimeCount > 0)
+                                <form method="POST" action="{{ route($routePrefix . '.academic-schedule.test-center.auto-time-all') }}"
+                                      style="display:inline;"
+                                      onsubmit="return confirm('{{ $tcMissingTimeCount }} ta vaqtsiz yozuvga avtomatik vaqt belgilansinmi? Sozlamalardagi ish vaqti boshlanishidan boshlab guruh slot\'larga taqsimlanadi.');">
+                                    @csrf
+                                    <input type="hidden" name="date_from" value="{{ $dateFrom ?? '' }}" />
+                                    <input type="hidden" name="date_to"   value="{{ $dateTo ?? '' }}" />
+                                    <button type="submit"
+                                            style="height:34px;background:#d97706;color:#fff;border:0;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;">
+                                        Hammasiga avto-vaqt belgilash
+                                    </button>
+                                </form>
+                            @endif
+                        </div>
+                    </div>
                 @endif
 
                 @if(!$tcReadOnly)

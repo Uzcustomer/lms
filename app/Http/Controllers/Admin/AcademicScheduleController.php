@@ -351,8 +351,53 @@ class AcademicScheduleController extends Controller
         }
         $today = now()->toDateString();
 
-        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today) {
-            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today) {
+        // Birinchi pass: har bir talabaning joriy semestrdagi qarz fanlari ro'yxatini
+        // butun scheduleData bo'ylab yig'amiz. Aks holda har row faqat o'z fanini
+        // hisoblaydi va talabaning bir nechta fandan qarzdorligi to'g'ri ko'rsatilmaydi.
+        // currentDebtsByStudent[hemis_id] = [subject_id|semester_code => ['subject_name', 'semester_name']]
+        $currentDebtsByStudent = [];
+        foreach ($scheduleData as $itemsBatch) {
+            foreach ($itemsBatch as $itm) {
+                $itGHid = $itm['group']->group_hemis_id ?? null;
+                $itSubj = $itm['subject']->subject_id ?? null;
+                $itSem = $itm['subject']->semester_code ?? null;
+                if (!$itGHid || !$itSubj || !$itSem) continue;
+                $itStatusKey = $itGHid . '|' . $itSubj . '|' . $itSem;
+                $itStatusByStudent = $studentStatus[$itStatusKey] ?? [];
+                $itGroupKey = $itGHid . '|' . $itSubj . '|' . $itSem;
+                $itOskiMap = $attempt1OskiByKey[$itGroupKey] ?? [];
+                $itTestMap = $attempt1TestByKey[$itGroupKey] ?? [];
+                $itOskiDate = $itm['oski_date'] ?? null;
+                $itTestDate = $itm['test_date'] ?? null;
+                $itLessonEnd = $itm['lesson_end_date'] ?? null;
+                $itEffOski = $itOskiDate ?: $itLessonEnd;
+                $itEffTest = $itTestDate ?: $itLessonEnd;
+                $itOskiPassed = $itEffOski && $itEffOski < $today && !empty($itOskiMap);
+                $itTestPassed = $itEffTest && $itEffTest < $today && !empty($itTestMap);
+                $itStuList = $studentsByGroup->get($itGHid, collect());
+                foreach ($itStuList as $st) {
+                    $stat = $itStatusByStudent[$st->hemis_id] ?? ['failed1' => false];
+                    $missedO = $itOskiPassed && empty($itOskiMap[$st->hemis_id]);
+                    $missedT = $itTestPassed && empty($itTestMap[$st->hemis_id]);
+                    $explicitK = $st->hemis_id . '|' . $itSubj . '|' . $itSem;
+                    $hasA2 = !empty($explicitAttemptByStudent[$explicitK]['attempt2']);
+                    $eff1 = $stat['failed1'] || $missedO || $missedT || $hasA2;
+                    if ($eff1) {
+                        $debtKey = $itSubj . '|' . $itSem;
+                        if (!isset($currentDebtsByStudent[$st->hemis_id][$debtKey])) {
+                            $currentDebtsByStudent[$st->hemis_id][$debtKey] = [
+                                'subject_name' => $itm['subject']->subject_name ?? '',
+                                'semester_name' => $itm['subject']->semester_name ?? '',
+                                'semester_code' => (int) $itSem,
+                            ];
+                        }
+                    }
+                }
+            }
+        }
+
+        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent) {
+            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent) {
                 $gHid = $item['group']->group_hemis_id;
                 $subjectId = $item['subject']->subject_id ?? null;
                 $semCode = $item['subject']->semester_code ?? null;
@@ -404,6 +449,9 @@ class AcademicScheduleController extends Controller
                     //   - student_grades.attempt=2 yozuvi mavjud (qo'lda 12a ga o'tkazilgan)
                     $effectiveFailed1 = $stat['failed1'] || $didNotAttend || $hasAttempt2;
                     $effectiveFailed2 = $stat['failed2'] || $hasAttempt3;
+                    // Joriy semestrdagi BARCHA qarz fanlari (barcha rowlar bo'yicha)
+                    $currentDebts = array_values($currentDebtsByStudent[$stu->hemis_id] ?? []);
+                    usort($currentDebts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
                     $rows[] = [
                         'hemis_id' => $stu->hemis_id,
                         'student_id_number' => $stu->student_id_number ?? null,
@@ -424,6 +472,7 @@ class AcademicScheduleController extends Controller
                         'is_pullik' => $stat['pullik'],
                         'is_held_back' => $stat['held_back'] ?? false,
                         'past_debts' => $pastDebts,
+                        'current_semester_debts' => $currentDebts,
                     ];
                 }
                 $item['students'] = $rows;
@@ -3675,15 +3724,16 @@ class AcademicScheduleController extends Controller
                             $stuTest = $stu['test_resit2_date'] ?? '';
                         }
 
-                        // Qarz hisobi: o'tgan semestrlardagi qarzlar + joriy fan failed_attempt1
+                        // Qarz hisobi: o'tgan semestrlardagi qarzlar + joriy semestr BARCHA qarzlar
                         $stuPastDebts = $stu['past_debts'] ?? [];
-                        $stuDebtCount = count($stuPastDebts) + (!empty($stu['failed_attempt1']) ? 1 : 0);
+                        $stuCurrentDebts = $stu['current_semester_debts'] ?? [];
+                        $stuDebtCount = count($stuPastDebts) + count($stuCurrentDebts);
                         $stuDebtParts = [];
                         foreach ($stuPastDebts as $d) {
                             $stuDebtParts[] = ($d['subject_name'] ?? '') . ' (' . ($d['semester_name'] ?? '') . ')';
                         }
-                        if (!empty($stu['failed_attempt1'])) {
-                            $stuDebtParts[] = ($item['subject']->subject_name ?? '') . ' (' . ($item['subject']->semester_name ?? 'joriy semestr') . ') — joriy';
+                        foreach ($stuCurrentDebts as $d) {
+                            $stuDebtParts[] = ($d['subject_name'] ?? '') . ' (' . ($d['semester_name'] ?? '') . ') — joriy';
                         }
                         $stuDebtNote = implode('; ', $stuDebtParts);
 

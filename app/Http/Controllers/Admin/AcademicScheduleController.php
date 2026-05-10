@@ -23,6 +23,7 @@ use App\Models\DocumentVerification;
 use App\Models\AbsenceExcuseMakeup;
 use App\Models\YnStudentGrade;
 use App\Models\StudentNotification;
+use App\Services\AutoAssignService;
 use App\Services\ExamCapacityService;
 use App\Services\ExamDateRoleService;
 use App\Services\TelegramService;
@@ -3241,6 +3242,100 @@ class AcademicScheduleController extends Controller
             'cleared_count' => $clearedCount,
             'per_day' => $perDay,
         ]);
+    }
+
+    /**
+     * Bulk: re-run AutoAssignService::distribute() for every exam_schedules
+     * row in the requested date range that has a test_date but no test_time
+     * yet. Lets the test centre fix records whose AutoDistributeOnDateSetJob
+     * never ran (queue outage, dates set before that feature shipped, etc.)
+     * without clicking the per-row 🎲 button on every line.
+     *
+     * Restricted to the test_markazi role only — registrar/dekan are
+     * read-only on this page and admins still have the per-row 🎲.
+     */
+    public function autoTimeAll(Request $request, AutoAssignService $service)
+    {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
+
+        $user = auth()->user() ?? auth('teacher')->user();
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        if ($activeRole !== \App\Enums\ProjectRole::TEST_CENTER->value) {
+            return back()->with('error', "Avto-vaqt belgilash faqat Test markazi roli uchun ochiq.");
+        }
+
+        $today = now()->format('Y-m-d');
+        $dateFrom = $request->input('date_from', $today);
+        $dateTo   = $request->input('date_to', $today);
+
+        try {
+            $from = \Carbon\Carbon::parse($dateFrom)->format('Y-m-d');
+            $to   = \Carbon\Carbon::parse($dateTo)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return back()->with('error', "Sana noto'g'ri formatda.");
+        }
+        if ($to < $from) {
+            $to = $from;
+        }
+
+        $schedules = ExamSchedule::query()
+            ->whereNotNull('test_date')
+            ->whereNull('test_time')
+            ->where(function ($q) {
+                $q->where('test_na', false)->orWhereNull('test_na');
+            })
+            ->whereBetween('test_date', [$from, $to])
+            ->get();
+
+        if ($schedules->isEmpty()) {
+            return back()->with('warning', "Tanlangan oraliqda vaqt belgilashga muhtoj yozuv topilmadi.");
+        }
+
+        $okCount = 0;
+        $failures = [];
+
+        foreach ($schedules as $schedule) {
+            $dateStr = $schedule->test_date instanceof \Carbon\Carbon
+                ? $schedule->test_date->format('Y-m-d')
+                : (string) $schedule->test_date;
+
+            try {
+                $capacity = ExamCapacityService::getSettingsForDate($dateStr);
+                $startTime = $capacity['work_hours_start'] ?? '09:00';
+                $result = $service->distribute($schedule, 'test', $startTime);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('autoTimeAll: distribute threw', [
+                    'schedule_id' => $schedule->id,
+                    'message'     => $e->getMessage(),
+                ]);
+                $result = ['ok' => false, 'reason' => $e->getMessage()];
+            }
+
+            if (!empty($result['ok'])) {
+                $okCount++;
+            } else {
+                $failures[] = sprintf(
+                    '#%d (%s): %s',
+                    $schedule->id,
+                    $schedule->subject_name ?: $schedule->subject_id,
+                    $result['reason'] ?? "noma'lum sabab"
+                );
+            }
+        }
+
+        $msg = "Avto-vaqt belgilandi: {$okCount} ta.";
+        if (!empty($failures)) {
+            $shown = array_slice($failures, 0, 5);
+            $more = count($failures) - count($shown);
+            $msg .= ' Bajarilmadi: ' . count($failures) . ' ta — ' . implode('; ', $shown);
+            if ($more > 0) {
+                $msg .= " (yana {$more} ta)";
+            }
+        }
+
+        return back()->with($okCount > 0 ? 'success' : 'error', $msg);
     }
 
     public function saveTestTime(Request $request)

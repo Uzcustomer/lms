@@ -126,7 +126,60 @@
                 @php
                     $tcDefaults = \App\Services\ExamCapacityService::getSettings();
                     $tcReadOnly = $readOnly ?? false;
+                    $tcUser = auth()->user() ?? auth('teacher')->user();
+                    $tcActiveRole = $tcUser ? session('active_role', $tcUser->getRoleNames()->first()) : null;
+                    $tcIsTestMarkazi = $tcActiveRole === \App\Enums\ProjectRole::TEST_CENTER->value;
+                    // "Vaqtsiz" hisobi — joriy ekrandagi sanalar oralig'idagi yozuvlar
+                    $tcMissingTimeCount = 0;
+                    if (!empty($scheduleData)) {
+                        foreach ($scheduleData as $items) {
+                            foreach ($items as $it) {
+                                $ynType = strtolower($it['yn_type'] ?? '');
+                                $isTestUrinish = $ynType === 'test' && (int) ($it['attempt'] ?? 1) === 1;
+                                if ($isTestUrinish && !empty($it['test_date']) && empty($it['test_time']) && empty($it['test_na'])) {
+                                    $tcMissingTimeCount++;
+                                }
+                            }
+                        }
+                    }
                 @endphp
+
+                @if(session('success'))
+                    <div style="margin:0 16px 12px;padding:10px 14px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;color:#065f46;font-size:13px;">
+                        {{ session('success') }}
+                    </div>
+                @endif
+                @if(session('warning'))
+                    <div style="margin:0 16px 12px;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;color:#92400e;font-size:13px;">
+                        {{ session('warning') }}
+                    </div>
+                @endif
+                @if(session('error'))
+                    <div style="margin:0 16px 12px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:13px;">
+                        {{ session('error') }}
+                    </div>
+                @endif
+
+                @if($tcIsTestMarkazi && $tcMissingTimeCount > 0)
+                    <form method="POST" action="{{ route($routePrefix . '.academic-schedule.test-center.auto-time-all') }}"
+                          style="margin:0 16px 12px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;"
+                          onsubmit="return confirm('{{ $tcMissingTimeCount }} ta vaqtsiz yozuvga avtomatik vaqt belgilansinmi? Sozlamalardagi ish vaqti boshlanishidan boshlab guruh slot\'larga taqsimlanadi.');">
+                        @csrf
+                        <input type="hidden" name="date_from" value="{{ $dateFrom ?? '' }}" />
+                        <input type="hidden" name="date_to"   value="{{ $dateTo ?? '' }}" />
+                        <svg style="width:18px;height:18px;color:#d97706;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                        </svg>
+                        <span style="color:#92400e;font-size:13px;">
+                            Joriy oraliqda <strong>{{ $tcMissingTimeCount }}</strong> ta yozuvda vaqt belgilanmagan.
+                        </span>
+                        <button type="submit"
+                                style="margin-left:auto;height:34px;background:#d97706;color:#fff;border:0;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;">
+                            Hammasiga avto-vaqt belgilash
+                        </button>
+                    </form>
+                @endif
+
                 @if(!$tcReadOnly)
                 <!-- Inline day override panel -->
                 <div id="day-override-panel" data-defaults='@json($tcDefaults)' style="margin:0 16px 14px 16px;background:linear-gradient(135deg,#f0fdfa,#ccfbf1);border:1px solid #5eead4;border-radius:12px;padding:12px 14px;">

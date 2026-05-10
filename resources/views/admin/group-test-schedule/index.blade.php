@@ -5,29 +5,9 @@
         </h2>
     </x-slot>
 
-    @php
-        $missingTimeCount = $rows->where('is_first_attempt', true)->whereNull('test_time')->count();
-    @endphp
-
     <div class="py-4">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-
-                @if(session('success'))
-                    <div style="margin:14px 18px 0;padding:10px 14px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;color:#065f46;font-size:13px;">
-                        {{ session('success') }}
-                    </div>
-                @endif
-                @if(session('warning'))
-                    <div style="margin:14px 18px 0;padding:10px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;color:#92400e;font-size:13px;">
-                        {{ session('warning') }}
-                    </div>
-                @endif
-                @if(session('error'))
-                    <div style="margin:14px 18px 0;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:8px;color:#991b1b;font-size:13px;">
-                        {{ session('error') }}
-                    </div>
-                @endif
 
                 <div style="padding:14px 18px;border-bottom:1px solid #e5e7eb;background:#f8fafc;display:flex;flex-wrap:wrap;align-items:center;gap:8px;">
                     <span style="background:#1a3268;color:#fff;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;">
@@ -36,11 +16,6 @@
                     <span style="color:#64748b;font-size:13px;">
                         Qaysi guruh qachon testga kirishi haqidagi ma'lumot.
                     </span>
-                    @if($canAutoTime && $missingTimeCount > 0)
-                        <span style="margin-left:auto;background:#fef3c7;color:#92400e;font-size:11px;font-weight:600;padding:3px 8px;border-radius:999px;">
-                            Vaqtsiz: {{ $missingTimeCount }} ta
-                        </span>
-                    @endif
                 </div>
 
                 <form method="GET" action="{{ route('admin.group-test-schedule.index') }}"
@@ -73,23 +48,6 @@
                     </div>
                 </form>
 
-                @if($canAutoTime && $missingTimeCount > 0)
-                    <form method="POST" action="{{ route('admin.group-test-schedule.auto-time') }}"
-                          style="padding:12px 18px;border-bottom:1px solid #e5e7eb;background:#fffbeb;display:flex;align-items:center;gap:10px;"
-                          onsubmit="return confirm('{{ $missingTimeCount }} ta vaqtsiz yozuvga avtomatik vaqt belgilansinmi? Sozlamalardagi ish vaqti boshlanishi (default 09:00) dan boshlab guruh slot\'larga taqsimlanadi.');">
-                        @csrf
-                        <input type="hidden" name="date_from" value="{{ $dateFrom }}" />
-                        <input type="hidden" name="date_to" value="{{ $dateTo }}" />
-                        <span style="color:#92400e;font-size:13px;">
-                            Joriy oraliqdagi <strong>{{ $missingTimeCount }}</strong> ta yozuvda vaqt belgilanmagan.
-                        </span>
-                        <button type="submit"
-                                style="margin-left:auto;height:34px;background:#d97706;color:#fff;border:0;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;">
-                            Hammasiga avto-vaqt belgilash
-                        </button>
-                    </form>
-                @endif
-
                 <div style="overflow-x:auto;">
                     <table style="width:100%;border-collapse:collapse;font-size:13px;">
                         <thead>
@@ -114,23 +72,7 @@
                                         {{ \Carbon\Carbon::parse($r->test_date)->format('d.m.Y') }}
                                     </td>
                                     <td style="padding:9px 12px;color:#0f172a;white-space:nowrap;">
-                                        @if($r->test_time)
-                                            {{ $r->test_time }}
-                                        @elseif($canAutoTime && $r->is_first_attempt)
-                                            <form method="POST" action="{{ route('admin.group-test-schedule.auto-time') }}" style="display:inline;"
-                                                  onsubmit="return confirm('Bu guruh uchun avto-vaqt belgilansinmi?');">
-                                                @csrf
-                                                <input type="hidden" name="date_from" value="{{ $dateFrom }}" />
-                                                <input type="hidden" name="date_to" value="{{ $dateTo }}" />
-                                                <input type="hidden" name="exam_schedule_id" value="{{ $r->exam_schedule_id }}" />
-                                                <button type="submit"
-                                                        style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:600;cursor:pointer;">
-                                                    Avto-vaqt
-                                                </button>
-                                            </form>
-                                        @else
-                                            <span style="color:#94a3b8;">—</span>
-                                        @endif
+                                        {{ $r->test_time ?: '—' }}
                                     </td>
                                     <td style="padding:9px 12px;">
                                         <span style="font-size:11px;padding:2px 7px;border-radius:999px;

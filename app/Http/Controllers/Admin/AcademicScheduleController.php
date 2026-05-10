@@ -3338,6 +3338,82 @@ class AcademicScheduleController extends Controller
         return back()->with($okCount > 0 ? 'success' : 'error', $msg);
     }
 
+    /**
+     * Bulk: clear test_time on every exam_schedules row in the requested
+     * date range and wipe their pending ComputerAssignments so a fresh
+     * autoTimeAll() pass can re-distribute slots from scratch.
+     *
+     * Past dates are skipped — they represent history, not future plans.
+     * Restricted to test_markazi only.
+     */
+    public function clearTimes(Request $request)
+    {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
+
+        $user = auth()->user() ?? auth('teacher')->user();
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        if ($activeRole !== \App\Enums\ProjectRole::TEST_CENTER->value) {
+            return back()->with('error', "Vaqtlarni tozalash faqat Test markazi roli uchun ochiq.");
+        }
+
+        $today = now()->format('Y-m-d');
+        $dateFrom = $request->input('date_from', $today);
+        $dateTo   = $request->input('date_to', $today);
+
+        try {
+            $from = \Carbon\Carbon::parse($dateFrom)->format('Y-m-d');
+            $to   = \Carbon\Carbon::parse($dateTo)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return back()->with('error', "Sana noto'g'ri formatda.");
+        }
+        if ($to < $from) {
+            $to = $from;
+        }
+        // Don't rewrite history.
+        if ($from < $today) {
+            $from = $today;
+        }
+
+        $schedules = ExamSchedule::query()
+            ->whereNotNull('test_date')
+            ->whereNotNull('test_time')
+            ->whereBetween('test_date', [$from, $to])
+            ->get();
+
+        if ($schedules->isEmpty()) {
+            return back()->with('warning', "Tanlangan oraliqda tozalashga arziydigan vaqt topilmadi.");
+        }
+
+        $clearedCount = 0;
+        $assignmentsDeleted = 0;
+
+        DB::transaction(function () use ($schedules, &$clearedCount, &$assignmentsDeleted) {
+            foreach ($schedules as $schedule) {
+                $deleted = \App\Models\ComputerAssignment::where('exam_schedule_id', $schedule->id)
+                    ->where('yn_type', 'test')
+                    ->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+                    ->delete();
+                $assignmentsDeleted += (int) $deleted;
+
+                $schedule->test_time = null;
+                $schedule->test_assignment_mode = null;
+                $schedule->save();
+
+                $clearedCount++;
+            }
+        });
+
+        $msg = "Vaqt tozalandi: {$clearedCount} ta yozuv";
+        if ($assignmentsDeleted > 0) {
+            $msg .= " (talaba slotlari: {$assignmentsDeleted} ta)";
+        }
+        $msg .= ". Endi qayta avto-vaqt belgilashingiz mumkin.";
+
+        return back()->with('success', $msg);
+    }
+
     public function saveTestTime(Request $request)
     {
         if ($deny = $this->ensureTestCenterAccess()) {

@@ -23,14 +23,7 @@
 
 <div class="container mx-auto px-4 py-6 max-w-3xl">
 
-    <div class="flex items-center justify-between mb-5">
-        <div>
-            <h1 class="text-xl font-bold text-gray-800">{{ $student->full_name }}</h1>
-            <p class="text-sm text-gray-500">
-                ID: <span class="font-mono">{{ $student->student_id_number }}</span>
-                @if($student->group_name) · {{ $student->group_name }}@endif
-            </p>
-        </div>
+    <div class="flex items-center justify-end mb-5">
         <a href="{{ route('admin.registrator.face-check.index') }}"
            class="px-3 py-1.5 text-sm bg-gray-100 text-gray-700 rounded hover:bg-gray-200">← Ro'yxat</a>
     </div>

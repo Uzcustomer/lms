@@ -7,9 +7,12 @@ use App\Exports\GroupTestScheduleExport;
 use App\Http\Controllers\Controller;
 use App\Models\ExamSchedule;
 use App\Models\Group;
+use App\Services\AutoAssignService;
+use App\Services\ExamCapacityService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Maatwebsite\Excel\Facades\Excel;
 
 /**
@@ -35,6 +38,18 @@ class GroupTestScheduleController extends Controller
         'registrator_ofisi',
     ];
 
+    /**
+     * Roles that may trigger AutoAssignService::distribute() from this page.
+     * Tyutor and dekan can only view; only the registrar office and admins
+     * can rewrite the official test_time on a schedule.
+     */
+    private const AUTO_TIME_ROLES = [
+        'superadmin',
+        'admin',
+        'kichik_admin',
+        'registrator_ofisi',
+    ];
+
     public function index(Request $request)
     {
         $this->ensureAccess();
@@ -43,10 +58,11 @@ class GroupTestScheduleController extends Controller
         $rows = $this->buildRows($dateFrom, $dateTo);
 
         return view('admin.group-test-schedule.index', [
-            'rows'     => $rows,
-            'dateFrom' => $dateFrom->toDateString(),
-            'dateTo'   => $dateTo->toDateString(),
-            'scopeLabel' => $this->scopeLabel(),
+            'rows'        => $rows,
+            'dateFrom'    => $dateFrom->toDateString(),
+            'dateTo'      => $dateTo->toDateString(),
+            'scopeLabel'  => $this->scopeLabel(),
+            'canAutoTime' => $this->canTriggerAutoTime(),
         ]);
     }
 
@@ -211,6 +227,8 @@ class GroupTestScheduleController extends Controller
                 }
 
                 $rows->push((object) [
+                    'exam_schedule_id' => (int) $r->id,
+                    'is_first_attempt' => $label === '1-urinish',
                     'test_date'      => $dateOnly,
                     'test_time'      => $time ? substr((string) $time, 0, 5) : null,
                     'attempt'        => $label,
@@ -300,5 +318,105 @@ class GroupTestScheduleController extends Controller
             ProjectRole::REGISTRAR_OFFICE->value => 'Registrator ofisi: barcha guruhlar',
             default => 'Barcha guruhlar',
         };
+    }
+
+    private function canTriggerAutoTime(): bool
+    {
+        return in_array($this->activeRole(), self::AUTO_TIME_ROLES, true);
+    }
+
+    /**
+     * Run AutoAssignService::distribute() for one or many ExamSchedule rows
+     * whose test_date is set but test_time is empty. The same logic that
+     * AutoDistributeOnDateSetJob runs in the background — exposed here as
+     * a manual trigger so registrar staff can fix records that never had
+     * the job dispatched (e.g. dates set before that feature shipped, or
+     * a queue worker outage).
+     *
+     * Single-row form: POST { exam_schedule_id }.
+     * Bulk form (no id): processes every test_time-less schedule whose
+     * test_date falls inside the page's current date range.
+     */
+    public function autoTime(Request $request, AutoAssignService $service)
+    {
+        $this->ensureAccess();
+        if (!$this->canTriggerAutoTime()) {
+            abort(403, "Avto-vaqt belgilash sizning rolingiz uchun ochiq emas.");
+        }
+
+        [$dateFrom, $dateTo] = $this->resolveDateRange($request);
+        $singleId = $request->input('exam_schedule_id');
+
+        $query = ExamSchedule::query()
+            ->whereNotNull('test_date')
+            ->whereNull('test_time')
+            ->where(function ($q) {
+                $q->where('test_na', false)->orWhereNull('test_na');
+            });
+
+        if ($singleId) {
+            $query->where('id', (int) $singleId);
+        } else {
+            $query->whereBetween('test_date', [$dateFrom->toDateString(), $dateTo->toDateString()]);
+        }
+
+        $schedules = $query->get();
+        if ($schedules->isEmpty()) {
+            return redirect()
+                ->route('admin.group-test-schedule.index', [
+                    'date_from' => $dateFrom->toDateString(),
+                    'date_to'   => $dateTo->toDateString(),
+                ])
+                ->with('warning', "Vaqt belgilashga muhtoj yozuv topilmadi.");
+        }
+
+        $okCount = 0;
+        $failures = [];
+
+        foreach ($schedules as $schedule) {
+            $dateStr = $schedule->test_date instanceof Carbon
+                ? $schedule->test_date->format('Y-m-d')
+                : (string) $schedule->test_date;
+
+            try {
+                $capacity = ExamCapacityService::getSettingsForDate($dateStr);
+                $startTime = $capacity['work_hours_start'] ?? '09:00';
+                $result = $service->distribute($schedule, 'test', $startTime);
+            } catch (\Throwable $e) {
+                Log::warning('GroupTestSchedule autoTime: distribute threw', [
+                    'schedule_id' => $schedule->id,
+                    'message'     => $e->getMessage(),
+                ]);
+                $result = ['ok' => false, 'reason' => $e->getMessage()];
+            }
+
+            if (!empty($result['ok'])) {
+                $okCount++;
+            } else {
+                $failures[] = sprintf(
+                    '#%d (%s): %s',
+                    $schedule->id,
+                    $schedule->subject_name ?: $schedule->subject_id,
+                    $result['reason'] ?? 'noma\'lum sabab'
+                );
+            }
+        }
+
+        $msg = "Avto-vaqt belgilandi: {$okCount} ta.";
+        if (!empty($failures)) {
+            $shown = array_slice($failures, 0, 5);
+            $more = count($failures) - count($shown);
+            $msg .= ' Bajarilmadi: ' . count($failures) . ' ta — ' . implode('; ', $shown);
+            if ($more > 0) {
+                $msg .= " (yana {$more} ta)";
+            }
+        }
+
+        return redirect()
+            ->route('admin.group-test-schedule.index', [
+                'date_from' => $dateFrom->toDateString(),
+                'date_to'   => $dateTo->toDateString(),
+            ])
+            ->with($okCount > 0 ? 'success' : 'error', $msg);
     }
 }

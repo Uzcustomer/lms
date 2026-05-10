@@ -3246,13 +3246,13 @@ class AcademicScheduleController extends Controller
 
     /**
      * Bulk: re-run AutoAssignService::distribute() for every exam_schedules
-     * row in the requested date range that has a test_date but no test_time
-     * yet. Lets the test centre fix records whose AutoDistributeOnDateSetJob
-     * never ran (queue outage, dates set before that feature shipped, etc.)
-     * without clicking the per-row 🎲 button on every line.
+     * row in the requested date range that has a yn date but no yn time
+     * yet. Covers both test and oski. Lets the test centre fix records
+     * whose AutoDistributeOnDateSetJob never ran (queue outage, dates
+     * set before that feature shipped, etc.) without clicking the per-row
+     * 🎲 button on every line.
      *
-     * Restricted to the test_markazi role only — registrar/dekan are
-     * read-only on this page and admins still have the per-row 🎲.
+     * Restricted to the test_markazi role only.
      */
     public function autoTimeAll(Request $request, AutoAssignService $service)
     {
@@ -3280,48 +3280,106 @@ class AcademicScheduleController extends Controller
             $to = $from;
         }
 
-        $schedules = ExamSchedule::query()
-            ->whereNotNull('test_date')
-            ->whereNull('test_time')
-            ->where(function ($q) {
-                $q->where('test_na', false)->orWhereNull('test_na');
+        // Each (yn_type, attempt) is a separate column triplet. For
+        // attempt=1 we run the full AutoAssignService::distribute()
+        // (slot allocation + ComputerAssignments + time); for attempts
+        // 2/3 (resit) we only set the time, mirroring saveTestTime() —
+        // ComputerAssignment doesn't model attempts so resit students
+        // are scheduled by the proctor manually.
+        $columnSets = [
+            'test' => [
+                1 => ['date' => 'test_date',         'time' => 'test_time',         'na' => 'test_na', 'distribute' => true],
+                2 => ['date' => 'test_resit_date',   'time' => 'test_resit_time',   'na' => null,      'distribute' => false],
+                3 => ['date' => 'test_resit2_date',  'time' => 'test_resit2_time',  'na' => null,      'distribute' => false],
+            ],
+            'oski' => [
+                1 => ['date' => 'oski_date',         'time' => 'oski_time',         'na' => 'oski_na', 'distribute' => true],
+                2 => ['date' => 'oski_resit_date',   'time' => 'oski_resit_time',   'na' => null,      'distribute' => false],
+                3 => ['date' => 'oski_resit2_date',  'time' => 'oski_resit2_time',  'na' => null,      'distribute' => false],
+            ],
+        ];
+
+        // Pull every schedule whose ANY (yn_type, attempt) date falls in
+        // the range and is missing the matching time.
+        $candidates = ExamSchedule::query()
+            ->where(function ($q) use ($from, $to, $columnSets) {
+                foreach ($columnSets as $cols) {
+                    foreach ($cols as $c) {
+                        $q->orWhere(function ($qq) use ($from, $to, $c) {
+                            $qq->whereBetween($c['date'], [$from, $to])
+                                ->whereNull($c['time']);
+                            if ($c['na']) {
+                                $qq->where(function ($x) use ($c) {
+                                    $x->where($c['na'], false)->orWhereNull($c['na']);
+                                });
+                            }
+                        });
+                    }
+                }
             })
-            ->whereBetween('test_date', [$from, $to])
             ->get();
 
-        if ($schedules->isEmpty()) {
+        if ($candidates->isEmpty()) {
             return back()->with('warning', "Tanlangan oraliqda vaqt belgilashga muhtoj yozuv topilmadi.");
         }
 
         $okCount = 0;
         $failures = [];
 
-        foreach ($schedules as $schedule) {
-            $dateStr = $schedule->test_date instanceof \Carbon\Carbon
-                ? $schedule->test_date->format('Y-m-d')
-                : (string) $schedule->test_date;
+        foreach ($candidates as $schedule) {
+            foreach ($columnSets as $ynType => $attempts) {
+                foreach ($attempts as $attempt => $c) {
+                    $dateVal = $schedule->{$c['date']};
+                    if (empty($dateVal) || !empty($schedule->{$c['time']})) {
+                        continue;
+                    }
+                    if ($c['na'] && !empty($schedule->{$c['na']})) {
+                        continue;
+                    }
 
-            try {
-                $capacity = ExamCapacityService::getSettingsForDate($dateStr);
-                $startTime = $capacity['work_hours_start'] ?? '09:00';
-                $result = $service->distribute($schedule, 'test', $startTime);
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('autoTimeAll: distribute threw', [
-                    'schedule_id' => $schedule->id,
-                    'message'     => $e->getMessage(),
-                ]);
-                $result = ['ok' => false, 'reason' => $e->getMessage()];
-            }
+                    $dateStr = $dateVal instanceof \Carbon\Carbon
+                        ? $dateVal->format('Y-m-d')
+                        : (string) $dateVal;
+                    if ($dateStr < $from || $dateStr > $to) {
+                        continue;
+                    }
 
-            if (!empty($result['ok'])) {
-                $okCount++;
-            } else {
-                $failures[] = sprintf(
-                    '#%d (%s): %s',
-                    $schedule->id,
-                    $schedule->subject_name ?: $schedule->subject_id,
-                    $result['reason'] ?? "noma'lum sabab"
-                );
+                    try {
+                        $capacity = ExamCapacityService::getSettingsForDate($dateStr);
+                        $startTime = $capacity['work_hours_start'] ?? '09:00';
+
+                        if ($c['distribute']) {
+                            // Full slot distribution for the primary attempt.
+                            $result = $service->distribute($schedule, $ynType, $startTime);
+                        } else {
+                            // Resit: just stamp the time, like saveTestTime.
+                            $schedule->{$c['time']} = $startTime;
+                            $schedule->save();
+                            $result = ['ok' => true];
+                        }
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning('autoTimeAll: failed', [
+                            'schedule_id' => $schedule->id,
+                            'yn'          => $ynType,
+                            'attempt'     => $attempt,
+                            'message'     => $e->getMessage(),
+                        ]);
+                        $result = ['ok' => false, 'reason' => $e->getMessage()];
+                    }
+
+                    if (!empty($result['ok'])) {
+                        $okCount++;
+                    } else {
+                        $label = strtoupper($ynType) . ($attempt > 1 ? " {$attempt}-urinish" : '');
+                        $failures[] = sprintf(
+                            '#%d %s (%s): %s',
+                            $schedule->id,
+                            $label,
+                            $schedule->subject_name ?: $schedule->subject_id,
+                            $result['reason'] ?? "noma'lum sabab"
+                        );
+                    }
+                }
             }
         }
 
@@ -3376,10 +3434,30 @@ class AcademicScheduleController extends Controller
             $from = $today;
         }
 
+        $columnSets = [
+            'test' => [
+                1 => ['date' => 'test_date',         'time' => 'test_time',         'mode' => 'test_assignment_mode', 'wipe_assignments' => true],
+                2 => ['date' => 'test_resit_date',   'time' => 'test_resit_time',   'mode' => null,                   'wipe_assignments' => false],
+                3 => ['date' => 'test_resit2_date',  'time' => 'test_resit2_time',  'mode' => null,                   'wipe_assignments' => false],
+            ],
+            'oski' => [
+                1 => ['date' => 'oski_date',         'time' => 'oski_time',         'mode' => 'oski_assignment_mode', 'wipe_assignments' => true],
+                2 => ['date' => 'oski_resit_date',   'time' => 'oski_resit_time',   'mode' => null,                   'wipe_assignments' => false],
+                3 => ['date' => 'oski_resit2_date',  'time' => 'oski_resit2_time',  'mode' => null,                   'wipe_assignments' => false],
+            ],
+        ];
+
         $schedules = ExamSchedule::query()
-            ->whereNotNull('test_date')
-            ->whereNotNull('test_time')
-            ->whereBetween('test_date', [$from, $to])
+            ->where(function ($q) use ($from, $to, $columnSets) {
+                foreach ($columnSets as $cols) {
+                    foreach ($cols as $c) {
+                        $q->orWhere(function ($qq) use ($from, $to, $c) {
+                            $qq->whereBetween($c['date'], [$from, $to])
+                                ->whereNotNull($c['time']);
+                        });
+                    }
+                }
+            })
             ->get();
 
         if ($schedules->isEmpty()) {
@@ -3389,21 +3467,47 @@ class AcademicScheduleController extends Controller
         $clearedCount = 0;
         $assignmentsDeleted = 0;
 
-        DB::transaction(function () use ($schedules, &$clearedCount, &$assignmentsDeleted) {
+        DB::transaction(function () use ($schedules, $from, $to, $columnSets, &$clearedCount, &$assignmentsDeleted) {
             foreach ($schedules as $schedule) {
-                $deleted = \App\Models\ComputerAssignment::where('exam_schedule_id', $schedule->id)
-                    ->where('yn_type', 'test')
-                    ->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
-                    ->delete();
-                $assignmentsDeleted += (int) $deleted;
+                $touched = false;
 
-                // test_assignment_mode is NOT NULL with default 'manual';
-                // reset to that so a future distribute() can reassign it.
-                $schedule->test_time = null;
-                $schedule->test_assignment_mode = 'manual';
-                $schedule->save();
+                foreach ($columnSets as $ynType => $attempts) {
+                    foreach ($attempts as $c) {
+                        $dateVal = $schedule->{$c['date']};
+                        if (empty($dateVal) || empty($schedule->{$c['time']})) {
+                            continue;
+                        }
+                        $dateStr = $dateVal instanceof \Carbon\Carbon
+                            ? $dateVal->format('Y-m-d')
+                            : (string) $dateVal;
+                        if ($dateStr < $from || $dateStr > $to) {
+                            continue;
+                        }
 
-                $clearedCount++;
+                        if ($c['wipe_assignments']) {
+                            // ComputerAssignment.yn_type doesn't track
+                            // attempts — only attempt=1 has slot rows.
+                            $deleted = \App\Models\ComputerAssignment::where('exam_schedule_id', $schedule->id)
+                                ->where('yn_type', $ynType)
+                                ->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+                                ->delete();
+                            $assignmentsDeleted += (int) $deleted;
+                        }
+
+                        $schedule->{$c['time']} = null;
+                        if ($c['mode']) {
+                            // *_assignment_mode is NOT NULL with default
+                            // 'manual'; reset so distribute() can stamp.
+                            $schedule->{$c['mode']} = 'manual';
+                        }
+                        $touched = true;
+                    }
+                }
+
+                if ($touched) {
+                    $schedule->save();
+                    $clearedCount++;
+                }
             }
         });
 

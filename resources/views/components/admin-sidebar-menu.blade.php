@@ -421,7 +421,25 @@
         @elseif(!$hasActiveRole(['oquv_bolimi', 'oquv_bolimi_boshligi', 'fan_masuli']))
         {{-- Boshqa rollar uchun Qo'shimcha --}}
         @php
-            $isTutorWithGroups = $hasActiveRole('tyutor') && auth()->guard('teacher')->check() && auth()->guard('teacher')->user()->groups()->where('active', true)->count() > 0;
+            // Tyutorni "guruhlari bor" deb hisoblash mantig'i TeacherMainController::students()
+            // bilan mos kelishi kerak: group_teacher OR nazoratchi_groups OR (bo'sh bo'lsa)
+            // joriy o'quv yili schedules. Aks holda /teacher/students sahifada guruhlar
+            // ko'rinadi-yu, sidebar'da "JN o'zlashtirish" yo'qolib qoladi.
+            $isTutorWithGroups = false;
+            if ($hasActiveRole('tyutor') && auth()->guard('teacher')->check()) {
+                $tch = auth()->guard('teacher')->user();
+                if ($tch->groups()->where('active', true)->exists()
+                    || $tch->nazoratchiGroups()->where('active', true)->exists()) {
+                    $isTutorWithGroups = true;
+                } elseif ($tch->hemis_id) {
+                    $isTutorWithGroups = \Illuminate\Support\Facades\DB::table('schedules')
+                        ->where('employee_id', $tch->hemis_id)
+                        ->where('education_year_current', true)
+                        ->whereNotNull('lesson_date')
+                        ->limit(1)
+                        ->exists();
+                }
+            }
         @endphp
 
         @if($isTutorWithGroups)

@@ -67,19 +67,22 @@ class AcademicScheduleController extends Controller
      */
     public function index(Request $request)
     {
-        // Sahifaga kirish huquqini tekshirish (sozlamalardan kelib chiqib)
+        // Sahifaga kirish huquqini tekshirish: registrator/dekanat/o'quv bo'limi/admin
+        // — barchasi ko'rishi mumkin. Sana qo'yish huquqi alohida tekshiriladi.
         $user = auth()->user() ?? auth('teacher')->user();
         $activeRole = session('active_role', $user?->getRoleNames()->first());
         $adminRoles = ExamDateRoleService::adminRoles();
         $isAdmin = $user && in_array($activeRole, $adminRoles, true);
-        if (!$isAdmin && !ExamDateRoleService::roleHasAnyAccess($activeRole)) {
+        if (!ExamDateRoleService::canViewPage($activeRole)) {
             abort(403, 'Bu sahifaga kirish uchun ruxsat yo\'q.');
         }
 
-        // Ushbu rol uchun ruxsat etilgan kurs darajalari
-        $allowedLevelCodes = $isAdmin
+        // 1-urinish sanasini belgilash uchun ushbu rolga ruxsat etilgan kurs darajalari
+        $attempt1Levels = $isAdmin
             ? array_keys(ExamDateRoleService::getMapping())
             : ExamDateRoleService::levelsForRole($activeRole);
+        // 2+ urinish (12a/12b resit) sanalarini faqat registrator_ofisi (yoki admin) qo'yadi
+        $canEditResit = ExamDateRoleService::canEditResit($activeRole);
 
         $currentSemesters = Semester::where('current', true)->get();
         $currentEducationYear = $currentSemesters->first()?->education_year;
@@ -90,11 +93,6 @@ class AcademicScheduleController extends Controller
         $selectedSpecialty = $request->get('specialty_id');
         $selectedLevelCode = $request->get('level_code');
 
-        // Agar foydalanuvchi admin bo'lmasa va tanlagan kursi ruxsat etilgan
-        // ro'yxatda bo'lmasa — filtrni avtomatik tozalash
-        if (!$isAdmin && $selectedLevelCode && !in_array((string) $selectedLevelCode, $allowedLevelCodes, true)) {
-            $selectedLevelCode = null;
-        }
         $selectedSemester = $request->get('semester_code');
         $selectedGroup = $request->get('group_id');
         $selectedSubject = $request->get('subject_id');
@@ -157,15 +155,6 @@ class AcademicScheduleController extends Controller
                 $currentSemesterToggle, false, $dateFrom, $dateTo
             );
 
-            // Admin bo'lmagan rol — faqat unga ruxsat etilgan kurs darajalari
-            if (!$isAdmin && !empty($allowedLevelCodes)) {
-                $scheduleData = $scheduleData->map(function ($items) use ($allowedLevelCodes) {
-                    return $items->filter(function ($item) use ($allowedLevelCodes) {
-                        $lvl = (string) ($item['group']->level_code ?? $item['level_code'] ?? '');
-                        return $lvl !== '' && in_array($lvl, $allowedLevelCodes, true);
-                    });
-                })->filter(fn($items) => $items->isNotEmpty());
-            }
 
             // OSKI sanasi bo'yicha filtr
             if ($oskiDateFrom || $oskiDateTo) {
@@ -209,8 +198,9 @@ class AcademicScheduleController extends Controller
 
         $routePrefix = $this->routePrefix();
         $canDelete = $isAdmin;
-        // Edit huquqi: admin yoki sozlamalarda biror kurs uchun ruxsatga ega rol
-        $canEdit = $canDelete || !empty($allowedLevelCodes);
+        // Edit huquqi: admin yoki sozlamalarda biror kurs uchun 1-urinish ruxsati,
+        // yoki 2+ urinish uchun registrator_ofisi
+        $canEdit = $canDelete || !empty($attempt1Levels) || $canEditResit;
 
         // Talabani ko'rsatish toggle yoqilgan bo'lsa — har guruh+fan uchun
         // talabalar ro'yxati va ularning shaxsiy resit/resit2 sanalarini olish
@@ -249,7 +239,10 @@ class AcademicScheduleController extends Controller
             'routePrefix',
             'canDelete',
             'canEdit',
-            'allowedLevelCodes',
+            'attempt1Levels',
+            'canEditResit',
+            'isAdmin',
+            'activeRole',
         ));
     }
 
@@ -1734,43 +1727,43 @@ class AcademicScheduleController extends Controller
         $user = auth()->user() ?? auth('teacher')->user();
         $activeRole = session('active_role', $user?->getRoleNames()->first());
         $isAdmin = $user && in_array($activeRole, ExamDateRoleService::adminRoles(), true);
-        if (!$isAdmin && !ExamDateRoleService::roleHasAnyAccess($activeRole)) {
+        if (!ExamDateRoleService::canEditAnything($activeRole)) {
             abort(403, 'Bu amalni bajarish uchun ruxsat yo\'q.');
         }
         // Saqlangan sanani o'zgartirish — admin yoki sozlamalarda ruxsat etilgan rol
         $canEditSaved = $isAdmin || ExamDateRoleService::roleHasAnyAccess($activeRole);
         $minDate = $isAdmin ? $today : $today->copy()->addDay();
 
-        // Foydalanuvchi rolga ruxsat etilgan kurs darajalari
-        $allowedLevelCodes = $isAdmin
-            ? null // admin uchun cheklov yo'q
-            : ExamDateRoleService::levelsForRole($activeRole);
+        // Per-row permission validatsiyasi uchun (curriculum_hemis_id, semester_code) → level_code map
+        $groupIds = collect($validSchedules)->pluck('group_hemis_id')->filter()->unique()->values();
+        $groupCurriculumMap = Group::whereIn('group_hemis_id', $groupIds)
+            ->pluck('curriculum_hemis_id', 'group_hemis_id');
+        $curriculumIds = $groupCurriculumMap->unique()->values();
+        $semesterCodes = collect($validSchedules)->pluck('semester_code')->filter()->unique()->values();
 
-        // (curriculum_hemis_id . '_' . semester_code) → level_code map (validatsiya uchun)
         $semesterLevelMap = collect();
-        if (is_array($allowedLevelCodes)) {
-            $groupIds = collect($validSchedules)->pluck('group_hemis_id')->filter()->unique()->values();
-            $groupCurriculumMap = Group::whereIn('group_hemis_id', $groupIds)
-                ->pluck('curriculum_hemis_id', 'group_hemis_id');
-            $curriculumIds = $groupCurriculumMap->unique()->values();
-            $semesterCodes = collect($validSchedules)->pluck('semester_code')->filter()->unique()->values();
+        if ($curriculumIds->isNotEmpty() && $semesterCodes->isNotEmpty()) {
+            $semesterLevelMap = Semester::whereIn('curriculum_hemis_id', $curriculumIds)
+                ->whereIn('code', $semesterCodes)
+                ->get(['curriculum_hemis_id', 'code', 'level_code'])
+                ->mapWithKeys(fn($s) => [$s->curriculum_hemis_id . '_' . $s->code => (string) $s->level_code]);
+        }
 
-            if ($curriculumIds->isNotEmpty() && $semesterCodes->isNotEmpty()) {
-                $semesterLevelMap = Semester::whereIn('curriculum_hemis_id', $curriculumIds)
-                    ->whereIn('code', $semesterCodes)
-                    ->get(['curriculum_hemis_id', 'code', 'level_code'])
-                    ->mapWithKeys(fn($s) => [$s->curriculum_hemis_id . '_' . $s->code => (string) $s->level_code]);
-            }
-
-            // Foydalanuvchi rolga ruxsat etilmagan kurslarga tegishli yozuvlarni rad etish
+        // Har bir yozuvga urinish + kurs darajasi bo'yicha alohida ruxsat tekshiruvi.
+        //  - 1-urinish: sozlamalardagi rollar mapping bo'yicha (level_code orqali).
+        //  - 2+ urinish: faqat registrator_ofisi (yoki admin) qo'yadi.
+        if (!$isAdmin) {
             foreach ($validSchedules as $schedule) {
                 $curriculumId = $groupCurriculumMap[$schedule['group_hemis_id']] ?? null;
-                if (!$curriculumId) {
-                    continue;
-                }
-                $lvl = (string) ($semesterLevelMap[$curriculumId . '_' . $schedule['semester_code']] ?? '');
-                if ($lvl !== '' && !in_array($lvl, $allowedLevelCodes, true)) {
-                    return redirect()->back()->with('error', 'Sizning rolingizga ushbu kurs darajasi uchun YN sanasini belgilashga ruxsat yo\'q. Sozlamalardan tekshiring.');
+                $lvl = $curriculumId
+                    ? (string) ($semesterLevelMap[$curriculumId . '_' . $schedule['semester_code']] ?? '')
+                    : '';
+                $rowAttempt = (int) ($schedule['urinish'] ?? 1);
+                if (!ExamDateRoleService::canEditAttempt($activeRole, $lvl, $rowAttempt)) {
+                    $msg = $rowAttempt >= 2
+                        ? '2-urinish va keyingi urinishlar uchun YN sanasini faqat registrator ofisi belgilay oladi.'
+                        : 'Sizning rolingizga ushbu kurs darajasi uchun 1-urinish YN sanasini belgilashga ruxsat yo\'q. Sozlamalardan tekshiring.';
+                    return redirect()->back()->with('error', $msg);
                 }
             }
         }
@@ -2259,22 +2252,13 @@ class AcademicScheduleController extends Controller
             ->orderBy('name')
             ->get(['specialty_hemis_id', 'name']);
 
-        // 4. Kurslar (level filtrini tashlab)
+        // 4. Kurslar (level filtrini tashlab) — barcha viewer rollar uchun
+        // hech qanday cheklovsiz to'liq ro'yxat. Sana qo'yish huquqi store() da
+        // urinish + kurs darajasi bo'yicha alohida tekshiriladi.
         $levelCurrIds = $buildQuery('level_code')->pluck('curricula_hemis_id');
         $levelQuery = Semester::where($currentSemesterOnly ? 'current' : 'education_year', $currentSemesterOnly ? true : $currentEducationYear)
             ->whereIn('curriculum_hemis_id', $levelCurrIds);
         if ($semesterCode) $levelQuery->where('code', $semesterCode);
-
-        // Foydalanuvchi rolga ruxsat etilgan kurs darajalari (admin emas bo'lsa)
-        $user = auth()->user() ?? auth('teacher')->user();
-        $activeRole = session('active_role', $user?->getRoleNames()->first());
-        $isAdmin = $user && in_array($activeRole, ExamDateRoleService::adminRoles(), true);
-        if (!$isAdmin) {
-            $allowedLevelCodes = ExamDateRoleService::levelsForRole($activeRole);
-            if (!empty($allowedLevelCodes)) {
-                $levelQuery->whereIn('level_code', $allowedLevelCodes);
-            }
-        }
 
         $levels = $levelQuery->select('level_code', 'level_name')
             ->distinct()->orderBy('level_code')->get();
@@ -3556,13 +3540,9 @@ class AcademicScheduleController extends Controller
         $activeRole = session('active_role', $user?->getRoleNames()->first());
         $adminRoles = ExamDateRoleService::adminRoles();
         $isAdmin = $user && in_array($activeRole, $adminRoles, true);
-        if (!$isAdmin && !ExamDateRoleService::roleHasAnyAccess($activeRole)) {
+        if (!ExamDateRoleService::canViewPage($activeRole)) {
             abort(403, 'Bu amalni bajarish uchun ruxsat yo\'q.');
         }
-
-        $allowedLevelCodes = $isAdmin
-            ? array_keys(ExamDateRoleService::getMapping())
-            : ExamDateRoleService::levelsForRole($activeRole);
 
         $currentSemesters = Semester::where('current', true)->get();
 
@@ -3570,9 +3550,6 @@ class AcademicScheduleController extends Controller
         $selectedDepartment = $request->get('department_id');
         $selectedSpecialty = $request->get('specialty_id');
         $selectedLevelCode = $request->get('level_code');
-        if (!$isAdmin && $selectedLevelCode && !in_array((string) $selectedLevelCode, $allowedLevelCodes, true)) {
-            $selectedLevelCode = null;
-        }
         $selectedSemester = $request->get('semester_code');
         $selectedGroup = $request->get('group_id');
         $selectedSubject = $request->get('subject_id');
@@ -3593,15 +3570,6 @@ class AcademicScheduleController extends Controller
             $selectedLevelCode, $selectedSubject, $selectedStatus,
             $currentSemesterToggle, false, $dateFrom, $dateTo
         );
-
-        if (!$isAdmin && !empty($allowedLevelCodes)) {
-            $scheduleData = $scheduleData->map(function ($items) use ($allowedLevelCodes) {
-                return $items->filter(function ($item) use ($allowedLevelCodes) {
-                    $lvl = (string) ($item['group']->level_code ?? $item['level_code'] ?? '');
-                    return $lvl !== '' && in_array($lvl, $allowedLevelCodes, true);
-                });
-            })->filter(fn($items) => $items->isNotEmpty());
-        }
 
         if ($oskiDateFrom || $oskiDateTo) {
             $scheduleData = $scheduleData->map(function ($items) use ($oskiDateFrom, $oskiDateTo) {

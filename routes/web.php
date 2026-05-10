@@ -658,6 +658,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/test-markazi-times', [ReportController::class, 'testMarkaziTimes'])->name('reports.test-markazi-times');
         Route::get('/reports/test-markazi-times/data', [ReportController::class, 'testMarkaziTimesData'])->name('reports.test-markazi-times.data');
 
+        // Guruh test jadvali — tyutor / dekan / registrator_ofisi uchun.
+        // Role-aware scoping va Excel eksport kontroller ichida amalga oshiriladi.
+        Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|tyutor|dekan|registrator_ofisi'])
+            ->group(function () {
+                Route::get('/group-test-schedule', [\App\Http\Controllers\Admin\GroupTestScheduleController::class, 'index'])
+                    ->name('group-test-schedule.index');
+                Route::get('/group-test-schedule/export', [\App\Http\Controllers\Admin\GroupTestScheduleController::class, 'export'])
+                    ->name('group-test-schedule.export');
+            });
+
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 
         Route::get('/lessons/create', [LessonController::class, 'index'])->name('lessons.create');

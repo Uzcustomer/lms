@@ -63,6 +63,55 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * Test markazi sahifasi (YN jadvali) ko'rishi/ishlatishi mumkin
+     * bo'lgan rollar. O'quv bo'limi, o'quv bo'limi boshlig'i va o'quv
+     * prorektori bu sahifaga muhtoj emas — ular faqat "YN kunini
+     * belgilash" sahifasidan foydalanadi (route: academic-schedule.index).
+     * Boshqa kichik rollar ham bu yerga ruxsat berilmaydi.
+     *
+     * Sidebar bunga ko'p o'rinda mos keladi (test-center linki faqat
+     * test_markazi va registrator_ofisi/dekan ostida ko'rinadi), lekin
+     * URL bilan to'g'ridan-to'g'ri kirish ham bo'sh bo'lmasligi uchun
+     * bu kontrolni ham qo'shamiz.
+     */
+    private function testCenterAllowedRoles(): array
+    {
+        return array_merge(
+            ExamDateRoleService::adminRoles(),
+            [
+                ProjectRole::TEST_CENTER->value,
+                ProjectRole::REGISTRAR_OFFICE->value,
+                ProjectRole::DEAN->value,
+            ]
+        );
+    }
+
+    /**
+     * Joriy foydalanuvchi rolini tekshiradi va Test markazi sahifasi
+     * uchun ruxsat etilmagan rollarni 403 / redirect qiladi.
+     */
+    private function ensureTestCenterAccess(): ?\Symfony\Component\HttpFoundation\Response
+    {
+        $user = auth()->user() ?? auth('teacher')->user();
+        if (!$user) {
+            return response()->json(['success' => false, 'message' => 'Avtorizatsiya kerak.'], 401);
+        }
+        $activeRole = session('active_role', $user->getRoleNames()->first());
+        if (!in_array($activeRole, $this->testCenterAllowedRoles(), true)) {
+            if (request()->expectsJson() || request()->ajax()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bu sahifa sizning rolingiz uchun ochiq emas.',
+                ], 403);
+            }
+            return redirect()->route(
+                $this->routePrefix() . '.academic-schedule.index'
+            )->with('error', 'Test markazi sahifasi sizning rolingiz uchun ochiq emas.');
+        }
+        return null;
+    }
+
+    /**
      * O'quv bo'limi uchun: YN kunini belgilash sahifasi
      */
     public function index(Request $request)
@@ -1347,6 +1396,10 @@ class AcademicScheduleController extends Controller
 
     public function testCenterView(Request $request)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
+
         \Illuminate\Support\Facades\Log::info('testCenterView: metod boshlandi', [
             'url' => $request->fullUrl(),
             'guard' => auth()->getDefaultDriver(),
@@ -1424,6 +1477,9 @@ class AcademicScheduleController extends Controller
      */
     public function refreshQuizCounts(Request $request)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
         $items = $request->input('items', []);
         if (empty($items)) {
             return response()->json(['counts' => []]);
@@ -2352,6 +2408,9 @@ class AcademicScheduleController extends Controller
      */
     public function generateYnOldiWord(Request $request)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
         $request->validate([
             'items' => 'required|array|min:1',
             'items.*.group_hemis_id' => 'required|string',
@@ -3045,6 +3104,9 @@ class AcademicScheduleController extends Controller
      */
     public function getDayOverride(Request $request)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
         $request->validate(['date' => 'required|date_format:Y-m-d']);
         $date = $request->input('date');
 
@@ -3075,6 +3137,9 @@ class AcademicScheduleController extends Controller
      */
     public function saveDayOverride(Request $request)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
         if ($this->isTestCenterReadOnly()) {
             return response()->json(['success' => false, 'message' => 'Bu amalga ruxsat yo\'q.'], 403);
         }
@@ -3180,6 +3245,9 @@ class AcademicScheduleController extends Controller
 
     public function saveTestTime(Request $request)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
         if ($this->isTestCenterReadOnly()) {
             return response()->json(['success' => false, 'message' => 'Bu amalga ruxsat yo\'q.'], 403);
         }
@@ -3426,6 +3494,9 @@ class AcademicScheduleController extends Controller
      */
     public function pinComputer(Request $request)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
         if ($this->isTestCenterReadOnly()) {
             return response()->json(['success' => false, 'message' => 'Bu amalga ruxsat yo\'q.'], 403);
         }
@@ -3487,6 +3558,9 @@ class AcademicScheduleController extends Controller
      */
     public function saveStudentTime(Request $request)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
         if ($this->isTestCenterReadOnly()) {
             return response()->json(['success' => false, 'message' => 'Bu amalga ruxsat yo\'q.'], 403);
         }
@@ -3569,6 +3643,9 @@ class AcademicScheduleController extends Controller
 
     public function exportTestCenter(Request $request)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
         $result = $this->buildTestCenterData($request);
         $scheduleData = $result['scheduleData'];
 
@@ -3817,6 +3894,9 @@ class AcademicScheduleController extends Controller
 
     public function bandlikKursatkichi(Request $request)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
         $totalComputers = (int) ExamCapacityService::getSettings()['computer_count'];
         $today = now()->format('Y-m-d');
 
@@ -3937,6 +4017,9 @@ class AcademicScheduleController extends Controller
 
     public function bandlikKursatkichiShow(Request $request, string $date)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
         $totalComputers = (int) ExamCapacityService::getSettings()['computer_count'];
 
         // Sana validatsiyasi
@@ -4284,6 +4367,9 @@ class AcademicScheduleController extends Controller
      */
     public function manualAssignOptions(Request $request)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
         if ($this->isTestCenterReadOnly()) {
             return response()->json(['success' => false, 'message' => 'Bu amalga ruxsat yo\'q.'], 403);
         }
@@ -4406,6 +4492,9 @@ class AcademicScheduleController extends Controller
      */
     public function manualAssignSave(Request $request)
     {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
         if ($this->isTestCenterReadOnly()) {
             return response()->json(['success' => false, 'message' => 'Bu amalga ruxsat yo\'q.'], 403);
         }

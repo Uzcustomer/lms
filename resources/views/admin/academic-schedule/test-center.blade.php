@@ -315,6 +315,9 @@
                                                         <button type="button" class="auto-assign-btn" onclick="saveTestTime(this, false, true)" style="padding:3px 8px;background:#8b5cf6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Avtomatik taqsimlash (JIT — kompyuter 5 daqiqa qolganda biriktiriladi)">
                                                             🎲
                                                         </button>
+                                                        <button type="button" class="manual-assign-btn" onclick="openManualAssignModal(this)" style="padding:3px 8px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Qo'lda biriktirish — har talabaga vaqt va kompyuterni alohida tanlang">
+                                                            🔧
+                                                        </button>
                                                         @endif
                                                         @if(!($item['yn_submitted'] ?? false) && $item['test_time'])
                                                             <div class="yn-time-note" style="width:100%;text-align:center;margin-top:2px;">
@@ -1544,5 +1547,388 @@
         .color-filter option[value="green"] { color: #16a34a; font-weight: 600; }
         .color-filter option[value="yellow"] { color: #d97706; font-weight: 600; }
         .color-filter option[value="red"] { color: #dc2626; font-weight: 600; }
+
+        /* Qo'lda biriktirma modal */
+        #ma-modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:10000; display:none; align-items:center; justify-content:center; padding:20px; }
+        #ma-modal-overlay.show { display:flex; }
+        #ma-modal { background:#fff; border-radius:12px; max-width:1100px; width:100%; max-height:92vh; display:flex; flex-direction:column; box-shadow:0 20px 50px rgba(0,0,0,0.3); }
+        #ma-modal header { padding:14px 20px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; }
+        #ma-modal header h3 { margin:0; font-size:16px; font-weight:700; color:#0f172a; }
+        #ma-modal .ma-meta { padding:10px 20px; font-size:13px; color:#475569; background:#f8fafc; border-bottom:1px solid #e5e7eb; display:flex; gap:18px; flex-wrap:wrap; }
+        #ma-modal .ma-meta b { color:#0f172a; }
+        #ma-modal .ma-body { overflow-y:auto; padding:0 20px 14px 20px; }
+        #ma-modal table { width:100%; border-collapse:collapse; font-size:13px; }
+        #ma-modal thead th { position:sticky; top:0; background:#f1f5f9; padding:8px 10px; text-align:left; font-weight:600; color:#334155; border-bottom:1px solid #cbd5e1; z-index:1; }
+        #ma-modal tbody td { padding:6px 10px; border-bottom:1px solid #f1f5f9; vertical-align:middle; }
+        #ma-modal tbody tr:hover { background:#f8fafc; }
+        #ma-modal .ma-time { width:80px; padding:4px 6px; border:1px solid #d1d5db; border-radius:6px; font-size:12px; text-align:center; }
+        #ma-modal .ma-comp { width:240px; padding:4px 6px; border:1px solid #d1d5db; border-radius:6px; font-size:12px; }
+        #ma-modal .ma-comp option:disabled { color:#94a3b8; }
+        #ma-modal footer { padding:14px 20px; border-top:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; gap:10px; }
+        #ma-modal footer .ma-status { font-size:12px; color:#64748b; flex:1; }
+        #ma-modal footer .ma-status.error { color:#dc2626; font-weight:600; }
+        #ma-modal .btn-primary { background:#0ea5e9; color:#fff; padding:8px 16px; border:0; border-radius:8px; font-weight:600; cursor:pointer; }
+        #ma-modal .btn-primary:disabled { background:#94a3b8; cursor:not-allowed; }
+        #ma-modal .btn-secondary { background:#f1f5f9; color:#334155; padding:8px 16px; border:0; border-radius:8px; cursor:pointer; }
+        #ma-modal .ma-row-warn { background:#fef2f2; }
     </style>
+
+    <!-- Qo'lda biriktirma modal -->
+    <div id="ma-modal-overlay" onclick="if(event.target===this) closeManualAssignModal()">
+        <div id="ma-modal">
+            <header>
+                <h3>Qo'lda biriktirish</h3>
+                <button type="button" class="btn-secondary" onclick="closeManualAssignModal()">&times;</button>
+            </header>
+            <div class="ma-meta">
+                <span>Guruh: <b id="ma-group">—</b></span>
+                <span>Fan: <b id="ma-subject">—</b></span>
+                <span>YN: <b id="ma-yntype">—</b></span>
+                <span>Sana: <b id="ma-date">—</b></span>
+                <span>Davomiyligi: <b><span id="ma-duration">—</span> daq</b> (oraliq <span id="ma-buffer">—</span> daq)</span>
+                <span>Ish vaqti: <b id="ma-hours">—</b></span>
+            </div>
+            <div class="ma-body">
+                <table id="ma-table">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;">#</th>
+                            <th>Talaba</th>
+                            <th style="width:90px;">Vaqt</th>
+                            <th style="width:260px;">Kompyuter</th>
+                            <th style="width:200px;">Holat</th>
+                        </tr>
+                    </thead>
+                    <tbody id="ma-tbody"></tbody>
+                </table>
+            </div>
+            <footer>
+                <span class="ma-status" id="ma-status">Yuklanmoqda…</span>
+                <button type="button" class="btn-secondary" onclick="closeManualAssignModal()">Bekor qilish</button>
+                <button type="button" class="btn-primary" id="ma-save-btn" onclick="saveManualAssign()" disabled>Saqlash</button>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+    (function () {
+        'use strict';
+        // Endpointlar — Blade'dan render qilingan named route'lardan kelishi kerak.
+        const optionsUrl = @json(route(($routePrefix ?? 'admin').'.academic-schedule.test-center.manual-assign.options'));
+        const saveUrl    = @json(route(($routePrefix ?? 'admin').'.academic-schedule.test-center.manual-assign.save'));
+        const csrfToken  = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+        // Modal state
+        let MA_STATE = null; // {group_hemis_id, subject_id, semester_code, yn_type, students[], computers[], busy[], existing[], duration, buffer, date, work_hours_*}
+
+        window.openManualAssignModal = async function (btn) {
+            const row = btn.closest('tr');
+            const inp = row.querySelector('.test-time-input');
+            if (!inp) return;
+            const groupId   = inp.getAttribute('data-group-hemis-id');
+            const subjectId = inp.getAttribute('data-subject-id');
+            const semCode   = inp.getAttribute('data-semester-code');
+            const subjName  = inp.getAttribute('data-subject-name');
+            const ynType    = inp.getAttribute('data-yn-type'); // OSKI yoki Test
+            const groupName = row.querySelector('.group-name-cell')?.textContent?.trim()
+                              || row.querySelector('td:first-child')?.textContent?.trim()
+                              || groupId;
+            const baseTime  = (inp.value || '').trim();
+
+            document.getElementById('ma-group').textContent = groupName;
+            document.getElementById('ma-subject').textContent = subjName || '—';
+            document.getElementById('ma-yntype').textContent = ynType;
+            document.getElementById('ma-date').textContent = '—';
+            document.getElementById('ma-duration').textContent = '—';
+            document.getElementById('ma-buffer').textContent = '—';
+            document.getElementById('ma-hours').textContent = '—';
+            document.getElementById('ma-tbody').innerHTML = '';
+            document.getElementById('ma-status').textContent = 'Yuklanmoqda…';
+            document.getElementById('ma-status').classList.remove('error');
+            document.getElementById('ma-save-btn').disabled = true;
+            document.getElementById('ma-modal-overlay').classList.add('show');
+
+            try {
+                const params = new URLSearchParams({
+                    group_hemis_id: groupId, subject_id: subjectId,
+                    semester_code: semCode, yn_type: ynType,
+                });
+                const resp = await fetch(optionsUrl + '?' + params.toString(), {
+                    headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                });
+                const data = await resp.json();
+                if (!data.success) {
+                    document.getElementById('ma-status').textContent = data.message || 'Yuklab bo\'lmadi.';
+                    document.getElementById('ma-status').classList.add('error');
+                    return;
+                }
+                MA_STATE = Object.assign({}, data, {
+                    group_hemis_id: groupId, subject_id: subjectId,
+                    semester_code: semCode, yn_type: ynType,
+                });
+                document.getElementById('ma-date').textContent = data.date || '—';
+                document.getElementById('ma-duration').textContent = data.duration_minutes;
+                document.getElementById('ma-buffer').textContent = data.buffer_minutes;
+                document.getElementById('ma-hours').textContent = (data.work_hours_start || '?')
+                    + '–' + (data.work_hours_end || '?')
+                    + (data.lunch_start ? ' (tushlik ' + data.lunch_start + '–' + data.lunch_end + ')' : '');
+
+                renderModalRows(baseTime);
+                refreshAllRows();
+                document.getElementById('ma-status').textContent = data.students.length + ' ta talaba.';
+                document.getElementById('ma-save-btn').disabled = false;
+            } catch (e) {
+                document.getElementById('ma-status').textContent = 'Tarmoq xatosi: ' + e.message;
+                document.getElementById('ma-status').classList.add('error');
+            }
+        };
+
+        window.closeManualAssignModal = function () {
+            document.getElementById('ma-modal-overlay').classList.remove('show');
+            MA_STATE = null;
+        };
+
+        function renderModalRows(defaultTime) {
+            const tbody = document.getElementById('ma-tbody');
+            tbody.innerHTML = '';
+            const existingByStudent = {};
+            (MA_STATE.existing || []).forEach(e => { existingByStudent[e.student_hemis_id] = e; });
+
+            MA_STATE.students.forEach((s, idx) => {
+                const ex = existingByStudent[s.hemis_id] || {};
+                const time = ex.time || defaultTime || '';
+                const tr = document.createElement('tr');
+                tr.setAttribute('data-hemis-id', s.hemis_id);
+                tr.innerHTML =
+                    '<td>' + (idx + 1) + '</td>' +
+                    '<td><div style="font-weight:600;color:#0f172a;">' + escapeHtml(s.full_name) + '</div>' +
+                        '<div style="font-size:11px;color:#64748b;">' + escapeHtml(s.student_id_number || '') + '</div></td>' +
+                    '<td><input type="text" class="ma-time" value="' + escapeHtml(time) + '" placeholder="HH:MM" maxlength="5"></td>' +
+                    '<td><select class="ma-comp"><option value="">—</option></select></td>' +
+                    '<td class="ma-row-status" style="font-size:11.5px;color:#64748b;"></td>';
+                tbody.appendChild(tr);
+
+                const compSel = tr.querySelector('.ma-comp');
+                if (ex.computer_number) {
+                    compSel.setAttribute('data-preselect', ex.computer_number);
+                }
+                tr.querySelector('.ma-time').addEventListener('input', function (e) {
+                    formatTimeInput(e.target);
+                });
+                tr.querySelector('.ma-time').addEventListener('blur', () => refreshRow(tr));
+                tr.querySelector('.ma-time').addEventListener('change', () => refreshRow(tr));
+                tr.querySelector('.ma-comp').addEventListener('change', () => refreshRowsConflicts());
+            });
+        }
+
+        function formatTimeInput(el) {
+            let v = el.value.replace(/[^0-9]/g, '');
+            if (v.length >= 3) v = v.slice(0, 2) + ':' + v.slice(2, 4);
+            el.value = v.slice(0, 5);
+        }
+
+        function parseTimeMinutes(t) {
+            if (!t) return null;
+            const m = t.match(/^(\d{1,2}):(\d{2})$/);
+            if (!m) return null;
+            const h = +m[1], mm = +m[2];
+            if (h > 23 || mm > 59) return null;
+            return h * 60 + mm;
+        }
+
+        function fmtMinutes(mins) {
+            return String(Math.floor(mins / 60)).padStart(2, '0') + ':' + String(mins % 60).padStart(2, '0');
+        }
+
+        function refreshAllRows() {
+            document.querySelectorAll('#ma-tbody tr').forEach(tr => refreshRow(tr));
+            refreshRowsConflicts();
+        }
+
+        function refreshRow(tr) {
+            const timeEl = tr.querySelector('.ma-time');
+            const compEl = tr.querySelector('.ma-comp');
+            const statusEl = tr.querySelector('.ma-row-status');
+            const startMin = parseTimeMinutes(timeEl.value);
+            const slotLen = MA_STATE.duration_minutes + MA_STATE.buffer_minutes;
+            const previouslyChosen = compEl.value || compEl.getAttribute('data-preselect') || '';
+
+            // Clear and rebuild options based on busy windows at this time.
+            compEl.innerHTML = '<option value="">—</option>';
+
+            if (startMin === null) {
+                statusEl.textContent = 'Vaqt kiritilmagan';
+                statusEl.style.color = '#94a3b8';
+                tr.classList.remove('ma-row-warn');
+                return;
+            }
+            const endMin = startMin + slotLen;
+
+            // Out of work hours
+            const ws = parseTimeMinutes(MA_STATE.work_hours_start);
+            const we = parseTimeMinutes(MA_STATE.work_hours_end);
+            if (ws !== null && we !== null && (startMin < ws || endMin > we)) {
+                statusEl.textContent = '⚠ Ish vaqtidan tashqarida';
+                statusEl.style.color = '#dc2626';
+                tr.classList.add('ma-row-warn');
+            } else {
+                statusEl.textContent = fmtMinutes(startMin) + '–' + fmtMinutes(endMin);
+                statusEl.style.color = '#64748b';
+                tr.classList.remove('ma-row-warn');
+            }
+
+            // Lunch overlap (warn but allow)
+            const ls = parseTimeMinutes(MA_STATE.lunch_start);
+            const le = parseTimeMinutes(MA_STATE.lunch_end);
+            if (ls !== null && le !== null && startMin < le && endMin > ls) {
+                statusEl.textContent += ' • Tushlik bilan kesishadi';
+                statusEl.style.color = '#d97706';
+            }
+
+            MA_STATE.computers.forEach(c => {
+                const opt = document.createElement('option');
+                opt.value = c.number;
+
+                // Find first overlapping busy window for this computer.
+                let busyHit = null;
+                for (const b of MA_STATE.busy) {
+                    if (b.computer_number !== c.number) continue;
+                    const bs = parseTimeMinutes(b.planned_start);
+                    const be = parseTimeMinutes(b.planned_end);
+                    if (bs === null || be === null) continue;
+                    if (bs < endMin && be > startMin) { busyHit = b; break; }
+                }
+                let label = '#' + c.number + (c.is_reserve ? ' [zaxira]' : '');
+                if (c.label) label += ' (' + c.label + ')';
+                if (busyHit) {
+                    opt.disabled = true;
+                    label += ' — band: ' + (busyHit.subject || '?')
+                        + ' ' + (busyHit.planned_start || '') + '–' + (busyHit.planned_end || '');
+                }
+                opt.textContent = label;
+                compEl.appendChild(opt);
+            });
+
+            if (previouslyChosen) {
+                const optEl = compEl.querySelector('option[value="' + previouslyChosen + '"]');
+                if (optEl && !optEl.disabled) {
+                    compEl.value = previouslyChosen;
+                }
+            }
+        }
+
+        function refreshRowsConflicts() {
+            // Detect SAME-batch conflicts: two students sharing a computer
+            // within overlapping windows.
+            const rows = Array.from(document.querySelectorAll('#ma-tbody tr'));
+            const slotLen = MA_STATE.duration_minutes + MA_STATE.buffer_minutes;
+            const picks = rows.map(tr => {
+                const t = parseTimeMinutes(tr.querySelector('.ma-time').value);
+                const c = +(tr.querySelector('.ma-comp').value || 0);
+                return { tr, start: t, end: t === null ? null : t + slotLen, comp: c };
+            });
+
+            picks.forEach(p => {
+                const status = p.tr.querySelector('.ma-row-status');
+                if (!p.comp || p.start === null) return;
+                let conflict = null;
+                for (const q of picks) {
+                    if (q === p) continue;
+                    if (q.comp !== p.comp) continue;
+                    if (q.start === null) continue;
+                    if (q.end <= p.start) continue;
+                    if (p.end <= q.start) continue;
+                    conflict = q.tr.querySelector('td:nth-child(2)').textContent.trim().split('\n')[0];
+                    break;
+                }
+                if (conflict) {
+                    status.textContent = '✘ #' + p.comp + ' ' + conflict + ' bilan kesishadi';
+                    status.style.color = '#dc2626';
+                    p.tr.classList.add('ma-row-warn');
+                }
+            });
+        }
+
+        window.saveManualAssign = async function () {
+            if (!MA_STATE) return;
+            const rows = Array.from(document.querySelectorAll('#ma-tbody tr'));
+            const assignments = [];
+            const missing = [];
+            rows.forEach(tr => {
+                const hemis = tr.getAttribute('data-hemis-id');
+                const time = tr.querySelector('.ma-time').value.trim();
+                const comp = tr.querySelector('.ma-comp').value;
+                if (!time || !comp) {
+                    missing.push(tr.querySelector('td:nth-child(2)').textContent.trim().split('\n')[0]);
+                    return;
+                }
+                assignments.push({ student_hemis_id: hemis, computer_number: +comp, time });
+            });
+
+            if (missing.length) {
+                const s = document.getElementById('ma-status');
+                s.textContent = 'To\'ldirilmagan: ' + missing.slice(0, 3).join(', ')
+                    + (missing.length > 3 ? ' va yana ' + (missing.length - 3) : '');
+                s.classList.add('error');
+                return;
+            }
+
+            const btn = document.getElementById('ma-save-btn');
+            btn.disabled = true;
+            btn.textContent = 'Saqlanmoqda…';
+            document.getElementById('ma-status').classList.remove('error');
+            document.getElementById('ma-status').textContent = 'Yuborilmoqda…';
+
+            try {
+                const resp = await fetch(saveUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        group_hemis_id: MA_STATE.group_hemis_id,
+                        subject_id: MA_STATE.subject_id,
+                        semester_code: MA_STATE.semester_code,
+                        yn_type: MA_STATE.yn_type,
+                        assignments,
+                    }),
+                });
+                const data = await resp.json();
+                if (!resp.ok || !data.success) {
+                    const errs = (data.errors || [data.message || 'Xato']).join('; ');
+                    document.getElementById('ma-status').textContent = errs;
+                    document.getElementById('ma-status').classList.add('error');
+                    btn.disabled = false;
+                    btn.textContent = 'Saqlash';
+                    return;
+                }
+                showToast('Saqlandi', data.message, false);
+                closeManualAssignModal();
+                // Quickly bump the row's time input to the earliest slot so
+                // the visible state matches the server.
+                if (data.earliest_time) {
+                    const sel = '.test-time-input[data-group-hemis-id="' + MA_STATE.group_hemis_id
+                        + '"][data-subject-id="' + MA_STATE.subject_id + '"][data-semester-code="'
+                        + MA_STATE.semester_code + '"][data-yn-type="' + MA_STATE.yn_type + '"]';
+                    const inp = document.querySelector(sel);
+                    if (inp) inp.value = data.earliest_time;
+                }
+            } catch (e) {
+                document.getElementById('ma-status').textContent = 'Tarmoq xatosi: ' + e.message;
+                document.getElementById('ma-status').classList.add('error');
+                btn.disabled = false;
+                btn.textContent = 'Saqlash';
+            }
+        };
+
+        function escapeHtml(s) {
+            return String(s || '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            })[c]);
+        }
+    })();
+    </script>
 </x-app-layout>

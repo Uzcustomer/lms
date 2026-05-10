@@ -152,6 +152,186 @@ class ComputerAssignmentService
             ->delete();
     }
 
+    /**
+     * Manual bulk assignment: admin explicitly picks (time, computer) per
+     * student. Each row in $perStudent is:
+     *   ['student_hemis_id' => string, 'computer_number' => int, 'time' => 'HH:MM']
+     *
+     * Validations are mostly mirrored from pinComputer():
+     *   - the computer must exist and be active
+     *   - it must not be occupied by ANOTHER (schedule, yn_type) at that
+     *     time window
+     *   - within this same call, two students can't share a computer
+     *     while their windows overlap
+     * Existing scheduled rows for (schedule, yn_type) are wiped before
+     * the new ones are inserted so re-running the modal is idempotent.
+     *
+     * @return array{ok:bool, count?:int, errors?:array<int, string>, earliest_time?:string}
+     */
+    public function manualAssign(ExamSchedule $schedule, string $ynType, array $perStudent): array
+    {
+        $ynType = strtolower($ynType);
+        if (!in_array($ynType, ['oski', 'test'], true)) {
+            return ['ok' => false, 'errors' => ['Noto\'g\'ri yn turi.']];
+        }
+        $dateField = $ynType . '_date';
+        $naField   = $ynType . '_na';
+
+        if ($schedule->{$naField}) {
+            return ['ok' => false, 'errors' => ['Bu yn N/A deb belgilangan.']];
+        }
+        if (empty($schedule->{$dateField})) {
+            return ['ok' => false, 'errors' => ['Avval sana belgilanishi kerak.']];
+        }
+        $dateStr = $schedule->{$dateField} instanceof Carbon
+            ? $schedule->{$dateField}->format('Y-m-d')
+            : Carbon::parse((string) $schedule->{$dateField})->format('Y-m-d');
+
+        if (empty($perStudent)) {
+            return ['ok' => false, 'errors' => ['Hech qaysi talaba uchun biriktiruv yuborilmagan.']];
+        }
+
+        $duration = max(1, (int) config('services.moodle.quiz_duration_minutes', 25));
+        $buffer   = max(0, (int) config('services.moodle.computer_buffer_minutes', 5));
+        $slotLen  = $duration + $buffer;
+
+        // Build & validate every row.
+        $errors = [];
+        $rows = [];
+        $studentSeen = [];
+
+        $groupStudents = Student::where('group_id', $schedule->group_hemis_id)
+            ->whereNotNull('student_id_number')
+            ->get(['student_id_number', 'hemis_id', 'full_name'])
+            ->keyBy(fn($s) => (string) $s->hemis_id);
+
+        foreach ($perStudent as $idx => $entry) {
+            $hemisId = isset($entry['student_hemis_id']) ? (string) $entry['student_hemis_id'] : '';
+            $compNum = isset($entry['computer_number']) ? (int) $entry['computer_number'] : 0;
+            $timeStr = isset($entry['time']) ? substr((string) $entry['time'], 0, 5) : '';
+
+            if ($hemisId === '' || !preg_match('/^\d{2}:\d{2}$/', $timeStr) || $compNum < 1) {
+                $errors[] = "Qator " . ($idx + 1) . ": ma'lumot to'liq emas.";
+                continue;
+            }
+            if (!isset($groupStudents[$hemisId])) {
+                $errors[] = "Talaba (hemis_id={$hemisId}) bu guruhga tegishli emas.";
+                continue;
+            }
+            if (isset($studentSeen[$hemisId])) {
+                $errors[] = "Talaba {$groupStudents[$hemisId]->full_name} bir necha qatorda qaytarilgan.";
+                continue;
+            }
+            $studentSeen[$hemisId] = true;
+
+            try {
+                $start = Carbon::parse($dateStr . ' ' . $timeStr, config('app.timezone'));
+            } catch (\Throwable) {
+                $errors[] = "Talaba {$groupStudents[$hemisId]->full_name}: vaqt formatlash xatosi.";
+                continue;
+            }
+            $end = $start->copy()->addMinutes($slotLen);
+
+            $rows[] = [
+                'hemis_id'        => $hemisId,
+                'student'         => $groupStudents[$hemisId],
+                'computer_number' => $compNum,
+                'planned_start'   => $start,
+                'planned_end'     => $end,
+            ];
+        }
+
+        if (!empty($errors)) {
+            return ['ok' => false, 'errors' => $errors];
+        }
+
+        // Internal conflict: same computer, overlapping windows within this batch.
+        foreach ($rows as $i => $a) {
+            foreach ($rows as $j => $b) {
+                if ($i >= $j) continue;
+                if ($a['computer_number'] !== $b['computer_number']) continue;
+                if ($a['planned_end']->lte($b['planned_start'])) continue;
+                if ($b['planned_end']->lte($a['planned_start'])) continue;
+                $errors[] = "#{$a['computer_number']} kompyuter ikki talabaga bir vaqtda berilgan: "
+                    . "{$a['student']->full_name} va {$b['student']->full_name}.";
+            }
+        }
+        if (!empty($errors)) {
+            return ['ok' => false, 'errors' => array_values(array_unique($errors))];
+        }
+
+        // External conflict: each picked computer must not be busy at its
+        // window per any OTHER (schedule, yn_type).
+        foreach ($rows as $r) {
+            $occupied = $this->occupiedComputerNumbers(
+                $r['planned_start'],
+                $r['planned_end'],
+                $schedule->id,
+                $ynType,
+            );
+            if (in_array($r['computer_number'], $occupied, true)) {
+                $errors[] = "{$r['student']->full_name}: #{$r['computer_number']} bu vaqt oralig'ida boshqa guruh tomonidan band.";
+            }
+            $computer = \App\Models\Computer::where('number', $r['computer_number'])->first();
+            if (!$computer || !$computer->active) {
+                $errors[] = "Kompyuter #{$r['computer_number']} mavjud emas yoki faol emas.";
+            }
+        }
+        if (!empty($errors)) {
+            return ['ok' => false, 'errors' => array_values(array_unique($errors))];
+        }
+
+        // All good — wipe and insert atomically. The wipe matches what
+        // assign() does so re-running the modal is idempotent and the
+        // earlier status='in_progress'/'finished' history is preserved.
+        $now = now();
+        $earliest = collect($rows)->pluck('planned_start')->sort()->first();
+
+        DB::transaction(function () use ($schedule, $ynType, $rows, $now, $earliest) {
+            ComputerAssignment::where('exam_schedule_id', $schedule->id)
+                ->where('yn_type', $ynType)
+                ->where('status', ComputerAssignment::STATUS_SCHEDULED)
+                ->delete();
+
+            $insert = [];
+            foreach ($rows as $r) {
+                $insert[] = [
+                    'exam_schedule_id'  => $schedule->id,
+                    'student_id_number' => (string) $r['student']->student_id_number,
+                    'student_hemis_id'  => (string) $r['student']->hemis_id,
+                    'yn_type'           => $ynType,
+                    'computer_number'   => $r['computer_number'],
+                    'planned_start'     => $r['planned_start'],
+                    'planned_end'       => $r['planned_end'],
+                    'reveal_at'         => null,
+                    'reveal_notified'   => false,
+                    'approach_notified' => false,
+                    'ready_notified'    => false,
+                    'is_reserve'        => false,
+                    'is_pinned'         => true,
+                    'status'            => ComputerAssignment::STATUS_SCHEDULED,
+                    'created_at'        => $now,
+                    'updated_at'        => $now,
+                ];
+            }
+            ComputerAssignment::insert($insert);
+
+            $modeField = $ynType . '_assignment_mode';
+            $timeField = $ynType . '_time';
+            $schedule->{$modeField} = 'manual_explicit';
+            if ($earliest) {
+                $schedule->{$timeField} = $earliest->format('H:i');
+            }
+            $schedule->save();
+        });
+
+        return [
+            'ok'             => true,
+            'count'          => count($rows),
+            'earliest_time'  => $earliest ? $earliest->format('H:i') : null,
+        ];
+    }
+
     private function combineDateTime(mixed $date, mixed $time): ?Carbon
     {
         try {

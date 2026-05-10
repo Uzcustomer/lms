@@ -4256,4 +4256,185 @@ class AcademicScheduleController extends Controller
             \Log::warning('autoOpenAttemptIfNeeded xatolik (attempt=' . $attempt . '): ' . $e->getMessage());
         }
     }
+
+    /**
+     * Test markazi: "Qo'lda" rejim modali uchun ma'lumot — guruh
+     * talabalari (familiya bo'yicha tartiblangan), faol kompyuterlar va
+     * kunning boshqa schedule'lari uchun band oraliqlar. Frontend bu
+     * ma'lumot asosida har talabaning vaqtini o'zgartirganda kompyuter
+     * ro'yxatini disabled holatga keltirib turadi.
+     */
+    public function manualAssignOptions(Request $request)
+    {
+        if ($this->isTestCenterReadOnly()) {
+            return response()->json(['success' => false, 'message' => 'Bu amalga ruxsat yo\'q.'], 403);
+        }
+
+        $request->validate([
+            'group_hemis_id' => 'required|string',
+            'subject_id'     => 'required|string',
+            'semester_code'  => 'required|string',
+            'yn_type'        => 'required|string|in:OSKI,Test',
+        ]);
+
+        $schedule = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->whereNull('student_hemis_id')
+            ->first();
+        if (!$schedule) {
+            return response()->json(['success' => false, 'message' => 'Jadval topilmadi.'], 404);
+        }
+
+        $ynKey = $request->yn_type === 'OSKI' ? 'oski' : 'test';
+        $dateField = $ynKey . '_date';
+        $rawDate = $schedule->{$dateField};
+        if (empty($rawDate)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Avval ' . $request->yn_type . ' sanasini belgilang.',
+            ], 422);
+        }
+        $dateStr = $rawDate instanceof \Carbon\Carbon
+            ? $rawDate->format('Y-m-d')
+            : \Carbon\Carbon::parse((string) $rawDate)->format('Y-m-d');
+
+        $duration = max(1, (int) config('services.moodle.quiz_duration_minutes', 25));
+        $buffer   = max(0, (int) config('services.moodle.computer_buffer_minutes', 5));
+
+        $capacity = ExamCapacityService::getSettingsForDate($dateStr);
+
+        $students = Student::where('group_id', $request->group_hemis_id)
+            ->whereNotNull('student_id_number')
+            ->orderBy('full_name')
+            ->get(['hemis_id', 'student_id_number', 'full_name']);
+
+        $computers = \App\Models\Computer::where('active', true)
+            ->orderBy('number')
+            ->get(['number', 'ip_address', 'is_reserve_pool', 'label']);
+
+        // Pull all OTHER schedules' assignments for this date so the
+        // frontend can mark conflicts per (computer, time-window).
+        $busy = \App\Models\ComputerAssignment::query()
+            ->whereDate('planned_start', $dateStr)
+            ->where(function ($q) use ($schedule, $ynKey) {
+                $q->where('exam_schedule_id', '!=', $schedule->id)
+                    ->orWhere('yn_type', '!=', $ynKey);
+            })
+            ->whereIn('status', [
+                \App\Models\ComputerAssignment::STATUS_SCHEDULED,
+                \App\Models\ComputerAssignment::STATUS_IN_PROGRESS,
+            ])
+            ->with([
+                'examSchedule:id,group_hemis_id,subject_name,subject_id,semester_code',
+            ])
+            ->orderBy('planned_start')
+            ->get(['exam_schedule_id', 'computer_number', 'planned_start', 'planned_end', 'yn_type'])
+            ->map(function ($a) {
+                return [
+                    'computer_number' => (int) $a->computer_number,
+                    'planned_start'   => $a->planned_start?->format('H:i'),
+                    'planned_end'     => $a->planned_end?->format('H:i'),
+                    'subject'         => $a->examSchedule?->subject_name,
+                    'yn_type'         => $a->yn_type,
+                ];
+            })
+            ->values();
+
+        // Pre-load existing assignments for THIS schedule so we can
+        // pre-fill the modal if admin re-opens it.
+        $existing = \App\Models\ComputerAssignment::query()
+            ->where('exam_schedule_id', $schedule->id)
+            ->where('yn_type', $ynKey)
+            ->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+            ->get(['student_hemis_id', 'computer_number', 'planned_start'])
+            ->map(fn($a) => [
+                'student_hemis_id' => (string) $a->student_hemis_id,
+                'computer_number'  => $a->computer_number ? (int) $a->computer_number : null,
+                'time'             => $a->planned_start?->format('H:i'),
+            ])
+            ->values();
+
+        return response()->json([
+            'success' => true,
+            'date'    => $dateStr,
+            'duration_minutes' => $duration,
+            'buffer_minutes'   => $buffer,
+            'work_hours_start' => $capacity['work_hours_start'] ?? null,
+            'work_hours_end'   => $capacity['work_hours_end'] ?? null,
+            'lunch_start'      => $capacity['lunch_start'] ?? null,
+            'lunch_end'        => $capacity['lunch_end'] ?? null,
+            'students' => $students->map(fn($s) => [
+                'hemis_id' => (string) $s->hemis_id,
+                'student_id_number' => $s->student_id_number,
+                'full_name' => $s->full_name,
+            ])->values(),
+            'computers' => $computers->map(fn($c) => [
+                'number' => (int) $c->number,
+                'ip' => $c->ip_address,
+                'is_reserve' => (bool) $c->is_reserve_pool,
+                'label' => $c->label,
+            ])->values(),
+            'busy' => $busy,
+            'existing' => $existing,
+        ]);
+    }
+
+    /**
+     * Test markazi: "Qo'lda" rejim modalidan kelgan POST — har bir
+     * talaba uchun (vaqt, kompyuter) jufti bilan ComputerAssignment
+     * rowlari yoziladi. Validatsiya va saqlash logikasi
+     * ComputerAssignmentService::manualAssign'da.
+     */
+    public function manualAssignSave(Request $request)
+    {
+        if ($this->isTestCenterReadOnly()) {
+            return response()->json(['success' => false, 'message' => 'Bu amalga ruxsat yo\'q.'], 403);
+        }
+
+        $request->validate([
+            'group_hemis_id' => 'required|string',
+            'subject_id'     => 'required|string',
+            'semester_code'  => 'required|string',
+            'yn_type'        => 'required|string|in:OSKI,Test',
+            'assignments'    => 'required|array|min:1',
+            'assignments.*.student_hemis_id' => 'required|string',
+            'assignments.*.computer_number'  => 'required|integer|min:1',
+            'assignments.*.time'             => 'required|date_format:H:i',
+        ]);
+
+        $schedule = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
+            ->where('subject_id', $request->subject_id)
+            ->where('semester_code', $request->semester_code)
+            ->whereNull('student_hemis_id')
+            ->first();
+        if (!$schedule) {
+            return response()->json(['success' => false, 'message' => 'Jadval topilmadi.'], 404);
+        }
+
+        $ynKey = $request->yn_type === 'OSKI' ? 'oski' : 'test';
+
+        $result = app(\App\Services\ComputerAssignmentService::class)
+            ->manualAssign($schedule, $ynKey, $request->input('assignments'));
+
+        if (empty($result['ok'])) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Saqlashda xato.',
+                'errors' => $result['errors'] ?? ['Noma\'lum xato'],
+            ], 422);
+        }
+
+        // Trigger the existing Moodle group-exam booking job, mirroring
+        // the auto/JIT paths so quizzes are created with the right open
+        // window and per-student access list.
+        BookMoodleGroupExam::dispatch($schedule->id, $ynKey);
+
+        return response()->json([
+            'success' => true,
+            'count'   => $result['count'] ?? 0,
+            'earliest_time' => $result['earliest_time'] ?? null,
+            'message' => "Qo'lda biriktirma saqlandi: " . ($result['count'] ?? 0) . " ta talaba.",
+        ]);
+    }
 }

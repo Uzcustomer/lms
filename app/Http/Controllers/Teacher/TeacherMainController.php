@@ -324,6 +324,7 @@ class TeacherMainController extends Controller
                 $payload['quality_issues'] = $gate['issues'] ?? [];
                 $payload['quality_ok'] = $gate['ok'] ?? [];
                 $payload['quality_checked_at'] = now();
+                $payload['face_height_ratio'] = $gate['face_height_ratio'];
             }
 
             \App\Models\StudentPhoto::create($payload);

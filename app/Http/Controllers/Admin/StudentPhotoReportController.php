@@ -520,14 +520,27 @@ class StudentPhotoReportController extends Controller
     private function qualityBlockReason(StudentPhoto $photo): ?string
     {
         // Avval mavjud yozuvni baholaymiz (admin allaqachon `Sifat tekshiruvi`ni bosgan
-        // bo'lsa, natijalar DBda turibdi).
+        // bo'lsa yoki tutor yuklash paytida tekshirilgan bo'lsa, natijalar DBda turibdi).
+        // MUHIM: face_height_ratio kesh ustuni ham uzatiladi — aks holda 35% gateri
+        // ikkinchi tasdiqlash urinishida ishlamay qoladi.
         if ($photo->quality_checked_at !== null) {
+            $cachedRatio = $photo->face_height_ratio !== null
+                ? (float) $photo->face_height_ratio
+                : null;
+
+            // Agar oldingi tekshiruvda ratio saqlanmagan bo'lsa (eski yozuvlar uchun),
+            // tekshiruvni qaytadan o'tkazib, hamma narsani yangilaymiz — gate'ni
+            // chetlab o'tib bo'lmasligi shart.
+            if ($cachedRatio === null) {
+                return $this->runFreshGateCheck($photo);
+            }
+
             $evaluated = \App\Services\PhotoQualityGate::evaluate([
                 'passed' => (bool) $photo->quality_passed,
                 'quality_score' => (float) $photo->quality_score,
                 'issues' => $photo->quality_issues ?: [],
                 'ok' => $photo->quality_ok ?: [],
-                'metrics' => [],
+                'metrics' => ['face_height_ratio' => $cachedRatio],
             ]);
             if ($evaluated['passed']) {
                 return null;
@@ -536,7 +549,15 @@ class StudentPhotoReportController extends Controller
                 '. Rasmni rad eting va tyutorga qayta yuklatish so\'rang.';
         }
 
-        // Hali tekshirilmagan — AI servisni chaqirib o'zimiz tekshiramiz.
+        return $this->runFreshGateCheck($photo);
+    }
+
+    /**
+     * Sifat servisini chaqirib, natijani (face_height_ratio bilan birga) DBga yozadi
+     * va gate'dan o'tmasa sababini qaytaradi.
+     */
+    private function runFreshGateCheck(StudentPhoto $photo): ?string
+    {
         $url = asset($photo->photo_path);
         $gate = \App\Services\PhotoQualityGate::checkUrl($url);
 
@@ -545,12 +566,14 @@ class StudentPhotoReportController extends Controller
         }
 
         // Natijani DBga yozamiz, admin keyingi safar takror chaqirmasligi uchun.
+        // face_height_ratio HAR DOIM saqlanadi — gate'ni chetlab o'tib bo'lmaydi.
         $photo->forceFill([
             'quality_score' => $gate['quality_score'] ?? null,
             'quality_passed' => (bool) ($gate['service_passed'] ?? false),
             'quality_issues' => $gate['issues'] ?? [],
             'quality_ok' => $gate['ok'] ?? [],
             'quality_checked_at' => now(),
+            'face_height_ratio' => $gate['face_height_ratio'],
         ])->saveQuietly();
 
         if ($gate['passed']) {
@@ -803,11 +826,16 @@ class StudentPhotoReportController extends Controller
             ], 502);
         }
 
-        $data = $response->json();
+        $data = $response->json() ?: [];
         $score = (float) ($data['quality_score'] ?? 0);
         $passed = (bool) ($data['passed'] ?? false);
         $issues = $data['issues'] ?? [];
         $ok = $data['ok'] ?? [];
+
+        // Persist the derived face-height ratio so the approve() gate can
+        // re-evaluate the >=35% rule from cached fields without rerunning
+        // the AI service every click.
+        $evaluated = \App\Services\PhotoQualityGate::evaluate($data);
 
         $photo->update([
             'quality_score' => $score,
@@ -815,6 +843,7 @@ class StudentPhotoReportController extends Controller
             'quality_issues' => $issues,
             'quality_ok' => $ok,
             'quality_checked_at' => now(),
+            'face_height_ratio' => $evaluated['face_height_ratio'],
         ]);
 
         return response()->json([
@@ -823,6 +852,9 @@ class StudentPhotoReportController extends Controller
             'issues' => $issues,
             'ok' => $ok,
             'metrics' => $data['metrics'] ?? null,
+            'face_height_ratio' => $evaluated['face_height_ratio'],
+            'gate_passed' => $evaluated['passed'],
+            'gate_reason' => $evaluated['reason'],
             'checked_at' => $photo->quality_checked_at->toIso8601String(),
         ]);
     }

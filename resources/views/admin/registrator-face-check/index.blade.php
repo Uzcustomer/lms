@@ -1,8 +1,10 @@
-@extends('layouts.app')
+<x-app-layout>
+<x-slot name="header">
+    <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+        Registrator Face ID tekshiruvi
+    </h2>
+</x-slot>
 
-@section('title', 'Registrator Face ID tekshiruvi')
-
-@section('content')
 <div class="container mx-auto px-4 py-6">
 
     <div class="flex items-center justify-between mb-5">
@@ -66,4 +68,4 @@
 
     <div class="mt-4">{{ $students->links() }}</div>
 </div>
-@endsection
+</x-app-layout>

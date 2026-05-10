@@ -1,8 +1,10 @@
-@extends('layouts.app')
+<x-app-layout>
+<x-slot name="header">
+    <h2 class="font-semibold text-xl text-gray-800 leading-tight">
+        Webcam tekshiruv: {{ $student->full_name }}
+    </h2>
+</x-slot>
 
-@section('title', 'Webcam tekshiruv: ' . $student->full_name)
-
-@section('content')
 <div class="container mx-auto px-4 py-6 max-w-5xl">
 
     <div class="flex items-center justify-between mb-5">
@@ -286,4 +288,4 @@
     startCamera();
 })();
 </script>
-@endsection
+</x-app-layout>

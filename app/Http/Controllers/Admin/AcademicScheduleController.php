@@ -264,6 +264,20 @@ class AcademicScheduleController extends Controller
             $scheduleData = $this->expandByUrinish($scheduleData, $urinishFilter);
         }
 
+        // Test markazi yuklanganligi statistikasi — bo'sh kunlarni tanlash uchun
+        $testCenterLoad = [];
+        $testCenterCapacity = 0;
+        if ($isSearched) {
+            $loadFrom = $oskiDateFrom ?: ($testDateFrom ?: $dateFrom);
+            $loadTo = $oskiDateTo ?: ($testDateTo ?: $dateTo);
+            // Filter to'liq belgilanmagan bo'lsa, bugun + 60 kun ko'rsatamiz
+            if (!$loadFrom) $loadFrom = now()->toDateString();
+            if (!$loadTo) $loadTo = now()->addDays(60)->toDateString();
+            $loadInfo = $this->computeTestCenterLoad($loadFrom, $loadTo);
+            $testCenterLoad = $loadInfo['days'];
+            $testCenterCapacity = $loadInfo['capacity'];
+        }
+
         return view('admin.academic-schedule.index', compact(
             'scheduleData',
             'selectedEducationType',
@@ -293,7 +307,122 @@ class AcademicScheduleController extends Controller
             'canEditResit',
             'isAdmin',
             'activeRole',
+            'testCenterLoad',
+            'testCenterCapacity',
         ));
+    }
+
+    /**
+     * Berilgan sana oraliq uchun test markazi yuklanganligini hisoblaydi.
+     * Har bir kun uchun: rejalashtirilgan OSKI/Test sonlari va guruhlar.
+     * Bo'sh kunlarni tanlashga yordam berish uchun.
+     */
+    private function computeTestCenterLoad(string $dateFrom, string $dateTo): array
+    {
+        try {
+            $from = \Carbon\Carbon::parse($dateFrom)->format('Y-m-d');
+            $to = \Carbon\Carbon::parse($dateTo)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return ['days' => [], 'capacity' => 0];
+        }
+        if ($from > $to) {
+            [$from, $to] = [$to, $from];
+        }
+        // Juda uzoq oraliq bo'lsa, 120 kun bilan cheklaymiz
+        $maxTo = \Carbon\Carbon::parse($from)->addDays(120)->format('Y-m-d');
+        if ($to > $maxTo) $to = $maxTo;
+
+        $capacity = (int) (ExamCapacityService::getSettings()['computer_count'] ?? 0);
+
+        // Asosiy guruh sanalarini olish
+        $rows = ExamSchedule::where(function ($q) use ($from, $to) {
+                $q->where(function ($q2) use ($from, $to) {
+                    $q2->whereNotNull('oski_date')
+                       ->where('oski_na', false)
+                       ->whereBetween('oski_date', [$from, $to]);
+                })->orWhere(function ($q2) use ($from, $to) {
+                    $q2->whereNotNull('test_date')
+                       ->where('test_na', false)
+                       ->whereBetween('test_date', [$from, $to]);
+                })->orWhere(function ($q2) use ($from, $to) {
+                    $q2->whereNotNull('oski_resit_date')
+                       ->whereBetween('oski_resit_date', [$from, $to]);
+                })->orWhere(function ($q2) use ($from, $to) {
+                    $q2->whereNotNull('test_resit_date')
+                       ->whereBetween('test_resit_date', [$from, $to]);
+                })->orWhere(function ($q2) use ($from, $to) {
+                    $q2->whereNotNull('oski_resit2_date')
+                       ->whereBetween('oski_resit2_date', [$from, $to]);
+                })->orWhere(function ($q2) use ($from, $to) {
+                    $q2->whereNotNull('test_resit2_date')
+                       ->whereBetween('test_resit2_date', [$from, $to]);
+                });
+            })
+            ->get();
+
+        // Guruhdagi talabalar soni — yuklanish indikatorida talaba sonini ham ko'rsatish uchun
+        $groupHemisIds = $rows->pluck('group_hemis_id')->filter()->unique()->values()->toArray();
+        $groupSizes = [];
+        if (!empty($groupHemisIds)) {
+            try {
+                $groupSizes = DB::table('students')
+                    ->whereIn('group_id', $groupHemisIds)
+                    ->where('student_status_code', 11)
+                    ->groupBy('group_id')
+                    ->select('group_id', DB::raw('COUNT(*) as cnt'))
+                    ->pluck('cnt', 'group_id')
+                    ->toArray();
+            } catch (\Throwable $e) {
+                // ignore
+            }
+        }
+
+        $byDate = [];
+        $addEvent = function (?string $date, string $type, $row, ?int $stuCount) use (&$byDate, $from, $to) {
+            if (!$date) return;
+            if ($date < $from || $date > $to) return;
+            $byDate[$date]['oski'] = $byDate[$date]['oski'] ?? 0;
+            $byDate[$date]['test'] = $byDate[$date]['test'] ?? 0;
+            $byDate[$date]['groups'] = $byDate[$date]['groups'] ?? [];
+            $byDate[$date]['student_count'] = $byDate[$date]['student_count'] ?? 0;
+            $byDate[$date][$type]++;
+            $byDate[$date]['groups'][$row->group_hemis_id] = true;
+            $byDate[$date]['student_count'] += (int) ($stuCount ?? 0);
+        };
+
+        foreach ($rows as $r) {
+            $stuCount = $groupSizes[$r->group_hemis_id] ?? 0;
+            $oskiD = $r->oski_date?->format('Y-m-d');
+            if ($oskiD && !$r->oski_na) $addEvent($oskiD, 'oski', $r, $stuCount);
+            $testD = $r->test_date?->format('Y-m-d');
+            if ($testD && !$r->test_na) $addEvent($testD, 'test', $r, $stuCount);
+            $addEvent($r->oski_resit_date?->format('Y-m-d'), 'oski', $r, null);
+            $addEvent($r->test_resit_date?->format('Y-m-d'), 'test', $r, null);
+            $addEvent($r->oski_resit2_date?->format('Y-m-d'), 'oski', $r, null);
+            $addEvent($r->test_resit2_date?->format('Y-m-d'), 'test', $r, null);
+        }
+
+        // Sanalar oraliqdagi har kun uchun (bo'sh bo'lsa ham) yozuv qo'shish
+        $days = [];
+        $cursor = \Carbon\Carbon::parse($from);
+        $end = \Carbon\Carbon::parse($to);
+        while ($cursor->lte($end)) {
+            $d = $cursor->format('Y-m-d');
+            $info = $byDate[$d] ?? ['oski' => 0, 'test' => 0, 'groups' => [], 'student_count' => 0];
+            $days[] = [
+                'date' => $d,
+                'weekday' => $cursor->isoFormat('dd'),
+                'is_weekend' => in_array($cursor->dayOfWeek, [0, 6], true),
+                'oski_count' => $info['oski'],
+                'test_count' => $info['test'],
+                'group_count' => count($info['groups']),
+                'student_count' => $info['student_count'],
+                'total' => $info['oski'] + $info['test'],
+            ];
+            $cursor->addDay();
+        }
+
+        return ['days' => $days, 'capacity' => $capacity];
     }
 
     /**
@@ -3911,11 +4040,11 @@ class AcademicScheduleController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('YN kunlari');
 
-        $headers = ['#', 'Guruh', "Yo'nalish", 'Fan', 'Kredit', 'Yopilish shakli', 'Urinish', 'OSKI sanasi', 'Test sanasi', 'Talaba FISH', 'Talaba ID', 'Holat', 'Qarzlar soni', 'Izoh (qarz fanlari)'];
+        $headers = ['#', 'Guruh', "Yo'nalish", 'Fan', 'Kredit', 'Yopilish shakli', 'Urinish', 'Talaba soni', 'OSKI sanasi', 'Test sanasi', 'Talaba FISH', 'Talaba ID', 'Holat', 'Qarzlar soni', 'Izoh (qarz fanlari)'];
         foreach ($headers as $i => $h) {
             $sheet->setCellValue([$i + 1, 1], $h);
         }
-        $sheet->getStyle('A1:N1')->applyFromArray([
+        $sheet->getStyle('A1:O1')->applyFromArray([
             'font' => ['bold' => true, 'size' => 11, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '2B5EA7']],
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
@@ -3944,13 +4073,14 @@ class AcademicScheduleController extends Controller
                 $sheet->setCellValue([5, $rowNum], $item['subject']->credit ?? '');
                 $sheet->setCellValue([6, $rowNum], $cfLabel);
                 $sheet->setCellValue([7, $rowNum], $itemUrinish . '-urinish');
-                $sheet->setCellValue([8, $rowNum], $oskiNa ? 'N/A' : $fmt($oski));
-                $sheet->setCellValue([9, $rowNum], $testNa ? 'N/A' : $fmt($test));
-                $sheet->setCellValue([10, $rowNum], '');
+                $sheet->setCellValue([8, $rowNum], (int) ($item['student_count'] ?? 0));
+                $sheet->setCellValue([9, $rowNum], $oskiNa ? 'N/A' : $fmt($oski));
+                $sheet->setCellValue([10, $rowNum], $testNa ? 'N/A' : $fmt($test));
                 $sheet->setCellValue([11, $rowNum], '');
                 $sheet->setCellValue([12, $rowNum], '');
                 $sheet->setCellValue([13, $rowNum], '');
                 $sheet->setCellValue([14, $rowNum], '');
+                $sheet->setCellValue([15, $rowNum], '');
                 $rowNum++;
 
                 // Per-student qatorlar
@@ -4002,30 +4132,31 @@ class AcademicScheduleController extends Controller
                         $sheet->setCellValue([5, $rowNum], '');
                         $sheet->setCellValue([6, $rowNum], $cfLabel);
                         $sheet->setCellValue([7, $rowNum], $itemUrinish . '-urinish');
-                        $sheet->setCellValue([8, $rowNum], $fmt($stuOski));
-                        $sheet->setCellValue([9, $rowNum], $fmt($stuTest));
-                        $sheet->setCellValue([10, $rowNum], $stu['full_name'] ?? '');
-                        $sheet->setCellValueExplicit([11, $rowNum], (string) ($stu['student_id_number'] ?? ''), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
-                        $sheet->setCellValue([12, $rowNum], $statusLabel);
-                        $sheet->setCellValue([13, $rowNum], $stuDebtCount);
-                        $sheet->setCellValue([14, $rowNum], $stuDebtNote);
+                        $sheet->setCellValue([8, $rowNum], '');
+                        $sheet->setCellValue([9, $rowNum], $fmt($stuOski));
+                        $sheet->setCellValue([10, $rowNum], $fmt($stuTest));
+                        $sheet->setCellValue([11, $rowNum], $stu['full_name'] ?? '');
+                        $sheet->setCellValueExplicit([12, $rowNum], (string) ($stu['student_id_number'] ?? ''), \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+                        $sheet->setCellValue([13, $rowNum], $statusLabel);
+                        $sheet->setCellValue([14, $rowNum], $stuDebtCount);
+                        $sheet->setCellValue([15, $rowNum], $stuDebtNote);
 
                         // Per-student qatorni vizual ajratish (kulrang fon)
-                        $sheet->getStyle("A{$rowNum}:N{$rowNum}")->applyFromArray([
+                        $sheet->getStyle("A{$rowNum}:O{$rowNum}")->applyFromArray([
                             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F8FAFC']],
                             'font' => ['italic' => true, 'size' => 10, 'color' => ['rgb' => '475569']],
                         ]);
-                        $sheet->getStyle("N{$rowNum}")->getAlignment()->setWrapText(true);
+                        $sheet->getStyle("O{$rowNum}")->getAlignment()->setWrapText(true);
                         // Qarz soni > 0 bo'lsa, yacheykani qizg'ish rangda ajratish
                         if ($stuDebtCount > 0) {
-                            $sheet->getStyle("M{$rowNum}")->applyFromArray([
+                            $sheet->getStyle("N{$rowNum}")->applyFromArray([
                                 'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEF3C7']],
                                 'font' => ['bold' => true, 'color' => ['rgb' => '92400E']],
                             ]);
                         }
                         // Holat to'lgan bo'lsa, qizil rangda ajratish
                         if ($statusLabel !== '') {
-                            $sheet->getStyle("L{$rowNum}")->applyFromArray([
+                            $sheet->getStyle("M{$rowNum}")->applyFromArray([
                                 'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEE2E2']],
                                 'font' => ['bold' => true, 'color' => ['rgb' => '991B1B']],
                             ]);
@@ -4036,20 +4167,21 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        $widths = [5, 18, 30, 35, 8, 18, 12, 14, 14, 28, 14, 22, 11, 60];
+        $widths = [5, 18, 30, 35, 8, 18, 12, 11, 14, 14, 28, 14, 22, 11, 60];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
 
         $lastRow = $rowNum - 1;
         if ($lastRow > 1) {
-            $sheet->getStyle("A2:N{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:O{$lastRow}")->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN, 'color' => ['rgb' => 'E2E8F0']]],
                 'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
             ]);
             $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("G2:I{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("M2:M{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("G2:J{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("H2:H{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("N2:N{$lastRow}")->getAlignment()->setHorizontal(\PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER);
         }
 
         $sheet->freezePane('A2');
@@ -4304,6 +4436,24 @@ class AcademicScheduleController extends Controller
     {
         if ($scheduleData->isEmpty()) return $scheduleData;
 
+        // Guruhdagi faol talabalar soni — 1-urinish ustuni uchun
+        $allGroupHemisIds = $scheduleData->flatMap(fn($items) => $items->pluck('group')->pluck('group_hemis_id'))
+            ->unique()->values()->toArray();
+        $groupSizes = [];
+        if (!empty($allGroupHemisIds)) {
+            try {
+                $groupSizes = DB::table('students')
+                    ->whereIn('group_id', $allGroupHemisIds)
+                    ->where('student_status_code', 11)
+                    ->groupBy('group_id')
+                    ->select('group_id', DB::raw('COUNT(*) as cnt'))
+                    ->pluck('cnt', 'group_id')
+                    ->toArray();
+            } catch (\Throwable $e) {
+                \Log::warning('groupSizes lookup failed: ' . $e->getMessage());
+            }
+        }
+
         // Talabalar qaysi urinishda V<60 bo'lib qolganligini aniqlash.
         // Strict mantiq: faqat haqiqiy bahosi mavjud bo'lib, lekin <60 bo'lgan yozuvlar.
         // Null/null yozuvlar (NB placeholderlar) inobatga olinmaydi.
@@ -4389,13 +4539,26 @@ class AcademicScheduleController extends Controller
             \Log::warning('expandByUrinish needs check failed: ' . $e->getMessage());
         }
 
-        return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey, $attemptExistsByKey) {
+        return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey, $attemptExistsByKey, $groupSizes) {
             $expanded = collect();
             foreach ($items as $item) {
                 $groupHid = $item['group']->group_hemis_id ?? '';
                 $subjectId = $item['subject']->subject_id ?? '';
                 $semCode = $item['subject']->semester_code ?? '';
                 $needsKeyBase = $groupHid . '|' . $subjectId . '|' . $semCode;
+
+                $studentsAttachedList = (isset($item['students']) && is_array($item['students'])) ? $item['students'] : null;
+                $countFor = function (int $att) use ($studentsAttachedList, $groupSizes, $groupHid, $needsByKey, $needsKeyBase) {
+                    if (is_array($studentsAttachedList)) {
+                        if ($att === 1) return count($studentsAttachedList);
+                        $field = $att === 2 ? 'failed_attempt1' : 'failed_attempt2';
+                        return count(array_filter($studentsAttachedList, fn($s) => !empty($s[$field])));
+                    }
+                    if ($att === 1) {
+                        return (int) ($groupSizes[$groupHid] ?? 0);
+                    }
+                    return (int) ($needsByKey[$needsKeyBase . '|' . $att] ?? 0);
+                };
 
                 // 1-urinish — har doim
                 $row1 = $item;
@@ -4404,6 +4567,7 @@ class AcademicScheduleController extends Controller
                 $row1['test_date_for_urinish'] = $item['test_date'] ?? null;
                 $row1['oski_na_for_urinish'] = $item['oski_na'] ?? false;
                 $row1['test_na_for_urinish'] = $item['test_na'] ?? false;
+                $row1['student_count'] = $countFor(1);
 
                 // 2-urinish ko'rinish qoidasi:
                 //  - oski_resit_date / test_resit_date saqlangan bo'lsa
@@ -4434,6 +4598,7 @@ class AcademicScheduleController extends Controller
                     $row2['test_date_for_urinish'] = $item['test_resit_date'] ?? null;
                     $row2['oski_na_for_urinish'] = false;
                     $row2['test_na_for_urinish'] = false;
+                    $row2['student_count'] = $countFor(2);
                 }
 
                 // 3-urinish — xuddi shu mantiq, attempt=2 dan o'tmaganlar uchun
@@ -4459,6 +4624,7 @@ class AcademicScheduleController extends Controller
                     $row3['test_date_for_urinish'] = $item['test_resit2_date'] ?? null;
                     $row3['oski_na_for_urinish'] = false;
                     $row3['test_na_for_urinish'] = false;
+                    $row3['student_count'] = $countFor(3);
                 }
 
                 // Filter qo'llash

@@ -132,7 +132,11 @@
                     // Joriy ekrandagi sanalar oralig'idagi yozuvlar:
                     //   missing  = sana bor, vaqt yo'q (avto-vaqt uchun)
                     //   withTime = sana bor, vaqt bor (tozalash uchun)
-                    // Hisob TEST + OSKI ikkalasini ham qamraydi, faqat 1-urinish.
+                    // Hisob TEST + OSKI ikkalasini ham qamraydi, urinishlar 1, 2, 3.
+                    // scheduleData ichidagi $it elementi attempt bo'yicha:
+                    //   - yn_date  = shu urinishning sanasi
+                    //   - test_time = shu urinishning vaqti (nom yanglish, lekin har attempt uchun)
+                    //   - yn_na    = N/A bayrog'i (faqat attempt=1 da o'rnatiladi)
                     $tcMissingTimeCount = 0;
                     $tcWithTimeCount = 0;
                     if (!empty($scheduleData)) {
@@ -142,16 +146,10 @@
                                 if (!in_array($ynType, ['test', 'oski'], true)) {
                                     continue;
                                 }
-                                if ((int) ($it['attempt'] ?? 1) !== 1) {
+                                if (empty($it['yn_date']) || !empty($it['yn_na'])) {
                                     continue;
                                 }
-                                $dateKey = $ynType . '_date';
-                                $timeKey = $ynType . '_time';
-                                $naKey   = $ynType . '_na';
-                                if (empty($it[$dateKey]) || !empty($it[$naKey])) {
-                                    continue;
-                                }
-                                if (empty($it[$timeKey])) {
+                                if (empty($it['test_time'])) {
                                     $tcMissingTimeCount++;
                                 } else {
                                     $tcWithTimeCount++;

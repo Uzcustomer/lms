@@ -793,6 +793,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
             Route::post('/test-center/save-student-time', [AcademicScheduleController::class, 'saveStudentTime'])->name('test-center.save-student-time');
             Route::post('/test-center/pin-computer', [AcademicScheduleController::class, 'pinComputer'])->name('test-center.pin-computer');
+            Route::get('/test-center/manual-assign-options', [AcademicScheduleController::class, 'manualAssignOptions'])->name('test-center.manual-assign.options');
+            Route::post('/test-center/manual-assign', [AcademicScheduleController::class, 'manualAssignSave'])->name('test-center.manual-assign.save');
             Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
             Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
@@ -1365,6 +1367,8 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');
             Route::post('/test-center/save-student-time', [AcademicScheduleController::class, 'saveStudentTime'])->name('test-center.save-student-time');
             Route::post('/test-center/pin-computer', [AcademicScheduleController::class, 'pinComputer'])->name('test-center.pin-computer');
+            Route::get('/test-center/manual-assign-options', [AcademicScheduleController::class, 'manualAssignOptions'])->name('test-center.manual-assign.options');
+            Route::post('/test-center/manual-assign', [AcademicScheduleController::class, 'manualAssignSave'])->name('test-center.manual-assign.save');
             Route::post('/test-center/refresh-quiz-counts', [AcademicScheduleController::class, 'refreshQuizCounts'])->name('test-center.refresh-quiz-counts');
             Route::post('/test-center/generate-yn-oldi-word', [AcademicScheduleController::class, 'generateYnOldiWord'])->name('test-center.generate-yn-oldi-word');
             Route::post('/test-center/save-test-time', [AcademicScheduleController::class, 'saveTestTime'])->name('test-center.save-test-time');

@@ -275,6 +275,30 @@ class StudentPhotoReportController extends Controller
                 $query->where('student_photos.quality_score', $op, (float) $request->quality_value);
             }
         }
+        if ($has('moodle_sync')) {
+            switch ($request->moodle_sync) {
+                case 'confirmed':
+                    $query->whereNotNull('student_photos.descriptor_confirmed_at');
+                    break;
+                case 'face_api_failed':
+                    $query->where('student_photos.moodle_sync_status', 'moodle_face_api_failed');
+                    break;
+                case 'failed':
+                    $query->where('student_photos.moodle_sync_status', 'failed');
+                    break;
+                case 'sent_unconfirmed':
+                    $query->whereNotNull('student_photos.moodle_synced_at')
+                          ->whereNull('student_photos.descriptor_confirmed_at')
+                          ->where(function ($q) {
+                              $q->whereNull('student_photos.moodle_sync_status')
+                                ->orWhereNotIn('student_photos.moodle_sync_status', ['failed', 'moodle_face_api_failed']);
+                          });
+                    break;
+                case 'never':
+                    $query->whereNull('student_photos.moodle_synced_at');
+                    break;
+            }
+        }
 
         return $query;
     }
@@ -459,6 +483,14 @@ class StudentPhotoReportController extends Controller
             return $this->reviewResponse($request, false, 'Bu rasm allaqachon ko\'rib chiqilgan.');
         }
 
+        // Qattiq sifat eshigi: tasdiqdan oldin sifat tekshiruvi o'tgan bo'lishi shart va
+        // yuz balandligi >= 35% bo'lishi kerak. Aks holda Moodle face-api uni topa olmaydi
+        // va rasm "Yuz topilmadi" xatosi bilan qaytadi.
+        $gateError = $this->qualityBlockReason($photo);
+        if ($gateError !== null) {
+            return $this->reviewResponse($request, false, $gateError);
+        }
+
         $user = Auth::user();
         $photo->update([
             'status' => StudentPhoto::STATUS_APPROVED,
@@ -477,6 +509,78 @@ class StudentPhotoReportController extends Controller
         \App\Jobs\SendStudentPhotoToMoodle::dispatch($photo->id)->afterCommit();
 
         return $this->reviewResponse($request, true, 'Rasm tasdiqlandi.');
+    }
+
+    /**
+     * Tasdiqlashni bloklovchi sabab (yo'q bo'lsa null). Sifat tekshiruvi o'tmagan,
+     * yuz juda kichik (>= 35% balandlik talab qilinadi) yoki sifat servis
+     * bog'liq metrikalar yetishmasa — admin avval qayta yuklatishi yoki rad
+     * etishi kerak.
+     */
+    private function qualityBlockReason(StudentPhoto $photo): ?string
+    {
+        // Avval mavjud yozuvni baholaymiz (admin allaqachon `Sifat tekshiruvi`ni bosgan
+        // bo'lsa yoki tutor yuklash paytida tekshirilgan bo'lsa, natijalar DBda turibdi).
+        // MUHIM: face_height_ratio kesh ustuni ham uzatiladi — aks holda 35% gateri
+        // ikkinchi tasdiqlash urinishida ishlamay qoladi.
+        if ($photo->quality_checked_at !== null) {
+            $cachedRatio = $photo->face_height_ratio !== null
+                ? (float) $photo->face_height_ratio
+                : null;
+
+            // Agar oldingi tekshiruvda ratio saqlanmagan bo'lsa (eski yozuvlar uchun),
+            // tekshiruvni qaytadan o'tkazib, hamma narsani yangilaymiz — gate'ni
+            // chetlab o'tib bo'lmasligi shart.
+            if ($cachedRatio === null) {
+                return $this->runFreshGateCheck($photo);
+            }
+
+            $evaluated = \App\Services\PhotoQualityGate::evaluate([
+                'passed' => (bool) $photo->quality_passed,
+                'quality_score' => (float) $photo->quality_score,
+                'issues' => $photo->quality_issues ?: [],
+                'ok' => $photo->quality_ok ?: [],
+                'metrics' => ['face_height_ratio' => $cachedRatio],
+            ]);
+            if ($evaluated['passed']) {
+                return null;
+            }
+            return 'Tasdiqlash bloklandi: ' . ($evaluated['reason'] ?: 'rasm sifati standartlarga mos emas') .
+                '. Rasmni rad eting va tyutorga qayta yuklatish so\'rang.';
+        }
+
+        return $this->runFreshGateCheck($photo);
+    }
+
+    /**
+     * Sifat servisini chaqirib, natijani (face_height_ratio bilan birga) DBga yozadi
+     * va gate'dan o'tmasa sababini qaytaradi.
+     */
+    private function runFreshGateCheck(StudentPhoto $photo): ?string
+    {
+        $url = asset($photo->photo_path);
+        $gate = \App\Services\PhotoQualityGate::checkUrl($url);
+
+        if (!$gate['reachable']) {
+            return 'Tasdiqlashdan oldin "Sifat tekshiruvi" tugmasini bosing — AI servis vaqtinchalik javob bermadi.';
+        }
+
+        // Natijani DBga yozamiz, admin keyingi safar takror chaqirmasligi uchun.
+        // face_height_ratio HAR DOIM saqlanadi — gate'ni chetlab o'tib bo'lmaydi.
+        $photo->forceFill([
+            'quality_score' => $gate['quality_score'] ?? null,
+            'quality_passed' => (bool) ($gate['service_passed'] ?? false),
+            'quality_issues' => $gate['issues'] ?? [],
+            'quality_ok' => $gate['ok'] ?? [],
+            'quality_checked_at' => now(),
+            'face_height_ratio' => $gate['face_height_ratio'],
+        ])->saveQuietly();
+
+        if ($gate['passed']) {
+            return null;
+        }
+        return 'Tasdiqlash bloklandi: ' . ($gate['reason'] ?: 'rasm sifati standartlarga mos emas') .
+            '. Rasmni rad eting va tyutorga qayta yuklatish so\'rang.';
     }
 
     /**
@@ -722,11 +826,16 @@ class StudentPhotoReportController extends Controller
             ], 502);
         }
 
-        $data = $response->json();
+        $data = $response->json() ?: [];
         $score = (float) ($data['quality_score'] ?? 0);
         $passed = (bool) ($data['passed'] ?? false);
         $issues = $data['issues'] ?? [];
         $ok = $data['ok'] ?? [];
+
+        // Persist the derived face-height ratio so the approve() gate can
+        // re-evaluate the >=35% rule from cached fields without rerunning
+        // the AI service every click.
+        $evaluated = \App\Services\PhotoQualityGate::evaluate($data);
 
         $photo->update([
             'quality_score' => $score,
@@ -734,6 +843,7 @@ class StudentPhotoReportController extends Controller
             'quality_issues' => $issues,
             'quality_ok' => $ok,
             'quality_checked_at' => now(),
+            'face_height_ratio' => $evaluated['face_height_ratio'],
         ]);
 
         return response()->json([
@@ -742,6 +852,9 @@ class StudentPhotoReportController extends Controller
             'issues' => $issues,
             'ok' => $ok,
             'metrics' => $data['metrics'] ?? null,
+            'face_height_ratio' => $evaluated['face_height_ratio'],
+            'gate_passed' => $evaluated['passed'],
+            'gate_reason' => $evaluated['reason'],
             'checked_at' => $photo->quality_checked_at->toIso8601String(),
         ]);
     }

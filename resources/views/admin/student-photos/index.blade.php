@@ -453,6 +453,17 @@
                                        class="sp-text-input" style="flex:1;min-width:0;" />
                             </div>
                         </div>
+                        <div class="filter-item" style="min-width: 180px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#a855f7;"></span> Moodle holati</label>
+                            <select name="moodle_sync" class="select2-sp" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="confirmed" {{ request('moodle_sync') == 'confirmed' ? 'selected' : '' }}>Moodle'da tasdiqlangan</option>
+                                <option value="sent_unconfirmed" {{ request('moodle_sync') == 'sent_unconfirmed' ? 'selected' : '' }}>Yuborilgan, tasdiq kutilmoqda</option>
+                                <option value="face_api_failed" {{ request('moodle_sync') == 'face_api_failed' ? 'selected' : '' }}>Moodle: yuz topilmadi</option>
+                                <option value="failed" {{ request('moodle_sync') == 'failed' ? 'selected' : '' }}>Yuborish xatosi</option>
+                                <option value="never" {{ request('moodle_sync') == 'never' ? 'selected' : '' }}>Hech qachon yuborilmagan</option>
+                            </select>
+                        </div>
                         <div class="filter-item" style="flex: 1; min-width: 180px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -706,8 +717,18 @@
                                                 @if($photo->reviewed_by_name)
                                                     <div class="text-[11px] text-gray-500 mt-0.5">{{ $photo->reviewed_by_name }}</div>
                                                 @endif
+                                                @if($photo->descriptor_confirmed_at)
+                                                    <div class="mt-1"><span class="inline-block px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-medium" title="Moodle face-api descriptori muvaffaqiyatli yozilgan">Moodle ✓</span></div>
+                                                @elseif($photo->moodle_synced_at)
+                                                    <div class="mt-1"><span class="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-medium" title="Moodle'ga yuborilgan, descriptor tasdig'i kutilmoqda">Moodle: kutilmoqda</span></div>
+                                                @else
+                                                    <div class="mt-1"><span class="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-[10px] font-medium" title="Hali Moodle'ga yuborilmagan (queue ishga tushgani kutilmoqda)">Moodle: navbatda</span></div>
+                                                @endif
                                             @elseif($photo->status === 'rejected')
                                                 <span class="inline-block px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-medium" title="{{ $photo->rejection_reason }}">Rad etilgan</span>
+                                                @if($photo->moodle_sync_status === 'moodle_face_api_failed')
+                                                    <div class="mt-1"><span class="inline-block px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-medium" title="{{ $photo->moodle_sync_error }}">Moodle: yuz topilmadi</span></div>
+                                                @endif
                                                 @if($photo->rejection_reason)
                                                     <div class="text-[11px] text-gray-500 mt-0.5 max-w-[180px] truncate" title="{{ $photo->rejection_reason }}">{{ $photo->rejection_reason }}</div>
                                                 @endif

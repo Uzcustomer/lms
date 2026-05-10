@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\ExamAccessCheckController;
 use App\Http\Controllers\Api\ExamLayoutController;
 use App\Http\Controllers\Api\ExamQuizTargetController;
 use App\Http\Controllers\Api\MoodleDescriptorCallbackController;
+use App\Http\Controllers\Api\MoodleDescriptorFailedCallbackController;
 use App\Http\Controllers\Api\MoodlePhotoSyncController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
@@ -29,6 +30,15 @@ Route::post('/sync-photos-to-moodle', [MoodlePhotoSyncController::class, 'syncPh
 Route::post('/moodle-descriptor-confirmed', [MoodleDescriptorCallbackController::class, 'confirm'])
     ->middleware('throttle:30,1')
     ->name('api.moodle.descriptor-confirmed');
+
+// Moodle plugin → LMS descriptor FAILURE. When face-api.js cannot detect a
+// face on a photo we already approved and pushed, Moodle calls this so we
+// can flip the photo back to 'rejected', clear the cached ArcFace embedding
+// and notify the tutor — instead of silently leaving an unusable approved
+// photo in Mark.
+Route::post('/moodle-descriptor-failed', [MoodleDescriptorFailedCallbackController::class, 'fail'])
+    ->middleware('throttle:60,1')
+    ->name('api.moodle.descriptor-failed');
 
 // Moodle quizaccess_lmsguard plugin → LMS pre-attempt check. Verifies the
 // student's IP matches the computer assigned to them and the slot is

@@ -275,6 +275,30 @@ class StudentPhotoReportController extends Controller
                 $query->where('student_photos.quality_score', $op, (float) $request->quality_value);
             }
         }
+        if ($has('moodle_sync')) {
+            switch ($request->moodle_sync) {
+                case 'confirmed':
+                    $query->whereNotNull('student_photos.descriptor_confirmed_at');
+                    break;
+                case 'face_api_failed':
+                    $query->where('student_photos.moodle_sync_status', 'moodle_face_api_failed');
+                    break;
+                case 'failed':
+                    $query->where('student_photos.moodle_sync_status', 'failed');
+                    break;
+                case 'sent_unconfirmed':
+                    $query->whereNotNull('student_photos.moodle_synced_at')
+                          ->whereNull('student_photos.descriptor_confirmed_at')
+                          ->where(function ($q) {
+                              $q->whereNull('student_photos.moodle_sync_status')
+                                ->orWhereNotIn('student_photos.moodle_sync_status', ['failed', 'moodle_face_api_failed']);
+                          });
+                    break;
+                case 'never':
+                    $query->whereNull('student_photos.moodle_synced_at');
+                    break;
+            }
+        }
 
         return $query;
     }
@@ -459,6 +483,14 @@ class StudentPhotoReportController extends Controller
             return $this->reviewResponse($request, false, 'Bu rasm allaqachon ko\'rib chiqilgan.');
         }
 
+        // Qattiq sifat eshigi: tasdiqdan oldin sifat tekshiruvi o'tgan bo'lishi shart va
+        // yuz balandligi >= 35% bo'lishi kerak. Aks holda Moodle face-api uni topa olmaydi
+        // va rasm "Yuz topilmadi" xatosi bilan qaytadi.
+        $gateError = $this->qualityBlockReason($photo);
+        if ($gateError !== null) {
+            return $this->reviewResponse($request, false, $gateError);
+        }
+
         $user = Auth::user();
         $photo->update([
             'status' => StudentPhoto::STATUS_APPROVED,
@@ -477,6 +509,55 @@ class StudentPhotoReportController extends Controller
         \App\Jobs\SendStudentPhotoToMoodle::dispatch($photo->id)->afterCommit();
 
         return $this->reviewResponse($request, true, 'Rasm tasdiqlandi.');
+    }
+
+    /**
+     * Tasdiqlashni bloklovchi sabab (yo'q bo'lsa null). Sifat tekshiruvi o'tmagan,
+     * yuz juda kichik (>= 35% balandlik talab qilinadi) yoki sifat servis
+     * bog'liq metrikalar yetishmasa — admin avval qayta yuklatishi yoki rad
+     * etishi kerak.
+     */
+    private function qualityBlockReason(StudentPhoto $photo): ?string
+    {
+        // Avval mavjud yozuvni baholaymiz (admin allaqachon `Sifat tekshiruvi`ni bosgan
+        // bo'lsa, natijalar DBda turibdi).
+        if ($photo->quality_checked_at !== null) {
+            $evaluated = \App\Services\PhotoQualityGate::evaluate([
+                'passed' => (bool) $photo->quality_passed,
+                'quality_score' => (float) $photo->quality_score,
+                'issues' => $photo->quality_issues ?: [],
+                'ok' => $photo->quality_ok ?: [],
+                'metrics' => [],
+            ]);
+            if ($evaluated['passed']) {
+                return null;
+            }
+            return 'Tasdiqlash bloklandi: ' . ($evaluated['reason'] ?: 'rasm sifati standartlarga mos emas') .
+                '. Rasmni rad eting va tyutorga qayta yuklatish so\'rang.';
+        }
+
+        // Hali tekshirilmagan — AI servisni chaqirib o'zimiz tekshiramiz.
+        $url = asset($photo->photo_path);
+        $gate = \App\Services\PhotoQualityGate::checkUrl($url);
+
+        if (!$gate['reachable']) {
+            return 'Tasdiqlashdan oldin "Sifat tekshiruvi" tugmasini bosing — AI servis vaqtinchalik javob bermadi.';
+        }
+
+        // Natijani DBga yozamiz, admin keyingi safar takror chaqirmasligi uchun.
+        $photo->forceFill([
+            'quality_score' => $gate['quality_score'] ?? null,
+            'quality_passed' => (bool) ($gate['service_passed'] ?? false),
+            'quality_issues' => $gate['issues'] ?? [],
+            'quality_ok' => $gate['ok'] ?? [],
+            'quality_checked_at' => now(),
+        ])->saveQuietly();
+
+        if ($gate['passed']) {
+            return null;
+        }
+        return 'Tasdiqlash bloklandi: ' . ($gate['reason'] ?: 'rasm sifati standartlarga mos emas') .
+            '. Rasmni rad eting va tyutorga qayta yuklatish so\'rang.';
     }
 
     /**

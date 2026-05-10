@@ -19,9 +19,9 @@ class ClosingFormController extends Controller
             abort(403);
         }
         $activeRole = session('active_role', '');
-        $allowedRoles = ['superadmin', 'admin', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi'];
+        $allowedRoles = ['superadmin', 'admin', 'kichik_admin', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'registrator_ofisi'];
         if (!in_array($activeRole, $allowedRoles, true)) {
-            abort(403, "Yopilish shakli sahifasiga faqat o'quv bo'limi va adminlar kira oladi.");
+            abort(403, "Yopilish shakli sahifasiga faqat o'quv bo'limi, registrator ofisi va adminlar kira oladi.");
         }
     }
 

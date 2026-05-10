@@ -660,12 +660,16 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // Guruh test jadvali — tyutor / dekan / registrator_ofisi uchun.
         // Role-aware scoping va Excel eksport kontroller ichida amalga oshiriladi.
+        // POST autoTime kontroller ichida qo'shimcha cheklov bilan: faqat
+        // admin va registrator_ofisi vaqt yoza oladi.
         Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|tyutor|dekan|registrator_ofisi'])
             ->group(function () {
                 Route::get('/group-test-schedule', [\App\Http\Controllers\Admin\GroupTestScheduleController::class, 'index'])
                     ->name('group-test-schedule.index');
                 Route::get('/group-test-schedule/export', [\App\Http\Controllers\Admin\GroupTestScheduleController::class, 'export'])
                     ->name('group-test-schedule.export');
+                Route::post('/group-test-schedule/auto-time', [\App\Http\Controllers\Admin\GroupTestScheduleController::class, 'autoTime'])
+                    ->name('group-test-schedule.auto-time');
             });
 
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');

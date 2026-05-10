@@ -490,17 +490,18 @@
                                                         $stuValueTest = $stuRow['test_resit2_date'] ?? '';
                                                     }
                                                     // Qarz fanlari: o'tgan semestrlardagi (academic_records'da yo'q)
-                                                    // + joriy semestrdagi failed_attempt1 (V<60) — shu satr fani uchun
+                                                    // + joriy semestrdagi BARCHA failed fanlar (controller pre-pass'dan)
                                                     $stuPastDebts = $stuRow['past_debts'] ?? [];
-                                                    $stuDebtCount = count($stuPastDebts) + (!empty($stuRow['failed_attempt1']) ? 1 : 0);
+                                                    $stuCurrentDebts = $stuRow['current_semester_debts'] ?? [];
+                                                    $stuDebtCount = count($stuPastDebts) + count($stuCurrentDebts);
                                                     $stuDebtTooltip = '';
                                                     if ($stuDebtCount > 0) {
                                                         $tooltipLines = [];
                                                         foreach ($stuPastDebts as $d) {
                                                             $tooltipLines[] = '• ' . ($d['subject_name'] ?? '') . ' (' . ($d['semester_name'] ?? '') . ')';
                                                         }
-                                                        if (!empty($stuRow['failed_attempt1'])) {
-                                                            $tooltipLines[] = '• ' . ($item['subject']->subject_name ?? '') . ' (' . ($item['subject']->semester_name ?? 'joriy semestr') . ') — joriy';
+                                                        foreach ($stuCurrentDebts as $d) {
+                                                            $tooltipLines[] = '• ' . ($d['subject_name'] ?? '') . ' (' . ($d['semester_name'] ?? '') . ') — joriy';
                                                         }
                                                         $stuDebtTooltip = implode("\n", $tooltipLines);
                                                     }

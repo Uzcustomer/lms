@@ -144,6 +144,11 @@ class JnMtCalculator
      */
     private function effectiveGrade($row): ?float
     {
+        // ENG YUQORI QOIDA: asl baho < 60 va retake mavjud → retake ustun.
+        // Asl baho >= 60 bo'lsa, retake umuman qabul qilinmaydi.
+        if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+            return (float) $row->retake_grade;
+        }
         if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {
             return (float) $row->grade;
         }
@@ -153,13 +158,6 @@ class JnMtCalculator
         }
         if ($row->status === 'closed' && $row->reason === 'teacher_victim' && (float) $row->grade == 0 && $row->retake_grade === null) {
             return null;
-        }
-        if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
-            return (float) $row->retake_grade;
-        }
-        // Asl baho < 60 va retake_grade mavjud bo'lsa, retake ustun
-        if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
-            return (float) $row->retake_grade;
         }
         if ($row->status === 'recorded') return $row->grade !== null ? (float) $row->grade : null;
         if ($row->status === 'closed') return $row->grade !== null ? (float) $row->grade : null;

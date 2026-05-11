@@ -2489,6 +2489,7 @@
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">F.I.SH.</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 140px;">Fayl</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 80px;">Baho</th>
+                                        <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 180px;">Baho qo'ygan</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="min-width: 150px;">Izoh</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 160px;">Tarix</th>
                                         <th class="px-2 py-1 font-bold text-gray-700 text-center align-middle" style="width: 110px;">Amal</th>
@@ -2628,6 +2629,25 @@
                                                         data-student-id="{{ $student->hemis_id }}"
                                                         placeholder="0-100"
                                                         {{ $inputDisabled ? 'disabled' : '' }}>
+                                                @else
+                                                    <span style="color: #d1d5db;">—</span>
+                                                @endif
+                                            </td>
+                                            <td class="px-1 py-1 text-xs" id="mt-grader-{{ $student->hemis_id }}" style="color: #374151;">
+                                                @php
+                                                    $graderName = null;
+                                                    if ($gradeRow) {
+                                                        $uid = $gradeRow->graded_by_user_id ?? null;
+                                                        $eid = $gradeRow->employee_id ?? null;
+                                                        if ($uid && isset($mtGraderUserNames[$uid])) {
+                                                            $graderName = $mtGraderUserNames[$uid];
+                                                        } elseif ($eid && isset($mtGraderEmployeeNames[$eid])) {
+                                                            $graderName = $mtGraderEmployeeNames[$eid];
+                                                        }
+                                                    }
+                                                @endphp
+                                                @if($graderName)
+                                                    {{ $graderName }}
                                                 @else
                                                     <span style="color: #d1d5db;">—</span>
                                                 @endif

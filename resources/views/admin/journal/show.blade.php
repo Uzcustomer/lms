@@ -1268,6 +1268,9 @@
                                                         $gName = ($uid && isset($mtGraderUserNames[$uid]))
                                                             ? $mtGraderUserNames[$uid]
                                                             : (($eid && isset($mtGraderEmployeeNames[$eid])) ? $mtGraderEmployeeNames[$eid] : null);
+                                                        if (!$gName) {
+                                                            $gName = $gd['employee_name'] ?? ($gd['retake_by'] ?? null);
+                                                        }
                                                         $val = round($gd['grade'], 0);
                                                         $dStr = \Carbon\Carbon::parse($date)->format('d.m');
                                                         $mtGraderLines[] = $gName
@@ -1785,6 +1788,9 @@
                                                         $gName = ($uid && isset($mtGraderUserNames[$uid]))
                                                             ? $mtGraderUserNames[$uid]
                                                             : (($eid && isset($mtGraderEmployeeNames[$eid])) ? $mtGraderEmployeeNames[$eid] : null);
+                                                        if (!$gName) {
+                                                            $gName = $gd['employee_name'] ?? ($gd['retake_by'] ?? null);
+                                                        }
                                                         $val = round($gd['grade'], 0);
                                                         $dStr = \Carbon\Carbon::parse($date)->format('d.m');
                                                         $mtGraderLines[] = $gName
@@ -2643,6 +2649,10 @@
                                                             $graderName = $mtGraderUserNames[$uid];
                                                         } elseif ($eid && isset($mtGraderEmployeeNames[$eid])) {
                                                             $graderName = $mtGraderEmployeeNames[$eid];
+                                                        } elseif (!empty($gradeRow->employee_name)) {
+                                                            $graderName = $gradeRow->employee_name;
+                                                        } elseif (!empty($gradeRow->retake_by)) {
+                                                            $graderName = $gradeRow->retake_by;
                                                         }
                                                     }
                                                 @endphp

@@ -2649,7 +2649,7 @@
                                                             $graderName = $mtGraderUserNames[$uid];
                                                         } elseif ($eid && isset($mtGraderEmployeeNames[$eid])) {
                                                             $graderName = $mtGraderEmployeeNames[$eid];
-                                                        } elseif (!empty($gradeRow->employee_name)) {
+                                                        } elseif (!empty($gradeRow->employee_name) && $gradeRow->employee_name !== 'Manual Entry') {
                                                             $graderName = $gradeRow->employee_name;
                                                         } elseif (!empty($gradeRow->retake_by)) {
                                                             $graderName = $gradeRow->retake_by;
@@ -2659,7 +2659,7 @@
                                                 @if($graderName)
                                                     {{ $graderName }}
                                                 @else
-                                                    <span style="color: #d1d5db;">—</span>
+                                                    <span style="color: #d1d5db;" title="Eski yozuv — kim baholaganligi saqlanmagan">—</span>
                                                 @endif
                                             </td>
                                             <td class="px-1 py-1" id="mt-comment-{{ $student->hemis_id }}">

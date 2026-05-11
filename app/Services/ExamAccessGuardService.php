@@ -76,4 +76,69 @@ class ExamAccessGuardService
             'planned_start' => $assignment->planned_start->toIso8601String(),
         ];
     }
+
+    /**
+     * Lightweight check used at LOGIN time (FaceID page) to fail fast when
+     * a student walks up to the wrong computer during their exam slot.
+     *
+     * The full ::check() above is too strict for login: it fails on
+     * `unknown_ip` (IP not registered as a test-centre PC) and on
+     * `no_active_assignment`, both of which are perfectly normal for
+     * everyday Moodle login from outside the test centre or on a non-exam
+     * day. Blocking those at login would lock students out of homework /
+     * results browsing.
+     *
+     * This method only blocks the one case that matters at login: the
+     * student HAS an active exam assignment AND their current IP belongs
+     * to a different test-centre PC than the one they were assigned. All
+     * other cases — no assignment, IP not in test-centre at all, IP
+     * matches assignment — fall through as allowed. The full ::check()
+     * still runs at quiz-attempt time to catch anything this method
+     * intentionally lets through.
+     */
+    public function checkForLogin(Student $student, ?string $clientIp, ?Carbon $now = null): array
+    {
+        $now ??= now();
+
+        $detectedNumber = Computer::numberByIp($clientIp);
+        if ($detectedNumber === null) {
+            return ['allowed' => true];
+        }
+
+        $window = max(1, (int) config('services.moodle.open_window_minutes', 10));
+        $assignment = ComputerAssignment::query()
+            ->where('student_hemis_id', $student->hemis_id)
+            ->where('planned_start', '<=', $now->copy()->addMinutes($window))
+            ->where('planned_end', '>=', $now->copy()->subMinutes($window))
+            ->whereIn('status', [
+                ComputerAssignment::STATUS_SCHEDULED,
+                ComputerAssignment::STATUS_IN_PROGRESS,
+            ])
+            ->orderBy('planned_start')
+            ->first();
+
+        if (!$assignment) {
+            return ['allowed' => true];
+        }
+
+        if ((int) $assignment->computer_number !== (int) $detectedNumber) {
+            return [
+                'allowed' => false,
+                'reason' => 'wrong_computer',
+                'message' => "Bu sizning kompyuteringiz emas. Siz #{$assignment->computer_number} kompyuterga "
+                          . "biriktirilgansiz, hozir esa #{$detectedNumber} kompyuterdasiz. "
+                          . "O'z joyingizga o'tib qayta urining.",
+                'computer_number' => $detectedNumber,
+                'expected_computer' => (int) $assignment->computer_number,
+                'planned_start' => optional($assignment->planned_start)->toIso8601String(),
+            ];
+        }
+
+        return [
+            'allowed' => true,
+            'computer_number' => (int) $assignment->computer_number,
+            'expected_computer' => (int) $assignment->computer_number,
+            'planned_start' => $assignment->planned_start->toIso8601String(),
+        ];
+    }
 }

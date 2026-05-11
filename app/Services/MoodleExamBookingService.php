@@ -55,8 +55,20 @@ class MoodleExamBookingService
             return $this->fail($schedule, $ynType, 'cannot parse date/time');
         }
 
+        // open_window_minutes = ± entry grace (early/late cutoff), independent
+        // of slot duration. Default 10. The slot duration itself (how long the
+        // exam runs) is sourced from ExamCapacityService so the "Davomiyligi"
+        // value in the admin UI is the single source of truth — no parallel
+        // env block to keep in sync.
         $window = max(1, (int) config('services.moodle.open_window_minutes', 10));
-        $closeBuffer = max(1, (int) config('services.moodle.close_buffer_minutes', 30));
+        $capacity = ExamCapacityService::getSettingsForDate($startsAt->toDateString());
+        $duration = max(1, (int) ($capacity['test_duration_minutes'] ?? 15));
+        // closeBuffer = how long after the late-entry cutoff the quiz stays
+        // open, so a student starting at the cutoff still has the full
+        // duration. We default it to the exam duration; an env override
+        // remains available if a site wants something different.
+        $closeBuffer = max(1, (int) config('services.moodle.close_buffer_minutes', $duration));
+
         $timeopen = $startsAt->copy()->subMinutes($window)->getTimestamp();
         // After exam_time + window: no NEW attempt starts (handled by quizaccess plugin).
         $startCutoff = $startsAt->copy()->addMinutes($window)->getTimestamp();

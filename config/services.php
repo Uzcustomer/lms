@@ -163,4 +163,15 @@ return [
         'photo_allowed_origins' => array_values(array_filter(array_map('trim', explode(',', (string) env('FACEID_PHOTO_ALLOWED_ORIGINS', ''))))),
     ],
 
+    'exam_access' => [
+        // Whether ExamAccessGuardService should enforce the
+        // "student must sit at a specific computer" rule. When false
+        // (default), students can take their exam from any test-centre
+        // PC within the scheduled time window — the Moodle-side
+        // quizaccess_examwindow rule still enforces the ±N-minute
+        // entry window. Flip to true ONLY if you re-introduce the
+        // strict seat-binding workflow on the LMS side.
+        'enforce_computer_binding' => env('EXAM_ENFORCE_COMPUTER_BINDING', false),
+    ],
+
 ];

@@ -1259,7 +1259,25 @@
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
-                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
+                                            @php
+                                                $mtGraderLines = [];
+                                                foreach ($studentMtGrades as $date => $dayGrades) {
+                                                    foreach ($dayGrades as $pair => $gd) {
+                                                        $uid = $gd['graded_by_user_id'] ?? null;
+                                                        $eid = $gd['employee_id'] ?? null;
+                                                        $gName = ($uid && isset($mtGraderUserNames[$uid]))
+                                                            ? $mtGraderUserNames[$uid]
+                                                            : (($eid && isset($mtGraderEmployeeNames[$eid])) ? $mtGraderEmployeeNames[$eid] : null);
+                                                        $val = round($gd['grade'], 0);
+                                                        $dStr = \Carbon\Carbon::parse($date)->format('d.m');
+                                                        $mtGraderLines[] = $gName
+                                                            ? "{$dStr}({$pair}) {$val} — {$gName}"
+                                                            : "{$dStr}({$pair}) {$val}";
+                                                    }
+                                                }
+                                                $mtTooltip = implode(' | ', $mtGraderLines);
+                                            @endphp
+                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}" @if($mtTooltip) title="{{ $mtTooltip }}" @endif><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             @php
                                                 $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
@@ -1758,7 +1776,25 @@
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
-                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
+                                            @php
+                                                $mtGraderLines = [];
+                                                foreach ($studentMtGrades as $date => $dayGrades) {
+                                                    foreach ($dayGrades as $pair => $gd) {
+                                                        $uid = $gd['graded_by_user_id'] ?? null;
+                                                        $eid = $gd['employee_id'] ?? null;
+                                                        $gName = ($uid && isset($mtGraderUserNames[$uid]))
+                                                            ? $mtGraderUserNames[$uid]
+                                                            : (($eid && isset($mtGraderEmployeeNames[$eid])) ? $mtGraderEmployeeNames[$eid] : null);
+                                                        $val = round($gd['grade'], 0);
+                                                        $dStr = \Carbon\Carbon::parse($date)->format('d.m');
+                                                        $mtGraderLines[] = $gName
+                                                            ? "{$dStr}({$pair}) {$val} — {$gName}"
+                                                            : "{$dStr}({$pair}) {$val}";
+                                                    }
+                                                }
+                                                $mtTooltip = implode(' | ', $mtGraderLines);
+                                            @endphp
+                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}" @if($mtTooltip) title="{{ $mtTooltip }}" @endif><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             @php
                                                 $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;

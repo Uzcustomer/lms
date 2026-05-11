@@ -529,7 +529,13 @@ class JournalController extends Controller
         // Helper function to get effective grade based on status
         // Returns array: ['grade' => value, 'is_retake' => bool] or null
         $getEffectiveGrade = function ($row) {
-            // status = pending + low_grade → show the grade (e.g. 55 ball)
+            // ENG YUQORI QOIDA: asl baho 60 dan past va retake_grade mavjud bo'lsa,
+            // status/reason qanday bo'lishidan qat'iy nazar retake ustun (jurnal "ixcham"
+            // tabidagi qiymat shu). Asl baho >= 60 bo'lsa, retake umuman qabul qilinmaydi.
+            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+                return ['grade' => $row->retake_grade, 'is_retake' => true];
+            }
+            // status = pending + low_grade → show the failing grade (retake hali yo'q)
             if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {
                 return ['grade' => $row->grade, 'is_retake' => false];
             }
@@ -547,15 +553,6 @@ class JournalController extends Controller
             // status = closed AND reason = teacher_victim AND grade == 0 AND retake_grade === null → null
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
                 return null;
-            }
-            // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
-            if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
-                return ['grade' => $row->retake_grade, 'is_retake' => true];
-            }
-            // Asl baho yiqilgan (60 dan past) va retake_grade mavjud bo'lsa,
-            // status='recorded'/'closed' bo'lganda ham retake_grade ustun bo'ladi.
-            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
-                return ['grade' => $row->retake_grade, 'is_retake' => true];
             }
             // status = recorded → use grade
             if ($row->status === 'recorded') {
@@ -5251,21 +5248,17 @@ class JournalController extends Controller
 
         // Baho filtrlash (jurnal logikasi bilan bir xil)
         $getEffectiveGrade = function ($row) {
+            // ENG YUQORI QOIDA: asl baho < 60 va retake mavjud → retake ustun.
+            // Asl baho >= 60 bo'lsa, retake umuman qabul qilinmaydi.
+            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+                return $row->retake_grade;
+            }
             if ($row->status === 'pending') return null;
             if ($row->reason === 'absent' && $row->grade === null) {
                 return $row->retake_grade !== null ? $row->retake_grade : null;
             }
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
                 return null;
-            }
-            // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
-            if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
-                return $row->retake_grade;
-            }
-            // Asl baho < 60 va retake_grade mavjud bo'lsa, status='recorded'/'closed'
-            // bo'lganda ham retake_grade ustun bo'ladi.
-            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
-                return $row->retake_grade;
             }
             if ($row->status === 'recorded') return $row->grade;
             if ($row->status === 'closed') return $row->grade;
@@ -6178,21 +6171,17 @@ class JournalController extends Controller
             ->get();
 
         $getEffectiveGrade = function ($row) {
+            // ENG YUQORI QOIDA: asl baho < 60 va retake mavjud → retake ustun.
+            // Asl baho >= 60 bo'lsa, retake umuman qabul qilinmaydi.
+            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+                return $row->retake_grade;
+            }
             if ($row->status === 'pending') return null;
             if ($row->reason === 'absent' && $row->grade === null) {
                 return $row->retake_grade !== null ? $row->retake_grade : null;
             }
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
                 return null;
-            }
-            // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
-            if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
-                return $row->retake_grade;
-            }
-            // Asl baho < 60 va retake_grade mavjud bo'lsa, status='recorded'/'closed'
-            // bo'lganda ham retake_grade ustun bo'ladi.
-            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
-                return $row->retake_grade;
             }
             if ($row->status === 'recorded') return $row->grade;
             if ($row->status === 'closed') return $row->grade;
@@ -7038,6 +7027,11 @@ class JournalController extends Controller
             if (!$includeSababli && !empty($row->retake_was_sababli)) {
                 $retakeGrade = null;
             }
+            // ENG YUQORI QOIDA: asl baho < 60 va retake mavjud → retake ustun.
+            // Asl baho >= 60 bo'lsa, retake umuman qabul qilinmaydi.
+            if ($row->grade !== null && (float) $row->grade < 60 && $retakeGrade !== null) {
+                return $retakeGrade;
+            }
             if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {
                 return $row->grade;
             }
@@ -7047,15 +7041,6 @@ class JournalController extends Controller
             }
             if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $retakeGrade === null) {
                 return null;
-            }
-            // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
-            if ($row->reason === 'low_grade' && $retakeGrade !== null) {
-                return $retakeGrade;
-            }
-            // Asl baho < 60 va retake_grade mavjud bo'lsa, status='recorded'/'closed'
-            // bo'lganda ham retake_grade ustun bo'ladi.
-            if ($row->grade !== null && (float) $row->grade < 60 && $retakeGrade !== null) {
-                return $retakeGrade;
             }
             if ($row->status === 'recorded') return $row->grade;
             if ($row->status === 'closed') return $row->grade;

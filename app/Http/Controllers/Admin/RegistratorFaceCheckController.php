@@ -195,11 +195,47 @@ class RegistratorFaceCheckController extends Controller
             if (!$passed) {
                 // Generic message — never reveal which reference failed or by
                 // how much. The registrator must just take a sharper photo.
-                return response()->json([
+                $response = [
                     'ok'      => false,
                     'message' => 'Tasdiqlanmadi. Sifatliroq rasm oling: '
                               . 'webcam yorug\'roq joyga, yuz ramkaga to\'liq tushsin.',
-                ], 422);
+                ];
+
+                // Admin-only diagnostic: surface the actual ArcFace scores so
+                // a super-admin can tell whether the failure is a real
+                // mismatch (one reference far below threshold) vs. a poor
+                // capture (both near threshold). Only super-admins and
+                // top-level admins see this — never registrators or kichik
+                // admins, otherwise the anti-fraud tell-tale leaks.
+                $viewer = auth()->user();
+                if ($viewer && method_exists($viewer, 'hasAnyRole')
+                        && $viewer->hasAnyRole(['superadmin', 'admin'])) {
+                    $threshold = self::ANTI_FRAUD_THRESHOLD;
+                    $hemisPass = $simHemis >= $threshold;
+                    $markPass  = $simMark  >= $threshold;
+
+                    if (!$hemisPass && !$markPass) {
+                        $hint = 'Ikkala etalon ham tushmadi — webcam sifati past yoki '
+                              . 'kameradagi odam HEMIS va mark rasmlaridagi odamga o\'xshamaydi.';
+                    } else if (!$hemisPass) {
+                        $hint = 'Faqat HEMIS rasmiga mos kelmadi — HEMIS rasmi eski/sifatsiz '
+                              . 'bo\'lishi mumkin, mark rasmi to\'g\'ri.';
+                    } else {
+                        $hint = 'Faqat MARK tasdiqlangan rasmga mos kelmadi — avval boshqa '
+                              . 'odam tasdiqlangan bo\'lishi mumkin, tekshirish shart.';
+                    }
+
+                    $response['diagnostic'] = [
+                        'similarity_hemis'  => round($simHemis, 2),
+                        'similarity_mark'   => round($simMark,  2),
+                        'threshold'         => $threshold,
+                        'hemis_passed'      => $hemisPass,
+                        'mark_passed'       => $markPass,
+                        'hint'              => $hint,
+                    ];
+                }
+
+                return response()->json($response, 422);
             }
 
             $newPhoto = $this->persistWebcamPhoto(

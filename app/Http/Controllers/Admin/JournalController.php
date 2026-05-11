@@ -519,7 +519,7 @@ class JournalController extends Controller
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select(array_merge(
-                ['id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline', 'created_at', 'graded_by_user_id', 'retake_graded_at', 'quiz_result_id', 'employee_id'],
+                ['id', 'hemis_id', 'student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason', 'is_final', 'deadline', 'created_at', 'graded_by_user_id', 'retake_graded_at', 'quiz_result_id', 'employee_id', 'employee_name', 'retake_by'],
                 $hasSababliCol ? ['retake_was_sababli'] : []
             ))
             ->orderBy('lesson_date')
@@ -693,6 +693,8 @@ class JournalController extends Controller
                     'deadline' => $g->deadline,
                     'graded_by_user_id' => $g->graded_by_user_id,
                     'employee_id' => $g->employee_id,
+                    'employee_name' => $g->employee_name ?? null,
+                    'retake_by' => $g->retake_by ?? null,
                 ]);
             }
         }

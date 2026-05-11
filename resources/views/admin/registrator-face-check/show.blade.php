@@ -195,7 +195,7 @@
         el.setAttribute('class', 'fc-oval' + (kind ? ' ' + kind : ''));
     }
 
-    async function postJson(url, payload, { timeoutMs = 45000 } = {}) {
+    async function postJson(url, payload, { timeoutMs = 15000 } = {}) {
         const ctrl = new AbortController();
         const t = setTimeout(() => ctrl.abort(), timeoutMs);
         try {

@@ -476,11 +476,41 @@
                     runLiveness();
                 };
             } else {
-                result.innerHTML =
+                let html =
                     '<div class="bg-amber-50 border border-amber-300 rounded p-4 text-center">' +
                     '<div class="text-3xl mb-2">⚠️</div>' +
-                    '<div class="text-amber-800">' + (body.message || 'Tasdiqlanmadi. Qayta urining.') + '</div>' +
-                    '</div>';
+                    '<div class="text-amber-800">' + (body.message || 'Tasdiqlanmadi. Qayta urining.') + '</div>';
+
+                // Admin-only diagnostic block (server only includes this for
+                // super-admins / admins; registrators get an empty diagnostic).
+                if (body.diagnostic) {
+                    const d = body.diagnostic;
+                    const fmtBadge = (label, score, passed) => {
+                        const color = passed ? 'bg-emerald-100 text-emerald-800 border-emerald-300'
+                                              : 'bg-red-100 text-red-800 border-red-300';
+                        const icon = passed ? '✓' : '✗';
+                        return '<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded border ' + color + ' text-sm font-mono">' +
+                               '<span class="font-bold">' + icon + '</span>' +
+                               '<span>' + label + ':</span>' +
+                               '<span class="font-semibold">' + score.toFixed(2) + '%</span>' +
+                               '</div>';
+                    };
+                    html +=
+                        '<div class="mt-4 pt-3 border-t border-amber-300 text-left">' +
+                        '<div class="text-xs uppercase tracking-wider text-amber-700 font-semibold mb-2">🛡️ Admin diagnostika (faqat siz ko\'rasiz)</div>' +
+                        '<div class="flex flex-wrap gap-2 justify-center mb-2">' +
+                            fmtBadge('HEMIS', d.similarity_hemis, d.hemis_passed) +
+                            fmtBadge('MARK',  d.similarity_mark,  d.mark_passed) +
+                            '<div class="inline-flex items-center px-2.5 py-1 rounded border bg-slate-100 text-slate-700 border-slate-300 text-sm font-mono">chegara: ' + d.threshold.toFixed(0) + '%</div>' +
+                        '</div>' +
+                        '<div class="text-sm text-slate-700 bg-white rounded p-2 border border-slate-200">' +
+                            '<strong>Sabab:</strong> ' + d.hint +
+                        '</div>' +
+                        '</div>';
+                }
+
+                html += '</div>';
+                result.innerHTML = html;
                 $('btn-snap').disabled = false;
             }
         } catch (e) {

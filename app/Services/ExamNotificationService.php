@@ -2,9 +2,14 @@
 
 namespace App\Services;
 
+use App\Enums\ProjectRole;
 use App\Models\ComputerAssignment;
+use App\Models\ExamSchedule;
 use App\Models\Student;
 use App\Models\StudentNotification;
+use App\Models\Teacher;
+use App\Models\TeacherNotification;
+use Illuminate\Support\Facades\Log;
 
 class ExamNotificationService
 {
@@ -113,6 +118,92 @@ class ExamNotificationService
             'event' => 'moved',
         ]);
         $this->sendTelegram($student, $messageHtml);
+    }
+
+    /**
+     * Inform the group's students AND test centre staff that there
+     * weren't enough free computers to allocate seats yet. Called from
+     * AssignComputersJob / AutoDistributeOnDateSetJob when the allocator
+     * returns skipped (typically: previous group's window still occupies
+     * the room when this group's slot starts).
+     */
+    public function notifyComputerShortage(ExamSchedule $schedule, string $ynType, string $reason): void
+    {
+        $ynKey = strtolower($ynType);
+        $ynLabel = $ynKey === 'oski' ? 'OSKI' : 'Test';
+        $subject = (string) ($schedule->subject_name ?? 'Fan');
+        $dateField = $ynKey . '_date';
+        $timeField = $ynKey . '_time';
+        $dateRaw = $schedule->{$dateField} ?? null;
+        $when = $dateRaw
+            ? (\Carbon\Carbon::parse((string) $dateRaw)->format('d.m.Y')
+                . ($schedule->{$timeField} ? ' ' . substr((string) $schedule->{$timeField}, 0, 5) : ''))
+            : '';
+
+        $studentTitle = "{$ynLabel} kompyuter raqami kechikmoqda";
+        $studentPlain = "Hozircha kompyuter yetarli emas. {$subject} ({$when}). "
+            . "Iltimos kuting — kompyuter bo'shashi bilan raqamingiz beriladi.";
+        $studentHtml = "⏳ <b>{$ynLabel} uchun kompyuter hozircha tayyor emas</b>\n\n"
+            . "📌 Fan: <b>{$subject}</b>\n"
+            . ($when ? "📅 Vaqt: <b>{$when}</b>\n" : '')
+            . "\nHozircha test markazidagi barcha kompyuterlar oldingi guruh tomonidan band. "
+            . "Kompyuter bo'shashi bilan raqamingiz beriladi — iltimos kuting va xabarlarni kuzating.";
+
+        $students = Student::where('group_id', $schedule->group_hemis_id)
+            ->where('student_status_code', 11)
+            ->get();
+        foreach ($students as $student) {
+            try {
+                $this->push($student, $studentTitle, $studentPlain, [
+                    'exam_schedule_id' => $schedule->id,
+                    'yn_type'          => $ynKey,
+                    'event'            => 'shortage',
+                ]);
+                $this->sendTelegram($student, $studentHtml);
+            } catch (\Throwable $e) {
+                Log::warning('notifyComputerShortage: student notify failed', [
+                    'student_id' => $student->id,
+                    'err'        => $e->getMessage(),
+                ]);
+            }
+        }
+
+        $staffTitle = "Kompyuter yetishmadi: {$subject}";
+        $staffMessage = "{$ynLabel} ({$when}) uchun guruhga kompyuter biriktirib bo'lmadi. "
+            . "Sabab: {$reason}. Vaqtni o'zgartiring yoki test markazi sig'imini oshiring.";
+        $staffLink = '/admin/academic-schedule';
+
+        $staff = Teacher::query()
+            ->whereHas('roles', function ($q) {
+                $q->whereIn('name', [
+                    ProjectRole::TEST_CENTER->value,
+                    'admin',
+                    'superadmin',
+                ]);
+            })
+            ->get();
+        foreach ($staff as $teacher) {
+            try {
+                TeacherNotification::create([
+                    'teacher_id' => $teacher->id,
+                    'type'       => 'exam_seat_shortage',
+                    'title'      => $staffTitle,
+                    'message'    => $staffMessage,
+                    'link'       => $staffLink,
+                    'data'       => [
+                        'exam_schedule_id' => $schedule->id,
+                        'yn_type'          => $ynKey,
+                        'reason'           => $reason,
+                    ],
+                    'read_at'    => null,
+                ]);
+            } catch (\Throwable $e) {
+                Log::warning('notifyComputerShortage: staff notify failed', [
+                    'teacher_id' => $teacher->id,
+                    'err'        => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     private function push(Student $student, string $title, string $message, array $data = []): void

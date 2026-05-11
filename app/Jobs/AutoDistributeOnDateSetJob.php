@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\ExamSchedule;
 use App\Services\AutoAssignService;
 use App\Services\ExamCapacityService;
+use App\Services\ExamNotificationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
@@ -35,7 +36,7 @@ class AutoDistributeOnDateSetJob implements ShouldQueue
         public string $ynType,
     ) {}
 
-    public function handle(AutoAssignService $service): void
+    public function handle(AutoAssignService $service, ExamNotificationService $notifier): void
     {
         $schedule = ExamSchedule::find($this->examScheduleId);
         if (!$schedule) {
@@ -64,11 +65,13 @@ class AutoDistributeOnDateSetJob implements ShouldQueue
         $result = $service->distribute($schedule, $ynType, $startTime);
 
         if (empty($result['ok'])) {
+            $reason = $result['reason'] ?? 'unknown';
             Log::warning('AutoDistributeOnDateSetJob: distribute failed', [
                 'schedule_id' => $this->examScheduleId,
                 'yn' => $ynType,
-                'reason' => $result['reason'] ?? 'unknown',
+                'reason' => $reason,
             ]);
+            $notifier->notifyComputerShortage($schedule, $ynType, $reason);
             return;
         }
 

@@ -21,10 +21,12 @@ use Illuminate\Support\Facades\Log;
  * later. The flow has two stages:
  *
  *   1. Anti-fraud verify (this controller's verify action):
- *      ArcFace 85% similarity webcam ↔ HEMIS photo AND webcam ↔ approved
- *      mark photo. Both must pass. On success we save a new student_photos
- *      row, persist the descriptor to face_id_descriptors, push the photo to
- *      Moodle and append the descriptor to auth_faceid_descriptors.
+ *      ArcFace similarity webcam ↔ HEMIS photo AND webcam ↔ approved mark
+ *      photo. Per-reference thresholds: HEMIS ≥ 75%, MARK ≥ 82% (HEMIS is
+ *      lower because those photos are old/different lighting). Both must
+ *      pass. On success we save a new student_photos row, persist the
+ *      descriptor to face_id_descriptors, push the photo to Moodle and
+ *      append the descriptor to auth_faceid_descriptors.
  *
  *   2. Moodle pre-check (precheck action):
  *      Sends the live descriptor to local_hemisexport_match_face_descriptor
@@ -33,8 +35,20 @@ use Illuminate\Support\Facades\Log;
  */
 class RegistratorFaceCheckController extends Controller
 {
-    /** Strict anti-fraud similarity threshold (percent). */
-    private const ANTI_FRAUD_THRESHOLD = 85.0;
+    /**
+     * Anti-fraud similarity thresholds (percent), tuned per reference.
+     *
+     * HEMIS photos are typically the student's 1st-kurs passport shot —
+     * several years old, different lighting, often serious / no-smile. They
+     * legitimately score ~75-85% against a fresh webcam capture even for
+     * the right person, so we set a lower bar here.
+     *
+     * MARK photos are recent (taken by a tutor or this very flow), under
+     * controlled lighting, so we keep the bar close to the industry-standard
+     * 85% — a real impostor scores well below 80%.
+     */
+    private const ANTI_FRAUD_THRESHOLD_HEMIS = 75.0;
+    private const ANTI_FRAUD_THRESHOLD_MARK  = 82.0;
 
     public function index(Request $request)
     {
@@ -179,8 +193,8 @@ class RegistratorFaceCheckController extends Controller
 
             $simHemis = (float) $vsHemis['similarity_percent'];
             $simMark  = (float) $vsMark['similarity_percent'];
-            $passed   = $simHemis >= self::ANTI_FRAUD_THRESHOLD
-                     && $simMark  >= self::ANTI_FRAUD_THRESHOLD;
+            $passed   = $simHemis >= self::ANTI_FRAUD_THRESHOLD_HEMIS
+                     && $simMark  >= self::ANTI_FRAUD_THRESHOLD_MARK;
 
             // Audit log: keep the actual scores server-side regardless of
             // what we tell the registrator.
@@ -210,9 +224,10 @@ class RegistratorFaceCheckController extends Controller
                 $viewer = auth()->user();
                 if ($viewer && method_exists($viewer, 'hasAnyRole')
                         && $viewer->hasAnyRole(['superadmin', 'admin'])) {
-                    $threshold = self::ANTI_FRAUD_THRESHOLD;
-                    $hemisPass = $simHemis >= $threshold;
-                    $markPass  = $simMark  >= $threshold;
+                    $thresholdHemis = self::ANTI_FRAUD_THRESHOLD_HEMIS;
+                    $thresholdMark  = self::ANTI_FRAUD_THRESHOLD_MARK;
+                    $hemisPass = $simHemis >= $thresholdHemis;
+                    $markPass  = $simMark  >= $thresholdMark;
 
                     if (!$hemisPass && !$markPass) {
                         $hint = 'Ikkala etalon ham tushmadi — webcam sifati past yoki '
@@ -228,7 +243,8 @@ class RegistratorFaceCheckController extends Controller
                     $response['diagnostic'] = [
                         'similarity_hemis'  => round($simHemis, 2),
                         'similarity_mark'   => round($simMark,  2),
-                        'threshold'         => $threshold,
+                        'threshold_hemis'   => $thresholdHemis,
+                        'threshold_mark'    => $thresholdMark,
                         'hemis_passed'      => $hemisPass,
                         'mark_passed'       => $markPass,
                         'hint'              => $hint,

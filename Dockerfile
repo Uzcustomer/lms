@@ -63,6 +63,8 @@ RUN echo "* * * * * cd /var/www/html && php artisan schedule:run >> /dev/null 2>
 RUN chmod 0644 /etc/cron.d/laravel-cron
 RUN crontab /etc/cron.d/laravel-cron
 
+COPY docker/php/www.conf /usr/local/etc/php-fpm.d/www.conf
+
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh

@@ -65,9 +65,19 @@ class RegistratorFaceCheckController extends Controller
             ->paginate(25)
             ->withQueryString();
 
+        $approvedIds = StudentPhoto::query()
+            ->whereIn('student_id_number', $students->pluck('student_id_number'))
+            ->where('source', StudentPhoto::SOURCE_REGISTRATOR_WEBCAM)
+            ->where('status', StudentPhoto::STATUS_APPROVED)
+            ->pluck('student_id_number')
+            ->map(fn ($v) => (string) $v)
+            ->unique()
+            ->flip();
+
         return view('admin.registrator-face-check.index', [
-            'students' => $students,
-            'query'    => $query,
+            'students'    => $students,
+            'query'       => $query,
+            'approvedIds' => $approvedIds,
         ]);
     }
 

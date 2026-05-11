@@ -195,18 +195,30 @@
         el.setAttribute('class', 'fc-oval' + (kind ? ' ' + kind : ''));
     }
 
-    async function postJson(url, payload) {
-        const resp = await fetch(url, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-TOKEN': CSRF,
-                'Accept': 'application/json',
-            },
-            body: JSON.stringify(payload),
-        });
-        const body = await resp.json().catch(() => ({}));
-        return { status: resp.status, body };
+    async function postJson(url, payload, { timeoutMs = 45000 } = {}) {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), timeoutMs);
+        try {
+            const resp = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': CSRF,
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify(payload),
+                signal: ctrl.signal,
+            });
+            const body = await resp.json().catch(() => ({}));
+            return { status: resp.status, body };
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                throw new Error('Server javob bermayapti (timeout). Test markazi xizmati ishlamayotgan bo\'lishi mumkin — birozdan keyin qayta urining.');
+            }
+            throw e;
+        } finally {
+            clearTimeout(t);
+        }
     }
 
     // Same EAR/yaw helpers as Moodle's auth/faceid/login.js
@@ -376,7 +388,16 @@
         setMsg('fc-msg', 'Test markazi bilan solishtirilmoqda…'); setProgress(95);
 
         const descriptor = Array.from(finalDetection.descriptor);
-        const { body } = await postJson(URLS.precheck, { descriptor });
+        let body;
+        try {
+            ({ body } = await postJson(URLS.precheck, { descriptor }));
+        } catch (e) {
+            setProgress(100);
+            stopCamera(livenessStream); livenessStream = null;
+            $('fail-detail').textContent = e.message || 'Texnik xato.';
+            showPhase('result-fail');
+            return;
+        }
         setProgress(100);
         stopCamera(livenessStream); livenessStream = null;
 

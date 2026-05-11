@@ -42,9 +42,18 @@ class ExamLayoutController extends Controller
             ->orderBy('planned_start')
             ->get();
 
-        // Bucket assignments per computer for O(1) lookup.
+        // Bucket assignments per computer for O(1) lookup. Rows with a
+        // NULL computer_number are slot reservations created by AutoAssign
+        // that have not yet been JIT-bound to a specific PC — they'd
+        // otherwise fall into bucket 0 and disappear from the grid, so
+        // surface them separately as $unassigned (see below).
         $byComputer = [];
+        $unassignedRows = [];
         foreach ($assignments as $a) {
+            if ($a->computer_number === null) {
+                $unassignedRows[] = $a;
+                continue;
+            }
             $byComputer[(int) $a->computer_number][] = $a;
         }
 
@@ -96,10 +105,56 @@ class ExamLayoutController extends Controller
             ];
         }
 
+        // Group still-unassigned (computer_number = NULL) rows by their
+        // start time, but only for the next-90-minutes horizon — older
+        // unassigned rows are stale leftovers, far-future ones aren't
+        // actionable for the proctor right now.
+        $horizonStart = $now->copy()->subMinutes($window);
+        $horizonEnd   = $now->copy()->addMinutes(90);
+
+        $unassignedByTime = [];
+        foreach ($unassignedRows as $a) {
+            $start = $a->planned_start;
+            if (!$start) {
+                continue;
+            }
+            if ($start->lt($horizonStart) || $start->gt($horizonEnd)) {
+                continue;
+            }
+            if (!in_array($a->status, [
+                ComputerAssignment::STATUS_SCHEDULED,
+                ComputerAssignment::STATUS_IN_PROGRESS,
+            ], true)) {
+                continue;
+            }
+            $key = $start->format('H:i');
+            if (!isset($unassignedByTime[$key])) {
+                $unassignedByTime[$key] = [
+                    'planned_start_h' => $key,
+                    'planned_end_h'   => $a->planned_end?->format('H:i'),
+                    'count'           => 0,
+                    'students'        => [],
+                ];
+            }
+            $unassignedByTime[$key]['count']++;
+            // Keep the per-student list bounded so the JSON stays small
+            // when there are many waves — proctor only needs a sample
+            // and the total count.
+            if (count($unassignedByTime[$key]['students']) < 30) {
+                $unassignedByTime[$key]['students'][] = [
+                    'username'   => $a->student?->student_id_number,
+                    'short_name' => self::shortName($a->student),
+                ];
+            }
+        }
+        ksort($unassignedByTime);
+        $unassignedPanel = array_values($unassignedByTime);
+
         return response()->json([
-            'ok'        => true,
-            'now'       => $now->toIso8601String(),
-            'computers' => $payload,
+            'ok'         => true,
+            'now'        => $now->toIso8601String(),
+            'computers'  => $payload,
+            'unassigned' => $unassignedPanel,
         ]);
     }
 

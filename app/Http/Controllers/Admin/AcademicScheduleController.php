@@ -2186,12 +2186,19 @@ class AcademicScheduleController extends Controller
                 }
 
                 // Per-student qatorlar uchun asosiy oski_date/test_date saqlanmaydi —
-                // faqat resit/resit2 sanalari yoziladi (asosiy guruhga umumiy)
+                // faqat resit/resit2 sanalari yoziladi (asosiy guruhga umumiy).
+                // 2/3-urinish per-student qatorlarda forma `test_date`/`oski_date` nomi
+                // bilan post qiladi (keyin urinishga qarab test_resit_date / test_resit2_date
+                // ustuniga yoziladi), shuning uchun ularni ham "resit data" sifatida sanaymiz.
                 if ($studentHemisIdForRow) {
+                    $rowUrinishCheck = (int) ($schedule['urinish'] ?? 1);
                     $resitOnly = ['oski_resit_date', 'oski_resit2_date', 'test_resit_date', 'test_resit2_date'];
                     $hasAnyResit = false;
                     foreach ($resitOnly as $rf) {
                         if (!empty($schedule[$rf])) { $hasAnyResit = true; break; }
+                    }
+                    if (!$hasAnyResit && $rowUrinishCheck >= 2) {
+                        $hasAnyResit = !empty($schedule['oski_date']) || !empty($schedule['test_date']);
                     }
                     if (!$hasAnyResit && !$record->exists) {
                         // Bo'sh per-student row — yaratmaymiz

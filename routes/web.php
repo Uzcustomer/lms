@@ -581,6 +581,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{application}', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'show'])->name('show');
             Route::post('/{application}/approve', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'approve'])->name('approve');
             Route::post('/{application}/reject', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'reject'])->name('reject');
+            Route::post('/bulk-approve', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'bulkApprove'])->name('bulk-approve');
+            Route::post('/bulk-reject', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'bulkReject'])->name('bulk-reject');
             Route::delete('/{application}', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'destroy'])->name('destroy');
         });
 

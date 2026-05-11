@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\ExamAccessCheckController;
+use App\Http\Controllers\Api\ExamLoginCheckController;
 use App\Http\Controllers\Api\ExamLayoutController;
 use App\Http\Controllers\Api\ExamQuizTargetController;
 use App\Http\Controllers\Api\MoodleDescriptorCallbackController;
@@ -46,6 +47,15 @@ Route::post('/moodle-descriptor-failed', [MoodleDescriptorFailedCallbackControll
 Route::post('/exam-access-check', [ExamAccessCheckController::class, 'check'])
     ->middleware('throttle:120,1')
     ->name('api.moodle.exam-access-check');
+
+// Moodle auth_faceid plugin → LMS pre-login check. Lighter than
+// exam-access-check: only blocks "wrong_computer" so students walking
+// up to the wrong PC during their exam slot are turned away at the
+// FaceID screen instead of getting an error 30 seconds later when they
+// try to open the quiz.
+Route::post('/exam-login-check', [ExamLoginCheckController::class, 'check'])
+    ->middleware('throttle:240,1')
+    ->name('api.moodle.exam-login-check');
 
 // Moodle proctor dashboard (auth_faceid plugin) → today's full computer
 // grid with current/next student per cell. Same X-SYNC-SECRET auth.

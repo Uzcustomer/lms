@@ -17,6 +17,16 @@ class ExamAccessGuardService
      */
     public function check(Student $student, ?string $clientIp, ?Carbon $now = null): array
     {
+        // Seat-binding bypass: when the institution runs the
+        // "any-PC-in-the-window" model, this guard becomes a no-op and
+        // entry is governed purely by the Moodle-side time window
+        // (quizaccess_examwindow ± N minutes around the scheduled
+        // time). Flip EXAM_ENFORCE_COMPUTER_BINDING=true in .env to
+        // re-enable the strict per-PC checks below.
+        if (!config('services.exam_access.enforce_computer_binding', false)) {
+            return ['allowed' => true];
+        }
+
         $now ??= now();
 
         $detectedNumber = Computer::numberByIp($clientIp);
@@ -98,6 +108,15 @@ class ExamAccessGuardService
      */
     public function checkForLogin(Student $student, ?string $clientIp, ?Carbon $now = null): array
     {
+        // Same seat-binding bypass as ::check(). Without it, every FaceID
+        // login would have to pass the wrong-computer check even when
+        // the institution explicitly opted out of seat binding. The
+        // Moodle-side time-window rule still enforces ±N min around the
+        // scheduled exam time, so this only relaxes the SEAT check.
+        if (!config('services.exam_access.enforce_computer_binding', false)) {
+            return ['allowed' => true];
+        }
+
         $now ??= now();
 
         $detectedNumber = Computer::numberByIp($clientIp);

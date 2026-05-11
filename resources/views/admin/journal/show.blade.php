@@ -2748,7 +2748,24 @@
                                                         $isRetake = $hasRetakeInDay[$date] ?? false;
                                                         $hasNonFinalInDay = $hasGrades && collect($dayGrades)->contains(fn($g) => !($g['is_final'] ?? true));
                                                     @endphp
-                                                    <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}">
+                                                    @php
+                                                        $dayGraderLines = [];
+                                                        if ($hasGrades) {
+                                                            foreach ($dayGrades as $pair => $gd) {
+                                                                $uid = $gd['graded_by_user_id'] ?? null;
+                                                                $eid = $gd['employee_id'] ?? null;
+                                                                $gName = ($uid && isset($mtGraderUserNames[$uid]))
+                                                                    ? $mtGraderUserNames[$uid]
+                                                                    : (($eid && isset($mtGraderEmployeeNames[$eid])) ? $mtGraderEmployeeNames[$eid] : null);
+                                                                $val = round($gd['grade'], 0);
+                                                                $dayGraderLines[] = $gName
+                                                                    ? "({$pair}) {$val} — {$gName}"
+                                                                    : "({$pair}) {$val}";
+                                                            }
+                                                        }
+                                                        $dayTitle = implode(' | ', $dayGraderLines);
+                                                    @endphp
+                                                    <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}" @if($dayTitle) title="{{ $dayTitle }}" @endif>
                                                         @if($hasGrades)
                                                             <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ $dayAvg }}</span>
                                                             @if(count($dayGrades) > 1)
@@ -2840,9 +2857,25 @@
                                                     $isNonFinal = $gradeData && !($gradeData['is_final'] ?? true);
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}">
-                                                    @php $retakeSababli = !empty($gradeData['retake_was_sababli']); @endphp
+                                                    @php
+                                                        $retakeSababli = !empty($gradeData['retake_was_sababli']);
+                                                        $graderName = null;
+                                                        if ($gradeData) {
+                                                            $uid = $gradeData['graded_by_user_id'] ?? null;
+                                                            $eid = $gradeData['employee_id'] ?? null;
+                                                            if ($uid && isset($mtGraderUserNames[$uid])) {
+                                                                $graderName = $mtGraderUserNames[$uid];
+                                                            } elseif ($eid && isset($mtGraderEmployeeNames[$eid])) {
+                                                                $graderName = $mtGraderEmployeeNames[$eid];
+                                                            }
+                                                        }
+                                                        $cellTitleParts = [];
+                                                        if ($retakeSababli) $cellTitleParts[] = "Sababli ariza — 12-qo'shimcha shaklga tushadi";
+                                                        if ($graderName) $cellTitleParts[] = "Baho qo'ygan: {$graderName}";
+                                                        $cellTitle = implode(' · ', $cellTitleParts);
+                                                    @endphp
                                                     @if($grade !== null)
-                                                        <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} {{ $retakeSababli ? 'sababli-retake-cell' : '' }} font-medium" @if($retakeSababli) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>{{ round($grade, 0) }}</span>
+                                                        <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} {{ $retakeSababli ? 'sababli-retake-cell' : '' }} font-medium" @if($cellTitle) title="{{ $cellTitle }}" @endif>{{ round($grade, 0) }}</span>
                                                     @elseif($isAbsent)
                                                         <span class="text-red-600 font-medium">NB</span>
                                                     @else

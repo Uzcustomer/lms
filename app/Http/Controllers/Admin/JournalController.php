@@ -691,9 +691,25 @@ class JournalController extends Controller
                     'original_grade' => $g->grade,
                     'is_final' => $g->is_final,
                     'deadline' => $g->deadline,
+                    'graded_by_user_id' => $g->graded_by_user_id,
+                    'employee_id' => $g->employee_id,
                 ]);
             }
         }
+
+        // Mustaqil ta'lim baholarini kim qo'yganini ko'rsatish uchun lookup'lar:
+        // users.id (admin/o'qituvchi qo'lda baho qo'yganda) va teachers.hemis_id
+        // (o'qituvchi avtomatik baho qo'yganda employee_id sifatida saqlanadi).
+        $mtGraderUserIds = collect($mtGrades)->flatten(2)
+            ->pluck('graded_by_user_id')->filter()->unique()->values()->toArray();
+        $mtGraderEmployeeIds = collect($mtGrades)->flatten(2)
+            ->pluck('employee_id')->filter()->unique()->values()->toArray();
+        $mtGraderUserNames = !empty($mtGraderUserIds)
+            ? DB::table('users')->whereIn('id', $mtGraderUserIds)->pluck('name', 'id')->toArray()
+            : [];
+        $mtGraderEmployeeNames = !empty($mtGraderEmployeeIds)
+            ? DB::table('teachers')->whereIn('hemis_id', $mtGraderEmployeeIds)->pluck('full_name', 'hemis_id')->toArray()
+            : [];
 
         // Track absence markers (NB) separately from grades:
         // - absent row (any status) => NB if no effective grade exists
@@ -1647,6 +1663,8 @@ class JournalController extends Controller
             'jbAbsences',
             'retakeGraderNames',
             'retakeEmployeeNames',
+            'mtGraderUserNames',
+            'mtGraderEmployeeNames',
             'mtAbsences',
             'jbAttendance',
             'mtAttendance',

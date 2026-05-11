@@ -36,6 +36,7 @@
                 $byClub = $applications->groupBy('club_name');
                 $activeRole = session('active_role', '');
                 $isKafedraMudiri = $activeRole === 'kafedra_mudiri';
+                $canManage = in_array($activeRole, ['kafedra_mudiri', 'kichik_admin']);
             @endphp
 
             <div x-data="{ filter: 'all' }">
@@ -155,7 +156,7 @@
                                                 <th class="text-left">Masul shaxs</th>
                                                 <th class="text-left">Ariza sanasi</th>
                                                 <th class="text-center">Holati</th>
-                                                @if($isKafedraMudiri)
+                                                @if($canManage)
                                                     <th class="text-center">Amal</th>
                                                 @endif
                                                 @if(in_array($activeRole, ['superadmin', 'admin']))
@@ -181,7 +182,7 @@
                                                             <span class="inline-flex px-2.5 py-1 rounded-md text-[11px] font-semibold" style="background: #fee2e2; color: #991b1b;">Rad etilgan</span>
                                                         @endif
                                                     </td>
-                                                    @if($isKafedraMudiri)
+                                                    @if($canManage)
                                                         <td class="text-center" style="min-width: 200px;">
                                                             @if($app->status === 'pending')
                                                                 <div class="flex items-center justify-center gap-2">

@@ -697,19 +697,9 @@ class JournalController extends Controller
             }
         }
 
-        // Mustaqil ta'lim baholarini kim qo'yganini ko'rsatish uchun lookup'lar:
-        // users.id (admin/o'qituvchi qo'lda baho qo'yganda) va teachers.hemis_id
-        // (o'qituvchi avtomatik baho qo'yganda employee_id sifatida saqlanadi).
-        $mtGraderUserIds = collect($mtGrades)->flatten(2)
-            ->pluck('graded_by_user_id')->filter()->unique()->values()->toArray();
-        $mtGraderEmployeeIds = collect($mtGrades)->flatten(2)
-            ->pluck('employee_id')->filter()->unique()->values()->toArray();
-        $mtGraderUserNames = !empty($mtGraderUserIds)
-            ? DB::table('users')->whereIn('id', $mtGraderUserIds)->pluck('name', 'id')->toArray()
-            : [];
-        $mtGraderEmployeeNames = !empty($mtGraderEmployeeIds)
-            ? DB::table('teachers')->whereIn('hemis_id', $mtGraderEmployeeIds)->pluck('full_name', 'hemis_id')->toArray()
-            : [];
+        // (mtGraderUserNames / mtGraderEmployeeNames lookuplari pastroqda
+        // manualMtGradesRaw qurib bo'lingach quriladi — har ikki manbadagi grader id'lari
+        // bir xil so'rovda topiladi).
 
         // Track absence markers (NB) separately from grades:
         // - absent row (any status) => NB if no effective grade exists
@@ -1013,6 +1003,24 @@ class JournalController extends Controller
             ->get()
             ->keyBy('student_hemis_id');
         $manualMtGrades = $manualMtGradesRaw->map(fn($g) => $g->grade)->toArray();
+
+        // MT baholarini kim qo'yganini ko'rsatish uchun lookup'lar — mtGrades
+        // (lesson asosidagi) va manualMtGradesRaw (qo'lda kiritilgan) ikkalasidan
+        // graded_by_user_id (users.id) va employee_id (teachers.hemis_id) yig'ib,
+        // bir martadan users / teachers ga so'rov yuboramiz.
+        $lessonMtGraded = collect($mtGrades)->flatten(2);
+        $mtGraderUserIds = $lessonMtGraded->pluck('graded_by_user_id')
+            ->merge($manualMtGradesRaw->pluck('graded_by_user_id'))
+            ->filter()->unique()->values()->toArray();
+        $mtGraderEmployeeIds = $lessonMtGraded->pluck('employee_id')
+            ->merge($manualMtGradesRaw->pluck('employee_id'))
+            ->filter()->unique()->values()->toArray();
+        $mtGraderUserNames = !empty($mtGraderUserIds)
+            ? DB::table('users')->whereIn('id', $mtGraderUserIds)->pluck('name', 'id')->toArray()
+            : [];
+        $mtGraderEmployeeNames = !empty($mtGraderEmployeeIds)
+            ? DB::table('teachers')->whereIn('hemis_id', $mtGraderEmployeeIds)->pluck('full_name', 'hemis_id')->toArray()
+            : [];
 
         // Get MT grade history for all students
         $mtGradeHistory = [];

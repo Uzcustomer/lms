@@ -2921,6 +2921,8 @@ class JournalController extends Controller
                 ->update([
                     'grade' => $grade,
                     'grade_comment' => $gradeComment,
+                    'graded_by_user_id' => auth()->id(),
+                    'employee_name' => auth()->user()?->name ?? 'Manual Entry',
                     'updated_at' => $now,
                 ]);
         } elseif (!$existingGrade) {
@@ -2947,7 +2949,8 @@ class JournalController extends Controller
                 'training_type_code' => 99,
                 'training_type_name' => "Mustaqil ta'lim",
                 'employee_id' => 0,
-                'employee_name' => 'Manual Entry',
+                'employee_name' => auth()->user()?->name ?? 'Manual Entry',
+                'graded_by_user_id' => auth()->id(),
                 'lesson_pair_code' => '1',
                 'lesson_pair_name' => 'Manual',
                 'lesson_pair_start_time' => '00:00',

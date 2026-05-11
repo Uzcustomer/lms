@@ -72,6 +72,14 @@ class JnMtCalculator
         $mtLessonDates = array_values(array_unique(array_map(fn($c) => $c['date'], $mtColumns)));
         sort($mtLessonDates);
 
+        // JN uchun cutoff: faqat bugungi sanaga qadar bo'lgan darslar — jurnal
+        // "ixcham" tabidagi $jbLessonDatesForAverage bilan bir xil.
+        // MT uchun cutoff yo'q — jurnal MT ixchamida $totalMtDays = count($mtLessonDates).
+        $cutoff = Carbon::now('Asia/Tashkent')->endOfDay();
+        $jbLessonDates = array_values(array_filter($jbLessonDates, function (string $date) use ($cutoff): bool {
+            return Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($cutoff);
+        }));
+
         // 2. Talabalar
         $studentHemisIds = DB::table('students')
             ->where('group_id', $groupHemisId)
@@ -166,24 +174,26 @@ class JnMtCalculator
     }
 
     /**
-     * Jurnal "ixcham" mantig'i: empty kunlar tashlanadi,
-     * bo'luvchi sifatida faqat bahosi mavjud kunlar soni olinadi.
+     * Jurnal "ixcham" mantig'i (show.blade.php:1170-1188 bilan bir xil):
+     * - Har bir kun uchun dailyAverage = round(sum(grades)/pairsInDay, HALF_UP)
+     *   (NB bo'lsa sum=0, ya'ni dayAverage=0)
+     * - JN = round(sum(dailyAverages) / totalScheduledDays, HALF_UP)
+     *   ya'ni rejalashtirilgan kunlar soniga bo'linadi (NB ham hisobda qoladi)
      *
      * @param array<string,array<string,float>> $studentDayGrades date => pair => grade
-     * @param string[] $lessonDates
+     * @param string[] $lessonDates  cutoffgacha bo'lgan rejalashtirilgan kunlar
      * @param array<string,int> $pairsPerDay
      */
     private function dailyAverage(array $studentDayGrades, array $lessonDates, array $pairsPerDay): int
     {
+        $totalDays = count($lessonDates);
+        if ($totalDays === 0) return 0;
         $dailySum = 0;
-        $days = 0;
         foreach ($lessonDates as $date) {
             $dayGrades = $studentDayGrades[$date] ?? [];
-            if (empty($dayGrades)) continue;
             $pairs = $pairsPerDay[$date] ?? 1;
             $dailySum += round(array_sum($dayGrades) / $pairs, 0, PHP_ROUND_HALF_UP);
-            $days++;
         }
-        return $days > 0 ? (int) round($dailySum / $days, 0, PHP_ROUND_HALF_UP) : 0;
+        return (int) round($dailySum / $totalDays, 0, PHP_ROUND_HALF_UP);
     }
 }

@@ -144,11 +144,57 @@
                                     <svg class="w-4 h-4 text-gray-400 transition-transform duration-200" :class="open && 'rotate-180'" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/></svg>
                                 </div>
                             </div>
-                            <div x-show="open" x-collapse x-cloak>
+                            <div x-show="open" x-collapse x-cloak
+                                 @if($canManage)
+                                 x-data="{ selected: [], showBulkReject: false, bulkReason: '' }"
+                                 @endif>
+                                @if($canManage && $clubPending > 0)
+                                    @php $pendingIds = $clubApps->where('status', 'pending')->pluck('id')->values()->all(); @endphp
+                                    <div class="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-gray-100 bg-blue-50/40"
+                                         x-show="selected.length > 0" x-cloak>
+                                        <div class="text-sm font-semibold text-blue-900">
+                                            <span x-text="selected.length"></span> ta ariza belgilangan
+                                        </div>
+                                        <div class="flex items-center gap-2">
+                                            <form method="POST" action="{{ route('admin.club-applications.bulk-approve') }}"
+                                                  onsubmit="return confirm('Belgilangan arizalarni biriktirmoqchimisiz?')">
+                                                @csrf
+                                                <template x-for="id in selected" :key="id">
+                                                    <input type="hidden" name="ids[]" :value="id">
+                                                </template>
+                                                <button type="submit" class="px-3 py-1.5 text-xs font-semibold rounded-md text-white transition" style="background: linear-gradient(135deg, #059669, #10b981);">Hammasini biriktirish</button>
+                                            </form>
+                                            <button type="button" @click="showBulkReject = !showBulkReject" class="px-3 py-1.5 text-xs font-semibold rounded-md text-white transition" style="background: linear-gradient(135deg, #dc2626, #ef4444);">Hammasini rad etish</button>
+                                            <button type="button" @click="selected = []" class="px-2.5 py-1.5 text-xs font-semibold rounded-md text-gray-600 border border-gray-300 bg-white hover:bg-gray-50">Bekor</button>
+                                        </div>
+                                    </div>
+                                    <div x-show="showBulkReject && selected.length > 0" x-cloak class="px-4 py-2.5 border-b border-gray-100 bg-red-50/40">
+                                        <form method="POST" action="{{ route('admin.club-applications.bulk-reject') }}" class="flex gap-2 items-center"
+                                              onsubmit="return confirm('Belgilangan arizalarni rad etmoqchimisiz?')">
+                                            @csrf
+                                            <template x-for="id in selected" :key="id">
+                                                <input type="hidden" name="ids[]" :value="id">
+                                            </template>
+                                            <input type="text" name="reject_reason" x-model="bulkReason" placeholder="Rad etish sababi (ixtiyoriy)..." class="flex-1 text-sm border border-gray-300 rounded-md px-3 py-1.5 focus:ring-1 focus:ring-red-300 focus:border-red-400">
+                                            <button type="submit" class="px-3 py-1.5 text-xs font-semibold rounded-md text-white" style="background: #991b1b;">Tasdiqlash</button>
+                                        </form>
+                                    </div>
+                                @endif
                                 <div class="overflow-x-auto">
                                     <table class="club-table">
                                         <thead>
                                             <tr>
+                                                @if($canManage)
+                                                    <th class="text-center" style="width: 36px;">
+                                                        @if($clubPending > 0)
+                                                            <input type="checkbox"
+                                                                   class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                                   @change="selected = $event.target.checked ? @js($pendingIds) : []"
+                                                                   :checked="selected.length === {{ count($pendingIds) }} && selected.length > 0"
+                                                                   title="Barchasini belgilash">
+                                                        @endif
+                                                    </th>
+                                                @endif
                                                 <th class="text-center" style="width: 40px;">#</th>
                                                 <th class="text-left">Talaba</th>
                                                 <th class="text-left">Guruh</th>
@@ -167,6 +213,16 @@
                                         <tbody>
                                             @foreach($clubApps->sortByDesc('created_at')->values() as $i => $app)
                                                 <tr x-show="filter === 'all' || filter === '{{ $app->status }}'" x-data="{ rejectOpen: false }">
+                                                    @if($canManage)
+                                                        <td class="text-center">
+                                                            @if($app->status === 'pending')
+                                                                <input type="checkbox"
+                                                                       class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                                                       value="{{ $app->id }}"
+                                                                       x-model.number="selected">
+                                                            @endif
+                                                        </td>
+                                                    @endif
                                                     <td class="text-center text-gray-400 font-medium">{{ $i + 1 }}</td>
                                                     <td class="font-semibold text-gray-800">{{ $app->student_name }}</td>
                                                     <td class="text-gray-600">{{ $app->group_name ?? '—' }}</td>

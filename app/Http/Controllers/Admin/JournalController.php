@@ -552,6 +552,11 @@ class JournalController extends Controller
             if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
                 return ['grade' => $row->retake_grade, 'is_retake' => true];
             }
+            // Asl baho yiqilgan (60 dan past) va retake_grade mavjud bo'lsa,
+            // status='recorded'/'closed' bo'lganda ham retake_grade ustun bo'ladi.
+            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+                return ['grade' => $row->retake_grade, 'is_retake' => true];
+            }
             // status = recorded → use grade
             if ($row->status === 'recorded') {
                 return ['grade' => $row->grade, 'is_retake' => false];
@@ -5257,6 +5262,11 @@ class JournalController extends Controller
             if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
                 return $row->retake_grade;
             }
+            // Asl baho < 60 va retake_grade mavjud bo'lsa, status='recorded'/'closed'
+            // bo'lganda ham retake_grade ustun bo'ladi.
+            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+                return $row->retake_grade;
+            }
             if ($row->status === 'recorded') return $row->grade;
             if ($row->status === 'closed') return $row->grade;
             if ($row->retake_grade !== null) return $row->retake_grade;
@@ -6179,6 +6189,11 @@ class JournalController extends Controller
             if ($row->reason === 'low_grade' && $row->retake_grade !== null) {
                 return $row->retake_grade;
             }
+            // Asl baho < 60 va retake_grade mavjud bo'lsa, status='recorded'/'closed'
+            // bo'lganda ham retake_grade ustun bo'ladi.
+            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+                return $row->retake_grade;
+            }
             if ($row->status === 'recorded') return $row->grade;
             if ($row->status === 'closed') return $row->grade;
             if ($row->retake_grade !== null) return $row->retake_grade;
@@ -7035,6 +7050,11 @@ class JournalController extends Controller
             }
             // Mavzu retake yuklangan past baho (diagnostika): retake_grade asosiy hisoblanadi
             if ($row->reason === 'low_grade' && $retakeGrade !== null) {
+                return $retakeGrade;
+            }
+            // Asl baho < 60 va retake_grade mavjud bo'lsa, status='recorded'/'closed'
+            // bo'lganda ham retake_grade ustun bo'ladi.
+            if ($row->grade !== null && (float) $row->grade < 60 && $retakeGrade !== null) {
                 return $retakeGrade;
             }
             if ($row->status === 'recorded') return $row->grade;

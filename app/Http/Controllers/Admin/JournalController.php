@@ -5293,44 +5293,40 @@ class JournalController extends Controller
             ->keyBy('student_hemis_id');
 
         // Har bir talaba uchun JN va MT hisoblash
-        // Jurnal ko'rinishi bilan bir xil: baholanmagan kunlar tashlanadi,
-        // bo'luvchi sifatida faqat bahosi bor kunlar soni ishlatiladi.
         $studentGradeSnapshots = [];
         foreach ($studentHemisIds as $hemisId) {
             // JN hisoblash
             $dailySum = 0;
-            $jnDays = 0;
             $studentDayGrades = $jbGrades[$hemisId] ?? [];
             foreach ($jbLessonDates as $date) {
-                if (!isset($jbLessonDatesForAverageLookup[$date])) continue;
                 $dayGrades = $studentDayGrades[$date] ?? [];
-                if (empty($dayGrades)) continue;
                 $pairsInDay = $jbPairsPerDay[$date] ?? 1;
-                $dailySum += round(array_sum($dayGrades) / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                $jnDays++;
+                $gradeSum = array_sum($dayGrades);
+                $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                if (isset($jbLessonDatesForAverageLookup[$date])) {
+                    $dailySum += $dayAverage;
+                }
             }
-            $jn = $jnDays > 0
-                ? (int) round($dailySum / $jnDays, 0, PHP_ROUND_HALF_UP)
+            $jn = $totalJbDaysForAverage > 0
+                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
                 : 0;
 
             // MT hisoblash
             $mtDailySum = 0;
-            $mtDays = 0;
             $studentMtGrades = $mtGrades[$hemisId] ?? [];
             foreach ($mtLessonDates as $date) {
                 $dayGrades = $studentMtGrades[$date] ?? [];
-                if (empty($dayGrades)) continue;
                 $pairsInDay = $mtPairsPerDay[$date] ?? 1;
-                $mtDailySum += round(array_sum($dayGrades) / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                $mtDays++;
+                $gradeSum = array_sum($dayGrades);
+                $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
             }
-            $mt = $mtDays > 0
-                ? (int) round($mtDailySum / $mtDays, 0, PHP_ROUND_HALF_UP)
+            $mt = $totalMtDays > 0
+                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
                 : 0;
 
             // Manual MT override
             if (isset($manualMtGrades[$hemisId])) {
-                $mt = (int) round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
+                $mt = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
             }
 
             $studentGradeSnapshots[$hemisId] = ['jn' => $jn, 'mt' => $mt];
@@ -6224,40 +6220,37 @@ class JournalController extends Controller
         foreach ($approvedExcuses as $excuse) {
             $hemisId = $excuse->student_hemis_id;
 
-            // JN hisoblash — jurnal ko'rinishi bilan bir xil:
-            // baholanmagan kunlar tashlanadi, bo'luvchi = bahosi bor kunlar soni
+            // JN hisoblash
             $dailySum = 0;
-            $jnDays = 0;
             $studentDayGrades = $jbGrades[$hemisId] ?? [];
             foreach ($jbLessonDates as $date) {
-                if (!isset($jbLessonDatesForAverageLookup[$date])) continue;
                 $dayGrades = $studentDayGrades[$date] ?? [];
-                if (empty($dayGrades)) continue;
                 $pairsInDay = $jbPairsPerDay[$date] ?? 1;
-                $dailySum += round(array_sum($dayGrades) / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                $jnDays++;
+                $gradeSum = array_sum($dayGrades);
+                $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                if (isset($jbLessonDatesForAverageLookup[$date])) {
+                    $dailySum += $dayAverage;
+                }
             }
-            $jn = $jnDays > 0
-                ? (int) round($dailySum / $jnDays, 0, PHP_ROUND_HALF_UP)
+            $jn = $totalJbDaysForAverage > 0
+                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
                 : 0;
 
             // MT hisoblash
             $mtDailySum = 0;
-            $mtDays = 0;
             $studentMtGrades = $mtGrades[$hemisId] ?? [];
             foreach ($mtLessonDates as $date) {
                 $dayGrades = $studentMtGrades[$date] ?? [];
-                if (empty($dayGrades)) continue;
                 $pairsInDay = $mtPairsPerDay[$date] ?? 1;
-                $mtDailySum += round(array_sum($dayGrades) / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                $mtDays++;
+                $gradeSum = array_sum($dayGrades);
+                $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
             }
-            $mt = $mtDays > 0
-                ? (int) round($mtDailySum / $mtDays, 0, PHP_ROUND_HALF_UP)
+            $mt = $totalMtDays > 0
+                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
                 : 0;
 
             if (isset($manualMtGrades[$hemisId])) {
-                $mt = (int) round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
+                $mt = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
             }
 
             $insertData[] = [

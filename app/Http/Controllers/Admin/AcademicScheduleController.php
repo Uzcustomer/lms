@@ -4313,6 +4313,7 @@ class AcademicScheduleController extends Controller
                     ];
                 }
                 $rows[$key]['groups'][] = [
+                    'schedule_id' => $schedule->id,
                     'group_hemis_id' => $schedule->group_hemis_id,
                     'subject_id' => $schedule->subject_id ?? '',
                     'group_name' => $schedule->group?->name ?? $schedule->group_hemis_id,
@@ -4331,6 +4332,7 @@ class AcademicScheduleController extends Controller
                     ];
                 }
                 $rows[$key]['groups'][] = [
+                    'schedule_id' => $schedule->id,
                     'group_hemis_id' => $schedule->group_hemis_id,
                     'subject_id' => $schedule->subject_id ?? '',
                     'group_name' => $schedule->group?->name ?? $schedule->group_hemis_id,
@@ -4342,7 +4344,6 @@ class AcademicScheduleController extends Controller
         // Talabalar soni
         $allGroups = collect($rows)->pluck('groups')->flatten(1);
         $allGroupIds = $allGroups->pluck('group_hemis_id')->unique()->toArray();
-        $allSubjectIds = $allGroups->pluck('subject_id')->filter()->unique()->toArray();
         $studentCounts = [];
         if (!empty($allGroupIds)) {
             $studentCounts = \Illuminate\Support\Facades\DB::table('students')
@@ -4354,35 +4355,32 @@ class AcademicScheduleController extends Controller
                 ->toArray();
         }
 
-        // Quiz topshirganlar: shu guruhdagi talabalar Test/OSKI tipidagi
-        // quiz tugatgan bo'lsa hisoblanadi.
-        // Eslatma 1: avval subject_id (fan_id) bo'yicha filtrlash sinab ko'rildi,
-        // lekin ExamSchedule.subject_id ↔ hemis_quiz_results.fan_id mosligi
-        // ko'p yozuvlarda ishlamaydi (ID ko'rinishi farqli). Odatda har guruhda
-        // kuniga bitta Test va bitta OSKI bo'lganligi sababli (guruh + yn_type)
-        // bo'yicha sanash ham yetarli aniqlikni beradi.
-        // Eslatma 2: sana bo'yicha filtr (date_finish=$date) qo'llanmaydi —
-        // Moodle'dan hemis_quiz_results jadvaliga sync kechikishi mumkin.
-        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
-        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
-        $quizCounts = [];
-        if (!empty($allGroupIds)) {
+        // Quiz topshirganlar: computer_assignments jadvalidan real-time
+        // status'lar olinadi. Moodle'dagi `local_hemisexport` plagini har
+        // bir quiz attempt boshlangani/tugaganida LMS'ga POST yuboradi
+        // (MoodleExamEventController) — bu yerda assignment.status
+        // 'in_progress'/'finished'/'abandoned' qiymatiga yangilanadi.
+        // hemis_quiz_results jadvali esa bulk sync orqali alohida sinxron
+        // qilinadi (kuniga 3 marta) — uni ishlatib bo'lmaydi.
+        $scheduleIds = $allGroups->pluck('schedule_id')->filter()->unique()->toArray();
+        $finishedMap = [];
+        if (!empty($scheduleIds)) {
             try {
-                $quizRows = DB::table('hemis_quiz_results as hqr')
-                    ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
-                    ->whereIn('st.group_id', $allGroupIds)
-                    ->where('hqr.is_active', 1)
-                    ->whereIn('hqr.quiz_type', array_merge($testTypes, $oskiTypes))
-                    ->groupBy('st.group_id', 'hqr.quiz_type')
-                    ->select('st.group_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
+                $finishedRows = DB::table('computer_assignments')
+                    ->whereIn('exam_schedule_id', $scheduleIds)
+                    ->whereIn('status', [
+                        \App\Models\ComputerAssignment::STATUS_FINISHED,
+                        \App\Models\ComputerAssignment::STATUS_ABANDONED,
+                    ])
+                    ->groupBy('exam_schedule_id', 'yn_type')
+                    ->select('exam_schedule_id', 'yn_type', DB::raw('COUNT(*) as cnt'))
                     ->get();
-                foreach ($quizRows as $qr) {
-                    $bucket = in_array($qr->quiz_type, $oskiTypes, true) ? 'OSKI' : 'Test';
-                    $qKey = $qr->group_id . '|' . $bucket;
-                    $quizCounts[$qKey] = ($quizCounts[$qKey] ?? 0) + (int) $qr->cnt;
+                foreach ($finishedRows as $fr) {
+                    $key = $fr->exam_schedule_id . '|' . strtolower((string) $fr->yn_type);
+                    $finishedMap[$key] = (int) $fr->cnt;
                 }
             } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: hemis_quiz_results so\'rovi xatolik berdi: ' . $e->getMessage());
+                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: computer_assignments so\'rovi xatolik berdi: ' . $e->getMessage());
             }
         }
 
@@ -4390,11 +4388,12 @@ class AcademicScheduleController extends Controller
             $occupied = 0;
             $submitted = 0;
             $remaining = 0;
+            $ynLower = strtolower($row['yn_type']);
             foreach ($row['groups'] as &$grp) {
                 $cnt = (int) ($studentCounts[$grp['group_hemis_id']] ?? 0);
                 $grp['student_count'] = $cnt;
-                $qKey = $grp['group_hemis_id'] . '|' . $row['yn_type'];
-                $qCnt = (int) ($quizCounts[$qKey] ?? 0);
+                $qKey = ($grp['schedule_id'] ?? '') . '|' . $ynLower;
+                $qCnt = (int) ($finishedMap[$qKey] ?? 0);
                 if ($qCnt > $cnt) {
                     $qCnt = $cnt;
                 }

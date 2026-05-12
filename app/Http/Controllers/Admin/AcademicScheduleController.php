@@ -4354,14 +4354,15 @@ class AcademicScheduleController extends Controller
                 ->toArray();
         }
 
-        // Quiz topshirganlar: shu sanada Test/OSKI tipidagi quiz tugatgan
-        // talabalarni guruh + yn_type bo'yicha hisoblash.
-        // Eslatma: avval subject_id (fan_id) bo'yicha filtrlash sinab ko'rildi,
+        // Quiz topshirganlar: shu guruhdagi talabalar Test/OSKI tipidagi
+        // quiz tugatgan bo'lsa hisoblanadi.
+        // Eslatma 1: avval subject_id (fan_id) bo'yicha filtrlash sinab ko'rildi,
         // lekin ExamSchedule.subject_id ↔ hemis_quiz_results.fan_id mosligi
         // ko'p yozuvlarda ishlamaydi (ID ko'rinishi farqli). Odatda har guruhda
         // kuniga bitta Test va bitta OSKI bo'lganligi sababli (guruh + yn_type)
-        // bo'yicha sanash ham yetarli aniqlikni beradi va FaceID dashboard
-        // bilan mos keladi.
+        // bo'yicha sanash ham yetarli aniqlikni beradi.
+        // Eslatma 2: sana bo'yicha filtr (date_finish=$date) qo'llanmaydi —
+        // Moodle'dan hemis_quiz_results jadvaliga sync kechikishi mumkin.
         $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
         $quizCounts = [];
@@ -4371,7 +4372,6 @@ class AcademicScheduleController extends Controller
                     ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
                     ->whereIn('st.group_id', $allGroupIds)
                     ->where('hqr.is_active', 1)
-                    ->whereDate('hqr.date_finish', $date)
                     ->whereIn('hqr.quiz_type', array_merge($testTypes, $oskiTypes))
                     ->groupBy('st.group_id', 'hqr.quiz_type')
                     ->select('st.group_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))

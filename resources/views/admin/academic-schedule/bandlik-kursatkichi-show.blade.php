@@ -84,7 +84,7 @@
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">YN turi</th>
                                     <th class="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Guruhlar</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Talabalar</th>
-                                    <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Topshirgan / Qoldi</th>
+                                    <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Topshirdi / Qoldi</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Band / Jami</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Bo'sh</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Bandlik %</th>
@@ -150,7 +150,7 @@
                                                         $grpRem = (int) ($grp['remaining'] ?? max(0, $grpCnt - $grpQuiz));
                                                     @endphp
                                                     <div class="inline-flex items-center gap-2 px-2 py-1 rounded bg-gray-50 border border-gray-200">
-                                                        <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold">
+                                                        <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold" title="Guruhdagi jami talabalar">
                                                             {{ $grpCnt }}
                                                         </span>
                                                         <span class="font-semibold text-gray-900 text-xs whitespace-nowrap">{{ $grp['group_name'] }}</span>
@@ -159,10 +159,13 @@
                                                             <span class="text-gray-700 text-xs">{{ $grp['subject_name'] }}</span>
                                                         @endif
                                                         <span class="text-gray-300 text-xs">·</span>
-                                                        <span class="inline-flex items-center gap-1 text-[10px]">
-                                                            <span class="text-emerald-700 font-semibold" title="Topshirgan">✓ {{ $grpQuiz }}</span>
-                                                            <span class="text-gray-300">/</span>
-                                                            <span class="{{ $grpRem > 0 ? 'text-amber-700' : 'text-gray-400' }} font-semibold" title="Qoldi">⏳ {{ $grpRem }}</span>
+                                                        <span class="inline-flex items-center gap-1 text-[10px] whitespace-nowrap">
+                                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold" title="Quizni topshirgan talabalar soni">
+                                                                Topshirdi: {{ $grpQuiz }}
+                                                            </span>
+                                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded {{ $grpRem > 0 ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-500' }} font-semibold" title="Hali topshirmagan talabalar soni">
+                                                                Qoldi: {{ $grpRem }}
+                                                            </span>
                                                         </span>
                                                     </div>
                                                 @endforeach
@@ -171,12 +174,15 @@
                                         <td class="px-3 py-2 text-center font-semibold text-gray-900">{{ $slotOccupied }}</td>
                                         <td class="px-3 py-2 text-center">
                                             <div class="flex flex-col items-center gap-1">
-                                                <div class="text-sm">
-                                                    <span class="font-semibold text-emerald-700">{{ $slotSubmitted }}</span>
-                                                    <span class="text-gray-400">/</span>
-                                                    <span class="font-semibold {{ $slotRemaining > 0 ? 'text-amber-700' : 'text-gray-500' }}">{{ $slotRemaining }}</span>
+                                                <div class="flex items-center gap-1 text-xs">
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-800 font-semibold" title="Quizni topshirgan talabalar soni">
+                                                        Topshirdi: {{ $slotSubmitted }}
+                                                    </span>
+                                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded {{ $slotRemaining > 0 ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-500' }} font-semibold" title="Hali topshirmagan talabalar soni">
+                                                        Qoldi: {{ $slotRemaining }}
+                                                    </span>
                                                 </div>
-                                                <div class="w-20 bg-gray-200 rounded-full h-1.5 overflow-hidden">
+                                                <div class="w-24 bg-gray-200 rounded-full h-1.5 overflow-hidden">
                                                     <div class="bg-emerald-500 h-full" style="width: {{ $submitPercent }}%"></div>
                                                 </div>
                                                 <span class="text-[10px] text-gray-500">{{ $submitPercent }}%</span>

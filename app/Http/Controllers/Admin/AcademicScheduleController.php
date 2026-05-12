@@ -4314,6 +4314,7 @@ class AcademicScheduleController extends Controller
                 }
                 $rows[$key]['groups'][] = [
                     'group_hemis_id' => $schedule->group_hemis_id,
+                    'subject_id' => $schedule->subject_id ?? '',
                     'group_name' => $schedule->group?->name ?? $schedule->group_hemis_id,
                     'subject_name' => $schedule->subject_name ?? '',
                 ];
@@ -4331,6 +4332,7 @@ class AcademicScheduleController extends Controller
                 }
                 $rows[$key]['groups'][] = [
                     'group_hemis_id' => $schedule->group_hemis_id,
+                    'subject_id' => $schedule->subject_id ?? '',
                     'group_name' => $schedule->group?->name ?? $schedule->group_hemis_id,
                     'subject_name' => $schedule->subject_name ?? '',
                 ];
@@ -4338,7 +4340,9 @@ class AcademicScheduleController extends Controller
         }
 
         // Talabalar soni
-        $allGroupIds = collect($rows)->pluck('groups')->flatten(1)->pluck('group_hemis_id')->unique()->toArray();
+        $allGroups = collect($rows)->pluck('groups')->flatten(1);
+        $allGroupIds = $allGroups->pluck('group_hemis_id')->unique()->toArray();
+        $allSubjectIds = $allGroups->pluck('subject_id')->filter()->unique()->toArray();
         $studentCounts = [];
         if (!empty($allGroupIds)) {
             $studentCounts = \Illuminate\Support\Facades\DB::table('students')
@@ -4350,15 +4354,58 @@ class AcademicScheduleController extends Controller
                 ->toArray();
         }
 
+        // Quiz topshirganlar: (group_hemis_id, subject_id, yn_type) → distinct talabalar soni
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+        $quizCounts = [];
+        if (!empty($allGroupIds) && !empty($allSubjectIds)) {
+            try {
+                $quizRows = DB::table('hemis_quiz_results as hqr')
+                    ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
+                    ->whereIn('st.group_id', $allGroupIds)
+                    ->whereIn('hqr.fan_id', $allSubjectIds)
+                    ->where('hqr.is_active', 1)
+                    ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
+                    ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
+                    ->get();
+                foreach ($quizRows as $qr) {
+                    if (in_array($qr->quiz_type, $testTypes, true)) {
+                        $bucket = 'Test';
+                    } elseif (in_array($qr->quiz_type, $oskiTypes, true)) {
+                        $bucket = 'OSKI';
+                    } else {
+                        continue;
+                    }
+                    $qKey = $qr->group_id . '|' . $qr->fan_id . '|' . $bucket;
+                    $quizCounts[$qKey] = ($quizCounts[$qKey] ?? 0) + (int) $qr->cnt;
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: hemis_quiz_results so\'rovi xatolik berdi: ' . $e->getMessage());
+            }
+        }
+
         foreach ($rows as &$row) {
             $occupied = 0;
+            $submitted = 0;
+            $remaining = 0;
             foreach ($row['groups'] as &$grp) {
                 $cnt = (int) ($studentCounts[$grp['group_hemis_id']] ?? 0);
                 $grp['student_count'] = $cnt;
+                $qKey = $grp['group_hemis_id'] . '|' . ($grp['subject_id'] ?? '') . '|' . $row['yn_type'];
+                $qCnt = (int) ($quizCounts[$qKey] ?? 0);
+                if ($qCnt > $cnt) {
+                    $qCnt = $cnt;
+                }
+                $grp['quiz_count'] = $qCnt;
+                $grp['remaining'] = max(0, $cnt - $qCnt);
                 $occupied += $cnt;
+                $submitted += $qCnt;
+                $remaining += $grp['remaining'];
             }
             unset($grp);
             $row['occupied'] = $occupied;
+            $row['submitted'] = $submitted;
+            $row['remaining'] = $remaining;
             $row['free'] = max(0, $totalComputers - $occupied);
             $row['overflow'] = max(0, $occupied - $totalComputers);
             $row['usage_percent'] = $totalComputers > 0 ? round(($occupied / $totalComputers) * 100, 1) : 0;
@@ -4834,3 +4881,4 @@ class AcademicScheduleController extends Controller
         ]);
     }
 }
+

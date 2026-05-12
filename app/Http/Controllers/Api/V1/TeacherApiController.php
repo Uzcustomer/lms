@@ -1367,14 +1367,16 @@ class TeacherApiController extends Controller
 
             $newAttempt = $currentAttempt + 1;
 
-            // Update grade
+            // Update grade — graded_by_user_id FK references users(id);
+            // teacher.id boshqa jadval bo'lgani uchun null qoldiramiz va
+            // o'qituvchi ismini employee_name ga yozamiz.
             DB::table('student_grades')
                 ->where('id', $existingGrade->id)
                 ->update([
                     'grade' => $grade,
                     'employee_id' => $teacher->hemis_id ?? 0,
                     'employee_name' => $teacher->full_name ?? 'Teacher',
-                    'graded_by_user_id' => $teacher->id,
+                    'graded_by_user_id' => null,
                     'updated_at' => $now,
                 ]);
         } elseif (!$existingGrade) {
@@ -1401,7 +1403,7 @@ class TeacherApiController extends Controller
                 'training_type_name' => "Mustaqil ta'lim",
                 'employee_id' => $teacher->hemis_id ?? 0,
                 'employee_name' => $teacher->full_name ?? 'Teacher',
-                'graded_by_user_id' => $teacher->id,
+                'graded_by_user_id' => null,
                 'lesson_pair_code' => '1',
                 'lesson_pair_name' => 'Manual',
                 'lesson_pair_start_time' => '00:00',

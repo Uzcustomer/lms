@@ -4355,16 +4355,55 @@ class AcademicScheduleController extends Controller
         }
 
         // Quiz topshirganlar: (group_hemis_id, subject_id, yn_type) → distinct talabalar soni
+        // Eslatma: ExamSchedule.subject_id ayrim yozuvlarda CurriculumSubject.subject_id
+        // (HEMIS), boshqalarida curriculum_subject_hemis_id qiymatini saqlab turishi
+        // mumkin. Shu sababli har ikkalasiga ham mos fan_id'lar to'planadi.
         $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+        $fanIdAliasMap = [];
+        $allFanIdCandidates = collect($allSubjectIds)->map(fn($v) => (string) $v)->all();
+        if (!empty($allSubjectIds)) {
+            try {
+                $csRows = CurriculumSubject::where(function ($q) use ($allSubjectIds) {
+                        $q->whereIn('subject_id', $allSubjectIds)
+                          ->orWhereIn('curriculum_subject_hemis_id', $allSubjectIds);
+                    })
+                    ->get(['subject_id', 'curriculum_subject_hemis_id']);
+                foreach ($csRows as $cs) {
+                    $aliases = [];
+                    if ($cs->subject_id !== null && $cs->subject_id !== '') {
+                        $aliases[] = (string) $cs->subject_id;
+                    }
+                    if ($cs->curriculum_subject_hemis_id !== null && $cs->curriculum_subject_hemis_id !== '') {
+                        $aliases[] = (string) $cs->curriculum_subject_hemis_id;
+                    }
+                    if (empty($aliases)) continue;
+                    sort($aliases);
+                    $canonical = $aliases[0];
+                    foreach ($aliases as $a) {
+                        $fanIdAliasMap[$a] = $canonical;
+                        $allFanIdCandidates[] = $a;
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: curriculum_subjects alias xatosi: ' . $e->getMessage());
+            }
+        }
+        $allFanIdCandidates = array_values(array_unique($allFanIdCandidates));
+        $canonicalFanId = function ($id) use ($fanIdAliasMap) {
+            $key = (string) $id;
+            return $fanIdAliasMap[$key] ?? $key;
+        };
+
         $quizCounts = [];
-        if (!empty($allGroupIds) && !empty($allSubjectIds)) {
+        if (!empty($allGroupIds) && !empty($allFanIdCandidates)) {
             try {
                 $quizRows = DB::table('hemis_quiz_results as hqr')
                     ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
                     ->whereIn('st.group_id', $allGroupIds)
-                    ->whereIn('hqr.fan_id', $allSubjectIds)
+                    ->whereIn('hqr.fan_id', $allFanIdCandidates)
                     ->where('hqr.is_active', 1)
+                    ->whereDate('hqr.date_finish', $date)
                     ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
                     ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
                     ->get();
@@ -4376,7 +4415,8 @@ class AcademicScheduleController extends Controller
                     } else {
                         continue;
                     }
-                    $qKey = $qr->group_id . '|' . $qr->fan_id . '|' . $bucket;
+                    $canonFan = $canonicalFanId($qr->fan_id);
+                    $qKey = $qr->group_id . '|' . $canonFan . '|' . $bucket;
                     $quizCounts[$qKey] = ($quizCounts[$qKey] ?? 0) + (int) $qr->cnt;
                 }
             } catch (\Throwable $e) {
@@ -4391,7 +4431,8 @@ class AcademicScheduleController extends Controller
             foreach ($row['groups'] as &$grp) {
                 $cnt = (int) ($studentCounts[$grp['group_hemis_id']] ?? 0);
                 $grp['student_count'] = $cnt;
-                $qKey = $grp['group_hemis_id'] . '|' . ($grp['subject_id'] ?? '') . '|' . $row['yn_type'];
+                $canonSubject = $canonicalFanId($grp['subject_id'] ?? '');
+                $qKey = $grp['group_hemis_id'] . '|' . $canonSubject . '|' . $row['yn_type'];
                 $qCnt = (int) ($quizCounts[$qKey] ?? 0);
                 if ($qCnt > $cnt) {
                     $qCnt = $cnt;

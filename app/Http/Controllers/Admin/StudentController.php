@@ -135,7 +135,69 @@ class StudentController extends Controller
 
     public function statistics(Request $request)
     {
-        return view('admin.students.statistics');
+        // Faqat aktiv talabalar (student_status_code = 11) bo'yicha sanaymiz.
+        // Ta'lim turi va jinsi bo'yicha kesim — "Umumiy" tabidagi kartalar uchun.
+        $rows = DB::table('students')
+            ->selectRaw('education_type_name, gender_name, COUNT(*) as total')
+            ->where('student_status_code', 11)
+            ->groupBy('education_type_name', 'gender_name')
+            ->get();
+
+        $byEduGender = [];
+        foreach ($rows as $r) {
+            $type   = trim((string) $r->education_type_name);
+            $gender = strtolower(trim((string) $r->gender_name));
+            if ($type === '') {
+                continue;
+            }
+            if (!isset($byEduGender[$type])) {
+                $byEduGender[$type] = ['male' => 0, 'female' => 0, 'total' => 0];
+            }
+            $byEduGender[$type]['total'] += (int) $r->total;
+            // Erkak / Erkaklar / Male / etc.
+            if (str_starts_with($gender, 'erkak') || $gender === 'male' || $gender === 'm') {
+                $byEduGender[$type]['male'] += (int) $r->total;
+            } elseif (str_starts_with($gender, 'ayol') || str_starts_with($gender, 'xotin')
+                    || $gender === 'female' || $gender === 'f') {
+                $byEduGender[$type]['female'] += (int) $r->total;
+            }
+        }
+
+        // Bakalavr / Magistratura / Ordinatura kartalari — DB nomi farq qilishi
+        // mumkin (Bakalavriat, Magistr, Ordinatura...), shuning uchun moslama.
+        $aliases = [
+            'bakalavr'    => ['bakalavr', 'bakalavriat'],
+            'magistr'     => ['magistratura', 'magistr'],
+            'ordinatura'  => ['ordinatura'],
+        ];
+        $resolve = function (array $keys) use ($byEduGender) {
+            $out = ['male' => 0, 'female' => 0, 'total' => 0];
+            foreach ($byEduGender as $type => $stat) {
+                $low = mb_strtolower($type);
+                foreach ($keys as $k) {
+                    if (str_contains($low, $k)) {
+                        $out['male']   += $stat['male'];
+                        $out['female'] += $stat['female'];
+                        $out['total']  += $stat['total'];
+                        break;
+                    }
+                }
+            }
+            return $out;
+        };
+
+        $stats = [
+            'bakalavr'   => $resolve($aliases['bakalavr']),
+            'magistr'    => $resolve($aliases['magistr']),
+            'ordinatura' => $resolve($aliases['ordinatura']),
+        ];
+        $stats['total'] = [
+            'male'   => array_sum(array_column($byEduGender, 'male')),
+            'female' => array_sum(array_column($byEduGender, 'female')),
+            'total'  => array_sum(array_column($byEduGender, 'total')),
+        ];
+
+        return view('admin.students.statistics', compact('stats'));
     }
 
     public function disabledIndex(Request $request)

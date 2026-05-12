@@ -133,6 +133,11 @@ class StudentController extends Controller
         return view('admin.students.index', compact('students', 'educationTypes', 'countries'));
     }
 
+    public function statistics(Request $request)
+    {
+        return view('admin.students.statistics');
+    }
+
     public function disabledIndex(Request $request)
     {
         $disabledFilter = function ($q) {

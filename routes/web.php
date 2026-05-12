@@ -129,6 +129,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         })->name('switch-role');
 
         Route::get('/students', [AdminStudentController::class, 'index'])->name('students.index');
+        Route::get('/students-statistics', [AdminStudentController::class, 'statistics'])->name('students.statistics');
         Route::get('/students/disabled', [AdminStudentController::class, 'disabledIndex'])->name('students.disabled');
         Route::get('/students/disabled/{student}/info', [AdminStudentController::class, 'disabledInfo'])->name('students.disabled.info');
         Route::get('/students/disabled/{student}/certificate', [AdminStudentController::class, 'disabledCertificate'])->name('students.disabled.certificate');

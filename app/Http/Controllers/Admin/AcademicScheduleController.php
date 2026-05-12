@@ -4359,19 +4359,17 @@ class AcademicScheduleController extends Controller
         // status'lar olinadi. Moodle'dagi `local_hemisexport` plagini har
         // bir quiz attempt boshlangani/tugaganida LMS'ga POST yuboradi
         // (MoodleExamEventController) — bu yerda assignment.status
-        // 'in_progress'/'finished'/'abandoned' qiymatiga yangilanadi.
-        // hemis_quiz_results jadvali esa bulk sync orqali alohida sinxron
-        // qilinadi (kuniga 3 marta) — uni ishlatib bo'lmaydi.
+        // 'in_progress' yoki 'finished' qiymatiga yangilanadi.
+        // Eslatma: ExamScheduleTickJob::processNoShow() kelmagan
+        // talabalarni 'abandoned'ga o'tkazadi — bu "topshirdi" emas,
+        // shu sababli faqat STATUS_FINISHED hisoblanadi.
         $scheduleIds = $allGroups->pluck('schedule_id')->filter()->unique()->toArray();
         $finishedMap = [];
         if (!empty($scheduleIds)) {
             try {
                 $finishedRows = DB::table('computer_assignments')
                     ->whereIn('exam_schedule_id', $scheduleIds)
-                    ->whereIn('status', [
-                        \App\Models\ComputerAssignment::STATUS_FINISHED,
-                        \App\Models\ComputerAssignment::STATUS_ABANDONED,
-                    ])
+                    ->where('status', \App\Models\ComputerAssignment::STATUS_FINISHED)
                     ->groupBy('exam_schedule_id', 'yn_type')
                     ->select('exam_schedule_id', 'yn_type', DB::raw('COUNT(*) as cnt'))
                     ->get();

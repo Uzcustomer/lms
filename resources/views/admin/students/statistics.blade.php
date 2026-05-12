@@ -127,7 +127,12 @@
      x-data="{
         outer: 'talabalar',
         inner: { talabalar: 'umumiy' }
-     }">
+     }"
+     x-init="
+        $watch('outer', () => $nextTick(() => window.statsAnimateVisible()));
+        $watch('inner.talabalar', () => $nextTick(() => window.statsAnimateVisible()));
+        $nextTick(() => window.statsAnimateVisible());
+     ">
 
     {{-- ───── Outer tabs ───── --}}
     <div class="stats-outer-tabs">
@@ -208,17 +213,17 @@
                         </span>
                         <div class="kpi-title">{{ $c['title'] }}</div>
                         <div class="kpi-sub">Umumiy</div>
-                        <div class="kpi-total">{{ number_format($total, 0, '.', ' ') }}</div>
+                        <div class="kpi-total" data-count="{{ $total }}">{{ number_format($total, 0, '.', ' ') }}</div>
                         <div class="kpi-split">
                             <div>
                                 <span class="lbl">Erkaklar</span>
-                                <span class="val">{{ number_format($m, 0, '.', ' ') }}</span>
-                                <span class="pct pct-m">{{ number_format($mp, 2) }}%</span>
+                                <span class="val" data-count="{{ $m }}">{{ number_format($m, 0, '.', ' ') }}</span>
+                                <span class="pct pct-m" data-count="{{ $mp }}" data-count-decimals="2">{{ number_format($mp, 2) }}%</span>
                             </div>
                             <div>
                                 <span class="lbl">Ayollar</span>
-                                <span class="val">{{ number_format($f, 0, '.', ' ') }}</span>
-                                <span class="pct pct-f">{{ number_format($fp, 2) }}%</span>
+                                <span class="val" data-count="{{ $f }}">{{ number_format($f, 0, '.', ' ') }}</span>
+                                <span class="pct pct-f" data-count="{{ $fp }}" data-count-decimals="2">{{ number_format($fp, 2) }}%</span>
                             </div>
                         </div>
                     </div>
@@ -251,4 +256,38 @@
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    const DURATION = 900;            // ms
+    const fmtInt = (n) => Math.round(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
+    const fmtFloat = (n, d) => n.toFixed(d).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+
+    function animate(el) {
+        const target = parseFloat((el.dataset.count || '0').toString().replace(/\s/g, ''));
+        const decimals = parseInt(el.dataset.countDecimals || '0', 10);
+        const isPct = el.classList.contains('pct');
+        const suffix = isPct ? '%' : '';
+        if (!isFinite(target)) return;
+
+        const start = performance.now();
+        function tick(now) {
+            const p = Math.min(1, (now - start) / DURATION);
+            const eased = 1 - Math.pow(1 - p, 3);
+            const v = target * eased;
+            el.textContent = (decimals > 0 ? fmtFloat(v, decimals) : fmtInt(v)) + suffix;
+            if (p < 1) requestAnimationFrame(tick);
+        }
+        requestAnimationFrame(tick);
+    }
+
+    window.statsAnimateVisible = function () {
+        document.querySelectorAll('[data-count]').forEach(el => {
+            // Faqat hozirda ko'rinayotgan elementlarni animatsiya qilamiz
+            // (boshqa tablardagilar offsetParent=null bo'ladi).
+            if (el.offsetParent !== null) animate(el);
+        });
+    };
+})();
+</script>
 </x-app-layout>

@@ -36,7 +36,7 @@
     .stats-outer-btn.active {
         background: linear-gradient(135deg, #6366f1, #4f46e5);
         color: #ffffff;
-        border-color: #4f46e5;
+        border-color: transparent;
         box-shadow: 0 6px 16px -4px rgba(79, 70, 229, .45);
     }
 
@@ -75,7 +75,7 @@
     .stats-inner-btn.active {
         background: #4f46e5;
         color: #ffffff;
-        border-color: #4338ca;
+        border-color: transparent;
         box-shadow: 0 3px 10px -3px rgba(79, 70, 229, .55);
     }
 
@@ -93,10 +93,10 @@
     }
 </style>
 
-<div class="container mx-auto px-4 py-6"
+<div class="w-full px-4 py-6"
      x-data="{
         outer: 'talabalar',
-        inner: { talabalar: 'talim_turi' }
+        inner: { talabalar: 'umumiy' }
      }">
 
     {{-- ───── Outer tabs ───── --}}
@@ -122,6 +122,7 @@
     <div x-show="outer === 'talabalar'" class="stats-card">
         @php
             $innerTabs = [
+                'umumiy'          => 'Umumiy',
                 'talim_turi'      => "Ta'lim turi",
                 'ijtimoiy_toifa'  => 'Ijtimoiy toifa',
                 'tolov_shakli'    => "To'lov shakli",

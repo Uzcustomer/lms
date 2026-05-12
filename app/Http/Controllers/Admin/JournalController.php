@@ -2917,14 +2917,23 @@ class JournalController extends Controller
 
             $newAttempt = $currentAttempt + 1;
 
+            // graded_by_user_id FK references users(id). Faqat web guard
+            // (admin) login bo'lsa to'g'ri user.id beradi; teacher guard
+            // ostida auth()->id() teachers.id qaytaradi va FK violation
+            // bo'ladi. Shu sababli faqat web guarddagi id ishlatamiz.
+            $webUserId = \Illuminate\Support\Facades\Auth::guard('web')->id();
+            $graderName = \Illuminate\Support\Facades\Auth::guard('web')->user()?->name
+                ?? \Illuminate\Support\Facades\Auth::guard('teacher')->user()?->full_name
+                ?? 'Manual Entry';
+
             // Update existing grade with new value
             DB::table('student_grades')
                 ->where('id', $existingGrade->id)
                 ->update([
                     'grade' => $grade,
                     'grade_comment' => $gradeComment,
-                    'graded_by_user_id' => auth()->id(),
-                    'employee_name' => auth()->user()?->name ?? 'Manual Entry',
+                    'graded_by_user_id' => $webUserId,
+                    'employee_name' => $graderName,
                     'updated_at' => $now,
                 ]);
         } elseif (!$existingGrade) {
@@ -2951,8 +2960,10 @@ class JournalController extends Controller
                 'training_type_code' => 99,
                 'training_type_name' => "Mustaqil ta'lim",
                 'employee_id' => 0,
-                'employee_name' => auth()->user()?->name ?? 'Manual Entry',
-                'graded_by_user_id' => auth()->id(),
+                'employee_name' => (\Illuminate\Support\Facades\Auth::guard('web')->user()?->name
+                    ?? \Illuminate\Support\Facades\Auth::guard('teacher')->user()?->full_name
+                    ?? 'Manual Entry'),
+                'graded_by_user_id' => \Illuminate\Support\Facades\Auth::guard('web')->id(),
                 'lesson_pair_code' => '1',
                 'lesson_pair_name' => 'Manual',
                 'lesson_pair_start_time' => '00:00',

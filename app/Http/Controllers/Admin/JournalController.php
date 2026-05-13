@@ -3293,6 +3293,23 @@ class JournalController extends Controller
                 ->where('semester_code', $data['semester_code'])
                 ->first();
 
+            // Joriy o'quv yili — agar shu talaba+fan bo'yicha hech qanday template
+            // bo'lmasa, semester_codedan kelib chiqib aniqlaymiz. Aks holda
+            // education_year_code NULL qoladi va sahifa qayta yuklanganda
+            // jurnaldagi otherGrades filtri yangi yozuvni tashlab yuboradi.
+            $eduYearCode = $template->education_year_code ?? null;
+            $eduYearName = $template->education_year_name ?? null;
+            if ($eduYearCode === null) {
+                $semRow = DB::table('semesters')
+                    ->where('code', $data['semester_code'])
+                    ->orderByDesc('education_year_code')
+                    ->first();
+                if ($semRow) {
+                    $eduYearCode = $semRow->education_year_code ?? null;
+                    $eduYearName = $semRow->education_year_name ?? null;
+                }
+            }
+
             $ttype = (int) $data['training_type_code'];
             $typeName = $ttype === 101 ? 'OSKI' : 'YN test';
 
@@ -3302,8 +3319,8 @@ class JournalController extends Controller
                 'student_hemis_id'     => $data['student_hemis_id'],
                 'semester_code'        => $data['semester_code'],
                 'semester_name'        => $template->semester_name ?? ($subject->semester_name ?? ''),
-                'education_year_code'  => $template->education_year_code ?? null,
-                'education_year_name'  => $template->education_year_name ?? null,
+                'education_year_code'  => $eduYearCode,
+                'education_year_name'  => $eduYearName,
                 'subject_schedule_id'  => $template->subject_schedule_id ?? 0,
                 'subject_id'           => $data['subject_id'],
                 'subject_name'         => $template->subject_name ?? ($subject->subject_name ?? ''),

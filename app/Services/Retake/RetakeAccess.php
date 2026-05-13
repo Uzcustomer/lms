@@ -95,11 +95,19 @@ class RetakeAccess
     }
 
     /**
-     * Super-admin override (oyna/guruh sanalarini majburan o'zgartirish).
+     * Oyna/sessiya sanalarini override qilish (vaqtni o'zgartirish).
+     * Super-admin + O'quv bo'limi (xodim va boshlig'i) bo'la oladi.
      */
     public static function canOverride(?Model $actor): bool
     {
-        return self::isStaff($actor) && self::isSuperAdmin($actor);
+        if (!self::isStaff($actor)) {
+            return false;
+        }
+        return self::isSuperAdmin($actor)
+            || $actor->hasAnyRole([
+                ProjectRole::ACADEMIC_DEPARTMENT->value,
+                ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value,
+            ]);
     }
 
     /**

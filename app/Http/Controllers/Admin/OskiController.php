@@ -576,6 +576,7 @@ class OskiController extends Controller
                         'subject_code' => $oski->subject->subject_code,
                         'training_type_code' => 101,
                         'training_type_name' => "Oski",
+                        'attempt' => (int) ($oski->shakl ?? 1),
                         'employee_id' => "0",
                         'employee_name' => $request->user()->short_name ?? $request->user()->name,
                         'lesson_pair_name' => "",

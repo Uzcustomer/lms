@@ -2018,6 +2018,7 @@ class QuizResultController extends Controller
                     'grade' => round($result->grade),
                     'deadline' => now(),
                     'quiz_result_id' => $result->id,
+                    'attempt' => (int) ($result->attempt_number ?? 1),
                     'is_final' => true,
                 ]);
 

@@ -218,6 +218,16 @@
                                 </button>
                             </div>
                         </div>
+                        <div class="filter-item" style="margin-left:auto;max-width:280px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Ism bo'yicha qidiruv (barcha sanalar)</label>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <input type="text" id="search_student_name" class="date-input" placeholder="FISH kiriting..." autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();searchByName();}" style="flex:1;" />
+                                <button type="button" class="btn-tartibga" onclick="searchByName()" style="background:#10b981;border-color:#059669;white-space:nowrap;">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    Qidirish
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -470,10 +480,22 @@
         }
 
         // ========== TARTIBGA SOLISH ==========
+        function searchByName() {
+            var nameQ = ($('#search_student_name').val() || '').trim();
+            if (!nameQ) {
+                alert("Iltimos, qidirish uchun talaba ismini kiriting.");
+                $('#search_student_name').focus();
+                return;
+            }
+            loadTartibgaSol();
+        }
+
         function loadTartibgaSol() {
+            var nameQ = ($('#search_student_name').val() || '').trim();
             var params = {
-                date_from: $('#date_from').val() || '',
-                date_to: $('#date_to').val() || '',
+                date_from: nameQ ? '' : ($('#date_from').val() || ''),
+                date_to:   nameQ ? '' : ($('#date_to').val()   || ''),
+                student_name: nameQ,
             };
 
             $('#empty-state').hide(); $('#table-area').hide(); $('#loading-state').show();
@@ -763,9 +785,11 @@
 
         // ========== EXCEL (Quiz natijalar) ==========
         function downloadExcel() {
+            var nameQ = ($('#search_student_name').val() || '').trim();
             var params = {
-                date_from: $('#date_from').val() || '',
-                date_to: $('#date_to').val() || '',
+                date_from: nameQ ? '' : ($('#date_from').val() || ''),
+                date_to:   nameQ ? '' : ($('#date_to').val()   || ''),
+                student_name: nameQ,
                 export: 'excel',
             };
             window.location.href = dataUrl + '?' + $.param(params);

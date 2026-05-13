@@ -58,6 +58,7 @@ class RetakeApprovalController extends Controller
         }
 
         // Ariza-guruhlari joiniga ariza-bog'liq filtr
+        $statusColumn = $role === 'dean' ? 'dean_status' : 'registrar_status';
         $query = RetakeApplicationGroup::query()
             ->with([
                 'student',
@@ -68,6 +69,13 @@ class RetakeApprovalController extends Controller
                 'applications.deanUser',
                 'applications.registrarUser',
             ])
+            // Birinchi navbatda kutilayotgan arizalar — undan keyin eng yangilari
+            ->orderByRaw(
+                "CASE WHEN EXISTS (SELECT 1 FROM retake_applications ra "
+                . "WHERE ra.group_id = retake_application_groups.id "
+                . "AND ra.{$statusColumn} = 'pending' "
+                . "AND ra.final_status = 'pending') THEN 0 ELSE 1 END ASC"
+            )
             ->orderByDesc('created_at');
 
         // Dekan — faqat o'z fakulteti talabalari

@@ -815,6 +815,7 @@
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan']))
         <div class="sidebar-section">Talaba arizalari</div>
 
+        @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi']))
         <a href="{{ route('admin.absence-excuses.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.absence-excuses.*') ? 'sidebar-active' : '' }}" style="position: relative;">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -825,6 +826,7 @@
                 <span class="sidebar-badge">{{ $pendingExcusesCount }}</span>
             @endif
         </a>
+        @endif
 
         <a href="{{ route('admin.yn-form-corrections.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.yn-form-corrections.*') ? 'sidebar-active' : '' }}" style="position: relative;">

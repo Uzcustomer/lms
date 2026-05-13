@@ -15,6 +15,14 @@
          x-data="{
             showCreate: false,
             selected: [],
+            overrideSessionId: null,
+            overrideStart: '',
+            overrideEnd: '',
+            openOverride(id, start, end) {
+                this.overrideSessionId = id;
+                this.overrideStart = start || '';
+                this.overrideEnd = end || '';
+            },
             get deletableIds() { return @js($deletableIds); },
             get allChecked() { return this.deletableIds.length > 0 && this.deletableIds.every(id => this.selected.includes(id)); },
             toggleAll(ev) {
@@ -179,6 +187,14 @@
                                    class="px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100">
                                     {{ __("Oynalar") }}
                                 </a>
+                                @if(!$session->is_closed && ($canOverride ?? false))
+                                    <button type="button"
+                                            @click="openOverride({{ $session->id }}, '', '')"
+                                            class="px-3 py-1.5 text-xs bg-amber-50 text-amber-700 rounded hover:bg-amber-100"
+                                            title="{{ __("Sessiya ichidagi barcha oynalar sanasini bir marta o'zgartirish") }}">
+                                        📅 {{ __("Sanani o'zgartirish") }}
+                                    </button>
+                                @endif
                                 @if(!$session->is_closed)
                                     <form method="POST"
                                           action="{{ route('admin.retake-sessions.close', $session->id) }}"
@@ -320,5 +336,73 @@
                 </div>
             </div>
         </div>
+
+        {{-- Override (sana o'zgartirish) modal — sessiya ichidagi BARCHA oynalar uchun --}}
+        @if($canOverride ?? false)
+            <div x-show="overrideSessionId !== null"
+                 x-cloak
+                 class="fixed inset-0 z-50 overflow-y-auto"
+                 @keydown.escape.window="overrideSessionId = null">
+                <div class="flex min-h-screen items-center justify-center p-4">
+                    <div class="fixed inset-0 bg-gray-900/60 backdrop-blur-sm" @click="overrideSessionId = null"></div>
+                    <div class="relative bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden z-10"
+                         x-transition:enter="ease-out duration-200"
+                         x-transition:enter-start="opacity-0 scale-95"
+                         x-transition:enter-end="opacity-100 scale-100">
+
+                        <div class="px-6 pt-6 pb-4 border-b border-gray-100">
+                            <div class="flex items-center gap-3 mb-1">
+                                <div class="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0">
+                                    📅
+                                </div>
+                                <h3 class="text-base font-semibold text-gray-900">
+                                    {{ __("Sessiya oynalari sanasini o'zgartirish") }}
+                                </h3>
+                            </div>
+                            <p class="text-xs text-amber-700 mt-2">
+                                ⚠️ {{ __("Bu sessiyadagi BARCHA oynalarning start_date va end_date qiymatlari yangilanadi") }}
+                            </p>
+                        </div>
+
+                        <form :action="`{{ url('/admin/retake-sessions') }}/${overrideSessionId}/bulk-override-dates`" method="POST">
+                            @csrf
+                            <div class="px-6 py-5 space-y-3">
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">
+                                        {{ __("Boshlanish sanasi") }} <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="date" name="start_date" x-model="overrideStart" required
+                                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                    <p class="text-[10px] text-gray-500 mt-0.5">
+                                        {{ __("Shu sana kuni ham talaba ariza bera oladi") }}
+                                    </p>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-medium text-gray-700 mb-1">
+                                        {{ __("Tugash sanasi") }} <span class="text-red-500">*</span>
+                                    </label>
+                                    <input type="date" name="end_date" x-model="overrideEnd" required
+                                           class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                    <p class="text-[10px] text-gray-500 mt-0.5">
+                                        {{ __("O'qish davri tugash kuni") }}
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-2">
+                                <button type="button" @click="overrideSessionId = null"
+                                        class="px-4 py-2 text-sm bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50">
+                                    {{ __("Bekor qilish") }}
+                                </button>
+                                <button type="submit"
+                                        class="px-4 py-2 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700">
+                                    {{ __("Hammasini yangilash") }}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        @endif
     </div>
 </x-teacher-app-layout>

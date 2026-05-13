@@ -47,6 +47,7 @@ class RetakeWindowSessionController extends Controller
         return view('teacher.academic-dept.retake-sessions.index', [
             'sessions' => $sessions,
             'sessionsWithApps' => $sessionsWithApps,
+            'canOverride' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
         ]);
     }
 
@@ -95,6 +96,41 @@ class RetakeWindowSessionController extends Controller
 
         return redirect()->route('admin.retake-sessions.index')
             ->with('success', __('Sessiya yopildi'));
+    }
+
+    /**
+     * Sessiya ichidagi BARCHA oynalarning sanalarini bir marta o'zgartirish.
+     * O'quv bo'limi (canOverride) ruxsatga ega xodimlar uchun.
+     */
+    public function bulkOverrideDates(Request $request, int $sessionId): RedirectResponse
+    {
+        if (!\App\Services\Retake\RetakeAccess::canOverride(\App\Services\Retake\RetakeAccess::currentStaff())) {
+            abort(403, "Sizda sanalarni o'zgartirish ruxsati yo'q");
+        }
+
+        $data = $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $session = RetakeWindowSession::findOrFail($sessionId);
+        if ($session->is_closed) {
+            return redirect()->back()->withErrors([
+                'session' => 'Yopilgan sessiya oynalarini o\'zgartirib bo\'lmaydi',
+            ]);
+        }
+
+        $count = \App\Models\RetakeApplicationWindow::query()
+            ->where('session_id', $session->id)
+            ->update([
+                'start_date' => $data['start_date'],
+                'end_date' => $data['end_date'],
+            ]);
+
+        return redirect()->back()->with(
+            'success',
+            "{$count} ta oyna sanalari yangilandi: {$data['start_date']} → {$data['end_date']}"
+        );
     }
 
     /**

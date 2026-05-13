@@ -82,22 +82,33 @@ class RetakeApplicationWindow extends Model
     /**
      * Talabaning oynalarini tanlash.
      *
-     * Tarixda fakultet filtri qo'shilgandi, lekin Student.department_id va
-     * window.department_hemis_id qiymatlari HEMIS ma'lumotlar farqi yoki
-     * admin tanlov nuanslari tufayli aniq mos kelmasligi mumkin. Bu sabab
-     * talaba ariza bera olmaydigan holatga tushardi.
+     * Muhim: HEMIS data tuzilishi tufayli `students.specialty_id` va
+     * `specialties.specialty_hemis_id` qiymatlari har doim ham mos kelmaydi.
+     * Misol: "Davolash ishi" yo'nalishi talabalarda specialty_id=18, ammo
+     * Specialty jadvalida har bir fakultet uchun alohida (44, 98, ...).
+     * Shu sababdan window'da saqlangan specialty_id ham 44/98 bo'lishi mumkin.
      *
-     * Endi faqat (yo'nalish + kurs) bo'yicha mos keluvchi oyna qaytariladi.
-     * Talabaning haqiqiy fakulteti `Student.department_id` orqali alohida
-     * saqlanadi va guruhlashda ishlatiladi — bu yerda zarurati yo'q.
+     * Mos kelish uchun: specialty_id YOKI specialty_name (case-insensitive)
+     * mos kelsa kifoya. Bu HEMIS variant farqlari uchun ham mos tushadi.
      *
-     * Eslatma: `$studentDepartmentHemisId` parametri orqaga moslik uchun
-     * saqlanadi, ammo filtr sifatida ishlatilmaydi.
+     * `$studentDepartmentHemisId` parametri orqaga moslik uchun saqlanadi,
+     * ammo filtr sifatida ishlatilmaydi (talabaning haqiqiy fakulteti
+     * Student.department_id da saqlangan).
      */
-    public function scopeForStudent($query, int $specialtyId, string $levelCode, ?string $studentDepartmentHemisId = null)
+    public function scopeForStudent($query, int $specialtyId, string $levelCode, ?string $studentDepartmentHemisId = null, ?string $specialtyName = null)
     {
-        return $query->where('specialty_id', $specialtyId)
-            ->where('level_code', $levelCode);
+        $query->where('level_code', $levelCode);
+
+        $name = $specialtyName !== null ? trim($specialtyName) : '';
+
+        $query->where(function ($q) use ($specialtyId, $name) {
+            $q->where('specialty_id', $specialtyId);
+            if ($name !== '') {
+                $q->orWhereRaw('LOWER(TRIM(specialty_name)) = ?', [mb_strtolower($name)]);
+            }
+        });
+
+        return $query;
     }
 
     /**

@@ -29,6 +29,20 @@ class QuizResultController extends Controller
     }
 
     /**
+     * "1-urinish" / "2-urinish" / "3-urinish" → 1/2/3.
+     * shakl noma'lum bo'lsa attempt_number ga fallback.
+     */
+    public static function parseAttemptFromShakl(?string $shakl, $attemptNumber = null): int
+    {
+        if (is_string($shakl) && preg_match('/^(\d+)-urinish$/i', trim($shakl), $m)) {
+            $n = (int) $m[1];
+            if ($n >= 1 && $n <= 3) return $n;
+        }
+        $n = (int) ($attemptNumber ?? 1);
+        return $n >= 1 ? $n : 1;
+    }
+
+    /**
      * Diagnostika sahifasi — yangi dizayn bilan.
      */
     public function diagnostikaPage(Request $request)
@@ -2018,7 +2032,7 @@ class QuizResultController extends Controller
                     'grade' => round($result->grade),
                     'deadline' => now(),
                     'quiz_result_id' => $result->id,
-                    'attempt' => (int) ($result->attempt_number ?? 1),
+                    'attempt' => self::parseAttemptFromShakl($result->shakl, $result->attempt_number),
                     'is_final' => true,
                 ]);
 

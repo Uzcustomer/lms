@@ -139,7 +139,7 @@ class QuizResultImport implements ToCollection, WithHeadingRow, WithValidation
                 'grade' => round($grade),
                 'deadline' => now(),
                 'quiz_result_id' => $quizResult?->id,
-                'attempt' => (int) ($quizResult?->attempt_number ?? 1),
+                'attempt' => \App\Http\Controllers\Admin\QuizResultController::parseAttemptFromShakl($quizResult?->shakl, $quizResult?->attempt_number),
                 'is_final' => true,
             ]);
 

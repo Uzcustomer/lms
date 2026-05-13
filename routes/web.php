@@ -123,6 +123,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             $user = auth()->user();
             $role = $request->input('role');
             if ($user && $user->hasRole($role)) {
+                // Session ID ni regenerate qilamiz — eski rolda kelayotgan
+                // keshlangan menyu va flash xabarlardan qutilish uchun.
+                $request->session()->regenerate();
                 session(['active_role' => $role]);
             }
             return back();
@@ -1187,6 +1190,9 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             $user = auth()->user();
             $role = $request->input('role');
             if ($user && $user->hasRole($role)) {
+                // Session ID ni regenerate qilamiz — eski rolda kelayotgan
+                // keshlangan menyu va flash xabarlardan qutilish uchun.
+                $request->session()->regenerate();
                 session(['active_role' => $role]);
             }
             return back();

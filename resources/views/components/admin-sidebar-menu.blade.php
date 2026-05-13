@@ -10,6 +10,19 @@
         $activeRole = $userRoles[0];
     }
 
+    // Tyutor-only sahifalar — agar foydalanuvchi tyutor rolida bo'lsa va shu
+    // sahifaga kirgan bo'lsa, active_role'ni avtomatik tyutor ga o'tkazamiz.
+    // Bu oqituvchi/tyutor dual rolidagi foydalanuvchi rol almashtirishni
+    // yodga olishi shart bo'lmasligi uchun ishlatiladi.
+    $tyutorOnlyRouteNames = ['admin.group-test-schedule.index', 'admin.group-test-schedule.export'];
+    if ($activeRole !== 'tyutor'
+        && in_array('tyutor', $userRoles, true)
+        && request()->route()
+        && in_array(request()->route()->getName(), $tyutorOnlyRouteNames, true)) {
+        session(['active_role' => 'tyutor']);
+        $activeRole = 'tyutor';
+    }
+
     // Admin rollar - har doim admin route ishlatadi
     $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
 

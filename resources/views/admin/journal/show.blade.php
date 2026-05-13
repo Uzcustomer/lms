@@ -1317,12 +1317,12 @@
                                             @endphp
                                             {{-- Asosiy OSKI — sababli orqali yoki superadmin orqali tahrirlash --}}
                                             @php
-                                                $oskiClickable = $isOskiSababli || ($isSuperAdmin && $oskiRounded !== null);
+                                                $oskiClickable = $isOskiSababli || $isSuperAdmin;
                                                 $oskiClickHandler = $isOskiSababli
                                                     ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiRounded !== null ? $oskiRounded : 'null') . ", 1, true)"
                                                     : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 1)";
                                                 $oskiTitle = $isOskiSababli ? 'Sababli OSKI — bahoni kiriting'
-                                                    : ($isSuperAdmin && $oskiRounded !== null ? 'Superadmin: OSKI bahosini o\'zgartirish'
+                                                    : ($isSuperAdmin ? 'Superadmin: OSKI bahosini o\'zgartirish'
                                                         : (!empty($other['oski_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
                                             @endphp
                                             <td class="px-1 py-1 text-center {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
@@ -1330,6 +1330,8 @@
                                                 @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
                                                     <span class="font-bold {{ $isOskiSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $oskiRounded }}</span>
+                                                @elseif($isSuperAdmin)
+                                                    <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
                                             {{-- 2-urinish OSKI ustuni --}}
@@ -1360,12 +1362,12 @@
                                             @endif
                                             {{-- Asosiy Test — sababli yoki superadmin orqali tahrirlash --}}
                                             @php
-                                                $testClickable = $isTestSababli || ($isSuperAdmin && $testRounded !== null);
+                                                $testClickable = $isTestSababli || $isSuperAdmin;
                                                 $testClickHandler = $isTestSababli
                                                     ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
                                                     : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
                                                 $testTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
-                                                    : ($isSuperAdmin && $testRounded !== null ? 'Superadmin: Test bahosini o\'zgartirish'
+                                                    : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish'
                                                         : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
                                             @endphp
                                             <td class="px-1 py-1 text-center {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
@@ -1373,6 +1375,8 @@
                                                 @if($testTitle) title="{{ $testTitle }}" @endif>
                                                 @if($testRounded !== null)
                                                     <span class="font-bold {{ $isTestSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $testRounded }}</span>
+                                                @elseif($isSuperAdmin)
+                                                    <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
                                             {{-- 2-urinish Test ustuni --}}
@@ -1881,12 +1885,12 @@
                                             @endphp
                                             {{-- Asosiy OSKI — sababli orqali yoki superadmin orqali tahrirlash --}}
                                             @php
-                                                $oskiClickable = $isOskiSababli || ($isSuperAdmin && $oskiRounded !== null);
+                                                $oskiClickable = $isOskiSababli || $isSuperAdmin;
                                                 $oskiClickHandler = $isOskiSababli
                                                     ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiRounded !== null ? $oskiRounded : 'null') . ", 1, true)"
                                                     : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 1)";
                                                 $oskiTitle = $isOskiSababli ? 'Sababli OSKI — bahoni kiriting'
-                                                    : ($isSuperAdmin && $oskiRounded !== null ? 'Superadmin: OSKI bahosini o\'zgartirish'
+                                                    : ($isSuperAdmin ? 'Superadmin: OSKI bahosini o\'zgartirish'
                                                         : (!empty($other['oski_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
                                             @endphp
                                             <td class="px-1 py-1 text-center {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
@@ -1894,6 +1898,8 @@
                                                 @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
                                                     <span class="font-bold {{ $isOskiSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $oskiRounded }}</span>
+                                                @elseif($isSuperAdmin)
+                                                    <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
                                             {{-- 2-urinish OSKI ustuni --}}
@@ -1924,12 +1930,12 @@
                                             @endif
                                             {{-- Asosiy Test — sababli yoki superadmin orqali tahrirlash --}}
                                             @php
-                                                $testClickable = $isTestSababli || ($isSuperAdmin && $testRounded !== null);
+                                                $testClickable = $isTestSababli || $isSuperAdmin;
                                                 $testClickHandler = $isTestSababli
                                                     ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
                                                     : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
                                                 $testTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
-                                                    : ($isSuperAdmin && $testRounded !== null ? 'Superadmin: Test bahosini o\'zgartirish'
+                                                    : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish'
                                                         : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
                                             @endphp
                                             <td class="px-1 py-1 text-center {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
@@ -1937,6 +1943,8 @@
                                                 @if($testTitle) title="{{ $testTitle }}" @endif>
                                                 @if($testRounded !== null)
                                                     <span class="font-bold {{ $isTestSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $testRounded }}</span>
+                                                @elseif($isSuperAdmin)
+                                                    <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
                                             {{-- 2-urinish Test ustuni --}}

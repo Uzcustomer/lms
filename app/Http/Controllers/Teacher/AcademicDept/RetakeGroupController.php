@@ -59,7 +59,11 @@ class RetakeGroupController extends Controller
             ->where('registrar_status', 'approved')
             ->where('academic_dept_status', 'approved')
             ->where('final_status', 'pending')
-            ->whereNull('retake_group_id');
+            ->whereNull('retake_group_id')
+            ->whereHas('group', function ($q) {
+                $q->whereNotNull('payment_uploaded_at')
+                  ->where('payment_verification_status', 'approved');
+            });
 
         // Talaba ma'lumoti bo'yicha filtrlar (cascading: education_type, department, ...)
         $hasStudentLevelFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty()

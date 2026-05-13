@@ -11,7 +11,7 @@ services:
       - ./storage:/var/www/html/storage
       - ./public:/var/www/html/public
     ports:
-      - "127.0.0.1:9001:9000"
+      - "9001:9000"
     networks:
       - app-network
     environment:
@@ -19,8 +19,8 @@ services:
       - DB_HOST=host.docker.internal
       - DB_PORT=3306
       - DB_DATABASE=lmsttatf
-      - DB_USERNAME=${DB_USERNAME}
-      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_USERNAME=falcon
+      - DB_PASSWORD=Password@123
     extra_hosts:
       - "host.docker.internal:host-gateway"
 
@@ -53,8 +53,8 @@ services:
     environment:
       - PMA_HOST=host.docker.internal
       - PMA_PORT=3306
-      - PMA_USER=${DB_USERNAME}
-      - PMA_PASSWORD=${DB_PASSWORD}
+      - PMA_USER=falcon
+      - PMA_PASSWORD=Password@123
       - UPLOAD_LIMIT=100M
     extra_hosts:
       - "host.docker.internal:host-gateway"

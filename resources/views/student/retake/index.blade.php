@@ -85,18 +85,6 @@
                 <p class="text-sm text-yellow-800">
                     {{ __("Sizning yo'nalishingiz va kursingiz uchun qayta o'qish ariza qabul qilish oynasi hali ochilmagan.") }}
                 </p>
-                {{-- Diagnostika: admin yoki o'quv bo'limi xodimi nima sabab borligini tushunishi uchun --}}
-                <div class="mt-3 pt-3 border-t border-yellow-200 text-[11px] text-yellow-700">
-                    <p class="font-semibold mb-1">{{ __("Talaba ma'lumotlari (admin diagnostikasi)") }}:</p>
-                    <ul class="space-y-0.5 list-disc list-inside">
-                        <li>{{ __("Fakultet") }}: <span class="font-mono">{{ $student->department_name ?? '—' }} <span class="text-yellow-500">(ID: {{ $student->department_id ?? '—' }})</span></span></li>
-                        <li>{{ __("Yo'nalish") }}: <span class="font-mono">{{ $student->specialty_name ?? '—' }} <span class="text-yellow-500">(ID: {{ $student->specialty_id ?? '—' }})</span></span></li>
-                        <li>{{ __("Kurs") }}: <span class="font-mono">{{ $student->level_name ?? '—' }} <span class="text-yellow-500">(kod: {{ $student->level_code ?? '—' }})</span></span></li>
-                    </ul>
-                    <p class="mt-2 text-yellow-600">
-                        💡 {{ __("Agar admin shu kombinatsiya uchun oyna ochgan bo'lsa, lekin bu yerda ko'rinmasa — o'quv bo'limiga murojaat qiling. Oynaning yo'nalish ID va kurs kodi yuqoridagi qiymatlarga aniq mos kelishi kerak.") }}
-                    </p>
-                </div>
             </div>
         @endif
 

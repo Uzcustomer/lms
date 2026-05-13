@@ -718,11 +718,17 @@ class QuizResultController extends Controller
                     });
             });
 
-            if ($request->filled('date_from')) {
-                $query->whereDate('date_finish', '>=', $request->date_from);
-            }
-            if ($request->filled('date_to')) {
-                $query->whereDate('date_finish', '<=', $request->date_to);
+            // Ism bo'yicha qidiruv: kiritilgan bo'lsa, barcha sanalarda qidiriladi
+            // (date_from/date_to e'tiborga olinmaydi).
+            if ($request->filled('student_name')) {
+                $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
+            } else {
+                if ($request->filled('date_from')) {
+                    $query->whereDate('date_finish', '>=', $request->date_from);
+                }
+                if ($request->filled('date_to')) {
+                    $query->whereDate('date_finish', '<=', $request->date_to);
+                }
             }
 
             $results = $query->orderBy('student_id')->orderBy('fan_id')->orderBy('date_finish')->get();

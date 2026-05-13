@@ -4187,6 +4187,9 @@
                                      : attempt === 3 ? 'text-orange-700'
                                      : 'text-blue-600';
                     cellTd.innerHTML = '<span class="font-bold ' + colorClass + '">' + rounded + '</span>';
+                    // Saqlangani aniq ko'rinishi va boshqa hisob-kitoblar
+                    // (JN/MT% kabi) qaytadan to'g'ri chiqishi uchun sahifani yangilaymiz.
+                    setTimeout(() => window.location.reload(), 300);
                 } else {
                     alert(data.message || 'Xatolik');
                     cellTd.innerHTML = originalHTML;

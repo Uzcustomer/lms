@@ -8,7 +8,7 @@
     <div class="fixed inset-0 bg-black bg-opacity-50 transition-opacity"
          @click="if (!submitting) closeModal()"></div>
 
-    {{-- Modal har doim markazda (mobil va desktop) --}}
+    {{-- Modal har doim markazda (mobil va desktopda) --}}
     <div class="relative min-h-full flex items-center justify-center p-3 sm:p-4">
         <div class="relative bg-white rounded-2xl shadow-xl w-full sm:max-w-md text-left z-10 my-4"
              x-transition:enter="ease-out duration-200"
@@ -30,7 +30,7 @@
                   @submit="submitting = true">
                 @csrf
 
-                {{-- Body — content tabiiy o'sadi --}}
+                {{-- Body --}}
                 <div class="px-4 sm:px-5 py-4 space-y-4">
                     {{-- Tanlangan fanlar --}}
                     <div>
@@ -58,7 +58,7 @@
                         </div>
                     </div>
 
-                    {{-- Tushuntirish xati --}}
+                    {{-- Tushuntirish xati — file input HECH QACHON disabled BO'LMASLIGI KERAK, aks holda yuborilmaydi --}}
                     <div>
                         <label class="block text-xs font-medium text-gray-700 mb-1">
                             {{ __("Dekanat tasdig'idagi tushuntirish xati") }} <span class="text-red-500">*</span>
@@ -70,8 +70,7 @@
                                name="receipt"
                                accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
                                required
-                               :disabled="submitting"
-                               class="block w-full text-xs text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50">
+                               class="block w-full text-xs text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
                         <p class="text-[11px] text-gray-500 mt-1">
                             PDF, DOC, JPG, PNG · max {{ $receiptMaxMb }} MB
                         </p>
@@ -89,8 +88,7 @@
                         <textarea name="comment"
                                   rows="3"
                                   maxlength="{{ \App\Services\Retake\RetakeApplicationService::MAX_COMMENT_LENGTH }}"
-                                  :disabled="submitting"
-                                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+                                  class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                   placeholder="{{ __('Qo\'shimcha ma\'lumot...') }}"></textarea>
                     </div>
                 </div>
@@ -119,7 +117,7 @@
         </div>
     </div>
 
-    {{-- Loading overlay — submit paytida butun ekran bloklanadi --}}
+    {{-- Loading overlay — submit paytida butun ekran bloklanadi (lekin form input'larini disabled qilmaymiz) --}}
     <div x-show="submitting" x-cloak
          class="fixed inset-0 z-[60] bg-white/40 backdrop-blur-sm flex items-center justify-center pointer-events-auto">
         <div class="bg-white rounded-xl shadow-2xl px-6 py-4 flex items-center gap-3">

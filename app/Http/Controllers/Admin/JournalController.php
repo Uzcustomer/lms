@@ -933,13 +933,15 @@ class JournalController extends Controller
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select(array_merge(
-                ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'attempt'],
+                ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'attempt', 'lesson_date'],
                 $hasSababliCol ? ['retake_was_sababli'] : []
             ))
             ->get();
 
         $otherGrades = [];
         $otherGradesSababli = [];
+        // Sana tooltip uchun: $otherGradeDates[hemis_id][ttc][attempt] = 'YYYY-MM-DD'
+        $otherGradeDates = [];
         foreach ($otherGradesRaw as $g) {
             $effectiveGrade = $getEffectiveGrade($g);
             if ($effectiveGrade !== null) {
@@ -960,35 +962,54 @@ class JournalController extends Controller
                 if (!empty($g->retake_was_sababli)) {
                     $otherGradesSababli[$g->student_hemis_id][$typeCode][$attempt] = true;
                 }
+                // Eng oxirgi yozuvning sanasini saqlaymiz (bir urinishda bir nechta yozuv kam holatda)
+                if (!empty($g->lesson_date)) {
+                    $otherGradeDates[$g->student_hemis_id][$typeCode][$attempt] = $g->lesson_date;
+                }
             }
         }
-        // 2/3-urinish 1-urinishni almashtiradi: eng katta attempt qiymatidagi
-        // yozuvlar olinadi, o'rtachalash faqat shu urinish ichida.
-        $pickLatestAttempt = function (?array $byAttempt): ?array {
-            if (empty($byAttempt)) {
+        // Asosiy ustunda 1-urinish bahosi ko'rinadi (asosiy stsenariy uchun ham).
+        // 2/3-urinish baholari alohida ustunlarda — $oskiAttempt2Map / $oskiAttempt3Map orqali.
+        $pickAttempt = function (?array $byAttempt, int $target): ?array {
+            if (empty($byAttempt) || empty($byAttempt[$target])) {
                 return null;
             }
-            $latest = max(array_keys($byAttempt));
-            $grades = $byAttempt[$latest];
-            if (empty($grades)) {
-                return null;
-            }
-            return ['attempt' => $latest, 'value' => array_sum($grades) / count($grades)];
+            $grades = $byAttempt[$target];
+            return ['attempt' => $target, 'value' => array_sum($grades) / count($grades)];
         };
         foreach ($otherGrades as $studentId => $types) {
             $result = [
                 'on' => null, 'oski' => null, 'test' => null,
                 'on_sababli' => false, 'oski_sababli' => false, 'test_sababli' => false,
             ];
-            $picked = [100 => null, 101 => null, 102 => null];
             foreach ([100 => 'on', 101 => 'oski', 102 => 'test'] as $tc => $key) {
-                $picked[$tc] = $pickLatestAttempt($types[$tc] ?? null);
-                if ($picked[$tc] !== null) {
-                    $result[$key] = $picked[$tc]['value'];
-                    $result[$key . '_sababli'] = !empty($otherGradesSababli[$studentId][$tc][$picked[$tc]['attempt']]);
+                // ON: bitta turdagi yozuv, attempt har xil bo'lmaydi → mavjud bo'lgan birinchi attempt
+                // OSKI/Test: asosiy ustun 1-urinish (attempt=1)
+                $target = $tc === 100 ? (int) (min(array_keys($types[$tc] ?? [1])) ?: 1) : 1;
+                $picked = $pickAttempt($types[$tc] ?? null, $target);
+                if ($picked !== null) {
+                    $result[$key] = $picked['value'];
+                    $result[$key . '_sababli'] = !empty($otherGradesSababli[$studentId][$tc][$picked['attempt']]);
                 }
             }
             $otherGrades[$studentId] = $result;
+        }
+
+        // Sana xaritalari (Carbon orqali UI formati) — admin/registrator_ofisi tooltipi uchun.
+        $formatDate = fn($d) => $d ? \Carbon\Carbon::parse($d)->format('d.m.Y') : null;
+        $oskiAttempt1DateMap = [];
+        $testAttempt1DateMap = [];
+        $oskiAttempt2DateMap = [];
+        $testAttempt2DateMap = [];
+        $oskiAttempt3DateMap = [];
+        $testAttempt3DateMap = [];
+        foreach ($otherGradeDates as $sid => $byType) {
+            if (isset($byType[101][1])) $oskiAttempt1DateMap[$sid] = $formatDate($byType[101][1]);
+            if (isset($byType[101][2])) $oskiAttempt2DateMap[$sid] = $formatDate($byType[101][2]);
+            if (isset($byType[101][3])) $oskiAttempt3DateMap[$sid] = $formatDate($byType[101][3]);
+            if (isset($byType[102][1])) $testAttempt1DateMap[$sid] = $formatDate($byType[102][1]);
+            if (isset($byType[102][2])) $testAttempt2DateMap[$sid] = $formatDate($byType[102][2]);
+            if (isset($byType[102][3])) $testAttempt3DateMap[$sid] = $formatDate($byType[102][3]);
         }
 
         // Get attendance data for each student (auditorium types only: exclude MT, ON, OSKI, Test)
@@ -1737,7 +1758,13 @@ class JournalController extends Controller
             'oskiAttempt2Map',
             'testAttempt2Map',
             'oskiAttempt3Map',
-            'testAttempt3Map'
+            'testAttempt3Map',
+            'oskiAttempt1DateMap',
+            'testAttempt1DateMap',
+            'oskiAttempt2DateMap',
+            'testAttempt2DateMap',
+            'oskiAttempt3DateMap',
+            'testAttempt3DateMap'
         ));
     }
 

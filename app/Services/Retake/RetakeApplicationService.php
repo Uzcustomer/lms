@@ -516,8 +516,9 @@ class RetakeApplicationService
             ]);
         }
 
-        // 2. Allaqachon yuklanganmi?
-        if ($group->payment_uploaded_at !== null) {
+        // 2. Allaqachon yuklanganmi? — REJECTED holat istisno (qayta yuklash uchun)
+        if ($group->payment_uploaded_at !== null
+            && $group->payment_verification_status !== RetakeApplicationGroup::PAYMENT_VERIFICATION_REJECTED) {
             throw ValidationException::withMessages([
                 'payment' => 'To\'lov cheki allaqachon yuklangan',
             ]);

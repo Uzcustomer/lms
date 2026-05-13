@@ -48,15 +48,16 @@ class RetakeApplicationWindow extends Model
 
     /**
      * Window holatlari:
-     *  - active : today < start_date — ariza qabul ochiq (talabalar ariza yuborishi mumkin)
-     *  - study  : start_date <= today <= end_date — o'qish davri (ariza yopildi, jurnal ishlaydi)
+     *  - active : today <= start_date — ariza qabul ochiq (start_date kuni ham
+     *             ariza yuborilishi mumkin)
+     *  - study  : start_date < today <= end_date — o'qish davri (jurnal ishlaydi)
      *  - closed : today > end_date — tugagan
      */
     public function getStatusAttribute(): string
     {
         $today = Carbon::today();
 
-        if ($this->start_date->gt($today)) {
+        if ($this->start_date->gte($today)) {
             return 'active';
         }
         if ($this->end_date->lt($today)) {
@@ -112,13 +113,14 @@ class RetakeApplicationWindow extends Model
     }
 
     /**
-     * "Ariza qabul davri" faol oyna — bugungi sana boshlanish sanasidan oldin (qattiq kichik).
-     * Ya'ni start_date kunining boshlanishidan boshlab oyna ariza qabul qilmaydi
-     * (start_date — qayta o'qish "o'qish davrining" boshlanish kuni).
+     * "Ariza qabul davri" faol oyna — bugungi sana boshlanish sanasidan oldin
+     * yoki shu kun. Ya'ni start_date kuni ham talaba ariza yubora oladi.
+     * (start_date — qayta o'qish "o'qish davrining" boshlanish kuni, ammo
+     * shu kun ham ariza qabuli yopilmaydi).
      */
     public function scopeActive($query)
     {
         $today = Carbon::today();
-        return $query->whereDate('start_date', '>', $today);
+        return $query->whereDate('start_date', '>=', $today);
     }
 }

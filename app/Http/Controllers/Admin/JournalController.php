@@ -3317,18 +3317,149 @@ class JournalController extends Controller
             ->get();
 
         if ($rows->isEmpty()) {
+            // Yozuv yo'q — superadmin uchun yangisini yaratamiz. Ko'pchilik
+            // bog'liq ustunlarni shu fan/talaba uchun mavjud boshqa yozuvdan
+            // (har qanday training_type) nusxa olamiz, aks holda standart
+            // qiymatlardan foydalanamiz.
+            $template = DB::table('student_grades')
+                ->where('student_hemis_id', $data['student_hemis_id'])
+                ->where('subject_id', $data['subject_id'])
+                ->where('semester_code', $data['semester_code'])
+                ->whereNull('deleted_at')
+                ->first();
+
+            $student = DB::table('students')->where('hemis_id', $data['student_hemis_id'])->first();
+            $subject = DB::table('curriculum_subjects')
+                ->where('subject_id', $data['subject_id'])
+                ->where('semester_code', $data['semester_code'])
+                ->first();
+
+            // Joriy o'quv yili va eng so'nggi dars sanasi — jurnal show()
+            // ishlatadigan logikasiga moslab schedules jadvalidan olamiz. Bu
+            // otherGrades filtri (education_year_code va lesson_date) bilan
+            // mos kelishi shart, aks holda yangi yozuv sahifada ko'rinmay qoladi.
+            $eduYearCode = $template->education_year_code ?? null;
+            $eduYearName = $template->education_year_name ?? null;
+            $latestLessonDate = null;
+            if ($student) {
+                $schedYear = DB::table('schedules')
+                    ->where('group_id', $student->group_id)
+                    ->where('subject_id', $data['subject_id'])
+                    ->where('semester_code', $data['semester_code'])
+                    ->whereNull('deleted_at')
+                    ->orderBy('lesson_date', 'desc')
+                    ->select('education_year_code', 'education_year_name', 'lesson_date')
+                    ->first();
+                if ($schedYear) {
+                    if ($eduYearCode === null && $schedYear->education_year_code) {
+                        $eduYearCode = $schedYear->education_year_code;
+                        $eduYearName = $schedYear->education_year_name ?? $eduYearName;
+                    }
+                    $latestLessonDate = $schedYear->lesson_date ?? null;
+                }
+            }
+            if ($eduYearCode === null && $student) {
+                $grp = DB::table('groups')->where('group_hemis_id', $student->group_id)->first();
+                if ($grp) {
+                    $curr = DB::table('curricula')->where('curricula_hemis_id', $grp->curriculum_hemis_id)->first();
+                    if ($curr) {
+                        $eduYearCode = $curr->education_year_code ?? null;
+                        $eduYearName = $curr->education_year_name ?? $eduYearName;
+                    }
+                }
+            }
+
+            $ttype = (int) $data['training_type_code'];
+            $typeName = $ttype === 101 ? 'OSKI' : 'YN test';
+
+            $insertId = DB::table('student_grades')->insertGetId([
+                'hemis_id'             => 0,
+                'student_id'           => $template->student_id ?? ($student->id ?? 0),
+                'student_hemis_id'     => $data['student_hemis_id'],
+                'semester_code'        => $data['semester_code'],
+                'semester_name'        => $template->semester_name ?? ($subject->semester_name ?? ''),
+                'education_year_code'  => $eduYearCode,
+                'education_year_name'  => $eduYearName,
+                'subject_schedule_id'  => $template->subject_schedule_id ?? 0,
+                'subject_id'           => $data['subject_id'],
+                'subject_name'         => $template->subject_name ?? ($subject->subject_name ?? ''),
+                'subject_code'         => $template->subject_code ?? ($subject->subject_code ?? ''),
+                'training_type_code'   => $ttype,
+                'training_type_name'   => $typeName,
+                'employee_id'          => 0,
+                'employee_name'        => auth()->user()?->name ?? 'Superadmin',
+                'graded_by_user_id'    => auth()->id(),
+                'lesson_pair_code'     => '1',
+                'lesson_pair_name'     => 'Superadmin',
+                'lesson_pair_start_time' => '00:00',
+                'lesson_pair_end_time'   => '00:00',
+                'grade'                => $data['grade'],
+                'lesson_date'          => $latestLessonDate,
+                'attempt'              => $data['attempt'],
+                'status'               => 'recorded',
+                'created_at_api'       => now(),
+                'created_at'           => now(),
+                'updated_at'           => now(),
+            ]);
+
             return response()->json([
-                'success' => false,
-                'message' => 'Bu talaba uchun shu YN turida baho yozuvi topilmadi.',
-            ], 404);
+                'success' => true,
+                'grade'   => (float) $data['grade'],
+                'created' => true,
+                'id'      => $insertId,
+            ]);
         }
+
+        // UPDATE yo'lida ham education_year_code va lesson_date NULL bo'lsa
+        // tuzatamiz — aks holda jurnal otherGrades filtri yangi qiymatni
+        // tashlab yuborishi mumkin. Joriy o'quv yili va dars sanasini
+        // schedules orqali aniqlaymiz (insert bilan bir xil mantiq).
+        $student = DB::table('students')->where('hemis_id', $data['student_hemis_id'])->first();
+        $eduYearCode = null;
+        $latestLessonDate = null;
+        if ($student) {
+            $sched = DB::table('schedules')
+                ->where('group_id', $student->group_id)
+                ->where('subject_id', $data['subject_id'])
+                ->where('semester_code', $data['semester_code'])
+                ->whereNull('deleted_at')
+                ->orderBy('lesson_date', 'desc')
+                ->select('education_year_code', 'lesson_date')
+                ->first();
+            if ($sched) {
+                $eduYearCode = $sched->education_year_code;
+                $latestLessonDate = $sched->lesson_date;
+            }
+            if ($eduYearCode === null) {
+                $grp = DB::table('groups')->where('group_hemis_id', $student->group_id)->first();
+                $curr = $grp ? DB::table('curricula')->where('curricula_hemis_id', $grp->curriculum_hemis_id)->first() : null;
+                $eduYearCode = $curr->education_year_code ?? null;
+            }
+        }
+
+        $updates = [
+            'grade'      => $data['grade'],
+            'updated_at' => now(),
+        ];
 
         DB::table('student_grades')
             ->whereIn('id', $rows->pluck('id'))
-            ->update([
-                'grade'      => $data['grade'],
-                'updated_at' => now(),
-            ]);
+            ->update($updates);
+
+        // education_year_code yoki lesson_date NULL yozuvlarini ham tuzatamiz —
+        // alohida UPDATE'lar bilan, mavjud qiymatlarni perezapis qilmaslik uchun.
+        if ($eduYearCode !== null) {
+            DB::table('student_grades')
+                ->whereIn('id', $rows->pluck('id'))
+                ->whereNull('education_year_code')
+                ->update(['education_year_code' => $eduYearCode]);
+        }
+        if ($latestLessonDate !== null) {
+            DB::table('student_grades')
+                ->whereIn('id', $rows->pluck('id'))
+                ->whereNull('lesson_date')
+                ->update(['lesson_date' => $latestLessonDate]);
+        }
 
         return response()->json([
             'success' => true,

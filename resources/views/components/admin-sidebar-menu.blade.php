@@ -10,6 +10,19 @@
         $activeRole = $userRoles[0];
     }
 
+    // Tyutor-only sahifalar — agar foydalanuvchi tyutor rolida bo'lsa va shu
+    // sahifaga kirgan bo'lsa, active_role'ni avtomatik tyutor ga o'tkazamiz.
+    // Bu oqituvchi/tyutor dual rolidagi foydalanuvchi rol almashtirishni
+    // yodga olishi shart bo'lmasligi uchun ishlatiladi.
+    $tyutorOnlyRouteNames = ['admin.group-test-schedule.index', 'admin.group-test-schedule.export'];
+    if ($activeRole !== 'tyutor'
+        && in_array('tyutor', $userRoles, true)
+        && request()->route()
+        && in_array(request()->route()->getName(), $tyutorOnlyRouteNames, true)) {
+        session(['active_role' => 'tyutor']);
+        $activeRole = 'tyutor';
+    }
+
     // Admin rollar - har doim admin route ishlatadi
     $adminRoles = ['superadmin', 'admin', 'kichik_admin'];
 
@@ -802,6 +815,7 @@
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan']))
         <div class="sidebar-section">Talaba arizalari</div>
 
+        @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi']))
         <a href="{{ route('admin.absence-excuses.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.absence-excuses.*') ? 'sidebar-active' : '' }}" style="position: relative;">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -812,6 +826,7 @@
                 <span class="sidebar-badge">{{ $pendingExcusesCount }}</span>
             @endif
         </a>
+        @endif
 
         <a href="{{ route('admin.yn-form-corrections.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.yn-form-corrections.*') ? 'sidebar-active' : '' }}" style="position: relative;">

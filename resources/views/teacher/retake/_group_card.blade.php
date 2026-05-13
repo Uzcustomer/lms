@@ -5,9 +5,15 @@
     $otherLabel = $role === 'dean' ? __('Registrator') : __('Dekan');
     $canBulkDelete = $canBulkDelete ?? false;
     $canBulkDecide = $canBulkDecide ?? false;
+    $rowNumber = $rowNumber ?? null;
+
+    // Bu guruh kutilayotgan holatda bormi? (rang/tartib uchun)
+    $hasPending = $group->applications->contains(function ($app) use ($myStatusField) {
+        return $app->{$myStatusField} === 'pending' && $app->final_status === 'pending';
+    });
 @endphp
 
-<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+<div class="bg-white rounded-xl shadow-sm border {{ $hasPending ? 'border-amber-200 ring-1 ring-amber-100' : 'border-gray-100' }} overflow-hidden"
      x-data="{ openReject: null, openApprove: null, openVerifyReject: false }">
     <div class="p-4 border-b border-gray-100 flex items-start justify-between flex-wrap gap-3">
         @if($canBulkDelete)
@@ -22,6 +28,11 @@
                         }"
                        class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
             </label>
+        @endif
+        @if($rowNumber !== null)
+            <div class="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm {{ $hasPending ? 'bg-amber-100 text-amber-800' : 'bg-blue-50 text-blue-700' }}">
+                {{ $rowNumber }}
+            </div>
         @endif
         <div class="flex-1">
             <p class="text-sm font-semibold text-gray-900">

@@ -120,17 +120,36 @@ class RetakeWindowSessionController extends Controller
             ]);
         }
 
-        $count = \App\Models\RetakeApplicationWindow::query()
+        $windows = \App\Models\RetakeApplicationWindow::query()
             ->where('session_id', $session->id)
-            ->update([
+            ->get();
+
+        $count = 0;
+        foreach ($windows as $w) {
+            $w->update([
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
             ]);
+            $count++;
+        }
 
-        return redirect()->back()->with(
-            'success',
-            "{$count} ta oyna sanalari yangilandi: {$data['start_date']} → {$data['end_date']}"
-        );
+        // Avtomatik Telegram xabar — har bir oyna uchun mos talabalarga
+        $notifiedCount = 0;
+        $notifier = app(\App\Services\Retake\RetakeNotificationService::class);
+        foreach ($windows as $w) {
+            try {
+                $notifiedCount += $notifier->notifyWindowDatesUpdated($w->fresh());
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[Retake] notifyWindowDatesUpdated: ' . $e->getMessage());
+            }
+        }
+
+        $msg = "{$count} ta oyna sanalari yangilandi: {$data['start_date']} → {$data['end_date']}";
+        if ($notifiedCount > 0) {
+            $msg .= " · {$notifiedCount} talabaga Telegram xabar yuborildi";
+        }
+
+        return redirect()->back()->with('success', $msg);
     }
 
     /**

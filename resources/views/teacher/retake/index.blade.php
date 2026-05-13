@@ -240,13 +240,14 @@
                 @endif
 
                 <div class="space-y-3">
-                    @foreach($groups as $group)
+                    @foreach($groups as $i => $group)
                         @include('teacher.retake._group_card', [
                             'group' => $group,
                             'role' => $role,
                             'minReasonLength' => $minReasonLength,
                             'canBulkDelete' => $canBulkDelete,
                             'canBulkDecide' => $canBulkDecide,
+                            'rowNumber' => ($groups->currentPage() - 1) * $groups->perPage() + $i + 1,
                         ])
                     @endforeach
                 </div>

@@ -1321,13 +1321,13 @@
                                             @endphp
                                             {{-- Asosiy OSKI (1-urinish) — sababli orqali yoki superadmin orqali tahrirlash --}}
                                             @php
-                                                $oskiClickable = $isOskiSababli || ($isSuperAdmin && $oskiRounded !== null);
+                                                $oskiClickable = $isOskiSababli || $isSuperAdmin;
                                                 $oskiClickHandler = $isOskiSababli
                                                     ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiRounded !== null ? $oskiRounded : 'null') . ", 1, true)"
                                                     : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 1)";
                                                 $oski1DateStr = $oskiAttempt1DateMap[$student->hemis_id] ?? null;
                                                 $oskiBaseTitle = $isOskiSababli ? 'Sababli OSKI — bahoni kiriting'
-                                                    : ($isSuperAdmin && $oskiRounded !== null ? 'Superadmin: OSKI bahosini o\'zgartirish'
+                                                    : ($isSuperAdmin ? 'Superadmin: OSKI bahosini o\'zgartirish'
                                                         : (!empty($other['oski_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
                                                 $oskiDatePart = ($canSeeExamDateTooltip && $oskiRounded !== null && $oski1DateStr) ? "Topshirilgan: {$oski1DateStr}" : '';
                                                 $oskiTitle = trim($oskiDatePart && $oskiBaseTitle ? "{$oskiDatePart} | {$oskiBaseTitle}" : ($oskiDatePart ?: $oskiBaseTitle));
@@ -1337,6 +1337,8 @@
                                                 @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
                                                     <span class="font-bold {{ $isOskiSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $oskiRounded }}</span>
+                                                @elseif($isSuperAdmin)
+                                                    <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
                                             {{-- 2-urinish OSKI ustuni --}}
@@ -1377,13 +1379,13 @@
                                             @endif
                                             {{-- Asosiy Test (1-urinish) — sababli yoki superadmin orqali tahrirlash --}}
                                             @php
-                                                $testClickable = $isTestSababli || ($isSuperAdmin && $testRounded !== null);
+                                                $testClickable = $isTestSababli || $isSuperAdmin;
                                                 $testClickHandler = $isTestSababli
                                                     ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
                                                     : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
                                                 $test1DateStr = $testAttempt1DateMap[$student->hemis_id] ?? null;
                                                 $testBaseTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
-                                                    : ($isSuperAdmin && $testRounded !== null ? 'Superadmin: Test bahosini o\'zgartirish'
+                                                    : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish'
                                                         : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
                                                 $testDatePart = ($canSeeExamDateTooltip && $testRounded !== null && $test1DateStr) ? "Topshirilgan: {$test1DateStr}" : '';
                                                 $testTitle = trim($testDatePart && $testBaseTitle ? "{$testDatePart} | {$testBaseTitle}" : ($testDatePart ?: $testBaseTitle));
@@ -1393,6 +1395,8 @@
                                                 @if($testTitle) title="{{ $testTitle }}" @endif>
                                                 @if($testRounded !== null)
                                                     <span class="font-bold {{ $isTestSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $testRounded }}</span>
+                                                @elseif($isSuperAdmin)
+                                                    <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
                                             {{-- 2-urinish Test ustuni --}}
@@ -1911,13 +1915,13 @@
                                             @endphp
                                             {{-- Asosiy OSKI (1-urinish) — sababli orqali yoki superadmin orqali tahrirlash --}}
                                             @php
-                                                $oskiClickable = $isOskiSababli || ($isSuperAdmin && $oskiRounded !== null);
+                                                $oskiClickable = $isOskiSababli || $isSuperAdmin;
                                                 $oskiClickHandler = $isOskiSababli
                                                     ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiRounded !== null ? $oskiRounded : 'null') . ", 1, true)"
                                                     : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 1)";
                                                 $oski1DateStr = $oskiAttempt1DateMap[$student->hemis_id] ?? null;
                                                 $oskiBaseTitle = $isOskiSababli ? 'Sababli OSKI — bahoni kiriting'
-                                                    : ($isSuperAdmin && $oskiRounded !== null ? 'Superadmin: OSKI bahosini o\'zgartirish'
+                                                    : ($isSuperAdmin ? 'Superadmin: OSKI bahosini o\'zgartirish'
                                                         : (!empty($other['oski_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
                                                 $oskiDatePart = ($canSeeExamDateTooltip && $oskiRounded !== null && $oski1DateStr) ? "Topshirilgan: {$oski1DateStr}" : '';
                                                 $oskiTitle = trim($oskiDatePart && $oskiBaseTitle ? "{$oskiDatePart} | {$oskiBaseTitle}" : ($oskiDatePart ?: $oskiBaseTitle));
@@ -1927,6 +1931,8 @@
                                                 @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
                                                     <span class="font-bold {{ $isOskiSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $oskiRounded }}</span>
+                                                @elseif($isSuperAdmin)
+                                                    <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
                                             {{-- 2-urinish OSKI ustuni --}}
@@ -1967,13 +1973,13 @@
                                             @endif
                                             {{-- Asosiy Test (1-urinish) — sababli yoki superadmin orqali tahrirlash --}}
                                             @php
-                                                $testClickable = $isTestSababli || ($isSuperAdmin && $testRounded !== null);
+                                                $testClickable = $isTestSababli || $isSuperAdmin;
                                                 $testClickHandler = $isTestSababli
                                                     ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
                                                     : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
                                                 $test1DateStr = $testAttempt1DateMap[$student->hemis_id] ?? null;
                                                 $testBaseTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
-                                                    : ($isSuperAdmin && $testRounded !== null ? 'Superadmin: Test bahosini o\'zgartirish'
+                                                    : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish'
                                                         : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
                                                 $testDatePart = ($canSeeExamDateTooltip && $testRounded !== null && $test1DateStr) ? "Topshirilgan: {$test1DateStr}" : '';
                                                 $testTitle = trim($testDatePart && $testBaseTitle ? "{$testDatePart} | {$testBaseTitle}" : ($testDatePart ?: $testBaseTitle));
@@ -1983,6 +1989,8 @@
                                                 @if($testTitle) title="{{ $testTitle }}" @endif>
                                                 @if($testRounded !== null)
                                                     <span class="font-bold {{ $isTestSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $testRounded }}</span>
+                                                @elseif($isSuperAdmin)
+                                                    <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
                                             {{-- 2-urinish Test ustuni --}}
@@ -4235,6 +4243,9 @@
                                      : attempt === 3 ? 'text-orange-700'
                                      : 'text-blue-600';
                     cellTd.innerHTML = '<span class="font-bold ' + colorClass + '">' + rounded + '</span>';
+                    // Saqlangani aniq ko'rinishi va boshqa hisob-kitoblar
+                    // (JN/MT% kabi) qaytadan to'g'ri chiqishi uchun sahifani yangilaymiz.
+                    setTimeout(() => window.location.reload(), 300);
                 } else {
                     alert(data.message || 'Xatolik');
                     cellTd.innerHTML = originalHTML;

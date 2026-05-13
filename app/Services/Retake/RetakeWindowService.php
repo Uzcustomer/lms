@@ -14,6 +14,12 @@ class RetakeWindowService
      * Talabaning yo'nalish va kursi uchun joriy faol oyna.
      * Faqat ochiq sessiyadagi oynalar e'tiborga olinadi — yopilgan
      * sessiyadagi oyna ko'rinmaydi.
+     *
+     * Mantiq:
+     *  1) Avval talaba fakulteti aniq mos kelgan oyna qidiriladi
+     *  2) Topilmasa — fakulteti belgilanmagan (eski) oynalar
+     *  3) Hali ham topilmasa — spec+level mos kelgan har qanday oyna
+     *     (ma'lumotlarda fakultet farqi bo'lsa ham talaba bloklanmasligi uchun)
      */
     public function activeWindowForStudent(Student $student): ?RetakeApplicationWindow
     {
@@ -21,10 +27,38 @@ class RetakeWindowService
             return null;
         }
 
-        return RetakeApplicationWindow::query()
-            ->forStudent((int) $student->specialty_id, $student->level_code, (string) ($student->department_id ?? ''))
+        $baseQuery = RetakeApplicationWindow::query()
+            ->where('specialty_id', (int) $student->specialty_id)
+            ->where('level_code', $student->level_code)
             ->active()
-            ->whereHas('session', fn ($q) => $q->where('is_closed', false))
+            ->whereHas('session', fn ($q) => $q->where('is_closed', false));
+
+        $studentDept = (string) ($student->department_id ?? '');
+
+        // 1) Aniq fakultet bo'yicha mos
+        if ($studentDept !== '') {
+            $exact = (clone $baseQuery)
+                ->where('department_hemis_id', $studentDept)
+                ->orderByDesc('end_date')
+                ->first();
+            if ($exact) {
+                return $exact;
+            }
+        }
+
+        // 2) Fakulteti belgilanmagan (eski yozuvlar) — null/empty
+        $unset = (clone $baseQuery)
+            ->where(function ($q) {
+                $q->whereNull('department_hemis_id')->orWhere('department_hemis_id', '');
+            })
+            ->orderByDesc('end_date')
+            ->first();
+        if ($unset) {
+            return $unset;
+        }
+
+        // 3) Fallback — har qanday spec+level mos kelgan oyna (ma'lumot mos kelmasa ham)
+        return $baseQuery
             ->orderByDesc('end_date')
             ->first();
     }
@@ -40,10 +74,27 @@ class RetakeWindowService
             return new Collection();
         }
 
-        return RetakeApplicationWindow::query()
-            ->forStudent((int) $student->specialty_id, $student->level_code, (string) ($student->department_id ?? ''))
+        $baseQuery = RetakeApplicationWindow::query()
+            ->where('specialty_id', (int) $student->specialty_id)
+            ->where('level_code', $student->level_code);
+
+        $studentDept = (string) ($student->department_id ?? '');
+
+        // Avval aniq fakultet bo'yicha; topilmasa har qanday mos kelgan oyna
+        $strict = (clone $baseQuery)
+            ->where(function ($q) use ($studentDept) {
+                $q->where('department_hemis_id', $studentDept)
+                    ->orWhereNull('department_hemis_id')
+                    ->orWhere('department_hemis_id', '');
+            })
             ->orderByDesc('start_date')
             ->get();
+
+        if ($strict->isNotEmpty()) {
+            return $strict;
+        }
+
+        return $baseQuery->orderByDesc('start_date')->get();
     }
 
     /**

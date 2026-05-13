@@ -132,10 +132,18 @@
                                             'study' => __("O'qish davri"),
                                             'closed' => __("Tugagan"),
                                         ];
+                                        $sessionClosed = $w->session?->is_closed === true;
                                     @endphp
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium {{ $statusColors[$w->status] }}">
-                                        {{ $statusLabels[$w->status] }}
-                                    </span>
+                                    @if($sessionClosed)
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-red-100 text-red-800"
+                                              title="{{ __('Sessiya yopilgan — talabalar ariza bera olmaydi') }}">
+                                            🔒 {{ __("Sessiya yopilgan") }}
+                                        </span>
+                                    @else
+                                        <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium {{ $statusColors[$w->status] }}">
+                                            {{ $statusLabels[$w->status] }}
+                                        </span>
+                                    @endif
                                 </td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700 text-right">{{ $w->applications_count }}</td>
                                 <td class="px-3 py-2.5 text-right whitespace-nowrap">

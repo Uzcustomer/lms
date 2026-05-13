@@ -3224,6 +3224,65 @@ class JournalController extends Controller
         ]);
     }
 
+    /**
+     * Superadmin: OSKI/Test bahosini to'g'ridan-to'g'ri tahrirlash.
+     * Bitta talabaning bitta fan + semestr + YN turi + urinishi uchun
+     * mos keladigan barcha student_grades qatorlarining grade qiymatini
+     * yangilaydi (odatda bitta yozuv bo'ladi, ammo bir nechta quiz natijasi
+     * mavjud bo'lsa hammasini bir xil qiymatga keltiradi).
+     *
+     * training_type_code: 101 = OSKI, 102 = Test.
+     * attempt: 1 (asosiy), 2 (12a-shakl), 3 (12b-shakl).
+     */
+    public function superadminEditExamGrade(Request $request)
+    {
+        if (!auth()->user()?->hasRole('superadmin')) {
+            return response()->json(['success' => false, 'message' => 'Faqat superadmin uchun'], 403);
+        }
+
+        if (Setting::get('feature_superadmin_grade_edit', '0') !== '1') {
+            return response()->json(['success' => false, 'message' => 'Bu funksiya hozirda o\'chirilgan'], 403);
+        }
+
+        $data = $request->validate([
+            'student_hemis_id'   => 'required',
+            'subject_id'         => 'required',
+            'semester_code'      => 'required',
+            'training_type_code' => 'required|integer|in:101,102',
+            'attempt'            => 'required|integer|in:1,2,3',
+            'grade'              => 'required|numeric|min:0|max:100',
+        ]);
+
+        $rows = DB::table('student_grades')
+            ->where('student_hemis_id', $data['student_hemis_id'])
+            ->where('subject_id', $data['subject_id'])
+            ->where('semester_code', $data['semester_code'])
+            ->where('training_type_code', $data['training_type_code'])
+            ->where('attempt', $data['attempt'])
+            ->whereNull('deleted_at')
+            ->get();
+
+        if ($rows->isEmpty()) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu talaba uchun shu YN turida baho yozuvi topilmadi.',
+            ], 404);
+        }
+
+        DB::table('student_grades')
+            ->whereIn('id', $rows->pluck('id'))
+            ->update([
+                'grade'      => $data['grade'],
+                'updated_at' => now(),
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'grade'   => (float) $data['grade'],
+            'updated' => $rows->count(),
+        ]);
+    }
+
     public function saveRetakeGrade(Request $request)
     {
         // Check admin or teacher role

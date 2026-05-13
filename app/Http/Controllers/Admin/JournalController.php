@@ -3293,25 +3293,28 @@ class JournalController extends Controller
                 ->where('semester_code', $data['semester_code'])
                 ->first();
 
-            // Joriy o'quv yili — jurnal show() ishlatadigan logikasiga moslab
-            // schedules jadvalidan eng so'nggi dars sanasi orqali aniqlaymiz.
-            // Bu otherGrades filtri (education_year_code) bilan mos kelishi
-            // shart, aks holda yangi yozuv sahifada ko'rinmay qoladi.
+            // Joriy o'quv yili va eng so'nggi dars sanasi — jurnal show()
+            // ishlatadigan logikasiga moslab schedules jadvalidan olamiz. Bu
+            // otherGrades filtri (education_year_code va lesson_date) bilan
+            // mos kelishi shart, aks holda yangi yozuv sahifada ko'rinmay qoladi.
             $eduYearCode = $template->education_year_code ?? null;
             $eduYearName = $template->education_year_name ?? null;
-            if ($eduYearCode === null && $student) {
+            $latestLessonDate = null;
+            if ($student) {
                 $schedYear = DB::table('schedules')
                     ->where('group_id', $student->group_id)
                     ->where('subject_id', $data['subject_id'])
                     ->where('semester_code', $data['semester_code'])
                     ->whereNull('deleted_at')
-                    ->whereNotNull('education_year_code')
                     ->orderBy('lesson_date', 'desc')
-                    ->select('education_year_code', 'education_year_name')
+                    ->select('education_year_code', 'education_year_name', 'lesson_date')
                     ->first();
                 if ($schedYear) {
-                    $eduYearCode = $schedYear->education_year_code;
-                    $eduYearName = $schedYear->education_year_name ?? $eduYearName;
+                    if ($eduYearCode === null && $schedYear->education_year_code) {
+                        $eduYearCode = $schedYear->education_year_code;
+                        $eduYearName = $schedYear->education_year_name ?? $eduYearName;
+                    }
+                    $latestLessonDate = $schedYear->lesson_date ?? null;
                 }
             }
             if ($eduYearCode === null && $student) {
@@ -3350,7 +3353,7 @@ class JournalController extends Controller
                 'lesson_pair_start_time' => '00:00',
                 'lesson_pair_end_time'   => '00:00',
                 'grade'                => $data['grade'],
-                'lesson_date'          => null,
+                'lesson_date'          => $latestLessonDate,
                 'attempt'              => $data['attempt'],
                 'status'               => 'recorded',
                 'created_at_api'       => now(),
@@ -3366,12 +3369,56 @@ class JournalController extends Controller
             ]);
         }
 
+        // UPDATE yo'lida ham education_year_code va lesson_date NULL bo'lsa
+        // tuzatamiz — aks holda jurnal otherGrades filtri yangi qiymatni
+        // tashlab yuborishi mumkin. Joriy o'quv yili va dars sanasini
+        // schedules orqali aniqlaymiz (insert bilan bir xil mantiq).
+        $student = DB::table('students')->where('hemis_id', $data['student_hemis_id'])->first();
+        $eduYearCode = null;
+        $latestLessonDate = null;
+        if ($student) {
+            $sched = DB::table('schedules')
+                ->where('group_id', $student->group_id)
+                ->where('subject_id', $data['subject_id'])
+                ->where('semester_code', $data['semester_code'])
+                ->whereNull('deleted_at')
+                ->orderBy('lesson_date', 'desc')
+                ->select('education_year_code', 'lesson_date')
+                ->first();
+            if ($sched) {
+                $eduYearCode = $sched->education_year_code;
+                $latestLessonDate = $sched->lesson_date;
+            }
+            if ($eduYearCode === null) {
+                $grp = DB::table('groups')->where('group_hemis_id', $student->group_id)->first();
+                $curr = $grp ? DB::table('curricula')->where('curricula_hemis_id', $grp->curriculum_hemis_id)->first() : null;
+                $eduYearCode = $curr->education_year_code ?? null;
+            }
+        }
+
+        $updates = [
+            'grade'      => $data['grade'],
+            'updated_at' => now(),
+        ];
+
         DB::table('student_grades')
             ->whereIn('id', $rows->pluck('id'))
-            ->update([
-                'grade'      => $data['grade'],
-                'updated_at' => now(),
-            ]);
+            ->update($updates);
+
+        // education_year_code yoki lesson_date NULL yozuvlarini ham tuzatamiz —
+        // alohida UPDATE'lar bilan, mavjud qiymatlarni perezapis qilmaslik uchun.
+        if ($eduYearCode !== null) {
+            DB::table('student_grades')
+                ->whereIn('id', $rows->pluck('id'))
+                ->whereNull('education_year_code')
+                ->update(['education_year_code' => $eduYearCode]);
+        }
+        if ($latestLessonDate !== null) {
+            DB::table('student_grades')
+                ->whereIn('id', $rows->pluck('id'))
+                ->whereNull('lesson_date')
+                ->update(['lesson_date' => $latestLessonDate]);
+        }
 
         return response()->json([
             'success' => true,

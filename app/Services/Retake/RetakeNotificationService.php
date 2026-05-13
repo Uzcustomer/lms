@@ -281,6 +281,90 @@ class RetakeNotificationService
 
     // ─── Quyi metodlar ─────────────────────────────────────────────
 
+    /**
+     * Oyna sanalari o'zgarganda — shu oynaga mos talabalarga xabar yuboradi.
+     * Mos talabalar: window.specialty_id YOKI specialty_name + level_code bo'yicha.
+     * Faqat telegram_chat_id mavjud talabalarga yuboriladi.
+     */
+    public function notifyWindowDatesUpdated(\App\Models\RetakeApplicationWindow $window): int
+    {
+        $sent = 0;
+        $students = $this->matchingStudentsForWindow($window);
+
+        $title = "📅 Qayta o'qish sanalari yangilandi";
+        $body = "Yo'nalish: {$window->specialty_name}\n"
+            . "Kurs: " . ($window->level_name ?? $window->level_code) . "\n\n"
+            . "Yangi sanalar: " . $window->start_date->format('Y-m-d')
+            . " → " . $window->end_date->format('Y-m-d') . "\n\n"
+            . "📌 Qayta o'qish sanasi boshlangunga qadar (shu kuni ham)\n"
+            . "arizangizni yubora olasiz.\n\n"
+            . "🔗 " . route('student.retake.index');
+
+        foreach ($students as $student) {
+            $this->sendToStudent($student, 'retake_window_dates_updated', $title, $body, $window->id, route('student.retake.index'));
+            $sent++;
+            usleep(40000);
+        }
+
+        return $sent;
+    }
+
+    /**
+     * Yangi oyna ochilganda — shu oynaga mos talabalarga xabar yuboradi.
+     */
+    public function notifyWindowOpened(\App\Models\RetakeApplicationWindow $window): int
+    {
+        $sent = 0;
+        $students = $this->matchingStudentsForWindow($window);
+
+        $deptName = '';
+        if (!empty($window->department_hemis_id)) {
+            $dept = \App\Models\Department::where('department_hemis_id', $window->department_hemis_id)->first();
+            $deptName = $dept?->name ?? '';
+        }
+
+        $title = "🆕 Qayta o'qish qabul oynasi ochildi!";
+        $body = "Yo'nalish: {$window->specialty_name}\n"
+            . "Kurs: " . ($window->level_name ?? $window->level_code) . "\n"
+            . ($deptName ? "Fakultet: {$deptName}\n" : '')
+            . "\nSanalar: " . $window->start_date->format('Y-m-d')
+            . " → " . $window->end_date->format('Y-m-d') . "\n\n"
+            . "📌 Siz " . $window->start_date->format('Y-m-d') . " kuniga qadar\n"
+            . "ariza yubora olasiz (shu kuni ham ariza qabul ochiq).\n\n"
+            . "🔗 " . route('student.retake.index');
+
+        foreach ($students as $student) {
+            $this->sendToStudent($student, 'retake_window_opened', $title, $body, $window->id, route('student.retake.index'));
+            $sent++;
+            usleep(40000);
+        }
+
+        return $sent;
+    }
+
+    /**
+     * Oynaga mos keluvchi talabalarni topish (specialty_id YOKI name + level_code).
+     * Faqat telegram_chat_id mavjudlar qaytariladi (xabar yuborish uchun).
+     */
+    private function matchingStudentsForWindow(\App\Models\RetakeApplicationWindow $window): \Illuminate\Database\Eloquent\Collection
+    {
+        $query = Student::query()
+            ->whereNotNull('telegram_chat_id')
+            ->where('level_code', $window->level_code)
+            ->where(function ($q) use ($window) {
+                $q->where('specialty_id', (int) $window->specialty_id);
+                if (!empty($window->specialty_name)) {
+                    $q->orWhereRaw('LOWER(TRIM(specialty_name)) = ?', [mb_strtolower(trim($window->specialty_name))]);
+                }
+            });
+
+        if (!empty($window->department_hemis_id)) {
+            $query->where('department_id', $window->department_hemis_id);
+        }
+
+        return $query->get();
+    }
+
     private function sendToStudent(
         Student $student,
         string $type,

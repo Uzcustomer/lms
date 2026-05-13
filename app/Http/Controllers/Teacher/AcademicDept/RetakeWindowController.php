@@ -260,11 +260,12 @@ class RetakeWindowController extends Controller
         $created = 0;
         $skipped = 0;
         $firstError = null;
+        $createdWindowIds = [];
 
         // Bulk operatsiya uchun bitta umumiy batch ID
         $batchId = (string) \Illuminate\Support\Str::uuid();
 
-        DB::transaction(function () use ($data, $triplets, $specialties, $levelMap, $departments, $semesterMap, $user, &$created, &$skipped, &$firstError, $batchId) {
+        DB::transaction(function () use ($data, $triplets, $specialties, $levelMap, $departments, $semesterMap, $user, &$created, &$skipped, &$firstError, &$createdWindowIds, $batchId) {
             foreach ($triplets as $t) {
                 $sp = $specialties->get($t['specialty_pk']);
                 if (!$sp) {
@@ -282,14 +283,10 @@ class RetakeWindowController extends Controller
 
                 foreach ($combos as $sem) {
                     try {
-                        $this->windowService->createWindow([
+                        $newWindow = $this->windowService->createWindow([
                             'session_id' => $data['session_id'],
                             'specialty_id' => (int) $sp->specialty_hemis_id,
                             'specialty_name' => $sp->name,
-                            // BUG FIX: foydalanuvchi tanlagan fakultet (user-selected fid)
-                            // ishlatiladi. Avval $sp->department_hemis_id ishlatilardi,
-                            // bir xil yo'nalish bir nechta fakultetda bo'lsa unique
-                            // check'da to'qnashib, faqat birinchi oyna yaratilardi.
                             'department_hemis_id' => (string) $t['fid'],
                             'level_code' => $t['level_code'],
                             'level_name' => $levelMap->get($t['level_code']) ?? $t['level_code'],
@@ -300,6 +297,7 @@ class RetakeWindowController extends Controller
                             'creation_batch_id' => $batchId,
                         ], $user);
                         $created++;
+                        $createdWindowIds[] = $newWindow->id;
                     } catch (ValidationException $e) {
                         $skipped++;
                         $firstError = $firstError ?? collect($e->errors())->flatten()->first();
@@ -308,7 +306,23 @@ class RetakeWindowController extends Controller
             }
         });
 
+        // Avtomatik Telegram xabar: yangi yaratilgan har oyna uchun mos talabalarga
+        $notifiedCount = 0;
+        if (!empty($createdWindowIds)) {
+            $notifier = app(\App\Services\Retake\RetakeNotificationService::class);
+            foreach (RetakeApplicationWindow::whereIn('id', $createdWindowIds)->get() as $win) {
+                try {
+                    $notifiedCount += $notifier->notifyWindowOpened($win);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('[Retake] notifyWindowOpened: ' . $e->getMessage());
+                }
+            }
+        }
+
         $msg = "{$created} ta qabul oynasi yaratildi";
+        if ($notifiedCount > 0) {
+            $msg .= " · {$notifiedCount} talabaga Telegram xabar yuborildi";
+        }
         if ($skipped > 0) {
             $msg .= ", {$skipped} ta o'tkazib yuborildi (allaqachon mavjud)";
         }
@@ -339,7 +353,16 @@ class RetakeWindowController extends Controller
             return redirect()->back()->withErrors($e->errors());
         }
 
-        return redirect()->back()->with('success', __('Sanalar override qilindi'));
+        // Avtomatik Telegram xabar: sanalar yangilanganda mos talabalarga
+        try {
+            $sent = app(\App\Services\Retake\RetakeNotificationService::class)
+                ->notifyWindowDatesUpdated($window->fresh());
+        } catch (\Throwable $e) {
+            $sent = 0;
+            \Illuminate\Support\Facades\Log::warning('[Retake] notifyWindowDatesUpdated: ' . $e->getMessage());
+        }
+
+        return redirect()->back()->with('success', __("Sanalar yangilandi. {$sent} talabaga Telegram xabar yuborildi."));
     }
 
     public function destroy(Request $request, int $windowId): RedirectResponse

@@ -308,7 +308,7 @@ class StudentApiController extends Controller
                 'weeks' => $weeks,
                 'selected_week_id' => $selectedWeekId,
                 'week_label' => $weekLabel,
-                'days' => $days,
+                'days' => (object) $days,
                 'schedule' => $groupedSchedule,
             ],
         ]);

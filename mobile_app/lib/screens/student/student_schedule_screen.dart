@@ -219,7 +219,8 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
               );
             }
 
-            final days = schedule['days'] as Map<String, dynamic>? ?? {};
+            final daysRaw = schedule['days'];
+            final days = daysRaw is Map<String, dynamic> ? daysRaw : <String, dynamic>{};
             final dateSchedule = schedule['schedule'] as List<dynamic>? ?? [];
             final weeks = schedule['weeks'] as List<dynamic>? ?? [];
             final selectedWeekId = schedule['selected_week_id'];

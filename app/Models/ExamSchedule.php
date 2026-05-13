@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Jobs\BookMoodleGroupExam;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -78,5 +79,51 @@ class ExamSchedule extends Model
     public function curriculum()
     {
         return $this->belongsTo(Curriculum::class, 'curriculum_hemis_id', 'curricula_hemis_id');
+    }
+
+
+    /**
+     * Re-push the booking to Moodle whenever the attempt-1 schedule
+     * window changes.
+     *
+     * The proctor / academic UI has multiple endpoints that mutate the
+     * oski_* / test_* date and time columns (saveTestTime, autoTimeAll,
+     * AutoAssignService::distribute, manual edits via Tinker, etc.).
+     * Without a centralised hook, each call site has to remember to
+     * dispatch BookMoodleGroupExam — and some of them already don't,
+     * which left the Moodle bookings stuck at whatever Mark pushed on
+     * the first save.
+     *
+     * Listening on saved() gives us a single place that watches the
+     * window columns and triggers a re-push on every legitimate
+     * change. The job is idempotent on the Moodle side (book() updates
+     * the existing local_hemisexport_cutoffs / quiz_overrides rows in
+     * place) so a duplicate dispatch from an explicit call site does
+     * no harm.
+     *
+     * Only attempt-1 columns are watched. Resit columns
+     * (oski_resit_*, test_resit_*, etc.) belong to attempt 2/3 and are
+     * not supported by the current book_group_exam web service, so we
+     * deliberately leave them alone.
+     */
+    protected static function booted(): void
+    {
+        static::saved(function (self $schedule) {
+            foreach (['oski', 'test'] as $yn) {
+                $watched = [$yn . '_date', $yn . '_time', $yn . '_na'];
+                if (!$schedule->wasChanged($watched)) {
+                    continue;
+                }
+                // Only push when the full window is set and not flagged N/A.
+                if (
+                    empty($schedule->{$yn . '_date'}) ||
+                    empty($schedule->{$yn . '_time'}) ||
+                    !empty($schedule->{$yn . '_na'})
+                ) {
+                    continue;
+                }
+                BookMoodleGroupExam::dispatch($schedule->id, $yn);
+            }
+        });
     }
 }

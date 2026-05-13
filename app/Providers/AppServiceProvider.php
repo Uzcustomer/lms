@@ -117,6 +117,8 @@ class AppServiceProvider extends ServiceProvider
 
                             // O'quv bo'limi — Dekan+Registrator tasdiqlagan, hali tasdiqlamagan
                             // arizalar (QO': Arizalar sahifasidagi "Tasdiq kutmoqda" bosqichi).
+                            // To'lov filtri olib tashlangan: hamma dekan+registrator
+                            // tasdiqlagan arizalar hisoblanadi.
                             $academicRoles = [
                                 \App\Enums\ProjectRole::ACADEMIC_DEPARTMENT->value,
                                 \App\Enums\ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value,
@@ -127,10 +129,6 @@ class AppServiceProvider extends ServiceProvider
                                     ->where('registrar_status', 'approved')
                                     ->where('academic_dept_status', 'pending')
                                     ->where('final_status', 'pending')
-                                    ->whereHas('group', function ($q) {
-                                        $q->whereNotNull('payment_uploaded_at')
-                                          ->where('payment_verification_status', 'approved');
-                                    })
                                     ->count();
                             }
 
@@ -161,14 +159,12 @@ class AppServiceProvider extends ServiceProvider
                             $cacheKeyG,
                             60,
                             function () {
+                                // To'lov filtri olib tashlangan — tasdiqlangan barcha
+                                // arizalarni hisoblaymiz (guruhga biriktirilmaganlarni)
                                 return \App\Models\RetakeApplication::query()
                                     ->where('academic_dept_status', 'approved')
                                     ->where('final_status', 'pending')
                                     ->whereNull('retake_group_id')
-                                    ->whereHas('group', function ($q) {
-                                        $q->whereNotNull('payment_uploaded_at')
-                                          ->where('payment_verification_status', 'approved');
-                                    })
                                     ->count();
                             }
                         );

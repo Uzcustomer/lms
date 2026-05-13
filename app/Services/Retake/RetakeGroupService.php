@@ -32,10 +32,6 @@ class RetakeGroupService
             ->where('academic_dept_status', 'approved')
             ->where('final_status', 'pending')
             ->whereNull('retake_group_id')
-            ->whereHas('group', function ($q) {
-                $q->whereNotNull('payment_uploaded_at')
-                  ->where('payment_verification_status', 'approved');
-            })
             ->with('group.student')
             ->orderBy('subject_name')
             ->get();
@@ -84,10 +80,6 @@ class RetakeGroupService
             ->where('academic_dept_status', 'approved')
             ->where('final_status', 'pending')
             ->whereNull('retake_group_id')
-            ->whereHas('group', function ($q) {
-                $q->whereNotNull('payment_uploaded_at')
-                  ->where('payment_verification_status', 'approved');
-            })
             ->with('group.student')
             ->get();
     }

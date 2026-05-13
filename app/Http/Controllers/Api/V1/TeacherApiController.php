@@ -652,28 +652,36 @@ class TeacherApiController extends Controller
                             }));
                     });
             }))
-            ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'attempt')
             ->get();
 
         $otherGrades = [];
         foreach ($otherGradesRaw as $g) {
             $eff = $getEffectiveGrade($g);
             if ($eff !== null) {
-                $otherGrades[$g->student_hemis_id][$g->training_type_code][] = $eff['grade'];
+                $attempt = (int) ($g->attempt ?? 1);
+                $otherGrades[$g->student_hemis_id][$g->training_type_code][$attempt][] = $eff['grade'];
             }
         }
+        // 2-urinish 1-urinish o'rnini bosadi (o'rtachalanmaydi): har turi uchun
+        // eng katta attempt qiymatidagi yozuvlarni olamiz.
+        $pickLatestAttempt = function (array $byAttempt): ?float {
+            if (empty($byAttempt)) {
+                return null;
+            }
+            $latest = max(array_keys($byAttempt));
+            $grades = $byAttempt[$latest];
+            if (empty($grades)) {
+                return null;
+            }
+            return round(array_sum($grades) / count($grades), 2);
+        };
         foreach ($otherGrades as $studentId => $types) {
-            $result = ['on' => null, 'oski' => null, 'test' => null];
-            if (isset($types[100]) && count($types[100]) > 0) {
-                $result['on'] = round(array_sum($types[100]) / count($types[100]), 2);
-            }
-            if (isset($types[101]) && count($types[101]) > 0) {
-                $result['oski'] = round(array_sum($types[101]) / count($types[101]), 2);
-            }
-            if (isset($types[102]) && count($types[102]) > 0) {
-                $result['test'] = round(array_sum($types[102]) / count($types[102]), 2);
-            }
-            $otherGrades[$studentId] = $result;
+            $otherGrades[$studentId] = [
+                'on' => isset($types[100]) ? $pickLatestAttempt($types[100]) : null,
+                'oski' => isset($types[101]) ? $pickLatestAttempt($types[101]) : null,
+                'test' => isset($types[102]) ? $pickLatestAttempt($types[102]) : null,
+            ];
         }
 
         // ==================== ATTENDANCE STATS ====================

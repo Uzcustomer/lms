@@ -933,7 +933,7 @@ class JournalController extends Controller
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select(array_merge(
-                ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id'],
+                ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'attempt'],
                 $hasSababliCol ? ['retake_was_sababli'] : []
             ))
             ->get();
@@ -955,29 +955,38 @@ class JournalController extends Controller
                         $typeCode = 102;
                     }
                 }
-                $otherGrades[$g->student_hemis_id][$typeCode][] = $effectiveGrade['grade'];
+                $attempt = (int) ($g->attempt ?? 1);
+                $otherGrades[$g->student_hemis_id][$typeCode][$attempt][] = $effectiveGrade['grade'];
                 if (!empty($g->retake_was_sababli)) {
-                    $otherGradesSababli[$g->student_hemis_id][$typeCode] = true;
+                    $otherGradesSababli[$g->student_hemis_id][$typeCode][$attempt] = true;
                 }
             }
         }
-        // Calculate averages
+        // 2/3-urinish 1-urinishni almashtiradi: eng katta attempt qiymatidagi
+        // yozuvlar olinadi, o'rtachalash faqat shu urinish ichida.
+        $pickLatestAttempt = function (?array $byAttempt): ?array {
+            if (empty($byAttempt)) {
+                return null;
+            }
+            $latest = max(array_keys($byAttempt));
+            $grades = $byAttempt[$latest];
+            if (empty($grades)) {
+                return null;
+            }
+            return ['attempt' => $latest, 'value' => array_sum($grades) / count($grades)];
+        };
         foreach ($otherGrades as $studentId => $types) {
             $result = [
                 'on' => null, 'oski' => null, 'test' => null,
                 'on_sababli' => false, 'oski_sababli' => false, 'test_sababli' => false,
             ];
-            if (isset($types[100]) && count($types[100]) > 0) {
-                $result['on'] = array_sum($types[100]) / count($types[100]);
-                $result['on_sababli'] = !empty($otherGradesSababli[$studentId][100]);
-            }
-            if (isset($types[101]) && count($types[101]) > 0) {
-                $result['oski'] = array_sum($types[101]) / count($types[101]);
-                $result['oski_sababli'] = !empty($otherGradesSababli[$studentId][101]);
-            }
-            if (isset($types[102]) && count($types[102]) > 0) {
-                $result['test'] = array_sum($types[102]) / count($types[102]);
-                $result['test_sababli'] = !empty($otherGradesSababli[$studentId][102]);
+            $picked = [100 => null, 101 => null, 102 => null];
+            foreach ([100 => 'on', 101 => 'oski', 102 => 'test'] as $tc => $key) {
+                $picked[$tc] = $pickLatestAttempt($types[$tc] ?? null);
+                if ($picked[$tc] !== null) {
+                    $result[$key] = $picked[$tc]['value'];
+                    $result[$key . '_sababli'] = !empty($otherGradesSababli[$studentId][$tc][$picked[$tc]['attempt']]);
+                }
             }
             $otherGrades[$studentId] = $result;
         }
@@ -1479,13 +1488,18 @@ class JournalController extends Controller
             $hasAttemptColForStage = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
 
             // 12a (attempt=2) va 12b (attempt=3) OSKI/Test baholari (sababsiz va sababli alohida)
+            // Asosiy otherGradesRaw kabi semester_code shartini yumshatamiz — diagnostika
+            // boshqa semestr bilan saqlangan yozuvlarni ham qamrab oladi.
             $fetchAttemptOskiTest = function (int $attempt, bool $excludeSababli) use ($studentHemisIds, $subjectId, $semesterCode, $hasAttemptColForStage) {
                 if (!$hasAttemptColForStage) return [101 => [], 102 => []];
                 $rows = DB::table('student_grades')
                     ->whereNull('deleted_at')
                     ->whereIn('student_hemis_id', $studentHemisIds)
                     ->where('subject_id', $subjectId)
-                    ->where('semester_code', $semesterCode)
+                    ->where(function ($q) use ($semesterCode) {
+                        $q->where('semester_code', $semesterCode)
+                            ->orWhereIn('training_type_code', [101, 102]);
+                    })
                     ->whereIn('training_type_code', [101, 102])
                     ->where('attempt', $attempt)
                     ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'retake_was_sababli', 'status', 'reason')

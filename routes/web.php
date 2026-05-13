@@ -806,6 +806,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/bulk-force-delete', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'bulkForceDestroy'])->name('bulk-force-delete');
             Route::get('/{sessionId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'show'])->name('show');
             Route::post('/{sessionId}/close', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'close'])->name('close');
+            Route::post('/{sessionId}/bulk-override-dates', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'bulkOverrideDates'])->name('bulk-override-dates');
             Route::delete('/{sessionId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'destroy'])->name('destroy');
             Route::post('/{sessionId}/restore', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'restore'])->name('restore');
             Route::delete('/{sessionId}/force', [\App\Http\Controllers\Teacher\AcademicDept\RetakeWindowSessionController::class, 'forceDestroy'])->name('force-destroy');

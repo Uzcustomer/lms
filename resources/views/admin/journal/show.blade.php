@@ -1315,46 +1315,90 @@
                                                 $showTest2Col = !empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []);
                                                 $showTest3Col = !empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []);
                                             @endphp
-                                            {{-- Asosiy OSKI — sababli orqali tahrirlash mumkin --}}
-                                            <td class="px-1 py-1 text-center {{ $isOskiSababli ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
-                                                @if($isOskiSababli) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }}, 1, true)" title="Sababli OSKI — bahoni kiriting" @elseif(!empty($other['oski_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
+                                            {{-- Asosiy OSKI — sababli orqali yoki superadmin orqali tahrirlash --}}
+                                            @php
+                                                $oskiClickable = $isOskiSababli || ($isSuperAdmin && $oskiRounded !== null);
+                                                $oskiClickHandler = $isOskiSababli
+                                                    ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiRounded !== null ? $oskiRounded : 'null') . ", 1, true)"
+                                                    : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 1)";
+                                                $oskiTitle = $isOskiSababli ? 'Sababli OSKI — bahoni kiriting'
+                                                    : ($isSuperAdmin && $oskiRounded !== null ? 'Superadmin: OSKI bahosini o\'zgartirish'
+                                                        : (!empty($other['oski_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
+                                            @endphp
+                                            <td class="px-1 py-1 text-center {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
+                                                @if($oskiClickable) onclick="{{ $oskiClickHandler }}" @endif
+                                                @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
                                                     <span class="font-bold {{ $isOskiSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $oskiRounded }}</span>
                                                 @endif
                                             </td>
                                             {{-- 2-urinish OSKI ustuni --}}
                                             @if($showOski2Col)
-                                                <td class="px-1 py-1 text-center {{ $eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'bg-gray-50' }}"
-                                                    @if($eligible12a) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiA2 !== null ? $oskiA2 : 'null' }}, 2, false)" title="2-urinish OSKI{{ $oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
-                                                    @if($oskiA2 !== null)<span class="font-bold text-amber-700">{{ $oskiA2 }}</span>@elseif(!$eligible12a)<span class="text-gray-300 text-xs">—</span>@endif
+                                                @php
+                                                    $oski2Clickable = $eligible12a || ($isSuperAdmin && $oskiA2 !== null);
+                                                    $oski2Handler = $eligible12a
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiA2 !== null ? $oskiA2 : 'null') . ", 2, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 2)";
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $oski2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($oski2Clickable) onclick="{{ $oski2Handler }}" title="{{ $eligible12a ? '2-urinish OSKI' . ($oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish OSKI tahrirlash' }}" @endif>
+                                                    @if($oskiA2 !== null)<span class="font-bold text-amber-700">{{ $oskiA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish OSKI ustuni --}}
                                             @if($showOski3Col)
-                                                <td class="px-1 py-1 text-center {{ $eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'bg-gray-50' }}"
-                                                    @if($eligible12b) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiA3 !== null ? $oskiA3 : 'null' }}, 3, false)" title="3-urinish OSKI{{ $oski2ResitDate ? ' (' . \Carbon\Carbon::parse($oski2ResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
-                                                    @if($oskiA3 !== null)<span class="font-bold text-orange-700">{{ $oskiA3 }}</span>@elseif(!$eligible12b)<span class="text-gray-300 text-xs">—</span>@endif
+                                                @php
+                                                    $oski3Clickable = $eligible12b || ($isSuperAdmin && $oskiA3 !== null);
+                                                    $oski3Handler = $eligible12b
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiA3 !== null ? $oskiA3 : 'null') . ", 3, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 3)";
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $oski3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($oski3Clickable) onclick="{{ $oski3Handler }}" title="{{ $eligible12b ? '3-urinish OSKI' . ($oski2ResitDate ? ' (' . \Carbon\Carbon::parse($oski2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish OSKI tahrirlash' }}" @endif>
+                                                    @if($oskiA3 !== null)<span class="font-bold text-orange-700">{{ $oskiA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
-                                            {{-- Asosiy Test — sababli orqali tahrirlash mumkin --}}
-                                            <td class="px-1 py-1 text-center {{ $isTestSababli ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
-                                                @if($isTestSababli) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }}, 1, true)" title="Sababli Test — bahoni kiriting" @elseif(!empty($other['test_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
+                                            {{-- Asosiy Test — sababli yoki superadmin orqali tahrirlash --}}
+                                            @php
+                                                $testClickable = $isTestSababli || ($isSuperAdmin && $testRounded !== null);
+                                                $testClickHandler = $isTestSababli
+                                                    ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
+                                                    : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
+                                                $testTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
+                                                    : ($isSuperAdmin && $testRounded !== null ? 'Superadmin: Test bahosini o\'zgartirish'
+                                                        : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
+                                            @endphp
+                                            <td class="px-1 py-1 text-center {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
+                                                @if($testClickable) onclick="{{ $testClickHandler }}" @endif
+                                                @if($testTitle) title="{{ $testTitle }}" @endif>
                                                 @if($testRounded !== null)
                                                     <span class="font-bold {{ $isTestSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $testRounded }}</span>
                                                 @endif
                                             </td>
                                             {{-- 2-urinish Test ustuni --}}
                                             @if($showTest2Col)
-                                                <td class="px-1 py-1 text-center {{ $eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'bg-gray-50' }}"
-                                                    @if($eligible12a) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testA2 !== null ? $testA2 : 'null' }}, 2, false)" title="2-urinish Test{{ $testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
-                                                    @if($testA2 !== null)<span class="font-bold text-amber-700">{{ $testA2 }}</span>@elseif(!$eligible12a)<span class="text-gray-300 text-xs">—</span>@endif
+                                                @php
+                                                    $test2Clickable = $eligible12a || ($isSuperAdmin && $testA2 !== null);
+                                                    $test2Handler = $eligible12a
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testA2 !== null ? $testA2 : 'null') . ", 2, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 2)";
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $test2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($test2Clickable) onclick="{{ $test2Handler }}" title="{{ $eligible12a ? '2-urinish Test' . ($testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish Test tahrirlash' }}" @endif>
+                                                    @if($testA2 !== null)<span class="font-bold text-amber-700">{{ $testA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish Test ustuni --}}
                                             @if($showTest3Col)
-                                                <td class="px-1 py-1 text-center {{ $eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'bg-gray-50' }}"
-                                                    @if($eligible12b) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testA3 !== null ? $testA3 : 'null' }}, 3, false)" title="3-urinish Test{{ $test2ResitDate ? ' (' . \Carbon\Carbon::parse($test2ResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
-                                                    @if($testA3 !== null)<span class="font-bold text-orange-700">{{ $testA3 }}</span>@elseif(!$eligible12b)<span class="text-gray-300 text-xs">—</span>@endif
+                                                @php
+                                                    $test3Clickable = $eligible12b || ($isSuperAdmin && $testA3 !== null);
+                                                    $test3Handler = $eligible12b
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testA3 !== null ? $testA3 : 'null') . ", 3, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 3)";
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $test3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($test3Clickable) onclick="{{ $test3Handler }}" title="{{ $eligible12b ? '3-urinish Test' . ($test2ResitDate ? ' (' . \Carbon\Carbon::parse($test2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish Test tahrirlash' }}" @endif>
+                                                    @if($testA3 !== null)<span class="font-bold text-orange-700">{{ $testA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
@@ -1835,46 +1879,90 @@
                                                 $showTest2Col = !empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []);
                                                 $showTest3Col = !empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []);
                                             @endphp
-                                            {{-- Asosiy OSKI — sababli orqali tahrirlash mumkin --}}
-                                            <td class="px-1 py-1 text-center {{ $isOskiSababli ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
-                                                @if($isOskiSababli) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }}, 1, true)" title="Sababli OSKI — bahoni kiriting" @elseif(!empty($other['oski_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
+                                            {{-- Asosiy OSKI — sababli orqali yoki superadmin orqali tahrirlash --}}
+                                            @php
+                                                $oskiClickable = $isOskiSababli || ($isSuperAdmin && $oskiRounded !== null);
+                                                $oskiClickHandler = $isOskiSababli
+                                                    ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiRounded !== null ? $oskiRounded : 'null') . ", 1, true)"
+                                                    : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 1)";
+                                                $oskiTitle = $isOskiSababli ? 'Sababli OSKI — bahoni kiriting'
+                                                    : ($isSuperAdmin && $oskiRounded !== null ? 'Superadmin: OSKI bahosini o\'zgartirish'
+                                                        : (!empty($other['oski_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
+                                            @endphp
+                                            <td class="px-1 py-1 text-center {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
+                                                @if($oskiClickable) onclick="{{ $oskiClickHandler }}" @endif
+                                                @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
                                                     <span class="font-bold {{ $isOskiSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $oskiRounded }}</span>
                                                 @endif
                                             </td>
                                             {{-- 2-urinish OSKI ustuni --}}
                                             @if($showOski2Col)
-                                                <td class="px-1 py-1 text-center {{ $eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'bg-gray-50' }}"
-                                                    @if($eligible12a) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiA2 !== null ? $oskiA2 : 'null' }}, 2, false)" title="2-urinish OSKI{{ $oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
-                                                    @if($oskiA2 !== null)<span class="font-bold text-amber-700">{{ $oskiA2 }}</span>@elseif(!$eligible12a)<span class="text-gray-300 text-xs">—</span>@endif
+                                                @php
+                                                    $oski2Clickable = $eligible12a || ($isSuperAdmin && $oskiA2 !== null);
+                                                    $oski2Handler = $eligible12a
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiA2 !== null ? $oskiA2 : 'null') . ", 2, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 2)";
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $oski2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($oski2Clickable) onclick="{{ $oski2Handler }}" title="{{ $eligible12a ? '2-urinish OSKI' . ($oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish OSKI tahrirlash' }}" @endif>
+                                                    @if($oskiA2 !== null)<span class="font-bold text-amber-700">{{ $oskiA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish OSKI ustuni --}}
                                             @if($showOski3Col)
-                                                <td class="px-1 py-1 text-center {{ $eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'bg-gray-50' }}"
-                                                    @if($eligible12b) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiA3 !== null ? $oskiA3 : 'null' }}, 3, false)" title="3-urinish OSKI{{ $oski2ResitDate ? ' (' . \Carbon\Carbon::parse($oski2ResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
-                                                    @if($oskiA3 !== null)<span class="font-bold text-orange-700">{{ $oskiA3 }}</span>@elseif(!$eligible12b)<span class="text-gray-300 text-xs">—</span>@endif
+                                                @php
+                                                    $oski3Clickable = $eligible12b || ($isSuperAdmin && $oskiA3 !== null);
+                                                    $oski3Handler = $eligible12b
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiA3 !== null ? $oskiA3 : 'null') . ", 3, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 3)";
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $oski3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($oski3Clickable) onclick="{{ $oski3Handler }}" title="{{ $eligible12b ? '3-urinish OSKI' . ($oski2ResitDate ? ' (' . \Carbon\Carbon::parse($oski2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish OSKI tahrirlash' }}" @endif>
+                                                    @if($oskiA3 !== null)<span class="font-bold text-orange-700">{{ $oskiA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
-                                            {{-- Asosiy Test — sababli orqali tahrirlash mumkin --}}
-                                            <td class="px-1 py-1 text-center {{ $isTestSababli ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
-                                                @if($isTestSababli) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }}, 1, true)" title="Sababli Test — bahoni kiriting" @elseif(!empty($other['test_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
+                                            {{-- Asosiy Test — sababli yoki superadmin orqali tahrirlash --}}
+                                            @php
+                                                $testClickable = $isTestSababli || ($isSuperAdmin && $testRounded !== null);
+                                                $testClickHandler = $isTestSababli
+                                                    ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
+                                                    : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
+                                                $testTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
+                                                    : ($isSuperAdmin && $testRounded !== null ? 'Superadmin: Test bahosini o\'zgartirish'
+                                                        : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
+                                            @endphp
+                                            <td class="px-1 py-1 text-center {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
+                                                @if($testClickable) onclick="{{ $testClickHandler }}" @endif
+                                                @if($testTitle) title="{{ $testTitle }}" @endif>
                                                 @if($testRounded !== null)
                                                     <span class="font-bold {{ $isTestSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $testRounded }}</span>
                                                 @endif
                                             </td>
                                             {{-- 2-urinish Test ustuni --}}
                                             @if($showTest2Col)
-                                                <td class="px-1 py-1 text-center {{ $eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'bg-gray-50' }}"
-                                                    @if($eligible12a) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testA2 !== null ? $testA2 : 'null' }}, 2, false)" title="2-urinish Test{{ $testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
-                                                    @if($testA2 !== null)<span class="font-bold text-amber-700">{{ $testA2 }}</span>@elseif(!$eligible12a)<span class="text-gray-300 text-xs">—</span>@endif
+                                                @php
+                                                    $test2Clickable = $eligible12a || ($isSuperAdmin && $testA2 !== null);
+                                                    $test2Handler = $eligible12a
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testA2 !== null ? $testA2 : 'null') . ", 2, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 2)";
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $test2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($test2Clickable) onclick="{{ $test2Handler }}" title="{{ $eligible12a ? '2-urinish Test' . ($testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish Test tahrirlash' }}" @endif>
+                                                    @if($testA2 !== null)<span class="font-bold text-amber-700">{{ $testA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish Test ustuni --}}
                                             @if($showTest3Col)
-                                                <td class="px-1 py-1 text-center {{ $eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'bg-gray-50' }}"
-                                                    @if($eligible12b) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testA3 !== null ? $testA3 : 'null' }}, 3, false)" title="3-urinish Test{{ $test2ResitDate ? ' (' . \Carbon\Carbon::parse($test2ResitDate)->format('d.m.Y') . ')' : '' }}" @endif>
-                                                    @if($testA3 !== null)<span class="font-bold text-orange-700">{{ $testA3 }}</span>@elseif(!$eligible12b)<span class="text-gray-300 text-xs">—</span>@endif
+                                                @php
+                                                    $test3Clickable = $eligible12b || ($isSuperAdmin && $testA3 !== null);
+                                                    $test3Handler = $eligible12b
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testA3 !== null ? $testA3 : 'null') . ", 3, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 3)";
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $test3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($test3Clickable) onclick="{{ $test3Handler }}" title="{{ $eligible12b ? '3-urinish Test' . ($test2ResitDate ? ' (' . \Carbon\Carbon::parse($test2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish Test tahrirlash' }}" @endif>
+                                                    @if($testA3 !== null)<span class="font-bold text-orange-700">{{ $testA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
@@ -4050,6 +4138,57 @@
             });
             function blurHandler() { if (!saving) save(); }
             input.addEventListener('blur', blurHandler);
+        }
+
+        // Superadmin: OSKI yoki Test bahosini bevosita o'zgartirish
+        // (sababli ariza yoki resit zarurati bo'lmasdan).
+        function superadminEditExam(cellTd, hemisId, subjectId, semesterCode, ttype, attempt) {
+            if (currentEditingCell) return;
+            const span = cellTd.querySelector('span.font-bold');
+            const currentVal = span ? span.textContent.trim() : '';
+            const yn = ttype == 101 ? 'OSKI' : 'Test';
+            const attLabel = attempt === 1 ? '' : ' (' + attempt + '-urinish)';
+            const raw = prompt('Superadmin: ' + yn + attLabel + ' bahosini kiriting (0–100):', currentVal);
+            if (raw === null) return;
+            const val = parseFloat(raw);
+            if (isNaN(val) || val < 0 || val > 100) {
+                alert('Baho 0 va 100 oralig\'ida bo\'lishi kerak.');
+                return;
+            }
+            currentEditingCell = cellTd;
+            const originalHTML = cellTd.innerHTML;
+            cellTd.innerHTML = '<span class="text-gray-500 text-xs">...</span>';
+
+            fetch('{{ route("admin.journal.superadmin-edit-exam-grade") }}', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json','X-CSRF-TOKEN':'{{ csrf_token() }}','Accept':'application/json'},
+                body: JSON.stringify({
+                    student_hemis_id: hemisId,
+                    subject_id: subjectId,
+                    semester_code: semesterCode,
+                    training_type_code: ttype,
+                    attempt: attempt,
+                    grade: val,
+                })
+            })
+            .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+            .then(({ ok, data }) => {
+                if (ok && data.success) {
+                    const rounded = Math.round(data.grade);
+                    const colorClass = attempt === 2 ? 'text-amber-700'
+                                     : attempt === 3 ? 'text-orange-700'
+                                     : 'text-blue-600';
+                    cellTd.innerHTML = '<span class="font-bold ' + colorClass + '">' + rounded + '</span>';
+                } else {
+                    alert(data.message || 'Xatolik');
+                    cellTd.innerHTML = originalHTML;
+                }
+            })
+            .catch(() => {
+                alert('Tarmoq xatosi');
+                cellTd.innerHTML = originalHTML;
+            })
+            .finally(() => { currentEditingCell = null; });
         }
 
         // Retake grade functionality - Excel-like inline editing

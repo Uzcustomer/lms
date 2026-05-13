@@ -80,26 +80,24 @@ class RetakeApplicationWindow extends Model
     }
 
     /**
-     * Talabaning oynalarini tanlash. Agar talabaning fakulteti uzatilsa,
-     * shu fakultetga (yoki fakulteti belgilanmagan eski yozuvlarga) tegishli
-     * oynalar qaytariladi. Shu bilan bir xil yo'nalish/kurs uchun turli
-     * fakultetlarda alohida oynalar bo'lganda har talaba o'z fakulteti
-     * oynasiga yo'naltiriladi.
+     * Talabaning oynalarini tanlash.
+     *
+     * Tarixda fakultet filtri qo'shilgandi, lekin Student.department_id va
+     * window.department_hemis_id qiymatlari HEMIS ma'lumotlar farqi yoki
+     * admin tanlov nuanslari tufayli aniq mos kelmasligi mumkin. Bu sabab
+     * talaba ariza bera olmaydigan holatga tushardi.
+     *
+     * Endi faqat (yo'nalish + kurs) bo'yicha mos keluvchi oyna qaytariladi.
+     * Talabaning haqiqiy fakulteti `Student.department_id` orqali alohida
+     * saqlanadi va guruhlashda ishlatiladi — bu yerda zarurati yo'q.
+     *
+     * Eslatma: `$studentDepartmentHemisId` parametri orqaga moslik uchun
+     * saqlanadi, ammo filtr sifatida ishlatilmaydi.
      */
     public function scopeForStudent($query, int $specialtyId, string $levelCode, ?string $studentDepartmentHemisId = null)
     {
-        $query->where('specialty_id', $specialtyId)
+        return $query->where('specialty_id', $specialtyId)
             ->where('level_code', $levelCode);
-
-        if ($studentDepartmentHemisId !== null && $studentDepartmentHemisId !== '') {
-            $query->where(function ($q) use ($studentDepartmentHemisId) {
-                $q->where('department_hemis_id', $studentDepartmentHemisId)
-                    ->orWhereNull('department_hemis_id')
-                    ->orWhere('department_hemis_id', '');
-            });
-        }
-
-        return $query;
     }
 
     /**

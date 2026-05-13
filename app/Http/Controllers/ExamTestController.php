@@ -485,6 +485,7 @@ class ExamTestController extends Controller
                         'subject_code' => $exam_test->subject->subject_code,
                         'training_type_code' => 102,
                         'training_type_name' => "Yakuniy test",
+                        'attempt' => (int) ($exam_test->shakl ?? 1),
                         'employee_id' => "0",
                         'employee_name' => auth()->user()->name,
                         'lesson_pair_name' => "",

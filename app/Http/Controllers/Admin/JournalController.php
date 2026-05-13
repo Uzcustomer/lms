@@ -3280,20 +3280,35 @@ class JournalController extends Controller
                 ->where('semester_code', $data['semester_code'])
                 ->first();
 
-            // Joriy o'quv yili — agar shu talaba+fan bo'yicha hech qanday template
-            // bo'lmasa, semester_codedan kelib chiqib aniqlaymiz. Aks holda
-            // education_year_code NULL qoladi va sahifa qayta yuklanganda
-            // jurnaldagi otherGrades filtri yangi yozuvni tashlab yuboradi.
+            // Joriy o'quv yili — jurnal show() ishlatadigan logikasiga moslab
+            // schedules jadvalidan eng so'nggi dars sanasi orqali aniqlaymiz.
+            // Bu otherGrades filtri (education_year_code) bilan mos kelishi
+            // shart, aks holda yangi yozuv sahifada ko'rinmay qoladi.
             $eduYearCode = $template->education_year_code ?? null;
             $eduYearName = $template->education_year_name ?? null;
-            if ($eduYearCode === null) {
-                $semRow = DB::table('semesters')
-                    ->where('code', $data['semester_code'])
-                    ->orderByDesc('education_year_code')
+            if ($eduYearCode === null && $student) {
+                $schedYear = DB::table('schedules')
+                    ->where('group_id', $student->group_id)
+                    ->where('subject_id', $data['subject_id'])
+                    ->where('semester_code', $data['semester_code'])
+                    ->whereNull('deleted_at')
+                    ->whereNotNull('education_year_code')
+                    ->orderBy('lesson_date', 'desc')
+                    ->select('education_year_code', 'education_year_name')
                     ->first();
-                if ($semRow) {
-                    $eduYearCode = $semRow->education_year_code ?? null;
-                    $eduYearName = $semRow->education_year_name ?? null;
+                if ($schedYear) {
+                    $eduYearCode = $schedYear->education_year_code;
+                    $eduYearName = $schedYear->education_year_name ?? $eduYearName;
+                }
+            }
+            if ($eduYearCode === null && $student) {
+                $grp = DB::table('groups')->where('group_hemis_id', $student->group_id)->first();
+                if ($grp) {
+                    $curr = DB::table('curricula')->where('curricula_hemis_id', $grp->curriculum_hemis_id)->first();
+                    if ($curr) {
+                        $eduYearCode = $curr->education_year_code ?? null;
+                        $eduYearName = $curr->education_year_name ?? $eduYearName;
+                    }
                 }
             }
 

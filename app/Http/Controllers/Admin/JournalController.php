@@ -3276,10 +3276,62 @@ class JournalController extends Controller
             ->get();
 
         if ($rows->isEmpty()) {
+            // Yozuv yo'q — superadmin uchun yangisini yaratamiz. Ko'pchilik
+            // bog'liq ustunlarni shu fan/talaba uchun mavjud boshqa yozuvdan
+            // (har qanday training_type) nusxa olamiz, aks holda standart
+            // qiymatlardan foydalanamiz.
+            $template = DB::table('student_grades')
+                ->where('student_hemis_id', $data['student_hemis_id'])
+                ->where('subject_id', $data['subject_id'])
+                ->where('semester_code', $data['semester_code'])
+                ->whereNull('deleted_at')
+                ->first();
+
+            $student = DB::table('students')->where('hemis_id', $data['student_hemis_id'])->first();
+            $subject = DB::table('curriculum_subjects')
+                ->where('subject_id', $data['subject_id'])
+                ->where('semester_code', $data['semester_code'])
+                ->first();
+
+            $ttype = (int) $data['training_type_code'];
+            $typeName = $ttype === 101 ? 'OSKI' : 'YN test';
+
+            $insertId = DB::table('student_grades')->insertGetId([
+                'hemis_id'             => 0,
+                'student_id'           => $template->student_id ?? ($student->id ?? 0),
+                'student_hemis_id'     => $data['student_hemis_id'],
+                'semester_code'        => $data['semester_code'],
+                'semester_name'        => $template->semester_name ?? ($subject->semester_name ?? ''),
+                'education_year_code'  => $template->education_year_code ?? null,
+                'education_year_name'  => $template->education_year_name ?? null,
+                'subject_schedule_id'  => $template->subject_schedule_id ?? 0,
+                'subject_id'           => $data['subject_id'],
+                'subject_name'         => $template->subject_name ?? ($subject->subject_name ?? ''),
+                'subject_code'         => $template->subject_code ?? ($subject->subject_code ?? ''),
+                'training_type_code'   => $ttype,
+                'training_type_name'   => $typeName,
+                'employee_id'          => 0,
+                'employee_name'        => auth()->user()?->name ?? 'Superadmin',
+                'graded_by_user_id'    => auth()->id(),
+                'lesson_pair_code'     => '1',
+                'lesson_pair_name'     => 'Superadmin',
+                'lesson_pair_start_time' => '00:00',
+                'lesson_pair_end_time'   => '00:00',
+                'grade'                => $data['grade'],
+                'lesson_date'          => null,
+                'attempt'              => $data['attempt'],
+                'status'               => 'recorded',
+                'created_at_api'       => now(),
+                'created_at'           => now(),
+                'updated_at'           => now(),
+            ]);
+
             return response()->json([
-                'success' => false,
-                'message' => 'Bu talaba uchun shu YN turida baho yozuvi topilmadi.',
-            ], 404);
+                'success' => true,
+                'grade'   => (float) $data['grade'],
+                'created' => true,
+                'id'      => $insertId,
+            ]);
         }
 
         DB::table('student_grades')

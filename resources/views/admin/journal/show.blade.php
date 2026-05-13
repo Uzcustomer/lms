@@ -1336,7 +1336,7 @@
                                                 @if($oskiClickable) onclick="{{ $oskiClickHandler }}" @endif
                                                 @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
-                                                    <span class="font-bold {{ $isOskiSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $oskiRounded }}</span>
+                                                    <span class="font-bold {{ $oskiRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isOskiSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $oskiRounded }}</span>
                                                 @elseif($isSuperAdmin)
                                                     <span class="text-gray-300 text-xs">+</span>
                                                 @endif
@@ -1356,7 +1356,7 @@
                                                 <td class="px-1 py-1 text-center {{ $oski2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($oski2Clickable) onclick="{{ $oski2Handler }}" @endif
                                                     title="{{ $oski2Title }}">
-                                                    @if($oskiA2 !== null)<span class="font-bold text-amber-700">{{ $oskiA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($oskiA2 !== null)<span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $oskiA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish OSKI ustuni --}}
@@ -1374,7 +1374,7 @@
                                                 <td class="px-1 py-1 text-center {{ $oski3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($oski3Clickable) onclick="{{ $oski3Handler }}" @endif
                                                     title="{{ $oski3Title }}">
-                                                    @if($oskiA3 !== null)<span class="font-bold text-orange-700">{{ $oskiA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($oskiA3 !== null)<span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $oskiA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- Asosiy Test (1-urinish) — sababli yoki superadmin orqali tahrirlash --}}
@@ -1394,7 +1394,7 @@
                                                 @if($testClickable) onclick="{{ $testClickHandler }}" @endif
                                                 @if($testTitle) title="{{ $testTitle }}" @endif>
                                                 @if($testRounded !== null)
-                                                    <span class="font-bold {{ $isTestSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $testRounded }}</span>
+                                                    <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
                                                 @elseif($isSuperAdmin)
                                                     <span class="text-gray-300 text-xs">+</span>
                                                 @endif
@@ -1414,7 +1414,7 @@
                                                 <td class="px-1 py-1 text-center {{ $test2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($test2Clickable) onclick="{{ $test2Handler }}" @endif
                                                     title="{{ $test2Title }}">
-                                                    @if($testA2 !== null)<span class="font-bold text-amber-700">{{ $testA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($testA2 !== null)<span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $testA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish Test ustuni --}}
@@ -1432,7 +1432,7 @@
                                                 <td class="px-1 py-1 text-center {{ $test3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($test3Clickable) onclick="{{ $test3Handler }}" @endif
                                                     title="{{ $test3Title }}">
-                                                    @if($testA3 !== null)<span class="font-bold text-orange-700">{{ $testA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($testA3 !== null)<span class="font-bold {{ $testA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $testA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
@@ -1930,7 +1930,7 @@
                                                 @if($oskiClickable) onclick="{{ $oskiClickHandler }}" @endif
                                                 @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
-                                                    <span class="font-bold {{ $isOskiSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $oskiRounded }}</span>
+                                                    <span class="font-bold {{ $oskiRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isOskiSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $oskiRounded }}</span>
                                                 @elseif($isSuperAdmin)
                                                     <span class="text-gray-300 text-xs">+</span>
                                                 @endif
@@ -1950,7 +1950,7 @@
                                                 <td class="px-1 py-1 text-center {{ $oski2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($oski2Clickable) onclick="{{ $oski2Handler }}" @endif
                                                     title="{{ $oski2Title }}">
-                                                    @if($oskiA2 !== null)<span class="font-bold text-amber-700">{{ $oskiA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($oskiA2 !== null)<span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $oskiA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish OSKI ustuni --}}
@@ -1968,7 +1968,7 @@
                                                 <td class="px-1 py-1 text-center {{ $oski3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($oski3Clickable) onclick="{{ $oski3Handler }}" @endif
                                                     title="{{ $oski3Title }}">
-                                                    @if($oskiA3 !== null)<span class="font-bold text-orange-700">{{ $oskiA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($oskiA3 !== null)<span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $oskiA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- Asosiy Test (1-urinish) — sababli yoki superadmin orqali tahrirlash --}}
@@ -1988,7 +1988,7 @@
                                                 @if($testClickable) onclick="{{ $testClickHandler }}" @endif
                                                 @if($testTitle) title="{{ $testTitle }}" @endif>
                                                 @if($testRounded !== null)
-                                                    <span class="font-bold {{ $isTestSababli ? 'text-violet-700' : 'text-blue-600' }}">{{ $testRounded }}</span>
+                                                    <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
                                                 @elseif($isSuperAdmin)
                                                     <span class="text-gray-300 text-xs">+</span>
                                                 @endif
@@ -2008,7 +2008,7 @@
                                                 <td class="px-1 py-1 text-center {{ $test2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($test2Clickable) onclick="{{ $test2Handler }}" @endif
                                                     title="{{ $test2Title }}">
-                                                    @if($testA2 !== null)<span class="font-bold text-amber-700">{{ $testA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($testA2 !== null)<span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $testA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish Test ustuni --}}
@@ -2026,7 +2026,7 @@
                                                 <td class="px-1 py-1 text-center {{ $test3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($test3Clickable) onclick="{{ $test3Handler }}" @endif
                                                     title="{{ $test3Title }}">
-                                                    @if($testA3 !== null)<span class="font-bold text-orange-700">{{ $testA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($testA3 !== null)<span class="font-bold {{ $testA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $testA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>

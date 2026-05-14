@@ -305,6 +305,7 @@
                                     <th class="sortable" data-col="11" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="12" style="width:120px;text-align:center;">YN yuborilgan <span class="sort-icon"></span></th>
                                     <th style="width:160px;text-align:center;">Test vaqti</th>
+                                    <th style="width:150px;text-align:center;">Moodle holati</th>
                                 </tr>
                                 <tr class="filter-header-row">
                                     <th></th>
@@ -334,6 +335,14 @@
                                         </select>
                                     </th>
                                     <th></th>
+                                    <th>
+                                        <select class="col-filter color-filter" data-col="14" data-filter-type="color">
+                                            <option value="">Barchasi</option>
+                                            <option value="green" data-color="#16a34a">Topildi</option>
+                                            <option value="red" data-color="#dc2626">Topilmadi</option>
+                                            <option value="yellow" data-color="#d97706">Xato</option>
+                                        </select>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -420,6 +429,31 @@
                                                             </div>
                                                         @endif
                                                     </div>
+                                            </td>
+                                            <td style="text-align:center;padding:4px 6px;" data-color="{{ ['ok'=>'green','notfound'=>'red','error'=>'yellow'][$item['moodle_status'] ?? ''] ?? '' }}">
+                                                @php $ms = $item['moodle_status'] ?? 'na'; @endphp
+                                                @if($ms === 'na')
+                                                    <span style="color:#cbd5e1;">—</span>
+                                                @else
+                                                    @php
+                                                        $msMap = [
+                                                            'ok'       => ['Topildi', '#dcfce7', '#16a34a'],
+                                                            'notfound' => ['Topilmadi', '#fee2e2', '#991b1b'],
+                                                            'error'    => ['Xato', '#fef3c7', '#92400e'],
+                                                            'pending'  => ['Yuborilmagan', '#f1f5f9', '#64748b'],
+                                                        ];
+                                                        $msInfo = $msMap[$ms] ?? $msMap['pending'];
+                                                    @endphp
+                                                    <span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600;background:{{ $msInfo[1] }};color:{{ $msInfo[2] }};" title="{{ $ms === 'notfound' ? 'Moodle\'da bu nomli quiz topilmadi' : ($ms === 'pending' ? 'Hali Moodle\'ga yuborilmagan (sana qo\'yilmagan)' : '') }}">{{ $msInfo[0] }}</span>
+                                                    @if(!$tcReadOnly && ($item['schedule_id'] ?? null))
+                                                        <form method="POST" action="{{ route($routePrefix . '.academic-schedule.test-center.recheck-moodle') }}" style="display:inline;">
+                                                            @csrf
+                                                            <input type="hidden" name="schedule_id" value="{{ $item['schedule_id'] }}">
+                                                            <input type="hidden" name="yn_type" value="{{ $item['yn_type'] ?? '' }}">
+                                                            <button type="submit" title="Moodle bilan qayta tekshirish" style="margin-left:4px;padding:1px 6px;background:#e2e8f0;border:none;border-radius:5px;font-size:12px;cursor:pointer;">↻</button>
+                                                        </form>
+                                                    @endif
+                                                @endif
                                             </td>
                                         </tr>
                                         @if(($showStudents ?? false) && !empty($item['students']))
@@ -511,6 +545,7 @@
                                                             </div>
                                                         @endif
                                                     </td>
+                                                    <td></td>
                                                 </tr>
                                             @endforeach
                                         @endif

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\ExamSchedule;
 use App\Models\Group;
 use App\Models\HemisQuizResult;
+use App\Models\Semester;
 use App\Models\Student;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
@@ -90,13 +91,13 @@ class MoodleExamBookingService
         // Moodle already told us.
         $quizMiddle = $this->resolveQuizMiddle($schedule, $ynType);
         if ($quizMiddle === null) {
-            // No prior Moodle attempt for this group+subject, so we cannot
-            // derive the real quiz name. Leave it for the proctor to add via
-            // the "Add manual booking" fallback on the Moodle proctor page.
+            // No usable Moodle quiz history for this group, so we cannot derive
+            // the real quiz name. Leave it for the proctor to add via the
+            // "Add manual booking" fallback on the Moodle proctor page.
             return [
                 'ok' => false,
                 'skipped' => true,
-                'reason' => 'no Moodle quiz history for this group+subject - proctor manual booking needed',
+                'reason' => 'no usable Moodle quiz history for this group - proctor manual booking needed',
             ];
         }
 
@@ -172,16 +173,25 @@ class MoodleExamBookingService
 
     /**
      * Resolve the stable "middle" of the Moodle quiz name for this
-     * (group, subject): the subject + semester + faculty + direction segment,
+     * (group, subject): the "{subject}_{N-sem}_{faculty}_{direction}" segment,
      * which is identical across language and attempt number.
      *
-     * Source of truth = hemis_quiz_results.attempt_name, i.e. the real quiz
-     * names Moodle pushed back during the Diagnostika results import. We pick a
-     * recorded name of the same yn_type and strip the "{type} ({lang})_" prefix
-     * and the trailing "_{shakl}" so it can be rebuilt for any language/attempt.
+     * Source of truth = hemis_quiz_results.attempt_name, the real quiz names
+     * Moodle pushed back during the Diagnostika results import. cm.idnumber is
+     * empty on the Moodle install and course.idnumber is unreliable, so the
+     * quiz NAME is the only dependable key.
      *
-     * Returns null when the group has no recorded attempt for this subject in
-     * the matching yn_type - the caller then skips the booking.
+     * Resolution order:
+     *  1. This group already sat a {prefix} ({lang}) quiz for THIS subject -
+     *     replay that exact middle.
+     *  2. First {prefix} for this subject for this group: take the
+     *     "{N-sem}_{faculty}_{direction}" tail from any of the group's recorded
+     *     quiz names in the matching semester and prepend this schedule's
+     *     subject name. The tail is group-specific and identical across
+     *     subjects, so this rebuilds the real Moodle quiz name.
+     *
+     * Returns null when the group has no usable recorded attempt at all - the
+     * caller then skips the booking for a proctor to add manually.
      */
     private function resolveQuizMiddle(ExamSchedule $schedule, string $ynType): ?string
     {
@@ -195,6 +205,8 @@ class MoodleExamBookingService
 
         $prefix = $ynType === 'oski' ? 'OSKI' : 'YN test';
 
+        // 1. This group already has a {prefix} quiz recorded for this subject -
+        //    replay that exact middle.
         $names = HemisQuizResult::query()
             ->where('fan_id', $schedule->subject_id)
             ->whereIn('student_id', $groupStudentIds)
@@ -211,6 +223,48 @@ class MoodleExamBookingService
             }
         }
 
+        // 2. First {prefix} for this group+subject. The "{N-sem}_{faculty}_
+        //    {direction}" tail is group-specific and identical across subjects,
+        //    so lift it off any of the group's recorded quiz names in the same
+        //    semester and prepend this schedule's subject name.
+        $subjectName = trim((string) $schedule->subject_name);
+        $targetNsem = $this->resolveTargetNsem($schedule);
+        if ($subjectName === '' || $targetNsem === null) {
+            return null;
+        }
+
+        $anyNames = HemisQuizResult::query()
+            ->whereIn('student_id', $groupStudentIds)
+            ->whereNotNull('attempt_name')
+            ->where(function ($q) {
+                $q->where('attempt_name', 'LIKE', 'YN test (%')
+                  ->orWhere('attempt_name', 'LIKE', 'OSKI (%')
+                  ->orWhere('attempt_name', 'LIKE', 'JN (%');
+            })
+            ->orderByDesc('synced_at')
+            ->orderByDesc('id')
+            ->pluck('attempt_name');
+
+        foreach ($anyNames as $name) {
+            $tail = $this->extractMiddleTail((string) $name);
+            if ($tail !== null && str_starts_with($tail, $targetNsem . '_')) {
+                return $subjectName . '_' . $tail;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * The "{N}-sem" token for this schedule's semester, e.g. "2-sem".
+     * The semesters table stores names like "2-semestr".
+     */
+    private function resolveTargetNsem(ExamSchedule $schedule): ?string
+    {
+        $name = Semester::where('code', $schedule->semester_code)->value('name');
+        if ($name && preg_match('/(\d+)/', (string) $name, $m)) {
+            return $m[1] . '-sem';
+        }
         return null;
     }
 
@@ -226,6 +280,22 @@ class MoodleExamBookingService
         if (preg_match($pattern, trim($quizName), $m)) {
             $middle = trim($m[1]);
             return $middle !== '' ? $middle : null;
+        }
+        return null;
+    }
+
+    /**
+     * Lift the "{N-sem}_{faculty}_{direction}" tail off a full Moodle quiz
+     * name (any type - YN test / OSKI / JN), dropping the type/lang prefix,
+     * the subject name and the trailing "_{shakl}".
+     *
+     * "YN test (uzb)_Gistologiya, sitologiya_2-sem_DAV-2_D_1-urinish" => "2-sem_DAV-2_D"
+     * "JN (uzb)_8_Rus tili_2-sem_DAV-2_D_13-mavzu"                    => "2-sem_DAV-2_D"
+     */
+    private function extractMiddleTail(string $quizName): ?string
+    {
+        if (preg_match('/_(\d+-sem_.+)_[^_]+$/u', trim($quizName), $m)) {
+            return trim($m[1]);
         }
         return null;
     }

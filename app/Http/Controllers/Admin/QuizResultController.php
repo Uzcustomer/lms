@@ -1937,6 +1937,23 @@ class QuizResultController extends Controller
                 continue;
             }
 
+            // Semestr filtri — natija semestri talaba joriy semestriga mos kelmasa
+            // (masalan 5-semestr natijasi 6-semestrga, yoki aksincha) — yuklamaymiz.
+            // Diagnostika jadvalidagi SEMESTR ustuni shu mantiq asosida.
+            $resultSemNum = null;
+            if (!empty($result->semester) && preg_match('/(\d+)/', (string) $result->semester, $sm)) {
+                $resultSemNum = (int) $sm[1];
+            }
+            $studentSemNum = null;
+            if (!empty($student->semester_name) && preg_match('/(\d+)/', (string) $student->semester_name, $ssm)) {
+                $studentSemNum = (int) $ssm[1];
+            }
+            if ($resultSemNum !== null && $studentSemNum !== null && $resultSemNum !== $studentSemNum) {
+                $rowInfo['error'] = "Semestr mos kelmadi: natija {$resultSemNum}-semestr, talaba {$studentSemNum}-semestrda — yuklanmadi";
+                $errors[] = $rowInfo;
+                continue;
+            }
+
             $group = Group::where('group_hemis_id', $student->group_id)->first();
             if (!$group) {
                 $rowInfo['error'] = "Talaba guruhida guruh topilmadi";

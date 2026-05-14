@@ -42,6 +42,18 @@ class ExamSchedule extends Model
         'test_moodle_synced_at',
         'test_moodle_response',
         'test_moodle_error',
+        'oski_resit_moodle_synced_at',
+        'oski_resit_moodle_response',
+        'oski_resit_moodle_error',
+        'oski_resit2_moodle_synced_at',
+        'oski_resit2_moodle_response',
+        'oski_resit2_moodle_error',
+        'test_resit_moodle_synced_at',
+        'test_resit_moodle_response',
+        'test_resit_moodle_error',
+        'test_resit2_moodle_synced_at',
+        'test_resit2_moodle_response',
+        'test_resit2_moodle_error',
         'test_assignment_mode',
         'oski_assignment_mode',
     ];
@@ -59,6 +71,14 @@ class ExamSchedule extends Model
         'test_moodle_synced_at' => 'datetime',
         'oski_moodle_response' => 'array',
         'test_moodle_response' => 'array',
+        'oski_resit_moodle_synced_at' => 'datetime',
+        'oski_resit2_moodle_synced_at' => 'datetime',
+        'test_resit_moodle_synced_at' => 'datetime',
+        'test_resit2_moodle_synced_at' => 'datetime',
+        'oski_resit_moodle_response' => 'array',
+        'oski_resit2_moodle_response' => 'array',
+        'test_resit_moodle_response' => 'array',
+        'test_resit2_moodle_response' => 'array',
     ];
 
     public function department()
@@ -107,30 +127,42 @@ class ExamSchedule extends Model
      * exam silently open. Filling in the time later re-pushes as a full
      * booking; clearing the time again re-pushes as an unscheduled hold.
      *
-     * Only attempt-1 columns are watched. Resit columns
-     * (oski_resit_*, test_resit_*, etc.) belong to attempt 2/3 and are
-     * not supported by the current book_group_exam web service, so we
-     * deliberately leave them alone.
+     * All three attempts are watched: attempt 1 uses the oski_* / test_*
+     * columns (with the N/A flag), attempts 2 and 3 use the *_resit_* /
+     * *_resit2_* columns (resits have no N/A). Each attempt is pushed as
+     * its own Moodle quiz ("..._{attempt}-urinish").
      */
     protected static function booted(): void
     {
         static::saved(function (self $schedule) {
             foreach (['oski', 'test'] as $yn) {
-                $watched = [$yn . '_date', $yn . '_time', $yn . '_na'];
-                if (!$schedule->wasChanged($watched)) {
-                    continue;
+                // attempt => column prefix for that attempt's date/time.
+                $attempts = [
+                    1 => $yn,
+                    2 => $yn . '_resit',
+                    3 => $yn . '_resit2',
+                ];
+                foreach ($attempts as $attempt => $prefix) {
+                    $watched = [$prefix . '_date', $prefix . '_time'];
+                    if ($attempt === 1) {
+                        $watched[] = $yn . '_na';
+                    }
+                    if (!$schedule->wasChanged($watched)) {
+                        continue;
+                    }
+                    // N/A applies to attempt 1 only; resits have no N/A flag.
+                    if ($attempt === 1 && !empty($schedule->{$yn . '_na'})) {
+                        continue;
+                    }
+                    // No exam date at all -> nothing bookable.
+                    if (empty($schedule->{$prefix . '_date'})) {
+                        continue;
+                    }
+                    // Date set but no time yet -> unscheduled hold;
+                    // date + time set -> full booking.
+                    $unscheduled = empty($schedule->{$prefix . '_time'});
+                    BookMoodleGroupExam::dispatch($schedule->id, $yn, $unscheduled, $attempt);
                 }
-                // Nothing bookable: flagged N/A, or no exam date at all.
-                if (
-                    !empty($schedule->{$yn . '_na'}) ||
-                    empty($schedule->{$yn . '_date'})
-                ) {
-                    continue;
-                }
-                // Date set but no time yet -> push an unscheduled hold;
-                // date + time set -> push a full booking.
-                $unscheduled = empty($schedule->{$yn . '_time'});
-                BookMoodleGroupExam::dispatch($schedule->id, $yn, $unscheduled);
             }
         });
     }

@@ -19,21 +19,33 @@ class MoodleExamBookingService
     ) {}
 
     /**
-     * Book a single (schedule, yn_type) on Moodle and persist the outcome on the schedule.
+     * Book a single (schedule, yn_type, attempt) on Moodle and persist the
+     * outcome on the schedule.
      *
      * @param string $ynType "oski" or "test"
      * @param bool $unscheduled When true, push a date-only "unscheduled" hold:
      *                          Moodle records the booking and blocks the quiz,
      *                          but no time window / start cutoff is sent. Used
      *                          when the schedule has a date but no exam time yet.
+     * @param int $attempt 1 = attempt-1 columns (oski_ / test_), 2 = resit
+     *                     columns (_resit_), 3 = resit2 columns (_resit2_).
+     *                     Each attempt is a separate Moodle quiz, named
+     *                     "..._{attempt}-urinish".
      * @return array{ok:bool, skipped?:bool, reason?:string, calls?:array}
      */
-    public function book(ExamSchedule $schedule, string $ynType, bool $unscheduled = false): array
+    public function book(ExamSchedule $schedule, string $ynType, bool $unscheduled = false, int $attempt = 1): array
     {
         $ynType = strtolower($ynType);
         if (!in_array($ynType, ['oski', 'test'], true)) {
-            return $this->fail($schedule, $ynType, 'invalid yn_type: ' . $ynType);
+            return ['ok' => false, 'error' => 'invalid yn_type: ' . $ynType, 'calls' => []];
         }
+        if (!in_array($attempt, [1, 2, 3], true)) {
+            return ['ok' => false, 'error' => 'invalid attempt: ' . $attempt, 'calls' => []];
+        }
+
+        // Column prefix for this attempt: 1 = oski/test, 2 = *_resit, 3 = *_resit2.
+        // The *_date / *_time / *_moodle_* columns all share this prefix.
+        $prefix = $this->attemptPrefix($ynType, $attempt);
 
         $url = $this->wsUrl ?: (string) config('services.moodle.ws_url');
         $token = $this->wsToken ?: (string) config('services.moodle.ws_token');
@@ -41,11 +53,11 @@ class MoodleExamBookingService
             return ['ok' => false, 'skipped' => true, 'reason' => 'Moodle WS not configured'];
         }
 
-        $dateField = $ynType . '_date';
-        $timeField = $ynType . '_time';
-        $naField = $ynType . '_na';
+        $dateField = $prefix . '_date';
+        $timeField = $prefix . '_time';
 
-        if ($schedule->{$naField}) {
+        // The N/A flag exists for attempt 1 only — resits have no N/A.
+        if ($attempt === 1 && $schedule->{$ynType . '_na'}) {
             return ['ok' => false, 'skipped' => true, 'reason' => 'yn marked N/A'];
         }
         if (empty($schedule->{$dateField})) {
@@ -70,7 +82,7 @@ class MoodleExamBookingService
 
             $startsAt = $this->combineDateTime($schedule->{$dateField}, $schedule->{$timeField});
             if (!$startsAt) {
-                return $this->fail($schedule, $ynType, 'cannot parse date/time');
+                return $this->fail($schedule, $prefix, 'cannot parse date/time');
             }
             // The real exam start (e.g. 14:00) — sent as-is so the proctor page
             // shows the LMS time, not the computed +window+buffer cutoff.
@@ -132,14 +144,14 @@ class MoodleExamBookingService
 
         $studentsByLang = $this->studentsByLanguage($schedule->group_hemis_id);
         if (empty($studentsByLang)) {
-            return $this->fail($schedule, $ynType, 'no students in group ' . $schedule->group_hemis_id);
+            return $this->fail($schedule, $prefix, 'no students in group ' . $schedule->group_hemis_id);
         }
 
         $calls = [];
         $allOk = true;
 
         foreach ($studentsByLang as $langCode => $usernames) {
-            $quizName = $this->buildQuizName($ynType, $langCode, $quizMiddle);
+            $quizName = $this->buildQuizName($ynType, $langCode, $quizMiddle, $attempt);
             $payload = [
                 'wstoken' => $token,
                 'wsfunction' => 'local_hemisexport_book_group_exam',
@@ -170,6 +182,7 @@ class MoodleExamBookingService
         $result = [
             'ok' => $allOk,
             'unscheduled' => $unscheduled,
+            'attempt' => $attempt,
             'quiz_middle' => $quizMiddle,
             'fan_id' => $fanId,
             'academic_year' => $academicYear,
@@ -181,9 +194,23 @@ class MoodleExamBookingService
             'calls' => $calls,
         ];
 
-        $this->persistResult($schedule, $ynType, $result);
+        $this->persistResult($schedule, $prefix, $result);
 
         return $result;
+    }
+
+    /**
+     * Column prefix for a (yn_type, attempt) pair — the *_date / *_time /
+     * *_moodle_* columns all share it: attempt 1 = "oski"/"test",
+     * attempt 2 = "*_resit", attempt 3 = "*_resit2".
+     */
+    private function attemptPrefix(string $ynType, int $attempt): string
+    {
+        return match ($attempt) {
+            2 => $ynType . '_resit',
+            3 => $ynType . '_resit2',
+            default => $ynType,
+        };
     }
 
     /**
@@ -356,12 +383,13 @@ class MoodleExamBookingService
     }
 
     /**
-     * Build the target Moodle quiz name for attempt 1 in the given language.
+     * Build the target Moodle quiz name for the given language and attempt,
+     * e.g. "YN test (uzb)_{middle}_2-urinish".
      */
-    private function buildQuizName(string $ynType, string $langCode, string $quizMiddle): string
+    private function buildQuizName(string $ynType, string $langCode, string $quizMiddle, int $attempt = 1): string
     {
         $prefix = $ynType === 'oski' ? 'OSKI' : 'YN test';
-        return $prefix . ' (' . $langCode . ')_' . $quizMiddle . '_1-urinish';
+        return $prefix . ' (' . $langCode . ')_' . $quizMiddle . '_' . $attempt . '-urinish';
     }
 
     /**
@@ -439,9 +467,13 @@ class MoodleExamBookingService
         }
     }
 
-    private function persistResult(ExamSchedule $schedule, string $ynType, array $result): void
+    /**
+     * Persist the push outcome onto the schedule's {$prefix}_moodle_* columns,
+     * where $prefix is the attempt-specific column prefix (oski / oski_resit /
+     * oski_resit2 / test / test_resit / test_resit2).
+     */
+    private function persistResult(ExamSchedule $schedule, string $prefix, array $result): void
     {
-        $prefix = $ynType;
         $errorText = null;
         if (!($result['ok'] ?? false)) {
             $errors = [];
@@ -474,10 +506,10 @@ class MoodleExamBookingService
         ])->save();
     }
 
-    private function fail(ExamSchedule $schedule, string $ynType, string $message): array
+    private function fail(ExamSchedule $schedule, string $prefix, string $message): array
     {
         $result = ['ok' => false, 'error' => $message, 'calls' => []];
-        $this->persistResult($schedule, $ynType, $result);
+        $this->persistResult($schedule, $prefix, $result);
         return $result;
     }
 }

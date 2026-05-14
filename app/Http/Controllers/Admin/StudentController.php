@@ -304,9 +304,49 @@ class StudentController extends Controller
         }
         arsort($socialStats);
 
+        // Fuqaroligi kesimi — citizenship_name × ta'lim turi (stacked bar uchun).
+        $citRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('citizenship_name, education_type_name, COUNT(*) as total')
+            ->groupBy('citizenship_name', 'education_type_name')
+            ->get();
+        // citizenshipStats[citName] = ['total'=>n, 'edu'=>[eduKey=>n]]
+        $citizenshipStats = [];
+        foreach ($citRows as $r) {
+            $cit = trim((string) $r->citizenship_name);
+            if ($cit === '') {
+                $cit = 'Boshqa';
+            }
+            $eduKey = $eduKeyOf((string) $r->education_type_name) ?? 'other';
+            if (!isset($citizenshipStats[$cit])) {
+                $citizenshipStats[$cit] = ['total' => 0, 'edu' => ['bakalavr' => 0, 'magistr' => 0, 'ordinatura' => 0, 'other' => 0]];
+            }
+            $citizenshipStats[$cit]['total'] += (int) $r->total;
+            $citizenshipStats[$cit]['edu'][$eduKey] += (int) $r->total;
+        }
+        uasort($citizenshipStats, fn($a, $b) => $b['total'] <=> $a['total']);
+
+        // Davlat (country) kesimi — eng ko'p mamlakatlar (aylanma chart uchun).
+        $countryRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('country_name, COUNT(*) as total')
+            ->groupBy('country_name')
+            ->orderByDesc('total')
+            ->get();
+        $countryStats = [];
+        foreach ($countryRows as $c) {
+            $name = trim((string) $c->country_name);
+            if ($name === '') {
+                $name = 'Boshqa';
+            }
+            $countryStats[$name] = ($countryStats[$name] ?? 0) + (int) $c->total;
+        }
+        arsort($countryStats);
+
         return view('admin.students.statistics', compact(
             'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals',
-            'socialStats', 'socialHasCategory'
+            'socialStats', 'socialHasCategory',
+            'citizenshipStats', 'countryStats'
         ));
     }
 

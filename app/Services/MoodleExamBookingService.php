@@ -101,6 +101,9 @@ class MoodleExamBookingService
         }
 
         $fanId = (string) $schedule->subject_id;
+        // Academic year lets Moodle drop same-named quizzes left over from a
+        // previous year (the course category name starts with this).
+        $academicYear = (string) ($schedule->education_year ?? '');
 
         $studentsByLang = $this->studentsByLanguage($schedule->group_hemis_id);
         if (empty($studentsByLang)) {
@@ -118,6 +121,7 @@ class MoodleExamBookingService
                 'moodlewsrestformat' => 'json',
                 'quiz_name' => $quizName,
                 'fan_id' => $fanId,
+                'academic_year' => $academicYear,
                 'timeopen' => $timeopen,
                 'timeclose' => $timeclose,
                 'timelimit' => $timelimit,
@@ -140,6 +144,7 @@ class MoodleExamBookingService
             'ok' => $allOk,
             'quiz_middle' => $quizMiddle,
             'fan_id' => $fanId,
+            'academic_year' => $academicYear,
             'timeopen' => $timeopen,
             'timeclose' => $timeclose,
             'timelimit' => $timelimit,

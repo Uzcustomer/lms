@@ -22,9 +22,13 @@ class MoodleExamBookingService
      * Book a single (schedule, yn_type) on Moodle and persist the outcome on the schedule.
      *
      * @param string $ynType "oski" or "test"
+     * @param bool $unscheduled When true, push a date-only "unscheduled" hold:
+     *                          Moodle records the booking and blocks the quiz,
+     *                          but no time window / start cutoff is sent. Used
+     *                          when the schedule has a date but no exam time yet.
      * @return array{ok:bool, skipped?:bool, reason?:string, calls?:array}
      */
-    public function book(ExamSchedule $schedule, string $ynType): array
+    public function book(ExamSchedule $schedule, string $ynType, bool $unscheduled = false): array
     {
         $ynType = strtolower($ynType);
         if (!in_array($ynType, ['oski', 'test'], true)) {
@@ -44,43 +48,58 @@ class MoodleExamBookingService
         if ($schedule->{$naField}) {
             return ['ok' => false, 'skipped' => true, 'reason' => 'yn marked N/A'];
         }
-        if (empty($schedule->{$dateField}) || empty($schedule->{$timeField})) {
-            return ['ok' => false, 'skipped' => true, 'reason' => 'date or time missing'];
+        if (empty($schedule->{$dateField})) {
+            return ['ok' => false, 'skipped' => true, 'reason' => 'date missing'];
         }
 
-        $startsAt = $this->combineDateTime($schedule->{$dateField}, $schedule->{$timeField});
-        if (!$startsAt) {
-            return $this->fail($schedule, $ynType, 'cannot parse date/time');
+        if ($unscheduled) {
+            // Date-only hold: the test-centre has not picked a time yet. No
+            // window / cutoff is computed - Moodle records the booking as
+            // "unscheduled" and keeps the quiz closed until a full booking
+            // (with real times) replaces it.
+            $timeopen = 0;
+            $timeclose = 0;
+            $timelimit = 0;
+            $startCutoff = 0;
+        } else {
+            if (empty($schedule->{$timeField})) {
+                return ['ok' => false, 'skipped' => true, 'reason' => 'date or time missing'];
+            }
+
+            $startsAt = $this->combineDateTime($schedule->{$dateField}, $schedule->{$timeField});
+            if (!$startsAt) {
+                return $this->fail($schedule, $ynType, 'cannot parse date/time');
+            }
+
+            // open_window_minutes = +/- entry grace (early/late cutoff for FaceID
+            // login & quiz entry), independent of slot duration. Default 10.
+            $window = max(1, (int) config('services.moodle.open_window_minutes', 10));
+            // attempt_start_buffer_minutes = extra grace AFTER the late entry
+            // cutoff during which the student is still allowed to click "Start
+            // attempt". Solves the "FaceID at 15:44, but the page navigation /
+            // click takes 30 sec, hits the start_cutoff at 15:45 and the quiz
+            // refuses" problem. Doesn't extend the FaceID login window itself
+            // (that's still controlled by $window), only the quiz start cutoff
+            // on Moodle side.
+            $attemptBuffer = max(0, (int) config('services.moodle.attempt_start_buffer_minutes', 2));
+            $capacity = ExamCapacityService::getSettingsForDate($startsAt->toDateString());
+            $duration = max(1, (int) ($capacity['test_duration_minutes'] ?? 15));
+            // closeBuffer = how long after the late-entry cutoff the quiz stays
+            // open, so a student starting at the cutoff still has the full
+            // duration. We default it to the exam duration; an env override
+            // remains available if a site wants something different.
+            $closeBuffer = max(1, (int) config('services.moodle.close_buffer_minutes', $duration));
+
+            $timeopen = $startsAt->copy()->subMinutes($window)->getTimestamp();
+            // After exam_time + window + attemptBuffer: no NEW attempt starts.
+            // The +attemptBuffer minutes are the grace between a FaceID login
+            // landing right on the late-entry edge and the student actually
+            // clicking "Start attempt".
+            $startCutoff = $startsAt->copy()->addMinutes($window + $attemptBuffer)->getTimestamp();
+            // timeclose is wider so in-progress attempts run their full Moodle timelimit.
+            $timeclose = $startsAt->copy()->addMinutes($window + $attemptBuffer + $closeBuffer)->getTimestamp();
+            $timelimit = max(0, (int) config('services.moodle.timelimit_seconds', 0));
         }
-
-        // open_window_minutes = +/- entry grace (early/late cutoff for FaceID
-        // login & quiz entry), independent of slot duration. Default 10.
-        $window = max(1, (int) config('services.moodle.open_window_minutes', 10));
-        // attempt_start_buffer_minutes = extra grace AFTER the late entry
-        // cutoff during which the student is still allowed to click "Start
-        // attempt". Solves the "FaceID at 15:44, but the page navigation /
-        // click takes 30 sec, hits the start_cutoff at 15:45 and the quiz
-        // refuses" problem. Doesn't extend the FaceID login window itself
-        // (that's still controlled by $window), only the quiz start cutoff
-        // on Moodle side.
-        $attemptBuffer = max(0, (int) config('services.moodle.attempt_start_buffer_minutes', 2));
-        $capacity = ExamCapacityService::getSettingsForDate($startsAt->toDateString());
-        $duration = max(1, (int) ($capacity['test_duration_minutes'] ?? 15));
-        // closeBuffer = how long after the late-entry cutoff the quiz stays
-        // open, so a student starting at the cutoff still has the full
-        // duration. We default it to the exam duration; an env override
-        // remains available if a site wants something different.
-        $closeBuffer = max(1, (int) config('services.moodle.close_buffer_minutes', $duration));
-
-        $timeopen = $startsAt->copy()->subMinutes($window)->getTimestamp();
-        // After exam_time + window + attemptBuffer: no NEW attempt starts.
-        // The +attemptBuffer minutes are the grace between a FaceID login
-        // landing right on the late-entry edge and the student actually
-        // clicking "Start attempt".
-        $startCutoff = $startsAt->copy()->addMinutes($window + $attemptBuffer)->getTimestamp();
-        // timeclose is wider so in-progress attempts run their full Moodle timelimit.
-        $timeclose = $startsAt->copy()->addMinutes($window + $attemptBuffer + $closeBuffer)->getTimestamp();
-        $timelimit = max(0, (int) config('services.moodle.timelimit_seconds', 0));
 
         // Resolve the stable middle of the Moodle quiz name - subject + semester
         // + faculty + direction - from the real quiz names Moodle itself
@@ -127,6 +146,7 @@ class MoodleExamBookingService
                 'timeclose' => $timeclose,
                 'timelimit' => $timelimit,
                 'start_cutoff' => $startCutoff,
+                'unscheduled' => $unscheduled ? 1 : 0,
                 'students' => array_values($usernames),
             ];
 
@@ -143,6 +163,7 @@ class MoodleExamBookingService
 
         $result = [
             'ok' => $allOk,
+            'unscheduled' => $unscheduled,
             'quiz_middle' => $quizMiddle,
             'fan_id' => $fanId,
             'academic_year' => $academicYear,

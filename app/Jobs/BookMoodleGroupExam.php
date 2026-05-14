@@ -31,9 +31,16 @@ class BookMoodleGroupExam implements ShouldQueue
         'invalid_parameter_exception',
     ];
 
+    /**
+     * @param bool $unscheduled When true, push a date-only "unscheduled" hold
+     *                          (Moodle blocks the quiz, no time window) instead
+     *                          of a full booking. Set by ExamSchedule::booted()
+     *                          when the exam has a date but no time yet.
+     */
     public function __construct(
         public int $examScheduleId,
         public string $ynType,
+        public bool $unscheduled = false,
     ) {}
 
     public function handle(MoodleExamBookingService $service): void
@@ -47,7 +54,7 @@ class BookMoodleGroupExam implements ShouldQueue
             return;
         }
 
-        $result = $service->book($schedule, $this->ynType);
+        $result = $service->book($schedule, $this->ynType, $this->unscheduled);
 
         // Skipped (no config / na / missing time / no quiz history) - do not retry.
         if (!empty($result['skipped'])) {

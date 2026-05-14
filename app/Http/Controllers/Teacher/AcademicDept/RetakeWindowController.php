@@ -307,22 +307,23 @@ class RetakeWindowController extends Controller
             }
         });
 
-        // Avtomatik Telegram xabar: yangi yaratilgan har oyna uchun mos talabalarga
-        $notifiedCount = 0;
+        // Telegram xabar JAVOBDAN KEYIN — sahifa muzlamasligi uchun.
         if (!empty($createdWindowIds)) {
-            $notifier = app(\App\Services\Retake\RetakeNotificationService::class);
-            foreach (RetakeApplicationWindow::whereIn('id', $createdWindowIds)->get() as $win) {
-                try {
-                    $notifiedCount += $notifier->notifyWindowOpened($win);
-                } catch (\Throwable $e) {
-                    \Illuminate\Support\Facades\Log::warning('[Retake] notifyWindowOpened: ' . $e->getMessage());
+            dispatch(function () use ($createdWindowIds) {
+                $notifier = app(\App\Services\Retake\RetakeNotificationService::class);
+                foreach (RetakeApplicationWindow::whereIn('id', $createdWindowIds)->get() as $win) {
+                    try {
+                        $notifier->notifyWindowOpened($win);
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning('[Retake] notifyWindowOpened: ' . $e->getMessage());
+                    }
                 }
-            }
+            })->afterResponse();
         }
 
         $msg = "{$created} ta qabul oynasi yaratildi";
-        if ($notifiedCount > 0) {
-            $msg .= " · {$notifiedCount} talabaga Telegram xabar yuborildi";
+        if (!empty($createdWindowIds)) {
+            $msg .= " · talabalarga Telegram xabar fonida yuborilmoqda";
         }
         if ($skipped > 0) {
             $msg .= ", {$skipped} ta o'tkazib yuborildi (allaqachon mavjud)";
@@ -354,16 +355,22 @@ class RetakeWindowController extends Controller
             return redirect()->back()->withErrors($e->errors());
         }
 
-        // Avtomatik Telegram xabar: sanalar yangilanganda mos talabalarga
-        try {
-            $sent = app(\App\Services\Retake\RetakeNotificationService::class)
-                ->notifyWindowDatesUpdated($window->fresh());
-        } catch (\Throwable $e) {
-            $sent = 0;
-            \Illuminate\Support\Facades\Log::warning('[Retake] notifyWindowDatesUpdated: ' . $e->getMessage());
-        }
+        // Telegram xabarni JAVOBDAN KEYIN yuboramiz — sahifa muzlamasligi uchun.
+        // afterResponse() — HTTP javob brauzerga yuborilgandan so'ng ishga tushadi.
+        $windowId = $window->id;
+        dispatch(function () use ($windowId) {
+            $w = RetakeApplicationWindow::find($windowId);
+            if ($w) {
+                try {
+                    app(\App\Services\Retake\RetakeNotificationService::class)
+                        ->notifyWindowDatesUpdated($w);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('[Retake] notifyWindowDatesUpdated: ' . $e->getMessage());
+                }
+            }
+        })->afterResponse();
 
-        return redirect()->back()->with('success', __("Sanalar yangilandi. {$sent} talabaga Telegram xabar yuborildi."));
+        return redirect()->back()->with('success', __("Sanalar yangilandi. Talabalarga Telegram xabar fonida yuborilmoqda."));
     }
 
     public function destroy(Request $request, int $windowId): RedirectResponse

@@ -40,12 +40,16 @@
                 @else
                     {{-- Xulosa kartalar --}}
                     @php
-                        $totalSlots = $slots->count();
-                        $overflowSlots = $slots->where('overflow', '>', 0)->count();
-                        $fullSlots = $slots->where('usage_percent', '>=', 100)->count();
-                        $totalStudents = $slots->sum('occupied');
-                        $totalSubmitted = $slots->sum('submitted');
-                        $totalRemaining = $slots->sum('remaining');
+                        $scheduledSlots = $slots->where('no_time', false);
+                        $pendingSlots = $slots->where('no_time', true);
+                        $totalSlots = $scheduledSlots->count();
+                        $overflowSlots = $scheduledSlots->where('overflow', '>', 0)->count();
+                        $fullSlots = $scheduledSlots->where('usage_percent', '>=', 100)->count();
+                        $totalStudents = $scheduledSlots->sum('occupied');
+                        $totalSubmitted = $scheduledSlots->sum('submitted');
+                        $totalRemaining = $scheduledSlots->sum('remaining');
+                        $pendingGroups = $pendingSlots->sum(fn($r) => count($r['groups']));
+                        $pendingStudents = $pendingSlots->sum('occupied');
                     @endphp
                     <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
                         <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
@@ -74,6 +78,22 @@
                         </div>
                     </div>
 
+                    @if($pendingSlots->isNotEmpty())
+                        <div class="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-3">
+                            <svg class="w-5 h-5 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                            </svg>
+                            <div class="text-sm text-amber-900">
+                                <span class="font-semibold">Vaqti qo'yilmagan:</span>
+                                {{ $pendingGroups }} guruh
+                                @if($pendingStudents > 0)
+                                    ({{ $pendingStudents }} talaba)
+                                @endif
+                                — quyidagi jadvalning oxirida ko'rsatilgan.
+                            </div>
+                        </div>
+                    @endif
+
                     {{-- Jadval --}}
                     <div class="overflow-x-auto border border-gray-200 rounded-lg">
                         <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -94,31 +114,36 @@
                             <tbody class="bg-white divide-y divide-gray-100">
                                 @foreach($slots as $i => $slot)
                                     @php
-                                        if ($slot['overflow'] > 0) {
+                                        $isNoTime = !empty($slot['no_time']);
+                                        if ($isNoTime) {
+                                            $rowBg = 'bg-amber-50';
+                                            $statusLabel = "Vaqti qo'yilmagan";
+                                            $statusClass = 'bg-amber-100 text-amber-800';
+                                            $barColor = 'bg-amber-400';
+                                        } elseif ($slot['overflow'] > 0) {
                                             $rowBg = 'bg-red-50';
                                             $statusLabel = "Sig'imdan ortiq";
                                             $statusClass = 'bg-red-100 text-red-800';
+                                            $barColor = 'bg-red-500';
                                         } elseif ($slot['usage_percent'] >= 100) {
                                             $rowBg = 'bg-yellow-50';
                                             $statusLabel = "To'la band";
                                             $statusClass = 'bg-yellow-100 text-yellow-800';
+                                            $barColor = 'bg-red-500';
                                         } elseif ($slot['usage_percent'] >= 75) {
                                             $rowBg = '';
                                             $statusLabel = 'Yuqori bandlik';
                                             $statusClass = 'bg-orange-100 text-orange-800';
+                                            $barColor = 'bg-orange-500';
+                                        } elseif ($slot['usage_percent'] >= 50) {
+                                            $rowBg = '';
+                                            $statusLabel = 'Normal';
+                                            $statusClass = 'bg-green-100 text-green-800';
+                                            $barColor = 'bg-yellow-500';
                                         } else {
                                             $rowBg = '';
                                             $statusLabel = 'Normal';
                                             $statusClass = 'bg-green-100 text-green-800';
-                                        }
-
-                                        if ($slot['usage_percent'] >= 100) {
-                                            $barColor = 'bg-red-500';
-                                        } elseif ($slot['usage_percent'] >= 75) {
-                                            $barColor = 'bg-orange-500';
-                                        } elseif ($slot['usage_percent'] >= 50) {
-                                            $barColor = 'bg-yellow-500';
-                                        } else {
                                             $barColor = 'bg-green-500';
                                         }
 
@@ -130,9 +155,15 @@
                                     <tr class="{{ $rowBg }} hover:bg-gray-50">
                                         <td class="px-3 py-2 text-gray-500">{{ $i + 1 }}</td>
                                         <td class="px-3 py-2 text-center">
-                                            <span class="inline-flex items-center px-2.5 py-1 rounded text-sm font-semibold bg-blue-100 text-blue-800">
-                                                {{ $slot['time'] }}
-                                            </span>
+                                            @if($isNoTime)
+                                                <span class="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold bg-amber-100 text-amber-800" title="Vaqti hali belgilanmagan">
+                                                    Vaqti qo'yilmagan
+                                                </span>
+                                            @else
+                                                <span class="inline-flex items-center px-2.5 py-1 rounded text-sm font-semibold bg-blue-100 text-blue-800">
+                                                    {{ $slot['time'] }}
+                                                </span>
+                                            @endif
                                         </td>
                                         <td class="px-3 py-2 text-center">
                                             @if($slot['yn_type'] === 'OSKI')
@@ -189,24 +220,34 @@
                                             </div>
                                         </td>
                                         <td class="px-3 py-2 text-center">
-                                            <span class="font-semibold text-indigo-700">{{ $slotOccupied }}</span>
-                                            <span class="text-gray-400">/</span>
-                                            <span class="text-gray-500">{{ $totalComputers }}</span>
+                                            @if($isNoTime)
+                                                <span class="text-gray-400">—</span>
+                                            @else
+                                                <span class="font-semibold text-indigo-700">{{ $slotOccupied }}</span>
+                                                <span class="text-gray-400">/</span>
+                                                <span class="text-gray-500">{{ $totalComputers }}</span>
+                                            @endif
                                         </td>
                                         <td class="px-3 py-2 text-center">
-                                            @if($slot['overflow'] > 0)
+                                            @if($isNoTime)
+                                                <span class="text-gray-400">—</span>
+                                            @elseif($slot['overflow'] > 0)
                                                 <span class="text-red-700 font-semibold">-{{ $slot['overflow'] }} yetmaydi</span>
                                             @else
                                                 <span class="font-semibold text-green-700">{{ $slot['free'] }}</span>
                                             @endif
                                         </td>
                                         <td class="px-3 py-2">
-                                            <div class="flex items-center gap-2">
-                                                <div class="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden min-w-[60px]">
-                                                    <div class="{{ $barColor }} h-full" style="width: {{ min(100, $slot['usage_percent']) }}%"></div>
+                                            @if($isNoTime)
+                                                <span class="text-gray-400">—</span>
+                                            @else
+                                                <div class="flex items-center gap-2">
+                                                    <div class="flex-1 bg-gray-200 rounded-full h-2 overflow-hidden min-w-[60px]">
+                                                        <div class="{{ $barColor }} h-full" style="width: {{ min(100, $slot['usage_percent']) }}%"></div>
+                                                    </div>
+                                                    <span class="text-xs text-gray-700 w-12 text-right">{{ $slot['usage_percent'] }}%</span>
                                                 </div>
-                                                <span class="text-xs text-gray-700 w-12 text-right">{{ $slot['usage_percent'] }}%</span>
-                                            </div>
+                                            @endif
                                         </td>
                                         <td class="px-3 py-2 text-center">
                                             <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ $statusClass }}">

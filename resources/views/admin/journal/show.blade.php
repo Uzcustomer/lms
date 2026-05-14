@@ -2754,6 +2754,22 @@
                                                 @else
                                                     <span style="color: #f87171; font-size: 12px; font-weight: 500;">Yuklanmagan</span>
                                                 @endif
+                                                @php
+                                                    $superadminMtUpload = (auth()->user()?->hasRole('superadmin') ?? false)
+                                                        && \App\Models\Setting::get('feature_superadmin_mt_upload_after_deadline', '0') === '1';
+                                                @endphp
+                                                @if($superadminMtUpload)
+                                                    <div style="margin-top:4px;">
+                                                        <input type="file" id="sa-mt-file-{{ $student->hemis_id }}" style="display:none;"
+                                                               onchange="superadminUploadMt('{{ $student->hemis_id }}')">
+                                                        <button type="button"
+                                                                onclick="document.getElementById('sa-mt-file-{{ $student->hemis_id }}').click()"
+                                                                style="font-size:10px; padding:2px 8px; background:#7c3aed; color:#fff; border:none; border-radius:5px; cursor:pointer;"
+                                                                title="Superadmin: muddatdan keyin ham fayl yuklash">
+                                                            ⬆ Fayl yuklash
+                                                        </button>
+                                                    </div>
+                                                @endif
                                             </td>
                                             <td class="px-1 py-1 text-center">
                                                 @if($hasFile || $isAdminMt)
@@ -3957,6 +3973,47 @@
                 }
             })
             .catch(() => alert('Server xatosi'));
+        }
+
+        // Superadmin: talaba nomidan MT fayl yuklash (muddatdan keyin ham)
+        function superadminUploadMt(studentHemisId) {
+            var input = document.getElementById('sa-mt-file-' + studentHemisId);
+            if (!input || !input.files || !input.files.length) return;
+            var file = input.files[0];
+
+            var fileCell = document.getElementById('mt-file-' + studentHemisId);
+            var prevHtml = fileCell ? fileCell.innerHTML : '';
+            if (fileCell) fileCell.innerHTML = '<span style="color:#6b7280;font-size:12px;">⏳ Yuklanmoqda…</span>';
+
+            var fd = new FormData();
+            fd.append('student_hemis_id', studentHemisId);
+            fd.append('subject_id', mtGradeConfig.subjectId);
+            fd.append('semester_code', mtGradeConfig.semesterCode);
+            fd.append('file', file);
+
+            fetch('{{ route("admin.journal.superadmin-upload-mt") }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': mtGradeConfig.csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: fd
+            })
+            .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+            .then(({ ok, data }) => {
+                if (ok && data.success) {
+                    // Sahifani yangilaymiz — fayl ustuni va baho kiritish maydonlari
+                    // to'g'ri holatga kelishi uchun.
+                    location.reload();
+                } else {
+                    alert(data.message || 'Xatolik');
+                    if (fileCell) fileCell.innerHTML = prevHtml;
+                }
+            })
+            .catch(() => {
+                alert('Server xatosi');
+                if (fileCell) fileCell.innerHTML = prevHtml;
+            });
         }
 
         // Update MT tab badge count after grading

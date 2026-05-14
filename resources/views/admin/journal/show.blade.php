@@ -1231,8 +1231,27 @@
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                     $isRetake = $hasRetakeInDay[$date] ?? false;
                                                     $hasNonFinalInDay = $hasGrades && collect($dayGrades)->contains(fn($g) => !($g['is_final'] ?? true));
+
+                                                    // Kunlik baholarni kim qo'yganini hover tooltipga yig'amiz
+                                                    $dayGraderLines = [];
+                                                    if ($hasGrades) {
+                                                        foreach ($dayGrades as $pair => $gd) {
+                                                            $uid = $gd['graded_by_user_id'] ?? null;
+                                                            $eid = $gd['employee_id'] ?? null;
+                                                            $gName = ($uid && isset($mtGraderUserNames[$uid]))
+                                                                ? $mtGraderUserNames[$uid]
+                                                                : (($eid && isset($mtGraderEmployeeNames[$eid])) ? $mtGraderEmployeeNames[$eid] : null);
+                                                            if (!$gName) {
+                                                                $gName = (!empty($gd['employee_name']) && $gd['employee_name'] !== 'Manual Entry')
+                                                                    ? $gd['employee_name']
+                                                                    : ($gd['retake_by'] ?? null);
+                                                            }
+                                                            $dayGraderLines[] = '(' . $pair . ') ' . round($gd['grade'], 0) . ($gName ? ' — ' . $gName : '');
+                                                        }
+                                                    }
+                                                    $dayTitle = implode(' | ', $dayGraderLines);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!}>
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!} @if($dayTitle) title="{{ $dayTitle }}" @endif>
                                                     @if($hasGrades)
                                                         @php
                                                             $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888);
@@ -1595,8 +1614,25 @@
                                                     $uniqueGrades = array_unique($gradeValues);
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                     $isNonFinal = $gradeData && !($gradeData['is_final'] ?? true);
+
+                                                    // Bahoni kim qo'yganini aniqlash — hover tooltip uchun
+                                                    $cellGrader = null;
+                                                    if ($gradeData) {
+                                                        $uid = $gradeData['graded_by_user_id'] ?? null;
+                                                        $eid = $gradeData['employee_id'] ?? null;
+                                                        if ($uid && isset($mtGraderUserNames[$uid])) {
+                                                            $cellGrader = $mtGraderUserNames[$uid];
+                                                        } elseif ($eid && isset($mtGraderEmployeeNames[$eid])) {
+                                                            $cellGrader = $mtGraderEmployeeNames[$eid];
+                                                        } elseif (!empty($gradeData['employee_name']) && $gradeData['employee_name'] !== 'Manual Entry') {
+                                                            $cellGrader = $gradeData['employee_name'];
+                                                        } elseif (!empty($gradeData['retake_by'])) {
+                                                            $cellGrader = $gradeData['retake_by'];
+                                                        }
+                                                    }
+                                                    $cellTitle = $cellGrader ? ('Baho qo\'ygan: ' . $cellGrader) : '';
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!}>
+                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!} @if($cellTitle) title="{{ $cellTitle }}" @endif>
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;

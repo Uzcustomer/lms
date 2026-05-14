@@ -501,42 +501,67 @@
 
             <script type="application/json" id="socialChartData">{!! $socialJson !!}</script>
 
-            {{-- Davlatlar bo'yicha aylanma chart (barcha mamlakatlar) --}}
-            <div class="course-bar-card">
-                <h3>Davlatlar bo'yicha taqsimot</h3>
-                <div class="stat-card-kpis" style="margin-bottom:14px;">
-                    <div>
-                        <span class="lbl">Jami (barcha davlatlar)</span>
-                        <span class="val" data-count="{{ $countryTotal }}">{{ number_format($countryTotal, 0, '.', ' ') }}</span>
+            {{-- Davlatlar aylanma + Fuqaroligi stacked bar — yonma-yon --}}
+            <div class="half-grid">
+                {{-- Davlatlar bo'yicha aylanma chart (barcha mamlakatlar) --}}
+                <div class="stat-card">
+                    <h3>Davlatlar bo'yicha taqsimot</h3>
+                    <div class="stat-card-kpis" style="margin-bottom:14px;">
+                        <div>
+                            <span class="lbl">Jami (barcha davlatlar)</span>
+                            <span class="val" data-count="{{ $countryTotal }}">{{ number_format($countryTotal, 0, '.', ' ') }}</span>
+                        </div>
+                        <div>
+                            <span class="lbl">Davlatlar soni</span>
+                            <span class="val" data-count="{{ count($countryStats) }}">{{ count($countryStats) }}</span>
+                        </div>
                     </div>
-                    <div>
-                        <span class="lbl">Davlatlar soni</span>
-                        <span class="val" data-count="{{ count($countryStats) }}">{{ count($countryStats) }}</span>
+                    <div class="pie-body" style="align-items:flex-start;">
+                        <div class="pie-canvas-wrap" style="height:240px;width:240px;">
+                            <canvas id="countryChartUmumiy"></canvas>
+                        </div>
+                        <div class="pie-legend" style="gap:10px;max-height:240px;overflow-y:auto;">
+                            @php $ci = 0; @endphp
+                            @foreach($countryStats as $cName => $cCount)
+                                <div class="pie-legend-item" style="gap:10px;">
+                                    <span class="pie-legend-dot" style="display:inline-block;width:14px;height:14px;border-radius:4px;flex-shrink:0;background:{{ $countryColors[$ci % count($countryColors)] }}"></span>
+                                    <span class="pie-legend-text">
+                                        <span class="pie-legend-label">{{ $cName }}</span>
+                                        <span class="pie-legend-value" style="font-size:18px;">
+                                            <span data-count="{{ $cCount }}">{{ number_format($cCount, 0, '.', ' ') }}</span>
+                                            <span class="pie-legend-pct">{{ $countryTotal > 0 ? number_format($cCount * 100 / $countryTotal, 1) : 0 }}%</span>
+                                        </span>
+                                    </span>
+                                </div>
+                                @php $ci++; @endphp
+                            @endforeach
+                        </div>
                     </div>
                 </div>
-                <div class="pie-body" style="align-items:flex-start;">
-                    <div class="pie-canvas-wrap" style="height:300px;width:300px;">
-                        <canvas id="countryChartUmumiy"></canvas>
+                {{-- Fuqaroligi — ta'lim turi bo'yicha stacked bar --}}
+                <div class="stat-card">
+                    <h3>Fuqaroligi</h3>
+                    <div class="stat-card-kpis">
+                        <div>
+                            <span class="lbl">O'zbekiston fuqarosi</span>
+                            <span class="val" data-count="{{ $citUz }}">{{ number_format($citUz, 0, '.', ' ') }}</span>
+                        </div>
+                        <div>
+                            <span class="lbl">Xorijiy davlat fuqarosi</span>
+                            <span class="val" data-count="{{ $citForeign }}">{{ number_format($citForeign, 0, '.', ' ') }}</span>
+                        </div>
+                        <div>
+                            <span class="lbl">Fuqaroligi yo'q shaxs</span>
+                            <span class="val" data-count="{{ $citNone }}">{{ number_format($citNone, 0, '.', ' ') }}</span>
+                        </div>
                     </div>
-                    <div class="pie-legend" style="gap:10px;max-height:300px;overflow-y:auto;">
-                        @php $ci = 0; @endphp
-                        @foreach($countryStats as $cName => $cCount)
-                            <div class="pie-legend-item" style="gap:10px;">
-                                <span class="pie-legend-dot" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;background:{{ $countryColors[$ci % count($countryColors)] }}"></span>
-                                <span class="pie-legend-text">
-                                    <span class="pie-legend-label">{{ $cName }}</span>
-                                    <span class="pie-legend-value" style="font-size:20px;">
-                                        <span data-count="{{ $cCount }}">{{ number_format($cCount, 0, '.', ' ') }}</span>
-                                        <span class="pie-legend-pct">{{ $countryTotal > 0 ? number_format($cCount * 100 / $countryTotal, 1) : 0 }}%</span>
-                                    </span>
-                                </span>
-                            </div>
-                            @php $ci++; @endphp
-                        @endforeach
+                    <div class="social-bar-wrap" style="height:300px;">
+                        <canvas id="citChartUmumiy"></canvas>
                     </div>
                 </div>
             </div>
             <script type="application/json" id="countryChartData">{!! $countryJson !!}</script>
+            <script type="application/json" id="citChartData">{!! $citJson !!}</script>
         </div>
 
         {{-- Yoshi tabi — pie chart --}}
@@ -756,8 +781,7 @@
                     </div>
                 </div>
             </div>
-            <script type="application/json" id="citChartData">{!! $citJson !!}</script>
-            {{-- countryChartData script Umumiy tabida bir marta e'lon qilingan --}}
+            {{-- citChartData / countryChartData scriptlari Umumiy tabida e'lon qilingan --}}
         </div>
 
         {{-- Boshqa inner tablar (hozircha bo'sh) --}}
@@ -1018,8 +1042,8 @@
         try { citCfg = JSON.parse(el.textContent); } catch (e) { citCfg = false; }
         return citCfg;
     }
-    function renderCitChart() {
-        const canvas = document.getElementById('citChart');
+    function renderCitChart(id) {
+        const canvas = document.getElementById(id || 'citChart');
         if (!canvas) return;
         const cfg = getCitCfg();
         if (!cfg) return;
@@ -1106,7 +1130,8 @@
         renderCourseChart('courseChartUmumiy');
         renderSocialChart('socialChart');
         renderSocialChart('socialChartTab');
-        renderCitChart();
+        renderCitChart('citChart');
+        renderCitChart('citChartUmumiy');
         renderCountryChart('countryChart');
         renderCountryChart('countryChartUmumiy');
     };

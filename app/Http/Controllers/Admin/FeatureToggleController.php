@@ -25,6 +25,10 @@ class FeatureToggleController extends Controller
             'label' => 'Sababli ariza kun chegarasi',
             'description' => 'Yoqilgan bo\'lsa, talaba 10 kunlik muddat tugagandan keyin ham ariza topshira oladi (limit olib tashlanadi). O\'chirilgan bo\'lsa, standart 10 kunlik chegara amal qiladi.',
         ],
+        'superadmin_mt_upload_after_deadline' => [
+            'label' => 'Superadmin MT fayl yuklash (muddatdan keyin ham)',
+            'description' => 'Yoqilgan bo\'lsa, superadmin talaba nomidan mustaqil ta\'lim faylini muddat tugagan bo\'lsa ham yuklay oladi va u jurnalda o\'sha talabaga ko\'rinadi.',
+        ],
     ];
 
     public function index()

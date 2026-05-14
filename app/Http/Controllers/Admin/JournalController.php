@@ -3475,6 +3475,107 @@ class JournalController extends Controller
         ]);
     }
 
+    /**
+     * Superadmin: talaba nomidan mustaqil ta'lim faylini yuklash.
+     * "superadmin_mt_upload_after_deadline" feature toggle yoqilgan bo'lsa,
+     * muddat tugagan bo'lsa ham yuklash mumkin — fayl jurnalda o'sha
+     * talabaga ko'rinadi (independent_submissions ga yoziladi).
+     */
+    public function superadminUploadMt(Request $request)
+    {
+        if (!auth()->user()?->hasRole('superadmin')) {
+            return response()->json(['success' => false, 'message' => 'Faqat superadmin uchun'], 403);
+        }
+        if (Setting::get('feature_superadmin_mt_upload_after_deadline', '0') !== '1') {
+            return response()->json(['success' => false, 'message' => 'Bu funksiya hozirda o\'chirilgan'], 403);
+        }
+
+        $data = $request->validate([
+            'student_hemis_id' => 'required',
+            'subject_id'       => 'required',
+            'semester_code'    => 'required',
+            'file'             => 'required|file|max:20480',
+        ]);
+
+        $student = Student::where('hemis_id', $data['student_hemis_id'])->first();
+        if (!$student) {
+            return response()->json(['success' => false, 'message' => 'Talaba topilmadi.'], 404);
+        }
+
+        $subject = DB::table('curriculum_subjects')
+            ->where('subject_id', $data['subject_id'])
+            ->where('semester_code', $data['semester_code'])
+            ->first();
+
+        // Talaba guruhi + fan + semestr bo'yicha mos independent topshiriqni topamiz.
+        $csHemisIds = DB::table('curriculum_subjects')
+            ->where('subject_id', $data['subject_id'])
+            ->where('semester_code', $data['semester_code'])
+            ->pluck('curriculum_subject_hemis_id')
+            ->toArray();
+
+        $independent = DB::table('independents')
+            ->where('group_hemis_id', $student->group_id)
+            ->where('semester_code', $data['semester_code'])
+            ->where(function ($q) use ($csHemisIds, $subject) {
+                $q->whereIn('subject_hemis_id', !empty($csHemisIds) ? $csHemisIds : [0]);
+                if ($subject && !empty($subject->subject_name)) {
+                    $q->orWhere('subject_name', $subject->subject_name);
+                }
+            })
+            ->orderByDesc('deadline')
+            ->first();
+
+        if (!$independent) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu talaba guruhi uchun mustaqil ta\'lim topshirig\'i topilmadi.',
+            ], 404);
+        }
+
+        $file = $request->file('file');
+        $filePath = $file->store('independent-submissions/' . $student->hemis_id, 'public');
+
+        $existing = DB::table('independent_submissions')
+            ->where('independent_id', $independent->id)
+            ->where('student_id', $student->id)
+            ->first();
+
+        // Eski faylni almashtirayotgan bo'lsak — diskdan o'chiramiz.
+        if ($existing && $existing->file_path) {
+            Storage::disk('public')->delete($existing->file_path);
+        }
+
+        $now = now();
+        DB::table('independent_submissions')->updateOrInsert(
+            ['independent_id' => $independent->id, 'student_id' => $student->id],
+            [
+                'student_hemis_id'    => $student->hemis_id,
+                'file_path'           => $filePath,
+                'file_original_name'  => $file->getClientOriginalName(),
+                'submitted_at'        => $now,
+                'submission_count'    => ($existing->submission_count ?? 0) + 1,
+                'viewed_at'           => null,
+                'updated_at'          => $now,
+                'created_at'          => $existing->created_at ?? $now,
+            ]
+        );
+
+        Log::info('[Journal] superadmin MT upload', [
+            'student_hemis_id' => $student->hemis_id,
+            'subject_id'       => $data['subject_id'],
+            'semester_code'    => $data['semester_code'],
+            'independent_id'   => $independent->id,
+            'by_user_id'       => auth()->id(),
+        ]);
+
+        return response()->json([
+            'success'   => true,
+            'message'   => 'Fayl yuklandi.',
+            'file_name' => $file->getClientOriginalName(),
+        ]);
+    }
+
     public function saveRetakeGrade(Request $request)
     {
         // Check admin or teacher role

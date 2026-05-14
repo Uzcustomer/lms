@@ -48,6 +48,20 @@ class RetakeAccess
     }
 
     /**
+     * Qabul oynalari/sessiyalarni KO'RISH (faqat o'qish) ruxsati.
+     * O'quv bo'limi (to'liq boshqaruv) + Registrator ofisi (faqat ko'rish) +
+     * super-admin.
+     */
+    public static function canViewWindows(?Model $actor): bool
+    {
+        if (!self::isStaff($actor)) {
+            return false;
+        }
+        return self::canManageAcademicDept($actor)
+            || $actor->hasRole(ProjectRole::REGISTRAR_OFFICE->value);
+    }
+
+    /**
      * O'quv bo'limi xodimi (yakuniy bosqich + oyna/guruh boshqaruvi)?
      */
     public static function canManageAcademicDept(?Model $actor): bool

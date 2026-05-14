@@ -24,7 +24,7 @@ class RetakeWindowController extends Controller
 
     public function index(Request $request)
     {
-        $this->authorizeAccess();
+        $this->authorizeView();
 
         $statusFilter = $request->input('status', 'all');
         $departmentId = $request->input('department');
@@ -144,6 +144,7 @@ class RetakeWindowController extends Controller
             'departmentIdFilter' => $departmentId,
             'levelCodeFilter' => $levelCode,
             'canOverride' => $this->canOverride(),
+            'canManage' => $this->canManage(),
             'educationTypes' => $educationTypes,
         ]);
     }
@@ -407,7 +408,7 @@ class RetakeWindowController extends Controller
      */
     public function show(int $windowId)
     {
-        $this->authorizeAccess();
+        $this->authorizeView();
 
         $window = RetakeApplicationWindow::with('session')->findOrFail($windowId);
 
@@ -471,6 +472,7 @@ class RetakeWindowController extends Controller
             'approvedNoGroup' => $approvedNoGroup,
             'rejected' => $rejected,
             'pending' => $pending,
+            'canManage' => $this->canManage(),
         ]);
     }
 
@@ -482,6 +484,26 @@ class RetakeWindowController extends Controller
         if (!RetakeAccess::canManageAcademicDept($user)) {
             abort(403, 'Sizda qayta o\'qish oynalarini boshqarish ruxsati yo\'q');
         }
+    }
+
+    /**
+     * Faqat ko'rish ruxsati — O'quv bo'limi yoki Registrator ofisi.
+     */
+    private function authorizeView(): void
+    {
+        $user = RetakeAccess::currentStaff();
+        if (!RetakeAccess::canViewWindows($user)) {
+            abort(403, 'Sizda qayta o\'qish oynalarini ko\'rish ruxsati yo\'q');
+        }
+    }
+
+    /**
+     * Joriy foydalanuvchi oynalarni boshqara oladimi (yozish amallari)?
+     * View'da Override/O'chirish/Yangi oyna tugmalarini ko'rsatish uchun.
+     */
+    private function canManage(): bool
+    {
+        return RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff());
     }
 
     private function canOverride(): bool

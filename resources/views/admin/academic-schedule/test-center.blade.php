@@ -450,6 +450,7 @@
                                                             @csrf
                                                             <input type="hidden" name="schedule_id" value="{{ $item['schedule_id'] }}">
                                                             <input type="hidden" name="yn_type" value="{{ $item['yn_type'] ?? '' }}">
+                                                            <input type="hidden" name="attempt" value="{{ $item['attempt'] ?? 1 }}">
                                                             <button type="submit" title="Moodle bilan qayta tekshirish" style="margin-left:4px;padding:1px 6px;background:#e2e8f0;border:none;border-radius:5px;font-size:12px;cursor:pointer;">↻</button>
                                                         </form>
                                                     @endif

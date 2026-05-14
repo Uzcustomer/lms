@@ -36,11 +36,15 @@ class BookMoodleGroupExam implements ShouldQueue
      *                          (Moodle blocks the quiz, no time window) instead
      *                          of a full booking. Set by ExamSchedule::booted()
      *                          when the exam has a date but no time yet.
+     * @param int  $attempt     Which attempt to push: 1 = attempt-1 columns,
+     *                          2 = resit columns, 3 = resit2 columns. Each
+     *                          attempt is a separate Moodle quiz.
      */
     public function __construct(
         public int $examScheduleId,
         public string $ynType,
         public bool $unscheduled = false,
+        public int $attempt = 1,
     ) {}
 
     public function handle(MoodleExamBookingService $service): void
@@ -54,7 +58,7 @@ class BookMoodleGroupExam implements ShouldQueue
             return;
         }
 
-        $result = $service->book($schedule, $this->ynType, $this->unscheduled);
+        $result = $service->book($schedule, $this->ynType, $this->unscheduled, $this->attempt);
 
         // Skipped (no config / na / missing time / no quiz history) - do not retry.
         if (!empty($result['skipped'])) {

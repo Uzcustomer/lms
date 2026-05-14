@@ -1495,18 +1495,22 @@ class AcademicScheduleController extends Controller
 
     /**
      * Whether this schedule's quiz resolves on Moodle, derived from the last
-     * push result Mark persisted on the ExamSchedule row. Only attempt 1 is
-     * pushed to Moodle, so resit rows return 'na'.
+     * push result Mark persisted on the ExamSchedule row. Covers all three
+     * attempts (each is a separate Moodle quiz / column set); attempt-1 rows
+     * flagged N/A return 'na'.
      *
      * @return string ok | notfound | error | pending | na
      */
     private function computeMoodleStatus(array $item, string $ynType, int $attempt, bool $na): string
     {
-        if ($attempt !== 1 || $na) {
+        if ($na || !in_array($attempt, [1, 2, 3], true)) {
             return 'na';
         }
 
-        $prefix = $ynType === 'OSKI' ? 'oski' : 'test';
+        // Attempt-specific column prefix: 1 = oski/test, 2 = *_resit, 3 = *_resit2.
+        $base = $ynType === 'OSKI' ? 'oski' : 'test';
+        $suffix = $attempt === 2 ? '_resit' : ($attempt === 3 ? '_resit2' : '');
+        $prefix = $base . $suffix;
         $error = $item[$prefix . '_moodle_error'] ?? null;
         $syncedAt = $item[$prefix . '_moodle_synced_at'] ?? null;
 
@@ -1524,9 +1528,9 @@ class AcademicScheduleController extends Controller
     }
 
     /**
-     * AJAX/form: re-push a single (schedule, yn_type) to Moodle synchronously
-     * so the proctor sees the fresh quiz-resolution status without waiting for
-     * the queue. The push itself is idempotent on the Moodle side.
+     * AJAX/form: re-push a single (schedule, yn_type, attempt) to Moodle
+     * synchronously so the proctor sees the fresh quiz-resolution status
+     * without waiting for the queue. The push is idempotent on the Moodle side.
      */
     public function recheckMoodle(Request $request)
     {
@@ -1540,25 +1544,32 @@ class AcademicScheduleController extends Controller
         $scheduleId = (int) $request->input('schedule_id');
         $ynType = strtolower((string) $request->input('yn_type'));
         $ynType = $ynType === 'oski' ? 'oski' : 'test';
+        $attempt = (int) $request->input('attempt', 1);
+        if (!in_array($attempt, [1, 2, 3], true)) {
+            $attempt = 1;
+        }
 
         $schedule = ExamSchedule::find($scheduleId);
         if (!$schedule) {
             return back()->with('error', 'Imtihon jadvali yozuvi topilmadi.');
         }
 
-        $timeField = $ynType . '_time';
-        $unscheduled = empty($schedule->{$timeField});
+        // Attempt-specific column prefix.
+        $suffix = $attempt === 2 ? '_resit' : ($attempt === 3 ? '_resit2' : '');
+        $prefix = $ynType . $suffix;
+        $unscheduled = empty($schedule->{$prefix . '_time'});
 
         try {
-            app(\App\Services\MoodleExamBookingService::class)->book($schedule, $ynType, $unscheduled);
+            app(\App\Services\MoodleExamBookingService::class)
+                ->book($schedule, $ynType, $unscheduled, $attempt);
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::warning('recheckMoodle xatolik: ' . $e->getMessage());
             return back()->with('error', 'Moodle tekshiruvida xatolik: ' . $e->getMessage());
         }
 
         $fresh = $schedule->fresh();
-        $error = $ynType === 'oski' ? $fresh?->oski_moodle_error : $fresh?->test_moodle_error;
-        $synced = $ynType === 'oski' ? $fresh?->oski_moodle_synced_at : $fresh?->test_moodle_synced_at;
+        $error = $fresh?->{$prefix . '_moodle_error'};
+        $synced = $fresh?->{$prefix . '_moodle_synced_at'};
 
         if (empty($error) && !empty($synced)) {
             return back()->with('success', 'Moodle bilan tekshirildi: quiz topildi.');
@@ -1941,6 +1952,14 @@ class AcademicScheduleController extends Controller
                     'oski_moodle_error' => $existing?->oski_moodle_error,
                     'test_moodle_synced_at' => $existing?->test_moodle_synced_at,
                     'test_moodle_error' => $existing?->test_moodle_error,
+                    'oski_resit_moodle_synced_at' => $existing?->oski_resit_moodle_synced_at,
+                    'oski_resit_moodle_error' => $existing?->oski_resit_moodle_error,
+                    'oski_resit2_moodle_synced_at' => $existing?->oski_resit2_moodle_synced_at,
+                    'oski_resit2_moodle_error' => $existing?->oski_resit2_moodle_error,
+                    'test_resit_moodle_synced_at' => $existing?->test_resit_moodle_synced_at,
+                    'test_resit_moodle_error' => $existing?->test_resit_moodle_error,
+                    'test_resit2_moodle_synced_at' => $existing?->test_resit2_moodle_synced_at,
+                    'test_resit2_moodle_error' => $existing?->test_resit2_moodle_error,
                 ];
 
                 if ($includeCarbon) {

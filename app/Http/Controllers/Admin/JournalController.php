@@ -674,6 +674,10 @@ class JournalController extends Controller
                     'original_grade' => $g->grade,
                     'is_final' => $g->is_final,
                     'deadline' => $g->deadline,
+                    'graded_by_user_id' => $g->graded_by_user_id,
+                    'employee_id' => $g->employee_id,
+                    'employee_name' => $g->employee_name ?? null,
+                    'retake_by' => $g->retake_by ?? null,
                 ]);
             }
         }
@@ -1006,15 +1010,18 @@ class JournalController extends Controller
             ->keyBy('student_hemis_id');
         $manualMtGrades = $manualMtGradesRaw->map(fn($g) => $g->grade)->toArray();
 
-        // MT baholarini kim qo'yganini ko'rsatish uchun lookup'lar — mtGrades
-        // (lesson asosidagi) va manualMtGradesRaw (qo'lda kiritilgan) ikkalasidan
+        // Baholarni kim qo'yganini ko'rsatish uchun lookup'lar — JN (jbGrades),
+        // MT (mtGrades) va qo'lda kiritilgan MT (manualMtGradesRaw) — uchalasidan
         // graded_by_user_id (users.id) va employee_id (teachers.hemis_id) yig'ib,
         // bir martadan users / teachers ga so'rov yuboramiz.
         $lessonMtGraded = collect($mtGrades)->flatten(2);
+        $lessonJbGraded = collect($jbGrades)->flatten(2);
         $mtGraderUserIds = $lessonMtGraded->pluck('graded_by_user_id')
+            ->merge($lessonJbGraded->pluck('graded_by_user_id'))
             ->merge($manualMtGradesRaw->pluck('graded_by_user_id'))
             ->filter()->unique()->values()->toArray();
         $mtGraderEmployeeIds = $lessonMtGraded->pluck('employee_id')
+            ->merge($lessonJbGraded->pluck('employee_id'))
             ->merge($manualMtGradesRaw->pluck('employee_id'))
             ->filter()->unique()->values()->toArray();
         $mtGraderUserNames = !empty($mtGraderUserIds)

@@ -4692,13 +4692,16 @@ class AcademicScheduleController extends Controller
             case 'normativ':
             case 'sinov':
             case 'none':
+                // Bu shakllarda OSKI/Test imtihon sanasi yo'q — sana to'sig'i qo'llanmaydi.
+                return true;
             case '':
             case null:
-                // Bu shakllarda urinish kontseptsiyasi yo'q yoki sana belgilanmaydi —
-                // mavjud xulq saqlanadi (cheklamaymiz).
-                return true;
             default:
-                return true;
+                // closing_form sozlanmagan yoki noma'lum — qaysi sana talab qilinishi
+                // aniq emas (masalan eski o'quv reja qatori). Kamida bitta OSKI yoki
+                // Test sanasi qo'yilib o'tgan bo'lsagina urinish tugagan deb hisoblaymiz —
+                // shunda erta (sana belgilanmagan) 2-urinish ro'yxatga chiqmaydi.
+                return $oskiOk || $testOk;
         }
     }
 

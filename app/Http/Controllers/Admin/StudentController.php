@@ -247,11 +247,20 @@ class StudentController extends Controller
         $courseStats = [];
         // courseTotals[level] = jami (barcha ta'lim turlari) — KPI kartalar uchun
         $courseTotals = [];
+        // HEMIS level_code odatda 11..16 ko'rinishida (11=1-kurs ... 16=6-kurs).
+        // Toza 1..8 ko'rinishi ham bo'lishi mumkin — ikkalasini ham qo'llaymiz.
+        $toCourse = function ($raw): int {
+            $n = (int) $raw;
+            if ($n >= 11 && $n <= 20) {
+                return $n - 10;       // 11→1, 12→2, ... 16→6
+            }
+            return $n;                // allaqachon 1..8 bo'lsa
+        };
         foreach ($courseRows as $r) {
             $eduKey = $eduKeyOf((string) $r->education_type_name);
             if ($eduKey === null) continue;
-            $level = (int) $r->level_code;
-            if ($level < 1) continue;
+            $level = $toCourse($r->level_code);
+            if ($level < 1 || $level > 8) continue;
             $cnt = (int) $r->total;
             $gender = mb_strtolower(trim((string) $r->gender_name));
 

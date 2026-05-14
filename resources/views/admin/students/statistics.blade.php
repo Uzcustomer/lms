@@ -94,14 +94,14 @@
 
     .kpi-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
         gap: 18px;
     }
     .kpi-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
         border-radius: 16px;
-        padding: 24px 26px 26px;
+        padding: 22px 24px;
         box-shadow: 0 4px 14px -4px rgba(15, 23, 42, .12);
         transition: transform .18s ease, box-shadow .18s ease;
     }
@@ -109,27 +109,34 @@
         transform: translateY(-4px) scale(1.025);
         box-shadow: 0 14px 30px -8px rgba(15, 23, 42, .22);
     }
+    /* Yuqori qator: ikonka + sarlavha + qiymat — bitta qatorda */
+    .kpi-head {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+    }
     .kpi-icon {
-        width: 56px; height: 56px;
+        width: 52px; height: 52px;
         border-radius: 14px;
         background: #eef2ff;
         color: #4f46e5;
         display: inline-flex; align-items: center; justify-content: center;
-        margin-bottom: 18px;
+        flex-shrink: 0;
     }
-    .kpi-title { font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
-    .kpi-sub   { font-size: 14px; color: #94a3b8; margin-bottom: 12px; }
-    .kpi-total { font-size: 44px; font-weight: 800; color: #0f172a; line-height: 1.05; }
-    .kpi-split { display: flex; gap: 36px; margin-top: 20px; }
+    .kpi-headtext { display: flex; flex-direction: column; }
+    .kpi-title { font-size: 18px; font-weight: 700; color: #0f172a; line-height: 1.15; }
+    .kpi-sub   { font-size: 13px; color: #94a3b8; }
+    .kpi-total { font-size: 34px; font-weight: 800; color: #0f172a; line-height: 1; margin-left: auto; }
+    .kpi-split { display: flex; gap: 36px; margin-top: 18px; padding-top: 16px; border-top: 1px solid #f1f5f9; }
     .kpi-split .lbl { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 3px; }
-    .kpi-split .val { font-size: 24px; font-weight: 700; color: #0f172a; }
+    .kpi-split .val { font-size: 22px; font-weight: 700; color: #0f172a; }
     .kpi-split .pct { font-size: 14px; font-weight: 700; margin-left: 5px; }
     .pct-m { color: #059669; }
     .pct-f { color: #dc2626; }
 
     .pie-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
         gap: 18px;
         margin-top: 22px;
     }
@@ -146,7 +153,16 @@
         box-shadow: 0 14px 30px -8px rgba(15, 23, 42, .22);
     }
     .pie-card h3 { font-size: 19px; font-weight: 700; color: #0f172a; margin-bottom: 16px; }
-    .pie-canvas-wrap { position: relative; height: 260px; }
+    /* Chap: chart, o'ng: ko'rsatkichlar */
+    .pie-body { display: flex; align-items: center; gap: 22px; }
+    .pie-canvas-wrap { position: relative; height: 220px; width: 220px; flex-shrink: 0; }
+    .pie-legend { flex: 1; display: flex; flex-direction: column; gap: 14px; }
+    .pie-legend-item { display: flex; align-items: center; gap: 10px; }
+    .pie-legend-dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+    .pie-legend-text { display: flex; flex-direction: column; }
+    .pie-legend-label { font-size: 13px; color: #64748b; }
+    .pie-legend-value { font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1.1; }
+    .pie-legend-value .pie-legend-pct { font-size: 13px; font-weight: 700; color: #94a3b8; margin-left: 6px; }
 </style>
 
 <div class="w-full px-4 py-6"
@@ -193,6 +209,14 @@
                 'yashash_joyi'    => 'Yashash joyi',
                 'hududlar'        => 'Hududlar kesimida',
             ];
+
+            // Pie chart qiymatlari — bir nechta tabda ishlatilgani uchun yuqorida
+            $younger  = (int) ($ageStats['younger'] ?? 0);
+            $older    = (int) ($ageStats['older'] ?? 0);
+            $ageTotal = $younger + $older;
+            $grant    = (int) ($payStats['grant'] ?? 0);
+            $contract = (int) ($payStats['contract'] ?? 0);
+            $payTotal = $grant + $contract;
         @endphp
 
         <div class="stats-inner-tabs">
@@ -232,14 +256,18 @@
                         $fp = $total > 0 ? round($f * 100 / $total, 2) : 0;
                     @endphp
                     <div class="kpi-card">
-                        <span class="kpi-icon">
-                            <svg width="30" height="30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                {!! $icons[$c['icon']] !!}
-                            </svg>
-                        </span>
-                        <div class="kpi-title">{{ $c['title'] }}</div>
-                        <div class="kpi-sub">Umumiy</div>
-                        <div class="kpi-total" data-count="{{ $total }}">{{ number_format($total, 0, '.', ' ') }}</div>
+                        <div class="kpi-head">
+                            <span class="kpi-icon">
+                                <svg width="28" height="28" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    {!! $icons[$c['icon']] !!}
+                                </svg>
+                            </span>
+                            <div class="kpi-headtext">
+                                <span class="kpi-title">{{ $c['title'] }}</span>
+                                <span class="kpi-sub">Umumiy</span>
+                            </div>
+                            <div class="kpi-total" data-count="{{ $total }}">{{ number_format($total, 0, '.', ' ') }}</div>
+                        </div>
                         <div class="kpi-split">
                             <div>
                                 <span class="lbl">Erkaklar</span>
@@ -257,27 +285,69 @@
             </div>
 
             {{-- Pie chartlar — Yoshi va To'lov shakli kesimi --}}
-            @php
-                $younger = (int) ($ageStats['younger'] ?? 0);
-                $older   = (int) ($ageStats['older'] ?? 0);
-                $grant   = (int) ($payStats['grant'] ?? 0);
-                $contract = (int) ($payStats['contract'] ?? 0);
-            @endphp
             <div class="pie-grid">
                 <div class="pie-card">
                     <h3>Yoshi</h3>
-                    <div class="pie-canvas-wrap">
-                        <canvas id="ageChart"
-                                data-younger="{{ $younger }}"
-                                data-older="{{ $older }}"></canvas>
+                    <div class="pie-body">
+                        <div class="pie-canvas-wrap">
+                            <canvas id="ageChart"
+                                    data-younger="{{ $younger }}"
+                                    data-older="{{ $older }}"></canvas>
+                        </div>
+                        <div class="pie-legend">
+                            <div class="pie-legend-item">
+                                <span class="pie-legend-dot" style="background:#6366f1"></span>
+                                <span class="pie-legend-text">
+                                    <span class="pie-legend-label">30 yoshdan kichiklar</span>
+                                    <span class="pie-legend-value">
+                                        <span data-count="{{ $younger }}">{{ number_format($younger, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct">{{ $ageTotal > 0 ? number_format($younger * 100 / $ageTotal, 1) : 0 }}%</span>
+                                    </span>
+                                </span>
+                            </div>
+                            <div class="pie-legend-item">
+                                <span class="pie-legend-dot" style="background:#22c55e"></span>
+                                <span class="pie-legend-text">
+                                    <span class="pie-legend-label">30 yoshdan oshganlar</span>
+                                    <span class="pie-legend-value">
+                                        <span data-count="{{ $older }}">{{ number_format($older, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct">{{ $ageTotal > 0 ? number_format($older * 100 / $ageTotal, 1) : 0 }}%</span>
+                                    </span>
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="pie-card">
                     <h3>To'lov shakli</h3>
-                    <div class="pie-canvas-wrap">
-                        <canvas id="payChart"
-                                data-grant="{{ $grant }}"
-                                data-contract="{{ $contract }}"></canvas>
+                    <div class="pie-body">
+                        <div class="pie-canvas-wrap">
+                            <canvas id="payChart"
+                                    data-grant="{{ $grant }}"
+                                    data-contract="{{ $contract }}"></canvas>
+                        </div>
+                        <div class="pie-legend">
+                            <div class="pie-legend-item">
+                                <span class="pie-legend-dot" style="background:#a855f7"></span>
+                                <span class="pie-legend-text">
+                                    <span class="pie-legend-label">Davlat granti</span>
+                                    <span class="pie-legend-value">
+                                        <span data-count="{{ $grant }}">{{ number_format($grant, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct">{{ $payTotal > 0 ? number_format($grant * 100 / $payTotal, 1) : 0 }}%</span>
+                                    </span>
+                                </span>
+                            </div>
+                            <div class="pie-legend-item">
+                                <span class="pie-legend-dot" style="background:#f43f5e"></span>
+                                <span class="pie-legend-text">
+                                    <span class="pie-legend-label">To'lov-kontrakt</span>
+                                    <span class="pie-legend-value">
+                                        <span data-count="{{ $contract }}">{{ number_format($contract, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct">{{ $payTotal > 0 ? number_format($contract * 100 / $payTotal, 1) : 0 }}%</span>
+                                    </span>
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -288,10 +358,34 @@
             <div class="pie-grid">
                 <div class="pie-card">
                     <h3>Yoshi bo'yicha taqsimot</h3>
-                    <div class="pie-canvas-wrap">
-                        <canvas id="ageChartTab"
-                                data-younger="{{ (int) ($ageStats['younger'] ?? 0) }}"
-                                data-older="{{ (int) ($ageStats['older'] ?? 0) }}"></canvas>
+                    <div class="pie-body">
+                        <div class="pie-canvas-wrap">
+                            <canvas id="ageChartTab"
+                                    data-younger="{{ $younger }}"
+                                    data-older="{{ $older }}"></canvas>
+                        </div>
+                        <div class="pie-legend">
+                            <div class="pie-legend-item">
+                                <span class="pie-legend-dot" style="background:#6366f1"></span>
+                                <span class="pie-legend-text">
+                                    <span class="pie-legend-label">30 yoshdan kichiklar</span>
+                                    <span class="pie-legend-value">
+                                        <span data-count="{{ $younger }}">{{ number_format($younger, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct">{{ $ageTotal > 0 ? number_format($younger * 100 / $ageTotal, 1) : 0 }}%</span>
+                                    </span>
+                                </span>
+                            </div>
+                            <div class="pie-legend-item">
+                                <span class="pie-legend-dot" style="background:#22c55e"></span>
+                                <span class="pie-legend-text">
+                                    <span class="pie-legend-label">30 yoshdan oshganlar</span>
+                                    <span class="pie-legend-value">
+                                        <span data-count="{{ $older }}">{{ number_format($older, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct">{{ $ageTotal > 0 ? number_format($older * 100 / $ageTotal, 1) : 0 }}%</span>
+                                    </span>
+                                </span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -360,8 +454,16 @@
     const pieOpts = {
         responsive: true,
         maintainAspectRatio: false,
+        cutout: '58%',
+        // Aylanish + masshtab animatsiyasi — har render qilinganda 0 dan ochiladi
+        animation: {
+            animateRotate: true,
+            animateScale: true,
+            duration: 1100,
+            easing: 'easeOutCubic',
+        },
         plugins: {
-            legend: { position: 'bottom', labels: { font: { size: 13 }, padding: 16 } },
+            legend: { display: false },
             tooltip: {
                 callbacks: {
                     label: (ctx) => {
@@ -376,13 +478,15 @@
     };
 
     function makePie(canvas, labels, data, colors) {
-        if (!canvas || canvas.dataset.rendered === '1') return;
-        canvas.dataset.rendered = '1';
+        if (!canvas) return;
+        // Avval render qilingan bo'lsa — eski chartni buzib, qayta animatsiya bilan chizamiz
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
         new Chart(canvas, {
             type: 'doughnut',
             data: {
                 labels: labels,
-                datasets: [{ data: data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }]
+                datasets: [{ data: data, backgroundColor: colors, borderWidth: 3, borderColor: '#fff', hoverOffset: 6 }]
             },
             options: pieOpts
         });

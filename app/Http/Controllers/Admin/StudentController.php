@@ -284,8 +284,29 @@ class StudentController extends Controller
         }
         ksort($courseTotals);
 
+        // Ijtimoiy toifalar kesimi — social_category_name bo'yicha.
+        // "Boshqa" / bo'sh qiymatlar — ijtimoiy toifasi yo'q deb hisoblanadi.
+        $socialRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('social_category_name, COUNT(*) as total')
+            ->groupBy('social_category_name')
+            ->get();
+        $socialStats = [];          // [name => count] — faqat haqiqiy toifalar
+        $socialHasCategory = 0;     // toifasi bor talabalar jami
+        foreach ($socialRows as $s) {
+            $name = trim((string) $s->social_category_name);
+            $low = mb_strtolower($name);
+            if ($name === '' || str_contains($low, 'boshqa') || $low === "yo'q" || $low === 'yoq') {
+                continue;
+            }
+            $socialStats[$name] = (int) $s->total;
+            $socialHasCategory += (int) $s->total;
+        }
+        arsort($socialStats);
+
         return view('admin.students.statistics', compact(
-            'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals'
+            'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals',
+            'socialStats', 'socialHasCategory'
         ));
     }
 

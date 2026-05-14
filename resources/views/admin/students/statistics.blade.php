@@ -180,6 +180,44 @@
     }
     .course-bar-card h3 { font-size: 19px; font-weight: 700; color: #0f172a; margin-bottom: 16px; }
     .course-bar-wrap { position: relative; height: 420px; }
+
+    /* Yarim kenglikdagi kartalar uchun 2-ustunli grid */
+    .half-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 18px;
+        margin-top: 22px;
+    }
+    @media (max-width: 900px) {
+        .half-grid { grid-template-columns: 1fr; }
+    }
+    .stat-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 22px 24px;
+        box-shadow: 0 4px 14px -4px rgba(15, 23, 42, .12);
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .stat-card:hover {
+        transform: translateY(-4px) scale(1.015);
+        box-shadow: 0 14px 30px -8px rgba(15, 23, 42, .22);
+    }
+    .stat-card h3 { font-size: 19px; font-weight: 700; color: #0f172a; margin-bottom: 6px; }
+    .stat-card-kpis { display: flex; gap: 34px; margin-bottom: 8px; }
+    .stat-card-kpis .lbl { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 2px; }
+    .stat-card-kpis .val { font-size: 30px; font-weight: 800; color: #0f172a; line-height: 1.05; }
+    .stat-card-kpis .pct { font-size: 13px; font-weight: 700; color: #94a3b8; }
+    .social-bar-wrap { position: relative; height: 300px; margin-top: 10px; }
+
+    .stat-card-empty {
+        display: flex; align-items: center; justify-content: center;
+        background: #f8fafc;
+        border: 1px dashed #cbd5e1;
+        border-radius: 16px;
+        color: #94a3b8; font-size: 13px;
+        min-height: 200px;
+    }
 </style>
 
 <div class="w-full px-4 py-6"
@@ -242,6 +280,18 @@
                 'grant'    => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6m-6-3v-3"/>',
                 'contract' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 10h18M7 15h2m4 0h4M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"/>',
             ];
+
+            // Ijtimoiy toifalar — gorizontal bar chart uchun
+            $socialStats = $socialStats ?? [];
+            $socialHasCategory = (int) ($socialHasCategory ?? 0);
+            $totalActive = (int) ($stats['total']['total'] ?? 0);
+            $socialPct = $totalActive > 0 ? round($socialHasCategory * 100 / $totalActive, 1) : 0;
+            $socialColors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#a855f7', '#ec4899', '#14b8a6', '#f97316'];
+            $socialJson = json_encode([
+                'labels' => array_keys($socialStats),
+                'data'   => array_values($socialStats),
+                'colors' => $socialColors,
+            ]);
         @endphp
 
         <div class="stats-inner-tabs">
@@ -384,6 +434,32 @@
                     </div>
                 </div>
             </div>
+
+            {{-- Yarim kenglikdagi kartalar: Ijtimoiy toifalar + (keyin boshqa narsa) --}}
+            <div class="half-grid">
+                <div class="stat-card">
+                    <h3>Ijtimoiy toifalar</h3>
+                    <div class="stat-card-kpis">
+                        <div>
+                            <span class="lbl">Jami talabalar</span>
+                            <span class="val" data-count="{{ $totalActive }}">{{ number_format($totalActive, 0, '.', ' ') }}</span>
+                        </div>
+                        <div>
+                            <span class="lbl">Ijtimoiy toifasi bor (Boshqa'siz)</span>
+                            <span class="val" data-count="{{ $socialHasCategory }}">{{ number_format($socialHasCategory, 0, '.', ' ') }}</span>
+                            <div class="pct">{{ $socialPct }}%</div>
+                        </div>
+                    </div>
+                    <div class="social-bar-wrap">
+                        <canvas id="socialChart"></canvas>
+                    </div>
+                </div>
+                <div class="stat-card-empty">
+                    Tez orada — qo'shimcha statistika
+                </div>
+            </div>
+
+            <script type="application/json" id="socialChartData">{!! $socialJson !!}</script>
         </div>
 
         {{-- Yoshi tabi — pie chart --}}
@@ -488,9 +564,30 @@
             <script type="application/json" id="courseChartData">{!! $courseChartJson !!}</script>
         </div>
 
+        {{-- Ijtimoiy toifa tabi — to'liq kenglikdagi gorizontal bar chart --}}
+        <div x-show="inner.talabalar === 'ijtimoiy_toifa'" x-cloak>
+            <div class="course-bar-card" style="margin-top:0">
+                <h3>Ijtimoiy toifalar</h3>
+                <div class="stat-card-kpis">
+                    <div>
+                        <span class="lbl">Jami talabalar</span>
+                        <span class="val" data-count="{{ $totalActive }}">{{ number_format($totalActive, 0, '.', ' ') }}</span>
+                    </div>
+                    <div>
+                        <span class="lbl">Ijtimoiy toifasi bor (Boshqa'siz)</span>
+                        <span class="val" data-count="{{ $socialHasCategory }}">{{ number_format($socialHasCategory, 0, '.', ' ') }}</span>
+                        <div class="pct">{{ $socialPct }}%</div>
+                    </div>
+                </div>
+                <div style="position:relative; height:420px; margin-top:10px;">
+                    <canvas id="socialChartTab"></canvas>
+                </div>
+            </div>
+        </div>
+
         {{-- Boshqa inner tablar (hozircha bo'sh) --}}
         @foreach($innerTabs as $key => $label)
-            @if(in_array($key, ['umumiy', 'yoshi', 'kurslar'])) @continue @endif
+            @if(in_array($key, ['umumiy', 'yoshi', 'kurslar', 'ijtimoiy_toifa'])) @continue @endif
             <div x-show="inner.talabalar === '{{ $key }}'" x-cloak>
                 <div class="stats-empty">
                     <strong>{{ $label }}</strong> — statistika hali tayyor emas.
@@ -682,6 +779,61 @@
         });
     }
 
+    // ─── Ijtimoiy toifalar — gorizontal bar chart ──────────────────────
+    let socialCfg = null;
+    function getSocialCfg() {
+        if (socialCfg !== null) return socialCfg;
+        const el = document.getElementById('socialChartData');
+        if (!el) { socialCfg = false; return false; }
+        try { socialCfg = JSON.parse(el.textContent); }
+        catch (e) { socialCfg = false; }
+        return socialCfg;
+    }
+
+    function renderSocialChart(id) {
+        const canvas = document.getElementById(id);
+        if (!canvas) return;
+        const cfg = getSocialCfg();
+        if (!cfg) return;
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+
+        const fmt = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
+        const colors = cfg.labels.map((_, i) => cfg.colors[i % cfg.colors.length]);
+
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: cfg.labels,
+                datasets: [{
+                    label: 'Talabalar soni',
+                    data: cfg.data,
+                    backgroundColor: colors,
+                    borderRadius: 5,
+                    borderWidth: 0,
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 1000, easing: 'easeOutCubic' },
+                scales: {
+                    x: { beginAtZero: true, ticks: { callback: (v) => fmt(v) }, title: { display: true, text: 'Talabalar soni' } },
+                    y: { grid: { display: false } },
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => ' ' + fmt(ctx.parsed.x) + ' talaba',
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     // Chart.js canvas yashirin (display:none) bo'lsa o'lcham 0 bo'lib chiqadi —
     // shuning uchun tab ko'ringanda render qilamiz.
     window.statsRenderCharts = function () {
@@ -689,6 +841,8 @@
         renderPay('payChart');
         renderAge('ageChartTab');
         renderCourseChart();
+        renderSocialChart('socialChart');
+        renderSocialChart('socialChartTab');
     };
 
     document.addEventListener('DOMContentLoaded', () => {

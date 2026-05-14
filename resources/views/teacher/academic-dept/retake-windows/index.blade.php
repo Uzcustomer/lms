@@ -26,12 +26,18 @@
 
         <div class="flex justify-between items-center mb-4 flex-wrap gap-2">
             <p class="text-sm text-gray-500">
-                {{ __("Barcha sessiyalardagi oynalar — yangi oyna ochish uchun sessiyaga kiring") }}
+                @if($canManage ?? false)
+                    {{ __("Barcha sessiyalardagi oynalar — yangi oyna ochish uchun sessiyaga kiring") }}
+                @else
+                    {{ __("Barcha sessiyalardagi oynalar — faqat ko'rish") }}
+                @endif
             </p>
-            <a href="{{ route('admin.retake-sessions.index') }}"
-               class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                {{ __("Sessiyalarga o'tish") }}
-            </a>
+            @if($canManage ?? false)
+                <a href="{{ route('admin.retake-sessions.index') }}"
+                   class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                    {{ __("Sessiyalarga o'tish") }}
+                </a>
+            @endif
         </div>
 
         {{-- "Hozir ochiq" kartochkalar foydalanuvchi talabiga ko'ra olib tashlandi —
@@ -149,7 +155,7 @@
                                 <td class="px-3 py-2.5 text-right whitespace-nowrap">
                                     <a href="{{ route('admin.retake-windows.show', $w->id) }}"
                                        class="text-xs text-blue-600 hover:underline mr-2">{{ __("Ko'rish") }}</a>
-                                    @if($canOverride)
+                                    @if(($canManage ?? false) && $canOverride)
                                         <button type="button"
                                                 @click="overrideId = {{ $w->id }}; overrideStart = '{{ $w->start_date->format('Y-m-d') }}'; overrideEnd = '{{ $w->end_date->format('Y-m-d') }}'"
                                                 class="text-xs text-blue-600 hover:underline mr-2">
@@ -283,7 +289,7 @@
         </div>
 
         {{-- Override modal --}}
-        @if($canOverride)
+        @if(($canManage ?? false) && $canOverride)
             <div x-show="overrideId !== null" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="overrideId = null">
                 <div class="flex items-center justify-center min-h-screen p-4">
                     <div class="fixed inset-0 bg-black bg-opacity-50" @click="overrideId = null"></div>

@@ -1216,14 +1216,16 @@ class AcademicScheduleController extends Controller
                 $isPullik = $jnLow || $mtLow || ($davomatPct >= 25);
 
                 // "Tasdiqlangan yiqilish" mantiqi:
-                //  - Baho kiritilgan va past bo'lsa → yiqilgan
-                //  - Baho yo'q va imtihon sanasi o'tib ketgan bo'lsa → kelmagan = yiqilgan
-                //  - Baho yo'q va sana hali kelmagan/belgilanmagan bo'lsa → erta xulosa qilmaymiz
+                //  - Imtihon sanasi belgilanmagan yoki hali kelmagan bo'lsa → imtihon
+                //    o'tmagan, mavjud baho (hatto 0 ham) placeholder hisoblanadi —
+                //    "yiqilgan" deb erta xulosa qilmaymiz
+                //  - Sana o'tgan + baho kiritilgan va past bo'lsa → yiqilgan
+                //  - Sana o'tgan + baho yo'q bo'lsa → kelmagan = yiqilgan
                 $confirmFailed = function (bool $required, $grade, $date) use ($today, $minLimit) {
                     if (!$required) return false;
+                    if ($date === null || ((string) $date) > $today) return false; // imtihon hali bo'lmagan
                     if ($grade !== null) return ((float) $grade) < $minLimit;
-                    if ($date === null) return false; // sanasi belgilanmagan — hali baholay olmaymiz
-                    return ((string) $date) <= $today; // sana o'tdi, baho yo'q → kelmadi
+                    return true; // sana o'tdi, baho yo'q → kelmadi
                 };
 
                 // Yiqilgan attempt=1: pullik yoki tasdiqlangan OSKI/Test yiqilishi
@@ -4600,11 +4602,12 @@ class AcademicScheduleController extends Controller
                 $row1['student_count'] = $countFor(1);
 
                 // 2-urinish ko'rinish qoidasi:
-                //  - oski_resit_date / test_resit_date saqlangan bo'lsa
-                //  - student_grades.attempt=2 yozuvi mavjud (qo'lda 12a ga o'tkazilgan)
-                //  - talabalar yuklangan bo'lsa: birortasida effective failed_attempt1
-                //    (V<60 yoki imtihonda qatnashmagan yoki attempt=2 yozuvi bor) bo'lsa
-                //  - aks holda eski raw <60 signali (talabalar yuklanmagan holat uchun)
+                //  - oski_resit_date / test_resit_date saqlangan bo'lsa (admin allaqachon yaratgan)
+                //  - YOKI: 1-urinish kerakli sanalari belgilangan va o'tib bo'lgan
+                //    (closing_form ga qarab) hamda quyidagi avto-signallardan birortasi rost:
+                //      - student_grades.attempt=2 yozuvi mavjud (qo'lda 12a ga o'tkazilgan)
+                //      - talabalar yuklangan bo'lsa: birortasida effective failed_attempt1
+                //      - eski raw <60 signali (talabalar yuklanmagan holat uchun)
                 $has2Data = !empty($item['oski_resit_date']) || !empty($item['test_resit_date']);
                 $explicit2 = isset($attemptExistsByKey[$needsKeyBase . '|2']);
                 $needs2Raw = isset($needsByKey[$needsKeyBase . '|2']);
@@ -4618,7 +4621,17 @@ class AcademicScheduleController extends Controller
                         }
                     }
                 }
-                $show2 = $has2Data || $explicit2 || $anyStudentNeeds2 || ($needs2Raw && !$studentsAttached);
+                $attempt1Done = $this->isAttemptDatesPassed(
+                    $item['closing_form'] ?? null,
+                    $item['oski_date'] ?? null,
+                    $item['oski_na'] ?? false,
+                    $item['test_date'] ?? null,
+                    $item['test_na'] ?? false
+                );
+                $show2 = $has2Data || (
+                    ($explicit2 || $anyStudentNeeds2 || ($needs2Raw && !$studentsAttached))
+                    && $attempt1Done
+                );
 
                 $row2 = null;
                 if ($show2) {
@@ -4644,7 +4657,17 @@ class AcademicScheduleController extends Controller
                         }
                     }
                 }
-                $show3 = $has3Data || $explicit3 || $anyStudentNeeds3 || ($needs3Raw && !$studentsAttached);
+                $attempt2Done = $this->isAttemptDatesPassed(
+                    $item['closing_form'] ?? null,
+                    $item['oski_resit_date'] ?? null,
+                    false,
+                    $item['test_resit_date'] ?? null,
+                    false
+                );
+                $show3 = $has3Data || (
+                    ($explicit3 || $anyStudentNeeds3 || ($needs3Raw && !$studentsAttached))
+                    && $attempt2Done
+                );
 
                 $row3 = null;
                 if ($show3) {
@@ -4669,6 +4692,49 @@ class AcademicScheduleController extends Controller
             }
             return $expanded;
         })->filter(fn($items) => $items->isNotEmpty());
+    }
+
+    /**
+     * closing_form ga qarab urinishning kerakli imtihon sanalari belgilangan
+     * va bugundan oldin o'tib bo'lganini tekshiradi.
+     * "na" (qatnashmadi) bayrog'i sana o'rnini bosadi.
+     */
+    private function isAttemptDatesPassed(?string $closingForm, ?string $oskiDate, bool $oskiNa, ?string $testDate, bool $testNa): bool
+    {
+        $today = \Carbon\Carbon::now()->startOfDay();
+        $passed = function (?string $date) use ($today): bool {
+            if (!$date) return false;
+            try {
+                return \Carbon\Carbon::parse($date)->startOfDay()->lt($today);
+            } catch (\Throwable $e) {
+                return false;
+            }
+        };
+
+        $oskiOk = $oskiNa || $passed($oskiDate);
+        $testOk = $testNa || $passed($testDate);
+
+        switch ($closingForm) {
+            case 'oski':
+                return $oskiOk;
+            case 'test':
+                return $testOk;
+            case 'oski_test':
+                return $oskiOk && $testOk;
+            case 'normativ':
+            case 'sinov':
+            case 'none':
+                // Bu shakllarda OSKI/Test imtihon sanasi yo'q — sana to'sig'i qo'llanmaydi.
+                return true;
+            case '':
+            case null:
+            default:
+                // closing_form sozlanmagan yoki noma'lum — qaysi sana talab qilinishi
+                // aniq emas (masalan eski o'quv reja qatori). Kamida bitta OSKI yoki
+                // Test sanasi qo'yilib o'tgan bo'lsagina urinish tugagan deb hisoblaymiz —
+                // shunda erta (sana belgilanmagan) 2-urinish ro'yxatga chiqmaydi.
+                return $oskiOk || $testOk;
+        }
     }
 
     /**

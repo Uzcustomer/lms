@@ -1388,6 +1388,10 @@ class AcademicScheduleController extends Controller
                     $ynItem['yn_date_carbon'] = $def['date_carbon'];
                     $ynItem['yn_na'] = $def['attempt'] === 1 ? $def['na'] : false;
                     $ynItem['test_time'] = $def['time'];
+                    // Moodle quiz-resolution status for this attempt (read from
+                    // the last push result Mark already persisted on the row).
+                    $ynItem['moodle_status'] = $this->computeMoodleStatus(
+                        $item, $def['yn_type'], $def['attempt'], $ynItem['yn_na']);
                     // Urinishga mos talabalar — show_students yoqilganda ko'rsatish uchun
                     if (!empty($item['students'])) {
                         $ynItem['students'] = $this->filterStudentsForAttempt($item['students'], $def['attempt']);
@@ -1487,6 +1491,80 @@ class AcademicScheduleController extends Controller
             'urinishFilter' => $urinishFilter,
             'showStudents' => $showStudents,
         ];
+    }
+
+    /**
+     * Whether this schedule's quiz resolves on Moodle, derived from the last
+     * push result Mark persisted on the ExamSchedule row. Only attempt 1 is
+     * pushed to Moodle, so resit rows return 'na'.
+     *
+     * @return string ok | notfound | error | pending | na
+     */
+    private function computeMoodleStatus(array $item, string $ynType, int $attempt, bool $na): string
+    {
+        if ($attempt !== 1 || $na) {
+            return 'na';
+        }
+
+        $prefix = $ynType === 'OSKI' ? 'oski' : 'test';
+        $error = $item[$prefix . '_moodle_error'] ?? null;
+        $syncedAt = $item[$prefix . '_moodle_synced_at'] ?? null;
+
+        if (!empty($error)) {
+            $err = is_string($error) ? $error : json_encode($error);
+            if (str_contains($err, 'coursenotfound') || str_contains($err, 'quiznotfound')) {
+                return 'notfound';
+            }
+            return 'error';
+        }
+        if (!empty($syncedAt)) {
+            return 'ok';
+        }
+        return 'pending';
+    }
+
+    /**
+     * AJAX/form: re-push a single (schedule, yn_type) to Moodle synchronously
+     * so the proctor sees the fresh quiz-resolution status without waiting for
+     * the queue. The push itself is idempotent on the Moodle side.
+     */
+    public function recheckMoodle(Request $request)
+    {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
+        if ($this->isTestCenterReadOnly()) {
+            return back()->with('error', 'Sizda bu amalni bajarish huquqi yo\'q.');
+        }
+
+        $scheduleId = (int) $request->input('schedule_id');
+        $ynType = strtolower((string) $request->input('yn_type'));
+        $ynType = $ynType === 'oski' ? 'oski' : 'test';
+
+        $schedule = ExamSchedule::find($scheduleId);
+        if (!$schedule) {
+            return back()->with('error', 'Imtihon jadvali yozuvi topilmadi.');
+        }
+
+        $timeField = $ynType . '_time';
+        $unscheduled = empty($schedule->{$timeField});
+
+        try {
+            app(\App\Services\MoodleExamBookingService::class)->book($schedule, $ynType, $unscheduled);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('recheckMoodle xatolik: ' . $e->getMessage());
+            return back()->with('error', 'Moodle tekshiruvida xatolik: ' . $e->getMessage());
+        }
+
+        $fresh = $schedule->fresh();
+        $error = $ynType === 'oski' ? $fresh?->oski_moodle_error : $fresh?->test_moodle_error;
+        $synced = $ynType === 'oski' ? $fresh?->oski_moodle_synced_at : $fresh?->test_moodle_synced_at;
+
+        if (empty($error) && !empty($synced)) {
+            return back()->with('success', 'Moodle bilan tekshirildi: quiz topildi.');
+        }
+        return back()->with('error', 'Moodle bilan tekshirildi: quiz topilmadi yoki xato — '
+            . substr((string) $error, 0, 200));
     }
 
     /**
@@ -1859,6 +1937,10 @@ class AcademicScheduleController extends Controller
                     'test_resit2_date' => $existing?->test_resit2_date?->format('Y-m-d'),
                     'test_resit2_time' => $existing?->test_resit2_time,
                     'schedule_id' => $existing?->id,
+                    'oski_moodle_synced_at' => $existing?->oski_moodle_synced_at,
+                    'oski_moodle_error' => $existing?->oski_moodle_error,
+                    'test_moodle_synced_at' => $existing?->test_moodle_synced_at,
+                    'test_moodle_error' => $existing?->test_moodle_error,
                 ];
 
                 if ($includeCarbon) {

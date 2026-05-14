@@ -197,7 +197,36 @@ class StudentController extends Controller
             'total'  => array_sum(array_column($byEduGender, 'total')),
         ];
 
-        return view('admin.students.statistics', compact('stats'));
+        // Yoshi kesimi — 30 yoshdan kichik / katta (birth_date asosida).
+        $ageRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->whereNotNull('birth_date')
+            ->selectRaw("SUM(TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) < 30) as younger,
+                         SUM(TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) >= 30) as older")
+            ->first();
+        $ageStats = [
+            'younger' => (int) ($ageRows->younger ?? 0),
+            'older'   => (int) ($ageRows->older ?? 0),
+        ];
+
+        // To'lov shakli kesimi — Davlat granti / To'lov-kontrakt.
+        $payRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('payment_form_name, COUNT(*) as total')
+            ->groupBy('payment_form_name')
+            ->get();
+        $payStats = ['grant' => 0, 'contract' => 0];
+        foreach ($payRows as $p) {
+            $name = mb_strtolower(trim((string) $p->payment_form_name));
+            if (str_contains($name, 'grant') || str_contains($name, 'byudjet') || str_contains($name, 'budjet')) {
+                $payStats['grant'] += (int) $p->total;
+            } else {
+                // qolganlari (to'lov-kontrakt, kontrakt, shartnoma, ...) kontraktga
+                $payStats['contract'] += (int) $p->total;
+            }
+        }
+
+        return view('admin.students.statistics', compact('stats', 'ageStats', 'payStats'));
     }
 
     public function disabledIndex(Request $request)

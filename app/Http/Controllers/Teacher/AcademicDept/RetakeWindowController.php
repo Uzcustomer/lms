@@ -503,21 +503,35 @@ class RetakeWindowController extends Controller
      * ham o'quv bo'limi, ham registrator). Shuning uchun FAQAT hasAnyRole
      * emas, AKTIV rolni tekshiramiz — registrator rolida ishlayotgan bo'lsa,
      * o'quv bo'limi roli bo'lsa-da, boshqaruv tugmalari ko'rinmaydi.
+     *
+     * session('active_role') bo'sh bo'lishi mumkin (foydalanuvchi rolni
+     * hech qachon almashtirmagan) — bu holatda sidebar bilan bir xil
+     * fallback: foydalanuvchining birinchi roli ishlatiladi.
      */
     private function activeRoleCanManage(): bool
     {
+        $user = RetakeAccess::currentStaff();
+        if (!$user) {
+            return false;
+        }
+
+        $userRoles = $user->getRoleNames()->toArray();
         $activeRole = (string) session('active_role', '');
+
+        // Fallback (sidebar bilan bir xil): active_role bo'sh yoki
+        // foydalanuvchida bunday rol yo'q bo'lsa — birinchi rolni olamiz
+        if ($activeRole === '' || !in_array($activeRole, $userRoles, true)) {
+            $activeRole = $userRoles[0] ?? '';
+        }
+
         $manageRoles = [
             \App\Enums\ProjectRole::ACADEMIC_DEPARTMENT->value,
             \App\Enums\ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value,
             \App\Enums\ProjectRole::SUPERADMIN->value,
             \App\Enums\ProjectRole::ADMIN->value,
         ];
-        if (!in_array($activeRole, $manageRoles, true)) {
-            return false;
-        }
-        // Aktiv rol mos, lekin foydalanuvchida haqiqatan shu rol borligini ham tekshiramiz
-        return RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff());
+
+        return in_array($activeRole, $manageRoles, true);
     }
 
     private function canManage(): bool

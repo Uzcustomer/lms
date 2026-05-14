@@ -48,6 +48,40 @@ class RetakeAccess
     }
 
     /**
+     * AKTIV rol bo'yicha qayta o'qish oynalari/sessiyalarini boshqarish ruxsati.
+     *
+     * Foydalanuvchi bir nechta rolga ega bo'lishi mumkin (masalan, ham o'quv
+     * bo'limi, ham registrator). canManageAcademicDept() hasAnyRole() ishlatadi
+     * — bu barcha rollarni tekshiradi. Bu metod esa FAQAT aktiv (session'da
+     * tanlangan) rolni tekshiradi. Registrator rolida ishlayotgan foydalanuvchi
+     * o'quv bo'limi roliga ham ega bo'lsa-da, boshqaruvga ruxsat bermaydi.
+     *
+     * session('active_role') bo'sh bo'lsa (rol almashtirilmagan) — sidebar
+     * bilan bir xil fallback: foydalanuvchining birinchi roli ishlatiladi.
+     */
+    public static function activeRoleCanManageRetake(): bool
+    {
+        $user = self::currentStaff();
+        if (!$user) {
+            return false;
+        }
+
+        $userRoles = $user->getRoleNames()->toArray();
+        $activeRole = (string) session('active_role', '');
+
+        if ($activeRole === '' || !in_array($activeRole, $userRoles, true)) {
+            $activeRole = $userRoles[0] ?? '';
+        }
+
+        return in_array($activeRole, [
+            ProjectRole::ACADEMIC_DEPARTMENT->value,
+            ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value,
+            ProjectRole::SUPERADMIN->value,
+            ProjectRole::ADMIN->value,
+        ], true);
+    }
+
+    /**
      * Qabul oynalari/sessiyalarni KO'RISH (faqat o'qish) ruxsati.
      * O'quv bo'limi (to'liq boshqaruv) + Registrator ofisi (faqat ko'rish) +
      * super-admin.

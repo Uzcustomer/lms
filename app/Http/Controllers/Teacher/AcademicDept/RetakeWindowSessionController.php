@@ -120,33 +120,35 @@ class RetakeWindowSessionController extends Controller
             ]);
         }
 
-        $windows = \App\Models\RetakeApplicationWindow::query()
+        $windowIds = \App\Models\RetakeApplicationWindow::query()
             ->where('session_id', $session->id)
-            ->get();
+            ->pluck('id');
 
-        $count = 0;
-        foreach ($windows as $w) {
-            $w->update([
+        $count = \App\Models\RetakeApplicationWindow::query()
+            ->whereIn('id', $windowIds)
+            ->update([
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
             ]);
-            $count++;
-        }
 
-        // Avtomatik Telegram xabar — har bir oyna uchun mos talabalarga
-        $notifiedCount = 0;
-        $notifier = app(\App\Services\Retake\RetakeNotificationService::class);
-        foreach ($windows as $w) {
-            try {
-                $notifiedCount += $notifier->notifyWindowDatesUpdated($w->fresh());
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('[Retake] notifyWindowDatesUpdated: ' . $e->getMessage());
-            }
+        // Telegram xabar JAVOBDAN KEYIN — sahifa muzlamasligi uchun.
+        if ($windowIds->isNotEmpty()) {
+            $idsArr = $windowIds->all();
+            dispatch(function () use ($idsArr) {
+                $notifier = app(\App\Services\Retake\RetakeNotificationService::class);
+                foreach (\App\Models\RetakeApplicationWindow::whereIn('id', $idsArr)->get() as $w) {
+                    try {
+                        $notifier->notifyWindowDatesUpdated($w);
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning('[Retake] notifyWindowDatesUpdated: ' . $e->getMessage());
+                    }
+                }
+            })->afterResponse();
         }
 
         $msg = "{$count} ta oyna sanalari yangilandi: {$data['start_date']} → {$data['end_date']}";
-        if ($notifiedCount > 0) {
-            $msg .= " · {$notifiedCount} talabaga Telegram xabar yuborildi";
+        if ($windowIds->isNotEmpty()) {
+            $msg .= " · talabalarga Telegram xabar fonida yuborilmoqda";
         }
 
         return redirect()->back()->with('success', $msg);

@@ -350,6 +350,7 @@ class _SyncedTableState extends State<_SyncedTable> {
               Expanded(
                 child: ListView.builder(
                   controller: _frozenVertical,
+                  padding: EdgeInsets.zero,
                   itemCount: widget.students.length,
                   itemBuilder: (_, i) {
                     final student = widget.students[i];
@@ -415,6 +416,7 @@ class _SyncedTableState extends State<_SyncedTable> {
                   Expanded(
                     child: ListView.builder(
                       controller: _dataVertical,
+                      padding: EdgeInsets.zero,
                       itemCount: widget.students.length,
                       itemBuilder: (_, i) => SizedBox(
                         height: _rowH,

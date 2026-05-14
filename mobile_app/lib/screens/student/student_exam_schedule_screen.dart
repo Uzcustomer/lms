@@ -190,6 +190,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                     onRefresh: _loadExams,
                     child: selectedExams.isEmpty
                         ? ListView(
+                            padding: EdgeInsets.zero,
                             children: [
                               SizedBox(
                                 height: 200,

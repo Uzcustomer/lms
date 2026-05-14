@@ -137,6 +137,7 @@ class StudentUsefulScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: GridView.builder(
                     shrinkWrap: true,
+                    padding: EdgeInsets.zero,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: services.length,
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(

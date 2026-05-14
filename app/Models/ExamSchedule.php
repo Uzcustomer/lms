@@ -101,6 +101,12 @@ class ExamSchedule extends Model
      * place) so a duplicate dispatch from an explicit call site does
      * no harm.
      *
+     * As soon as the test-centre picks an exam date — even before a
+     * time is set — we push an "unscheduled" hold so Moodle blocks the
+     * quiz and the proctor sees the booking, instead of leaving the
+     * exam silently open. Filling in the time later re-pushes as a full
+     * booking; clearing the time again re-pushes as an unscheduled hold.
+     *
      * Only attempt-1 columns are watched. Resit columns
      * (oski_resit_*, test_resit_*, etc.) belong to attempt 2/3 and are
      * not supported by the current book_group_exam web service, so we
@@ -114,15 +120,17 @@ class ExamSchedule extends Model
                 if (!$schedule->wasChanged($watched)) {
                     continue;
                 }
-                // Only push when the full window is set and not flagged N/A.
+                // Nothing bookable: flagged N/A, or no exam date at all.
                 if (
-                    empty($schedule->{$yn . '_date'}) ||
-                    empty($schedule->{$yn . '_time'}) ||
-                    !empty($schedule->{$yn . '_na'})
+                    !empty($schedule->{$yn . '_na'}) ||
+                    empty($schedule->{$yn . '_date'})
                 ) {
                     continue;
                 }
-                BookMoodleGroupExam::dispatch($schedule->id, $yn);
+                // Date set but no time yet -> push an unscheduled hold;
+                // date + time set -> push a full booking.
+                $unscheduled = empty($schedule->{$yn . '_time'});
+                BookMoodleGroupExam::dispatch($schedule->id, $yn, $unscheduled);
             }
         });
     }

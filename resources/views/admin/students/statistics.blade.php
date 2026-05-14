@@ -154,15 +154,32 @@
     }
     .pie-card h3 { font-size: 19px; font-weight: 700; color: #0f172a; margin-bottom: 16px; }
     /* Chap: chart, o'ng: ko'rsatkichlar */
-    .pie-body { display: flex; align-items: center; gap: 22px; }
-    .pie-canvas-wrap { position: relative; height: 220px; width: 220px; flex-shrink: 0; }
-    .pie-legend { flex: 1; display: flex; flex-direction: column; gap: 14px; }
-    .pie-legend-item { display: flex; align-items: center; gap: 10px; }
-    .pie-legend-dot { width: 14px; height: 14px; border-radius: 4px; flex-shrink: 0; }
+    .pie-body { display: flex; align-items: center; gap: 44px; }
+    .pie-canvas-wrap { position: relative; height: 230px; width: 230px; flex-shrink: 0; }
+    .pie-legend { flex: 1; display: flex; flex-direction: column; gap: 22px; }
+    .pie-legend-item { display: flex; align-items: center; gap: 14px; }
+    .pie-legend-icon {
+        width: 44px; height: 44px;
+        border-radius: 12px;
+        display: inline-flex; align-items: center; justify-content: center;
+        color: #fff; flex-shrink: 0;
+    }
     .pie-legend-text { display: flex; flex-direction: column; }
-    .pie-legend-label { font-size: 13px; color: #64748b; }
-    .pie-legend-value { font-size: 22px; font-weight: 800; color: #0f172a; line-height: 1.1; }
-    .pie-legend-value .pie-legend-pct { font-size: 13px; font-weight: 700; color: #94a3b8; margin-left: 6px; }
+    .pie-legend-label { font-size: 14px; color: #64748b; margin-bottom: 2px; }
+    .pie-legend-value { font-size: 28px; font-weight: 800; color: #0f172a; line-height: 1.05; }
+    .pie-legend-value .pie-legend-pct { font-size: 14px; font-weight: 700; color: #94a3b8; margin-left: 8px; }
+
+    /* Kurslar bar chart */
+    .course-bar-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 22px 24px;
+        box-shadow: 0 4px 14px -4px rgba(15, 23, 42, .12);
+        margin-top: 22px;
+    }
+    .course-bar-card h3 { font-size: 19px; font-weight: 700; color: #0f172a; margin-bottom: 16px; }
+    .course-bar-wrap { position: relative; height: 420px; }
 </style>
 
 <div class="w-full px-4 py-6"
@@ -217,6 +234,14 @@
             $grant    = (int) ($payStats['grant'] ?? 0);
             $contract = (int) ($payStats['contract'] ?? 0);
             $payTotal = $grant + $contract;
+
+            // Legend ikonkalari
+            $legendIcons = [
+                'young'    => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 8v4l3 2m6-2a9 9 0 11-18 0 9 9 0 0118 0z"/>',
+                'old'      => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/>',
+                'grant'    => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 14l9-5-9-5-9 5 9 5zm0 0v6m-6-3v-3"/>',
+                'contract' => '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M3 10h18M7 15h2m4 0h4M5 5h14a2 2 0 012 2v10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2z"/>',
+            ];
         @endphp
 
         <div class="stats-inner-tabs">
@@ -296,7 +321,9 @@
                         </div>
                         <div class="pie-legend">
                             <div class="pie-legend-item">
-                                <span class="pie-legend-dot" style="background:#6366f1"></span>
+                                <span class="pie-legend-icon" style="background:#6366f1">
+                                    <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $legendIcons['young'] !!}</svg>
+                                </span>
                                 <span class="pie-legend-text">
                                     <span class="pie-legend-label">30 yoshdan kichiklar</span>
                                     <span class="pie-legend-value">
@@ -306,7 +333,9 @@
                                 </span>
                             </div>
                             <div class="pie-legend-item">
-                                <span class="pie-legend-dot" style="background:#22c55e"></span>
+                                <span class="pie-legend-icon" style="background:#22c55e">
+                                    <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $legendIcons['old'] !!}</svg>
+                                </span>
                                 <span class="pie-legend-text">
                                     <span class="pie-legend-label">30 yoshdan oshganlar</span>
                                     <span class="pie-legend-value">
@@ -328,7 +357,9 @@
                         </div>
                         <div class="pie-legend">
                             <div class="pie-legend-item">
-                                <span class="pie-legend-dot" style="background:#a855f7"></span>
+                                <span class="pie-legend-icon" style="background:#a855f7">
+                                    <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $legendIcons['grant'] !!}</svg>
+                                </span>
                                 <span class="pie-legend-text">
                                     <span class="pie-legend-label">Davlat granti</span>
                                     <span class="pie-legend-value">
@@ -338,7 +369,9 @@
                                 </span>
                             </div>
                             <div class="pie-legend-item">
-                                <span class="pie-legend-dot" style="background:#f43f5e"></span>
+                                <span class="pie-legend-icon" style="background:#f43f5e">
+                                    <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $legendIcons['contract'] !!}</svg>
+                                </span>
                                 <span class="pie-legend-text">
                                     <span class="pie-legend-label">To'lov-kontrakt</span>
                                     <span class="pie-legend-value">
@@ -366,7 +399,9 @@
                         </div>
                         <div class="pie-legend">
                             <div class="pie-legend-item">
-                                <span class="pie-legend-dot" style="background:#6366f1"></span>
+                                <span class="pie-legend-icon" style="background:#6366f1">
+                                    <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $legendIcons['young'] !!}</svg>
+                                </span>
                                 <span class="pie-legend-text">
                                     <span class="pie-legend-label">30 yoshdan kichiklar</span>
                                     <span class="pie-legend-value">
@@ -376,7 +411,9 @@
                                 </span>
                             </div>
                             <div class="pie-legend-item">
-                                <span class="pie-legend-dot" style="background:#22c55e"></span>
+                                <span class="pie-legend-icon" style="background:#22c55e">
+                                    <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $legendIcons['old'] !!}</svg>
+                                </span>
                                 <span class="pie-legend-text">
                                     <span class="pie-legend-label">30 yoshdan oshganlar</span>
                                     <span class="pie-legend-value">
@@ -391,9 +428,67 @@
             </div>
         </div>
 
+        {{-- Kurslar tabi — KPI raqamlar + stacked bar chart --}}
+        <div x-show="inner.talabalar === 'kurslar'" x-cloak>
+            @php
+                // KPI kartalar uchun — 1..6 kurs (mavjud bo'lganlari)
+                $allLevels = array_keys($courseTotals);
+                sort($allLevels);
+                // Bar chart datasi: ta'lim turi × kurs
+                $eduLabels = ['bakalavr' => 'Bakalavr', 'magistr' => 'Magistratura', 'ordinatura' => 'Ordinatura'];
+                $courseColors = [
+                    1 => '#3b82f6', 2 => '#ec4899', 3 => '#f59e0b',
+                    4 => '#22c55e', 5 => '#60a5fa', 6 => '#f97316',
+                    7 => '#a855f7', 8 => '#14b8a6',
+                ];
+                // chartData[eduKey][level] = full breakdown
+                $courseChartData = [];
+                foreach ($eduLabels as $eduKey => $_) {
+                    foreach ($allLevels as $lvl) {
+                        $cs = $courseStats[$eduKey][$lvl] ?? null;
+                        $courseChartData[$eduKey][$lvl] = $cs
+                            ? ['total' => $cs['total'], 'male' => $cs['male'], 'female' => $cs['female'], 'semesters' => $cs['semesters']]
+                            : ['total' => 0, 'male' => 0, 'female' => 0, 'semesters' => []];
+                    }
+                }
+            @endphp
+
+            {{-- KPI raqamlar --}}
+            <div class="course-bar-card" style="margin-top:0">
+                <h3>Kurslar</h3>
+                <div style="display:flex; flex-wrap:wrap; gap:36px;">
+                    @foreach($allLevels as $lvl)
+                        <div>
+                            <div style="font-size:14px; color:#94a3b8; margin-bottom:2px;">{{ $lvl }}-kurs</div>
+                            <div style="font-size:32px; font-weight:800; color:#0f172a;"
+                                 data-count="{{ (int) $courseTotals[$lvl] }}">{{ number_format($courseTotals[$lvl], 0, '.', ' ') }}</div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+
+            {{-- Stacked bar chart --}}
+            <div class="course-bar-card">
+                <h3>Ta'lim turi bo'yicha kurslar taqsimoti</h3>
+                <div class="course-bar-wrap">
+                    <canvas id="courseChart"></canvas>
+                </div>
+            </div>
+
+            <script type="application/json" id="courseChartData">
+                @json([
+                    'levels'    => $allLevels,
+                    'eduKeys'   => array_keys($eduLabels),
+                    'eduLabels' => array_values($eduLabels),
+                    'colors'    => $courseColors,
+                    'data'      => $courseChartData,
+                ])
+            </script>
+        </div>
+
         {{-- Boshqa inner tablar (hozircha bo'sh) --}}
         @foreach($innerTabs as $key => $label)
-            @if(in_array($key, ['umumiy', 'yoshi'])) @continue @endif
+            @if(in_array($key, ['umumiy', 'yoshi', 'kurslar'])) @continue @endif
             <div x-show="inner.talabalar === '{{ $key }}'" x-cloak>
                 <div class="stats-empty">
                     <strong>{{ $label }}</strong> — statistika hali tayyor emas.
@@ -509,12 +604,89 @@
             ['#a855f7', '#f43f5e']);
     }
 
+    // ─── Kurslar stacked bar chart ─────────────────────────────────────
+    let courseChartCfg = null;
+    function getCourseCfg() {
+        if (courseChartCfg !== null) return courseChartCfg;
+        const el = document.getElementById('courseChartData');
+        if (!el) { courseChartCfg = false; return false; }
+        try { courseChartCfg = JSON.parse(el.textContent); }
+        catch (e) { courseChartCfg = false; }
+        return courseChartCfg;
+    }
+
+    function renderCourseChart() {
+        const canvas = document.getElementById('courseChart');
+        if (!canvas) return;
+        const cfg = getCourseCfg();
+        if (!cfg) return;
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+
+        const fmt = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
+
+        // Har kurs (level) uchun bitta dataset — stacked
+        const datasets = cfg.levels.map(lvl => ({
+            label: lvl + '-kurs',
+            data: cfg.eduKeys.map(ek => (cfg.data[ek] && cfg.data[ek][lvl] ? cfg.data[ek][lvl].total : 0)),
+            backgroundColor: cfg.colors[lvl] || '#94a3b8',
+            borderWidth: 1,
+            borderColor: '#fff',
+            borderRadius: 4,
+        }));
+
+        new Chart(canvas, {
+            type: 'bar',
+            data: { labels: cfg.eduLabels, datasets: datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: { duration: 1000, easing: 'easeOutCubic' },
+                interaction: { mode: 'nearest', intersect: true },
+                scales: {
+                    x: { stacked: true, grid: { display: false } },
+                    y: { stacked: true, beginAtZero: true, ticks: { callback: (v) => fmt(v) } },
+                },
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 14, boxWidth: 14 } },
+                    tooltip: {
+                        // Rasmdagi kabi boy tooltip: kurs -> Erkak/Ayol -> semestrlar
+                        callbacks: {
+                            title: (items) => items.length ? items[0].label : '',
+                            label: (ctx) => {
+                                const ek = cfg.eduKeys[ctx.dataIndex];
+                                const lvl = cfg.levels[ctx.datasetIndex];
+                                const d = cfg.data[ek] && cfg.data[ek][lvl] ? cfg.data[ek][lvl] : null;
+                                if (!d || !d.total) return null;
+                                const lines = [];
+                                lines.push(lvl + '-kurs: ' + fmt(d.total));
+                                lines.push('   Erkak: ' + fmt(d.male) + ' · Ayol: ' + fmt(d.female));
+                                const sems = d.semesters || {};
+                                const semParts = Object.keys(sems)
+                                    .sort((a, b) => Number(a) - Number(b))
+                                    .map(s => s + '-semestr: ' + fmt(sems[s]));
+                                if (semParts.length) {
+                                    // 2 tadan bo'lib yangi qatorlarga
+                                    for (let i = 0; i < semParts.length; i += 2) {
+                                        lines.push('   ' + semParts.slice(i, i + 2).join(' · '));
+                                    }
+                                }
+                                return lines;
+                            },
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     // Chart.js canvas yashirin (display:none) bo'lsa o'lcham 0 bo'lib chiqadi —
     // shuning uchun tab ko'ringanda render qilamiz.
     window.statsRenderCharts = function () {
         renderAge('ageChart');
         renderPay('payChart');
         renderAge('ageChartTab');
+        renderCourseChart();
     };
 
     document.addEventListener('DOMContentLoaded', () => {

@@ -226,7 +226,58 @@ class StudentController extends Controller
             }
         }
 
-        return view('admin.students.statistics', compact('stats', 'ageStats', 'payStats'));
+        // Kurslar kesimi — ta'lim turi × kurs (level_code) × jins × semestr.
+        // Kurslar tabidagi KPI raqamlari va stacked bar chart uchun.
+        $courseRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->whereNotNull('level_code')
+            ->selectRaw('education_type_name, level_code, gender_name, semester_code, COUNT(*) as total')
+            ->groupBy('education_type_name', 'level_code', 'gender_name', 'semester_code')
+            ->get();
+
+        $eduKeyOf = function (string $type): ?string {
+            $low = mb_strtolower($type);
+            if (str_contains($low, 'bakalavr')) return 'bakalavr';
+            if (str_contains($low, 'magistr')) return 'magistr';
+            if (str_contains($low, 'ordinatura')) return 'ordinatura';
+            return null;
+        };
+
+        // courseStats[eduKey][level] = ['total','male','female','semesters'=>[sem=>count]]
+        $courseStats = [];
+        // courseTotals[level] = jami (barcha ta'lim turlari) — KPI kartalar uchun
+        $courseTotals = [];
+        foreach ($courseRows as $r) {
+            $eduKey = $eduKeyOf((string) $r->education_type_name);
+            if ($eduKey === null) continue;
+            $level = (int) $r->level_code;
+            if ($level < 1) continue;
+            $cnt = (int) $r->total;
+            $gender = mb_strtolower(trim((string) $r->gender_name));
+
+            if (!isset($courseStats[$eduKey][$level])) {
+                $courseStats[$eduKey][$level] = ['total' => 0, 'male' => 0, 'female' => 0, 'semesters' => []];
+            }
+            $courseStats[$eduKey][$level]['total'] += $cnt;
+            if (str_starts_with($gender, 'erkak') || $gender === 'male' || $gender === 'm') {
+                $courseStats[$eduKey][$level]['male'] += $cnt;
+            } elseif (str_starts_with($gender, 'ayol') || str_starts_with($gender, 'xotin')
+                    || $gender === 'female' || $gender === 'f') {
+                $courseStats[$eduKey][$level]['female'] += $cnt;
+            }
+            $sem = (string) ($r->semester_code ?? '');
+            if ($sem !== '') {
+                $courseStats[$eduKey][$level]['semesters'][$sem] =
+                    ($courseStats[$eduKey][$level]['semesters'][$sem] ?? 0) + $cnt;
+            }
+
+            $courseTotals[$level] = ($courseTotals[$level] ?? 0) + $cnt;
+        }
+        ksort($courseTotals);
+
+        return view('admin.students.statistics', compact(
+            'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals'
+        ));
     }
 
     public function disabledIndex(Request $request)

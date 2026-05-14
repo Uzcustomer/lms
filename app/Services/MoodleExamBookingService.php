@@ -271,7 +271,7 @@ class MoodleExamBookingService
         //    {direction}" tail is group-specific and identical across subjects,
         //    so lift it off any of the group's recorded quiz names in the same
         //    semester and prepend this schedule's subject name.
-        $subjectName = trim((string) $schedule->subject_name);
+        $subjectName = $this->stripGroupSuffix(trim((string) $schedule->subject_name));
         $targetNsem = $this->resolveTargetNsem($schedule);
         if ($subjectName === '' || $targetNsem === null) {
             return null;
@@ -310,6 +310,17 @@ class MoodleExamBookingService
             return $m[1] . '-sem';
         }
         return null;
+    }
+
+    /**
+     * Drop a trailing parallel-stream suffix — " (a)", " (b)", " (c)" — from a
+     * HEMIS subject name. Mark carries it on subject_name for split groups, but
+     * the Moodle quiz name never includes it, so it must come off before the
+     * quiz name is rebuilt in resolveQuizMiddle() step 2.
+     */
+    private function stripGroupSuffix(string $name): string
+    {
+        return trim(preg_replace('/\s*\([A-Za-z0-9]{1,4}\)\s*$/u', '', $name));
     }
 
     /**

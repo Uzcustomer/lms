@@ -19,6 +19,18 @@ class BookMoodleGroupExam implements ShouldQueue
     public int $timeout = 120;
     public array $backoff = [30, 120, 300];
 
+    /**
+     * WS error codes that will never succeed on retry - the (course, quiz)
+     * mapping is wrong, not the network. Retrying just burns the queue and
+     * fills failed_jobs; the error is already persisted on the schedule.
+     */
+    private const PERMANENT_WS_ERRORS = [
+        'quiznotfound',
+        'coursenotfound',
+        'manualenrolnotenabled',
+        'invalid_parameter_exception',
+    ];
+
     public function __construct(
         public int $examScheduleId,
         public string $ynType,
@@ -37,13 +49,17 @@ class BookMoodleGroupExam implements ShouldQueue
 
         $result = $service->book($schedule, $this->ynType);
 
-        // Skipped (no config / na / missing time) — do not retry.
+        // Skipped (no config / na / missing time / no quiz history) - do not retry.
         if (!empty($result['skipped'])) {
             return;
         }
 
-        // Persistent failure (e.g. missing course_idnumber): no point retrying.
-        if (!($result['ok'] ?? false) && !empty($result['error'])) {
+        if ($result['ok'] ?? false) {
+            return;
+        }
+
+        // Top-level failure (e.g. cannot parse date/time): permanent, no retry.
+        if (!empty($result['error'])) {
             Log::warning('BookMoodleGroupExam failed (no retry)', [
                 'schedule_id' => $this->examScheduleId,
                 'yn' => $this->ynType,
@@ -52,9 +68,33 @@ class BookMoodleGroupExam implements ShouldQueue
             return;
         }
 
-        // Per-language WS call had a transient error → trigger retry.
-        if (!($result['ok'] ?? false)) {
-            $this->release($this->backoff[$this->attempts() - 1] ?? 300);
+        // Per-language WS calls failed. Retry only when at least one failure
+        // looks transient (network / timeout). quiznotfound / coursenotfound
+        // and friends are permanent mapping problems - retrying just fills
+        // failed_jobs while the error is already persisted on the schedule.
+        $hasTransient = false;
+        foreach ($result['calls'] ?? [] as $c) {
+            if ($c['ok'] ?? false) {
+                continue;
+            }
+            $resp = $c['response'] ?? null;
+            $code = is_array($resp)
+                ? (string) ($resp['errorcode'] ?? $resp['exception'] ?? '')
+                : '';
+            if ($code === '' || !in_array($code, self::PERMANENT_WS_ERRORS, true)) {
+                $hasTransient = true;
+                break;
+            }
         }
+
+        if ($hasTransient) {
+            $this->release($this->backoff[$this->attempts() - 1] ?? 300);
+            return;
+        }
+
+        Log::warning('BookMoodleGroupExam: permanent WS failure, not retrying', [
+            'schedule_id' => $this->examScheduleId,
+            'yn' => $this->ynType,
+        ]);
     }
 }

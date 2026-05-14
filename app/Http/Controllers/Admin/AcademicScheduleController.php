@@ -1216,14 +1216,16 @@ class AcademicScheduleController extends Controller
                 $isPullik = $jnLow || $mtLow || ($davomatPct >= 25);
 
                 // "Tasdiqlangan yiqilish" mantiqi:
-                //  - Baho kiritilgan va past bo'lsa → yiqilgan
-                //  - Baho yo'q va imtihon sanasi o'tib ketgan bo'lsa → kelmagan = yiqilgan
-                //  - Baho yo'q va sana hali kelmagan/belgilanmagan bo'lsa → erta xulosa qilmaymiz
+                //  - Imtihon sanasi belgilanmagan yoki hali kelmagan bo'lsa → imtihon
+                //    o'tmagan, mavjud baho (hatto 0 ham) placeholder hisoblanadi —
+                //    "yiqilgan" deb erta xulosa qilmaymiz
+                //  - Sana o'tgan + baho kiritilgan va past bo'lsa → yiqilgan
+                //  - Sana o'tgan + baho yo'q bo'lsa → kelmagan = yiqilgan
                 $confirmFailed = function (bool $required, $grade, $date) use ($today, $minLimit) {
                     if (!$required) return false;
+                    if ($date === null || ((string) $date) > $today) return false; // imtihon hali bo'lmagan
                     if ($grade !== null) return ((float) $grade) < $minLimit;
-                    if ($date === null) return false; // sanasi belgilanmagan — hali baholay olmaymiz
-                    return ((string) $date) <= $today; // sana o'tdi, baho yo'q → kelmadi
+                    return true; // sana o'tdi, baho yo'q → kelmadi
                 };
 
                 // Yiqilgan attempt=1: pullik yoki tasdiqlangan OSKI/Test yiqilishi

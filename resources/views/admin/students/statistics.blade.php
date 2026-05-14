@@ -451,6 +451,16 @@
                             : ['total' => 0, 'male' => 0, 'female' => 0, 'semesters' => []];
                     }
                 }
+
+                // Chart konfiguratsiyasini JSON sifatida tayyorlaymiz — @json
+                // direktivasi ko'p qatorli massivni xato o'qigani uchun @php da.
+                $courseChartJson = json_encode([
+                    'levels'    => $allLevels,
+                    'eduKeys'   => array_keys($eduLabels),
+                    'eduLabels' => array_values($eduLabels),
+                    'colors'    => $courseColors,
+                    'data'      => $courseChartData,
+                ]);
             @endphp
 
             {{-- KPI raqamlar --}}
@@ -475,15 +485,7 @@
                 </div>
             </div>
 
-            <script type="application/json" id="courseChartData">
-                @json([
-                    'levels'    => $allLevels,
-                    'eduKeys'   => array_keys($eduLabels),
-                    'eduLabels' => array_values($eduLabels),
-                    'colors'    => $courseColors,
-                    'data'      => $courseChartData,
-                ])
-            </script>
+            <script type="application/json" id="courseChartData">{!! $courseChartJson !!}</script>
         </div>
 
         {{-- Boshqa inner tablar (hozircha bo'sh) --}}

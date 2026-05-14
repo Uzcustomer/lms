@@ -94,33 +94,59 @@
 
     .kpi-grid {
         display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-        gap: 16px;
+        grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        gap: 18px;
     }
     .kpi-card {
         background: #ffffff;
         border: 1px solid #e2e8f0;
-        border-radius: 14px;
-        padding: 18px 20px 20px;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+        border-radius: 16px;
+        padding: 24px 26px 26px;
+        box-shadow: 0 4px 14px -4px rgba(15, 23, 42, .12);
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .kpi-card:hover {
+        transform: translateY(-4px) scale(1.025);
+        box-shadow: 0 14px 30px -8px rgba(15, 23, 42, .22);
     }
     .kpi-icon {
-        width: 40px; height: 40px;
-        border-radius: 10px;
-        background: #f1f5f9;
-        color: #475569;
+        width: 56px; height: 56px;
+        border-radius: 14px;
+        background: #eef2ff;
+        color: #4f46e5;
         display: inline-flex; align-items: center; justify-content: center;
-        margin-bottom: 14px;
+        margin-bottom: 18px;
     }
-    .kpi-title { font-size: 15px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
-    .kpi-sub   { font-size: 12px; color: #94a3b8; margin-bottom: 10px; }
-    .kpi-total { font-size: 30px; font-weight: 800; color: #0f172a; line-height: 1.1; }
-    .kpi-split { display: flex; gap: 28px; margin-top: 16px; }
-    .kpi-split .lbl { display: block; font-size: 11px; color: #94a3b8; margin-bottom: 2px; }
-    .kpi-split .val { font-size: 16px; font-weight: 700; color: #0f172a; }
-    .kpi-split .pct { font-size: 12px; font-weight: 700; margin-left: 4px; }
+    .kpi-title { font-size: 20px; font-weight: 700; color: #0f172a; margin-bottom: 4px; }
+    .kpi-sub   { font-size: 14px; color: #94a3b8; margin-bottom: 12px; }
+    .kpi-total { font-size: 44px; font-weight: 800; color: #0f172a; line-height: 1.05; }
+    .kpi-split { display: flex; gap: 36px; margin-top: 20px; }
+    .kpi-split .lbl { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 3px; }
+    .kpi-split .val { font-size: 24px; font-weight: 700; color: #0f172a; }
+    .kpi-split .pct { font-size: 14px; font-weight: 700; margin-left: 5px; }
     .pct-m { color: #059669; }
     .pct-f { color: #dc2626; }
+
+    .pie-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+        gap: 18px;
+        margin-top: 22px;
+    }
+    .pie-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 22px 24px;
+        box-shadow: 0 4px 14px -4px rgba(15, 23, 42, .12);
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
+    .pie-card:hover {
+        transform: translateY(-4px) scale(1.015);
+        box-shadow: 0 14px 30px -8px rgba(15, 23, 42, .22);
+    }
+    .pie-card h3 { font-size: 19px; font-weight: 700; color: #0f172a; margin-bottom: 16px; }
+    .pie-canvas-wrap { position: relative; height: 260px; }
 </style>
 
 <div class="w-full px-4 py-6"
@@ -129,8 +155,8 @@
         inner: { talabalar: 'umumiy' }
      }"
      x-init="
-        $watch('outer', () => $nextTick(() => window.statsAnimateVisible()));
-        $watch('inner.talabalar', () => $nextTick(() => window.statsAnimateVisible()));
+        $watch('outer', () => $nextTick(() => { window.statsAnimateVisible(); window.statsRenderCharts && window.statsRenderCharts(); }));
+        $watch('inner.talabalar', () => $nextTick(() => { window.statsAnimateVisible(); window.statsRenderCharts && window.statsRenderCharts(); }));
         $nextTick(() => window.statsAnimateVisible());
      ">
 
@@ -207,7 +233,7 @@
                     @endphp
                     <div class="kpi-card">
                         <span class="kpi-icon">
-                            <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg width="30" height="30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 {!! $icons[$c['icon']] !!}
                             </svg>
                         </span>
@@ -229,11 +255,51 @@
                     </div>
                 @endforeach
             </div>
+
+            {{-- Pie chartlar — Yoshi va To'lov shakli kesimi --}}
+            @php
+                $younger = (int) ($ageStats['younger'] ?? 0);
+                $older   = (int) ($ageStats['older'] ?? 0);
+                $grant   = (int) ($payStats['grant'] ?? 0);
+                $contract = (int) ($payStats['contract'] ?? 0);
+            @endphp
+            <div class="pie-grid">
+                <div class="pie-card">
+                    <h3>Yoshi</h3>
+                    <div class="pie-canvas-wrap">
+                        <canvas id="ageChart"
+                                data-younger="{{ $younger }}"
+                                data-older="{{ $older }}"></canvas>
+                    </div>
+                </div>
+                <div class="pie-card">
+                    <h3>To'lov shakli</h3>
+                    <div class="pie-canvas-wrap">
+                        <canvas id="payChart"
+                                data-grant="{{ $grant }}"
+                                data-contract="{{ $contract }}"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Yoshi tabi — pie chart --}}
+        <div x-show="inner.talabalar === 'yoshi'" x-cloak>
+            <div class="pie-grid">
+                <div class="pie-card">
+                    <h3>Yoshi bo'yicha taqsimot</h3>
+                    <div class="pie-canvas-wrap">
+                        <canvas id="ageChartTab"
+                                data-younger="{{ (int) ($ageStats['younger'] ?? 0) }}"
+                                data-older="{{ (int) ($ageStats['older'] ?? 0) }}"></canvas>
+                    </div>
+                </div>
+            </div>
         </div>
 
         {{-- Boshqa inner tablar (hozircha bo'sh) --}}
         @foreach($innerTabs as $key => $label)
-            @if($key === 'umumiy') @continue @endif
+            @if(in_array($key, ['umumiy', 'yoshi'])) @continue @endif
             <div x-show="inner.talabalar === '{{ $key }}'" x-cloak>
                 <div class="stats-empty">
                     <strong>{{ $label }}</strong> — statistika hali tayyor emas.
@@ -257,6 +323,7 @@
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script>
 (function () {
     const DURATION = 900;            // ms
@@ -288,6 +355,68 @@
             if (el.offsetParent !== null) animate(el);
         });
     };
+
+    // ─── Pie chartlar ──────────────────────────────────────────────────
+    const pieOpts = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { position: 'bottom', labels: { font: { size: 13 }, padding: 16 } },
+            tooltip: {
+                callbacks: {
+                    label: (ctx) => {
+                        const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                        const v = ctx.parsed;
+                        const pct = total > 0 ? (v * 100 / total).toFixed(2) : 0;
+                        return ` ${ctx.label}: ${v.toLocaleString('uz-UZ').replace(/,/g, ' ')} (${pct}%)`;
+                    }
+                }
+            }
+        }
+    };
+
+    function makePie(canvas, labels, data, colors) {
+        if (!canvas || canvas.dataset.rendered === '1') return;
+        canvas.dataset.rendered = '1';
+        new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: labels,
+                datasets: [{ data: data, backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }]
+            },
+            options: pieOpts
+        });
+    }
+
+    function renderAge(id) {
+        const c = document.getElementById(id);
+        if (!c) return;
+        makePie(c,
+            ["30 yoshdan kichiklar", "30 yoshdan oshganlar"],
+            [parseInt(c.dataset.younger || '0', 10), parseInt(c.dataset.older || '0', 10)],
+            ['#6366f1', '#22c55e']);
+    }
+    function renderPay(id) {
+        const c = document.getElementById(id);
+        if (!c) return;
+        makePie(c,
+            ["Davlat granti", "To'lov-kontrakt"],
+            [parseInt(c.dataset.grant || '0', 10), parseInt(c.dataset.contract || '0', 10)],
+            ['#a855f7', '#f43f5e']);
+    }
+
+    // Chart.js canvas yashirin (display:none) bo'lsa o'lcham 0 bo'lib chiqadi —
+    // shuning uchun tab ko'ringanda render qilamiz.
+    window.statsRenderCharts = function () {
+        renderAge('ageChart');
+        renderPay('payChart');
+        renderAge('ageChartTab');
+    };
+
+    document.addEventListener('DOMContentLoaded', () => {
+        // Boshlang'ich ko'rinadigan (Umumiy) chartlar
+        setTimeout(window.statsRenderCharts, 50);
+    });
 })();
 </script>
 </x-app-layout>

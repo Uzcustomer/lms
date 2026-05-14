@@ -4155,16 +4155,16 @@ class AcademicScheduleController extends Controller
         $totalComputers = (int) ExamCapacityService::getSettings()['computer_count'];
         $today = now()->format('Y-m-d');
 
-        // Faqat bugundan keyingi (bugun kiradi) test vaqtlari belgilangan sanalar
+        // Bugundan keyingi (bugun kiradi) sanalar — vaqti qo'yilmaganlar ham
+        // kiritiladi, toki test markazi xodimi qaysi guruhlarga hali vaqt
+        // belgilanmaganini ko'ra olsin.
         $oskiDates = ExamSchedule::whereNotNull('oski_date')
-            ->whereNotNull('oski_time')
             ->where('oski_na', false)
             ->whereDate('oski_date', '>=', $today)
             ->pluck('oski_date')
             ->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'));
 
         $testDates = ExamSchedule::whereNotNull('test_date')
-            ->whereNotNull('test_time')
             ->where('test_na', false)
             ->whereDate('test_date', '>=', $today)
             ->pluck('test_date')
@@ -4182,40 +4182,45 @@ class AcademicScheduleController extends Controller
         $minDate = $uniqueDates->first();
         $maxDate = $uniqueDates->last();
 
-        // Sanalar oralig'idagi barcha schedule yozuvlarini olish
+        // Sanalar oralig'idagi barcha schedule yozuvlarini olish (vaqti
+        // qo'yilmaganlar ham olinadi, toki ular "Vaqti qo'yilmagan" sifatida
+        // ko'rinsin)
         $schedules = ExamSchedule::with(['group'])
             ->where(function ($q) use ($minDate, $maxDate) {
                 $q->where(function ($q2) use ($minDate, $maxDate) {
                     $q2->whereNotNull('oski_date')
-                       ->whereNotNull('oski_time')
                        ->where('oski_na', false)
                        ->whereBetween('oski_date', [$minDate, $maxDate]);
                 })->orWhere(function ($q2) use ($minDate, $maxDate) {
                     $q2->whereNotNull('test_date')
-                       ->whereNotNull('test_time')
                        ->where('test_na', false)
                        ->whereBetween('test_date', [$minDate, $maxDate]);
                 });
             })
             ->get();
 
-        // Har bir sana uchun ma'lumotlarni guruhlash
+        // Har bir sana uchun ma'lumotlarni guruhlash. time = null bo'lsa
+        // "Vaqti qo'yilmagan" deb belgilanadi.
         $byDate = [];
         foreach ($schedules as $schedule) {
             $oskiDateStr = $schedule->oski_date?->format('Y-m-d');
-            if ($oskiDateStr && $schedule->oski_time && !$schedule->oski_na && $oskiDateStr >= $today) {
+            if ($oskiDateStr && !$schedule->oski_na && $oskiDateStr >= $today) {
                 $byDate[$oskiDateStr][] = [
                     'group_hemis_id' => $schedule->group_hemis_id,
                     'yn_type' => 'OSKI',
-                    'time' => \Carbon\Carbon::parse($schedule->oski_time)->format('H:i'),
+                    'time' => $schedule->oski_time
+                        ? \Carbon\Carbon::parse($schedule->oski_time)->format('H:i')
+                        : null,
                 ];
             }
             $testDateStr = $schedule->test_date?->format('Y-m-d');
-            if ($testDateStr && $schedule->test_time && !$schedule->test_na && $testDateStr >= $today) {
+            if ($testDateStr && !$schedule->test_na && $testDateStr >= $today) {
                 $byDate[$testDateStr][] = [
                     'group_hemis_id' => $schedule->group_hemis_id,
                     'yn_type' => 'Test',
-                    'time' => \Carbon\Carbon::parse($schedule->test_time)->format('H:i'),
+                    'time' => $schedule->test_time
+                        ? \Carbon\Carbon::parse($schedule->test_time)->format('H:i')
+                        : null,
                 ];
             }
         }
@@ -4233,15 +4238,19 @@ class AcademicScheduleController extends Controller
                 ->toArray();
         }
 
-        // Har bir sana uchun karta ma'lumotlari
+        // Har bir sana uchun karta ma'lumotlari. Vaqti qo'yilmagan yozuvlar
+        // bandlik hisobiga kirmaydi, lekin alohida hisoblanadi.
         $dateCards = collect();
         foreach ($uniqueDates as $dateStr) {
             $items = $byDate[$dateStr] ?? [];
-            $slotKeys = collect($items)->map(fn($i) => $i['time'] . '|' . $i['yn_type'])->unique();
+            $scheduledItems = array_values(array_filter($items, fn($i) => $i['time'] !== null));
+            $pendingItems = array_values(array_filter($items, fn($i) => $i['time'] === null));
+
+            $slotKeys = collect($scheduledItems)->map(fn($i) => $i['time'] . '|' . $i['yn_type'])->unique();
             $totalStudents = 0;
             $maxOccupied = 0;
             $slotsOccupancy = [];
-            foreach ($items as $item) {
+            foreach ($scheduledItems as $item) {
                 $slotKey = $item['time'] . '|' . $item['yn_type'];
                 $cnt = (int) ($studentCounts[$item['group_hemis_id']] ?? 0);
                 $slotsOccupancy[$slotKey] = ($slotsOccupancy[$slotKey] ?? 0) + $cnt;
@@ -4251,16 +4260,23 @@ class AcademicScheduleController extends Controller
                 if ($occ > $maxOccupied) $maxOccupied = $occ;
             }
 
+            $pendingStudents = 0;
+            foreach ($pendingItems as $item) {
+                $pendingStudents += (int) ($studentCounts[$item['group_hemis_id']] ?? 0);
+            }
+
             $carbonDate = \Carbon\Carbon::parse($dateStr);
             $dateCards->push([
                 'date' => $carbonDate,
                 'date_str' => $dateStr,
                 'slot_count' => $slotKeys->count(),
-                'group_count' => count($items),
+                'group_count' => count($scheduledItems),
                 'total_students' => $totalStudents,
                 'max_occupied' => $maxOccupied,
                 'is_today' => $dateStr === $today,
                 'has_overflow' => $maxOccupied > $totalComputers,
+                'pending_time_count' => count($pendingItems),
+                'pending_time_students' => $pendingStudents,
             ]);
         }
 
@@ -4284,27 +4300,30 @@ class AcademicScheduleController extends Controller
             abort(404);
         }
 
+        // Vaqti qo'yilmaganlar ham olinadi — alohida "Vaqti qo'yilmagan"
+        // satrida ko'rsatiladi.
         $schedules = ExamSchedule::with(['group'])
             ->where(function ($q) use ($date) {
                 $q->where(function ($q2) use ($date) {
-                    $q2->whereNotNull('oski_time')
-                       ->where('oski_na', false)
+                    $q2->where('oski_na', false)
                        ->whereDate('oski_date', $date);
                 })->orWhere(function ($q2) use ($date) {
-                    $q2->whereNotNull('test_time')
-                       ->where('test_na', false)
+                    $q2->where('test_na', false)
                        ->whereDate('test_date', $date);
                 });
             })
             ->get();
 
-        // (time, yn_type) bo'yicha guruhlarni birlashtirish
+        // (time, yn_type) bo'yicha guruhlarni birlashtirish. time = null
+        // bo'lsa "Vaqti qo'yilmagan" satriga tushadi.
         $rows = [];
         foreach ($schedules as $schedule) {
             $oskiDateStr = $schedule->oski_date?->format('Y-m-d');
-            if ($oskiDateStr === $date && $schedule->oski_time && !$schedule->oski_na) {
-                $timeStr = \Carbon\Carbon::parse($schedule->oski_time)->format('H:i');
-                $key = $timeStr . '|OSKI';
+            if ($oskiDateStr === $date && !$schedule->oski_na) {
+                $timeStr = $schedule->oski_time
+                    ? \Carbon\Carbon::parse($schedule->oski_time)->format('H:i')
+                    : null;
+                $key = ($timeStr ?? '__no_time__') . '|OSKI';
                 if (!isset($rows[$key])) {
                     $rows[$key] = [
                         'time' => $timeStr,
@@ -4321,9 +4340,11 @@ class AcademicScheduleController extends Controller
                 ];
             }
             $testDateStr = $schedule->test_date?->format('Y-m-d');
-            if ($testDateStr === $date && $schedule->test_time && !$schedule->test_na) {
-                $timeStr = \Carbon\Carbon::parse($schedule->test_time)->format('H:i');
-                $key = $timeStr . '|Test';
+            if ($testDateStr === $date && !$schedule->test_na) {
+                $timeStr = $schedule->test_time
+                    ? \Carbon\Carbon::parse($schedule->test_time)->format('H:i')
+                    : null;
+                $key = ($timeStr ?? '__no_time__') . '|Test';
                 if (!isset($rows[$key])) {
                     $rows[$key] = [
                         'time' => $timeStr,
@@ -4407,14 +4428,25 @@ class AcademicScheduleController extends Controller
             $row['occupied'] = $occupied;
             $row['submitted'] = $submitted;
             $row['remaining'] = $remaining;
-            $row['free'] = max(0, $totalComputers - $occupied);
-            $row['overflow'] = max(0, $occupied - $totalComputers);
-            $row['usage_percent'] = $totalComputers > 0 ? round(($occupied / $totalComputers) * 100, 1) : 0;
+            // Vaqti qo'yilmagan satr uchun bandlik/sig'im hisoblanmaydi.
+            if ($row['time'] === null) {
+                $row['free'] = 0;
+                $row['overflow'] = 0;
+                $row['usage_percent'] = 0;
+                $row['no_time'] = true;
+            } else {
+                $row['free'] = max(0, $totalComputers - $occupied);
+                $row['overflow'] = max(0, $occupied - $totalComputers);
+                $row['usage_percent'] = $totalComputers > 0 ? round(($occupied / $totalComputers) * 100, 1) : 0;
+                $row['no_time'] = false;
+            }
         }
         unset($row);
 
-        // Vaqt bo'yicha saralash
-        $slots = collect($rows)->sortBy('time')->values();
+        // Vaqt bo'yicha saralash — vaqti qo'yilmaganlar oxirida
+        $slots = collect($rows)
+            ->sortBy(fn($r) => ($r['time'] === null ? 'zz' : $r['time']))
+            ->values();
 
         return view('admin.academic-schedule.bandlik-kursatkichi-show', [
             'date' => $carbonDate,

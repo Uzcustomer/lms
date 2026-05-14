@@ -10,19 +10,40 @@
 
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
 
-        {{-- Statistika kartlari --}}
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-            <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-yellow-500">
-                <p class="text-xs text-gray-500 uppercase">{{ __('Kutilmoqda') }}</p>
-                <p class="text-2xl font-bold text-gray-900 mt-1">{{ $stats['pending'] }}</p>
-            </div>
-            <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-green-500">
-                <p class="text-xs text-gray-500 uppercase">{{ __('Tasdiqlangan') }}</p>
-                <p class="text-2xl font-bold text-gray-900 mt-1">{{ $stats['approved'] }}</p>
-            </div>
-            <div class="bg-white rounded-xl shadow-sm p-4 border-l-4 border-red-500">
-                <p class="text-xs text-gray-500 uppercase">{{ __('Rad etilgan') }}</p>
-                <p class="text-2xl font-bold text-gray-900 mt-1">{{ $stats['rejected'] }}</p>
+        {{-- Bosqich tablari (LMS-style) — stat kartochkalar o'rniga --}}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
+            <div class="flex border-b border-gray-100 flex-wrap">
+                @php
+                    $tabs = [];
+                    $tabs['pending_mine'] = ['label' => "Tasdiq kutmoqda", 'color' => 'amber', 'icon' => '⏳', 'count' => $stats['pending'] ?? 0];
+                    if ($role === 'registrar') {
+                        $tabs['payment_to_verify'] = ['label' => "To'lov tekshirish", 'color' => 'orange', 'icon' => '💰', 'count' => $paymentToVerifyCount ?? 0];
+                    }
+                    $tabs['approved'] = ['label' => "Tasdiqlangan", 'color' => 'green', 'icon' => '✓', 'count' => $stats['approved'] ?? 0];
+                    $tabs['rejected'] = ['label' => "Rad etilgan", 'color' => 'red', 'icon' => '✕', 'count' => $stats['rejected'] ?? 0];
+                    $tabs['all'] = ['label' => "Hammasi", 'color' => 'gray', 'icon' => '📋', 'count' => ($stats['pending'] ?? 0) + ($stats['approved'] ?? 0) + ($stats['rejected'] ?? 0)];
+                @endphp
+                @foreach($tabs as $key => $tab)
+                    @php
+                        $active = ($filter ?? 'pending_mine') === $key;
+                        $activeBg = match($tab['color']) {
+                            'amber' => 'bg-amber-50 border-b-2 border-amber-500 text-amber-800',
+                            'orange' => 'bg-orange-50 border-b-2 border-orange-500 text-orange-800',
+                            'green' => 'bg-green-50 border-b-2 border-green-500 text-green-800',
+                            'red' => 'bg-red-50 border-b-2 border-red-500 text-red-800',
+                            'gray' => 'bg-gray-100 border-b-2 border-gray-500 text-gray-900',
+                            default => 'bg-gray-50 border-b-2 border-gray-500 text-gray-800',
+                        };
+                    @endphp
+                    <a href="{{ request()->fullUrlWithQuery(['filter' => $key]) }}"
+                       class="flex-1 min-w-[140px] px-4 py-3 text-center text-sm font-medium {{ $active ? $activeBg : 'text-gray-600 hover:bg-gray-50' }}">
+                        <span class="text-base mr-1">{{ $tab['icon'] }}</span>
+                        {{ __($tab['label']) }}
+                        <span class="ml-2 inline-flex items-center justify-center px-2 py-0.5 rounded-full text-xs font-semibold {{ $active ? 'bg-white' : 'bg-gray-100' }}">
+                            {{ $tab['count'] }}
+                        </span>
+                    </a>
+                @endforeach
             </div>
         </div>
 
@@ -32,44 +53,9 @@
             'educationTypes' => $educationTypes ?? collect(),
             'subjects' => $subjects ?? collect(),
             'extraQueryFields' => array_filter([
-                'filter' => $filter ?? null,
+                'filter' => ($filter ?? 'pending_mine') !== 'pending_mine' ? $filter : null,
             ]),
         ])
-
-        {{-- Holat filtri (qo'shimcha) --}}
-        <div class="bg-white rounded-xl shadow-sm p-4 mb-4">
-            <form method="GET" action="{{ route('admin.retake.index') }}" class="flex items-end gap-3 flex-wrap">
-                {{-- Cascading filterdan keladigan qiymatlarni saqlab qolamiz --}}
-                @foreach(['education_type','department','specialty','level_code','semester_code','group','subject','search','per_page'] as $kept)
-                    @if(request($kept))
-                        <input type="hidden" name="{{ $kept }}" value="{{ request($kept) }}">
-                    @endif
-                @endforeach
-                <div class="min-w-[200px]">
-                    <label class="block text-xs text-gray-600 mb-1">{{ __('Holat') }}</label>
-                    <select name="filter" class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
-                        <option value="pending_mine" {{ $filter === 'pending_mine' ? 'selected' : '' }}>{{ __('Kutilmoqda') }}</option>
-                        @if($role === 'registrar')
-                            <option value="payment_to_verify" {{ $filter === 'payment_to_verify' ? 'selected' : '' }}>
-                                {{ __("To'lov cheki tekshirilishi kutilmoqda") }}
-                                @if(($paymentToVerifyCount ?? 0) > 0) ({{ $paymentToVerifyCount }}) @endif
-                            </option>
-                        @endif
-                        <option value="approved" {{ $filter === 'approved' ? 'selected' : '' }}>{{ __('Tasdiqlangan') }}</option>
-                        <option value="rejected" {{ $filter === 'rejected' ? 'selected' : '' }}>{{ __('Rad etilgan') }}</option>
-                        <option value="all" {{ $filter === 'all' ? 'selected' : '' }}>{{ __('Barchasi') }}</option>
-                    </select>
-                </div>
-                <div class="flex gap-2">
-                    <button type="submit" class="px-4 py-2 text-sm bg-blue-600 text-white rounded-lg hover:bg-blue-700">
-                        {{ __('Qo\'llash') }}
-                    </button>
-                    <a href="{{ route('admin.retake.index') }}" class="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-                        {{ __('Tozalash') }}
-                    </a>
-                </div>
-            </form>
-        </div>
 
         {{-- Xabarlar --}}
         @if(session('success'))

@@ -435,8 +435,14 @@
                 </div>
             </div>
 
-            {{-- Yarim kenglikdagi kartalar: Ijtimoiy toifalar + (keyin boshqa narsa) --}}
+            {{-- Yarim kenglikdagi kartalar: Kurslar + Ijtimoiy toifalar --}}
             <div class="half-grid">
+                <div class="stat-card">
+                    <h3>Kurslar bo'yicha taqsimot</h3>
+                    <div class="social-bar-wrap" style="height:340px;">
+                        <canvas id="courseChartUmumiy"></canvas>
+                    </div>
+                </div>
                 <div class="stat-card">
                     <h3>Ijtimoiy toifalar</h3>
                     <div class="stat-card-kpis">
@@ -453,9 +459,6 @@
                     <div class="social-bar-wrap">
                         <canvas id="socialChart"></canvas>
                     </div>
-                </div>
-                <div class="stat-card-empty">
-                    Tez orada — qo'shimcha statistika
                 </div>
             </div>
 
@@ -714,8 +717,8 @@
         return courseChartCfg;
     }
 
-    function renderCourseChart() {
-        const canvas = document.getElementById('courseChart');
+    function renderCourseChart(id) {
+        const canvas = document.getElementById(id || 'courseChart');
         if (!canvas) return;
         const cfg = getCourseCfg();
         if (!cfg) return;
@@ -840,7 +843,8 @@
         renderAge('ageChart');
         renderPay('payChart');
         renderAge('ageChartTab');
-        renderCourseChart();
+        renderCourseChart('courseChart');
+        renderCourseChart('courseChartUmumiy');
         renderSocialChart('socialChart');
         renderSocialChart('socialChartTab');
     };

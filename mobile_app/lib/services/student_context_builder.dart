@@ -3,6 +3,10 @@ import 'student_data_cache.dart';
 /// Builds the long markdown text we feed to Gemini as the AI's view of the
 /// student. Pure projection of the cache — no API calls happen here, so the
 /// AI stays in sync with whatever the cache last fetched.
+///
+/// The per-section body is rendered by a generic recursive dumper
+/// ([_writeAny]) so it survives any API response shape — whatever the LMS
+/// returns under `data`, the whole structure ends up in the context.
 class StudentContextBuilder {
   final StudentDataCache _cache;
 
@@ -41,82 +45,49 @@ class StudentContextBuilder {
     }
     buf.writeln();
 
-    final profile = _cache.profile?['data'] as Map<String, dynamic>?;
-    final dashboard = _cache.dashboard?['data'] as Map<String, dynamic>?;
-    final subjects = _cache.subjects?['data'] as List<dynamic>?;
-    final attendance = _cache.attendance?['data'] as Map<String, dynamic>?;
-    final examSchedule = _cache.examSchedule?['data'];
-    final rating = _cache.rating?['data'] as Map<String, dynamic>?;
-    final schedule = _cache.schedule?['data'] as Map<String, dynamic>?;
-    final pendingLessons = _cache.pendingLessons?['data'];
-    final contract = _cache.contract?['data'];
-    final excuses = _cache.excuses?['data'];
+    final profile = _unwrap(_cache.profile);
+    final dashboard = _unwrap(_cache.dashboard);
+    final subjects = _unwrap(_cache.subjects);
+    final attendance = _unwrap(_cache.attendance);
+    final examSchedule = _unwrap(_cache.examSchedule);
+    final rating = _unwrap(_cache.rating);
+    final schedule = _unwrap(_cache.schedule);
+    final pendingLessons = _unwrap(_cache.pendingLessons);
+    final contract = _unwrap(_cache.contract);
+    final excuses = _unwrap(_cache.excuses);
 
-    if (profile != null) {
-      buf.writeln('## SHAXSIY MA\'LUMOTLAR');
-      for (final k in profile.keys) {
-        final v = profile[k];
-        if (v != null && v.toString().isNotEmpty && v is! List && v is! Map) {
-          buf.writeln('- $k: $v');
-        }
-      }
-      buf.writeln();
-    }
+    _section(buf, 'SHAXSIY MA\'LUMOTLAR', profile, today);
+    _section(buf, 'UMUMIY KO\'RSATKICHLAR (DASHBOARD)', dashboard, today);
 
-    if (dashboard != null) {
-      buf.writeln('## UMUMIY KO\'RSATKICHLAR (DASHBOARD)');
-      _writeAllScalar(buf, dashboard);
-      buf.writeln();
-    }
-
-    if (subjects != null && subjects.isNotEmpty) {
+    // Subjects keep their richer rendering (YN computation + per-subject
+    // daily grade breakdown pulled from a separate cache entry).
+    if (subjects is List && subjects.isNotEmpty) {
       buf.writeln('## FANLAR VA BAHOLAR (${subjects.length} ta fan)');
       buf.writeln('YN formula: JN×50% + MT×20% + ON×0% + OSKI×15% + TEST×15%');
       buf.writeln();
 
       for (final s in subjects) {
-        if (s is! Map<String, dynamic>) continue;
+        if (s is! Map) continue;
         final id = s['subject_id'] ?? s['id'];
         final name = s['subject_name'] ?? s['name'] ?? '?';
-        final grades = s['grades'] as Map<String, dynamic>? ?? {};
-        final yn = _computeYn(grades);
+        final grades = s['grades'];
+        final gradesMap =
+            grades is Map ? Map<String, dynamic>.from(grades) : <String, dynamic>{};
+        final yn = _computeYn(gradesMap);
 
         buf.writeln('### $name');
         _line(buf, 'YN (yakuniy nazorat)', yn?.toStringAsFixed(1));
-        _line(buf, 'JN (joriy nazorat)', grades['jn']);
-        _line(buf, 'MT (mustaqil ta\'lim)', grades['mt']);
-        _line(buf, 'ON (oraliq nazorat)', grades['on']);
-        _line(buf, 'OSKI', grades['oski']);
-        _line(buf, 'TEST', grades['test']);
-        _line(buf, 'Umumiy ball', grades['total']);
-        _line(buf, 'Kredit', s['credit'] ?? s['credits']);
-        _line(buf, 'O\'qituvchi', s['employee_name'] ?? s['teacher_name'] ?? s['teacher']);
-        _line(buf, 'Dars turi', s['subject_type'] ?? s['type']);
-        _line(buf, 'Davomat %', s['dav_percent']);
-        _line(buf, 'Sababsiz soatlar', s['absent_hours']);
-        _line(buf, 'Auditoriya soatlari', s['auditorium_hours']);
-
-        if (s['mt_submission'] is Map<String, dynamic>) {
-          final mt = s['mt_submission'] as Map<String, dynamic>;
-          _line(buf, 'MT yuklangan',
-              mt['has_submission'] == true ? 'Ha' : 'Yo\'q');
-          _line(buf, 'MT yuklash mumkin',
-              mt['can_submit'] == true ? 'Ha' : 'Yo\'q');
-          _line(buf, 'MT muddat', mt['deadline']);
-          _line(buf, 'MT muddati o\'tgan', mt['is_overdue'] == true ? 'Ha' : null);
-          _line(buf, 'MT baho', mt['grade']);
-          _line(buf, 'MT yuklangan sana', mt['submitted_at']);
-        }
+        // Dump every field the API sent for this subject — nothing is dropped.
+        _writeAny(buf, s, 1, today);
 
         if (id is int) {
-          final detail = _cache.subjectGrades(id);
-          final detailData = detail?['data'];
-          if (detailData is Map<String, dynamic>) {
-            final gradesList = detailData['grades'] as List<dynamic>?;
-            if (gradesList != null && gradesList.isNotEmpty) {
+          final detail = _unwrap(_cache.subjectGrades(id));
+          if (detail is Map) {
+            final gradesList = detail['grades'];
+            if (gradesList is List && gradesList.isNotEmpty) {
               buf.writeln('  JN batafsil kunlik baholar:');
               for (final g in gradesList) {
-                if (g is! Map<String, dynamic>) continue;
+                if (g is! Map) continue;
                 final date = g['lesson_date']?.toString() ?? '';
                 final grade = g['grade'] ?? g['ball'];
                 final absent = g['absent'] == true || g['is_absent'] == true;
@@ -131,6 +102,10 @@ class StudentContextBuilder {
                   buf.writeln('    - $shortDate $marker: $grade ball [$type]');
                 }
               }
+            } else {
+              // Unknown detail shape — still hand it over verbatim.
+              buf.writeln('  Batafsil ma\'lumot:');
+              _writeAny(buf, detail, 2, today);
             }
           }
         }
@@ -139,69 +114,94 @@ class StudentContextBuilder {
       }
     }
 
-    if (attendance != null) {
-      buf.writeln('## DAVOMAT STATISTIKASI');
-      _writeAllScalar(buf, attendance);
-      final bySubject = attendance['by_subject'] ?? attendance['subjects'];
-      if (bySubject is List && bySubject.isNotEmpty) {
-        buf.writeln('Fanlar bo\'yicha davomat:');
-        for (final s in bySubject) {
-          if (s is! Map<String, dynamic>) continue;
-          final name = s['subject_name'] ?? s['name'] ?? '?';
-          buf.writeln(
-              '  - $name: qatnashgan ${s['attended'] ?? '?'}/${s['total'] ?? '?'} (${s['percentage'] ?? '?'}%)');
-        }
-      }
-      buf.writeln();
-    }
-
-    if (pendingLessons != null) {
-      buf.writeln('## QARZDOR DARSLAR (qatnashilmagan, qaytarish kerak)');
-      _writeListOrScalar(buf, pendingLessons, today);
-      buf.writeln();
-    }
-
-    if (schedule != null) {
-      buf.writeln('## DARS JADVALI');
-      _writeSchedule(buf, schedule, today);
-      buf.writeln();
-    }
-
-    if (examSchedule != null) {
-      buf.writeln('## IMTIHON JADVALI');
-      _writeExamSchedule(buf, examSchedule, today);
-      buf.writeln();
-    }
-
-    if (rating != null) {
-      buf.writeln('## REYTING');
-      _writeAllScalar(buf, rating);
-      final students = rating['students'] as List<dynamic>?;
-      if (students != null && students.isNotEmpty) {
-        buf.writeln('Top 5 talaba:');
-        for (final s in students.take(5)) {
-          if (s is! Map<String, dynamic>) continue;
-          buf.writeln(
-              '  ${s['rank']}. ${s['full_name']} - ${s['jn_average']} (${s['is_me'] == true ? "SIZ" : s['group_name'] ?? ''})');
-        }
-      }
-      buf.writeln();
-    }
-
-    if (excuses != null) {
-      buf.writeln('## RUXSATNOMALAR (sababli qoldirilgan darslar)');
-      _writeListOrScalar(buf, excuses, today);
-      buf.writeln();
-    }
-
-    if (contract != null) {
-      buf.writeln('## SHARTNOMA / TO\'LOV');
-      _writeListOrScalar(buf, contract, today);
-      buf.writeln();
-    }
+    _section(buf, 'DAVOMAT STATISTIKASI', attendance, today);
+    _section(buf, 'QARZDOR DARSLAR (qatnashilmagan, qaytarish kerak)',
+        pendingLessons, today);
+    _section(buf, 'DARS JADVALI', schedule, today);
+    _section(buf, 'IMTIHON JADVALI', examSchedule, today);
+    _section(buf, 'REYTING', rating, today);
+    _section(buf, 'RUXSATNOMALAR (sababli qoldirilgan darslar)', excuses, today);
+    _section(buf, 'SHARTNOMA / TO\'LOV', contract, today);
 
     return buf.toString();
   }
+
+  /// Unwraps the API envelope: returns `response['data']` when present,
+  /// otherwise the response itself. Works for any response shape.
+  dynamic _unwrap(Map<String, dynamic>? response) {
+    if (response == null) return null;
+    if (response.containsKey('data')) return response['data'];
+    return response;
+  }
+
+  /// Writes a `## HEADER` block followed by a generic recursive dump of
+  /// whatever [data] is. Skips the section entirely when there is nothing.
+  void _section(StringBuffer buf, String header, dynamic data, DateTime today) {
+    if (data == null) return;
+    if (data is Map && data.isEmpty) return;
+    if (data is List && data.isEmpty) {
+      buf.writeln('## $header');
+      buf.writeln('- (bo\'sh)');
+      buf.writeln();
+      return;
+    }
+    if (data is String && data.isEmpty) return;
+
+    buf.writeln('## $header');
+    _writeAny(buf, data, 0, today);
+    buf.writeln();
+  }
+
+  /// Generic recursive renderer. Handles Map / List / scalar at any depth so
+  /// the AI receives the complete structure regardless of the API shape.
+  void _writeAny(StringBuffer buf, dynamic data, int indent, DateTime today) {
+    final pad = '  ' * indent;
+
+    if (data is Map) {
+      data.forEach((key, value) {
+        if (value == null) return;
+        if (value is Map) {
+          if (value.isEmpty) return;
+          buf.writeln('$pad- $key:');
+          _writeAny(buf, value, indent + 1, today);
+        } else if (value is List) {
+          if (value.isEmpty) return;
+          buf.writeln('$pad- $key:');
+          _writeAny(buf, value, indent + 1, today);
+        } else {
+          final s = value.toString();
+          if (s.isEmpty) return;
+          buf.writeln('$pad- $key: $s${_dateMarker(s, today)}');
+        }
+      });
+    } else if (data is List) {
+      for (var i = 0; i < data.length; i++) {
+        final item = data[i];
+        if (item == null) continue;
+        if (item is Map) {
+          if (item.isEmpty) continue;
+          buf.writeln('$pad- [${i + 1}]:');
+          _writeAny(buf, item, indent + 1, today);
+        } else if (item is List) {
+          if (item.isEmpty) continue;
+          buf.writeln('$pad- [${i + 1}]:');
+          _writeAny(buf, item, indent + 1, today);
+        } else {
+          final s = item.toString();
+          if (s.isEmpty) continue;
+          buf.writeln('$pad- $s${_dateMarker(s, today)}');
+        }
+      }
+    } else if (data != null) {
+      final s = data.toString();
+      if (s.isNotEmpty) {
+        buf.writeln('$pad- $s${_dateMarker(s, today)}');
+      }
+    }
+  }
+
+  String _dateMarker(String s, DateTime today) =>
+      _looksLikeDate(s) ? ' ${_pastFutureMarker(s, today)}' : '';
 
   String _pad(int n) => n.toString().padLeft(2, '0');
 
@@ -234,107 +234,9 @@ class StudentContextBuilder {
     return null;
   }
 
-  void _writeAllScalar(StringBuffer buf, Map<String, dynamic> map) {
-    for (final e in map.entries) {
-      if (e.value == null || e.value is List || e.value is Map) continue;
-      if (e.value.toString().isEmpty) continue;
-      buf.writeln('- ${e.key}: ${e.value}');
-    }
-  }
-
-  void _writeListOrScalar(StringBuffer buf, dynamic data, DateTime today) {
-    if (data is List) {
-      if (data.isEmpty) {
-        buf.writeln('- (bo\'sh)');
-        return;
-      }
-      for (final item in data) {
-        if (item is Map<String, dynamic>) {
-          buf.write('  -');
-          for (final e in item.entries) {
-            final v = e.value;
-            if (v == null || v is List || v is Map) continue;
-            if (v.toString().isEmpty) continue;
-            final marker = _looksLikeDate(v.toString())
-                ? ' ${_pastFutureMarker(v.toString(), today)}'
-                : '';
-            buf.write(' ${e.key}=$v$marker;');
-          }
-          buf.writeln();
-        } else if (item != null) {
-          buf.writeln('  - $item');
-        }
-      }
-    } else if (data is Map<String, dynamic>) {
-      _writeAllScalar(buf, data);
-    } else if (data != null) {
-      buf.writeln('- $data');
-    }
-  }
-
   bool _looksLikeDate(String s) {
     if (s.length < 10) return false;
     return (s[4] == '-' && s[7] == '-') || (s[2] == '.' && s[5] == '.');
-  }
-
-  void _writeSchedule(
-      StringBuffer buf, Map<String, dynamic> schedule, DateTime today) {
-    final currentWeek = schedule['current_week'] as Map<String, dynamic>?;
-    final days = schedule['days'] as List<dynamic>?;
-
-    if (currentWeek != null) {
-      _line(buf, 'Joriy hafta', currentWeek['name'] ?? currentWeek['label']);
-      _line(buf, 'Boshlanishi', currentWeek['start_date']);
-      _line(buf, 'Tugashi', currentWeek['end_date']);
-    }
-
-    if (days != null && days.isNotEmpty) {
-      for (final day in days) {
-        if (day is! Map<String, dynamic>) continue;
-        final dayName = day['day_name'] ?? day['name'] ?? '';
-        final date = day['date']?.toString() ?? '';
-        final marker = _pastFutureMarker(date, today);
-        final lessons = day['lessons'] as List<dynamic>?;
-        if (lessons == null || lessons.isEmpty) continue;
-        buf.writeln('  $dayName $date $marker:');
-        for (final l in lessons) {
-          if (l is! Map<String, dynamic>) continue;
-          buf.writeln(
-              '    - ${l['time'] ?? l['start_time'] ?? ''}: ${l['subject_name'] ?? l['name'] ?? '?'} (${l['teacher_name'] ?? ''}) [${l['room'] ?? l['auditorium'] ?? ''}]');
-        }
-      }
-    }
-  }
-
-  void _writeExamSchedule(
-      StringBuffer buf, dynamic examSchedule, DateTime today) {
-    if (examSchedule is List) {
-      for (final e in examSchedule) {
-        if (e is Map<String, dynamic>) {
-          final date = e['date']?.toString() ?? '?';
-          final marker = _pastFutureMarker(date, today);
-          buf.writeln(
-              '  - ${e['subject_name'] ?? e['name'] ?? '?'}: $date ${e['time'] ?? ''} $marker (${e['type'] ?? e['exam_type'] ?? ''})');
-        }
-      }
-    } else if (examSchedule is Map<String, dynamic>) {
-      for (final key in examSchedule.keys) {
-        final v = examSchedule[key];
-        if (v is List) {
-          buf.writeln('$key:');
-          for (final e in v) {
-            if (e is Map<String, dynamic>) {
-              final date = e['date']?.toString() ?? '?';
-              final marker = _pastFutureMarker(date, today);
-              buf.writeln(
-                  '  - ${e['subject_name'] ?? e['name'] ?? '?'}: $date ${e['time'] ?? ''} $marker');
-            }
-          }
-        } else if (v != null && v is! Map) {
-          buf.writeln('- $key: $v');
-        }
-      }
-    }
   }
 
   void _line(StringBuffer buf, String key, dynamic value) {

@@ -490,7 +490,10 @@ class RetakeWindowSessionController extends Controller
 
     private function authorizeAccess(): void
     {
-        if (!RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff())) {
+        // AKTIV rolni tekshiramiz — foydalanuvchi bir nechta rolga ega bo'lsa
+        // (masalan, registrator + o'quv bo'limi), faqat o'quv bo'limi rolida
+        // ishlayotgan bo'lsagina sessiyalarni boshqara oladi.
+        if (!RetakeAccess::activeRoleCanManageRetake()) {
             abort(403, 'Sizda qayta o\'qish sessiyalarini boshqarish ruxsati yo\'q');
         }
     }

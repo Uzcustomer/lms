@@ -112,6 +112,14 @@
                                     </svg>
                                     YN oldi word
                                 </button>
+                                <button type="button" id="btn-bulk-moodle" onclick="tcBulkRecheckMoodle()" disabled
+                                        style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#0e9f6e,#10b981);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;height:36px;"
+                                        title="Tanlangan qatorlarni Moodle bilan tekshirish (navbatga qo'shadi)">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                    </svg>
+                                    Tanlanganlarni Moodle'ga
+                                </button>
                                 <button type="button" class="btn-export-excel" onclick="tcExportExcel()">
                                     <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
@@ -353,7 +361,7 @@
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     @foreach($items as $item)
                                         @php $attempt = (int) ($item['attempt'] ?? 1); @endphp
-                                        <tr class="data-row" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-attempt="{{ $attempt }}">
+                                        <tr class="data-row" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-attempt="{{ $attempt }}" data-schedule-id="{{ $item['schedule_id'] ?? '' }}">
                                             <td style="text-align:center;">
                                                 <input type="checkbox" class="tc-row-checkbox" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" onchange="tcUpdateSelection()" style="accent-color:#2b5ea7;width:16px;height:16px;cursor:pointer;">
                                             </td>
@@ -1490,8 +1498,59 @@
             var checkedCount = visible.filter(function(cb) { return cb.checked; }).length;
             var btn = document.getElementById('btn-yn-oldi-word');
             if (btn) btn.disabled = checkedCount === 0;
+            var bulkBtn = document.getElementById('btn-bulk-moodle');
+            if (bulkBtn) bulkBtn.disabled = checkedCount === 0;
             var headerCb = document.getElementById('tc-select-all-header');
             if (headerCb) headerCb.checked = checkedCount > 0 && checkedCount === visible.length;
+        }
+
+        var bulkMoodleUrl = '{{ route($routePrefix . ".academic-schedule.test-center.bulk-recheck-moodle") }}';
+
+        // Bulk "recheck on Moodle": collect every selected row's
+        // (schedule, yn_type, attempt) and queue a BookMoodleGroupExam job
+        // for each. The proctor refreshes once the queue has drained.
+        function tcBulkRecheckMoodle() {
+            var items = [];
+            document.querySelectorAll('.tc-row-checkbox:checked').forEach(function(cb) {
+                var tr = cb.closest('tr.data-row');
+                if (!tr) return;
+                var sid = tr.getAttribute('data-schedule-id');
+                if (!sid) return;
+                items.push({
+                    schedule_id: sid,
+                    yn_type: tr.getAttribute('data-yn-type') || '',
+                    attempt: tr.getAttribute('data-attempt') || '1'
+                });
+            });
+            if (items.length === 0) {
+                alert('Kamida bitta qatorni tanlang');
+                return;
+            }
+            var btn = document.getElementById('btn-bulk-moodle');
+            var originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.textContent = 'Yuborilmoqda...';
+            fetch(bulkMoodleUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+                body: JSON.stringify({ items: items })
+            })
+            .then(function(r) {
+                return r.json().then(function(j) { return { ok: r.ok, body: j }; });
+            })
+            .then(function(res) {
+                alert(res.ok ? (res.body.message || 'Navbatga qo\'shildi') : (res.body.error || 'Xatolik yuz berdi'));
+            })
+            .catch(function(e) { alert('Xatolik: ' + e.message); })
+            .finally(function() {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+            });
         }
 
         var ynOldiWordUrl = '{{ route($routePrefix . ".academic-schedule.test-center.generate-yn-oldi-word") }}';

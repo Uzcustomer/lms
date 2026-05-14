@@ -120,6 +120,15 @@ class RetakeApplication extends Model
         }
 
         // pending — qaysi bosqichda ekanligi
+
+        // O'quv bo'limi oldindan tasdiqlagan, ammo hali guruhga biriktirilmagan
+        // (final_status hali pending). Bu yangi 2-bosqichli oqimning oraliq holati.
+        if ($this->academic_dept_status === self::STATUS_APPROVED
+            && $this->dean_status === self::STATUS_APPROVED
+            && $this->registrar_status === self::STATUS_APPROVED) {
+            return 'O\'quv bo\'limi tasdiqladi — guruhga biriktirilmoqda';
+        }
+
         if ($this->academic_dept_status === self::STATUS_PENDING
             && $this->dean_status === self::STATUS_APPROVED
             && $this->registrar_status === self::STATUS_APPROVED) {

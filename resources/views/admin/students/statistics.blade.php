@@ -588,9 +588,65 @@
             </div>
         </div>
 
+        {{-- To'lov shakli tabi — pie chart + ko'rsatkichlar --}}
+        <div x-show="inner.talabalar === 'tolov_shakli'" x-cloak>
+            <div class="course-bar-card" style="margin-top:0">
+                <h3>To'lov shakli</h3>
+                <div class="stat-card-kpis" style="margin-bottom:18px;">
+                    <div>
+                        <span class="lbl">Davlat granti</span>
+                        <span class="val" data-count="{{ $grant }}">{{ number_format($grant, 0, '.', ' ') }}</span>
+                        <div class="pct">{{ $payTotal > 0 ? number_format($grant * 100 / $payTotal, 1) : 0 }}%</div>
+                    </div>
+                    <div>
+                        <span class="lbl">To'lov-kontrakt</span>
+                        <span class="val" data-count="{{ $contract }}">{{ number_format($contract, 0, '.', ' ') }}</span>
+                        <div class="pct">{{ $payTotal > 0 ? number_format($contract * 100 / $payTotal, 1) : 0 }}%</div>
+                    </div>
+                    <div>
+                        <span class="lbl">Jami</span>
+                        <span class="val" data-count="{{ $payTotal }}">{{ number_format($payTotal, 0, '.', ' ') }}</span>
+                    </div>
+                </div>
+                <div class="pie-body">
+                    <div class="pie-canvas-wrap">
+                        <canvas id="payChartTab"
+                                data-grant="{{ $grant }}"
+                                data-contract="{{ $contract }}"></canvas>
+                    </div>
+                    <div class="pie-legend">
+                        <div class="pie-legend-item">
+                            <span class="pie-legend-icon" style="background:#a855f7">
+                                <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $legendIcons['grant'] !!}</svg>
+                            </span>
+                            <span class="pie-legend-text">
+                                <span class="pie-legend-label">Davlat granti</span>
+                                <span class="pie-legend-value">
+                                    <span data-count="{{ $grant }}">{{ number_format($grant, 0, '.', ' ') }}</span>
+                                    <span class="pie-legend-pct">{{ $payTotal > 0 ? number_format($grant * 100 / $payTotal, 1) : 0 }}%</span>
+                                </span>
+                            </span>
+                        </div>
+                        <div class="pie-legend-item">
+                            <span class="pie-legend-icon" style="background:#f43f5e">
+                                <svg width="22" height="22" fill="none" stroke="currentColor" viewBox="0 0 24 24">{!! $legendIcons['contract'] !!}</svg>
+                            </span>
+                            <span class="pie-legend-text">
+                                <span class="pie-legend-label">To'lov-kontrakt</span>
+                                <span class="pie-legend-value">
+                                    <span data-count="{{ $contract }}">{{ number_format($contract, 0, '.', ' ') }}</span>
+                                    <span class="pie-legend-pct">{{ $payTotal > 0 ? number_format($contract * 100 / $payTotal, 1) : 0 }}%</span>
+                                </span>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         {{-- Boshqa inner tablar (hozircha bo'sh) --}}
         @foreach($innerTabs as $key => $label)
-            @if(in_array($key, ['umumiy', 'yoshi', 'kurslar', 'ijtimoiy_toifa'])) @continue @endif
+            @if(in_array($key, ['umumiy', 'yoshi', 'kurslar', 'ijtimoiy_toifa', 'tolov_shakli'])) @continue @endif
             <div x-show="inner.talabalar === '{{ $key }}'" x-cloak>
                 <div class="stats-empty">
                     <strong>{{ $label }}</strong> — statistika hali tayyor emas.
@@ -842,6 +898,7 @@
     window.statsRenderCharts = function () {
         renderAge('ageChart');
         renderPay('payChart');
+        renderPay('payChartTab');
         renderAge('ageChartTab');
         renderCourseChart('courseChart');
         renderCourseChart('courseChartUmumiy');

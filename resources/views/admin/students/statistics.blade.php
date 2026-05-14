@@ -292,6 +292,40 @@
                 'data'   => array_values($socialStats),
                 'colors' => $socialColors,
             ]);
+
+            // Fuqaroligi — stacked bar (ta'lim turi bo'yicha) + KPI raqamlar
+            $citizenshipStats = $citizenshipStats ?? [];
+            $citTotal = array_sum(array_column($citizenshipStats, 'total'));
+            // KPI: O'zbekiston / Xorijiy / Fuqaroligi yo'q — nomga qarab ajratamiz
+            $citUz = 0; $citForeign = 0; $citNone = 0;
+            foreach ($citizenshipStats as $cName => $cData) {
+                $low = mb_strtolower($cName);
+                if (str_contains($low, "o'zbek") || str_contains($low, 'ozbek') || str_contains($low, 'uzbek')) {
+                    $citUz += $cData['total'];
+                } elseif (str_contains($low, "yo'q") || str_contains($low, 'yoq') || str_contains($low, 'apatrid')) {
+                    $citNone += $cData['total'];
+                } else {
+                    $citForeign += $cData['total'];
+                }
+            }
+            $citColors = ['#3b82f6', '#f59e0b', '#ef4444', '#22c55e', '#a855f7'];
+            $citJson = json_encode([
+                'labels' => array_keys($citizenshipStats),
+                'colors' => $citColors,
+                'eduKeys'   => ['bakalavr', 'magistr', 'ordinatura', 'other'],
+                'eduLabels' => ['Bakalavr', 'Magistratura', 'Ordinatura', 'Boshqa'],
+                'stats' => $citizenshipStats,
+            ]);
+
+            // Davlatlar — aylanma chart
+            $countryStats = $countryStats ?? [];
+            $countryTotal = array_sum($countryStats);
+            $countryColors = ['#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#06b6d4', '#a855f7', '#ec4899', '#14b8a6'];
+            $countryJson = json_encode([
+                'labels' => array_keys($countryStats),
+                'data'   => array_values($countryStats),
+                'colors' => $countryColors,
+            ]);
         @endphp
 
         <div class="stats-inner-tabs">
@@ -644,9 +678,51 @@
             </div>
         </div>
 
+        {{-- Fuqaroligi tabi — stacked bar + aylanma chart --}}
+        <div x-show="inner.talabalar === 'fuqaroligi'" x-cloak>
+            <div class="half-grid">
+                {{-- Chap: Fuqaroligi (ta'lim turi bo'yicha stacked bar) --}}
+                <div class="stat-card">
+                    <h3>Fuqaroligi</h3>
+                    <div class="stat-card-kpis">
+                        <div>
+                            <span class="lbl">O'zbekiston fuqarosi</span>
+                            <span class="val" data-count="{{ $citUz }}">{{ number_format($citUz, 0, '.', ' ') }}</span>
+                        </div>
+                        <div>
+                            <span class="lbl">Xorijiy davlat fuqarosi</span>
+                            <span class="val" data-count="{{ $citForeign }}">{{ number_format($citForeign, 0, '.', ' ') }}</span>
+                        </div>
+                        <div>
+                            <span class="lbl">Fuqaroligi yo'q shaxs</span>
+                            <span class="val" data-count="{{ $citNone }}">{{ number_format($citNone, 0, '.', ' ') }}</span>
+                        </div>
+                    </div>
+                    <div class="social-bar-wrap" style="height:340px;">
+                        <canvas id="citChart"></canvas>
+                    </div>
+                </div>
+                {{-- O'ng: Fuqaroligi (aylanma — davlatlar) --}}
+                <div class="stat-card">
+                    <h3>Fuqaroligi (aylanma)</h3>
+                    <div class="stat-card-kpis">
+                        <div>
+                            <span class="lbl">Eng ko'p mamlakatlar</span>
+                            <span class="val" data-count="{{ $countryTotal }}">{{ number_format($countryTotal, 0, '.', ' ') }}</span>
+                        </div>
+                    </div>
+                    <div class="social-bar-wrap" style="height:340px;">
+                        <canvas id="countryChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <script type="application/json" id="citChartData">{!! $citJson !!}</script>
+            <script type="application/json" id="countryChartData">{!! $countryJson !!}</script>
+        </div>
+
         {{-- Boshqa inner tablar (hozircha bo'sh) --}}
         @foreach($innerTabs as $key => $label)
-            @if(in_array($key, ['umumiy', 'yoshi', 'kurslar', 'ijtimoiy_toifa', 'tolov_shakli'])) @continue @endif
+            @if(in_array($key, ['umumiy', 'yoshi', 'kurslar', 'ijtimoiy_toifa', 'tolov_shakli', 'fuqaroligi'])) @continue @endif
             <div x-show="inner.talabalar === '{{ $key }}'" x-cloak>
                 <div class="stats-empty">
                     <strong>{{ $label }}</strong> — statistika hali tayyor emas.
@@ -893,6 +969,92 @@
         });
     }
 
+    // ─── Fuqaroligi — stacked bar (ta'lim turi bo'yicha) ───────────────
+    let citCfg = null;
+    function getCitCfg() {
+        if (citCfg !== null) return citCfg;
+        const el = document.getElementById('citChartData');
+        if (!el) { citCfg = false; return false; }
+        try { citCfg = JSON.parse(el.textContent); } catch (e) { citCfg = false; }
+        return citCfg;
+    }
+    function renderCitChart() {
+        const canvas = document.getElementById('citChart');
+        if (!canvas) return;
+        const cfg = getCitCfg();
+        if (!cfg) return;
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+        const fmt = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
+
+        // Har fuqarolik turi uchun bitta dataset — ta'lim turlari bo'yicha stacked
+        const datasets = cfg.labels.map((cit, i) => ({
+            label: cit,
+            data: cfg.eduKeys.map(ek => (cfg.stats[cit] && cfg.stats[cit].edu ? (cfg.stats[cit].edu[ek] || 0) : 0)),
+            backgroundColor: cfg.colors[i % cfg.colors.length],
+            borderWidth: 1, borderColor: '#fff', borderRadius: 4,
+        }));
+        new Chart(canvas, {
+            type: 'bar',
+            data: { labels: cfg.eduLabels, datasets: datasets },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                animation: { duration: 1000, easing: 'easeOutCubic' },
+                scales: {
+                    x: { stacked: true, grid: { display: false } },
+                    y: { stacked: true, beginAtZero: true, ticks: { callback: (v) => fmt(v) } },
+                },
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 12, boxWidth: 14 } },
+                    tooltip: { callbacks: { label: (ctx) => ' ' + ctx.dataset.label + ': ' + fmt(ctx.parsed.y) } }
+                }
+            }
+        });
+    }
+
+    // ─── Davlatlar — aylanma (doughnut) ────────────────────────────────
+    let countryCfg = null;
+    function getCountryCfg() {
+        if (countryCfg !== null) return countryCfg;
+        const el = document.getElementById('countryChartData');
+        if (!el) { countryCfg = false; return false; }
+        try { countryCfg = JSON.parse(el.textContent); } catch (e) { countryCfg = false; }
+        return countryCfg;
+    }
+    function renderCountryChart() {
+        const canvas = document.getElementById('countryChart');
+        if (!canvas) return;
+        const cfg = getCountryCfg();
+        if (!cfg) return;
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+        const fmt = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
+        const colors = cfg.labels.map((_, i) => cfg.colors[i % cfg.colors.length]);
+        new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: cfg.labels,
+                datasets: [{ data: cfg.data, backgroundColor: colors, borderWidth: 3, borderColor: '#fff', hoverOffset: 6 }]
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false, cutout: '58%',
+                animation: { animateRotate: true, animateScale: true, duration: 1100, easing: 'easeOutCubic' },
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 12, boxWidth: 14 } },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => {
+                                const total = ctx.dataset.data.reduce((a, b) => a + b, 0);
+                                const pct = total > 0 ? (ctx.parsed * 100 / total).toFixed(2) : 0;
+                                return ' ' + ctx.label + ': ' + fmt(ctx.parsed) + ' (' + pct + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     // Chart.js canvas yashirin (display:none) bo'lsa o'lcham 0 bo'lib chiqadi —
     // shuning uchun tab ko'ringanda render qilamiz.
     window.statsRenderCharts = function () {
@@ -904,6 +1066,8 @@
         renderCourseChart('courseChartUmumiy');
         renderSocialChart('socialChart');
         renderSocialChart('socialChartTab');
+        renderCitChart();
+        renderCountryChart();
     };
 
     document.addEventListener('DOMContentLoaded', () => {

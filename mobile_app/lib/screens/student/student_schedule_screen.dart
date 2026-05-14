@@ -7,6 +7,7 @@ import '../../providers/settings_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
+import '../../widgets/settings_sheet.dart';
 import 'student_home_screen.dart';
 
 class StudentScheduleScreen extends StatefulWidget {
@@ -137,7 +138,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
     final cc = cardColor ?? const Color(0xFF1E3A8A);
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
+    final border = isDark ? AppTheme.darkBorderColor : Colors.white.withOpacity(0.9);
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
@@ -262,7 +263,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
-                          onPressed: () {},
+                          onPressed: () => showSettingsSheet(context),
                         ),
                       ],
                     ),

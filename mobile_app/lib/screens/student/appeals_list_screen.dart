@@ -186,7 +186,7 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
                                         padding: const EdgeInsets.all(14),
                                         decoration: BoxDecoration(
                                           borderRadius: BorderRadius.circular(14),
-                                          border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
+                                          border: Border.all(color: isDark ? AppTheme.darkBorderColor : const Color(0xFFE2E8F0)),
                                           boxShadow: [
                                             BoxShadow(
                                               color: isDark

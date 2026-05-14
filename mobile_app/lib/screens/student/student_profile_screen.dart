@@ -9,6 +9,7 @@ import '../../providers/student_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/api_service.dart';
 import '../../widgets/loading_widget.dart';
+import '../../widgets/settings_sheet.dart';
 import 'student_home_screen.dart';
 
 class StudentProfileScreen extends StatefulWidget {
@@ -149,7 +150,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 ),
                 IconButton(
                   icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
-                  onPressed: () {},
+                  onPressed: () => showSettingsSheet(context),
                 ),
                 IconButton(
                   icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 22),
@@ -343,11 +344,11 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             prefixIcon: const Icon(Icons.alternate_email, size: 20),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: isDark ? AppTheme.darkDivider : Colors.grey[300]!),
+              borderSide: BorderSide(color: isDark ? AppTheme.darkBorderColor : Colors.grey[300]!),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: isDark ? AppTheme.darkDivider : Colors.grey[300]!),
+              borderSide: BorderSide(color: isDark ? AppTheme.darkBorderColor : Colors.grey[300]!),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),

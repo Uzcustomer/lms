@@ -165,7 +165,7 @@ class _ServiceCard extends StatelessWidget {
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
+    final border = isDark ? AppTheme.darkBorderColor : Colors.white.withOpacity(0.9);
 
     return ScaleTap(
       onTap: item.onTap,

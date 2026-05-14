@@ -7,6 +7,7 @@ import '../../l10n/app_localizations.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/scale_tap.dart';
+import '../../widgets/settings_sheet.dart';
 import 'student_services_screen.dart';
 import 'student_exam_schedule_screen.dart';
 import 'attendance_stats_screen.dart';
@@ -111,6 +112,10 @@ class StudentUsefulScreen extends StatelessWidget {
                       IconButton(
                         icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
                         onPressed: () {},
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
+                        onPressed: () => showSettingsSheet(context),
                       ),
                     ],
                   ),
@@ -251,7 +256,7 @@ class _GlassTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
+    final border = isDark ? AppTheme.darkBorderColor : Colors.white.withOpacity(0.9);
 
     return ScaleTap(
       onTap: () => Navigator.push(

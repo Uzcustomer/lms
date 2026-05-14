@@ -95,6 +95,8 @@ class AppTheme {
   static const Color darkTextPrimary = Color(0xFFE0E0E0);
   static const Color darkTextSecondary = Color(0xFF9E9E9E);
   static const Color darkDivider = Color(0xFF424242);
+  // Near-white border for cards, inputs and selects in dark mode
+  static const Color darkBorderColor = Color(0xFFE8E8F0);
 
   static ThemeData get darkTheme {
     return ThemeData(
@@ -138,11 +140,11 @@ class AppTheme {
         fillColor: darkCard,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: darkDivider),
+          borderSide: const BorderSide(color: darkBorderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: darkDivider),
+          borderSide: const BorderSide(color: darkBorderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

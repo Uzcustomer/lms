@@ -296,13 +296,16 @@
             // Fuqaroligi — stacked bar (ta'lim turi bo'yicha) + KPI raqamlar
             $citizenshipStats = $citizenshipStats ?? [];
             $citTotal = array_sum(array_column($citizenshipStats, 'total'));
-            // KPI: O'zbekiston / Xorijiy / Fuqaroligi yo'q — nomga qarab ajratamiz
+            // KPI: O'zbekiston / Xorijiy / Fuqaroligi yo'q — nomga qarab ajratamiz.
+            // Apostrof belgisi har xil bo'lishi mumkin (' yoki ʻ yoki ’), shuning
+            // uchun "zbek" qismiga qaraymiz — barcha variantlarda mavjud.
             $citUz = 0; $citForeign = 0; $citNone = 0;
             foreach ($citizenshipStats as $cName => $cData) {
                 $low = mb_strtolower($cName);
-                if (str_contains($low, "o'zbek") || str_contains($low, 'ozbek') || str_contains($low, 'uzbek')) {
+                if (str_contains($low, 'zbek')) {
                     $citUz += $cData['total'];
-                } elseif (str_contains($low, "yo'q") || str_contains($low, 'yoq') || str_contains($low, 'apatrid')) {
+                } elseif (str_contains($low, 'shaxs') || str_contains($low, 'apatrid')
+                        || str_contains($low, 'yoq') || str_contains($low, "yo'q")) {
                     $citNone += $cData['total'];
                 } else {
                     $citForeign += $cData['total'];
@@ -497,6 +500,43 @@
             </div>
 
             <script type="application/json" id="socialChartData">{!! $socialJson !!}</script>
+
+            {{-- Davlatlar bo'yicha aylanma chart (barcha mamlakatlar) --}}
+            <div class="course-bar-card">
+                <h3>Davlatlar bo'yicha taqsimot</h3>
+                <div class="stat-card-kpis" style="margin-bottom:14px;">
+                    <div>
+                        <span class="lbl">Jami (barcha davlatlar)</span>
+                        <span class="val" data-count="{{ $countryTotal }}">{{ number_format($countryTotal, 0, '.', ' ') }}</span>
+                    </div>
+                    <div>
+                        <span class="lbl">Davlatlar soni</span>
+                        <span class="val" data-count="{{ count($countryStats) }}">{{ count($countryStats) }}</span>
+                    </div>
+                </div>
+                <div class="pie-body" style="align-items:flex-start;">
+                    <div class="pie-canvas-wrap" style="height:300px;width:300px;">
+                        <canvas id="countryChartUmumiy"></canvas>
+                    </div>
+                    <div class="pie-legend" style="gap:10px;max-height:300px;overflow-y:auto;">
+                        @php $ci = 0; @endphp
+                        @foreach($countryStats as $cName => $cCount)
+                            <div class="pie-legend-item" style="gap:10px;">
+                                <span class="pie-legend-dot" style="width:14px;height:14px;border-radius:4px;flex-shrink:0;background:{{ $countryColors[$ci % count($countryColors)] }}"></span>
+                                <span class="pie-legend-text">
+                                    <span class="pie-legend-label">{{ $cName }}</span>
+                                    <span class="pie-legend-value" style="font-size:20px;">
+                                        <span data-count="{{ $cCount }}">{{ number_format($cCount, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct">{{ $countryTotal > 0 ? number_format($cCount * 100 / $countryTotal, 1) : 0 }}%</span>
+                                    </span>
+                                </span>
+                            </div>
+                            @php $ci++; @endphp
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+            <script type="application/json" id="countryChartData">{!! $countryJson !!}</script>
         </div>
 
         {{-- Yoshi tabi — pie chart --}}
@@ -717,7 +757,7 @@
                 </div>
             </div>
             <script type="application/json" id="citChartData">{!! $citJson !!}</script>
-            <script type="application/json" id="countryChartData">{!! $countryJson !!}</script>
+            {{-- countryChartData script Umumiy tabida bir marta e'lon qilingan --}}
         </div>
 
         {{-- Boshqa inner tablar (hozircha bo'sh) --}}
@@ -1021,8 +1061,8 @@
         try { countryCfg = JSON.parse(el.textContent); } catch (e) { countryCfg = false; }
         return countryCfg;
     }
-    function renderCountryChart() {
-        const canvas = document.getElementById('countryChart');
+    function renderCountryChart(id) {
+        const canvas = document.getElementById(id || 'countryChart');
         if (!canvas) return;
         const cfg = getCountryCfg();
         if (!cfg) return;
@@ -1067,7 +1107,8 @@
         renderSocialChart('socialChart');
         renderSocialChart('socialChartTab');
         renderCitChart();
-        renderCountryChart();
+        renderCountryChart('countryChart');
+        renderCountryChart('countryChartUmumiy');
     };
 
     document.addEventListener('DOMContentLoaded', () => {

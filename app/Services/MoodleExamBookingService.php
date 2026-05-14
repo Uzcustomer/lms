@@ -56,11 +56,13 @@ class MoodleExamBookingService
             // Date-only hold: the test-centre has not picked a time yet. No
             // window / cutoff is computed - Moodle records the booking as
             // "unscheduled" and keeps the quiz closed until a full booking
-            // (with real times) replaces it.
+            // (with real times) replaces it. examstart carries the exam date
+            // (midnight) so the proctor page can still show "Test sanasi".
             $timeopen = 0;
             $timeclose = 0;
             $timelimit = 0;
             $startCutoff = 0;
+            $examTime = $this->examDateMidnight($schedule->{$dateField});
         } else {
             if (empty($schedule->{$timeField})) {
                 return ['ok' => false, 'skipped' => true, 'reason' => 'date or time missing'];
@@ -70,6 +72,9 @@ class MoodleExamBookingService
             if (!$startsAt) {
                 return $this->fail($schedule, $ynType, 'cannot parse date/time');
             }
+            // The real exam start (e.g. 14:00) — sent as-is so the proctor page
+            // shows the LMS time, not the computed +window+buffer cutoff.
+            $examTime = $startsAt->getTimestamp();
 
             // open_window_minutes = +/- entry grace (early/late cutoff for FaceID
             // login & quiz entry), independent of slot duration. Default 10.
@@ -147,6 +152,7 @@ class MoodleExamBookingService
                 'timelimit' => $timelimit,
                 'start_cutoff' => $startCutoff,
                 'unscheduled' => $unscheduled ? 1 : 0,
+                'exam_time' => $examTime,
                 'students' => array_values($usernames),
             ];
 
@@ -171,12 +177,29 @@ class MoodleExamBookingService
             'timeclose' => $timeclose,
             'timelimit' => $timelimit,
             'start_cutoff' => $startCutoff,
+            'exam_time' => $examTime,
             'calls' => $calls,
         ];
 
         $this->persistResult($schedule, $ynType, $result);
 
         return $result;
+    }
+
+    /**
+     * Midnight (Unix ts) of an exam date — used as examstart for unscheduled
+     * holds, where only the date is known. Returns 0 if the date won't parse.
+     */
+    private function examDateMidnight(mixed $date): int
+    {
+        try {
+            $carbon = $date instanceof Carbon
+                ? $date->copy()
+                : Carbon::parse((string) $date, config('app.timezone'));
+            return $carbon->startOfDay()->getTimestamp();
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     private function combineDateTime(mixed $date, mixed $time): ?Carbon

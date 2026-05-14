@@ -480,8 +480,7 @@ class RetakeWindowController extends Controller
 
     private function authorizeAccess(): void
     {
-        $user = RetakeAccess::currentStaff();
-        if (!RetakeAccess::canManageAcademicDept($user)) {
+        if (!$this->activeRoleCanManage()) {
             abort(403, 'Sizda qayta o\'qish oynalarini boshqarish ruxsati yo\'q');
         }
     }
@@ -499,16 +498,38 @@ class RetakeWindowController extends Controller
 
     /**
      * Joriy foydalanuvchi oynalarni boshqara oladimi (yozish amallari)?
-     * View'da Override/O'chirish/Yangi oyna tugmalarini ko'rsatish uchun.
+     *
+     * MUHIM: foydalanuvchi bir nechta rolga ega bo'lishi mumkin (masalan,
+     * ham o'quv bo'limi, ham registrator). Shuning uchun FAQAT hasAnyRole
+     * emas, AKTIV rolni tekshiramiz — registrator rolida ishlayotgan bo'lsa,
+     * o'quv bo'limi roli bo'lsa-da, boshqaruv tugmalari ko'rinmaydi.
      */
+    private function activeRoleCanManage(): bool
+    {
+        $activeRole = (string) session('active_role', '');
+        $manageRoles = [
+            \App\Enums\ProjectRole::ACADEMIC_DEPARTMENT->value,
+            \App\Enums\ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value,
+            \App\Enums\ProjectRole::SUPERADMIN->value,
+            \App\Enums\ProjectRole::ADMIN->value,
+        ];
+        if (!in_array($activeRole, $manageRoles, true)) {
+            return false;
+        }
+        // Aktiv rol mos, lekin foydalanuvchida haqiqatan shu rol borligini ham tekshiramiz
+        return RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff());
+    }
+
     private function canManage(): bool
     {
-        return RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff());
+        return $this->activeRoleCanManage();
     }
 
     private function canOverride(): bool
     {
-        return RetakeAccess::canOverride(RetakeAccess::currentStaff());
+        // Override faqat boshqaruv ruxsati bor (aktiv rol) xodimlarga
+        return $this->activeRoleCanManage()
+            && RetakeAccess::canOverride(RetakeAccess::currentStaff());
     }
 
     /**

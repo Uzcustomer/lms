@@ -33,6 +33,14 @@ class ExamDateRoleService
      *  schedule changes, etc.). */
     public const SETTING_TC_EDIT_TODAY = 'test_center_can_edit_today';
 
+    /** Toggle: when true, YN sanasi sifatida o'tib ketgan (past) sanani ham
+     *  qo'yish mumkin. Sukut bo'yicha o'chirilgan — odatda imtihon kelajakda
+     *  bo'ladi. Sozlama yoqilgan bo'lsa, sana bo'yicha tekshiruv (1-urinish
+     *  uchun "kamida ertadan", admin uchun "bugundan boshlab") chetlab
+     *  o'tiladi. Tizimni semester o'rtasida ishga tushirish kabi hollarda
+     *  o'tib ketgan urinish sanasini ro'yxatga olish uchun ishlatiladi. */
+    public const SETTING_ALLOW_PAST_DATES = 'allow_past_exam_dates';
+
     /**
      * Whether the test-centre role may currently edit today's exam times.
      */
@@ -47,6 +55,22 @@ class ExamDateRoleService
     public static function setTestCenterCanEditToday(bool $value): void
     {
         \App\Models\Setting::set(self::SETTING_TC_EDIT_TODAY, $value ? '1' : '0');
+    }
+
+    /**
+     * YN sanasi sifatida o'tib ketgan (past) sanani qo'yishga ruxsat berilganmi.
+     */
+    public static function allowPastExamDates(): bool
+    {
+        return (bool) \App\Models\Setting::get(self::SETTING_ALLOW_PAST_DATES, false);
+    }
+
+    /**
+     * Persist the "allow past exam dates" toggle. Admin-only caller.
+     */
+    public static function setAllowPastExamDates(bool $value): void
+    {
+        \App\Models\Setting::set(self::SETTING_ALLOW_PAST_DATES, $value ? '1' : '0');
     }
 
     /**

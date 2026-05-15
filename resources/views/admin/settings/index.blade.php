@@ -294,6 +294,54 @@
                 </div>
             </div>
 
+            {{-- SECTION: YN SANASI SIYOSATI (eski/past sanalarga ruxsat) --}}
+            <div x-data="{ open: {{ request('tab') === 'exam-date-policy' ? 'true' : 'false' }} }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #fee2e2, #fecaca); border: none; cursor: pointer; border-bottom: 1px solid #fca5a5;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 44px; height: 44px; min-width: 44px; background: linear-gradient(135deg, #ef4444, #dc2626); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(239,68,68,0.3);">
+                            <svg width="22" height="22" style="width: 22px; height: 22px; color: #fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        </div>
+                        <div style="text-align: left;">
+                            <div style="font-size: 17px; font-weight: 700; color: #7f1d1d;">YN sanasi siyosati</div>
+                            <div style="font-size: 13px; color: #991b1b; margin-top: 2px;">O'tib ketgan (past) sanani YN kuni sifatida qo'yishga ruxsat</div>
+                        </div>
+                    </div>
+                    <svg width="20" height="20" :style="open ? 'transform: rotate(180deg)' : ''" style="width: 20px; height: 20px; min-width: 20px; color: #991b1b; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+
+                <div x-show="open" x-transition style="padding: 24px;">
+                    <form method="POST" action="{{ route('admin.settings.update.exam-date-policy') }}">
+                        @csrf
+                        <div style="background: #fef2f2; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; border: 1px solid #fecaca; font-size: 13px; color: #7f1d1d; display: flex; align-items: flex-start; gap: 10px;">
+                            <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px; margin-top: 1px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <div>
+                                Sukut bo'yicha YN kuni sifatida kelajakdagi sana qo'yiladi
+                                (1-urinish — kamida ertangi, admin uchun — bugundan boshlab).
+                                Tizim semestr o'rtasida ishga tushirilganda 1-urinish sanasi allaqachon o'tib bo'lgan bo'lishi mumkin —
+                                bu toggle yoqilsa, o'tib ketgan sanani ham qo'yish mumkin bo'ladi.
+                                Ish tugagach o'chirib qo'ying.
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="allow_past_dates" value="0">
+                        <label style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px; border: 1px solid {{ $allowPastExamDates ? '#ef4444' : '#e5e7eb' }}; background: {{ $allowPastExamDates ? '#fef2f2' : '#fff' }}; cursor: pointer; margin-bottom: 16px;">
+                            <input type="checkbox" name="allow_past_dates" value="1" {{ $allowPastExamDates ? 'checked' : '' }} style="width: 18px; height: 18px; accent-color: #ef4444;">
+                            <div>
+                                <div style="font-size: 14px; font-weight: 600; color: #0f172a;">Eski (o'tib ketgan) sanalarni qo'yishga ruxsat</div>
+                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Yoqilsa, YN kuni sifatida bugundan oldingi sanani ham qo'yish mumkin.</div>
+                            </div>
+                        </label>
+
+                        <div style="display: flex; justify-content: flex-end;">
+                            <button type="submit" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(239,68,68,0.3);">
+                                <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Saqlash
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             {{-- SECTION: TEST MARKAZI SIG'IMI --}}
             <div x-data="{ open: {{ request('tab') === 'exam-capacity' ? 'true' : 'false' }} }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
                 <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #f0fdfa, #ccfbf1); border: none; cursor: pointer; border-bottom: 1px solid #5eead4;">

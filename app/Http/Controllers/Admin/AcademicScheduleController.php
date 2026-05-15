@@ -1579,6 +1579,65 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * AJAX: re-push every selected (schedule, yn_type, attempt) to Moodle.
+     * Unlike recheckMoodle() this is queue-based — a bulk selection can be
+     * large, so each row is dispatched as a BookMoodleGroupExam job and the
+     * proctor refreshes once the queue has drained.
+     */
+    public function bulkRecheckMoodle(Request $request)
+    {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
+        if ($this->isTestCenterReadOnly()) {
+            return response()->json(['error' => 'Sizda bu amalni bajarish huquqi yo\'q.'], 403);
+        }
+
+        $items = $request->input('items', []);
+        if (!is_array($items) || empty($items)) {
+            return response()->json(['error' => 'Hech qanday qator tanlanmadi.'], 422);
+        }
+
+        $dispatched = 0;
+        $seen = [];
+        foreach ($items as $it) {
+            $scheduleId = (int) ($it['schedule_id'] ?? 0);
+            $ynType = strtolower((string) ($it['yn_type'] ?? ''));
+            $ynType = $ynType === 'oski' ? 'oski' : 'test';
+            $attempt = (int) ($it['attempt'] ?? 1);
+            if ($scheduleId <= 0 || !in_array($attempt, [1, 2, 3], true)) {
+                continue;
+            }
+            // De-duplicate identical (schedule, yn, attempt) triples.
+            $key = $scheduleId . '|' . $ynType . '|' . $attempt;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+
+            $schedule = ExamSchedule::find($scheduleId);
+            if (!$schedule) {
+                continue;
+            }
+            $suffix = $attempt === 2 ? '_resit' : ($attempt === 3 ? '_resit2' : '');
+            $prefix = $ynType . $suffix;
+            // Nothing to push without a date for that attempt.
+            if (empty($schedule->{$prefix . '_date'})) {
+                continue;
+            }
+            $unscheduled = empty($schedule->{$prefix . '_time'});
+            \App\Jobs\BookMoodleGroupExam::dispatch($schedule->id, $ynType, $unscheduled, $attempt);
+            $dispatched++;
+        }
+
+        return response()->json([
+            'dispatched' => $dispatched,
+            'message' => $dispatched . ' ta yozuv Moodle tekshiruviga navbatga qo\'shildi. '
+                . 'Bir necha daqiqadan so\'ng sahifani yangilab, "Moodle holati" ustunini ko\'ring.',
+        ]);
+    }
+
+    /**
      * Tanlangan urinish uchun talabalar ro'yxatini filtrlash:
      *  - 1-urinish: barcha talabalar
      *  - 2-urinish: 1-urinishdan o'tmaganlar (failed_attempt1) YOKI shaxsiy

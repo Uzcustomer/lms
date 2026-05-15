@@ -44,11 +44,7 @@ class RetakeGroupController extends Controller
             'semester_code' => $request->input('semester_code'),
             'group' => $request->input('group'),
         ];
-        // Fan filtri — bir nechta tanlash mumkin (massiv yoki bitta qiymat)
-        $subjectFilterRaw = $request->input('subject');
-        $subjectFilters = is_array($subjectFilterRaw)
-            ? array_values(array_filter($subjectFilterRaw, fn ($v) => filled($v)))
-            : (filled($subjectFilterRaw) ? [$subjectFilterRaw] : []);
+        $subjectFilter = $request->input('subject');
         $perPage = (int) $request->input('per_page', 50);
         if (!in_array($perPage, [10, 25, 50, 100], true)) {
             $perPage = 50;
@@ -89,8 +85,8 @@ class RetakeGroupController extends Controller
                 }
             });
         }
-        if (!empty($subjectFilters)) {
-            $pendingAppsQuery->whereIn('subject_id', $subjectFilters);
+        if ($subjectFilter) {
+            $pendingAppsQuery->where('subject_id', $subjectFilter);
         }
 
         $pendingApps = $pendingAppsQuery
@@ -136,8 +132,8 @@ class RetakeGroupController extends Controller
             });
         }
 
-        if (!empty($subjectFilters)) {
-            $groupsQuery->whereIn('subject_id', $subjectFilters);
+        if ($subjectFilter) {
+            $groupsQuery->where('subject_id', $subjectFilter);
         }
 
         $groups = $groupsQuery->paginate($perPage)->withQueryString();
@@ -168,18 +164,39 @@ class RetakeGroupController extends Controller
     }
 
     /**
-     * AJAX: bitta fan + semestr uchun arizalar va o'qituvchilar ro'yxati.
+     * AJAX: arizalar va o'qituvchilar ro'yxati.
+     * Ikki rejim:
+     *   1) subject_name + semester_name — bitta fan/semestr uchun (eski xulq).
+     *   2) application_ids[] — aniq ariza ID'lari (bulk: turli fanlarni
+     *      bitta guruhga birlashtirish uchun).
      */
     public function lookup(Request $request): JsonResponse
     {
         $this->authorize();
 
-        $data = $request->validate([
-            'subject_name' => 'required|string',
-            'semester_name' => 'required|string',
-        ]);
+        $appIds = $request->input('application_ids', []);
+        $hasIds = is_array($appIds) && count($appIds) > 0;
 
-        $apps = $this->groupService->applicationsForSubject($data['subject_name'], $data['semester_name']);
+        if ($hasIds) {
+            $apps = RetakeApplication::with(['group.student', 'group.window'])
+                ->whereIn('id', $appIds)
+                ->where('dean_status', 'approved')
+                ->where('registrar_status', 'approved')
+                ->where('academic_dept_status', 'approved')
+                ->where('final_status', 'pending')
+                ->whereNull('retake_group_id')
+                ->whereHas('group', function ($q) {
+                    $q->whereNotNull('payment_uploaded_at')
+                      ->where('payment_verification_status', 'approved');
+                })
+                ->get();
+        } else {
+            $data = $request->validate([
+                'subject_name' => 'required|string',
+                'semester_name' => 'required|string',
+            ]);
+            $apps = $this->groupService->applicationsForSubject($data['subject_name'], $data['semester_name']);
+        }
 
         $applications = $apps->map(function (RetakeApplication $a) {
             $student = $a->group->student ?? null;
@@ -191,6 +208,8 @@ class RetakeGroupController extends Controller
                 'specialty_name' => $student?->specialty_name,
                 'level_name' => $student?->level_name ?? $student?->level_code,
                 'group_name' => $student?->group_name,
+                'subject_name' => $a->subject_name,
+                'semester_name' => $a->semester_name,
                 'credit' => (float) $a->credit,
                 'has_oske' => (bool) $a->has_oske,
                 'has_test' => (bool) $a->has_test,

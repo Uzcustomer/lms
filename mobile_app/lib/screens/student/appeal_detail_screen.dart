@@ -427,7 +427,6 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
               decoration: BoxDecoration(
                 color: cardColor,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: AppTheme.cardBorderColor),
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,

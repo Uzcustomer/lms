@@ -165,7 +165,6 @@ class _ServiceCard extends StatelessWidget {
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    final border = AppTheme.cardBorderColor;
 
     return ScaleTap(
       onTap: item.onTap,
@@ -176,7 +175,6 @@ class _ServiceCard extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               color: surface,
-              border: Border.all(color: border),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(

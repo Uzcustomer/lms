@@ -256,7 +256,6 @@ class _GlassTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    final border = AppTheme.cardBorderColor;
 
     return ScaleTap(
       onTap: () => Navigator.push(
@@ -270,7 +269,6 @@ class _GlassTile extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               color: surface,
-              border: Border.all(color: border),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(

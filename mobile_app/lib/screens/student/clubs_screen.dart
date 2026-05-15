@@ -483,7 +483,6 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
             decoration: BoxDecoration(
               color: cardColor,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppTheme.cardBorderColor),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

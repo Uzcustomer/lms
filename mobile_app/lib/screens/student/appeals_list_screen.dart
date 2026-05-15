@@ -186,7 +186,6 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
                                         padding: const EdgeInsets.all(14),
                                         decoration: BoxDecoration(
                                           borderRadius: BorderRadius.circular(14),
-                                          border: Border.all(color: AppTheme.cardBorderColor),
                                           boxShadow: [
                                             BoxShadow(
                                               color: isDark

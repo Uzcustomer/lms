@@ -200,7 +200,7 @@
                 </div>
                 <a href="{{ route('admin.staff-evaluation.show', $teacher) }}" class="flex items-center gap-3 flex-1 min-w-0">
                     <div class="flex-shrink-0 relative">
-                        {!! QrCode::format('svg')->size(80)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
+                        {!! QrCode::size(80)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token)) !!}
                         @if($template['show_logo'])
                         <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                             <div class="bg-white rounded-full" style="padding:3px;">

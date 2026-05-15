@@ -25,7 +25,7 @@
         </div>
     </div>
     <div style="position:absolute; left:{{ $qrX }}mm; top:{{ $qrY }}mm; width:{{ $qrSize }}mm; height:{{ $qrSize }}mm;">
-        {!! str_replace('<svg ', '<svg style="width:100%;height:100%;display:block;" ', QrCode::format('svg')->size(300)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token))) !!}
+        {!! str_replace('<svg ', '<svg style="width:100%;height:100%;display:block;" ', QrCode::size(300)->errorCorrection('H')->margin(0)->generate(route('staff-evaluate.form', $teacher->eval_qr_token))) !!}
         @if($template['show_logo'])
         <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">
             <div style="background:white; border-radius:50%; padding:0.3mm; display:flex;">

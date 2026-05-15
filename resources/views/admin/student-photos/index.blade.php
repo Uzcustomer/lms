@@ -1471,7 +1471,7 @@
         .student-photos-table th:nth-child(2), .student-photos-table td:nth-child(2) { width: 1%; white-space: nowrap; }
         .student-photos-table th:nth-child(9), .student-photos-table td:nth-child(9) { width: 1%; white-space: nowrap; text-align: right; padding-right: 0.25rem; }
         .student-photos-table th:nth-child(11), .student-photos-table td:nth-child(11) { width: 1%; white-space: nowrap; }
-        .student-photos-table th:nth-child(12), .student-photos-table td:nth-child(12) { width: 170px; max-width: 170px; white-space: normal; word-break: break-word; }
+        .student-photos-table th:nth-child(12), .student-photos-table td:nth-child(12) { width: 350px; max-width: 350px; white-space: normal; word-break: break-word; }
         .student-photos-table th:nth-child(13), .student-photos-table td:nth-child(13) { width: 1%; white-space: nowrap; }
         .student-photos-table th:nth-child(14), .student-photos-table td:nth-child(14) { width: 1%; white-space: nowrap; }
 

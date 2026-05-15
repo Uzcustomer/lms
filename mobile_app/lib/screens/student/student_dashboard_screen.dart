@@ -1631,20 +1631,13 @@ class _TapHintChevron extends StatefulWidget {
 
 class _TapHintChevronState extends State<_TapHintChevron>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl;
-  late final Animation<double> _opacity;
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
 
-  @override
-  void initState() {
-    super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
-    _opacity = Tween<double>(begin: 0.15, end: 0.85).animate(
-      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
-    );
-  }
+  late final Animation<double> _opacity = Tween<double>(begin: 0.15, end: 0.85)
+      .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
 
   @override
   void dispose() {

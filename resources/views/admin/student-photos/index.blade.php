@@ -106,7 +106,7 @@
                 };
             },
             // Server JSON o'rniga HTML xato sahifasini qaytarsa (500/502/504),
-            // res.json() "Unexpected token '<'" tashlaydi. Bu helper xom matnni
+            // res.json() noto'g'ri JSON xatosi tashlaydi. Bu helper xom matnni
             // o'qib, JSON bo'lsa parse qiladi, aks holda holat kodi bilan xato qaytaradi.
             async _safeJson(res) {
                 const text = await res.text();

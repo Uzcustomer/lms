@@ -40,6 +40,7 @@
             'formAction' => route('admin.retake-groups.index'),
             'educationTypes' => $educationTypes ?? collect(),
             'subjects' => $subjects ?? collect(),
+            'subjectMultiple' => true,
             'extraQueryFields' => array_filter([
                 'status' => $statusFilter !== 'all' ? $statusFilter : null,
                 'search' => $search ?: null,
@@ -256,7 +257,13 @@
                         @endif
                     </a>
                     <form method="GET" action="{{ route('admin.retake-groups.index') }}" class="flex gap-2 items-center flex-wrap">
-                        @foreach(['education_type','department','specialty','level_code','semester_code','group','subject','per_page'] as $kept)
+                        @php
+                            $keptSubjects = is_array(request('subject')) ? request('subject') : (filled(request('subject')) ? [request('subject')] : []);
+                        @endphp
+                        @foreach($keptSubjects as $sId)
+                            <input type="hidden" name="subject[]" value="{{ $sId }}">
+                        @endforeach
+                        @foreach(['education_type','department','specialty','level_code','semester_code','group','per_page'] as $kept)
                             @if(request($kept))
                                 <input type="hidden" name="{{ $kept }}" value="{{ request($kept) }}">
                             @endif

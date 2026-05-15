@@ -44,7 +44,11 @@ class RetakeGroupController extends Controller
             'semester_code' => $request->input('semester_code'),
             'group' => $request->input('group'),
         ];
-        $subjectFilter = $request->input('subject');
+        // Fan filtri — bir nechta tanlash mumkin (massiv yoki bitta qiymat)
+        $subjectFilterRaw = $request->input('subject');
+        $subjectFilters = is_array($subjectFilterRaw)
+            ? array_values(array_filter($subjectFilterRaw, fn ($v) => filled($v)))
+            : (filled($subjectFilterRaw) ? [$subjectFilterRaw] : []);
         $perPage = (int) $request->input('per_page', 50);
         if (!in_array($perPage, [10, 25, 50, 100], true)) {
             $perPage = 50;
@@ -85,8 +89,8 @@ class RetakeGroupController extends Controller
                 }
             });
         }
-        if ($subjectFilter) {
-            $pendingAppsQuery->where('subject_id', $subjectFilter);
+        if (!empty($subjectFilters)) {
+            $pendingAppsQuery->whereIn('subject_id', $subjectFilters);
         }
 
         $pendingApps = $pendingAppsQuery
@@ -132,8 +136,8 @@ class RetakeGroupController extends Controller
             });
         }
 
-        if ($subjectFilter) {
-            $groupsQuery->where('subject_id', $subjectFilter);
+        if (!empty($subjectFilters)) {
+            $groupsQuery->whereIn('subject_id', $subjectFilters);
         }
 
         $groups = $groupsQuery->paginate($perPage)->withQueryString();

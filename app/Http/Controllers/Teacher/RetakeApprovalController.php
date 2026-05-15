@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Teacher;
 
 use App\Enums\ProjectRole;
+use App\Exports\RetakeApplicationsExport;
 use App\Http\Controllers\Controller;
 use App\Models\RetakeApplication;
 use App\Models\RetakeApplicationGroup;
@@ -11,6 +12,7 @@ use App\Models\Teacher;
 use App\Services\Retake\RetakeAccess;
 use App\Services\Retake\RetakeApplicationService;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -179,6 +181,45 @@ class RetakeApprovalController extends Controller
             'educationTypes' => $educationTypes,
             'subjects' => $subjects,
         ]);
+    }
+
+    /**
+     * Arizalarni Excelga eksport qilish (joriy filtrlar bo'yicha).
+     * Dekan — faqat o'z fakulteti; Registrator — barchasi.
+     */
+    public function export(Request $request)
+    {
+        $user = RetakeAccess::currentStaff();
+        $role = $this->detectRole($user);
+
+        $filters = [
+            'filter' => $request->input('filter'),
+            'date_from' => $request->input('date_from'),
+            'date_to' => $request->input('date_to'),
+            'subject' => $request->input('subject'),
+            'semester_code' => $request->input('semester_code'),
+            'education_type' => $request->input('education_type'),
+            'department' => $request->input('department'),
+            'specialty' => $request->input('specialty'),
+            'level_code' => $request->input('level_code'),
+            'group' => $request->input('group'),
+            'search' => $request->input('search'),
+        ];
+
+        // 'filter' qiymatini Export uchun aniqlashtiramiz
+        $filterValue = $filters['filter'] ?? null;
+        if ($filterValue === 'pending_mine' || $filterValue === 'all' || $filterValue === 'payment_to_verify') {
+            $filters['filter'] = null;
+        }
+
+        // Dekan — faqat o'z fakultetidagi talabalarning arizalarini eksport qilsin
+        if ($role === 'dean' && $user instanceof Teacher) {
+            $filters['dean_faculty_ids'] = array_map('intval', $user->deanFacultyIds);
+        }
+
+        $fileName = 'retake_arizalar_' . now()->format('Y_m_d_His') . '.xlsx';
+
+        return Excel::download(new RetakeApplicationsExport($filters), $fileName);
     }
 
     /**

@@ -85,6 +85,17 @@
             ]),
         ])
 
+        {{-- Excel eksport tugmasi (joriy filtrlar bo'yicha) --}}
+        <div class="mb-4 flex justify-end">
+            <a href="{{ route('admin.retake-applications.export', request()->query()) }}"
+               class="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg shadow-sm transition">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                </svg>
+                {{ __("Excel'ga yuklab olish") }}
+            </a>
+        </div>
+
         {{-- Bulk actions panel (har qachon ko'rinadi — tanlangan arizalar bo'lsa) --}}
         <div x-show="selected.length > 0" x-cloak
              class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex items-center justify-between flex-wrap gap-2">

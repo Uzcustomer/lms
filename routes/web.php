@@ -840,6 +840,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Dekan + Registrator paneli (rol auto-detect)
         Route::prefix('retake')->name('retake.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'index'])->name('index');
+            Route::get('/export', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'export'])->name('export');
             Route::post('/bulk-delete', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'bulkDestroy'])->name('bulk-delete');
             Route::post('/bulk-force-delete', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'bulkForceDestroy'])->name('bulk-force-delete');
             Route::get('/{groupId}/receipt', [\App\Http\Controllers\Teacher\RetakeApprovalController::class, 'receipt'])->name('receipt');
@@ -877,6 +878,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // O'quv bo'limi: Qayta o'qish arizalari (oldindan tasdiqlash)
         Route::prefix('retake-applications')->name('retake-applications.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'index'])->name('index');
+            Route::get('/export', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'export'])->name('export');
             Route::post('/{applicationId}/approve', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'approve'])->name('approve');
             Route::post('/{applicationId}/reject', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'reject'])->name('reject');
             Route::post('/bulk-approve', [\App\Http\Controllers\Teacher\AcademicDept\RetakeAcademicApplicationController::class, 'bulkApprove'])->name('bulk-approve');

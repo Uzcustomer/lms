@@ -418,9 +418,15 @@
                                                 @endif
                                             </td>
                                             <td style="text-align:center;padding:4px 6px;">
+                                                @php
+                                                    // Test markazi roli: faqat kelajakdagi (>= ertaga) sanalarda vaqtni o'zgartirish mumkin.
+                                                    $tcRowDateStr = ($item['yn_date_carbon'] ?? null)?->format('Y-m-d');
+                                                    $tcRowTooSoon = $tcIsTestMarkazi && $tcRowDateStr && $tcRowDateStr <= $today;
+                                                    $tcRowLocked = $tcReadOnly || $tcRowTooSoon;
+                                                @endphp
                                                     <div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">
-                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-attempt="{{ $attempt }}" data-yn-submitted="{{ ($item['yn_submitted'] ?? false) ? '1' : '0' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:{{ $tcReadOnly ? 'default' : 'pointer' }};{{ $tcReadOnly ? 'background:#f1f5f9;color:#475569;' : '' }}" {{ $tcReadOnly ? 'readonly' : '' }} @if(!$tcReadOnly) oninput="formatTimeInput(this)" onblur="validateTimeInput(this)" @endif>
-                                                        @if(!$tcReadOnly)
+                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-attempt="{{ $attempt }}" data-yn-submitted="{{ ($item['yn_submitted'] ?? false) ? '1' : '0' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:{{ $tcRowLocked ? 'not-allowed' : 'pointer' }};{{ $tcRowLocked ? 'background:#f1f5f9;color:#475569;' : '' }}" {{ $tcRowLocked ? 'readonly' : '' }} @if(!$tcRowLocked) oninput="formatTimeInput(this)" onblur="validateTimeInput(this)" @endif title="{{ $tcRowTooSoon ? 'Test markazi rolida vaqtni faqat kamida bir kun oldin belgilash mumkin. Bugungi va o\'tgan sanalar uchun o\'zgartirishga ruxsat yo\'q.' : '' }}">
+                                                        @if(!$tcRowLocked)
                                                         <button type="button" class="save-test-time-btn" onclick="saveTestTime(this)" style="padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Saqlash">
                                                             <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                         </button>
@@ -430,6 +436,10 @@
                                                         <button type="button" class="manual-assign-btn" onclick="openManualAssignModal(this)" style="padding:3px 8px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Qo'lda biriktirish — har talabaga vaqt va kompyuterni alohida tanlang">
                                                             🔧
                                                         </button>
+                                                        @elseif($tcRowTooSoon)
+                                                        <span style="display:inline-flex;align-items:center;padding:2px 6px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:6px;font-size:10px;" title="Test markazi rolida vaqtni faqat kamida bir kun oldin belgilash mumkin.">
+                                                            🔒 Bugun o'zgartirib bo'lmaydi
+                                                        </span>
                                                         @endif
                                                         @if(!($item['yn_submitted'] ?? false) && $item['test_time'])
                                                             <div class="yn-time-note" style="width:100%;text-align:center;margin-top:2px;">
@@ -515,6 +525,16 @@
                                                             }
                                                         @endphp
                                                         @if($attempt > 1 && !$stuBlocked)
+                                                            @php
+                                                                // Talabaning shaxsiy sanasi — agar mavjud bo'lsa o'shani, aks holda guruh sanasini olamiz.
+                                                                $stuEffectiveDate = $stuPersonalDate ?? ($item['yn_date_carbon'] ?? null);
+                                                                if ($stuEffectiveDate && !($stuEffectiveDate instanceof \Carbon\Carbon)) {
+                                                                    try { $stuEffectiveDate = \Carbon\Carbon::parse($stuEffectiveDate); } catch (\Throwable $e) { $stuEffectiveDate = null; }
+                                                                }
+                                                                $stuDateStr = $stuEffectiveDate?->format('Y-m-d');
+                                                                $stuTooSoon = $tcIsTestMarkazi && $stuDateStr && $stuDateStr <= $today;
+                                                                $stuLocked = $tcReadOnly || $stuTooSoon;
+                                                            @endphp
                                                             <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
                                                                 <input type="text" class="student-time-input"
                                                                        value="{{ $stuPersonalTime ? \Carbon\Carbon::parse($stuPersonalTime)->format('H:i') : '' }}"
@@ -526,14 +546,17 @@
                                                                        data-yn-type="{{ $item['yn_type'] ?? '' }}"
                                                                        data-attempt="{{ $attempt }}"
                                                                        placeholder="HH:MM" maxlength="5"
-                                                                       style="width:80px;padding:2px 4px;border:1px solid #d1d5db;border-radius:5px;font-size:11px;text-align:center;cursor:{{ $tcReadOnly ? 'default' : 'pointer' }};{{ $tcReadOnly ? 'background:#f1f5f9;color:#475569;' : '' }}"
-                                                                       {{ $tcReadOnly ? 'readonly' : '' }}
-                                                                       @if(!$tcReadOnly) oninput="formatTimeInput(this)" onblur="validateTimeInput(this)" @endif>
-                                                                @if(!$tcReadOnly)
+                                                                       style="width:80px;padding:2px 4px;border:1px solid #d1d5db;border-radius:5px;font-size:11px;text-align:center;cursor:{{ $stuLocked ? 'not-allowed' : 'pointer' }};{{ $stuLocked ? 'background:#f1f5f9;color:#475569;' : '' }}"
+                                                                       {{ $stuLocked ? 'readonly' : '' }}
+                                                                       title="{{ $stuTooSoon ? 'Test markazi rolida vaqtni faqat kamida bir kun oldin belgilash mumkin.' : '' }}"
+                                                                       @if(!$stuLocked) oninput="formatTimeInput(this)" onblur="validateTimeInput(this)" @endif>
+                                                                @if(!$stuLocked)
                                                                 <button type="button" class="save-student-time-btn" onclick="saveStudentTime(this)"
                                                                         style="padding:2px 6px;background:#3b82f6;color:#fff;border:none;border-radius:5px;font-size:10px;cursor:pointer;white-space:nowrap;" title="Talaba vaqtini saqlash">
                                                                     <svg style="width:12px;height:12px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                                 </button>
+                                                                @elseif($stuTooSoon)
+                                                                <span style="font-size:10px;color:#92400e;" title="Test markazi rolida bugun yoki o'tgan kunlardagi vaqtni o'zgartirib bo'lmaydi.">🔒</span>
                                                                 @endif
                                                             </div>
                                                         @endif

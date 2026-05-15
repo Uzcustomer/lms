@@ -65,6 +65,46 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * Foydalanuvchi hozir aynan "Test markazi" rolida ishlayaptimi?
+     * (admin rollari testCenterAccess testidan o'tadi, lekin bu yerda
+     * "false" qaytaradi — admin uchun cheklov yo'q.)
+     */
+    private function isActingAsTestCenter(): bool
+    {
+        $user = auth()->user() ?? auth('teacher')->user();
+        if (!$user) {
+            return false;
+        }
+        $activeRole = session('active_role', $user->getRoleNames()->first());
+        return $activeRole === ProjectRole::TEST_CENTER->value;
+    }
+
+    /**
+     * Test markazi roli uchun: imtihon vaqtini kamida 1 kun oldin
+     * belgilash/o'zgartirish mumkin. O'sha kun yoki o'tgan sanalarga
+     * tegish taqiqlanadi (admin uchun cheklov yo'q).
+     *
+     * @return string|null  Xatolik matni (cheklov bor) yoki null (ruxsat).
+     */
+    private function testCenterDateTooSoon($relatedDate): ?string
+    {
+        if (!$this->isActingAsTestCenter()) {
+            return null;
+        }
+        if (empty($relatedDate)) {
+            return null;
+        }
+        $dateStr = $relatedDate instanceof \Carbon\Carbon
+            ? $relatedDate->format('Y-m-d')
+            : \Carbon\Carbon::parse($relatedDate)->format('Y-m-d');
+        $today = now()->format('Y-m-d');
+        if ($dateStr <= $today) {
+            return "Test markazi rolida imtihon vaqtini kamida bir kun oldin belgilash kerak. O'sha kuni (yoki o'tgan sanalar uchun) vaqtni o'zgartirib bo'lmaydi.";
+        }
+        return null;
+    }
+
+    /**
      * Test markazi sahifasi (YN jadvali) ko'rishi/ishlatishi mumkin
      * bo'lgan rollar. O'quv bo'limi, o'quv bo'limi boshlig'i va o'quv
      * prorektori bu sahifaga muhtoj emas — ular faqat "YN kunini
@@ -1689,6 +1729,7 @@ class AcademicScheduleController extends Controller
         ]);
 
         $readOnly = $this->isTestCenterReadOnly();
+        $isTestCenter = $this->isActingAsTestCenter();
         $today = now()->format('Y-m-d');
 
         $selectedEducationType = $request->get('education_type');
@@ -1743,6 +1784,7 @@ class AcademicScheduleController extends Controller
                 'currentEducationYear',
                 'routePrefix',
                 'readOnly',
+                'isTestCenter',
             ))->render();
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('testCenterView VIEW RENDER xatolik: ' . $e->getMessage(), [
@@ -3404,8 +3446,9 @@ class AcademicScheduleController extends Controller
         }
 
         $today = now()->format('Y-m-d');
-        $dateFrom = $request->input('date_from', $today);
-        $dateTo   = $request->input('date_to', $today);
+        $tomorrow = now()->addDay()->format('Y-m-d');
+        $dateFrom = $request->input('date_from', $tomorrow);
+        $dateTo   = $request->input('date_to', $tomorrow);
 
         try {
             $from = \Carbon\Carbon::parse($dateFrom)->format('Y-m-d');
@@ -3415,6 +3458,14 @@ class AcademicScheduleController extends Controller
         }
         if ($to < $from) {
             $to = $from;
+        }
+        // Test markazi roli uchun: vaqtni faqat ertangi va undan keyingi
+        // sanalarga belgilash mumkin (o'sha kun va o'tgan kunlar taqiqlanadi).
+        if ($from <= $today) {
+            $from = $tomorrow;
+        }
+        if ($to < $from) {
+            return back()->with('error', "Test markazi rolida vaqt belgilashni faqat ertangi va undan keyingi sanalar uchun amalga oshirish mumkin.");
         }
 
         // Each (yn_type, attempt) is a separate column triplet. For
@@ -3554,8 +3605,9 @@ class AcademicScheduleController extends Controller
         }
 
         $today = now()->format('Y-m-d');
-        $dateFrom = $request->input('date_from', $today);
-        $dateTo   = $request->input('date_to', $today);
+        $tomorrow = now()->addDay()->format('Y-m-d');
+        $dateFrom = $request->input('date_from', $tomorrow);
+        $dateTo   = $request->input('date_to', $tomorrow);
 
         try {
             $from = \Carbon\Carbon::parse($dateFrom)->format('Y-m-d');
@@ -3566,9 +3618,13 @@ class AcademicScheduleController extends Controller
         if ($to < $from) {
             $to = $from;
         }
-        // Don't rewrite history.
-        if ($from < $today) {
-            $from = $today;
+        // Test markazi roli uchun: o'sha kun va o'tgan sanalarni o'zgartirib
+        // bo'lmaydi — vaqtni faqat ertangi va undan keyingi sanalarga tegish mumkin.
+        if ($from <= $today) {
+            $from = $tomorrow;
+        }
+        if ($to < $from) {
+            return back()->with('error', "Test markazi rolida vaqtlarni faqat ertangi va undan keyingi sanalar uchun tozalash mumkin.");
         }
 
         $columnSets = [
@@ -3707,6 +3763,11 @@ class AcademicScheduleController extends Controller
             $ynLabel .= ' (' . $attempt . '-urinish)';
         }
         $relatedDate = $examSchedule->{$dateColumn};
+
+        // Test markazi roli uchun: o'sha kun yoki o'tgan sanaga vaqt qo'yish/o'zgartirish taqiqlanadi.
+        if ($tooSoonMsg = $this->testCenterDateTooSoon($relatedDate)) {
+            return response()->json(['success' => false, 'message' => $tooSoonMsg], 422);
+        }
 
         $oldTime = $examSchedule->{$timeColumn};
         $timeChanged = $oldTime !== null && $oldTime !== $request->test_time;
@@ -4021,6 +4082,11 @@ class AcademicScheduleController extends Controller
                 'success' => false,
                 'message' => 'Bu urinish uchun avval sana belgilanmagan. Avval akademik bo\'lim sanani belgilashi kerak.',
             ], 422);
+        }
+
+        // Test markazi roli uchun: o'sha kun yoki o'tgan sanaga vaqt qo'yish/o'zgartirish taqiqlanadi.
+        if ($tooSoonMsg = $this->testCenterDateTooSoon($resolvedDate)) {
+            return response()->json(['success' => false, 'message' => $tooSoonMsg], 422);
         }
 
         $payload = [$timeColumn => $request->test_time];

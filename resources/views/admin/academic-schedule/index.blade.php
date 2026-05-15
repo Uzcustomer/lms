@@ -831,13 +831,16 @@
             }
             if (year < 2020 || year > 2040) err = 'Yil 2020-2040 orasida bo\'lishi kerak';
             if (!err) {
-                // Cheklov 2: imtihon sanasi kamida ertadan bo'lishi kerak
+                // Cheklov 2: imtihon sanasi kamida ertadan bo'lishi kerak.
+                // Agar sozlamalarda "Eski sanalarni qo'yishga ruxsat" yoqilgan bo'lsa — tekshiruv chetlab o'tiladi.
+                @if(!($allowPastExamDates ?? false))
                 var today = new Date();
                 today.setHours(0, 0, 0, 0);
                 var inputDate = new Date(year, month - 1, day);
                 if (inputDate <= today) {
                     err = 'Imtihon sanasi kamida ertadan bo\'lishi kerak (bugun qo\'yib bo\'lmaydi)';
                 }
+                @endif
             }
             if (err) {
                 inp.classList.add('date-error');

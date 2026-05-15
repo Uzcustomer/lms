@@ -326,6 +326,8 @@ class AcademicScheduleController extends Controller
             $testCenterCapacity = $loadInfo['capacity'];
         }
 
+        $allowPastExamDates = ExamDateRoleService::allowPastExamDates();
+
         return view('admin.academic-schedule.index', compact(
             'scheduleData',
             'selectedEducationType',
@@ -357,6 +359,7 @@ class AcademicScheduleController extends Controller
             'activeRole',
             'testCenterLoad',
             'testCenterCapacity',
+            'allowPastExamDates',
         ));
     }
 
@@ -2197,6 +2200,7 @@ class AcademicScheduleController extends Controller
         }
         // Saqlangan sanani o'zgartirish — admin yoki sozlamalarda ruxsat etilgan rol
         $canEditSaved = $isAdmin || ExamDateRoleService::roleHasAnyAccess($activeRole);
+        $allowPastDates = ExamDateRoleService::allowPastExamDates();
         $minDate = $isAdmin ? $today : $today->copy()->addDay();
 
         // Per-row permission validatsiyasi uchun (curriculum_hemis_id, semester_code) → level_code map
@@ -2244,7 +2248,7 @@ class AcademicScheduleController extends Controller
             $rowUrinishVal = (int) ($schedule['urinish'] ?? 1);
             $rowMinDate = ($rowUrinishVal >= 2) ? $today : $minDate;
 
-            if (!empty($schedule['oski_date'])) {
+            if (!empty($schedule['oski_date']) && !$allowPastDates) {
                 $alreadySaved = $existingRec && $existingRec->oski_date
                     && $existingRec->oski_date->format('Y-m-d') === $schedule['oski_date'];
                 if (!$alreadySaved) {
@@ -2258,7 +2262,7 @@ class AcademicScheduleController extends Controller
                     }
                 }
             }
-            if (!empty($schedule['test_date'])) {
+            if (!empty($schedule['test_date']) && !$allowPastDates) {
                 $alreadySaved = $existingRec && $existingRec->test_date
                     && $existingRec->test_date->format('Y-m-d') === $schedule['test_date'];
                 if (!$alreadySaved) {

@@ -39,6 +39,9 @@ class SettingsController extends Controller
         $data['examDateRoleMapping'] = ExamDateRoleService::getMapping();
         $data['examDateConfigurableRoles'] = ExamDateRoleService::configurableRoles();
 
+        // YN sanasi: o'tib ketgan (past) sanani qo'yishga ruxsat toggle'i
+        $data['allowPastExamDates'] = ExamDateRoleService::allowPastExamDates();
+
         // Test markazi sig'imi sozlamalari
         $data['examCapacity'] = ExamCapacityService::getSettings();
         $data['examDailyCapacity'] = ExamCapacityService::dailyCapacity();
@@ -246,6 +249,17 @@ class SettingsController extends Controller
 
         return redirect()->route('admin.settings', ['tab' => 'test-center-permissions'])
             ->with('success', 'Test markazi huquqlari yangilandi.');
+    }
+
+    public function updateExamDatePolicy(Request $request)
+    {
+        $request->validate([
+            'allow_past_dates' => 'nullable|in:0,1',
+        ]);
+        ExamDateRoleService::setAllowPastExamDates((bool) $request->input('allow_past_dates', 0));
+
+        return redirect()->route('admin.settings', ['tab' => 'exam-date-policy'])
+            ->with('success', 'YN sanasi siyosati yangilandi.');
     }
 
     public function updateContractCutoffs(Request $request)

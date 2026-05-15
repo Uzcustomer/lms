@@ -537,6 +537,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/settings/telegram', [SettingsController::class, 'updateTelegram'])->name('settings.update.telegram');
         Route::post('/settings/contract-cutoffs', [SettingsController::class, 'updateContractCutoffs'])->name('settings.update.contract-cutoffs');
         Route::post('/settings/exam-date-roles', [SettingsController::class, 'updateExamDateRoles'])->name('settings.update.exam-date-roles');
+        Route::post('/settings/test-center-permissions', [SettingsController::class, 'updateTestCenterPermissions'])->name('settings.update.test-center-permissions');
         Route::post('/settings/exam-capacity', [SettingsController::class, 'updateExamCapacity'])->name('settings.update.exam-capacity');
 
         // Old routes — redirect to unified settings

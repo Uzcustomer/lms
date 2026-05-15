@@ -3708,6 +3708,29 @@ class AcademicScheduleController extends Controller
         }
         $relatedDate = $examSchedule->{$dateColumn};
 
+        // Test-centre rule: by default the test-centre role may not edit
+        // today's exam times (only admins may, to handle last-minute changes
+        // intentionally). An admin can flip this off via Settings.
+        if ($relatedDate) {
+            $relatedDateStrEarly = $relatedDate instanceof \Carbon\Carbon
+                ? $relatedDate->format('Y-m-d')
+                : \Carbon\Carbon::parse($relatedDate)->format('Y-m-d');
+            $user = auth()->user() ?? auth('teacher')->user();
+            $activeRole = $user ? session('active_role', $user->getRoleNames()->first()) : null;
+            $isAdmin = $activeRole && in_array($activeRole, ExamDateRoleService::adminRoles(), true);
+            $isTestCenter = $activeRole === \App\Enums\ProjectRole::TEST_CENTER->value;
+            $today = now()->format('Y-m-d');
+            if (!$isAdmin && $isTestCenter
+                    && $relatedDateStrEarly === $today
+                    && !ExamDateRoleService::testCenterCanEditToday()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Bugungi imtihon vaqtini tahrirlash huquqi sizda yo\'q. '
+                        . 'Iltimos administrator bilan bog\'laning.',
+                ], 403);
+            }
+        }
+
         $oldTime = $examSchedule->{$timeColumn};
         $timeChanged = $oldTime !== null && $oldTime !== $request->test_time;
         $ynSubmitted = (bool) $request->input('yn_submitted', false);

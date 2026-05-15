@@ -22,10 +22,12 @@ publicly.
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from deepface import DeepFace
+import base64
 import json
 import logging
 import os
 import io
+import re
 import threading
 import requests
 from urllib.parse import urlsplit, urlunsplit, quote
@@ -201,12 +203,28 @@ def health():
 
 # ───────────────────────────── /compare ──────────────────────────────
 
+def _resolve_for_deepface(src: str):
+    """If `src` is a base64 data URI, decode it to a BGR ndarray DeepFace
+    can read directly; otherwise pass the URL/path through unchanged so
+    DeepFace handles fetching."""
+    if src.startswith("data:") or _DATA_URI_RE.match(src):
+        return _load_image_bgr(src)
+    return src
+
+
 @app.post("/compare")
 def compare(req: CompareRequest):
     try:
+        img1 = _resolve_for_deepface(req.image1)
+        img2 = _resolve_for_deepface(req.image2)
+    except Exception as e:
+        logger.exception("image decode failed")
+        raise HTTPException(status_code=400, detail=f"Rasmni o'qib bo'lmadi: {e}")
+
+    try:
         result = DeepFace.verify(
-            img1_path=req.image1,
-            img2_path=req.image2,
+            img1_path=img1,
+            img2_path=img2,
             model_name=MODEL_NAME,
             detector_backend=DETECTOR_BACKEND,
             enforce_detection=False,
@@ -432,14 +450,29 @@ def identify(req: IdentifyRequest):
 
 # ──────────────────────────── /quality-check ─────────────────────────
 
-def _load_image_bgr(src: str) -> np.ndarray:
-    """Load an image from a URL or local path into a BGR OpenCV array.
+_DATA_URI_RE = re.compile(r"^data:[^;,]*;base64,", re.IGNORECASE)
 
-    Percent-encodes non-ASCII URL paths (O'G'LI-style apostrophes,
-    Cyrillic filenames) before handing off to requests, because the
-    underlying http client refuses to build requests from raw unicode.
+
+def _decode_data_uri(src: str) -> bytes:
+    """Decode `data:image/...;base64,<payload>` (or bare base64) to bytes."""
+    payload = _DATA_URI_RE.sub("", src, count=1)
+    return base64.b64decode(payload, validate=False)
+
+
+def _load_image_bgr(src: str) -> np.ndarray:
+    """Load an image into a BGR OpenCV array.
+
+    Accepts:
+      - `data:image/...;base64,<payload>` inline (preferred — caller already
+        has the bytes, so we avoid a network round-trip that can stall when
+        the URL points back through a slow/unreachable gateway).
+      - http(s) URL — fetched with requests; non-ASCII path segments are
+        percent-encoded first (O'G'LI-style apostrophes, Cyrillic filenames).
+      - Absolute local path.
     """
-    if src.startswith(("http://", "https://")):
+    if src.startswith("data:") or _DATA_URI_RE.match(src):
+        pil = Image.open(io.BytesIO(_decode_data_uri(src))).convert("RGB")
+    elif src.startswith(("http://", "https://")):
         parts = urlsplit(src)
         safe_path = quote(parts.path, safe="/%")
         safe_query = quote(parts.query, safe="=&%")

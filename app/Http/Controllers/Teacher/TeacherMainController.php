@@ -285,8 +285,9 @@ class TeacherMainController extends Controller
 
             $request->file('photo')->move($dir, $fname);
 
-            $imageUrl = asset($path);
-            $gate = \App\Services\PhotoQualityGate::checkUrl($imageUrl);
+            // Inline base64 — face-compare servis LMS konteyneridan tashqarida
+            // bo'lsa, public APP_URL undan ochilmaydi va URL berilgan so'rov osilib qoladi.
+            $gate = \App\Services\PhotoQualityGate::checkPath($absolute);
 
             if ($gate['reachable'] && !$gate['passed']) {
                 // Sifat o'tmadi — qattiq blok. Yuklangan faylni o'chiramiz.

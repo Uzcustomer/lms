@@ -329,6 +329,18 @@
                 'data'   => array_values($countryStats),
                 'colors' => $countryColors,
             ]);
+
+            // Yashash joyi — ta'lim turi bo'yicha stacked bar (horizontal)
+            $accomStats = $accomStats ?? [];
+            $accomTotal = array_sum(array_column($accomStats, 'total'));
+            $accomColors = ['#ec4899', '#3b82f6', '#f59e0b', '#a855f7', '#06b6d4', '#22c55e', '#ef4444'];
+            $accomJson = json_encode([
+                'labels'    => array_keys($accomStats),
+                'colors'    => $accomColors,
+                'eduKeys'   => ['bakalavr', 'magistr', 'ordinatura', 'other'],
+                'eduLabels' => ['Bakalavr', 'Magistratura', 'Ordinatura', 'Boshqa'],
+                'stats'     => $accomStats,
+            ]);
         @endphp
 
         <div class="stats-inner-tabs">
@@ -476,7 +488,19 @@
             <div class="half-grid">
                 <div class="stat-card">
                     <h3>Kurslar bo'yicha taqsimot</h3>
-                    <div class="social-bar-wrap" style="height:340px;">
+                    @php
+                        $courseLevels = array_keys($courseTotals);
+                        sort($courseLevels);
+                    @endphp
+                    <div class="stat-card-kpis" style="flex-wrap:wrap; gap:22px; margin-bottom:10px;">
+                        @foreach($courseLevels as $lvl)
+                            <div>
+                                <span class="lbl">{{ $lvl }}-kurs</span>
+                                <span class="val" data-count="{{ (int) $courseTotals[$lvl] }}">{{ number_format($courseTotals[$lvl], 0, '.', ' ') }}</span>
+                            </div>
+                        @endforeach
+                    </div>
+                    <div class="social-bar-wrap" style="height:300px;">
                         <canvas id="courseChartUmumiy"></canvas>
                     </div>
                 </div>
@@ -562,6 +586,10 @@
             </div>
             <script type="application/json" id="countryChartData">{!! $countryJson !!}</script>
             <script type="application/json" id="citChartData">{!! $citJson !!}</script>
+
+            {{-- Yashash joyi — ta'lim turi bo'yicha stacked bar --}}
+            @include('admin.students._accom_card', ['canvasId' => 'accomChartUmumiy'])
+            <script type="application/json" id="accomChartData">{!! $accomJson !!}</script>
         </div>
 
         {{-- Yoshi tabi — pie chart --}}
@@ -784,9 +812,14 @@
             {{-- citChartData / countryChartData scriptlari Umumiy tabida e'lon qilingan --}}
         </div>
 
+        {{-- Yashash joyi inner tabi — to'liq kenglikdagi stacked bar --}}
+        <div x-show="inner.talabalar === 'yashash_joyi'" x-cloak>
+            @include('admin.students._accom_card', ['canvasId' => 'accomChartTab'])
+        </div>
+
         {{-- Boshqa inner tablar (hozircha bo'sh) --}}
         @foreach($innerTabs as $key => $label)
-            @if(in_array($key, ['umumiy', 'yoshi', 'kurslar', 'ijtimoiy_toifa', 'tolov_shakli', 'fuqaroligi'])) @continue @endif
+            @if(in_array($key, ['umumiy', 'yoshi', 'kurslar', 'ijtimoiy_toifa', 'tolov_shakli', 'fuqaroligi', 'yashash_joyi'])) @continue @endif
             <div x-show="inner.talabalar === '{{ $key }}'" x-cloak>
                 <div class="stats-empty">
                     <strong>{{ $label }}</strong> — statistika hali tayyor emas.
@@ -1119,6 +1152,68 @@
         });
     }
 
+    // ─── Yashash joyi — gorizontal stacked bar (ta'lim turi bo'yicha) ──
+    let accomCfg = null;
+    function getAccomCfg() {
+        if (accomCfg !== null) return accomCfg;
+        const el = document.getElementById('accomChartData');
+        if (!el) { accomCfg = false; return false; }
+        try { accomCfg = JSON.parse(el.textContent); } catch (e) { accomCfg = false; }
+        return accomCfg;
+    }
+    function renderAccomChart(id) {
+        const canvas = document.getElementById(id);
+        if (!canvas) return;
+        const cfg = getAccomCfg();
+        if (!cfg) return;
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+        const fmt = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
+
+        // X o'qi: ta'lim turlari, Y rejimida (horizontal). Har accommodation
+        // (yashash joyi) bitta dataset — ta'lim turlari bo'yicha stacked.
+        const datasets = cfg.labels.map((name, i) => ({
+            label: name,
+            data: cfg.eduKeys.map(ek => (cfg.stats[name] && cfg.stats[name].edu ? (cfg.stats[name].edu[ek] || 0) : 0)),
+            backgroundColor: cfg.colors[i % cfg.colors.length],
+            borderWidth: 1, borderColor: '#fff', borderRadius: 4,
+        }));
+        new Chart(canvas, {
+            type: 'bar',
+            data: { labels: cfg.eduLabels, datasets: datasets },
+            options: {
+                indexAxis: 'y',
+                responsive: true, maintainAspectRatio: false,
+                animation: { duration: 1000, easing: 'easeOutCubic' },
+                scales: {
+                    x: { stacked: true, beginAtZero: true, ticks: { callback: (v) => fmt(v) } },
+                    y: { stacked: true, grid: { display: false } },
+                },
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 12, boxWidth: 14 } },
+                    tooltip: {
+                        callbacks: {
+                            // Bitta tooltip ichida shu ta'lim turi uchun
+                            // yashash joyi taqsimotini ro'yxatlaymiz.
+                            title: (items) => items.length ? items[0].label : '',
+                            label: (ctx) => {
+                                const name = ctx.dataset.label;
+                                const v = ctx.parsed.x;
+                                const ek = cfg.eduKeys[ctx.dataIndex];
+                                let total = 0;
+                                cfg.labels.forEach((n) => {
+                                    total += (cfg.stats[n] && cfg.stats[n].edu ? (cfg.stats[n].edu[ek] || 0) : 0);
+                                });
+                                const pct = total > 0 ? (v * 100 / total).toFixed(1) : 0;
+                                return ' ' + name + ': ' + fmt(v) + ' (' + pct + '%)';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
     // Chart.js canvas yashirin (display:none) bo'lsa o'lcham 0 bo'lib chiqadi —
     // shuning uchun tab ko'ringanda render qilamiz.
     window.statsRenderCharts = function () {
@@ -1134,6 +1229,8 @@
         renderCitChart('citChartUmumiy');
         renderCountryChart('countryChart');
         renderCountryChart('countryChartUmumiy');
+        renderAccomChart('accomChartUmumiy');
+        renderAccomChart('accomChartTab');
     };
 
     document.addEventListener('DOMContentLoaded', () => {

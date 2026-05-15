@@ -15,8 +15,8 @@
 @endphp
 <div id="{{ $cardId }}" style="width:{{ $w }}mm; height:{{ $h }}mm; box-sizing:border-box; position:relative; font-family:Arial,sans-serif; background:white; overflow:hidden;">
     @if($titleText !== '')
-    <div style="position:absolute; top:1mm; left:0; right:0; text-align:center;">
-        <div style="font-size:2.0mm; color:#1e3a8a; font-weight:700; line-height:1.1; white-space:nowrap;">{{ $titleText }}</div>
+    <div style="position:absolute; left:{{ $template['title_x_mm'] }}mm; top:{{ $template['title_y_mm'] }}mm; width:{{ $template['title_w_mm'] }}mm; height:{{ $template['title_h_mm'] }}mm; display:flex; align-items:center; justify-content:center; text-align:center;">
+        <div style="font-size:{{ $template['title_size_mm'] }}mm; color:#1e3a8a; font-weight:700; line-height:1.1;">{{ $titleText }}</div>
     </div>
     @endif
     <div style="position:absolute; left:{{ $tX }}mm; top:{{ $tY }}mm; width:{{ $tW }}mm; height:{{ $tH }}mm; display:flex; align-items:center; justify-content:center; text-align:center;">

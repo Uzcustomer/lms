@@ -58,6 +58,11 @@ class StaffEvaluationController extends Controller
             'text_w_mm'      => 'nullable|numeric|min:5|max:300',
             'text_h_mm'      => 'nullable|numeric|min:3|max:300',
             'text_size_mm'   => 'nullable|numeric|min:0.5|max:20',
+            'title_x_mm'     => 'nullable|numeric|min:0|max:300',
+            'title_y_mm'     => 'nullable|numeric|min:0|max:300',
+            'title_w_mm'     => 'nullable|numeric|min:5|max:300',
+            'title_h_mm'     => 'nullable|numeric|min:2|max:300',
+            'title_size_mm'  => 'nullable|numeric|min:0.5|max:20',
         ]);
 
         Setting::set('staff_eval_tpl_institution', $data['institution'] ?? '');
@@ -69,7 +74,7 @@ class StaffEvaluationController extends Controller
         Setting::set('staff_eval_tpl_width_mm', (string)($data['width_mm'] ?? 60));
         Setting::set('staff_eval_tpl_height_mm', (string)($data['height_mm'] ?? 40));
         // Layout sozlamalari — faqat formada kelganlar yangilanadi (bo'sh = avtomatik)
-        foreach (['qr_size_mm','qr_x_mm','qr_y_mm','text_x_mm','text_y_mm','text_w_mm','text_h_mm','text_size_mm'] as $k) {
+        foreach (['qr_size_mm','qr_x_mm','qr_y_mm','text_x_mm','text_y_mm','text_w_mm','text_h_mm','text_size_mm','title_x_mm','title_y_mm','title_w_mm','title_h_mm','title_size_mm'] as $k) {
             if (array_key_exists($k, $data) && $data[$k] !== null && $data[$k] !== '') {
                 Setting::set('staff_eval_tpl_' . $k, (string) $data[$k]);
             }
@@ -108,6 +113,11 @@ class StaffEvaluationController extends Controller
             'text_w_mm'      => (float) Setting::get('staff_eval_tpl_text_w_mm', (string) $autoTextW),
             'text_h_mm'      => (float) Setting::get('staff_eval_tpl_text_h_mm', (string) $autoTextH),
             'text_size_mm'   => (float) Setting::get('staff_eval_tpl_text_size_mm', '1.9'),
+            'title_x_mm'     => (float) Setting::get('staff_eval_tpl_title_x_mm', '0'),
+            'title_y_mm'     => (float) Setting::get('staff_eval_tpl_title_y_mm', '1'),
+            'title_w_mm'     => (float) Setting::get('staff_eval_tpl_title_w_mm', (string) $w),
+            'title_h_mm'     => (float) Setting::get('staff_eval_tpl_title_h_mm', '4'),
+            'title_size_mm'  => (float) Setting::get('staff_eval_tpl_title_size_mm', '2.0'),
         ];
     }
 

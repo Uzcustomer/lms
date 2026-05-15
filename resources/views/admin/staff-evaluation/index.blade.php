@@ -362,6 +362,11 @@
                 <input type="hidden" name="text_w_mm"  id="lay-tx-w"    value="{{ $template['text_w_mm'] }}">
                 <input type="hidden" name="text_h_mm"  id="lay-tx-h"    value="{{ $template['text_h_mm'] }}">
                 <input type="hidden" name="text_size_mm" id="lay-tx-size" value="{{ $template['text_size_mm'] }}">
+                <input type="hidden" name="title_x_mm"    id="lay-ti-x"    value="{{ $template['title_x_mm'] }}">
+                <input type="hidden" name="title_y_mm"    id="lay-ti-y"    value="{{ $template['title_y_mm'] }}">
+                <input type="hidden" name="title_w_mm"    id="lay-ti-w"    value="{{ $template['title_w_mm'] }}">
+                <input type="hidden" name="title_h_mm"    id="lay-ti-h"    value="{{ $template['title_h_mm'] }}">
+                <input type="hidden" name="title_size_mm" id="lay-ti-size" value="{{ $template['title_size_mm'] }}">
 
                 <div class="flex items-center gap-2 mt-3">
                     <button type="submit" class="btn-apply">Saqlash</button>
@@ -378,6 +383,11 @@
                 <div id="lay-stage-wrap" style="display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap;">
                     <div id="lay-stage" style="position:relative; background:white; border:2px dashed #cbd5e1; box-shadow:0 1px 3px rgba(0,0,0,.06);"></div>
                     <div style="display:flex; flex-direction:column; gap:12px; min-width:200px;">
+                        <div>
+                            <label class="text-xs text-slate-500 block mb-1">Sarlavha shrifti (mm)</label>
+                            <input id="lay-title-size-input" type="range" min="1" max="8" step="0.1" value="{{ $template['title_size_mm'] }}" style="width:100%;">
+                            <div class="text-xs text-slate-700 mt-1"><span id="lay-title-size-label">{{ $template['title_size_mm'] }}</span> mm</div>
+                        </div>
                         <div>
                             <label class="text-xs text-slate-500 block mb-1">Matn shrifti (mm)</label>
                             <input id="lay-text-size-input" type="range" min="1" max="6" step="0.1" value="{{ $template['text_size_mm'] }}" style="width:100%;">
@@ -473,6 +483,7 @@
             hMm: parseFloat({{ $template['height_mm'] }}),
             qr:  { x: parseFloat({{ $template['qr_x_mm'] }}),    y: parseFloat({{ $template['qr_y_mm'] }}),    s: parseFloat({{ $template['qr_size_mm'] }}) },
             tx:  { x: parseFloat({{ $template['text_x_mm'] }}),  y: parseFloat({{ $template['text_y_mm'] }}),  w: parseFloat({{ $template['text_w_mm'] }}), h: parseFloat({{ $template['text_h_mm'] }}), s: parseFloat({{ $template['text_size_mm'] }}) },
+            ti:  { x: parseFloat({{ $template['title_x_mm'] }}), y: parseFloat({{ $template['title_y_mm'] }}), w: parseFloat({{ $template['title_w_mm'] }}), h: parseFloat({{ $template['title_h_mm'] }}), s: parseFloat({{ $template['title_size_mm'] }}) },
         };
 
         function syncFormFields() {
@@ -484,6 +495,11 @@
             document.getElementById('lay-tx-w').value    = layoutState.tx.w.toFixed(2);
             document.getElementById('lay-tx-h').value    = layoutState.tx.h.toFixed(2);
             document.getElementById('lay-tx-size').value = layoutState.tx.s.toFixed(2);
+            document.getElementById('lay-ti-x').value    = layoutState.ti.x.toFixed(2);
+            document.getElementById('lay-ti-y').value    = layoutState.ti.y.toFixed(2);
+            document.getElementById('lay-ti-w').value    = layoutState.ti.w.toFixed(2);
+            document.getElementById('lay-ti-h').value    = layoutState.ti.h.toFixed(2);
+            document.getElementById('lay-ti-size').value = layoutState.ti.s.toFixed(2);
         }
 
         function setupLayoutEditor() {
@@ -511,6 +527,18 @@
                 qr.appendChild(qrHandle);
                 stage.appendChild(qr);
 
+                // Title box (sarlavha)
+                const ti = document.createElement('div');
+                ti.id = 'lay-title-box';
+                ti.style.cssText = 'position:absolute; background:rgba(30,58,138,.10); border:2px solid #1e3a8a; cursor:move; display:flex; align-items:center; justify-content:center; text-align:center; color:#1e3a8a; font-weight:700; box-sizing:border-box; overflow:hidden; user-select:none; padding:2px;';
+                const titleVal = ((document.querySelector('input[name="institution"]') || {}).value || '') + ' ' + ((document.querySelector('input[name="branch"]') || {}).value || '');
+                ti.textContent = titleVal.trim() || 'Sarlavha';
+                const tiHandle = document.createElement('div');
+                tiHandle.style.cssText = 'position:absolute; right:-6px; bottom:-6px; width:14px; height:14px; background:#1e3a8a; border:2px solid #fff; border-radius:50%; cursor:nwse-resize;';
+                tiHandle.dataset.handle = '1';
+                ti.appendChild(tiHandle);
+                stage.appendChild(ti);
+
                 // Text box
                 const tx = document.createElement('div');
                 tx.id = 'lay-text-box';
@@ -527,6 +555,8 @@
                 bindResize(qrHandle, 'qr');
                 bindDrag(tx, 'tx', true);
                 bindResize(txHandle, 'tx', true);
+                bindDrag(ti, 'ti', true);
+                bindResize(tiHandle, 'ti', true);
             }
 
             function applyState() {
@@ -544,6 +574,14 @@
                     tx.style.width  = (layoutState.tx.w * PX_PER_MM) + 'px';
                     tx.style.height = (layoutState.tx.h * PX_PER_MM) + 'px';
                     tx.style.fontSize = (layoutState.tx.s * PX_PER_MM) + 'px';
+                }
+                const ti = document.getElementById('lay-title-box');
+                if (ti) {
+                    ti.style.left   = (layoutState.ti.x * PX_PER_MM) + 'px';
+                    ti.style.top    = (layoutState.ti.y * PX_PER_MM) + 'px';
+                    ti.style.width  = (layoutState.ti.w * PX_PER_MM) + 'px';
+                    ti.style.height = (layoutState.ti.h * PX_PER_MM) + 'px';
+                    ti.style.fontSize = (layoutState.ti.s * PX_PER_MM) + 'px';
                 }
                 syncFormFields();
             }
@@ -620,6 +658,18 @@
                 txLabel.textContent = layoutState.tx.s.toFixed(1);
                 applyState();
             });
+            const tiSlider = document.getElementById('lay-title-size-input');
+            const tiLabel  = document.getElementById('lay-title-size-label');
+            if (tiSlider) tiSlider.addEventListener('input', () => {
+                layoutState.ti.s = parseFloat(tiSlider.value);
+                tiLabel.textContent = layoutState.ti.s.toFixed(1);
+                applyState();
+            });
+
+            const instInput   = document.querySelector('input[name="institution"]');
+            const branchInput = document.querySelector('input[name="branch"]');
+            if (instInput)   instInput.addEventListener('input', rebuild);
+            if (branchInput) branchInput.addEventListener('input', rebuild);
 
             // O'lcham yoki matn o'zgarsa, qayta chiqaramiz
             if (widthInput)  widthInput.addEventListener('input', rebuild);
@@ -634,12 +684,13 @@
             const qrS = Math.max(15, Math.min(h - 4, w * 0.45));
             layoutState.qr = { x: w - qrS - 2, y: Math.max(2, (h - qrS) / 2), s: qrS };
             layoutState.tx = { x: 2, y: Math.max(2, (h - 14) / 2), w: Math.max(12, w - qrS - 5), h: Math.min(16, h - 6), s: 1.9 };
+            layoutState.ti = { x: 0, y: 1, w: w, h: 4, s: 2.0 };
             const qrSlider = document.getElementById('lay-qr-size-input');
             const txSlider = document.getElementById('lay-text-size-input');
+            const tiSlider = document.getElementById('lay-title-size-input');
             if (qrSlider) { qrSlider.value = qrS; document.getElementById('lay-qr-size-label').textContent = qrS.toFixed(1); }
             if (txSlider) { txSlider.value = 1.9; document.getElementById('lay-text-size-label').textContent = '1.9'; }
-            // applyState chaqirilishi uchun setupLayoutEditor ichida bo'lishi kerak;
-            // shuning uchun document'dagi DOMni qayta yangilash uchun stage rebuild kerak.
+            if (tiSlider) { tiSlider.value = 2.0; document.getElementById('lay-title-size-label').textContent = '2.0'; }
             setupLayoutEditor();
         }
         function downloadCard(elementId, filename) {

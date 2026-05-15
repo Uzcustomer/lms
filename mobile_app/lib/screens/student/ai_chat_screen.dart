@@ -655,7 +655,6 @@ class _AiChatScreenState extends State<AiChatScreen>
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: border),
           ),
           child: Row(
             children: [

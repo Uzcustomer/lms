@@ -742,6 +742,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           ? ((totalHours - absentHours) / totalHours * 100).clamp(0.0, 100.0)
           : 100.0;
       items.add({
+        'subject_id': s['subject_id'],
         'name': s['subject_name']?.toString() ?? '',
         'jn': jnVal,
         'attendance': attendance,
@@ -785,10 +786,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           }
 
           const subjectColors = [Color(0xFF43A047), Color(0xFF7C4DFF), Color(0xFFE65100), Color(0xFF0097A7), Color(0xFFE91E63), Color(0xFF1565C0)];
+          final rawId = item['subject_id'];
+          final subjectId = rawId is int
+              ? rawId
+              : (rawId == null ? null : int.tryParse(rawId.toString()));
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: ScaleTap(
-              onTap: () => StudentHomeScreen.switchToGrades(context),
+              onTap: () => subjectId != null
+                  ? StudentHomeScreen.openSubject(context, subjectId)
+                  : StudentHomeScreen.switchToGrades(context),
               child: _buildGlassCard(
               isDark: isDark,
               cardColor: subjectColors[index % subjectColors.length],
@@ -848,6 +855,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         ],
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    _TapHintChevron(color: subTextColor),
                   ],
                 ),
               ),
@@ -1604,6 +1613,55 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           ],
         ),
       ),
+      ),
+    );
+  }
+}
+
+/// Right-side "tap me" affordance for tappable dashboard subject cards.
+/// Gently slides the chevron sideways so users notice the card is clickable.
+class _TapHintChevron extends StatefulWidget {
+  final Color? color;
+  const _TapHintChevron({this.color});
+
+  @override
+  State<_TapHintChevron> createState() => _TapHintChevronState();
+}
+
+class _TapHintChevronState extends State<_TapHintChevron>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+  late final Animation<double> _dx;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+    _dx = Tween<double>(begin: 0, end: 4).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _dx,
+      builder: (_, __) => Transform.translate(
+        offset: Offset(_dx.value, 0),
+        child: Icon(
+          Icons.chevron_right_rounded,
+          size: 22,
+          color: widget.color ?? Colors.grey,
+        ),
       ),
     );
   }

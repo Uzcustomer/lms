@@ -20,6 +20,17 @@ class StudentHomeScreen extends StatefulWidget {
     state?._onTabTapped(0);
   }
 
+  /// Notifier the dashboard sets when the user taps a subject card so the
+  /// Grades screen scrolls to that subject's card after the tab switch.
+  static final ValueNotifier<int?> pendingSubjectScroll =
+      ValueNotifier<int?>(null);
+
+  /// Switch to the Grades tab and scroll to the given subject's card.
+  static void openSubject(BuildContext context, int subjectId) {
+    pendingSubjectScroll.value = subjectId;
+    switchToGrades(context);
+  }
+
   @override
   State<StudentHomeScreen> createState() => _StudentHomeScreenState();
 }

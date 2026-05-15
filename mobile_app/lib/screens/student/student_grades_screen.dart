@@ -27,12 +27,53 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   int _selectedFilter = 0;
   bool _isUploading = false;
   int _uploadingSubjectId = -1;
+  // GlobalKey per subject card so we can scroll to it when the dashboard
+  // asks us to via StudentHomeScreen.pendingSubjectScroll.
+  final Map<int, GlobalKey> _subjectKeys = {};
+  int? _highlightedSubjectId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<StudentProvider>().loadSubjects();
+    });
+    StudentHomeScreen.pendingSubjectScroll.addListener(_onScrollRequest);
+  }
+
+  @override
+  void dispose() {
+    StudentHomeScreen.pendingSubjectScroll.removeListener(_onScrollRequest);
+    super.dispose();
+  }
+
+  void _onScrollRequest() {
+    final id = StudentHomeScreen.pendingSubjectScroll.value;
+    if (id == null) return;
+    // Reset early so repeated taps on the same subject still trigger.
+    StudentHomeScreen.pendingSubjectScroll.value = null;
+    // Force the filter to "All" so the target card is in the list.
+    if (_selectedFilter != 0) {
+      setState(() => _selectedFilter = 0);
+    }
+    if (mounted) setState(() => _highlightedSubjectId = id);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final key = _subjectKeys[id];
+      final ctx = key?.currentContext;
+      if (ctx != null) {
+        await Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOutCubic,
+          alignment: 0.1,
+        );
+      }
+      // Clear the highlight after a moment so it doesn't linger forever.
+      Future.delayed(const Duration(milliseconds: 1600), () {
+        if (mounted && _highlightedSubjectId == id) {
+          setState(() => _highlightedSubjectId = null);
+        }
+      });
     });
   }
 
@@ -283,10 +324,40 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                     _buildFilterTabs(isDark, completed, waiting, subjects.length),
                     const SizedBox(height: 12),
                     // Subject cards
-                    ...filtered.asMap().entries.map((e) => Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: _buildSubjectCard(context, e.value, e.key, isDark, l),
-                    )),
+                    ...filtered.asMap().entries.map((e) {
+                      final subj = e.value;
+                      final rawId = subj['subject_id'];
+                      final sid = rawId is int
+                          ? rawId
+                          : (rawId == null ? null : int.tryParse(rawId.toString()));
+                      final key = sid != null
+                          ? _subjectKeys.putIfAbsent(sid, () => GlobalKey())
+                          : null;
+                      final highlighted =
+                          sid != null && sid == _highlightedSubjectId;
+                      return Padding(
+                        key: key,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          decoration: highlighted
+                              ? BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.primaryColor
+                                          .withOpacity(0.45),
+                                      blurRadius: 20,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                )
+                              : null,
+                          child: _buildSubjectCard(
+                              context, subj, e.key, isDark, l),
+                        ),
+                      );
+                    }),
                     const SizedBox(height: 100),
                   ],
                 ),

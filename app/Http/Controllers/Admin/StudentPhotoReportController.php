@@ -558,8 +558,9 @@ class StudentPhotoReportController extends Controller
      */
     private function runFreshGateCheck(StudentPhoto $photo): ?string
     {
-        $url = asset($photo->photo_path);
-        $gate = \App\Services\PhotoQualityGate::checkUrl($url);
+        // Inline base64 — face-compare servisning APP_URL'ga teskari fetch
+        // qilishini chetlab o'tamiz (konteyner tashqarisidan ochilmaydi).
+        $gate = \App\Services\PhotoQualityGate::checkPath(public_path($photo->photo_path));
 
         if (!$gate['reachable']) {
             return 'Tasdiqlashdan oldin "Sifat tekshiruvi" tugmasini bosing — AI servis vaqtinchalik javob bermadi.';
@@ -733,10 +734,14 @@ class StudentPhotoReportController extends Controller
             ], 422);
         }
 
-        // Face-compare service may run outside the Laravel container, so
-        // local filesystem paths don't translate. Send a URL instead and
-        // let the service download the image itself.
-        $uploadedUrl = asset($photo->photo_path);
+        // Yuklangan rasmni inline base64 yuboramiz (face-compare servis LMS
+        // konteyneridan tashqarida, public APP_URL undan ochilmaydi). Moodle
+        // profil rasmi (image1) URL ko'rinishida qoldiriladi — u tashqi
+        // serverda joylashgan va servis uni odatda muvaffaqiyatli yuklaydi.
+        $uploadedDataUri = \App\Services\PhotoQualityGate::fileToDataUri($uploadedFullPath);
+        if ($uploadedDataUri === null) {
+            return response()->json(['error' => 'Yuklangan rasm faylini o\'qib bo\'lmadi.'], 422);
+        }
 
         $serviceUrl = rtrim(config('services.face_compare.url'), '/');
         // Gateway 504 oldini olish uchun Laravel timeout'ini nginx limitidan past
@@ -750,7 +755,7 @@ class StudentPhotoReportController extends Controller
                 ->acceptJson()
                 ->post($serviceUrl . '/compare', [
                     'image1' => $student->image,
-                    'image2' => $uploadedUrl,
+                    'image2' => $uploadedDataUri,
                 ]);
         } catch (\Throwable $e) {
             Log::error('Face compare service unreachable', [
@@ -806,12 +811,20 @@ class StudentPhotoReportController extends Controller
         // checkSimilarity bilan bir xil: 50s gateway limitidan past timeout.
         $timeout = max(5, min(50, (int) config('services.face_compare.timeout', 50)));
 
+        // Rasmni inline (base64) yuboramiz — face-compare servis odatda LMS
+        // konteyneridan tashqarida turadi va public APP_URL hostdan ochilmaydi,
+        // shuning uchun URL berib yuborilsa servis "muz qotib" qolardi.
+        $dataUri = \App\Services\PhotoQualityGate::fileToDataUri($uploadedFullPath);
+        if ($dataUri === null) {
+            return response()->json(['error' => 'Rasm faylini o\'qib bo\'lmadi.'], 422);
+        }
+
         try {
             $response = Http::timeout($timeout)
                 ->connectTimeout(5)
                 ->acceptJson()
                 ->post($serviceUrl . '/quality-check', [
-                    'image' => asset($photo->photo_path),
+                    'image' => $dataUri,
                 ]);
         } catch (\Throwable $e) {
             Log::error('Quality service unreachable', [

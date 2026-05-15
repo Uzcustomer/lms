@@ -46,6 +46,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'moodle/import',
             'moodle/should-sync',
             'moodle/exam-event',
+            // Admin AJAX yuz tahlili — admin middleware + auth allaqachon himoya qiladi.
+            // CSRF tokeni sessiyada saqlanadi va bulk paytida konkurensiya + 504
+            // kaskadlari natijasida "419 Page Expired" pullaridan saqlanish uchun
+            // ushbu idempotent endpointlar CSRF'dan ozod etiladi.
+            'admin/student-photos/*/check-similarity',
+            'admin/student-photos/*/check-quality',
         ]);
 
     })

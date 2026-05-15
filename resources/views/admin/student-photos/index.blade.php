@@ -92,7 +92,9 @@
                 ids: [], total: 0, processed: 0, succeeded: 0, failed: 0,
                 currentName: '', cancel: false, errors: [],
                 runQuality: true, runSimilarity: true,
-                concurrency: 3,
+                // Konkurensiya = 1 (default): sessiya bo'g'iqligi va AI servis
+                // overload'iga olib kelmaslik uchun. Slayder bilan oshirish mumkin.
+                concurrency: 1,
                 inflight: [],
             },
             openLightbox(src, alt) { this.lightbox = { open: true, src, alt }; },
@@ -162,7 +164,7 @@
                     processed: 0, succeeded: 0, failed: 0,
                     currentName: '', cancel: false, errors: [],
                     runQuality: true, runSimilarity: true,
-                    concurrency: 3,
+                    concurrency: 1,
                     inflight: [],
                 };
             },
@@ -196,11 +198,11 @@
                 try {
                     const tasks = [];
                     if (this.bulk.runSimilarity) {
-                        tasks.push(this._bulkPost(`/admin/student-photos/${id}/check-similarity`, csrf, 120000)
+                        tasks.push(this._bulkPost(`/admin/student-photos/${id}/check-similarity`, csrf, 60000)
                             .then(r => { if (!r.ok) { okOne = false; this.bulk.errors.push(`#${id} (similarity): ${r.error}`); } }));
                     }
                     if (this.bulk.runQuality) {
-                        tasks.push(this._bulkPost(`/admin/student-photos/${id}/check-quality`, csrf, 120000)
+                        tasks.push(this._bulkPost(`/admin/student-photos/${id}/check-quality`, csrf, 60000)
                             .then(r => { if (!r.ok) { okOne = false; this.bulk.errors.push(`#${id} (quality): ${r.error}`); } }));
                     }
                     await Promise.all(tasks);

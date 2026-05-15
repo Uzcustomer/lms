@@ -65,6 +65,53 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * Foydalanuvchi hozir aynan "Test markazi" rolida ishlayaptimi?
+     * (admin rollari testCenterAccess testidan o'tadi, lekin bu yerda
+     * "false" qaytaradi — admin uchun cheklov yo'q.)
+     */
+    private function isActingAsTestCenter(): bool
+    {
+        $user = auth()->user() ?? auth('teacher')->user();
+        if (!$user) {
+            return false;
+        }
+        $activeRole = session('active_role', $user->getRoleNames()->first());
+        return $activeRole === ProjectRole::TEST_CENTER->value;
+    }
+
+    /**
+     * Test markazi roli uchun: imtihon vaqtini kamida 1 kun oldin
+     * belgilash/o'zgartirish mumkin. O'sha kun yoki o'tgan sanalarga
+     * tegish taqiqlanadi (admin uchun cheklov yo'q).
+     *
+     * @return string|null  Xatolik matni (cheklov bor) yoki null (ruxsat).
+     */
+    private function testCenterDateTooSoon($relatedDate): ?string
+    {
+        if (!$this->isActingAsTestCenter()) {
+            return null;
+        }
+        if (empty($relatedDate)) {
+            return null;
+        }
+        // Admin Settings → "Test markazi huquqlari → Bugungi imtihonni
+        // o'zgartirish" toggle lifts this restriction entirely. Past days
+        // stay blocked even with the toggle on.
+        $dateStr = $relatedDate instanceof \Carbon\Carbon
+            ? $relatedDate->format('Y-m-d')
+            : \Carbon\Carbon::parse($relatedDate)->format('Y-m-d');
+        $today = now()->format('Y-m-d');
+        $canEditToday = ExamDateRoleService::testCenterCanEditToday();
+        if ($canEditToday && $dateStr === $today) {
+            return null;
+        }
+        if ($dateStr <= $today) {
+            return "Test markazi rolida imtihon vaqtini kamida bir kun oldin belgilash kerak. O'sha kuni (yoki o'tgan sanalar uchun) vaqtni o'zgartirib bo'lmaydi.";
+        }
+        return null;
+    }
+
+    /**
      * Test markazi sahifasi (YN jadvali) ko'rishi/ishlatishi mumkin
      * bo'lgan rollar. O'quv bo'limi, o'quv bo'limi boshlig'i va o'quv
      * prorektori bu sahifaga muhtoj emas — ular faqat "YN kunini
@@ -441,6 +488,16 @@ class AcademicScheduleController extends Controller
             ->unique()->values()->toArray();
         if (empty($allGroupHemisIds)) return $scheduleData;
 
+        // Sahifada ko'rinayotgan fanlar va semestrlar — per-student
+        // yozuvlarni shu kombinatsiya bo'yicha cheklash uchun. Aks holda
+        // boshqa fan/semestr yozuvlari ham xotiraga olinadi va kalit
+        // (group|subject|semester|student) bo'yicha mos kelmasa, qator
+        // sahifada ko'rinmay qolishi mumkin.
+        $allSubjectIds = $scheduleData->flatMap(fn($items) => $items->pluck('subject')->pluck('subject_id'))
+            ->filter()->unique()->values()->toArray();
+        $allSemesterCodes = $scheduleData->flatMap(fn($items) => $items->pluck('subject')->pluck('semester_code'))
+            ->filter()->unique()->values()->toArray();
+
         $studentsByGroup = DB::table('students')
             ->whereIn('group_id', $allGroupHemisIds)
             ->where('student_status_code', 11)
@@ -449,11 +506,19 @@ class AcademicScheduleController extends Controller
             ->get()
             ->groupBy('group_id');
 
-        // Per-student exam_schedules yozuvlarini olish (student_hemis_id NOT NULL)
+        // Per-student exam_schedules yozuvlarini olish (student_hemis_id NOT NULL).
+        // Subject va semester filtrlari muhim — keng so'rov sahifa pastdagi
+        // talaba qatorida noto'g'ri yozuvni tanlashga olib kelishi mumkin edi.
         $perStudentMap = [];
-        $perStudentRows = ExamSchedule::whereNotNull('student_hemis_id')
-            ->whereIn('group_hemis_id', $allGroupHemisIds)
-            ->get();
+        $perStudentQuery = ExamSchedule::whereNotNull('student_hemis_id')
+            ->whereIn('group_hemis_id', $allGroupHemisIds);
+        if (!empty($allSubjectIds)) {
+            $perStudentQuery->whereIn('subject_id', $allSubjectIds);
+        }
+        if (!empty($allSemesterCodes)) {
+            $perStudentQuery->whereIn('semester_code', $allSemesterCodes);
+        }
+        $perStudentRows = $perStudentQuery->get();
         foreach ($perStudentRows as $row) {
             $key = $row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code . '|' . $row->student_hemis_id;
             $perStudentMap[$key] = $row;
@@ -1689,6 +1754,7 @@ class AcademicScheduleController extends Controller
         ]);
 
         $readOnly = $this->isTestCenterReadOnly();
+        $isTestCenter = $this->isActingAsTestCenter();
         $today = now()->format('Y-m-d');
 
         $selectedEducationType = $request->get('education_type');
@@ -1743,6 +1809,7 @@ class AcademicScheduleController extends Controller
                 'currentEducationYear',
                 'routePrefix',
                 'readOnly',
+                'isTestCenter',
             ))->render();
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('testCenterView VIEW RENDER xatolik: ' . $e->getMessage(), [
@@ -2171,15 +2238,23 @@ class AcademicScheduleController extends Controller
                 $schedule['group_hemis_id'] . '_' . $schedule['subject_id'] . '_' . $schedule['semester_code']
             );
 
+            // 2- va 3-urinish (resit) sanalari uchun "ertadan" cheklovi yumshatilgan —
+            // bugungi kunni ham belgilash mumkin (registrator ofisi shoshilinch
+            // hollarda o'sha kun davomida resit tashkil qilishi kerak bo'lishi mumkin).
+            $rowUrinishVal = (int) ($schedule['urinish'] ?? 1);
+            $rowMinDate = ($rowUrinishVal >= 2) ? $today : $minDate;
+
             if (!empty($schedule['oski_date'])) {
                 $alreadySaved = $existingRec && $existingRec->oski_date
                     && $existingRec->oski_date->format('Y-m-d') === $schedule['oski_date'];
                 if (!$alreadySaved) {
                     $oskiDate = \Carbon\Carbon::parse($schedule['oski_date']);
-                    if ($oskiDate->lt($minDate)) {
+                    if ($oskiDate->lt($rowMinDate)) {
                         return redirect()->back()->with('error', $isAdmin
                             ? 'OSKI sanasi o\'tgan kunni qo\'yib bo\'lmaydi.'
-                            : 'OSKI sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
+                            : ($rowUrinishVal >= 2
+                                ? 'OSKI sanasi o\'tgan kunni qo\'yib bo\'lmaydi (resit uchun bugun ham bo\'ladi).'
+                                : 'OSKI sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.'));
                     }
                 }
             }
@@ -2188,10 +2263,12 @@ class AcademicScheduleController extends Controller
                     && $existingRec->test_date->format('Y-m-d') === $schedule['test_date'];
                 if (!$alreadySaved) {
                     $testDate = \Carbon\Carbon::parse($schedule['test_date']);
-                    if ($testDate->lt($minDate)) {
+                    if ($testDate->lt($rowMinDate)) {
                         return redirect()->back()->with('error', $isAdmin
                             ? 'Test sanasi o\'tgan kunni qo\'yib bo\'lmaydi.'
-                            : 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
+                            : ($rowUrinishVal >= 2
+                                ? 'Test sanasi o\'tgan kunni qo\'yib bo\'lmaydi (resit uchun bugun ham bo\'ladi).'
+                                : 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.'));
                     }
                 }
             }
@@ -2354,17 +2431,21 @@ class AcademicScheduleController extends Controller
                 // bilan post qiladi (keyin urinishga qarab test_resit_date / test_resit2_date
                 // ustuniga yoziladi), shuning uchun ularni ham "resit data" sifatida sanaymiz.
                 if ($studentHemisIdForRow) {
-                    $rowUrinishCheck = (int) ($schedule['urinish'] ?? 1);
-                    $resitOnly = ['oski_resit_date', 'oski_resit2_date', 'test_resit_date', 'test_resit2_date'];
-                    $hasAnyResit = false;
-                    foreach ($resitOnly as $rf) {
-                        if (!empty($schedule[$rf])) { $hasAnyResit = true; break; }
+                    // Per-student qatorda biror sana to'ldirilganmi tekshiramiz.
+                    // 1-urinishda forma test_date/oski_date jo'natadi va shu ustunlarga
+                    // yoziladi; 2/3-urinishda esa keyin test_resit_date / test_resit2_date
+                    // ga map qilinadi — ikkala holatda ham qiymat shu yerda paydo bo'ladi.
+                    $anyDateFields = [
+                        'oski_date', 'test_date',
+                        'oski_resit_date', 'oski_resit2_date',
+                        'test_resit_date', 'test_resit2_date',
+                    ];
+                    $hasAnyDate = false;
+                    foreach ($anyDateFields as $df) {
+                        if (!empty($schedule[$df])) { $hasAnyDate = true; break; }
                     }
-                    if (!$hasAnyResit && $rowUrinishCheck >= 2) {
-                        $hasAnyResit = !empty($schedule['oski_date']) || !empty($schedule['test_date']);
-                    }
-                    if (!$hasAnyResit && !$record->exists) {
-                        // Bo'sh per-student row — yaratmaymiz
+                    if (!$hasAnyDate && !$record->exists) {
+                        // Hech qanday sana yo'q va yangi qator — yaratmaymiz
                         continue;
                     }
                 }
@@ -3404,8 +3485,9 @@ class AcademicScheduleController extends Controller
         }
 
         $today = now()->format('Y-m-d');
-        $dateFrom = $request->input('date_from', $today);
-        $dateTo   = $request->input('date_to', $today);
+        $tomorrow = now()->addDay()->format('Y-m-d');
+        $dateFrom = $request->input('date_from', $tomorrow);
+        $dateTo   = $request->input('date_to', $tomorrow);
 
         try {
             $from = \Carbon\Carbon::parse($dateFrom)->format('Y-m-d');
@@ -3415,6 +3497,14 @@ class AcademicScheduleController extends Controller
         }
         if ($to < $from) {
             $to = $from;
+        }
+        // Test markazi roli uchun: vaqtni faqat ertangi va undan keyingi
+        // sanalarga belgilash mumkin (o'sha kun va o'tgan kunlar taqiqlanadi).
+        if ($from <= $today) {
+            $from = $tomorrow;
+        }
+        if ($to < $from) {
+            return back()->with('error', "Test markazi rolida vaqt belgilashni faqat ertangi va undan keyingi sanalar uchun amalga oshirish mumkin.");
         }
 
         // Each (yn_type, attempt) is a separate column triplet. For
@@ -3554,8 +3644,9 @@ class AcademicScheduleController extends Controller
         }
 
         $today = now()->format('Y-m-d');
-        $dateFrom = $request->input('date_from', $today);
-        $dateTo   = $request->input('date_to', $today);
+        $tomorrow = now()->addDay()->format('Y-m-d');
+        $dateFrom = $request->input('date_from', $tomorrow);
+        $dateTo   = $request->input('date_to', $tomorrow);
 
         try {
             $from = \Carbon\Carbon::parse($dateFrom)->format('Y-m-d');
@@ -3566,9 +3657,13 @@ class AcademicScheduleController extends Controller
         if ($to < $from) {
             $to = $from;
         }
-        // Don't rewrite history.
-        if ($from < $today) {
-            $from = $today;
+        // Test markazi roli uchun: o'sha kun va o'tgan sanalarni o'zgartirib
+        // bo'lmaydi — vaqtni faqat ertangi va undan keyingi sanalarga tegish mumkin.
+        if ($from <= $today) {
+            $from = $tomorrow;
+        }
+        if ($to < $from) {
+            return back()->with('error', "Test markazi rolida vaqtlarni faqat ertangi va undan keyingi sanalar uchun tozalash mumkin.");
         }
 
         $columnSets = [
@@ -3708,27 +3803,10 @@ class AcademicScheduleController extends Controller
         }
         $relatedDate = $examSchedule->{$dateColumn};
 
-        // Test-centre rule: by default the test-centre role may not edit
-        // today's exam times (only admins may, to handle last-minute changes
-        // intentionally). An admin can flip this off via Settings.
-        if ($relatedDate) {
-            $relatedDateStrEarly = $relatedDate instanceof \Carbon\Carbon
-                ? $relatedDate->format('Y-m-d')
-                : \Carbon\Carbon::parse($relatedDate)->format('Y-m-d');
-            $user = auth()->user() ?? auth('teacher')->user();
-            $activeRole = $user ? session('active_role', $user->getRoleNames()->first()) : null;
-            $isAdmin = $activeRole && in_array($activeRole, ExamDateRoleService::adminRoles(), true);
-            $isTestCenter = $activeRole === \App\Enums\ProjectRole::TEST_CENTER->value;
-            $today = now()->format('Y-m-d');
-            if (!$isAdmin && $isTestCenter
-                    && $relatedDateStrEarly === $today
-                    && !ExamDateRoleService::testCenterCanEditToday()) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Bugungi imtihon vaqtini tahrirlash huquqi sizda yo\'q. '
-                        . 'Iltimos administrator bilan bog\'laning.',
-                ], 403);
-            }
+        // Test markazi roli uchun: o'sha kun yoki o'tgan sanaga vaqt qo'yish/o'zgartirish taqiqlanadi
+        // (Settings tomonidagi "Test markazi huquqlari → Bugungi imtihonni o'zgartirish" toggle'i yoqilsa cheklov yo'qoladi).
+        if ($tooSoonMsg = $this->testCenterDateTooSoon($relatedDate)) {
+            return response()->json(['success' => false, 'message' => $tooSoonMsg], 422);
         }
 
         $oldTime = $examSchedule->{$timeColumn};
@@ -4046,6 +4124,11 @@ class AcademicScheduleController extends Controller
             ], 422);
         }
 
+        // Test markazi roli uchun: o'sha kun yoki o'tgan sanaga vaqt qo'yish/o'zgartirish taqiqlanadi.
+        if ($tooSoonMsg = $this->testCenterDateTooSoon($resolvedDate)) {
+            return response()->json(['success' => false, 'message' => $tooSoonMsg], 422);
+        }
+
         $payload = [$timeColumn => $request->test_time];
         if (!$perStudent) {
             $payload = array_merge($payload, [
@@ -4342,7 +4425,8 @@ class AcademicScheduleController extends Controller
 
         // Bugundan keyingi (bugun kiradi) sanalar — vaqti qo'yilmaganlar ham
         // kiritiladi, toki test markazi xodimi qaysi guruhlarga hali vaqt
-        // belgilanmaganini ko'ra olsin.
+        // belgilanmaganini ko'ra olsin. Barcha urinishlar (1, 2, 3) hisobga
+        // olinadi.
         $oskiDates = ExamSchedule::whereNotNull('oski_date')
             ->where('oski_na', false)
             ->whereDate('oski_date', '>=', $today)
@@ -4355,7 +4439,33 @@ class AcademicScheduleController extends Controller
             ->pluck('test_date')
             ->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'));
 
-        $uniqueDates = $oskiDates->merge($testDates)->unique()->sort()->values();
+        $oskiResitDates = ExamSchedule::whereNotNull('oski_resit_date')
+            ->whereDate('oski_resit_date', '>=', $today)
+            ->pluck('oski_resit_date')
+            ->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'));
+
+        $testResitDates = ExamSchedule::whereNotNull('test_resit_date')
+            ->whereDate('test_resit_date', '>=', $today)
+            ->pluck('test_resit_date')
+            ->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'));
+
+        $oskiResit2Dates = ExamSchedule::whereNotNull('oski_resit2_date')
+            ->whereDate('oski_resit2_date', '>=', $today)
+            ->pluck('oski_resit2_date')
+            ->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'));
+
+        $testResit2Dates = ExamSchedule::whereNotNull('test_resit2_date')
+            ->whereDate('test_resit2_date', '>=', $today)
+            ->pluck('test_resit2_date')
+            ->map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'));
+
+        $uniqueDates = $oskiDates
+            ->merge($testDates)
+            ->merge($oskiResitDates)
+            ->merge($testResitDates)
+            ->merge($oskiResit2Dates)
+            ->merge($testResit2Dates)
+            ->unique()->sort()->values();
 
         if ($uniqueDates->isEmpty()) {
             return view('admin.academic-schedule.bandlik-kursatkichi', [
@@ -4369,7 +4479,7 @@ class AcademicScheduleController extends Controller
 
         // Sanalar oralig'idagi barcha schedule yozuvlarini olish (vaqti
         // qo'yilmaganlar ham olinadi, toki ular "Vaqti qo'yilmagan" sifatida
-        // ko'rinsin)
+        // ko'rinsin). Barcha 3 urinish (1, 2, 3) bo'yicha sanalar tekshiriladi.
         $schedules = ExamSchedule::with(['group'])
             ->where(function ($q) use ($minDate, $maxDate) {
                 $q->where(function ($q2) use ($minDate, $maxDate) {
@@ -4380,19 +4490,34 @@ class AcademicScheduleController extends Controller
                     $q2->whereNotNull('test_date')
                        ->where('test_na', false)
                        ->whereBetween('test_date', [$minDate, $maxDate]);
+                })->orWhere(function ($q2) use ($minDate, $maxDate) {
+                    $q2->whereNotNull('oski_resit_date')
+                       ->whereBetween('oski_resit_date', [$minDate, $maxDate]);
+                })->orWhere(function ($q2) use ($minDate, $maxDate) {
+                    $q2->whereNotNull('test_resit_date')
+                       ->whereBetween('test_resit_date', [$minDate, $maxDate]);
+                })->orWhere(function ($q2) use ($minDate, $maxDate) {
+                    $q2->whereNotNull('oski_resit2_date')
+                       ->whereBetween('oski_resit2_date', [$minDate, $maxDate]);
+                })->orWhere(function ($q2) use ($minDate, $maxDate) {
+                    $q2->whereNotNull('test_resit2_date')
+                       ->whereBetween('test_resit2_date', [$minDate, $maxDate]);
                 });
             })
             ->get();
 
         // Har bir sana uchun ma'lumotlarni guruhlash. time = null bo'lsa
-        // "Vaqti qo'yilmagan" deb belgilanadi.
+        // "Vaqti qo'yilmagan" deb belgilanadi. Har bir urinish (1, 2, 3)
+        // alohida slot sifatida hisoblanadi.
         $byDate = [];
         foreach ($schedules as $schedule) {
+            // 1-urinish (asosiy)
             $oskiDateStr = $schedule->oski_date?->format('Y-m-d');
             if ($oskiDateStr && !$schedule->oski_na && $oskiDateStr >= $today) {
                 $byDate[$oskiDateStr][] = [
                     'group_hemis_id' => $schedule->group_hemis_id,
                     'yn_type' => 'OSKI',
+                    'attempt' => 1,
                     'time' => $schedule->oski_time
                         ? \Carbon\Carbon::parse($schedule->oski_time)->format('H:i')
                         : null,
@@ -4403,8 +4528,55 @@ class AcademicScheduleController extends Controller
                 $byDate[$testDateStr][] = [
                     'group_hemis_id' => $schedule->group_hemis_id,
                     'yn_type' => 'Test',
+                    'attempt' => 1,
                     'time' => $schedule->test_time
                         ? \Carbon\Carbon::parse($schedule->test_time)->format('H:i')
+                        : null,
+                ];
+            }
+            // 2-urinish (qayta topshirish)
+            $oskiResitDateStr = $schedule->oski_resit_date?->format('Y-m-d');
+            if ($oskiResitDateStr && $oskiResitDateStr >= $today) {
+                $byDate[$oskiResitDateStr][] = [
+                    'group_hemis_id' => $schedule->group_hemis_id,
+                    'yn_type' => 'OSKI',
+                    'attempt' => 2,
+                    'time' => $schedule->oski_resit_time
+                        ? \Carbon\Carbon::parse($schedule->oski_resit_time)->format('H:i')
+                        : null,
+                ];
+            }
+            $testResitDateStr = $schedule->test_resit_date?->format('Y-m-d');
+            if ($testResitDateStr && $testResitDateStr >= $today) {
+                $byDate[$testResitDateStr][] = [
+                    'group_hemis_id' => $schedule->group_hemis_id,
+                    'yn_type' => 'Test',
+                    'attempt' => 2,
+                    'time' => $schedule->test_resit_time
+                        ? \Carbon\Carbon::parse($schedule->test_resit_time)->format('H:i')
+                        : null,
+                ];
+            }
+            // 3-urinish (qayta topshirish 2)
+            $oskiResit2DateStr = $schedule->oski_resit2_date?->format('Y-m-d');
+            if ($oskiResit2DateStr && $oskiResit2DateStr >= $today) {
+                $byDate[$oskiResit2DateStr][] = [
+                    'group_hemis_id' => $schedule->group_hemis_id,
+                    'yn_type' => 'OSKI',
+                    'attempt' => 3,
+                    'time' => $schedule->oski_resit2_time
+                        ? \Carbon\Carbon::parse($schedule->oski_resit2_time)->format('H:i')
+                        : null,
+                ];
+            }
+            $testResit2DateStr = $schedule->test_resit2_date?->format('Y-m-d');
+            if ($testResit2DateStr && $testResit2DateStr >= $today) {
+                $byDate[$testResit2DateStr][] = [
+                    'group_hemis_id' => $schedule->group_hemis_id,
+                    'yn_type' => 'Test',
+                    'attempt' => 3,
+                    'time' => $schedule->test_resit2_time
+                        ? \Carbon\Carbon::parse($schedule->test_resit2_time)->format('H:i')
                         : null,
                 ];
             }
@@ -4431,12 +4603,15 @@ class AcademicScheduleController extends Controller
             $scheduledItems = array_values(array_filter($items, fn($i) => $i['time'] !== null));
             $pendingItems = array_values(array_filter($items, fn($i) => $i['time'] === null));
 
-            $slotKeys = collect($scheduledItems)->map(fn($i) => $i['time'] . '|' . $i['yn_type'])->unique();
+            // Bir vaqtda turli yn_type/urinishlar bo'lsa ham, kompyuter zalida
+            // ular birgalikda joylashadi — shuning uchun slot vaqt bo'yicha
+            // birlashtiriladi.
+            $slotKeys = collect($scheduledItems)->map(fn($i) => $i['time'])->unique();
             $totalStudents = 0;
             $maxOccupied = 0;
             $slotsOccupancy = [];
             foreach ($scheduledItems as $item) {
-                $slotKey = $item['time'] . '|' . $item['yn_type'];
+                $slotKey = $item['time'];
                 $cnt = (int) ($studentCounts[$item['group_hemis_id']] ?? 0);
                 $slotsOccupancy[$slotKey] = ($slotsOccupancy[$slotKey] ?? 0) + $cnt;
                 $totalStudents += $cnt;
@@ -4486,7 +4661,7 @@ class AcademicScheduleController extends Controller
         }
 
         // Vaqti qo'yilmaganlar ham olinadi — alohida "Vaqti qo'yilmagan"
-        // satrida ko'rsatiladi.
+        // satrida ko'rsatiladi. Barcha 3 urinish (1, 2, 3) bo'yicha tekshiriladi.
         $schedules = ExamSchedule::with(['group'])
             ->where(function ($q) use ($date) {
                 $q->where(function ($q2) use ($date) {
@@ -4495,24 +4670,46 @@ class AcademicScheduleController extends Controller
                 })->orWhere(function ($q2) use ($date) {
                     $q2->where('test_na', false)
                        ->whereDate('test_date', $date);
+                })->orWhere(function ($q2) use ($date) {
+                    $q2->whereDate('oski_resit_date', $date);
+                })->orWhere(function ($q2) use ($date) {
+                    $q2->whereDate('test_resit_date', $date);
+                })->orWhere(function ($q2) use ($date) {
+                    $q2->whereDate('oski_resit2_date', $date);
+                })->orWhere(function ($q2) use ($date) {
+                    $q2->whereDate('test_resit2_date', $date);
                 });
             })
             ->get();
 
-        // (time, yn_type) bo'yicha guruhlarni birlashtirish. time = null
-        // bo'lsa "Vaqti qo'yilmagan" satriga tushadi.
+        // Vaqt bo'yicha guruhlarni birlashtirish — bir vaqtda turli yn_type/urinish
+        // bo'lsa ham, kompyuter zalida ular bir vaqtda bo'lgani uchun bitta slotda
+        // hisoblanadi. time = null bo'lsa "Vaqti qo'yilmagan" satriga tushadi.
         $rows = [];
+        // Har bir schedule uchun barcha 3 urinishni tekshirish.
+        // Format: [ynType, attempt, dateField, timeField, naField (or null)]
+        $attemptDefs = [
+            ['OSKI', 1, 'oski_date', 'oski_time', 'oski_na'],
+            ['Test', 1, 'test_date', 'test_time', 'test_na'],
+            ['OSKI', 2, 'oski_resit_date', 'oski_resit_time', null],
+            ['Test', 2, 'test_resit_date', 'test_resit_time', null],
+            ['OSKI', 3, 'oski_resit2_date', 'oski_resit2_time', null],
+            ['Test', 3, 'test_resit2_date', 'test_resit2_time', null],
+        ];
         foreach ($schedules as $schedule) {
-            $oskiDateStr = $schedule->oski_date?->format('Y-m-d');
-            if ($oskiDateStr === $date && !$schedule->oski_na) {
-                $timeStr = $schedule->oski_time
-                    ? \Carbon\Carbon::parse($schedule->oski_time)->format('H:i')
+            foreach ($attemptDefs as [$ynType, $attempt, $dateField, $timeField, $naField]) {
+                $dStr = $schedule->{$dateField}?->format('Y-m-d');
+                if ($dStr !== $date) continue;
+                if ($naField !== null && $schedule->{$naField}) continue;
+
+                $timeRaw = $schedule->{$timeField} ?? null;
+                $timeStr = $timeRaw
+                    ? \Carbon\Carbon::parse($timeRaw)->format('H:i')
                     : null;
-                $key = ($timeStr ?? '__no_time__') . '|OSKI';
+                $key = $timeStr ?? '__no_time__';
                 if (!isset($rows[$key])) {
                     $rows[$key] = [
                         'time' => $timeStr,
-                        'yn_type' => 'OSKI',
                         'groups' => [],
                     ];
                 }
@@ -4522,27 +4719,8 @@ class AcademicScheduleController extends Controller
                     'subject_id' => $schedule->subject_id ?? '',
                     'group_name' => $schedule->group?->name ?? $schedule->group_hemis_id,
                     'subject_name' => $schedule->subject_name ?? '',
-                ];
-            }
-            $testDateStr = $schedule->test_date?->format('Y-m-d');
-            if ($testDateStr === $date && !$schedule->test_na) {
-                $timeStr = $schedule->test_time
-                    ? \Carbon\Carbon::parse($schedule->test_time)->format('H:i')
-                    : null;
-                $key = ($timeStr ?? '__no_time__') . '|Test';
-                if (!isset($rows[$key])) {
-                    $rows[$key] = [
-                        'time' => $timeStr,
-                        'yn_type' => 'Test',
-                        'groups' => [],
-                    ];
-                }
-                $rows[$key]['groups'][] = [
-                    'schedule_id' => $schedule->id,
-                    'group_hemis_id' => $schedule->group_hemis_id,
-                    'subject_id' => $schedule->subject_id ?? '',
-                    'group_name' => $schedule->group?->name ?? $schedule->group_hemis_id,
-                    'subject_name' => $schedule->subject_name ?? '',
+                    'yn_type' => $ynType,
+                    'attempt' => $attempt,
                 ];
             }
         }
@@ -4594,10 +4772,10 @@ class AcademicScheduleController extends Controller
             $occupied = 0;
             $submitted = 0;
             $remaining = 0;
-            $ynLower = strtolower($row['yn_type']);
             foreach ($row['groups'] as &$grp) {
                 $cnt = (int) ($studentCounts[$grp['group_hemis_id']] ?? 0);
                 $grp['student_count'] = $cnt;
+                $ynLower = strtolower($grp['yn_type'] ?? '');
                 $qKey = ($grp['schedule_id'] ?? '') . '|' . $ynLower;
                 $qCnt = (int) ($finishedMap[$qKey] ?? 0);
                 if ($qCnt > $cnt) {
@@ -4628,9 +4806,9 @@ class AcademicScheduleController extends Controller
         }
         unset($row);
 
-        // Vaqt bo'yicha saralash — vaqti qo'yilmaganlar oxirida
+        // Vaqt bo'yicha saralash — vaqti qo'yilmaganlar oxirida.
         $slots = collect($rows)
-            ->sortBy(fn($r) => ($r['time'] === null ? 'zz' : $r['time']))
+            ->sortBy(fn($r) => $r['time'] === null ? 'zz' : $r['time'])
             ->values();
 
         return view('admin.academic-schedule.bandlik-kursatkichi-show', [

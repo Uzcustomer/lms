@@ -1884,6 +1884,13 @@
                                                                  title="Bosib baho kiriting">
                                                                 <span class="text-gray-400">-</span>
                                                             </div>
+                                                        @elseif($isSuperAdmin && $isEmpty)
+                                                            {{-- Superadmin: bo'sh katakka ham baho qo'yish (YN cheklovlaridan tashqari) --}}
+                                                            <div class="editable-cell cursor-pointer hover:bg-purple-50"
+                                                                 onclick="makeEditableEmpty(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}')"
+                                                                 title="Superadmin: bosib baho kiriting">
+                                                                <span class="text-purple-300">-</span>
+                                                            </div>
                                                         @else
                                                             <span class="text-gray-300">-</span>
                                                         @endif

@@ -911,13 +911,13 @@ class VedomostTekshirishController extends Controller
                 $sheet->setCellValue("P{$r}", $oski);
                 $sheet->setCellValue("Q{$r}", $oskiBall);
                 if ($wOski > 0 && $wTest > 0) {
-                    // Ikkalasi ham vaznga ega — 1 kasr ko'rinishi
-                    $sheet->getStyle("Q{$r}")->getNumberFormat()->setFormatCode('0.0');
+                    // Ikkalasi ham vaznga ega — 2 kasr ko'rinishi (masalan 83*15/100=12.45)
+                    $sheet->getStyle("Q{$r}")->getNumberFormat()->setFormatCode('0.00');
                 }
                 $sheet->setCellValue("S{$r}", $test);
                 $sheet->setCellValue("T{$r}", $testBall);
                 if ($wOski > 0 && $wTest > 0) {
-                    $sheet->getStyle("T{$r}")->getNumberFormat()->setFormatCode('0.0');
+                    $sheet->getStyle("T{$r}")->getNumberFormat()->setFormatCode('0.00');
                 }
                 $sheet->setCellValue("V{$r}", $yn === '' ? '' : $yn);
                 $sheet->setCellValue("W{$r}", $ects);
@@ -1058,16 +1058,17 @@ class VedomostTekshirishController extends Controller
 
         // Yakuniy ball — ekranga chiqadigan ball'lardan hisoblanadi (4-5 kurs
         // uchun butun songa yaxlitlangan JN/MT/ON, faqat bittasi vaznga ega
-        // OSKI/Test holatlarida butun songa yaxlitlangan ball). Bu V'ni ekran
-        // ustunlari yig'indisiga mos qiladi.
-        $jbMtOnSum = round($jnBall + $mtBall + $onBall, 1);
+        // OSKI/Test holatlarida butun songa yaxlitlangan ball). Oraliq
+        // yaxlitlash qilinmaydi — aks holda 12.45 → 12.5 ga aylanib, yakuniy
+        // qiymat bir birlikka oshib ketadi (89.45 → 90 emas, 89 chiqishi kerak).
+        $jbMtOnSum = $jnBall + $mtBall + $onBall;
 
         if ($wOski > 0 && $wTest > 0) {
-            $examSum = round($oskiBall + $testBall, 1);
+            $examSum = $oskiBall + $testBall;
         } elseif ($wOski > 0) {
-            $examSum = round($oskiBall, 1);
+            $examSum = $oskiBall;
         } elseif ($wTest > 0) {
-            $examSum = round($testBall, 1);
+            $examSum = $testBall;
         } else {
             $examSum = 0;
         }

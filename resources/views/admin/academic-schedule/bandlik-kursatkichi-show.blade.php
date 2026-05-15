@@ -101,7 +101,6 @@
                                 <tr>
                                     <th class="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">#</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Vaqt</th>
-                                    <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">YN turi</th>
                                     <th class="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Guruhlar</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Talabalar</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Topshirdi / Qoldi</th>
@@ -165,13 +164,6 @@
                                                 </span>
                                             @endif
                                         </td>
-                                        <td class="px-3 py-2 text-center">
-                                            @if($slot['yn_type'] === 'OSKI')
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">OSKI</span>
-                                            @else
-                                                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-cyan-100 text-cyan-800">Test</span>
-                                            @endif
-                                        </td>
                                         <td class="px-3 py-2">
                                             <div class="flex flex-col gap-1.5">
                                                 @foreach($slot['groups'] as $grp)
@@ -179,10 +171,25 @@
                                                         $grpCnt = (int) ($grp['student_count'] ?? 0);
                                                         $grpQuiz = (int) ($grp['quiz_count'] ?? 0);
                                                         $grpRem = (int) ($grp['remaining'] ?? max(0, $grpCnt - $grpQuiz));
+                                                        $grpYn = $grp['yn_type'] ?? '';
+                                                        $grpAttempt = (int) ($grp['attempt'] ?? 1);
+                                                        $grpAttemptClass = match($grpAttempt) {
+                                                            2 => 'bg-orange-100 text-orange-800',
+                                                            3 => 'bg-red-100 text-red-800',
+                                                            default => 'bg-slate-100 text-slate-700',
+                                                        };
                                                     @endphp
                                                     <div class="inline-flex items-center gap-2 px-2 py-1 rounded bg-gray-50 border border-gray-200">
                                                         <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold" title="Guruhdagi jami talabalar">
                                                             {{ $grpCnt }}
+                                                        </span>
+                                                        @if($grpYn === 'OSKI')
+                                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-purple-100 text-purple-800">OSKI</span>
+                                                        @else
+                                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-cyan-100 text-cyan-800">Test</span>
+                                                        @endif
+                                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold {{ $grpAttemptClass }}" title="Urinish raqami">
+                                                            {{ $grpAttempt }}-urinish
                                                         </span>
                                                         <span class="font-semibold text-gray-900 text-xs whitespace-nowrap">{{ $grp['group_name'] }}</span>
                                                         @if(!empty($grp['subject_name']))

@@ -714,8 +714,13 @@ class QuizResultController extends Controller
             $query = HemisQuizResult::where('is_active', 1);
 
             // Bitta (talaba, fan, quiz_type, shakl) bo'yicha eng yuqori bahoga ega bo'lgan
-            // urinishni qoldirish — diagnostikaData bilan bir xil mantiq.
-            $query->whereNotExists(function ($sub) {
+            // urinishni qoldirish — diagnostikaData bilan bir xil mantiq, lekin dedup
+            // foydalanuvchi tanlagan sana oralig'i ichida qo'llaniladi. Aks holda,
+            // oraliqdan tashqaridagi balandroq urinishlar shu oraliqdagi yozuvni
+            // yashirib qo'yishi mumkin edi.
+            $dateFrom = $request->filled('date_from') ? $request->date_from : null;
+            $dateTo   = $request->filled('date_to')   ? $request->date_to   : null;
+            $query->whereNotExists(function ($sub) use ($dateFrom, $dateTo) {
                 $sub->select(\Illuminate\Support\Facades\DB::raw(1))
                     ->from('hemis_quiz_results as h2')
                     ->where('h2.is_active', 1)
@@ -730,6 +735,8 @@ class QuizResultController extends Controller
                                  ->whereColumn('h2.attempt_id', '>', 'hemis_quiz_results.attempt_id');
                           });
                     });
+                if ($dateFrom) $sub->whereDate('h2.date_finish', '>=', $dateFrom);
+                if ($dateTo)   $sub->whereDate('h2.date_finish', '<=', $dateTo);
             });
 
             // Ism bo'yicha qidiruv: kiritilgan bo'lsa, barcha sanalarda qidiriladi

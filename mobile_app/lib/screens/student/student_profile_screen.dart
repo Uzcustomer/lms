@@ -128,8 +128,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
           Container(
             padding: EdgeInsets.only(top: statusBarH, left: 16, right: 4),
             height: statusBarH + 64,
-            decoration: const BoxDecoration(
-              color: Color(0xFF1E3A8A),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(18),
                 bottomRight: Radius.circular(18),

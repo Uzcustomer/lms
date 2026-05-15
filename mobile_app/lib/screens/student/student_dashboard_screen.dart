@@ -370,8 +370,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         Container(
           padding: EdgeInsets.only(top: statusBarHeight, left: 16, right: 4),
           height: statusBarHeight + 64,
-          decoration: const BoxDecoration(
-            color: Color(0xFF1E3A8A),
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
             borderRadius: BorderRadius.only(
               bottomLeft: Radius.circular(18),
               bottomRight: Radius.circular(18),

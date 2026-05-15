@@ -58,6 +58,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
 
     final goingRight = _currentIndex > _previousIndex;
     final slideBegin = Offset(goingRight ? 0.08 : -0.08, 0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final navBg = isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A);
 
     return Scaffold(
       extendBody: true,
@@ -86,11 +88,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xFF1E3A8A),
+            color: navBg,
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF1E3A8A).withAlpha(50),
+                color: navBg.withAlpha(50),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),

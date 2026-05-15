@@ -67,8 +67,8 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
         children: [
           Container(
             padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
-            decoration: const BoxDecoration(
-              color: Color(0xFF1E3A8A),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(18),
                 bottomRight: Radius.circular(18),

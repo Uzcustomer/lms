@@ -95,8 +95,10 @@ class AppTheme {
   static const Color darkTextPrimary = Color(0xFFE0E0E0);
   static const Color darkTextSecondary = Color(0xFF9E9E9E);
   static const Color darkDivider = Color(0xFF424242);
-  // Near-white border for cards, inputs and selects in dark mode
-  static const Color darkBorderColor = Color(0xFFE8E8F0);
+  // Light-gray border for cards, inputs and selects in dark mode
+  static const Color darkBorderColor = Color(0xFFCFD3DC);
+  // Header / bottom-nav background in dark mode (clearly lighter than scaffold)
+  static const Color darkHeaderColor = Color(0xFF3D4250);
 
   static ThemeData get darkTheme {
     return ThemeData(

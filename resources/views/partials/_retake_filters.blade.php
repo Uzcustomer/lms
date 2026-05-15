@@ -23,11 +23,6 @@
     $hiddenFilters = $hiddenFilters ?? [];
     $extraQueryFields = $extraQueryFields ?? [];
     $hidden = fn ($key) => in_array($key, $hiddenFilters, true);
-    $subjectMultiple = $subjectMultiple ?? false;
-    $selectedSubjects = (array) request('subject', []);
-    if (!is_array(request('subject'))) {
-        $selectedSubjects = request('subject') ? [request('subject')] : [];
-    }
 @endphp
 
 <form method="GET" action="{{ $formAction }}" id="retake-filter-form">
@@ -111,26 +106,13 @@
 
             @if(!$hidden('subject') && !empty($subjects ?? []))
                 <div class="rf-item" style="flex: 1; min-width: 200px;">
-                    <label class="rf-label">
-                        <span class="rf-dot" style="background:#000000;"></span> Fan
-                        @if($subjectMultiple)
-                            <span class="text-[10px] font-normal text-gray-500 normal-case">({{ __("bir nechta tanlash mumkin") }})</span>
-                        @endif
-                    </label>
-                    @if($subjectMultiple)
-                        <select id="rf_subject" name="subject[]" class="rf-select2" multiple data-placeholder="Barchasi" style="width: 100%;">
-                            @foreach($subjects as $subjId => $subjName)
-                                <option value="{{ $subjId }}" {{ in_array((string)$subjId, array_map('strval', $selectedSubjects), true) ? 'selected' : '' }}>{{ $subjName }}</option>
-                            @endforeach
-                        </select>
-                    @else
-                        <select id="rf_subject" name="subject" class="rf-select2" style="width: 100%;">
-                            <option value="">Barchasi</option>
-                            @foreach($subjects as $subjId => $subjName)
-                                <option value="{{ $subjId }}" {{ (string)request('subject') === (string)$subjId ? 'selected' : '' }}>{{ $subjName }}</option>
-                            @endforeach
-                        </select>
-                    @endif
+                    <label class="rf-label"><span class="rf-dot" style="background:#000000;"></span> Fan</label>
+                    <select id="rf_subject" name="subject" class="rf-select2" style="width: 100%;">
+                        <option value="">Barchasi</option>
+                        @foreach($subjects as $subjId => $subjName)
+                            <option value="{{ $subjId }}" {{ (string)request('subject') === (string)$subjId ? 'selected' : '' }}>{{ $subjName }}</option>
+                        @endforeach
+                    </select>
                 </div>
             @endif
 
@@ -218,17 +200,11 @@
 
     $(document).ready(function() {
         $('.rf-select2').each(function() {
-            var $el = $(this);
-            var isMulti = $el.prop('multiple');
-            var placeholder = isMulti
-                ? ($el.attr('data-placeholder') || 'Barchasi')
-                : $el.find('option:first').text();
-            $el.select2({
+            $(this).select2({
                 theme: 'classic',
                 width: '100%',
-                allowClear: !isMulti,
-                placeholder: placeholder,
-                closeOnSelect: !isMulti
+                allowClear: true,
+                placeholder: $(this).find('option:first').text()
             });
         });
 

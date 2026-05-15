@@ -102,6 +102,7 @@
                                     <th class="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">#</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Vaqt</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">YN turi</th>
+                                    <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Urinish</th>
                                     <th class="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Guruhlar</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Talabalar</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Topshirdi / Qoldi</th>
@@ -171,6 +172,19 @@
                                             @else
                                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-cyan-100 text-cyan-800">Test</span>
                                             @endif
+                                        </td>
+                                        <td class="px-3 py-2 text-center">
+                                            @php
+                                                $slotAttempt = (int) ($slot['attempt'] ?? 1);
+                                                $attemptClass = match($slotAttempt) {
+                                                    2 => 'bg-orange-100 text-orange-800',
+                                                    3 => 'bg-red-100 text-red-800',
+                                                    default => 'bg-slate-100 text-slate-700',
+                                                };
+                                            @endphp
+                                            <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold {{ $attemptClass }}" title="Urinish raqami">
+                                                {{ $slotAttempt }}-urinish
+                                            </span>
                                         </td>
                                         <td class="px-3 py-2">
                                             <div class="flex flex-col gap-1.5">

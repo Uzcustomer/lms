@@ -365,11 +365,38 @@ class StudentController extends Controller
         }
         uasort($accomStats, fn($a, $b) => $b['total'] <=> $a['total']);
 
+        // Viloyatlar kesimi — province_name × gender_name (gorizontal bar chart).
+        $provRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('province_name, gender_name, COUNT(*) as total')
+            ->groupBy('province_name', 'gender_name')
+            ->get();
+        $provinceStats = [];
+        foreach ($provRows as $r) {
+            $name = trim((string) $r->province_name);
+            if ($name === '') {
+                $name = 'Boshqa';
+            }
+            $gender = mb_strtolower(trim((string) $r->gender_name));
+            if (!isset($provinceStats[$name])) {
+                $provinceStats[$name] = ['total' => 0, 'male' => 0, 'female' => 0];
+            }
+            $cnt = (int) $r->total;
+            $provinceStats[$name]['total'] += $cnt;
+            if (str_starts_with($gender, 'erkak') || $gender === 'male' || $gender === 'm') {
+                $provinceStats[$name]['male'] += $cnt;
+            } elseif (str_starts_with($gender, 'ayol') || str_starts_with($gender, 'xotin')
+                    || $gender === 'female' || $gender === 'f') {
+                $provinceStats[$name]['female'] += $cnt;
+            }
+        }
+        uasort($provinceStats, fn($a, $b) => $b['total'] <=> $a['total']);
+
         return view('admin.students.statistics', compact(
             'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals',
             'socialStats', 'socialHasCategory',
             'citizenshipStats', 'countryStats',
-            'accomStats'
+            'accomStats', 'provinceStats'
         ));
     }
 

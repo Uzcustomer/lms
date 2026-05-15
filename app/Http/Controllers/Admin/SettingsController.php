@@ -237,6 +237,17 @@ class SettingsController extends Controller
             ->with('success', "YN sanasini belgilash huquqlari muvaffaqiyatli yangilandi.");
     }
 
+    public function updateTestCenterPermissions(Request $request)
+    {
+        $request->validate([
+            'tc_edit_today' => 'nullable|in:0,1',
+        ]);
+        ExamDateRoleService::setTestCenterCanEditToday((bool) $request->input('tc_edit_today', 0));
+
+        return redirect()->route('admin.settings', ['tab' => 'test-center-permissions'])
+            ->with('success', 'Test markazi huquqlari yangilandi.');
+    }
+
     public function updateContractCutoffs(Request $request)
     {
         $request->validate([

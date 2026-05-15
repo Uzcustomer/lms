@@ -247,6 +247,53 @@
                 </div>
             </div>
 
+            {{-- SECTION: TEST MARKAZI HUQUQLARI (per-toggle) --}}
+            @php $tcEditToday = \App\Services\ExamDateRoleService::testCenterCanEditToday(); @endphp
+            <div x-data="{ open: {{ request('tab') === 'test-center-permissions' ? 'true' : 'false' }} }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #fef3c7, #fde68a); border: none; cursor: pointer; border-bottom: 1px solid #fbbf24;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 44px; height: 44px; min-width: 44px; background: linear-gradient(135deg, #f59e0b, #d97706); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(245,158,11,0.3);">
+                            <svg width="22" height="22" style="width: 22px; height: 22px; color: #fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                        </div>
+                        <div style="text-align: left;">
+                            <div style="font-size: 17px; font-weight: 700; color: #78350f;">Test markazi huquqlari</div>
+                            <div style="font-size: 13px; color: #92400e; margin-top: 2px;">Test markazi rolining bugungi imtihonni o'zgartirish ruxsati</div>
+                        </div>
+                    </div>
+                    <svg width="20" height="20" :style="open ? 'transform: rotate(180deg)' : ''" style="width: 20px; height: 20px; min-width: 20px; color: #92400e; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+
+                <div x-show="open" x-transition style="padding: 24px;">
+                    <form method="POST" action="{{ route('admin.settings.update.test-center-permissions') }}">
+                        @csrf
+                        <div style="background: #fefce8; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; border: 1px solid #fde68a; font-size: 13px; color: #78350f; display: flex; align-items: flex-start; gap: 10px;">
+                            <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px; margin-top: 1px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <div>
+                                Sukut bo'yicha test markazi roli faqat kelajakdagi imtihonlarning vaqtini o'zgartira oladi —
+                                bugungi imtihonlar admin huquqi (oxirgi daqiqada xato bo'lmasligi uchun).
+                                Bu toggle yoqilsa test markazi bugungi imtihon vaqtini ham o'zgartira oladi.
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="tc_edit_today" value="0">
+                        <label style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px; border: 1px solid {{ $tcEditToday ? '#f59e0b' : '#e5e7eb' }}; background: {{ $tcEditToday ? '#fffbeb' : '#fff' }}; cursor: pointer; margin-bottom: 16px;">
+                            <input type="checkbox" name="tc_edit_today" value="1" {{ $tcEditToday ? 'checked' : '' }} style="width: 18px; height: 18px; accent-color: #f59e0b;">
+                            <div>
+                                <div style="font-size: 14px; font-weight: 600; color: #0f172a;">Bugungi imtihonni o'zgartirish</div>
+                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Yoqilsa, test markazi roli bugungi sanaga belgilangan imtihonning vaqtini ham tahrirlay oladi.</div>
+                            </div>
+                        </label>
+
+                        <div style="display: flex; justify-content: flex-end;">
+                            <button type="submit" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px; background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(245,158,11,0.3);">
+                                <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Saqlash
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             {{-- SECTION: TEST MARKAZI SIG'IMI --}}
             <div x-data="{ open: {{ request('tab') === 'exam-capacity' ? 'true' : 'false' }} }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
                 <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #f0fdfa, #ccfbf1); border: none; cursor: pointer; border-bottom: 1px solid #5eead4;">

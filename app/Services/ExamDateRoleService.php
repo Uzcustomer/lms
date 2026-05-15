@@ -26,6 +26,29 @@ class ExamDateRoleService
 {
     public const SETTING_KEY = 'exam_date_role_settings';
 
+    /** Toggle: when true, the test-centre role may edit/save exam times for
+     *  today as well. Default false — test-centre may only touch future-dated
+     *  exams; today and earlier are admin-only. Stored as a separate Setting
+     *  so admins can flip it on for unusual circumstances (last-minute
+     *  schedule changes, etc.). */
+    public const SETTING_TC_EDIT_TODAY = 'test_center_can_edit_today';
+
+    /**
+     * Whether the test-centre role may currently edit today's exam times.
+     */
+    public static function testCenterCanEditToday(): bool
+    {
+        return (bool) \App\Models\Setting::get(self::SETTING_TC_EDIT_TODAY, false);
+    }
+
+    /**
+     * Persist the test-centre "edit today" toggle. Admin-only caller.
+     */
+    public static function setTestCenterCanEditToday(bool $value): void
+    {
+        \App\Models\Setting::set(self::SETTING_TC_EDIT_TODAY, $value ? '1' : '0');
+    }
+
     /**
      * Sahifaga kirish va tahrirlash uchun sozlanishi mumkin bo'lgan rollar.
      *

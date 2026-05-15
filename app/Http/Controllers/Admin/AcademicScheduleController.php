@@ -94,10 +94,17 @@ class AcademicScheduleController extends Controller
         if (empty($relatedDate)) {
             return null;
         }
+        // Admin Settings → "Test markazi huquqlari → Bugungi imtihonni
+        // o'zgartirish" toggle lifts this restriction entirely. Past days
+        // stay blocked even with the toggle on.
         $dateStr = $relatedDate instanceof \Carbon\Carbon
             ? $relatedDate->format('Y-m-d')
             : \Carbon\Carbon::parse($relatedDate)->format('Y-m-d');
         $today = now()->format('Y-m-d');
+        $canEditToday = ExamDateRoleService::testCenterCanEditToday();
+        if ($canEditToday && $dateStr === $today) {
+            return null;
+        }
         if ($dateStr <= $today) {
             return "Test markazi rolida imtihon vaqtini kamida bir kun oldin belgilash kerak. O'sha kuni (yoki o'tgan sanalar uchun) vaqtni o'zgartirib bo'lmaydi.";
         }
@@ -3796,7 +3803,8 @@ class AcademicScheduleController extends Controller
         }
         $relatedDate = $examSchedule->{$dateColumn};
 
-        // Test markazi roli uchun: o'sha kun yoki o'tgan sanaga vaqt qo'yish/o'zgartirish taqiqlanadi.
+        // Test markazi roli uchun: o'sha kun yoki o'tgan sanaga vaqt qo'yish/o'zgartirish taqiqlanadi
+        // (Settings tomonidagi "Test markazi huquqlari → Bugungi imtihonni o'zgartirish" toggle'i yoqilsa cheklov yo'qoladi).
         if ($tooSoonMsg = $this->testCenterDateTooSoon($relatedDate)) {
             return response()->json(['success' => false, 'message' => $tooSoonMsg], 422);
         }

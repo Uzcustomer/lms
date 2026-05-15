@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import '../../config/theme.dart';
 import '../../config/aurora_themes.dart';
 import '../../providers/settings_provider.dart';
 

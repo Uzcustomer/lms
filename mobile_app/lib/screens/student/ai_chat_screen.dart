@@ -449,6 +449,7 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   Widget _buildHeader(double statusBarH) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
       decoration: BoxDecoration(

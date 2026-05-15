@@ -2219,17 +2219,21 @@ class AcademicScheduleController extends Controller
                 // bilan post qiladi (keyin urinishga qarab test_resit_date / test_resit2_date
                 // ustuniga yoziladi), shuning uchun ularni ham "resit data" sifatida sanaymiz.
                 if ($studentHemisIdForRow) {
-                    $rowUrinishCheck = (int) ($schedule['urinish'] ?? 1);
-                    $resitOnly = ['oski_resit_date', 'oski_resit2_date', 'test_resit_date', 'test_resit2_date'];
-                    $hasAnyResit = false;
-                    foreach ($resitOnly as $rf) {
-                        if (!empty($schedule[$rf])) { $hasAnyResit = true; break; }
+                    // Per-student qatorda biror sana to'ldirilganmi tekshiramiz.
+                    // 1-urinishda forma test_date/oski_date jo'natadi va shu ustunlarga
+                    // yoziladi; 2/3-urinishda esa keyin test_resit_date / test_resit2_date
+                    // ga map qilinadi — ikkala holatda ham qiymat shu yerda paydo bo'ladi.
+                    $anyDateFields = [
+                        'oski_date', 'test_date',
+                        'oski_resit_date', 'oski_resit2_date',
+                        'test_resit_date', 'test_resit2_date',
+                    ];
+                    $hasAnyDate = false;
+                    foreach ($anyDateFields as $df) {
+                        if (!empty($schedule[$df])) { $hasAnyDate = true; break; }
                     }
-                    if (!$hasAnyResit && $rowUrinishCheck >= 2) {
-                        $hasAnyResit = !empty($schedule['oski_date']) || !empty($schedule['test_date']);
-                    }
-                    if (!$hasAnyResit && !$record->exists) {
-                        // Bo'sh per-student row — yaratmaymiz
+                    if (!$hasAnyDate && !$record->exists) {
+                        // Hech qanday sana yo'q va yangi qator — yaratmaymiz
                         continue;
                     }
                 }

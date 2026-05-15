@@ -268,6 +268,9 @@
             rowQuality: { id: null, loading: false, error: null },
             async runRowQuality(photoId) {
                 this.rowQuality = { id: photoId, loading: true, error: null };
+                const timeoutMs = 60000;
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), timeoutMs);
                 try {
                     const res = await fetch(`/admin/student-photos/${photoId}/check-quality`, {
                         method: 'POST',
@@ -275,18 +278,27 @@
                             'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
                             'Accept': 'application/json',
                         },
+                        signal: controller.signal,
                     });
-                    const data = await res.json();
+                    const { data, parsed } = await this._safeJson(res);
                     if (!res.ok) {
-                        this.rowQuality.error = data.error || 'Xatolik';
+                        this.rowQuality.error = data.error || ('HTTP ' + res.status);
                         alert('Sifat tekshiruvi xato: ' + this.rowQuality.error);
+                    } else if (!parsed) {
+                        this.rowQuality.error = 'Server JSON o\'rniga noto\'g\'ri javob qaytardi: ' + (data.error || '');
+                        alert('Xatolik: ' + this.rowQuality.error);
                     } else {
                         location.reload();
                     }
                 } catch (e) {
-                    this.rowQuality.error = e.message;
-                    alert('Xatolik: ' + e.message);
+                    if (e.name === 'AbortError') {
+                        this.rowQuality.error = `Timeout: AI servis ${Math.round(timeoutMs / 1000)} soniyada javob bermadi`;
+                    } else {
+                        this.rowQuality.error = e.message;
+                    }
+                    alert('Xatolik: ' + this.rowQuality.error);
                 } finally {
+                    clearTimeout(timer);
                     this.rowQuality.loading = false;
                 }
             },

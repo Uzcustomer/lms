@@ -274,6 +274,21 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             final waiting = subjects.length - completed;
             final bestSubject = _getBestSubject(subjects);
             final filtered = _filterSubjects(subjects);
+            // If the dashboard asked us to focus a specific subject, move it
+            // to the top of the list so it's the first card the user sees.
+            if (_highlightedSubjectId != null) {
+              final idx = filtered.indexWhere((s) {
+                final raw = s['subject_id'];
+                final id = raw is int
+                    ? raw
+                    : (raw == null ? null : int.tryParse(raw.toString()));
+                return id == _highlightedSubjectId;
+              });
+              if (idx > 0) {
+                final pinned = filtered.removeAt(idx);
+                filtered.insert(0, pinned);
+              }
+            }
             final semesterName = provider.profile?['semester_name']?.toString() ?? '';
 
             return RefreshIndicator(

@@ -1619,7 +1619,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 }
 
 /// Right-side "tap me" affordance for tappable dashboard subject cards.
-/// Gently slides the chevron sideways so users notice the card is clickable.
+/// A pointing-hand icon sitting on top of a pulsing colored halo, so the
+/// affordance is unambiguous and catches the eye.
 class _TapHintChevron extends StatefulWidget {
   final Color? color;
   const _TapHintChevron({this.color});
@@ -1631,7 +1632,7 @@ class _TapHintChevron extends StatefulWidget {
 class _TapHintChevronState extends State<_TapHintChevron>
     with SingleTickerProviderStateMixin {
   late final AnimationController _ctrl;
-  late final Animation<double> _dx;
+  late final Animation<double> _opacity;
 
   @override
   void initState() {
@@ -1640,7 +1641,7 @@ class _TapHintChevronState extends State<_TapHintChevron>
       vsync: this,
       duration: const Duration(milliseconds: 900),
     )..repeat(reverse: true);
-    _dx = Tween<double>(begin: 0, end: 4).animate(
+    _opacity = Tween<double>(begin: 0.15, end: 0.85).animate(
       CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
     );
   }
@@ -1653,14 +1654,36 @@ class _TapHintChevronState extends State<_TapHintChevron>
 
   @override
   Widget build(BuildContext context) {
+    const haloColor = Color(0xFFFFA726); // bright amber — eye-catching
     return AnimatedBuilder(
-      animation: _dx,
-      builder: (_, __) => Transform.translate(
-        offset: Offset(_dx.value, 0),
-        child: Icon(
-          Icons.chevron_right_rounded,
-          size: 22,
-          color: widget.color ?? Colors.grey,
+      animation: _opacity,
+      builder: (_, __) => SizedBox(
+        width: 36,
+        height: 36,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: haloColor.withOpacity(_opacity.value * 0.35),
+                boxShadow: [
+                  BoxShadow(
+                    color: haloColor.withOpacity(_opacity.value * 0.6),
+                    blurRadius: 14,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.touch_app_rounded,
+              size: 20,
+              color: haloColor,
+            ),
+          ],
         ),
       ),
     );

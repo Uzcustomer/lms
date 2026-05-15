@@ -49,6 +49,15 @@ class StaffEvaluationController extends Controller
             'show_logo'      => 'nullable|boolean',
             'width_mm'       => 'nullable|numeric|min:20|max:300',
             'height_mm'      => 'nullable|numeric|min:20|max:300',
+            // Interaktiv tahrirlovchidan keladigan joylashuv/o'lcham (mm)
+            'qr_size_mm'     => 'nullable|numeric|min:5|max:300',
+            'qr_x_mm'        => 'nullable|numeric|min:0|max:300',
+            'qr_y_mm'        => 'nullable|numeric|min:0|max:300',
+            'text_x_mm'      => 'nullable|numeric|min:0|max:300',
+            'text_y_mm'      => 'nullable|numeric|min:0|max:300',
+            'text_w_mm'      => 'nullable|numeric|min:5|max:300',
+            'text_h_mm'      => 'nullable|numeric|min:3|max:300',
+            'text_size_mm'   => 'nullable|numeric|min:0.5|max:20',
         ]);
 
         Setting::set('staff_eval_tpl_institution', $data['institution'] ?? '');
@@ -59,6 +68,12 @@ class StaffEvaluationController extends Controller
         Setting::set('staff_eval_tpl_show_logo', $request->boolean('show_logo') ? '1' : '0');
         Setting::set('staff_eval_tpl_width_mm', (string)($data['width_mm'] ?? 60));
         Setting::set('staff_eval_tpl_height_mm', (string)($data['height_mm'] ?? 40));
+        // Layout sozlamalari — faqat formada kelganlar yangilanadi (bo'sh = avtomatik)
+        foreach (['qr_size_mm','qr_x_mm','qr_y_mm','text_x_mm','text_y_mm','text_w_mm','text_h_mm','text_size_mm'] as $k) {
+            if (array_key_exists($k, $data) && $data[$k] !== null && $data[$k] !== '') {
+                Setting::set('staff_eval_tpl_' . $k, (string) $data[$k]);
+            }
+        }
 
         return redirect()->route('admin.staff-evaluation.index', ['tab' => 'shablon'])
             ->with('success', "Shablon muvaffaqiyatli saqlandi.");
@@ -66,6 +81,16 @@ class StaffEvaluationController extends Controller
 
     private function getTemplateData(): array
     {
+        $w = (float) Setting::get('staff_eval_tpl_width_mm', '60');
+        $h = (float) Setting::get('staff_eval_tpl_height_mm', '40');
+        // Avtomatik (eski) joylashuv standartlari — saqlanmagan paytda ishlatiladi
+        $autoQr = max(15, min($h - 4, $w * 0.45));
+        $autoQrX = $w - $autoQr - 2;
+        $autoQrY = max(2, ($h - $autoQr) / 2);
+        $autoTextX = 2;
+        $autoTextY = max(2, ($h - 14) / 2);
+        $autoTextW = max(12, $w - $autoQr - 5);
+        $autoTextH = min(16, $h - 6);
         return [
             'institution'    => Setting::get('staff_eval_tpl_institution', 'Toshkent davlat tibbiyot universiteti'),
             'branch'         => Setting::get('staff_eval_tpl_branch', 'Termiz filiali'),
@@ -73,8 +98,16 @@ class StaffEvaluationController extends Controller
             'title'          => Setting::get('staff_eval_tpl_title', ''),
             'description'    => Setting::get('staff_eval_tpl_description', ''),
             'show_logo'      => Setting::get('staff_eval_tpl_show_logo', '1') === '1',
-            'width_mm'       => (float) Setting::get('staff_eval_tpl_width_mm', '60'),
-            'height_mm'      => (float) Setting::get('staff_eval_tpl_height_mm', '40'),
+            'width_mm'       => $w,
+            'height_mm'      => $h,
+            'qr_size_mm'     => (float) Setting::get('staff_eval_tpl_qr_size_mm', (string) $autoQr),
+            'qr_x_mm'        => (float) Setting::get('staff_eval_tpl_qr_x_mm', (string) $autoQrX),
+            'qr_y_mm'        => (float) Setting::get('staff_eval_tpl_qr_y_mm', (string) $autoQrY),
+            'text_x_mm'      => (float) Setting::get('staff_eval_tpl_text_x_mm', (string) $autoTextX),
+            'text_y_mm'      => (float) Setting::get('staff_eval_tpl_text_y_mm', (string) $autoTextY),
+            'text_w_mm'      => (float) Setting::get('staff_eval_tpl_text_w_mm', (string) $autoTextW),
+            'text_h_mm'      => (float) Setting::get('staff_eval_tpl_text_h_mm', (string) $autoTextH),
+            'text_size_mm'   => (float) Setting::get('staff_eval_tpl_text_size_mm', '1.9'),
         ];
     }
 

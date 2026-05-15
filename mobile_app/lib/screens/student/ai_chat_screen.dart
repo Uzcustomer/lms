@@ -639,7 +639,7 @@ class _AiChatScreenState extends State<AiChatScreen>
     final surface = isDark
         ? Colors.white.withOpacity(0.08)
         : Colors.white.withOpacity(0.85);
-    final border = isDark ? AppTheme.darkBorderColor : Colors.grey.shade200;
+    final border = AppTheme.cardBorderColor;
     final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
@@ -1153,7 +1153,7 @@ class _AiChatScreenState extends State<AiChatScreen>
         decoration: BoxDecoration(
           color: isDark ? Colors.white10 : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isDark ? AppTheme.darkBorderColor : Colors.grey.shade200),
+          border: Border.all(color: AppTheme.cardBorderColor),
         ),
         child: Row(
           children: [

@@ -99,6 +99,8 @@ class AppTheme {
   static const Color darkBorderColor = Color(0xFFCFD3DC);
   // Header / bottom-nav background in dark mode (clearly lighter than scaffold)
   static const Color darkHeaderColor = Color(0xFF3D4250);
+  // Unified card border — gray, works on both light and dark surfaces
+  static const Color cardBorderColor = Color(0xFFCBD5E1);
 
   static ThemeData get darkTheme {
     return ThemeData(

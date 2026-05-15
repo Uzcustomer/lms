@@ -138,7 +138,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
     final cc = cardColor ?? const Color(0xFF1E3A8A);
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    final border = isDark ? AppTheme.darkBorderColor : Colors.white.withOpacity(0.9);
+    final border = AppTheme.cardBorderColor;
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(

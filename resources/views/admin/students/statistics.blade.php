@@ -8,6 +8,43 @@
 <style>
     [x-cloak]{display:none !important;}
 
+    /* ──────────────────────── Aurora background ──────────────────────── */
+    body { position: relative; }
+    .stats-aurora-bg {
+        position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 35%, #5b21b6 65%, #4338ca 100%);
+    }
+    .stats-aurora-bg::before, .stats-aurora-bg::after,
+    .stats-aurora-blob1, .stats-aurora-blob2, .stats-aurora-blob3 {
+        content: ''; position: absolute; border-radius: 50%; filter: blur(80px); opacity: .55;
+        animation: aurora-float 18s ease-in-out infinite;
+    }
+    .stats-aurora-bg::before {
+        width: 520px; height: 520px; background: #ec4899; top: -120px; left: -120px;
+    }
+    .stats-aurora-bg::after {
+        width: 480px; height: 480px; background: #06b6d4; bottom: -140px; right: -80px;
+        animation-delay: -6s;
+    }
+    .stats-aurora-blob1 { width: 420px; height: 420px; background: #8b5cf6; top: 30%; left: 45%; animation-delay: -3s; }
+    .stats-aurora-blob2 { width: 360px; height: 360px; background: #22c55e; top: 60%; left: 10%; animation-delay: -9s; opacity: .35; }
+    .stats-aurora-blob3 { width: 380px; height: 380px; background: #f59e0b; top: 5%; right: 20%; animation-delay: -12s; opacity: .4; }
+    @keyframes aurora-float {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        33%      { transform: translate(60px, -40px) scale(1.08); }
+        66%      { transform: translate(-50px, 50px) scale(0.95); }
+    }
+    .stats-root { position: relative; z-index: 1; }
+
+    /* Glassmorphism shared */
+    .glass {
+        background: rgba(255, 255, 255, 0.62);
+        backdrop-filter: blur(18px) saturate(160%);
+        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        box-shadow: 0 10px 30px -10px rgba(15, 23, 42, .28);
+    }
+
     .stats-outer-tabs {
         display: flex;
         flex-wrap: wrap;
@@ -21,31 +58,35 @@
         font-size: 16px;
         font-weight: 600;
         text-align: center;
-        background: #ffffff;
-        color: #475569;
-        border: 1px solid #e2e8f0;
+        background: rgba(255, 255, 255, 0.55);
+        color: #1e293b;
+        border: 1px solid rgba(255, 255, 255, 0.55);
         border-radius: 14px;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+        backdrop-filter: blur(14px) saturate(160%);
+        -webkit-backdrop-filter: blur(14px) saturate(160%);
+        box-shadow: 0 4px 16px -6px rgba(15, 23, 42, .22);
         cursor: pointer;
-        transition: all .15s ease;
+        transition: all .18s ease;
     }
     .stats-outer-btn:hover {
-        border-color: #cbd5e1;
-        color: #1e293b;
+        background: rgba(255, 255, 255, 0.75);
+        color: #0f172a;
     }
     .stats-outer-btn.active {
-        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        background: linear-gradient(135deg, rgba(139, 92, 246, .92), rgba(79, 70, 229, .95));
         color: #ffffff;
         border-color: transparent;
-        box-shadow: 0 6px 16px -4px rgba(79, 70, 229, .45);
+        box-shadow: 0 10px 28px -8px rgba(79, 70, 229, .65);
     }
 
     .stats-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.62);
+        backdrop-filter: blur(18px) saturate(160%);
+        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        border-radius: 18px;
         padding: 18px 18px 22px;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+        box-shadow: 0 10px 30px -10px rgba(15, 23, 42, .28);
     }
 
     .stats-inner-tabs {
@@ -60,36 +101,45 @@
         padding: 10px 18px;
         font-size: 13px;
         font-weight: 600;
-        background: #f8fafc;
-        color: #475569;
-        border: 1px solid #e2e8f0;
+        background: rgba(255, 255, 255, 0.55);
+        color: #1e293b;
+        border: 1px solid rgba(255, 255, 255, 0.55);
         border-radius: 10px;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
         cursor: pointer;
-        transition: all .15s ease;
+        transition: all .18s ease;
     }
     .stats-inner-btn:hover {
-        background: #eef2ff;
+        background: rgba(255, 255, 255, 0.85);
         color: #4338ca;
-        border-color: #c7d2fe;
     }
     .stats-inner-btn.active {
-        background: #4f46e5;
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
         color: #ffffff;
         border-color: transparent;
-        box-shadow: 0 3px 10px -3px rgba(79, 70, 229, .55);
+        box-shadow: 0 6px 18px -4px rgba(79, 70, 229, .65);
     }
 
     .stats-empty {
-        background: #f8fafc;
-        border: 1px dashed #cbd5e1;
-        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.5);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px dashed rgba(148, 163, 184, .6);
+        border-radius: 14px;
         padding: 56px 24px;
         text-align: center;
-        color: #94a3b8;
+        color: #475569;
         font-size: 13px;
     }
     .stats-empty strong {
-        color: #475569;
+        color: #1e293b;
+    }
+    .stat-card-empty {
+        background: rgba(255, 255, 255, 0.45);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        border: 1px dashed rgba(148, 163, 184, .6);
     }
 
     .kpi-grid {
@@ -98,16 +148,18 @@
         gap: 18px;
     }
     .kpi-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.62);
+        backdrop-filter: blur(18px) saturate(160%);
+        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        border-radius: 18px;
         padding: 22px 24px;
-        box-shadow: 0 4px 14px -4px rgba(15, 23, 42, .12);
+        box-shadow: 0 10px 30px -10px rgba(15, 23, 42, .28);
         transition: transform .18s ease, box-shadow .18s ease;
     }
     .kpi-card:hover {
         transform: translateY(-4px) scale(1.025);
-        box-shadow: 0 14px 30px -8px rgba(15, 23, 42, .22);
+        box-shadow: 0 18px 38px -10px rgba(15, 23, 42, .4);
     }
     /* Yuqori qator: ikonka + sarlavha + qiymat — bitta qatorda */
     .kpi-head {
@@ -141,11 +193,13 @@
         margin-top: 22px;
     }
     .pie-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.62);
+        backdrop-filter: blur(18px) saturate(160%);
+        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        border-radius: 18px;
         padding: 22px 24px;
-        box-shadow: 0 4px 14px -4px rgba(15, 23, 42, .12);
+        box-shadow: 0 10px 30px -10px rgba(15, 23, 42, .28);
         transition: transform .18s ease, box-shadow .18s ease;
     }
     .pie-card:hover {
@@ -171,11 +225,13 @@
 
     /* Kurslar bar chart */
     .course-bar-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.62);
+        backdrop-filter: blur(18px) saturate(160%);
+        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        border-radius: 18px;
         padding: 22px 24px;
-        box-shadow: 0 4px 14px -4px rgba(15, 23, 42, .12);
+        box-shadow: 0 10px 30px -10px rgba(15, 23, 42, .28);
         margin-top: 22px;
     }
     .course-bar-card h3 { font-size: 19px; font-weight: 700; color: #0f172a; margin-bottom: 16px; }
@@ -192,11 +248,13 @@
         .half-grid { grid-template-columns: 1fr; }
     }
     .stat-card {
-        background: #ffffff;
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.62);
+        backdrop-filter: blur(18px) saturate(160%);
+        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        border: 1px solid rgba(255, 255, 255, 0.55);
+        border-radius: 18px;
         padding: 22px 24px;
-        box-shadow: 0 4px 14px -4px rgba(15, 23, 42, .12);
+        box-shadow: 0 10px 30px -10px rgba(15, 23, 42, .28);
         transition: transform .18s ease, box-shadow .18s ease;
     }
     .stat-card:hover {
@@ -220,7 +278,13 @@
     }
 </style>
 
-<div class="w-full px-4 py-6"
+<div class="stats-aurora-bg">
+    <span class="stats-aurora-blob1"></span>
+    <span class="stats-aurora-blob2"></span>
+    <span class="stats-aurora-blob3"></span>
+</div>
+
+<div class="w-full px-4 py-6 stats-root"
      x-data="{
         outer: 'talabalar',
         inner: { talabalar: 'umumiy' }
@@ -340,6 +404,16 @@
                 'eduKeys'   => ['bakalavr', 'magistr', 'ordinatura', 'other'],
                 'eduLabels' => ['Bakalavr', 'Magistratura', 'Ordinatura', 'Boshqa'],
                 'stats'     => $accomStats,
+            ]);
+
+            // Viloyatlar — vertical grouped bar chart (Erkak/Ayol)
+            $provinceStats = $provinceStats ?? [];
+            $provMaleTotal = array_sum(array_column($provinceStats, 'male'));
+            $provFemaleTotal = array_sum(array_column($provinceStats, 'female'));
+            $provinceJson = json_encode([
+                'labels' => array_keys($provinceStats),
+                'male'   => array_column($provinceStats, 'male'),
+                'female' => array_column($provinceStats, 'female'),
             ]);
         @endphp
 
@@ -590,6 +664,10 @@
             {{-- Yashash joyi — ta'lim turi bo'yicha stacked bar --}}
             @include('admin.students._accom_card', ['canvasId' => 'accomChartUmumiy'])
             <script type="application/json" id="accomChartData">{!! $accomJson !!}</script>
+
+            {{-- Viloyatlar — vertical grouped bar (Erkak/Ayol) --}}
+            @include('admin.students._province_card', ['canvasId' => 'provinceChartUmumiy'])
+            <script type="application/json" id="provinceChartData">{!! $provinceJson !!}</script>
         </div>
 
         {{-- Yoshi tabi — pie chart --}}
@@ -817,9 +895,14 @@
             @include('admin.students._accom_card', ['canvasId' => 'accomChartTab'])
         </div>
 
+        {{-- Hududlar kesimida inner tabi — Viloyatlar bo'yicha vertical grouped bar --}}
+        <div x-show="inner.talabalar === 'hududlar'" x-cloak>
+            @include('admin.students._province_card', ['canvasId' => 'provinceChartTab'])
+        </div>
+
         {{-- Boshqa inner tablar (hozircha bo'sh) --}}
         @foreach($innerTabs as $key => $label)
-            @if(in_array($key, ['umumiy', 'yoshi', 'kurslar', 'ijtimoiy_toifa', 'tolov_shakli', 'fuqaroligi', 'yashash_joyi'])) @continue @endif
+            @if(in_array($key, ['umumiy', 'yoshi', 'kurslar', 'ijtimoiy_toifa', 'tolov_shakli', 'fuqaroligi', 'yashash_joyi', 'hududlar'])) @continue @endif
             <div x-show="inner.talabalar === '{{ $key }}'" x-cloak>
                 <div class="stats-empty">
                     <strong>{{ $label }}</strong> — statistika hali tayyor emas.
@@ -1214,6 +1297,48 @@
         });
     }
 
+    // ─── Viloyatlar — vertikal grouped bar (Erkak/Ayol) ────────────────
+    let provinceCfg = null;
+    function getProvinceCfg() {
+        if (provinceCfg !== null) return provinceCfg;
+        const el = document.getElementById('provinceChartData');
+        if (!el) { provinceCfg = false; return false; }
+        try { provinceCfg = JSON.parse(el.textContent); } catch (e) { provinceCfg = false; }
+        return provinceCfg;
+    }
+    function renderProvinceChart(id) {
+        const canvas = document.getElementById(id);
+        if (!canvas) return;
+        const cfg = getProvinceCfg();
+        if (!cfg) return;
+        const existing = Chart.getChart(canvas);
+        if (existing) existing.destroy();
+        const fmt = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
+
+        new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: cfg.labels,
+                datasets: [
+                    { label: 'Erkaklar', data: cfg.male,   backgroundColor: '#3b82f6', borderRadius: 4 },
+                    { label: 'Ayollar',  data: cfg.female, backgroundColor: '#ec4899', borderRadius: 4 },
+                ],
+            },
+            options: {
+                responsive: true, maintainAspectRatio: false,
+                animation: { duration: 1000, easing: 'easeOutCubic' },
+                scales: {
+                    x: { grid: { display: false }, ticks: { font: { size: 11 }, maxRotation: 45, minRotation: 30 } },
+                    y: { beginAtZero: true, ticks: { callback: (v) => fmt(v) } },
+                },
+                plugins: {
+                    legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 12, boxWidth: 14 } },
+                    tooltip: { callbacks: { label: (ctx) => ' ' + ctx.dataset.label + ': ' + fmt(ctx.parsed.y) } }
+                }
+            }
+        });
+    }
+
     // Chart.js canvas yashirin (display:none) bo'lsa o'lcham 0 bo'lib chiqadi —
     // shuning uchun tab ko'ringanda render qilamiz.
     window.statsRenderCharts = function () {
@@ -1231,6 +1356,8 @@
         renderCountryChart('countryChartUmumiy');
         renderAccomChart('accomChartUmumiy');
         renderAccomChart('accomChartTab');
+        renderProvinceChart('provinceChartUmumiy');
+        renderProvinceChart('provinceChartTab');
     };
 
     document.addEventListener('DOMContentLoaded', () => {

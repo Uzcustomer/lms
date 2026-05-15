@@ -27,15 +27,28 @@ class StaffEvaluationController extends Controller
             });
         }
 
+        // Kafedra (department) bo'yicha alohida filtr
+        if ($request->filled('department')) {
+            $query->where('department', $request->department);
+        }
+
         if (in_array($request->input('tab'), ['qr', 'shablon'])) {
             $query->whereNotNull('eval_qr_token');
         }
 
         $teachers = $query->orderBy('full_name')->paginate(20)->withQueryString();
 
+        // Dropdown uchun aktiv kafedralar ro'yxati
+        $departments = Teacher::where('is_active', true)
+            ->whereNotNull('department')
+            ->where('department', '!=', '')
+            ->distinct()
+            ->orderBy('department')
+            ->pluck('department');
+
         $template = $this->getTemplateData();
 
-        return view('admin.staff-evaluation.index', compact('teachers', 'template'));
+        return view('admin.staff-evaluation.index', compact('teachers', 'template', 'departments'));
     }
 
     public function saveTemplate(Request $request)

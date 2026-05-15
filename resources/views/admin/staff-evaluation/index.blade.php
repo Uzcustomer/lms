@@ -447,7 +447,7 @@
                 @include('admin.staff-evaluation._card', ['cardId' => 'card-' . $teacher->id])
                 {{-- Yuklab olish tugmasi --}}
                 <div class="border-t px-4 py-3 text-center bg-gray-50">
-                    <button onclick="downloadCard('card-{{ $teacher->id }}', '{{ Str::slug($teacher->full_name) }}')"
+                    <button onclick="downloadCard('card-{{ $teacher->id }}', '{{ addslashes(preg_replace('/[\\\\\/:*?\"<>|]+/u', '', $teacher->full_name)) }}')"
                             class="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 inline-flex items-center gap-2">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
@@ -706,7 +706,10 @@
             const el = document.getElementById(elementId);
             html2canvas(el, { scale: 3, backgroundColor: '#ffffff', useCORS: true }).then(canvas => {
                 const link = document.createElement('a');
-                link.download = 'qr-card-' + filename + '.png';
+                // Fayl nomi: <ISM FAMILYASI>.png — operatsion tizimga zarar bermaydigan
+                // belgilar JS tarafida ham yana bir bor tozalanadi.
+                const safe = (filename || 'qr-card').replace(/[\\/:*?"<>|]+/g, '').trim();
+                link.download = (safe || 'qr-card') + '.png';
                 link.href = canvas.toDataURL('image/png');
                 link.click();
             });

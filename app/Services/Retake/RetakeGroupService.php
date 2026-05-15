@@ -129,14 +129,10 @@ class RetakeGroupService
         }
 
         // Tanlangan arizalarni yuklash va validatsiya.
-        // Eslatma: subject_name tekshiruvi olib tashlangan — turli fan nomli
-        // (lekin ma'nosi bir xil) arizalarni bitta guruhga birlashtirish uchun.
-        // Semestr esa bir xil bo'lishi shart — qayta o'qish guruhi bitta
-        // semestr doirasida bo'ladi.
-        $normSemester = mb_strtolower(trim((string) ($data['semester_name'] ?? '')));
-
+        // subject_name va semester_name tekshiruvi olib tashlangan — turli
+        // fan/semestrdagi arizalarni bitta guruhga birlashtirish uchun
+        // (turli curriculum talabalari bir xil mavzuni qayta o'qishi mumkin).
         $apps = RetakeApplication::whereIn('id', $applicationIds)
-            ->whereRaw('LOWER(TRIM(semester_name)) = ?', [$normSemester])
             ->where('dean_status', 'approved')
             ->where('registrar_status', 'approved')
             ->where('academic_dept_status', 'approved')
@@ -146,7 +142,7 @@ class RetakeGroupService
 
         if ($apps->count() !== count($applicationIds)) {
             throw ValidationException::withMessages([
-                'applications' => "Ba'zi arizalar guruhga qo'shilishga yaroqsiz holatda yoki semestr mos emas",
+                'applications' => "Ba'zi arizalar guruhga qo'shilishga yaroqsiz holatda",
             ]);
         }
 

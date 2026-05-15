@@ -82,7 +82,13 @@
                         </span>
                     </template>
                     <span class="text-blue-600">·</span>
-                    <span x-text="selectedApps[0]?.semester_name"></span>
+                    <template x-if="selectedSemesterNames.length === 1">
+                        <span x-text="selectedApps[0]?.semester_name"></span>
+                    </template>
+                    <template x-if="selectedSemesterNames.length > 1">
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold"
+                              x-text="'⚠ ' + selectedSemesterNames.length + ' ta semestr'"></span>
+                    </template>
                 </div>
                 <div class="flex gap-2">
                     <button type="button"
@@ -172,7 +178,7 @@
 
                 <div class="p-3 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
                     <p class="text-[11px] text-gray-500">
-                        💡 {{ __("Bir xil semestrdagi arizalarni tanlash mumkin — fanlar har xil bo'lishi mumkin (ma'nosi bir xil, nomi har xil yozilgan fanlarni birlashtirish uchun)") }}
+                        💡 {{ __("Har qanday arizani tanlash mumkin — fan va semestr har xil bo'lishi mumkin (turli curriculum talabalari bir guruhga birlashtirilishi uchun)") }}
                     </p>
                     {{ $pendingApps->links() }}
                 </div>
@@ -626,24 +632,24 @@
                     pageApps: pageApps || [], // joriy sahifadagi barcha arizalar
                     selectedApps: [], // [{id, subject_id, subject_name, semester_id, semester_name}]
 
-                    // Joriy "lock guruhi" (birinchi tanlangan arizaning semestri) bo'yicha
-                    // sahifadagi shu semestrga tegishli arizalar.
-                    // Fan turlicha bo'lishi mumkin — ma'nosi bir xil, nomi har xil
-                    // yozilgan fanlarni bitta guruhga birlashtirish imkoni.
+                    // Bulk-tanlashda hech qanday lock yo'q — har xil fan va har
+                    // xil semestrdagi arizalarni birga belgilash mumkin (turli
+                    // curriculum talabalari bir guruhga birlashishi uchun).
                     matchingPageApps() {
-                        if (this.selectedApps.length === 0) {
-                            if (this.pageApps.length === 0) return [];
-                            const ref = this.pageApps[0];
-                            return this.pageApps.filter(a => a.semester_name === ref.semester_name);
-                        }
-                        const ref = this.selectedApps[0];
-                        return this.pageApps.filter(a => a.semester_name === ref.semester_name);
+                        return this.pageApps.slice();
                     },
 
                     // Tanlangan arizalardagi unikal fan nomlari (modal preambula uchun)
                     get selectedSubjectNames() {
                         const set = new Set();
                         this.selectedApps.forEach(a => set.add(a.subject_name));
+                        return Array.from(set);
+                    },
+
+                    // Tanlangan arizalardagi unikal semestrlar (preambula uchun)
+                    get selectedSemesterNames() {
+                        const set = new Set();
+                        this.selectedApps.forEach(a => set.add(a.semester_name));
                         return Array.from(set);
                     },
 
@@ -664,11 +670,9 @@
                     get allSelected() { return this.applications.length > 0 && this.selected.length === this.applications.length; },
 
                     // ── Bulk tanlash mantiqi ─────────────────────────────────
-                    // Faqat SEMESTR bo'yicha bloklaymiz — fan turlicha bo'lishi mumkin.
+                    // Hech qanday lock yo'q — fan/semestr har xil bo'lishi mumkin.
                     isLocked(row) {
-                        if (this.selectedApps.length === 0) return false;
-                        const a = this.selectedApps[0];
-                        return a.semester_name !== row.semester_name;
+                        return false;
                     },
 
                     toggleApp(row) {

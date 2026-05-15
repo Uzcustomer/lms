@@ -377,31 +377,31 @@
             @endif
 
             {{-- Statistika (bosilganda filter avtomat qo'llanadi) --}}
-            <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-2 mb-4">
                 <a href="{{ route('admin.student-photos.index') }}"
-                   class="bg-white shadow-sm rounded-lg p-4 hover:bg-gray-50 transition border-2 {{ !request('status') ? 'border-gray-700' : 'border-transparent' }}">
-                    <div class="text-sm text-gray-500">Jami rasmlar</div>
-                    <div class="text-2xl font-semibold text-gray-900">{{ number_format($stats['total']) }}</div>
+                   class="flex items-center justify-between bg-white shadow-sm rounded-lg px-3 py-2 hover:bg-gray-50 transition border-2 {{ !request('status') ? 'border-gray-700' : 'border-transparent' }}">
+                    <span class="text-xs text-gray-500">Jami</span>
+                    <span class="text-lg font-semibold text-gray-900 leading-none">{{ number_format($stats['total']) }}</span>
                 </a>
                 <a href="{{ route('admin.student-photos.index', ['status' => 'pending']) }}"
-                   class="bg-white shadow-sm rounded-lg p-4 hover:bg-yellow-50 transition border-2 {{ request('status') == 'pending' ? 'border-yellow-500' : 'border-transparent' }}">
-                    <div class="text-sm text-gray-500">Kutilmoqda</div>
-                    <div class="text-2xl font-semibold text-yellow-600">{{ number_format($stats['pending']) }}</div>
+                   class="flex items-center justify-between bg-white shadow-sm rounded-lg px-3 py-2 hover:bg-yellow-50 transition border-2 {{ request('status') == 'pending' ? 'border-yellow-500' : 'border-transparent' }}">
+                    <span class="text-xs text-gray-500">Kutilmoqda</span>
+                    <span class="text-lg font-semibold text-yellow-600 leading-none">{{ number_format($stats['pending']) }}</span>
                 </a>
                 <a href="{{ route('admin.student-photos.index', ['status' => 'approved']) }}"
-                   class="bg-white shadow-sm rounded-lg p-4 hover:bg-green-50 transition border-2 {{ request('status') == 'approved' ? 'border-green-500' : 'border-transparent' }}">
-                    <div class="text-sm text-gray-500">Tasdiqlangan</div>
-                    <div class="text-2xl font-semibold text-green-600">{{ number_format($stats['approved']) }}</div>
+                   class="flex items-center justify-between bg-white shadow-sm rounded-lg px-3 py-2 hover:bg-green-50 transition border-2 {{ request('status') == 'approved' ? 'border-green-500' : 'border-transparent' }}">
+                    <span class="text-xs text-gray-500">Tasdiqlangan</span>
+                    <span class="text-lg font-semibold text-green-600 leading-none">{{ number_format($stats['approved']) }}</span>
                 </a>
                 <a href="{{ route('admin.student-photos.index', ['status' => 'rejected']) }}"
-                   class="bg-white shadow-sm rounded-lg p-4 hover:bg-red-50 transition border-2 {{ request('status') == 'rejected' ? 'border-red-500' : 'border-transparent' }}">
-                    <div class="text-sm text-gray-500">Rad etilgan</div>
-                    <div class="text-2xl font-semibold text-red-600">{{ number_format($stats['rejected']) }}</div>
+                   class="flex items-center justify-between bg-white shadow-sm rounded-lg px-3 py-2 hover:bg-red-50 transition border-2 {{ request('status') == 'rejected' ? 'border-red-500' : 'border-transparent' }}">
+                    <span class="text-xs text-gray-500">Rad etilgan</span>
+                    <span class="text-lg font-semibold text-red-600 leading-none">{{ number_format($stats['rejected']) }}</span>
                 </a>
                 <a href="{{ route('admin.student-photos.index', ['status' => 'no_photo']) }}"
-                   class="bg-white shadow-sm rounded-lg p-4 hover:bg-orange-50 transition border-2 {{ request('status') == 'no_photo' ? 'border-orange-500' : 'border-transparent' }}">
-                    <div class="text-sm text-gray-500">Rasmsiz talabalar</div>
-                    <div class="text-2xl font-semibold text-orange-600">{{ number_format($stats['no_photo']) }}</div>
+                   class="flex items-center justify-between bg-white shadow-sm rounded-lg px-3 py-2 hover:bg-orange-50 transition border-2 {{ request('status') == 'no_photo' ? 'border-orange-500' : 'border-transparent' }}">
+                    <span class="text-xs text-gray-500">Rasmsiz</span>
+                    <span class="text-lg font-semibold text-orange-600 leading-none">{{ number_format($stats['no_photo']) }}</span>
                 </a>
             </div>
 
@@ -597,7 +597,7 @@
                 <div class="p-6 pt-3">
                     {{-- Jadval --}}
                     <div class="student-photos-table-wrap">
-                        <table class="student-photos-table w-full divide-y divide-gray-200 text-sm table-fixed">
+                        <table class="student-photos-table w-full divide-y divide-gray-200 text-sm table-auto">
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-3 py-2 text-center font-medium text-gray-600">
@@ -1456,7 +1456,12 @@
         .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
         .select2-container--classic .select2-selection--single:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
         .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height: 34px; padding-left: 10px; padding-right: 52px; color: #1e293b; font-size: 0.8rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .student-photos-table-wrap { overflow-x: hidden; }
+        /* table-auto bilan ustunlar kontentiga qarab proporsional kengayadi va
+           jadval butun content kengligini egallaydi. Kichik ikon ustunlari
+           (checkbox, #, rasm, AI%, Sifat, Solishtirish, Ruxsat) uchun yumshoq
+           min-kenglik beriladi, qolgan ustunlar qolgan joyni o'zaro bo'lishadi. */
+        .student-photos-table-wrap { overflow-x: auto; }
+        .student-photos-table { width: 100%; }
         .student-photos-table th,
         .student-photos-table td {
             white-space: normal;
@@ -1464,13 +1469,13 @@
             overflow-wrap: anywhere;
             vertical-align: top;
         }
-        .student-photos-table th:nth-child(1), .student-photos-table td:nth-child(1) { width: 40px; }
-        .student-photos-table th:nth-child(2), .student-photos-table td:nth-child(2) { width: 54px; }
-        .student-photos-table th:nth-child(9), .student-photos-table td:nth-child(9) { width: 74px; }
-        .student-photos-table th:nth-child(11), .student-photos-table td:nth-child(11) { width: 84px; }
-        .student-photos-table th:nth-child(12), .student-photos-table td:nth-child(12) { width: 78px; }
-        .student-photos-table th:nth-child(13), .student-photos-table td:nth-child(13) { width: 108px; }
-        .student-photos-table th:nth-child(14), .student-photos-table td:nth-child(14) { width: 98px; }
+        .student-photos-table th:nth-child(1), .student-photos-table td:nth-child(1) { width: 1%; white-space: nowrap; }
+        .student-photos-table th:nth-child(2), .student-photos-table td:nth-child(2) { width: 1%; white-space: nowrap; }
+        .student-photos-table th:nth-child(9), .student-photos-table td:nth-child(9) { width: 1%; white-space: nowrap; }
+        .student-photos-table th:nth-child(11), .student-photos-table td:nth-child(11) { width: 1%; white-space: nowrap; }
+        .student-photos-table th:nth-child(12), .student-photos-table td:nth-child(12) { width: 1%; white-space: nowrap; }
+        .student-photos-table th:nth-child(13), .student-photos-table td:nth-child(13) { width: 1%; white-space: nowrap; }
+        .student-photos-table th:nth-child(14), .student-photos-table td:nth-child(14) { width: 1%; white-space: nowrap; }
 
         .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 34px; width: 22px; background: transparent; border-left: none; right: 0; }
         .select2-container--classic .select2-selection--single .select2-selection__clear { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); font-size: 16px; font-weight: bold; color: #94a3b8; cursor: pointer; padding: 2px 6px; z-index: 2; background: #fff; border-radius: 50%; line-height: 1; transition: all 0.15s; }

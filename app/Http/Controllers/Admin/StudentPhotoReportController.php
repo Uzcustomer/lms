@@ -739,10 +739,14 @@ class StudentPhotoReportController extends Controller
         $uploadedUrl = asset($photo->photo_path);
 
         $serviceUrl = rtrim(config('services.face_compare.url'), '/');
-        $timeout = config('services.face_compare.timeout', 60);
+        // Gateway 504 oldini olish uchun Laravel timeout'ini nginx limitidan past
+        // saqlaymiz: AI servis 50s ichida javob bermasa, 503 JSON qaytariladi va
+        // bulk loop o'sha rasmda to'xtab qolmaydi.
+        $timeout = max(5, min(50, (int) config('services.face_compare.timeout', 50)));
 
         try {
             $response = Http::timeout($timeout)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->post($serviceUrl . '/compare', [
                     'image1' => $student->image,
@@ -799,10 +803,12 @@ class StudentPhotoReportController extends Controller
         }
 
         $serviceUrl = rtrim(config('services.face_compare.url'), '/');
-        $timeout = config('services.face_compare.timeout', 60);
+        // checkSimilarity bilan bir xil: 50s gateway limitidan past timeout.
+        $timeout = max(5, min(50, (int) config('services.face_compare.timeout', 50)));
 
         try {
             $response = Http::timeout($timeout)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->post($serviceUrl . '/quality-check', [
                     'image' => asset($photo->photo_path),

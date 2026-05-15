@@ -91,7 +91,11 @@
                 open: false, phase: 'confirm', // confirm | running | done
                 ids: [], total: 0, processed: 0, succeeded: 0, failed: 0,
                 currentName: '', cancel: false, errors: [],
-                runQuality: true,
+                runQuality: true, runSimilarity: true,
+                // Konkurensiya = 1 (default): sessiya bo'g'iqligi va AI servis
+                // overload'iga olib kelmaslik uchun. Slayder bilan oshirish mumkin.
+                concurrency: 1,
+                inflight: [],
             },
             openLightbox(src, alt) { this.lightbox = { open: true, src, alt }; },
             openCompare(photoId, profile, uploaded, title, existing, existingQuality) {
@@ -160,46 +164,81 @@
                     processed: 0, succeeded: 0, failed: 0,
                     currentName: '', cancel: false, errors: [],
                     runQuality: true, runSimilarity: true,
+                    concurrency: 1,
+                    inflight: [],
                 };
+            },
+            // POST + AbortController bilan timeout. Cheksiz osilib qolmaslik uchun.
+            async _bulkPost(url, csrf, timeoutMs) {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), timeoutMs);
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                        signal: controller.signal,
+                    });
+                    if (!res.ok) {
+                        const err = await res.json().catch(() => ({}));
+                        return { ok: false, error: err.error || ('HTTP ' + res.status) };
+                    }
+                    return { ok: true };
+                } catch (e) {
+                    if (e.name === 'AbortError') {
+                        return { ok: false, error: `Timeout: AI servis ${Math.round(timeoutMs / 1000)} soniyada javob bermadi` };
+                    }
+                    return { ok: false, error: e.message };
+                } finally {
+                    clearTimeout(timer);
+                }
+            },
+            async _bulkProcessOne(id, csrf) {
+                this.bulk.inflight = [...this.bulk.inflight, id];
+                let okOne = true;
+                try {
+                    const tasks = [];
+                    if (this.bulk.runSimilarity) {
+                        tasks.push(this._bulkPost(`/admin/student-photos/${id}/check-similarity`, csrf, 60000)
+                            .then(r => { if (!r.ok) { okOne = false; this.bulk.errors.push(`#${id} (similarity): ${r.error}`); } }));
+                    }
+                    if (this.bulk.runQuality) {
+                        tasks.push(this._bulkPost(`/admin/student-photos/${id}/check-quality`, csrf, 60000)
+                            .then(r => { if (!r.ok) { okOne = false; this.bulk.errors.push(`#${id} (quality): ${r.error}`); } }));
+                    }
+                    await Promise.all(tasks);
+                    if (okOne) { this.bulk.succeeded++; } else { this.bulk.failed++; }
+                } catch (e) {
+                    this.bulk.failed++;
+                    this.bulk.errors.push(`#${id}: ${e.message}`);
+                } finally {
+                    this.bulk.inflight = this.bulk.inflight.filter(x => x !== id);
+                    this.bulk.processed++;
+                    this.bulk.currentName = this.bulk.inflight.length
+                        ? `#${this.bulk.inflight.join(', #')} (${this.bulk.processed}/${this.bulk.total})`
+                        : `${this.bulk.processed}/${this.bulk.total}`;
+                }
             },
             async runBulk() {
                 this.bulk.phase = 'running';
+                this.bulk.processed = 0;
+                this.bulk.succeeded = 0;
+                this.bulk.failed = 0;
+                this.bulk.errors = [];
+                this.bulk.inflight = [];
                 const csrf = document.querySelector('meta[name=csrf-token]').content;
-                for (let i = 0; i < this.bulk.ids.length; i++) {
-                    if (this.bulk.cancel) break;
-                    const id = this.bulk.ids[i];
-                    this.bulk.currentName = `#${id} (${i + 1}/${this.bulk.total})`;
-                    let okOne = true;
-                    try {
-                        if (this.bulk.runSimilarity) {
-                            const r1 = await fetch(`/admin/student-photos/${id}/check-similarity`, {
-                                method: 'POST',
-                                headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
-                            });
-                            if (!r1.ok) {
-                                okOne = false;
-                                const err = await r1.json().catch(() => ({}));
-                                this.bulk.errors.push(`#${id} (similarity): ${err.error || ('HTTP ' + r1.status)}`);
-                            }
-                        }
-                        if (this.bulk.runQuality) {
-                            const r2 = await fetch(`/admin/student-photos/${id}/check-quality`, {
-                                method: 'POST',
-                                headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
-                            });
-                            if (!r2.ok) {
-                                okOne = false;
-                                const err = await r2.json().catch(() => ({}));
-                                this.bulk.errors.push(`#${id} (quality): ${err.error || ('HTTP ' + r2.status)}`);
-                            }
-                        }
-                        if (okOne) { this.bulk.succeeded++; } else { this.bulk.failed++; }
-                    } catch (e) {
-                        this.bulk.failed++;
-                        this.bulk.errors.push(`#${id}: ${e.message}`);
+                const queue = [...this.bulk.ids];
+                const concurrency = Math.max(1, Math.min(this.bulk.concurrency || 3, 5));
+
+                const worker = async () => {
+                    while (queue.length && !this.bulk.cancel) {
+                        const id = queue.shift();
+                        if (id === undefined) break;
+                        await this._bulkProcessOne(id, csrf);
                     }
-                    this.bulk.processed = i + 1;
-                }
+                };
+                const workers = [];
+                for (let i = 0; i < concurrency; i++) workers.push(worker());
+                await Promise.all(workers);
                 this.bulk.phase = 'done';
             },
             rowQuality: { id: null, loading: false, error: null },
@@ -1197,10 +1236,18 @@
                                 <span>Rasm sifati tekshiruvi (markaz, framing, oq xalat, yoritish)</span>
                             </label>
                         </div>
+                        <div class="space-y-2 rounded-md border border-gray-200 p-3 bg-gray-50">
+                            <div class="text-xs font-bold uppercase text-gray-500 mb-1">Parallellik (bir vaqtda nechta rasm)</div>
+                            <div class="flex items-center gap-2">
+                                <input type="range" min="1" max="5" step="1" x-model.number="bulk.concurrency"
+                                       class="flex-1">
+                                <span class="text-sm font-semibold w-8 text-center" x-text="bulk.concurrency"></span>
+                            </div>
+                            <div class="text-[11px] text-gray-500">Ko'p qilsangiz tezroq, lekin AI servisni ortiqcha yuklamasligi kerak.</div>
+                        </div>
                         <div class="text-xs text-gray-500">
-                            Har bir rasm
-                            <span x-text="((bulk.runSimilarity ? 3 : 0) + (bulk.runQuality ? 3 : 0)) + '-' + ((bulk.runSimilarity ? 5 : 0) + (bulk.runQuality ? 5 : 0))"></span>
-                            soniya oladi. Taxminiy vaqt: <strong x-text="Math.ceil(bulk.total * ((bulk.runSimilarity ? 3 : 0) + (bulk.runQuality ? 4 : 0)) / 60) + ' daqiqa'"></strong>.
+                            Similarity va quality endi parallel ishlaydi. Taxminiy vaqt:
+                            <strong x-text="Math.ceil(bulk.total * Math.max(bulk.runSimilarity ? 4 : 0, bulk.runQuality ? 4 : 0) / Math.max(1, bulk.concurrency) / 60) + ' daqiqa'"></strong>.
                             Natija avtomat bazaga saqlanadi. Tahlil chog'ida oynani yopmang.
                         </div>
                         <div class="flex justify-end gap-2 pt-2">
@@ -1233,8 +1280,20 @@
                                 <span class="text-green-700">✓ <span x-text="bulk.succeeded"></span></span>
                                 &nbsp;·&nbsp;
                                 <span class="text-red-700">✗ <span x-text="bulk.failed"></span></span>
+                                &nbsp;·&nbsp;
+                                <span class="text-indigo-700">⏳ <span x-text="bulk.inflight.length"></span></span>
                             </span>
                         </div>
+                        <template x-if="bulk.errors.length > 0">
+                            <details class="rounded-md bg-red-50 border border-red-200 text-red-800 px-3 py-2 text-xs">
+                                <summary class="cursor-pointer font-semibold">Joriy xatoliklar (<span x-text="bulk.errors.length"></span>)</summary>
+                                <ul class="mt-2 space-y-0.5 max-h-32 overflow-y-auto">
+                                    <template x-for="err in bulk.errors.slice(-50)" :key="err">
+                                        <li x-text="err"></li>
+                                    </template>
+                                </ul>
+                            </details>
+                        </template>
                         <div class="flex justify-end">
                             <button type="button" @click="bulk.cancel = true"
                                     :disabled="bulk.cancel"

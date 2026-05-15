@@ -343,10 +343,33 @@ class StudentController extends Controller
         }
         arsort($countryStats);
 
+        // Yashash joyi kesimi — ta'lim turi × accommodation_name (stacked bar uchun).
+        $accomRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('accommodation_name, education_type_name, COUNT(*) as total')
+            ->groupBy('accommodation_name', 'education_type_name')
+            ->get();
+        // accomStats[name] = ['total'=>n, 'edu'=>[eduKey=>n]]
+        $accomStats = [];
+        foreach ($accomRows as $r) {
+            $name = trim((string) $r->accommodation_name);
+            if ($name === '') {
+                $name = 'Boshqa';
+            }
+            $eduKey = $eduKeyOf((string) $r->education_type_name) ?? 'other';
+            if (!isset($accomStats[$name])) {
+                $accomStats[$name] = ['total' => 0, 'edu' => ['bakalavr' => 0, 'magistr' => 0, 'ordinatura' => 0, 'other' => 0]];
+            }
+            $accomStats[$name]['total'] += (int) $r->total;
+            $accomStats[$name]['edu'][$eduKey] += (int) $r->total;
+        }
+        uasort($accomStats, fn($a, $b) => $b['total'] <=> $a['total']);
+
         return view('admin.students.statistics', compact(
             'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals',
             'socialStats', 'socialHasCategory',
-            'citizenshipStats', 'countryStats'
+            'citizenshipStats', 'countryStats',
+            'accomStats'
         ));
     }
 

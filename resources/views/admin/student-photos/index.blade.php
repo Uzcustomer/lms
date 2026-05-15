@@ -105,6 +105,18 @@
                     quality: existingQuality || null, qualityLoading: false, qualityError: null,
                 };
             },
+            // Server JSON o'rniga HTML xato sahifasini qaytarsa (500/502/504),
+            // res.json() "Unexpected token '<'" tashlaydi. Bu helper xom matnni
+            // o'qib, JSON bo'lsa parse qiladi, aks holda holat kodi bilan xato qaytaradi.
+            async _safeJson(res) {
+                const text = await res.text();
+                try {
+                    return { data: JSON.parse(text), parsed: true };
+                } catch (_) {
+                    const snippet = text ? text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) : '';
+                    return { data: { error: `HTTP ${res.status}${snippet ? ' — ' + snippet : ''}` }, parsed: false };
+                }
+            },
             async runQualityCheck() {
                 this.compare.qualityLoading = true;
                 this.compare.qualityError = null;
@@ -116,9 +128,11 @@
                             'Accept': 'application/json',
                         },
                     });
-                    const data = await res.json();
+                    const { data, parsed } = await this._safeJson(res);
                     if (!res.ok) {
                         this.compare.qualityError = data.error || 'Nomaʼlum xatolik';
+                    } else if (!parsed) {
+                        this.compare.qualityError = 'Server JSON o\'rniga noto\'g\'ri javob qaytardi: ' + (data.error || '');
                     } else {
                         this.compare.quality = data;
                     }
@@ -140,9 +154,11 @@
                             'Accept': 'application/json',
                         },
                     });
-                    const data = await res.json();
+                    const { data, parsed } = await this._safeJson(res);
                     if (!res.ok) {
                         this.compare.error = data.error || 'Nomaʼlum xatolik';
+                    } else if (!parsed) {
+                        this.compare.error = 'Server JSON o\'rniga noto\'g\'ri javob qaytardi: ' + (data.error || '');
                     } else {
                         this.compare.result = data;
                     }
@@ -169,6 +185,8 @@
                 };
             },
             // POST + AbortController bilan timeout. Cheksiz osilib qolmaslik uchun.
+            // Server JSON o'rniga HTML qaytarsa ham (nginx 504, Laravel debug sahifasi),
+            // tushunarli xato xabarini chiqaradi.
             async _bulkPost(url, csrf, timeoutMs) {
                 const controller = new AbortController();
                 const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -178,11 +196,17 @@
                         headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
                         signal: controller.signal,
                     });
-                    if (!res.ok) {
-                        const err = await res.json().catch(() => ({}));
-                        return { ok: false, error: err.error || ('HTTP ' + res.status) };
+                    if (res.ok) return { ok: true };
+                    const text = await res.text();
+                    let errMsg = 'HTTP ' + res.status;
+                    try {
+                        const j = JSON.parse(text);
+                        if (j && j.error) errMsg = j.error;
+                    } catch (_) {
+                        const snippet = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+                        if (snippet) errMsg += ' — ' + snippet;
                     }
-                    return { ok: true };
+                    return { ok: false, error: errMsg };
                 } catch (e) {
                     if (e.name === 'AbortError') {
                         return { ok: false, error: `Timeout: AI servis ${Math.round(timeoutMs / 1000)} soniyada javob bermadi` };

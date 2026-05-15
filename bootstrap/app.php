@@ -93,8 +93,15 @@ return Application::configure(basePath: dirname(__DIR__))
 //        $schedule->command('app:test-cron')->everyFifteenSeconds();
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        // CSRF token muddati tugaganda — formga qaytarib xabar chiqarish
+        // CSRF token muddati tugaganda — formga qaytarib xabar chiqarish.
+        // AJAX (Accept: application/json) so'rovlar uchun esa JSON 419 qaytariladi,
+        // chunki redirect() AJAX javobida "Unexpected token '<'" xatosini keltirib chiqaradi.
         $exceptions->renderable(function (\Illuminate\Session\TokenMismatchException $e, $request) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'error' => 'Sessiya yangilandi. Sahifani yangilang va qayta urinib ko\'ring.',
+                ], 419);
+            }
             return redirect()->back()->withInput($request->except('_token', 'password'))->with('status', 'Sessiya yangilandi. Iltimos, qaytadan urinib ko\'ring.');
         });
 

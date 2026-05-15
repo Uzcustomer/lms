@@ -911,13 +911,13 @@ class VedomostTekshirishController extends Controller
                 $sheet->setCellValue("P{$r}", $oski);
                 $sheet->setCellValue("Q{$r}", $oskiBall);
                 if ($wOski > 0 && $wTest > 0) {
-                    // Ikkalasi ham vaznga ega — 1 kasr ko'rinishi
-                    $sheet->getStyle("Q{$r}")->getNumberFormat()->setFormatCode('0.0');
+                    // Ikkalasi ham vaznga ega — 2 kasr ko'rinishi (masalan 83*15/100=12.45)
+                    $sheet->getStyle("Q{$r}")->getNumberFormat()->setFormatCode('0.00');
                 }
                 $sheet->setCellValue("S{$r}", $test);
                 $sheet->setCellValue("T{$r}", $testBall);
                 if ($wOski > 0 && $wTest > 0) {
-                    $sheet->getStyle("T{$r}")->getNumberFormat()->setFormatCode('0.0');
+                    $sheet->getStyle("T{$r}")->getNumberFormat()->setFormatCode('0.00');
                 }
                 $sheet->setCellValue("V{$r}", $yn === '' ? '' : $yn);
                 $sheet->setCellValue("W{$r}", $ects);

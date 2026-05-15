@@ -137,6 +137,10 @@
                     $tcUser = auth()->user() ?? auth('teacher')->user();
                     $tcActiveRole = $tcUser ? session('active_role', $tcUser->getRoleNames()->first()) : null;
                     $tcIsTestMarkazi = $tcActiveRole === \App\Enums\ProjectRole::TEST_CENTER->value;
+                    // Admin sozlamalaridagi "Test markazi → Bugungi imtihonni o'zgartirish"
+                    // toggle'i yoqilgan bo'lsa, test markazi bugungi sanaga ham vaqtni
+                    // o'zgartira oladi (o'tgan sanalar baribir bloklangan).
+                    $tcCanEditToday = $tcIsTestMarkazi && \App\Services\ExamDateRoleService::testCenterCanEditToday();
                     // Joriy ekrandagi sanalar oralig'idagi yozuvlar:
                     //   missing  = sana bor, vaqt yo'q (avto-vaqt uchun)
                     //   withTime = sana bor, vaqt bor (tozalash uchun)
@@ -421,7 +425,11 @@
                                                 @php
                                                     // Test markazi roli: faqat kelajakdagi (>= ertaga) sanalarda vaqtni o'zgartirish mumkin.
                                                     $tcRowDateStr = ($item['yn_date_carbon'] ?? null)?->format('Y-m-d');
-                                                    $tcRowTooSoon = $tcIsTestMarkazi && $tcRowDateStr && $tcRowDateStr <= $today;
+                                                    // Past dates always locked for test markazi; today only when toggle is off.
+                                                    $tcRowTooSoon = $tcIsTestMarkazi && $tcRowDateStr && (
+                                                        $tcRowDateStr < $today
+                                                        || ($tcRowDateStr === $today && !$tcCanEditToday)
+                                                    );
                                                     $tcRowLocked = $tcReadOnly || $tcRowTooSoon;
                                                 @endphp
                                                     <div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">
@@ -532,7 +540,10 @@
                                                                     try { $stuEffectiveDate = \Carbon\Carbon::parse($stuEffectiveDate); } catch (\Throwable $e) { $stuEffectiveDate = null; }
                                                                 }
                                                                 $stuDateStr = $stuEffectiveDate?->format('Y-m-d');
-                                                                $stuTooSoon = $tcIsTestMarkazi && $stuDateStr && $stuDateStr <= $today;
+                                                                $stuTooSoon = $tcIsTestMarkazi && $stuDateStr && (
+                                                                    $stuDateStr < $today
+                                                                    || ($stuDateStr === $today && !$tcCanEditToday)
+                                                                );
                                                                 $stuLocked = $tcReadOnly || $stuTooSoon;
                                                             @endphp
                                                             <div style="display:flex;align-items:center;justify-content:center;gap:4px;">

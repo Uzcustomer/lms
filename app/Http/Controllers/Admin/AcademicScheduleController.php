@@ -4497,12 +4497,15 @@ class AcademicScheduleController extends Controller
             $scheduledItems = array_values(array_filter($items, fn($i) => $i['time'] !== null));
             $pendingItems = array_values(array_filter($items, fn($i) => $i['time'] === null));
 
-            $slotKeys = collect($scheduledItems)->map(fn($i) => $i['time'] . '|' . $i['yn_type'] . '|' . ($i['attempt'] ?? 1))->unique();
+            // Bir vaqtda turli yn_type/urinishlar bo'lsa ham, kompyuter zalida
+            // ular birgalikda joylashadi — shuning uchun slot vaqt bo'yicha
+            // birlashtiriladi.
+            $slotKeys = collect($scheduledItems)->map(fn($i) => $i['time'])->unique();
             $totalStudents = 0;
             $maxOccupied = 0;
             $slotsOccupancy = [];
             foreach ($scheduledItems as $item) {
-                $slotKey = $item['time'] . '|' . $item['yn_type'] . '|' . ($item['attempt'] ?? 1);
+                $slotKey = $item['time'];
                 $cnt = (int) ($studentCounts[$item['group_hemis_id']] ?? 0);
                 $slotsOccupancy[$slotKey] = ($slotsOccupancy[$slotKey] ?? 0) + $cnt;
                 $totalStudents += $cnt;
@@ -4573,9 +4576,9 @@ class AcademicScheduleController extends Controller
             })
             ->get();
 
-        // (time, yn_type, attempt) bo'yicha guruhlarni birlashtirish. time = null
-        // bo'lsa "Vaqti qo'yilmagan" satriga tushadi. Har bir urinish alohida
-        // satr sifatida ko'rsatiladi.
+        // Vaqt bo'yicha guruhlarni birlashtirish — bir vaqtda turli yn_type/urinish
+        // bo'lsa ham, kompyuter zalida ular bir vaqtda bo'lgani uchun bitta slotda
+        // hisoblanadi. time = null bo'lsa "Vaqti qo'yilmagan" satriga tushadi.
         $rows = [];
         // Har bir schedule uchun barcha 3 urinishni tekshirish.
         // Format: [ynType, attempt, dateField, timeField, naField (or null)]
@@ -4597,12 +4600,10 @@ class AcademicScheduleController extends Controller
                 $timeStr = $timeRaw
                     ? \Carbon\Carbon::parse($timeRaw)->format('H:i')
                     : null;
-                $key = ($timeStr ?? '__no_time__') . '|' . $ynType . '|' . $attempt;
+                $key = $timeStr ?? '__no_time__';
                 if (!isset($rows[$key])) {
                     $rows[$key] = [
                         'time' => $timeStr,
-                        'yn_type' => $ynType,
-                        'attempt' => $attempt,
                         'groups' => [],
                     ];
                 }
@@ -4612,6 +4613,7 @@ class AcademicScheduleController extends Controller
                     'subject_id' => $schedule->subject_id ?? '',
                     'group_name' => $schedule->group?->name ?? $schedule->group_hemis_id,
                     'subject_name' => $schedule->subject_name ?? '',
+                    'yn_type' => $ynType,
                     'attempt' => $attempt,
                 ];
             }
@@ -4664,10 +4666,10 @@ class AcademicScheduleController extends Controller
             $occupied = 0;
             $submitted = 0;
             $remaining = 0;
-            $ynLower = strtolower($row['yn_type']);
             foreach ($row['groups'] as &$grp) {
                 $cnt = (int) ($studentCounts[$grp['group_hemis_id']] ?? 0);
                 $grp['student_count'] = $cnt;
+                $ynLower = strtolower($grp['yn_type'] ?? '');
                 $qKey = ($grp['schedule_id'] ?? '') . '|' . $ynLower;
                 $qCnt = (int) ($finishedMap[$qKey] ?? 0);
                 if ($qCnt > $cnt) {
@@ -4699,9 +4701,8 @@ class AcademicScheduleController extends Controller
         unset($row);
 
         // Vaqt bo'yicha saralash — vaqti qo'yilmaganlar oxirida.
-        // Bir xil vaqtda urinish raqami bo'yicha tartiblanadi (1, 2, 3).
         $slots = collect($rows)
-            ->sortBy(fn($r) => ($r['time'] === null ? 'zz' : $r['time']) . '|' . ($r['attempt'] ?? 1))
+            ->sortBy(fn($r) => $r['time'] === null ? 'zz' : $r['time'])
             ->values();
 
         return view('admin.academic-schedule.bandlik-kursatkichi-show', [

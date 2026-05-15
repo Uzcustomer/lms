@@ -12,37 +12,42 @@
     body { position: relative; }
     .stats-aurora-bg {
         position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
-        background: linear-gradient(135deg, #1e1b4b 0%, #312e81 35%, #5b21b6 65%, #4338ca 100%);
+        background: linear-gradient(
+            135deg,
+            #ECFEFF 0%,
+            #DBEAFE 35%,
+            #DCFCE7 70%,
+            #F0FDFA 100%
+        );
     }
-    .stats-aurora-bg::before, .stats-aurora-bg::after,
-    .stats-aurora-blob1, .stats-aurora-blob2, .stats-aurora-blob3 {
-        content: ''; position: absolute; border-radius: 50%; filter: blur(80px); opacity: .55;
-        animation: aurora-float 18s ease-in-out infinite;
-    }
+    /* Yumshoq mint glow — yuqori o'ngda */
     .stats-aurora-bg::before {
-        width: 520px; height: 520px; background: #ec4899; top: -120px; left: -120px;
+        content: ""; position: absolute;
+        top: 80px; right: -100px;
+        width: 320px; height: 320px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(20, 184, 166, 0.22), transparent 70%);
+        filter: blur(40px); pointer-events: none;
     }
+    /* Indigo glow — pastki chapda */
     .stats-aurora-bg::after {
-        width: 480px; height: 480px; background: #06b6d4; bottom: -140px; right: -80px;
-        animation-delay: -6s;
+        content: ""; position: absolute;
+        bottom: 60px; left: -80px;
+        width: 280px; height: 280px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(99, 102, 241, 0.18), transparent 70%);
+        filter: blur(40px); pointer-events: none;
     }
-    .stats-aurora-blob1 { width: 420px; height: 420px; background: #8b5cf6; top: 30%; left: 45%; animation-delay: -3s; }
-    .stats-aurora-blob2 { width: 360px; height: 360px; background: #22c55e; top: 60%; left: 10%; animation-delay: -9s; opacity: .35; }
-    .stats-aurora-blob3 { width: 380px; height: 380px; background: #f59e0b; top: 5%; right: 20%; animation-delay: -12s; opacity: .4; }
-    @keyframes aurora-float {
-        0%, 100% { transform: translate(0, 0) scale(1); }
-        33%      { transform: translate(60px, -40px) scale(1.08); }
-        66%      { transform: translate(-50px, 50px) scale(0.95); }
-    }
+    .stats-aurora-blob1, .stats-aurora-blob2, .stats-aurora-blob3 { display: none; }
     .stats-root { position: relative; z-index: 1; }
 
     /* Glassmorphism shared */
     .glass {
         background: rgba(255, 255, 255, 0.62);
-        backdrop-filter: blur(18px) saturate(160%);
-        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        backdrop-filter: blur(18px) saturate(280%);
+        -webkit-backdrop-filter: blur(18px) saturate(280%);
         border: 1px solid rgba(255, 255, 255, 0.55);
-        box-shadow: 0 10px 30px -10px rgba(15, 23, 42, .28);
+        box-shadow: 0 10px 30px -10px rgba(15, 23, 42, .14);
     }
 
     .stats-outer-tabs {
@@ -62,8 +67,8 @@
         color: #1e293b;
         border: 1px solid rgba(255, 255, 255, 0.55);
         border-radius: 14px;
-        backdrop-filter: blur(14px) saturate(160%);
-        -webkit-backdrop-filter: blur(14px) saturate(160%);
+        backdrop-filter: blur(14px) saturate(280%);
+        -webkit-backdrop-filter: blur(14px) saturate(280%);
         box-shadow: 0 4px 16px -6px rgba(15, 23, 42, .22);
         cursor: pointer;
         transition: all .18s ease;
@@ -81,8 +86,8 @@
 
     .stats-card {
         background: rgba(255, 255, 255, 0.62);
-        backdrop-filter: blur(18px) saturate(160%);
-        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        backdrop-filter: blur(18px) saturate(280%);
+        -webkit-backdrop-filter: blur(18px) saturate(280%);
         border: 1px solid rgba(255, 255, 255, 0.55);
         border-radius: 18px;
         padding: 18px 18px 22px;
@@ -149,8 +154,8 @@
     }
     .kpi-card {
         background: rgba(255, 255, 255, 0.62);
-        backdrop-filter: blur(18px) saturate(160%);
-        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        backdrop-filter: blur(18px) saturate(280%);
+        -webkit-backdrop-filter: blur(18px) saturate(280%);
         border: 1px solid rgba(255, 255, 255, 0.55);
         border-radius: 18px;
         padding: 22px 24px;
@@ -194,8 +199,8 @@
     }
     .pie-card {
         background: rgba(255, 255, 255, 0.62);
-        backdrop-filter: blur(18px) saturate(160%);
-        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        backdrop-filter: blur(18px) saturate(280%);
+        -webkit-backdrop-filter: blur(18px) saturate(280%);
         border: 1px solid rgba(255, 255, 255, 0.55);
         border-radius: 18px;
         padding: 22px 24px;
@@ -226,8 +231,8 @@
     /* Kurslar bar chart */
     .course-bar-card {
         background: rgba(255, 255, 255, 0.62);
-        backdrop-filter: blur(18px) saturate(160%);
-        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        backdrop-filter: blur(18px) saturate(280%);
+        -webkit-backdrop-filter: blur(18px) saturate(280%);
         border: 1px solid rgba(255, 255, 255, 0.55);
         border-radius: 18px;
         padding: 22px 24px;
@@ -249,8 +254,8 @@
     }
     .stat-card {
         background: rgba(255, 255, 255, 0.62);
-        backdrop-filter: blur(18px) saturate(160%);
-        -webkit-backdrop-filter: blur(18px) saturate(160%);
+        backdrop-filter: blur(18px) saturate(280%);
+        -webkit-backdrop-filter: blur(18px) saturate(280%);
         border: 1px solid rgba(255, 255, 255, 0.55);
         border-radius: 18px;
         padding: 22px 24px;

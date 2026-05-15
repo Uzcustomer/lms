@@ -481,6 +481,16 @@ class AcademicScheduleController extends Controller
             ->unique()->values()->toArray();
         if (empty($allGroupHemisIds)) return $scheduleData;
 
+        // Sahifada ko'rinayotgan fanlar va semestrlar — per-student
+        // yozuvlarni shu kombinatsiya bo'yicha cheklash uchun. Aks holda
+        // boshqa fan/semestr yozuvlari ham xotiraga olinadi va kalit
+        // (group|subject|semester|student) bo'yicha mos kelmasa, qator
+        // sahifada ko'rinmay qolishi mumkin.
+        $allSubjectIds = $scheduleData->flatMap(fn($items) => $items->pluck('subject')->pluck('subject_id'))
+            ->filter()->unique()->values()->toArray();
+        $allSemesterCodes = $scheduleData->flatMap(fn($items) => $items->pluck('subject')->pluck('semester_code'))
+            ->filter()->unique()->values()->toArray();
+
         $studentsByGroup = DB::table('students')
             ->whereIn('group_id', $allGroupHemisIds)
             ->where('student_status_code', 11)
@@ -489,11 +499,19 @@ class AcademicScheduleController extends Controller
             ->get()
             ->groupBy('group_id');
 
-        // Per-student exam_schedules yozuvlarini olish (student_hemis_id NOT NULL)
+        // Per-student exam_schedules yozuvlarini olish (student_hemis_id NOT NULL).
+        // Subject va semester filtrlari muhim — keng so'rov sahifa pastdagi
+        // talaba qatorida noto'g'ri yozuvni tanlashga olib kelishi mumkin edi.
         $perStudentMap = [];
-        $perStudentRows = ExamSchedule::whereNotNull('student_hemis_id')
-            ->whereIn('group_hemis_id', $allGroupHemisIds)
-            ->get();
+        $perStudentQuery = ExamSchedule::whereNotNull('student_hemis_id')
+            ->whereIn('group_hemis_id', $allGroupHemisIds);
+        if (!empty($allSubjectIds)) {
+            $perStudentQuery->whereIn('subject_id', $allSubjectIds);
+        }
+        if (!empty($allSemesterCodes)) {
+            $perStudentQuery->whereIn('semester_code', $allSemesterCodes);
+        }
+        $perStudentRows = $perStudentQuery->get();
         foreach ($perStudentRows as $row) {
             $key = $row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code . '|' . $row->student_hemis_id;
             $perStudentMap[$key] = $row;
@@ -2213,15 +2231,23 @@ class AcademicScheduleController extends Controller
                 $schedule['group_hemis_id'] . '_' . $schedule['subject_id'] . '_' . $schedule['semester_code']
             );
 
+            // 2- va 3-urinish (resit) sanalari uchun "ertadan" cheklovi yumshatilgan —
+            // bugungi kunni ham belgilash mumkin (registrator ofisi shoshilinch
+            // hollarda o'sha kun davomida resit tashkil qilishi kerak bo'lishi mumkin).
+            $rowUrinishVal = (int) ($schedule['urinish'] ?? 1);
+            $rowMinDate = ($rowUrinishVal >= 2) ? $today : $minDate;
+
             if (!empty($schedule['oski_date'])) {
                 $alreadySaved = $existingRec && $existingRec->oski_date
                     && $existingRec->oski_date->format('Y-m-d') === $schedule['oski_date'];
                 if (!$alreadySaved) {
                     $oskiDate = \Carbon\Carbon::parse($schedule['oski_date']);
-                    if ($oskiDate->lt($minDate)) {
+                    if ($oskiDate->lt($rowMinDate)) {
                         return redirect()->back()->with('error', $isAdmin
                             ? 'OSKI sanasi o\'tgan kunni qo\'yib bo\'lmaydi.'
-                            : 'OSKI sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
+                            : ($rowUrinishVal >= 2
+                                ? 'OSKI sanasi o\'tgan kunni qo\'yib bo\'lmaydi (resit uchun bugun ham bo\'ladi).'
+                                : 'OSKI sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.'));
                     }
                 }
             }
@@ -2230,10 +2256,12 @@ class AcademicScheduleController extends Controller
                     && $existingRec->test_date->format('Y-m-d') === $schedule['test_date'];
                 if (!$alreadySaved) {
                     $testDate = \Carbon\Carbon::parse($schedule['test_date']);
-                    if ($testDate->lt($minDate)) {
+                    if ($testDate->lt($rowMinDate)) {
                         return redirect()->back()->with('error', $isAdmin
                             ? 'Test sanasi o\'tgan kunni qo\'yib bo\'lmaydi.'
-                            : 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
+                            : ($rowUrinishVal >= 2
+                                ? 'Test sanasi o\'tgan kunni qo\'yib bo\'lmaydi (resit uchun bugun ham bo\'ladi).'
+                                : 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.'));
                     }
                 }
             }

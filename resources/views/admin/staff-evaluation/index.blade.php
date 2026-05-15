@@ -353,11 +353,46 @@
                         </label>
                     </div>
                 </div>
+                {{-- Joylashuv: QR / matn (interaktiv tahrirlovchidan keladi) --}}
+                <input type="hidden" name="qr_size_mm" id="lay-qr-size" value="{{ $template['qr_size_mm'] }}">
+                <input type="hidden" name="qr_x_mm"    id="lay-qr-x"    value="{{ $template['qr_x_mm'] }}">
+                <input type="hidden" name="qr_y_mm"    id="lay-qr-y"    value="{{ $template['qr_y_mm'] }}">
+                <input type="hidden" name="text_x_mm"  id="lay-tx-x"    value="{{ $template['text_x_mm'] }}">
+                <input type="hidden" name="text_y_mm"  id="lay-tx-y"    value="{{ $template['text_y_mm'] }}">
+                <input type="hidden" name="text_w_mm"  id="lay-tx-w"    value="{{ $template['text_w_mm'] }}">
+                <input type="hidden" name="text_h_mm"  id="lay-tx-h"    value="{{ $template['text_h_mm'] }}">
+                <input type="hidden" name="text_size_mm" id="lay-tx-size" value="{{ $template['text_size_mm'] }}">
+
                 <div class="flex items-center gap-2 mt-3">
                     <button type="submit" class="btn-apply">Saqlash</button>
                     <button type="button" onclick="toggleTplEditor()" class="btn-secondary">Bekor qilish</button>
                 </div>
             </form>
+
+            {{-- Interaktiv joylashuv tahrirlovchisi --}}
+            <div id="layout-editor" class="mt-4 bg-white rounded-lg border p-4" style="display:none;">
+                <div class="flex items-center justify-between mb-3">
+                    <h4 class="text-sm font-bold text-slate-800">Joylashuv: QR va matnni sichqoncha bilan harakatlantiring va o'lchamini o'zgartiring</h4>
+                    <div class="text-xs text-slate-500">Burchakni sudrab o'lchamini, ichidan sudrab o'rnini o'zgartiring.</div>
+                </div>
+                <div id="lay-stage-wrap" style="display:flex; gap:18px; align-items:flex-start; flex-wrap:wrap;">
+                    <div id="lay-stage" style="position:relative; background:white; border:2px dashed #cbd5e1; box-shadow:0 1px 3px rgba(0,0,0,.06);"></div>
+                    <div style="display:flex; flex-direction:column; gap:12px; min-width:200px;">
+                        <div>
+                            <label class="text-xs text-slate-500 block mb-1">Matn shrifti (mm)</label>
+                            <input id="lay-text-size-input" type="range" min="1" max="6" step="0.1" value="{{ $template['text_size_mm'] }}" style="width:100%;">
+                            <div class="text-xs text-slate-700 mt-1"><span id="lay-text-size-label">{{ $template['text_size_mm'] }}</span> mm</div>
+                        </div>
+                        <div>
+                            <label class="text-xs text-slate-500 block mb-1">QR o'lchami (mm)</label>
+                            <input id="lay-qr-size-input" type="range" min="10" max="80" step="0.5" value="{{ $template['qr_size_mm'] }}" style="width:100%;">
+                            <div class="text-xs text-slate-700 mt-1"><span id="lay-qr-size-label">{{ $template['qr_size_mm'] }}</span> mm</div>
+                        </div>
+                        <button type="button" onclick="resetLayout()" class="btn-secondary text-xs" style="padding:6px 10px;">Standartga qaytarish</button>
+                        <div class="text-xs text-slate-400">Saqlash uchun yuqoridagi "Saqlash" tugmasini bosing.</div>
+                    </div>
+                </div>
+            </div>
 
             <div id="tpl-preview" class="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
                 <div class="bg-white rounded-lg border p-3">
@@ -417,15 +452,195 @@
             const f = document.getElementById('tpl-form');
             const p = document.getElementById('tpl-preview');
             const b = document.getElementById('tpl-toggle-btn');
+            const le = document.getElementById('layout-editor');
             if (f.style.display === 'none' || !f.style.display) {
                 f.style.display = '';
                 p.style.display = 'none';
                 b.style.display = 'none';
+                if (le) { le.style.display = ''; setupLayoutEditor(); }
             } else {
                 f.style.display = 'none';
                 p.style.display = '';
                 b.style.display = '';
+                if (le) le.style.display = 'none';
             }
+        }
+
+        // ─── Interaktiv joylashuv tahrirlovchisi (QR + matn drag/resize) ───
+        const PX_PER_MM = 4; // 1mm = 4px ekranda
+        let layoutState = {
+            wMm: parseFloat({{ $template['width_mm'] }}),
+            hMm: parseFloat({{ $template['height_mm'] }}),
+            qr:  { x: parseFloat({{ $template['qr_x_mm'] }}),    y: parseFloat({{ $template['qr_y_mm'] }}),    s: parseFloat({{ $template['qr_size_mm'] }}) },
+            tx:  { x: parseFloat({{ $template['text_x_mm'] }}),  y: parseFloat({{ $template['text_y_mm'] }}),  w: parseFloat({{ $template['text_w_mm'] }}), h: parseFloat({{ $template['text_h_mm'] }}), s: parseFloat({{ $template['text_size_mm'] }}) },
+        };
+
+        function syncFormFields() {
+            document.getElementById('lay-qr-size').value = layoutState.qr.s.toFixed(2);
+            document.getElementById('lay-qr-x').value    = layoutState.qr.x.toFixed(2);
+            document.getElementById('lay-qr-y').value    = layoutState.qr.y.toFixed(2);
+            document.getElementById('lay-tx-x').value    = layoutState.tx.x.toFixed(2);
+            document.getElementById('lay-tx-y').value    = layoutState.tx.y.toFixed(2);
+            document.getElementById('lay-tx-w').value    = layoutState.tx.w.toFixed(2);
+            document.getElementById('lay-tx-h').value    = layoutState.tx.h.toFixed(2);
+            document.getElementById('lay-tx-size').value = layoutState.tx.s.toFixed(2);
+        }
+
+        function setupLayoutEditor() {
+            const widthInput = document.querySelector('input[name="width_mm"]');
+            const heightInput = document.querySelector('input[name="height_mm"]');
+            const ctaInput = document.querySelector('textarea[name="description"]');
+            const stage = document.getElementById('lay-stage');
+            if (!stage) return;
+
+            function rebuild() {
+                layoutState.wMm = parseFloat(widthInput.value) || layoutState.wMm;
+                layoutState.hMm = parseFloat(heightInput.value) || layoutState.hMm;
+                stage.style.width = (layoutState.wMm * PX_PER_MM) + 'px';
+                stage.style.height = (layoutState.hMm * PX_PER_MM) + 'px';
+                stage.innerHTML = '';
+
+                // QR placeholder box
+                const qr = document.createElement('div');
+                qr.id = 'lay-qr-box';
+                qr.style.cssText = 'position:absolute; background:#0f172a; cursor:move; box-sizing:border-box; border:2px solid #4f46e5; display:flex; align-items:center; justify-content:center; color:#fff; font-size:12px; font-weight:600; user-select:none;';
+                qr.textContent = 'QR';
+                const qrHandle = document.createElement('div');
+                qrHandle.style.cssText = 'position:absolute; right:-6px; bottom:-6px; width:14px; height:14px; background:#4f46e5; border:2px solid #fff; border-radius:50%; cursor:nwse-resize;';
+                qrHandle.dataset.handle = '1';
+                qr.appendChild(qrHandle);
+                stage.appendChild(qr);
+
+                // Text box
+                const tx = document.createElement('div');
+                tx.id = 'lay-text-box';
+                tx.style.cssText = 'position:absolute; background:rgba(15,118,110,.10); border:2px solid #0f766e; cursor:move; display:flex; align-items:center; justify-content:center; text-align:center; color:#0f172a; font-weight:600; box-sizing:border-box; overflow:hidden; user-select:none; padding:2px;';
+                tx.textContent = (ctaInput && ctaInput.value.trim()) ? ctaInput.value : 'QR kodni skanerlang va xodim xizmatini xolis baholang';
+                const txHandle = document.createElement('div');
+                txHandle.style.cssText = 'position:absolute; right:-6px; bottom:-6px; width:14px; height:14px; background:#0f766e; border:2px solid #fff; border-radius:50%; cursor:nwse-resize;';
+                txHandle.dataset.handle = '1';
+                tx.appendChild(txHandle);
+                stage.appendChild(tx);
+
+                applyState();
+                bindDrag(qr, 'qr', false);
+                bindResize(qrHandle, 'qr');
+                bindDrag(tx, 'tx', true);
+                bindResize(txHandle, 'tx', true);
+            }
+
+            function applyState() {
+                const qr = document.getElementById('lay-qr-box');
+                const tx = document.getElementById('lay-text-box');
+                if (qr) {
+                    qr.style.left = (layoutState.qr.x * PX_PER_MM) + 'px';
+                    qr.style.top  = (layoutState.qr.y * PX_PER_MM) + 'px';
+                    qr.style.width  = (layoutState.qr.s * PX_PER_MM) + 'px';
+                    qr.style.height = (layoutState.qr.s * PX_PER_MM) + 'px';
+                }
+                if (tx) {
+                    tx.style.left   = (layoutState.tx.x * PX_PER_MM) + 'px';
+                    tx.style.top    = (layoutState.tx.y * PX_PER_MM) + 'px';
+                    tx.style.width  = (layoutState.tx.w * PX_PER_MM) + 'px';
+                    tx.style.height = (layoutState.tx.h * PX_PER_MM) + 'px';
+                    tx.style.fontSize = (layoutState.tx.s * PX_PER_MM) + 'px';
+                }
+                syncFormFields();
+            }
+
+            function bindDrag(el, key, hasWH) {
+                el.addEventListener('mousedown', (e) => {
+                    if (e.target.dataset.handle === '1') return; // resize handle
+                    e.preventDefault();
+                    const startX = e.clientX, startY = e.clientY;
+                    const sx = layoutState[key].x, sy = layoutState[key].y;
+                    function move(ev) {
+                        const dx = (ev.clientX - startX) / PX_PER_MM;
+                        const dy = (ev.clientY - startY) / PX_PER_MM;
+                        const wField = hasWH ? layoutState[key].w : layoutState[key].s;
+                        const hField = hasWH ? layoutState[key].h : layoutState[key].s;
+                        layoutState[key].x = Math.max(0, Math.min(layoutState.wMm - wField, sx + dx));
+                        layoutState[key].y = Math.max(0, Math.min(layoutState.hMm - hField, sy + dy));
+                        applyState();
+                    }
+                    function up() {
+                        document.removeEventListener('mousemove', move);
+                        document.removeEventListener('mouseup', up);
+                    }
+                    document.addEventListener('mousemove', move);
+                    document.addEventListener('mouseup', up);
+                });
+            }
+
+            function bindResize(handle, key, hasWH) {
+                handle.addEventListener('mousedown', (e) => {
+                    e.preventDefault(); e.stopPropagation();
+                    const startX = e.clientX, startY = e.clientY;
+                    const startW = hasWH ? layoutState[key].w : layoutState[key].s;
+                    const startH = hasWH ? layoutState[key].h : layoutState[key].s;
+                    function move(ev) {
+                        const dW = (ev.clientX - startX) / PX_PER_MM;
+                        const dH = (ev.clientY - startY) / PX_PER_MM;
+                        if (hasWH) {
+                            layoutState[key].w = Math.max(5,  Math.min(layoutState.wMm - layoutState[key].x, startW + dW));
+                            layoutState[key].h = Math.max(3,  Math.min(layoutState.hMm - layoutState[key].y, startH + dH));
+                        } else {
+                            // QR — kvadrat, max o'lchamga ko'ra
+                            const maxS = Math.min(layoutState.wMm - layoutState[key].x, layoutState.hMm - layoutState[key].y);
+                            const ns = Math.max(8, Math.min(maxS, startW + Math.max(dW, dH)));
+                            layoutState[key].s = ns;
+                            const qrSlider = document.getElementById('lay-qr-size-input');
+                            const qrLabel  = document.getElementById('lay-qr-size-label');
+                            if (qrSlider) qrSlider.value = ns;
+                            if (qrLabel) qrLabel.textContent = ns.toFixed(1);
+                        }
+                        applyState();
+                    }
+                    function up() {
+                        document.removeEventListener('mousemove', move);
+                        document.removeEventListener('mouseup', up);
+                    }
+                    document.addEventListener('mousemove', move);
+                    document.addEventListener('mouseup', up);
+                });
+            }
+
+            // Sliderlar
+            const qrSlider = document.getElementById('lay-qr-size-input');
+            const qrLabel  = document.getElementById('lay-qr-size-label');
+            if (qrSlider) qrSlider.addEventListener('input', () => {
+                layoutState.qr.s = parseFloat(qrSlider.value);
+                qrLabel.textContent = layoutState.qr.s.toFixed(1);
+                applyState();
+            });
+            const txSlider = document.getElementById('lay-text-size-input');
+            const txLabel  = document.getElementById('lay-text-size-label');
+            if (txSlider) txSlider.addEventListener('input', () => {
+                layoutState.tx.s = parseFloat(txSlider.value);
+                txLabel.textContent = layoutState.tx.s.toFixed(1);
+                applyState();
+            });
+
+            // O'lcham yoki matn o'zgarsa, qayta chiqaramiz
+            if (widthInput)  widthInput.addEventListener('input', rebuild);
+            if (heightInput) heightInput.addEventListener('input', rebuild);
+            if (ctaInput)    ctaInput.addEventListener('input', rebuild);
+
+            rebuild();
+        }
+
+        function resetLayout() {
+            const w = layoutState.wMm, h = layoutState.hMm;
+            const qrS = Math.max(15, Math.min(h - 4, w * 0.45));
+            layoutState.qr = { x: w - qrS - 2, y: Math.max(2, (h - qrS) / 2), s: qrS };
+            layoutState.tx = { x: 2, y: Math.max(2, (h - 14) / 2), w: Math.max(12, w - qrS - 5), h: Math.min(16, h - 6), s: 1.9 };
+            const qrSlider = document.getElementById('lay-qr-size-input');
+            const txSlider = document.getElementById('lay-text-size-input');
+            if (qrSlider) { qrSlider.value = qrS; document.getElementById('lay-qr-size-label').textContent = qrS.toFixed(1); }
+            if (txSlider) { txSlider.value = 1.9; document.getElementById('lay-text-size-label').textContent = '1.9'; }
+            // applyState chaqirilishi uchun setupLayoutEditor ichida bo'lishi kerak;
+            // shuning uchun document'dagi DOMni qayta yangilash uchun stage rebuild kerak.
+            setupLayoutEditor();
         }
         function downloadCard(elementId, filename) {
             const el = document.getElementById(elementId);

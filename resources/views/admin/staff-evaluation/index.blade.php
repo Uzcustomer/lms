@@ -22,8 +22,17 @@
                 <div class="filter-container">
                     <form method="GET" action="{{ route('admin.staff-evaluation.index') }}" class="flex items-end gap-2 flex-wrap">
                         <input type="hidden" name="tab" value="{{ request('tab', 'list') }}">
+                        <div class="filter-item" style="min-width:240px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kafedra</label>
+                            <select name="department" class="filter-input" style="min-width:240px;">
+                                <option value="">Barchasi</option>
+                                @foreach($departments as $dep)
+                                    <option value="{{ $dep }}" {{ request('department') === $dep ? 'selected' : '' }}>{{ $dep }}</option>
+                                @endforeach
+                            </select>
+                        </div>
                         <div class="filter-item" style="flex:1;min-width:240px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Qidirish</label>
+                            <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ism / familya bo'yicha qidirish</label>
                             <input type="text" name="search" value="{{ request('search') }}"
                                    placeholder="Ism, familya, kafedra..." class="filter-input">
                         </div>
@@ -31,7 +40,7 @@
                             <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
                             Qidirish
                         </button>
-                        @if(request('search'))
+                        @if(request('search') || request('department'))
                             <a href="{{ route('admin.staff-evaluation.index', ['tab' => request('tab', 'list')]) }}" class="btn-secondary">Tozalash</a>
                         @endif
 
@@ -70,11 +79,11 @@
 
                 {{-- Tablar --}}
                 <div class="tab-bar">
-                    <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search'), ['tab' => 'list'])) }}"
+                    <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search', 'department'), ['tab' => 'list'])) }}"
                        class="tab-link {{ $activeTab === 'list' ? 'tab-active' : '' }}">Ro'yxat</a>
-                    <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search'), ['tab' => 'qr'])) }}"
+                    <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search', 'department'), ['tab' => 'qr'])) }}"
                        class="tab-link {{ $activeTab === 'qr' ? 'tab-active' : '' }}">QR kodlar</a>
-                    <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search'), ['tab' => 'shablon'])) }}"
+                    <a href="{{ route('admin.staff-evaluation.index', array_merge(request()->only('search', 'department'), ['tab' => 'shablon'])) }}"
                        class="tab-link {{ $activeTab === 'shablon' ? 'tab-active' : '' }}">Shablon</a>
                 </div>
 

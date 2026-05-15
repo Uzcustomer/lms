@@ -128,12 +128,14 @@ class RetakeGroupService
             ]);
         }
 
-        // Tanlangan arizalarni yuklash va validatsiya — subject_name+semester_name match
-        $normSubject = mb_strtolower(trim((string) ($data['subject_name'] ?? '')));
+        // Tanlangan arizalarni yuklash va validatsiya.
+        // Eslatma: subject_name tekshiruvi olib tashlangan — turli fan nomli
+        // (lekin ma'nosi bir xil) arizalarni bitta guruhga birlashtirish uchun.
+        // Semestr esa bir xil bo'lishi shart — qayta o'qish guruhi bitta
+        // semestr doirasida bo'ladi.
         $normSemester = mb_strtolower(trim((string) ($data['semester_name'] ?? '')));
 
         $apps = RetakeApplication::whereIn('id', $applicationIds)
-            ->whereRaw('LOWER(TRIM(subject_name)) = ?', [$normSubject])
             ->whereRaw('LOWER(TRIM(semester_name)) = ?', [$normSemester])
             ->where('dean_status', 'approved')
             ->where('registrar_status', 'approved')
@@ -144,7 +146,7 @@ class RetakeGroupService
 
         if ($apps->count() !== count($applicationIds)) {
             throw ValidationException::withMessages([
-                'applications' => "Ba'zi arizalar guruhga qo'shilishga yaroqsiz holatda yoki fan/semestr nomi mos emas",
+                'applications' => "Ba'zi arizalar guruhga qo'shilishga yaroqsiz holatda yoki semestr mos emas",
             ]);
         }
 

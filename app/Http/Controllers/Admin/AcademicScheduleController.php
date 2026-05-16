@@ -137,6 +137,141 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * Talabalarga imtihon vaqti belgilanganligi haqida Telegram + DB
+     * notification yuboradi. saveTestTime, saveStudentTime, store() va
+     * autoTimeAll — barchasi shu yagona joydan foydalanadi.
+     *
+     * @param  \Illuminate\Support\Collection|iterable  $students  Notification
+     *         yuboriladigan Student modellari (telegram tasdiqlangan).
+     * @return int yuborilgan xabarlar soni
+     */
+    private function notifyStudentsExamTime(
+        $students,
+        string $subjectName,
+        string $ynType,           // 'OSKI' / 'Test'
+        string $ynLabel,          // 'OSKI' / 'Test (2-urinish)' ...
+        ?string $testDateFmt,     // 'd.m.Y' yoki null/empty
+        string $newTimeHM,        // 'H:i'
+        ?string $oldTime = null,  // oldingi vaqt (H:i:s yoki H:i); null = yangi
+        bool $ynSubmitted = false
+    ): int {
+        if (empty($students) || (is_object($students) && method_exists($students, 'isEmpty') && $students->isEmpty())) {
+            return 0;
+        }
+
+        $telegram = app(TelegramService::class);
+        $oldNorm = $oldTime ? substr((string) $oldTime, 0, 5) : null;
+        $timeChanged = $oldNorm !== null && $oldNorm !== $newTimeHM;
+
+        $warningText = !$ynSubmitted
+            ? "\n\n⚠️ <i>{$ynLabel} vaqti o'zgarishi mumkin, habardor bo'lib turing!</i>"
+            : '';
+        $warningPlain = !$ynSubmitted
+            ? " {$ynLabel} vaqti o'zgarishi mumkin, habardor bo'lib turing!"
+            : '';
+
+        if ($timeChanged) {
+            $message = "📋 <b>{$ynLabel} vaqti o'zgartirildi!</b>\n\n"
+                . "📌 Fan: <b>{$subjectName}</b>\n"
+                . ($testDateFmt ? "📅 Sana: <b>{$testDateFmt}</b>\n" : '')
+                . "⏰ Eski vaqt: <s>{$oldNorm}</s>\n"
+                . "⏰ Yangi vaqt: <b>{$newTimeHM}</b>"
+                . $warningText;
+            $notifTitle = "{$ynLabel} vaqti o'zgartirildi: {$subjectName}";
+            $notifMessage = "Fan: {$subjectName}"
+                . ($testDateFmt ? ", Sana: {$testDateFmt}" : '')
+                . ", Eski vaqt: {$oldNorm}, Yangi vaqt: {$newTimeHM}." . $warningPlain;
+        } else {
+            $message = "📋 <b>{$ynLabel} vaqti belgilandi!</b>\n\n"
+                . "📌 Fan: <b>{$subjectName}</b>\n"
+                . ($testDateFmt ? "📅 Sana: <b>{$testDateFmt}</b>\n" : '')
+                . "⏰ Vaqt: <b>{$newTimeHM}</b>"
+                . $warningText;
+            $notifTitle = "{$ynLabel} vaqti belgilandi: {$subjectName}";
+            $notifMessage = "Fan: {$subjectName}"
+                . ($testDateFmt ? ", Sana: {$testDateFmt}" : '')
+                . ", Vaqt: {$newTimeHM}." . $warningPlain;
+        }
+
+        $notificationRecords = [];
+        $sentCount = 0;
+        foreach ($students as $student) {
+            try {
+                if (!empty($student->telegram_chat_id)) {
+                    $telegram->sendToUser($student->telegram_chat_id, $message);
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('notifyStudentsExamTime: telegram failed', [
+                    'student_id' => $student->id ?? null,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+            $notificationRecords[] = [
+                'student_id' => $student->id,
+                'type' => 'exam_reminder',
+                'title' => $notifTitle,
+                'message' => $notifMessage,
+                'link' => '/student/exam-schedule',
+                'data' => json_encode([
+                    'subject' => $subjectName,
+                    'yn_type' => $ynType,
+                    'test_time' => $newTimeHM,
+                    'test_date' => $testDateFmt,
+                    'time_changed' => $timeChanged,
+                ]),
+                'read_at' => null,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+            $sentCount++;
+        }
+        if (!empty($notificationRecords)) {
+            StudentNotification::insert($notificationRecords);
+        }
+        return $sentCount;
+    }
+
+    /**
+     * Guruh notification ro'yxati: individual grafikka ega talabalarni
+     * (ushbu imtihon uchun shaxsiy date column'i to'lgan per-student
+     * yozuvga ega bo'lganlarini) chiqarib tashlaydi.
+     */
+    private function groupStudentsForExamNotify(
+        string $groupHemisId,
+        string $subjectId,
+        string $semesterCode,
+        string $dateColumn
+    ): \Illuminate\Database\Eloquent\Collection {
+        $excluded = ExamSchedule::where('group_hemis_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotNull('student_hemis_id')
+            ->whereNotNull($dateColumn)
+            ->pluck('student_hemis_id')
+            ->all();
+
+        $query = Student::where('group_id', $groupHemisId)
+            ->whereNotNull('telegram_chat_id')
+            ->whereNotNull('telegram_verified_at');
+        if (!empty($excluded)) {
+            $query->whereNotIn('hemis_id', $excluded);
+        }
+        return $query->get();
+    }
+
+    /**
+     * Bitta talabaning Telegram-tasdiqlangan yozuvini olib qaytaradi
+     * (notification yuborish uchun). Tasdiqlanmagan bo'lsa bo'sh collection.
+     */
+    private function singleStudentForNotify(string $studentHemisId): \Illuminate\Database\Eloquent\Collection
+    {
+        return Student::where('hemis_id', $studentHemisId)
+            ->whereNotNull('telegram_chat_id')
+            ->whereNotNull('telegram_verified_at')
+            ->get();
+    }
+
+    /**
      * Joriy foydalanuvchi rolini tekshiradi va Test markazi sahifasi
      * uchun ruxsat etilmagan rollarni 403 / redirect qiladi.
      */
@@ -2691,6 +2826,41 @@ class AcademicScheduleController extends Controller
                     );
                 }
 
+                // Per-student qatorda vaqt belgilanganda yoki o'zgartirilganda
+                // FAQAT shu talabaga Telegram + DB notification yuborish.
+                // Test markazi guruh vaqtini belgilashidan farqli o'laroq, individual
+                // grafikga ega talaba shu yerdan to'g'ridan-to'g'ri xabar oladi.
+                if ($studentHemisIdForRow) {
+                    $perStudentTimeFields = [
+                        ['yn' => 'OSKI', 'time_col' => $oskiTimeCol, 'date_col' => $oskiCol],
+                        ['yn' => 'Test', 'time_col' => $testTimeCol, 'date_col' => $testCol],
+                    ];
+                    $studentForNotify = null; // lazy load
+                    foreach ($perStudentTimeFields as $ftf) {
+                        if (!array_key_exists($ftf['time_col'], $auditDirty)) continue;
+                        $newT = $auditDirty[$ftf['time_col']];
+                        if (empty($newT)) continue; // vaqt o'chirilgan bo'lsa xabar yubormaymiz
+                        $oldT = $auditOriginal[$ftf['time_col']] ?? null;
+                        $dateVal = $record->{$ftf['date_col']};
+                        $lbl = $ftf['yn'];
+                        if ($rowUrinish > 1) {
+                            $lbl .= ' (' . $rowUrinish . '-urinish)';
+                        }
+                        if ($studentForNotify === null) {
+                            $studentForNotify = $this->singleStudentForNotify((string) $studentHemisIdForRow);
+                        }
+                        $this->notifyStudentsExamTime(
+                            $studentForNotify,
+                            $record->subject_name ?: 'Fan',
+                            $ftf['yn'],
+                            $lbl,
+                            $dateVal ? \Carbon\Carbon::parse($dateVal)->format('d.m.Y') : null,
+                            substr((string) $newT, 0, 5),
+                            $oldT
+                        );
+                    }
+                }
+
                 // Sana belgilangan bo'lsa — yn_submission(attempt=2/3) ni avtomatik yaratish
                 $this->autoOpenAttemptIfNeeded($record, 2, $resitOpened12a, $userId);
                 $this->autoOpenAttemptIfNeeded($record, 3, $resitOpened12b, $userId);
@@ -3749,6 +3919,43 @@ class AcademicScheduleController extends Controller
 
                     if (!empty($result['ok'])) {
                         $okCount++;
+                        // Avto-vaqt belgilangach Telegram + DB notification yuborish.
+                        // Per-student row (individual grafik) bo'lsa — faqat shu
+                        // talabaga. Guruh row bo'lsa — guruh talabalariga (individual
+                        // grafikdagilar chiqarib tashlanadi).
+                        try {
+                            $schedule->refresh();
+                            $assignedTime = $schedule->{$c['time']};
+                            if ($assignedTime) {
+                                $ynLabelLocal = $ynType === 'oski' ? 'OSKI' : 'Test';
+                                if ($attempt > 1) $ynLabelLocal .= ' (' . $attempt . '-urinish)';
+                                $dateVal = $schedule->{$c['date']};
+                                $dateFmt = $dateVal ? \Carbon\Carbon::parse($dateVal)->format('d.m.Y') : null;
+                                $timeHM = substr((string) $assignedTime, 0, 5);
+                                $studentsToNotify = !empty($schedule->student_hemis_id)
+                                    ? $this->singleStudentForNotify((string) $schedule->student_hemis_id)
+                                    : $this->groupStudentsForExamNotify(
+                                        (string) $schedule->group_hemis_id,
+                                        (string) $schedule->subject_id,
+                                        (string) $schedule->semester_code,
+                                        $c['date']
+                                    );
+                                $this->notifyStudentsExamTime(
+                                    $studentsToNotify,
+                                    $schedule->subject_name ?: 'Fan',
+                                    $ynType === 'oski' ? 'OSKI' : 'Test',
+                                    $ynLabelLocal,
+                                    $dateFmt,
+                                    $timeHM,
+                                    null  // bulk avto — odatda yangi (oldingi vaqt yo'q)
+                                );
+                            }
+                        } catch (\Throwable $ne) {
+                            \Illuminate\Support\Facades\Log::warning('autoTimeAll: notify failed', [
+                                'schedule_id' => $schedule->id,
+                                'error' => $ne->getMessage(),
+                            ]);
+                        }
                     } else {
                         $label = strtoupper($ynType) . ($attempt > 1 ? " {$attempt}-urinish" : '');
                         $failures[] = sprintf(
@@ -4100,71 +4307,32 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        // Shu guruhdagi Telegram tasdiqlangan talabalarga notification yuborish
-        $students = Student::where('group_id', $request->group_hemis_id)
-            ->whereNotNull('telegram_chat_id')
-            ->whereNotNull('telegram_verified_at')
-            ->get();
-
-        if ($students->isNotEmpty()) {
-            $telegram = app(TelegramService::class);
-            $subjectName = $examSchedule->subject_name ?? 'Fan';
-            $testDate = $relatedDate ? \Carbon\Carbon::parse($relatedDate)->format('d.m.Y') : '';
-            $timeFormatted = $request->test_time;
-
-            // Ogohlantirish faqat YN yuborilmagan holatlarda Telegram xabarga ham qo'shiladi
-            $warningText = !$ynSubmitted ? "\n\n⚠️ <i>{$ynLabel} vaqti o'zgarishi mumkin, habardor bo'lib turing!</i>" : '';
-            $warningPlain = !$ynSubmitted ? " {$ynLabel} vaqti o'zgarishi mumkin, habardor bo'lib turing!" : '';
-
-            if ($timeChanged) {
-                $oldTimeFormatted = $oldTime;
-                $message = "📋 <b>{$ynLabel} vaqti o'zgartirildi!</b>\n\n"
-                    . "📌 Fan: <b>{$subjectName}</b>\n"
-                    . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
-                    . "⏰ Eski vaqt: <s>{$oldTimeFormatted}</s>\n"
-                    . "⏰ Yangi vaqt: <b>{$timeFormatted}</b>"
-                    . $warningText;
-                $notifTitle = "{$ynLabel} vaqti o'zgartirildi: {$subjectName}";
-                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Eski vaqt: {$oldTimeFormatted}, Yangi vaqt: {$timeFormatted}." . $warningPlain;
-            } else {
-                $message = "📋 <b>{$ynLabel} vaqti belgilandi!</b>\n\n"
-                    . "📌 Fan: <b>{$subjectName}</b>\n"
-                    . ($testDate ? "📅 Sana: <b>{$testDate}</b>\n" : '')
-                    . "⏰ Vaqt: <b>{$timeFormatted}</b>"
-                    . $warningText;
-                $notifTitle = "{$ynLabel} vaqti belgilandi: {$subjectName}";
-                $notifMessage = "Fan: {$subjectName}" . ($testDate ? ", Sana: {$testDate}" : '') . ", Vaqt: {$timeFormatted}." . $warningPlain;
-            }
-
-            $notificationRecords = [];
-
-            foreach ($students as $student) {
-                $telegram->sendToUser($student->telegram_chat_id, $message);
-
-                $notificationRecords[] = [
-                    'student_id' => $student->id,
-                    'type' => 'exam_reminder',
-                    'title' => $notifTitle,
-                    'message' => $notifMessage,
-                    'link' => '/student/exam-schedule',
-                    'data' => json_encode(['subject' => $subjectName, 'yn_type' => $ynType, 'test_time' => $timeFormatted, 'test_date' => $testDate, 'time_changed' => $timeChanged]),
-                    'read_at' => null,
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-            }
-
-            if (!empty($notificationRecords)) {
-                StudentNotification::insert($notificationRecords);
-            }
-        }
+        // Notification yuborish — individual grafikka ega talabalarni
+        // chiqarib tashlaymiz (ular guruh vaqtidan emas, o'z vaqtidan
+        // foydalanadi va alohida xabar oladi).
+        $students = $this->groupStudentsForExamNotify(
+            (string) $request->group_hemis_id,
+            (string) $request->subject_id,
+            (string) $request->semester_code,
+            $dateColumn
+        );
+        $sentCount = $this->notifyStudentsExamTime(
+            $students,
+            $examSchedule->subject_name ?? 'Fan',
+            $ynType,
+            $ynLabel,
+            $relatedDate ? \Carbon\Carbon::parse($relatedDate)->format('d.m.Y') : null,
+            $request->test_time,
+            $oldTime,
+            $ynSubmitted
+        );
 
         $statusMsg = $timeChanged ? ($ynLabel . ' vaqti o\'zgartirildi') : ($ynLabel . ' vaqti saqlandi');
 
         return response()->json([
             'success' => true,
             'time_changed' => $timeChanged,
-            'message' => $statusMsg . ($students->count() > 0 ? " va {$students->count()} ta talabaga xabar yuborildi" : ''),
+            'message' => $statusMsg . ($sentCount > 0 ? " va {$sentCount} ta talabaga xabar yuborildi" : ''),
         ]);
     }
 
@@ -4295,6 +4463,8 @@ class AcademicScheduleController extends Controller
             return response()->json(['success' => false, 'message' => $tooSoonMsg], 422);
         }
 
+        $oldStudentTime = $perStudent?->{$timeColumn};
+
         $payload = [$timeColumn => $request->test_time];
         if (!$perStudent) {
             $payload = array_merge($payload, [
@@ -4320,10 +4490,28 @@ class AcademicScheduleController extends Controller
             $perStudent->update($payload);
         }
 
+        // Faqat shu talabaga notification (individual grafik — guruh xabari emas).
+        $ynLabel = $request->yn_type === 'OSKI' ? 'OSKI' : 'Test';
+        $attemptInt = (int) $request->attempt;
+        if ($attemptInt > 1) {
+            $ynLabel .= ' (' . $attemptInt . '-urinish)';
+        }
+        $sentCount = $this->notifyStudentsExamTime(
+            $this->singleStudentForNotify((string) $request->student_hemis_id),
+            $perStudent->subject_name ?: ($groupSchedule?->subject_name ?? 'Fan'),
+            $request->yn_type,
+            $ynLabel,
+            $resolvedDate ? \Carbon\Carbon::parse($resolvedDate)->format('d.m.Y') : null,
+            $request->test_time,
+            $oldStudentTime
+        );
+
         return response()->json([
             'success' => true,
-            'message' => 'Talaba uchun vaqt saqlandi.',
+            'message' => 'Talaba uchun vaqt saqlandi.'
+                . ($sentCount > 0 ? ' Telegramda xabar yuborildi.' : ''),
             'time' => $request->test_time,
+            'notified' => $sentCount,
         ]);
     }
 

@@ -6,6 +6,7 @@
 @endphp
 <div class="course-bar-card">
     <h3>Viloyatlar</h3>
+    @include('admin.students._edu_tabs', ['group' => 'province-' . $cId])
     <div class="stat-card-kpis" style="margin-bottom:12px;">
         <div>
             <span class="lbl" style="color:#3b82f6;">Erkaklar</span>
@@ -17,6 +18,6 @@
         </div>
     </div>
     <div class="course-bar-wrap" style="height:420px;">
-        <canvas id="{{ $cId }}"></canvas>
+        <canvas id="{{ $cId }}" data-edu-render="province" data-edu="all"></canvas>
     </div>
 </div>

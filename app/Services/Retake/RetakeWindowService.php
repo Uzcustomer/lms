@@ -12,6 +12,8 @@ class RetakeWindowService
 {
     /**
      * Talabaning yo'nalish va kursi uchun joriy faol oyna.
+     * Faqat ochiq sessiyadagi oynalar e'tiborga olinadi — yopilgan
+     * sessiyadagi oyna ko'rinmaydi.
      */
     public function activeWindowForStudent(Student $student): ?RetakeApplicationWindow
     {
@@ -20,8 +22,9 @@ class RetakeWindowService
         }
 
         return RetakeApplicationWindow::query()
-            ->forStudent((int) $student->specialty_id, $student->level_code)
+            ->forStudent((int) $student->specialty_id, $student->level_code, (string) ($student->department_id ?? ''), (string) ($student->specialty_name ?? ''))
             ->active()
+            ->whereHas('session', fn ($q) => $q->where('is_closed', false))
             ->orderByDesc('end_date')
             ->first();
     }
@@ -38,35 +41,47 @@ class RetakeWindowService
         }
 
         return RetakeApplicationWindow::query()
-            ->forStudent((int) $student->specialty_id, $student->level_code)
+            ->forStudent((int) $student->specialty_id, $student->level_code, (string) ($student->department_id ?? ''), (string) ($student->specialty_name ?? ''))
             ->orderByDesc('start_date')
             ->get();
     }
 
     /**
      * Yangi qabul oynasini ochish (O'quv bo'limi).
+     * `session_id` majburiy — har oyna albatta sessiyaga bog'langan bo'lishi kerak.
+     * Bir xil yo'nalish/kurs/semestr kombinatsiyasi har sessiyada bittadan bo'lishi mumkin
+     * (boshqa sessiyada — alohida oyna).
      */
     public function createWindow(array $data, Teacher $createdBy): RetakeApplicationWindow
     {
         $this->validateDateRange($data['start_date'], $data['end_date']);
 
-        $exists = RetakeApplicationWindow::query()
-            ->where('specialty_id', $data['specialty_id'])
-            ->where('level_code', $data['level_code'])
-            ->where('semester_code', $data['semester_code'])
-            ->exists();
-
-        if ($exists) {
+        if (empty($data['session_id'])) {
             throw ValidationException::withMessages([
-                'specialty_id' => 'Bu yo\'nalish, kurs va semestr uchun oyna allaqachon mavjud',
+                'session_id' => 'Sessiyani tanlash majburiy',
             ]);
         }
 
-        return RetakeApplicationWindow::create([
+        // Bir xil (sessiya, fakultet, yo'nalish, kurs, semestr) kombinatsiyasi
+        // takroriy oyna sifatida yaratilishi ruxsat etiladi (foydalanuvchi
+        // talabiga ko'ra). Avvalgi unique check va trashed-cleanup logikalari
+        // olib tashlandi.
+
+        $payload = [
             ...$data,
             'created_by_user_id' => $createdBy->id,
             'created_by_name' => $createdBy->full_name,
-        ]);
+        ];
+
+        // Migration hali qo'llanmagan bo'lsa yangi ustunlar yo'q — 500 oldini olish
+        foreach (['creation_batch_id', 'department_hemis_id'] as $col) {
+            if (isset($payload[$col]) &&
+                !\Illuminate\Support\Facades\Schema::hasColumn('retake_application_windows', $col)) {
+                unset($payload[$col]);
+            }
+        }
+
+        return RetakeApplicationWindow::create($payload);
     }
 
     /**

@@ -208,6 +208,10 @@
                                     Sababli check
                                 </x-dropdown-link>
                                 <div class="border-t border-gray-200 my-1"></div>
+                                <x-dropdown-link :href="route('teacher.vedomost.index')" :active="request()->routeIs('teacher.vedomost.*')">
+                                    Vedomost tekshirish
+                                </x-dropdown-link>
+                                <div class="border-t border-gray-200 my-1"></div>
                                 <x-dropdown-link :href="route('admin.contracts.index')">
                                     Kontraktlar
                                 </x-dropdown-link>
@@ -608,6 +612,9 @@
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('admin.reports.sababli-check')">
                     Sababli check
+                </x-responsive-nav-link>
+                <x-responsive-nav-link :href="route('teacher.vedomost.index')">
+                    Vedomost tekshirish
                 </x-responsive-nav-link>
                 <x-responsive-nav-link :href="route('admin.contracts.index')">
                     Kontraktlar

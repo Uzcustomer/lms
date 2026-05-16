@@ -70,9 +70,9 @@
                         <p class="text-xs text-gray-700 mt-1">
                             {{ $window->start_date->format('Y-m-d') }} → {{ $window->end_date->format('Y-m-d') }}
                             @if($window->isOpen())
-                                <span class="ml-2 text-green-700 font-medium">({{ $window->remaining_days }} {{ __('kun qoldi') }})</span>
-                            @elseif($window->status === 'upcoming')
-                                <span class="ml-2 text-yellow-700 font-medium">({{ __('Hali ochilmagan') }})</span>
+                                <span class="ml-2 text-green-700 font-medium">({{ __('Ariza qabul ochiq') }})</span>
+                            @elseif($window->status === 'study')
+                                <span class="ml-2 text-blue-700 font-medium">({{ __("O'qish davri — ariza qabul tugadi") }})</span>
                             @else
                                 <span class="ml-2 text-red-700 font-medium">({{ __('Muddat tugagan') }})</span>
                             @endif
@@ -317,6 +317,11 @@
                                         {{ $g->applications->count() }} {{ __("ta fan") }} ·
                                         {{ number_format($g->receipt_amount, 0, '.', ' ') }} UZS
                                     </p>
+                                    @if($g->window?->session?->name)
+                                        <p class="text-[11px] text-gray-500 mt-0.5">
+                                            {{ __("Sessiya") }}: <span class="font-medium">{{ $g->window->session->name }}</span>
+                                        </p>
+                                    @endif
                                 </div>
                                 <div class="flex flex-wrap gap-2">
                                     @if($g->docx_path)

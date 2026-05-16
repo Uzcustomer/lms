@@ -210,7 +210,9 @@ class StudentPhotoReportController extends Controller
             $needle = trim($request->search);
             $query->where(function ($q) use ($needle) {
                 $q->where('student_photos.full_name', 'like', "%{$needle}%")
-                  ->orWhere('student_photos.student_id_number', 'like', "%{$needle}%");
+                  ->orWhere('student_photos.student_id_number', 'like', "%{$needle}%")
+                  ->orWhere('students.full_name', 'like', "%{$needle}%")
+                  ->orWhere('students.student_id_number', 'like', "%{$needle}%");
             });
         }
         if ($has('department')) {
@@ -273,6 +275,30 @@ class StudentPhotoReportController extends Controller
                 $query->where('student_photos.quality_score', $op, (float) $request->quality_value);
             }
         }
+        if ($has('moodle_sync')) {
+            switch ($request->moodle_sync) {
+                case 'confirmed':
+                    $query->whereNotNull('student_photos.descriptor_confirmed_at');
+                    break;
+                case 'face_api_failed':
+                    $query->where('student_photos.moodle_sync_status', 'moodle_face_api_failed');
+                    break;
+                case 'failed':
+                    $query->where('student_photos.moodle_sync_status', 'failed');
+                    break;
+                case 'sent_unconfirmed':
+                    $query->whereNotNull('student_photos.moodle_synced_at')
+                          ->whereNull('student_photos.descriptor_confirmed_at')
+                          ->where(function ($q) {
+                              $q->whereNull('student_photos.moodle_sync_status')
+                                ->orWhereNotIn('student_photos.moodle_sync_status', ['failed', 'moodle_face_api_failed']);
+                          });
+                    break;
+                case 'never':
+                    $query->whereNull('student_photos.moodle_synced_at');
+                    break;
+            }
+        }
 
         return $query;
     }
@@ -308,7 +334,9 @@ class StudentPhotoReportController extends Controller
             $needle = trim($request->search);
             $query->where(function ($q) use ($needle) {
                 $q->where('student_photos.full_name', 'like', "%{$needle}%")
-                  ->orWhere('student_photos.student_id_number', 'like', "%{$needle}%");
+                  ->orWhere('student_photos.student_id_number', 'like', "%{$needle}%")
+                  ->orWhere('students.full_name', 'like', "%{$needle}%")
+                  ->orWhere('students.student_id_number', 'like', "%{$needle}%");
             });
         }
 
@@ -385,12 +413,82 @@ class StudentPhotoReportController extends Controller
         ]);
     }
 
+    public function bulkRejectByIds(Request $request)
+    {
+        $request->validate([
+            'idnumbers' => 'required|string',
+            'rejection_reason' => 'required|string|max:500',
+        ]);
+
+        $idnumbers = collect(preg_split('/[\s,;]+/', trim((string) $request->idnumbers)))
+            ->map(fn($v) => trim((string) $v))
+            ->filter(fn($v) => $v !== '')
+            ->unique()
+            ->values();
+
+        if ($idnumbers->isEmpty()) {
+            return response()->json([
+                'ok' => false,
+                'error' => 'Hech qanday ID topilmadi.',
+            ], 422);
+        }
+
+        $photos = StudentPhoto::query()
+            ->whereIn('student_id_number', $idnumbers)
+            ->where('status', StudentPhoto::STATUS_APPROVED)
+            ->get(['id', 'student_id_number']);
+
+        $matchedIds = $photos->pluck('student_id_number')->unique();
+        $missing = $idnumbers->diff($matchedIds)->values();
+
+        $user = Auth::user();
+        $reviewer = $user->name ?? $user->full_name ?? $user->short_name ?? 'Admin';
+
+        $updated = 0;
+        if ($photos->isNotEmpty()) {
+            $updated = StudentPhoto::query()
+                ->whereIn('id', $photos->pluck('id'))
+                ->update([
+                    'status' => StudentPhoto::STATUS_REJECTED,
+                    'reviewed_by_name' => $reviewer,
+                    'reviewed_at' => now(),
+                    'rejection_reason' => $request->rejection_reason,
+                    'updated_at' => now(),
+                ]);
+
+            Log::info('student-photos: bulk reject by ids', [
+                'requested' => $idnumbers->count(),
+                'matched' => $photos->count(),
+                'updated' => $updated,
+                'reviewer' => $reviewer,
+                'reason' => $request->rejection_reason,
+            ]);
+        }
+
+        return response()->json([
+            'ok' => true,
+            'requested' => $idnumbers->count(),
+            'matched' => $photos->count(),
+            'updated' => $updated,
+            'missing' => $missing->take(50)->values(),
+            'missing_count' => $missing->count(),
+        ]);
+    }
+
     public function approve(Request $request, $id)
     {
         $photo = StudentPhoto::findOrFail($id);
 
         if (!$photo->isPending()) {
             return $this->reviewResponse($request, false, 'Bu rasm allaqachon ko\'rib chiqilgan.');
+        }
+
+        // Qattiq sifat eshigi: tasdiqdan oldin sifat tekshiruvi o'tgan bo'lishi shart va
+        // yuz balandligi >= 35% bo'lishi kerak. Aks holda Moodle face-api uni topa olmaydi
+        // va rasm "Yuz topilmadi" xatosi bilan qaytadi.
+        $gateError = $this->qualityBlockReason($photo);
+        if ($gateError !== null) {
+            return $this->reviewResponse($request, false, $gateError);
         }
 
         $user = Auth::user();
@@ -401,9 +499,126 @@ class StudentPhotoReportController extends Controller
             'rejection_reason' => null,
         ]);
 
-        $this->notifyTutor($photo, true);
+        // ArcFace embedding'ni hisoblab DB ga va Python identify cache'iga qo'shish
+        $this->extractAndCacheEmbedding($photo);
+
+        // Tasdiqlangan rasmni Moodle ga yuborish (asinxron, queue orqali).
+        // Tyutorga xabar AYNI ZAHOTI yuborilmaydi — Moodle plagini descriptor
+        // ajratib, /api/moodle-descriptor-confirmed endpointiga callback
+        // yuborganda yuboriladi (StudentPhotoReportController::notifyTutor).
+        \App\Jobs\SendStudentPhotoToMoodle::dispatch($photo->id)->afterCommit();
 
         return $this->reviewResponse($request, true, 'Rasm tasdiqlandi.');
+    }
+
+    /**
+     * Tasdiqlashni bloklovchi sabab (yo'q bo'lsa null). Sifat tekshiruvi o'tmagan,
+     * yuz juda kichik (>= 35% balandlik talab qilinadi) yoki sifat servis
+     * bog'liq metrikalar yetishmasa — admin avval qayta yuklatishi yoki rad
+     * etishi kerak.
+     */
+    private function qualityBlockReason(StudentPhoto $photo): ?string
+    {
+        // Avval mavjud yozuvni baholaymiz (admin allaqachon `Sifat tekshiruvi`ni bosgan
+        // bo'lsa yoki tutor yuklash paytida tekshirilgan bo'lsa, natijalar DBda turibdi).
+        // MUHIM: face_height_ratio kesh ustuni ham uzatiladi — aks holda 35% gateri
+        // ikkinchi tasdiqlash urinishida ishlamay qoladi.
+        if ($photo->quality_checked_at !== null) {
+            $cachedRatio = $photo->face_height_ratio !== null
+                ? (float) $photo->face_height_ratio
+                : null;
+
+            // Agar oldingi tekshiruvda ratio saqlanmagan bo'lsa (eski yozuvlar uchun),
+            // tekshiruvni qaytadan o'tkazib, hamma narsani yangilaymiz — gate'ni
+            // chetlab o'tib bo'lmasligi shart.
+            if ($cachedRatio === null) {
+                return $this->runFreshGateCheck($photo);
+            }
+
+            $evaluated = \App\Services\PhotoQualityGate::evaluate([
+                'passed' => (bool) $photo->quality_passed,
+                'quality_score' => (float) $photo->quality_score,
+                'issues' => $photo->quality_issues ?: [],
+                'ok' => $photo->quality_ok ?: [],
+                'metrics' => ['face_height_ratio' => $cachedRatio],
+            ]);
+            if ($evaluated['passed']) {
+                return null;
+            }
+            return 'Tasdiqlash bloklandi: ' . ($evaluated['reason'] ?: 'rasm sifati standartlarga mos emas') .
+                '. Rasmni rad eting va tyutorga qayta yuklatish so\'rang.';
+        }
+
+        return $this->runFreshGateCheck($photo);
+    }
+
+    /**
+     * Sifat servisini chaqirib, natijani (face_height_ratio bilan birga) DBga yozadi
+     * va gate'dan o'tmasa sababini qaytaradi.
+     */
+    private function runFreshGateCheck(StudentPhoto $photo): ?string
+    {
+        // Inline base64 — face-compare servisning APP_URL'ga teskari fetch
+        // qilishini chetlab o'tamiz (konteyner tashqarisidan ochilmaydi).
+        $gate = \App\Services\PhotoQualityGate::checkPath(public_path($photo->photo_path));
+
+        if (!$gate['reachable']) {
+            return 'Tasdiqlashdan oldin "Sifat tekshiruvi" tugmasini bosing — AI servis vaqtinchalik javob bermadi.';
+        }
+
+        // Natijani DBga yozamiz, admin keyingi safar takror chaqirmasligi uchun.
+        // face_height_ratio HAR DOIM saqlanadi — gate'ni chetlab o'tib bo'lmaydi.
+        $photo->forceFill([
+            'quality_score' => $gate['quality_score'] ?? null,
+            'quality_passed' => (bool) ($gate['service_passed'] ?? false),
+            'quality_issues' => $gate['issues'] ?? [],
+            'quality_ok' => $gate['ok'] ?? [],
+            'quality_checked_at' => now(),
+            'face_height_ratio' => $gate['face_height_ratio'],
+        ])->saveQuietly();
+
+        if ($gate['passed']) {
+            return null;
+        }
+        return 'Tasdiqlash bloklandi: ' . ($gate['reason'] ?: 'rasm sifati standartlarga mos emas') .
+            '. Rasmni rad eting va tyutorga qayta yuklatish so\'rang.';
+    }
+
+    /**
+     * Tasdiqlangan rasm uchun ArcFace embedding'ni hisoblab DB ga yozish va
+     * Python identify cache'iga qo'shish.
+     */
+    private function extractAndCacheEmbedding(StudentPhoto $photo): void
+    {
+        try {
+            $url = asset($photo->photo_path);
+            $embedding = \App\Services\FaceIdService::extractEmbedding($url);
+            if (!$embedding) {
+                Log::warning('[FaceID] Approve hook: embedding hisoblanmadi', [
+                    'photo_id' => $photo->id,
+                    'student_id_number' => $photo->student_id_number,
+                ]);
+                return;
+            }
+
+            $photo->face_embedding = $embedding;
+            $photo->embedding_extracted_at = now();
+            $photo->saveQuietly();
+
+            // Python cache'ga qo'shish (replace=false — faqat ushbu yozuvni qo'shish/yangilash)
+            \App\Services\FaceIdService::refreshArcFaceCache([
+                [
+                    'student_id_number' => $photo->student_id_number,
+                    'full_name'         => $photo->full_name,
+                    'embedding'         => $embedding,
+                ],
+            ], false);
+        } catch (\Throwable $e) {
+            Log::error('[FaceID] Approve hook: embedding xato', [
+                'photo_id' => $photo->id,
+                'error'    => $e->getMessage(),
+            ]);
+        }
     }
 
     public function reject(Request $request, $id)
@@ -462,39 +677,11 @@ class StudentPhotoReportController extends Controller
 
     protected function notifyTutor(StudentPhoto $photo, bool $approved, ?string $reason = null): void
     {
-        $teacher = null;
-        if ($photo->uploaded_by_teacher_id) {
-            $teacher = Teacher::find($photo->uploaded_by_teacher_id);
-        }
-        if (!$teacher && $photo->uploaded_by) {
-            $teacher = Teacher::where('full_name', $photo->uploaded_by)->first();
-        }
-
-        if (!$teacher || empty($teacher->telegram_chat_id)) {
-            return;
-        }
-
+        $notifier = app(\App\Services\StudentPhotoNotifier::class);
         if ($approved) {
-            $text = "✅ Talaba rasmi qabul qilindi\n\n"
-                  . "Talaba: {$photo->full_name}\n"
-                  . "Guruh: " . ($photo->group_name ?: '—') . "\n\n"
-                  . "Admin tomonidan tasdiqlandi.";
+            $notifier->notifyApproved($photo);
         } else {
-            $text = "❌ Talaba rasmi rad etildi\n\n"
-                  . "Talaba: {$photo->full_name}\n"
-                  . "Guruh: " . ($photo->group_name ?: '—') . "\n"
-                  . "Sabab: " . ($reason ?: 'Standartlarga mos emas') . "\n\n"
-                  . "Iltimos, talaba rasmi standartlarga (tirsakdan yuqori, oq xalatda, oq fonda) mos ravishda qayta yuklang.";
-        }
-
-        try {
-            app(TelegramService::class)->sendAndGetId((string) $teacher->telegram_chat_id, $text);
-        } catch (\Throwable $e) {
-            Log::warning('Tyutorga telegram bildirish yuborilmadi', [
-                'photo_id' => $photo->id,
-                'teacher_id' => $teacher->id,
-                'error' => $e->getMessage(),
-            ]);
+            $notifier->notifyRejected($photo, $reason);
         }
     }
 
@@ -547,20 +734,28 @@ class StudentPhotoReportController extends Controller
             ], 422);
         }
 
-        // Face-compare service may run outside the Laravel container, so
-        // local filesystem paths don't translate. Send a URL instead and
-        // let the service download the image itself.
-        $uploadedUrl = asset($photo->photo_path);
+        // Yuklangan rasmni inline base64 yuboramiz (face-compare servis LMS
+        // konteyneridan tashqarida, public APP_URL undan ochilmaydi). Moodle
+        // profil rasmi (image1) URL ko'rinishida qoldiriladi — u tashqi
+        // serverda joylashgan va servis uni odatda muvaffaqiyatli yuklaydi.
+        $uploadedDataUri = \App\Services\PhotoQualityGate::fileToDataUri($uploadedFullPath);
+        if ($uploadedDataUri === null) {
+            return response()->json(['error' => 'Yuklangan rasm faylini o\'qib bo\'lmadi.'], 422);
+        }
 
         $serviceUrl = rtrim(config('services.face_compare.url'), '/');
-        $timeout = config('services.face_compare.timeout', 60);
+        // Gateway 504 oldini olish uchun Laravel timeout'ini nginx limitidan past
+        // saqlaymiz: AI servis 50s ichida javob bermasa, 503 JSON qaytariladi va
+        // bulk loop o'sha rasmda to'xtab qolmaydi.
+        $timeout = max(5, min(50, (int) config('services.face_compare.timeout', 50)));
 
         try {
             $response = Http::timeout($timeout)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->post($serviceUrl . '/compare', [
                     'image1' => $student->image,
-                    'image2' => $uploadedUrl,
+                    'image2' => $uploadedDataUri,
                 ]);
         } catch (\Throwable $e) {
             Log::error('Face compare service unreachable', [
@@ -613,13 +808,23 @@ class StudentPhotoReportController extends Controller
         }
 
         $serviceUrl = rtrim(config('services.face_compare.url'), '/');
-        $timeout = config('services.face_compare.timeout', 60);
+        // checkSimilarity bilan bir xil: 50s gateway limitidan past timeout.
+        $timeout = max(5, min(50, (int) config('services.face_compare.timeout', 50)));
+
+        // Rasmni inline (base64) yuboramiz — face-compare servis odatda LMS
+        // konteyneridan tashqarida turadi va public APP_URL hostdan ochilmaydi,
+        // shuning uchun URL berib yuborilsa servis "muz qotib" qolardi.
+        $dataUri = \App\Services\PhotoQualityGate::fileToDataUri($uploadedFullPath);
+        if ($dataUri === null) {
+            return response()->json(['error' => 'Rasm faylini o\'qib bo\'lmadi.'], 422);
+        }
 
         try {
             $response = Http::timeout($timeout)
+                ->connectTimeout(5)
                 ->acceptJson()
                 ->post($serviceUrl . '/quality-check', [
-                    'image' => asset($photo->photo_path),
+                    'image' => $dataUri,
                 ]);
         } catch (\Throwable $e) {
             Log::error('Quality service unreachable', [
@@ -640,11 +845,16 @@ class StudentPhotoReportController extends Controller
             ], 502);
         }
 
-        $data = $response->json();
+        $data = $response->json() ?: [];
         $score = (float) ($data['quality_score'] ?? 0);
         $passed = (bool) ($data['passed'] ?? false);
         $issues = $data['issues'] ?? [];
         $ok = $data['ok'] ?? [];
+
+        // Persist the derived face-height ratio so the approve() gate can
+        // re-evaluate the >=35% rule from cached fields without rerunning
+        // the AI service every click.
+        $evaluated = \App\Services\PhotoQualityGate::evaluate($data);
 
         $photo->update([
             'quality_score' => $score,
@@ -652,6 +862,7 @@ class StudentPhotoReportController extends Controller
             'quality_issues' => $issues,
             'quality_ok' => $ok,
             'quality_checked_at' => now(),
+            'face_height_ratio' => $evaluated['face_height_ratio'],
         ]);
 
         return response()->json([
@@ -660,6 +871,9 @@ class StudentPhotoReportController extends Controller
             'issues' => $issues,
             'ok' => $ok,
             'metrics' => $data['metrics'] ?? null,
+            'face_height_ratio' => $evaluated['face_height_ratio'],
+            'gate_passed' => $evaluated['passed'],
+            'gate_reason' => $evaluated['reason'],
             'checked_at' => $photo->quality_checked_at->toIso8601String(),
         ]);
     }

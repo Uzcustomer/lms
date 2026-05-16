@@ -180,8 +180,17 @@
                                             'level_name' => 'Kurs',
                                             'semester_name' => 'Semestr',
                                             'subject_name' => 'Fan',
+                                            'closing_form' => 'Yopilish shakli',
                                             'credit' => 'Kredit',
                                             'total_acload' => 'Jami yuklama',
+                                        ];
+                                        $closingFormBadges = [
+                                            'oski' => ['label' => 'OSKI', 'bg' => '#dbeafe', 'fg' => '#1d4ed8'],
+                                            'test' => ['label' => 'Test', 'bg' => '#dcfce7', 'fg' => '#15803d'],
+                                            'oski_test' => ['label' => 'OSKI + Test', 'bg' => '#ede9fe', 'fg' => '#6d28d9'],
+                                            'normativ' => ['label' => 'Normativ', 'bg' => '#fef3c7', 'fg' => '#a16207'],
+                                            'sinov' => ['label' => 'Sinov (test)', 'bg' => '#ffedd5', 'fg' => '#c2410c'],
+                                            'none' => ['label' => "Yo'q", 'bg' => '#f1f5f9', 'fg' => '#475569'],
                                         ];
                                     @endphp
                                     @foreach($columns as $column => $label)
@@ -236,6 +245,15 @@
                                         <td><span class="badge badge-violet">{{ $item->level_name ?? '-' }}</span></td>
                                         <td><span class="badge badge-teal">{{ $item->semester_name ?? '-' }}</span></td>
                                         <td><span class="text-cell text-subject">{{ $item->subject_name ?? '-' }}</span></td>
+                                        <td style="text-align: center;">
+                                            @php $cf = $item->closing_form ?? null; @endphp
+                                            @if($cf && isset($closingFormBadges[$cf]))
+                                                @php $b = $closingFormBadges[$cf]; @endphp
+                                                <span class="badge" style="background:{{ $b['bg'] }};color:{{ $b['fg'] }};font-size:11px;padding:2px 8px;border-radius:6px;">{{ $b['label'] }}</span>
+                                            @else
+                                                <a href="{{ route('admin.closing-form.index') }}" onclick="event.stopPropagation()" style="color:#94a3b8;font-size:11px;text-decoration:underline;" title="Yopilish shaklini belgilash">Belgilanmagan</a>
+                                            @endif
+                                        </td>
                                         <td style="text-align: center;"><span class="badge badge-blue">{{ $item->credit ?? '-' }}</span></td>
                                         <td style="text-align: center;"><span class="badge badge-amber">{{ $item->total_acload ?? '-' }}</span></td>
                                         @foreach($trainingTypes as $code => $name)

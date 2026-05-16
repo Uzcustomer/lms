@@ -1,4 +1,4 @@
-<nav class="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700">
+<nav class="bg-white dark:bg-gray-800 border-b border-gray-100 dark:border-gray-700" style="background-color: #ffffff;">
     <!-- Primary Navigation Menu -->
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between h-16">
@@ -48,6 +48,11 @@
                     @if(str_starts_with(strtolower($navStudent->group_name ?? ''), 'xd') || str_contains(strtolower($navStudent->citizenship_name ?? ''), 'orijiy'))
                     <x-nav-link :href="route('student.visa-info.index')" :active="request()->routeIs('student.visa-info.*')">
                         {{ __('Viza ma\'lumotlarim') }}
+                    </x-nav-link>
+                    @endif
+                    @if($navStudent && method_exists($navStudent, 'isDisabled') && $navStudent->isDisabled())
+                    <x-nav-link :href="route('student.disability-info.index')" :active="request()->routeIs('student.disability-info.*')">
+                        {{ __("Nogironlik ma'lumotlarim") }}
                     </x-nav-link>
                     @endif
                 </div>

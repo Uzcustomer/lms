@@ -46,37 +46,48 @@ class RetakeApplicationService
     ) {}
 
     /**
-     * Talabaning aktiv (pending + approved) arizalari soni.
-     * Faqat slot hisoblash uchun ishlatiladi.
+     * Talabaning aktiv (pending + approved) arizalari soni — JORIY OYNA ICHIDA.
+     * Slot har oyna uchun alohida hisoblanadi: yangi oyna ochilsa, slot reset bo'ladi.
      */
-    public function activeSubjectCount(int $studentHemisId): int
+    public function activeSubjectCount(int $studentHemisId, ?int $windowId = null): int
     {
-        return RetakeApplication::query()
+        $query = RetakeApplication::query()
             ->forStudent($studentHemisId)
-            ->active()
-            ->count();
+            ->active();
+
+        if ($windowId !== null) {
+            $query->whereHas('group', fn ($q) => $q->where('window_id', $windowId));
+        }
+
+        return $query->count();
     }
 
     /**
-     * Qancha slot bo'sh — talaba yana nechta fan tanlay oladi.
+     * Qancha slot bo'sh — talaba yana nechta fan tanlay oladi (joriy oynada).
      */
-    public function remainingSlots(int $studentHemisId): int
+    public function remainingSlots(int $studentHemisId, ?int $windowId = null): int
     {
-        return max(0, self::MAX_ACTIVE_SUBJECTS - $this->activeSubjectCount($studentHemisId));
+        return max(0, self::MAX_ACTIVE_SUBJECTS - $this->activeSubjectCount($studentHemisId, $windowId));
     }
 
     /**
      * Berilgan fan uchun talaba aktiv arizasi bor (pending yoki approved)?
-     * Bitta fanga bir vaqtda faqat bitta aktiv ariza bo'la oladi.
+     * Joriy oyna ichida bitta fanga faqat bitta aktiv ariza bo'la oladi.
+     * Boshqa (eski) oynadagi tasdiqlangan ariza yangi oynada blocklamaydi.
      */
-    public function hasActiveApplicationFor(int $studentHemisId, string $subjectId, string $semesterId): bool
+    public function hasActiveApplicationFor(int $studentHemisId, string $subjectId, string $semesterId, ?int $windowId = null): bool
     {
-        return RetakeApplication::query()
+        $query = RetakeApplication::query()
             ->forStudent($studentHemisId)
             ->where('subject_id', $subjectId)
             ->where('semester_id', $semesterId)
-            ->active()
-            ->exists();
+            ->active();
+
+        if ($windowId !== null) {
+            $query->whereHas('group', fn ($q) => $q->where('window_id', $windowId));
+        }
+
+        return $query->exists();
     }
 
     /**
@@ -106,11 +117,11 @@ class RetakeApplicationService
             ]);
         }
 
-        // 3. Slot tekshirish (aktiv + yangi <= 3)
-        $remaining = $this->remainingSlots((int) $student->hemis_id);
+        // 3. Slot tekshirish (joriy oyna ichida aktiv + yangi <= 3)
+        $remaining = $this->remainingSlots((int) $student->hemis_id, $window->id);
         if ($count > $remaining) {
             throw ValidationException::withMessages([
-                'subjects' => "Bo'sh slot yetarli emas. Aktiv arizalaringiz bilan birga jami 3 tadan oshmasligi kerak (qolgan: {$remaining})",
+                'subjects' => "Bo'sh slot yetarli emas. Joriy oynada aktiv arizalaringiz bilan birga jami 3 tadan oshmasligi kerak (qolgan: {$remaining})",
             ]);
         }
 
@@ -150,10 +161,10 @@ class RetakeApplicationService
                 ]);
             }
 
-            // Bu fan uchun aktiv ariza yo'qligini tekshirish
-            if ($this->hasActiveApplicationFor((int) $student->hemis_id, $debt->subject_id, $debt->semester_id)) {
+            // Bu fan uchun JORIY OYNADA aktiv ariza yo'qligini tekshirish
+            if ($this->hasActiveApplicationFor((int) $student->hemis_id, $debt->subject_id, $debt->semester_id, $window->id)) {
                 throw ValidationException::withMessages([
-                    'subjects' => "{$debt->subject_name} fani bo'yicha sizda aktiv ariza allaqachon mavjud",
+                    'subjects' => "{$debt->subject_name} fani bo'yicha siz joriy oynada ariza topshirgansiz",
                 ]);
             }
             $resolved[] = $debt;
@@ -207,10 +218,18 @@ class RetakeApplicationService
                 $loaded->docx_path = $this->documentService->generateDocx($loaded);
                 $loaded->save();
             } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('[Retake] DOCX generation failed', [
+                    'group_id' => $loaded->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
                 report($e);
             }
 
             $this->notificationService->notifyNewSubmission($loaded);
+
+            // Filtr keshini tozalaymiz (yangi fan/yangi ariza qo'shildi)
+            RetakeFilterCache::flushSubjects();
 
             return $loaded;
         });
@@ -288,23 +307,11 @@ class RetakeApplicationService
             $this->assertReason($reason);
         }
 
-        if ($decision === RetakeApplication::STATUS_APPROVED) {
-            // Joriy va mustaqil ta'lim baholari majburiy
-            $joriy = $details['previous_joriy_grade'] ?? null;
-            $mustaqil = $details['previous_mustaqil_grade'] ?? null;
-            if ($joriy === null || $joriy === '' || $mustaqil === null || $mustaqil === '') {
-                throw ValidationException::withMessages([
-                    'previous_grades' => 'Joriy va mustaqil ta\'lim baholarini to\'ldirish majburiy',
-                ]);
-            }
-            if ((float) $joriy < 0 || (float) $joriy > 100 || (float) $mustaqil < 0 || (float) $mustaqil > 100) {
-                throw ValidationException::withMessages([
-                    'previous_grades' => 'Baholar 0 dan 100 gacha bo\'lishi kerak',
-                ]);
-            }
-        }
+        // Eski Joriy / Mustaqil baho hamda OSKE/TEST/Sinov flaglar registrator
+        // tomonidan endi belgilanmaydi — O'quv bo'limi guruh yaratayotganda
+        // assessment turi tanlanadi.
 
-        return DB::transaction(function () use ($app, $actor, $decision, $reason, $details) {
+        return DB::transaction(function () use ($app, $actor, $decision, $reason) {
             $from = $app->registrar_status;
 
             $update = [
@@ -314,14 +321,6 @@ class RetakeApplicationService
                 'registrar_decision_at' => now(),
                 'registrar_reason' => $reason,
             ];
-
-            if ($decision === RetakeApplication::STATUS_APPROVED) {
-                $update['previous_joriy_grade'] = (float) $details['previous_joriy_grade'];
-                $update['previous_mustaqil_grade'] = (float) $details['previous_mustaqil_grade'];
-                $update['has_oske'] = !empty($details['has_oske']);
-                $update['has_test'] = !empty($details['has_test']);
-                $update['has_sinov'] = !empty($details['has_sinov']);
-            }
 
             $app->update($update);
 
@@ -376,6 +375,49 @@ class RetakeApplicationService
             $this->notificationService->notifyAcademicDecision($fresh);
 
             return $fresh;
+        });
+    }
+
+    /**
+     * O'quv bo'limi arizani guruh tashkil qilmasdan oldindan tasdiqlaydi.
+     * Bu — yangi 2-bosqichli oqim: avval QO': Arizalar sahifasidan tasdiq, so'ng
+     * QO': Guruhlar sahifasidan guruhlarga ajratish. Tasdiqlash paytida
+     * `academic_dept_status = approved` bo'ladi, lekin `final_status` hali
+     * `pending` qoladi va `retake_group_id` NULL — guruh keyinroq biriktiriladi.
+     */
+    public function academicPreApprove(RetakeApplication $app, Teacher $actor): RetakeApplication
+    {
+        if ($app->final_status !== RetakeApplication::STATUS_PENDING) {
+            throw ValidationException::withMessages([
+                'application' => 'Faqat kutilayotgan arizani tasdiqlash mumkin',
+            ]);
+        }
+
+        if (!$app->isDualApproved()) {
+            throw ValidationException::withMessages([
+                'application' => 'Avval dekan va registrator tasdiqlashi kerak',
+            ]);
+        }
+
+        if ($app->academic_dept_status === RetakeApplication::STATUS_APPROVED) {
+            return $app; // allaqachon pre-approved
+        }
+
+        return DB::transaction(function () use ($app, $actor) {
+            $app->update([
+                'academic_dept_status' => RetakeApplication::STATUS_APPROVED,
+                'academic_dept_user_id' => $actor->id,
+                'academic_dept_user_name' => $actor->full_name,
+                'academic_dept_decision_at' => now(),
+                'academic_dept_reason' => null,
+                // final_status va retake_group_id — guruh tashkil qilinganda yangilanadi
+            ]);
+
+            $this->log($app, RetakeApplicationLog::ACTION_ACADEMIC_APPROVED, $actor, null, [
+                'pre_approved' => true,
+            ]);
+
+            return $app->refresh();
         });
     }
 
@@ -474,8 +516,9 @@ class RetakeApplicationService
             ]);
         }
 
-        // 2. Allaqachon yuklanganmi?
-        if ($group->payment_uploaded_at !== null) {
+        // 2. Allaqachon yuklanganmi? — REJECTED holat istisno (qayta yuklash uchun)
+        if ($group->payment_uploaded_at !== null
+            && $group->payment_verification_status !== RetakeApplicationGroup::PAYMENT_VERIFICATION_REJECTED) {
             throw ValidationException::withMessages([
                 'payment' => 'To\'lov cheki allaqachon yuklangan',
             ]);

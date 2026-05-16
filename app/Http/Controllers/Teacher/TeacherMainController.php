@@ -178,7 +178,10 @@ class TeacherMainController extends Controller
         $allStudentIds = Student::whereIn('group_id', $groupHemisIds)->pluck('student_id_number')->toArray();
         $photoStats = [
             'has_photo' => \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'pending')->distinct('student_id_number')->count('student_id_number'),
-            'approved' => \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'approved')->distinct('student_id_number')->count('student_id_number'),
+            'approved' => \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)
+                ->where('status', 'approved')
+                ->whereNotNull('descriptor_confirmed_at')
+                ->distinct('student_id_number')->count('student_id_number'),
             'rejected' => \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'rejected')->distinct('student_id_number')->count('student_id_number'),
         ];
 
@@ -187,7 +190,10 @@ class TeacherMainController extends Controller
             $ids = \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'pending')->pluck('student_id_number')->unique()->toArray();
             $query->whereIn('student_id_number', $ids);
         } elseif ($photoFilter === 'approved') {
-            $ids = \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'approved')->pluck('student_id_number')->unique()->toArray();
+            $ids = \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)
+                ->where('status', 'approved')
+                ->whereNotNull('descriptor_confirmed_at')
+                ->pluck('student_id_number')->unique()->toArray();
             $query->whereIn('student_id_number', $ids);
         } elseif ($photoFilter === 'rejected') {
             $ids = \App\Models\StudentPhoto::whereIn('student_id_number', $allStudentIds)->where('status', 'rejected')->pluck('student_id_number')->unique()->toArray();
@@ -265,16 +271,8 @@ class TeacherMainController extends Controller
                 return back()->with('error', 'Rasm tanlanmadi');
             }
 
-            // Avvalgi rasmlarni o'chirish (DB + fayl)
-            $oldPhotos = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->get();
-            foreach ($oldPhotos as $old) {
-                $oldFile = public_path($old->photo_path);
-                if (file_exists($oldFile)) {
-                    @unlink($oldFile);
-                }
-                $old->delete();
-            }
-
+            // 1) Yangi faylni vaqtinchalik joyga yozib, sifat tekshiruvini AVVAL o'tkazamiz.
+            //    Tekshiruv o'tmasa: faylni o'chiramiz va eski rasm/yozuvga tegmaymiz.
             $safeName = preg_replace('/\s+/', '_', trim($student->full_name));
             $safeName = preg_replace('/[\/\\\\:*?"<>|\'`]/', '', $safeName);
             $fname = $student->student_id_number . '_' . $safeName . '_' . time() . '.jpg';
@@ -283,10 +281,35 @@ class TeacherMainController extends Controller
                 mkdir($dir, 0755, true);
             }
             $path = 'uploads/student-photos/' . date('Y-m') . '/' . $fname;
+            $absolute = $dir . '/' . $fname;
 
             $request->file('photo')->move($dir, $fname);
 
-            \App\Models\StudentPhoto::create([
+            // Inline base64 — face-compare servis LMS konteyneridan tashqarida
+            // bo'lsa, public APP_URL undan ochilmaydi va URL berilgan so'rov osilib qoladi.
+            $gate = \App\Services\PhotoQualityGate::checkPath($absolute);
+
+            if ($gate['reachable'] && !$gate['passed']) {
+                // Sifat o'tmadi — qattiq blok. Yuklangan faylni o'chiramiz.
+                @unlink($absolute);
+                return back()->with('error',
+                    'Rasm standartlarga mos emas: ' . ($gate['reason'] ?: 'sifat past') .
+                    '. Iltimos, talabani yaxshi yorug\'likda, yelkasidan yuqori qilib, oq xalatda va oq fonda qayta suratga oling.'
+                );
+            }
+
+            // 2) Sifat o'tdi (yoki AI servis vaqtinchalik javob bermayapti — eski xulq saqlanadi).
+            //    Endi eski rasmlarni o'chirib, yangisini DB ga yozamiz.
+            $oldPhotos = \App\Models\StudentPhoto::where('student_id_number', $student->student_id_number)->get();
+            foreach ($oldPhotos as $old) {
+                $oldFile = public_path($old->photo_path);
+                if (file_exists($oldFile) && realpath($oldFile) !== realpath($absolute)) {
+                    @unlink($oldFile);
+                }
+                $old->delete();
+            }
+
+            $payload = [
                 'student_id_number' => $student->student_id_number,
                 'full_name' => $student->full_name,
                 'group_name' => $student->group_name,
@@ -294,9 +317,24 @@ class TeacherMainController extends Controller
                 'uploaded_by' => $teacher->full_name ?? $teacher->short_name ?? 'Tyutor',
                 'uploaded_by_teacher_id' => $teacher->id,
                 'photo_path' => $path,
-            ]);
+            ];
 
-            return back()->with('success', 'Rasm yuklandi');
+            if ($gate['reachable']) {
+                $payload['quality_score'] = $gate['quality_score'] ?? null;
+                $payload['quality_passed'] = (bool) $gate['service_passed'];
+                $payload['quality_issues'] = $gate['issues'] ?? [];
+                $payload['quality_ok'] = $gate['ok'] ?? [];
+                $payload['quality_checked_at'] = now();
+                $payload['face_height_ratio'] = $gate['face_height_ratio'];
+            }
+
+            \App\Models\StudentPhoto::create($payload);
+
+            return back()->with('success',
+                $gate['reachable']
+                    ? 'Rasm yuklandi va sifat tekshiruvidan o\'tdi.'
+                    : 'Rasm yuklandi (sifat servisi javob bermadi, moderator tekshiradi).'
+            );
         } catch (\Throwable $e) {
             \Log::error('Student photo upload error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return back()->with('error', 'Xatolik: ' . $e->getMessage());

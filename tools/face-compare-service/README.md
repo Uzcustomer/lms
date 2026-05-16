@@ -1,7 +1,19 @@
 # Face Compare Service
 
 Local FastAPI microservice that compares two face images using DeepFace
-(ArcFace model). Used by the admin student-photo review page.
+(ArcFace model). Used by the admin student-photo review page and student
+Face ID login.
+
+## Endpoints
+
+- `GET  /health`        — service holati va cache hajmi
+- `POST /compare`       — ikki rasmni solishtirish (similarity %)
+- `POST /quality-check` — rasm sifatini tekshirish (markazga tushish, yorug'lik va h.k.)
+- `POST /embed`         — bitta rasm uchun ArcFace 512-dim embedding
+- `POST /identify`      — 1:N: kelgan rasmni cache'dagilarga solishtirib eng yaqinini topish
+- `POST /refresh-cache` — embedding'larni HTTP orqali cache'ga qo'shish/almashtirish
+- `POST /reload-from-db`— MySQL'dan cache'ni qayta yuklash
+- `GET  /cache-info`    — cache hajmi va sample IDlar
 
 ## Install
 
@@ -23,6 +35,31 @@ sudo cp face-compare.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now face-compare
 sudo systemctl status face-compare
+```
+
+## Yangilash (mavjud o'rnatilgan service uchun)
+
+Service ko'chirilgach yangi versiyani qo'llash:
+
+```bash
+sudo cp /var/www/lmsttatf/tools/face-compare-service/app.py /var/www/face-compare-service/
+sudo cp /var/www/lmsttatf/tools/face-compare-service/requirements.txt /var/www/face-compare-service/
+sudo chown www-data:www-data /var/www/face-compare-service/app.py /var/www/face-compare-service/requirements.txt
+
+# Yangi paketlarni o'rnatish (PyMySQL va python-dotenv)
+sudo -u www-data /var/www/face-compare-service/venv/bin/pip install -r /var/www/face-compare-service/requirements.txt
+
+# systemd service'ni yangilash
+sudo cp /var/www/lmsttatf/tools/face-compare-service/face-compare.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl restart face-compare
+sudo systemctl status face-compare
+sudo journalctl -u face-compare -n 50
+```
+
+Logda quyidagi qatorni izlang (DB cache yuklangani):
+```
+identify cache restored from DB: cache_size=3500
 ```
 
 The service binds to `127.0.0.1:5005` only. First startup downloads the

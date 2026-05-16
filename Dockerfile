@@ -36,6 +36,9 @@ RUN apt-get update && apt-get install -y \
     libgmp-dev \
     libicu-dev \
     sudo \
+    libreoffice-writer \
+    libreoffice-common \
+    fonts-liberation \
     && docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
     && docker-php-ext-install -j$(nproc) gd pdo_mysql mbstring exif pcntl bcmath gmp intl zip \
     && apt-get autoclean -y \
@@ -60,6 +63,8 @@ RUN echo "* * * * * cd /var/www/html && php artisan schedule:run >> /dev/null 2>
 RUN chmod 0644 /etc/cron.d/laravel-cron
 RUN crontab /etc/cron.d/laravel-cron
 
+COPY docker/php/www.conf /usr/local/etc/php-fpm.d/www.conf
+
 COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
@@ -68,6 +73,7 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 COPY . .
 RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+RUN npm install && npm run build
 
 RUN chown -R $USER:www-data storage && \
     chown -R $USER:www-data bootstrap/cache && \

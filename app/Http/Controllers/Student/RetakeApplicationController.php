@@ -49,12 +49,12 @@ class RetakeApplicationController extends Controller
         // Tarix (eski + joriy oynalar bo'yicha guruhlar)
         $history = RetakeApplicationGroup::query()
             ->where('student_hemis_id', $student->hemis_id)
-            ->with(['applications.retakeGroup.teacher', 'window'])
+            ->with(['applications.retakeGroup.teacher', 'window.session'])
             ->orderByDesc('created_at')
             ->limit(50)
             ->get();
 
-        $remainingSlots = $this->applicationService->remainingSlots((int) $student->hemis_id);
+        $remainingSlots = $this->applicationService->remainingSlots((int) $student->hemis_id, $window?->id);
         $creditPrice = RetakeSetting::creditPrice();
         $receiptMaxMb = RetakeSetting::receiptMaxMb();
 

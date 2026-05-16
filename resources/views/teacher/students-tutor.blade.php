@@ -245,8 +245,10 @@
                                             @if($studentPhoto->rejection_reason)
                                                 <div style="font-size:10px;color:#991b1b;max-width:140px;margin-top:2px;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ $studentPhoto->rejection_reason }}">{{ $studentPhoto->rejection_reason }}</div>
                                             @endif
-                                        @elseif($studentPhoto && $studentPhoto->status === 'approved')
+                                        @elseif($studentPhoto && $studentPhoto->status === 'approved' && $studentPhoto->descriptor_confirmed_at)
                                             <span class="student-status" style="background:#dcfce7;color:#166534;">Tasdiqlangan</span>
+                                        @elseif($studentPhoto && $studentPhoto->status === 'approved')
+                                            <span class="student-status" style="background:#e0e7ff;color:#3730a3;">Moodle'da ishlanmoqda</span>
                                         @elseif($studentPhoto)
                                             <span class="student-status" style="background:#dbeafe;color:#1e40af;">Rasm bor</span>
                                         @endif
@@ -290,8 +292,10 @@
                                         @if($studentPhoto->rejection_reason)
                                             <div style="font-size:10px;color:#991b1b;max-width:160px;margin-top:3px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ $studentPhoto->rejection_reason }}">{{ $studentPhoto->rejection_reason }}</div>
                                         @endif
-                                    @elseif(!$isNazoratchi && $studentPhoto && $studentPhoto->status === 'approved')
+                                    @elseif(!$isNazoratchi && $studentPhoto && $studentPhoto->status === 'approved' && $studentPhoto->descriptor_confirmed_at)
                                         <span class="student-status" style="background:#dcfce7;color:#166534;">Tasdiqlangan</span>
+                                    @elseif(!$isNazoratchi && $studentPhoto && $studentPhoto->status === 'approved')
+                                        <span class="student-status" style="background:#e0e7ff;color:#3730a3;">Moodle'da ishlanmoqda</span>
                                     @elseif(!$isNazoratchi && $studentPhoto)
                                         <span class="student-status" style="background:#dbeafe;color:#1e40af;">Rasm bor</span>
                                     @elseif($student->student_status_code == '11' || $student->student_status_name == 'Faol')
@@ -320,16 +324,48 @@
     </div>
 
     {{-- Fullscreen Camera --}}
+    {{--
+        Overlay 3:4 safe-zone va body-shape ko'rsatkichini birlashtiradi.
+        Video object-fit:cover bilan to'liq ekranga cho'ziladi, ammo snapPhoto()
+        markazdan 3:4 ga qirqadi — overlay aynan o'sha qirqilgan zonani ko'rsatadi.
+        Yuz balandligi ramka balandligining ~38% i — bu Moodle face-api'ning 35%
+        chegarasidan biroz yuqorida xavfsizlik marjasi sifatida tanlangan.
+    --}}
     <div id="camera-fullscreen" style="display:none;position:fixed;inset:0;z-index:99999;background:#000;">
         <video id="camera-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;"></video>
-        <svg viewBox="0 0 300 400" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none;">
-            <ellipse cx="150" cy="130" rx="52" ry="65" fill="none" stroke="#f59e0b" stroke-width="2.5" opacity="0.9"/>
-            <path d="M130 194 L130 210 Q130 220 118 225" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
-            <path d="M170 194 L170 210 Q170 220 182 225" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.7"/>
-            <path d="M118 225 Q80 240 45 270 Q25 290 15 330 L10 400" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.5"/>
-            <path d="M182 225 Q220 240 255 270 Q275 290 285 330 L290 400" fill="none" stroke="#f59e0b" stroke-width="2" opacity="0.5"/>
-            <text x="150" y="388" text-anchor="middle" font-size="12" fill="#fbbf24" font-weight="600">Bosh va yelkalarni moslang</text>
+        <svg viewBox="0 0 300 400" preserveAspectRatio="xMidYMid meet"
+             style="position:absolute;top:50%;left:50%;height:100%;aspect-ratio:3/4;transform:translate(-50%,-50%);pointer-events:none;">
+            {{-- Tashqarini xiraytirish (3:4 ramka tashqarisi) --}}
+            <defs>
+                <mask id="camMask">
+                    <rect width="300" height="400" fill="#fff"/>
+                    <rect x="0" y="0" width="300" height="400" fill="#000"/>
+                </mask>
+            </defs>
+            {{-- 3:4 safe-zone chegarasi --}}
+            <rect x="2" y="2" width="296" height="396" fill="none" stroke="#fff" stroke-width="2" stroke-dasharray="8 6" opacity="0.5" rx="4"/>
+            {{-- Bosh silueti — markazda, ramka tepasidan 12% pastda. Yuz balandligi ~150px / 400px = 37.5% --}}
+            <ellipse cx="150" cy="135" rx="56" ry="72" fill="none" stroke="#22c55e" stroke-width="3" opacity="0.95"/>
+            {{-- Bo'yin --}}
+            <path d="M126 200 Q126 215 118 224" fill="none" stroke="#22c55e" stroke-width="2.5" opacity="0.85"/>
+            <path d="M174 200 Q174 215 182 224" fill="none" stroke="#22c55e" stroke-width="2.5" opacity="0.85"/>
+            {{-- Yelkalar (kengroq, oq xalat siluetiga mos) --}}
+            <path d="M118 224 Q72 238 38 268 Q18 290 8 330 L0 400" fill="none" stroke="#22c55e" stroke-width="2.5" opacity="0.7"/>
+            <path d="M182 224 Q228 238 262 268 Q282 290 292 330 L300 400" fill="none" stroke="#22c55e" stroke-width="2.5" opacity="0.7"/>
+            {{-- Markaz nuqtasi (yuz markazi) --}}
+            <circle cx="150" cy="135" r="2" fill="#fbbf24" opacity="0.9"/>
+            {{-- Tepa marjin yo'l-yo'rig'i — bosh ustida 12% bo'sh joy bo'lsin --}}
+            <line x1="150" y1="2" x2="150" y2="62" stroke="#fbbf24" stroke-width="1" stroke-dasharray="3 4" opacity="0.6"/>
+            <text x="155" y="35" font-size="9" fill="#fbbf24" opacity="0.85">~10% bo'sh</text>
         </svg>
+        {{-- Yo'l-yo'riq paneli --}}
+        <div style="position:absolute;top:16px;left:16px;right:16px;padding:10px 12px;background:rgba(0,0,0,0.55);border-radius:10px;backdrop-filter:blur(6px);">
+            <div style="font-size:13px;font-weight:700;color:#fff;margin-bottom:4px;">Talabani yashil siluetga moslang</div>
+            <div style="font-size:11px;color:#cbd5e1;line-height:1.4;">
+                Bosh — markazda, yelkalargacha ko'rinib tursin.<br>
+                Oq xalat, oq fon, yorug'lik yuzga teng tushsin.
+            </div>
+        </div>
         <div style="position:absolute;bottom:0;left:0;right:0;padding:20px;display:flex;align-items:center;justify-content:center;gap:16px;background:linear-gradient(transparent,rgba(0,0,0,0.7));">
             <button type="button" onclick="closeCameraFullscreen()" style="width:50px;height:50px;border-radius:50%;background:rgba(255,255,255,0.2);border:2px solid rgba(255,255,255,0.5);color:#fff;font-size:20px;cursor:pointer;backdrop-filter:blur(4px);">&times;</button>
             <button type="button" onclick="snapPhoto()" style="width:72px;height:72px;border-radius:50%;background:#fff;border:4px solid rgba(255,255,255,0.5);cursor:pointer;box-shadow:0 4px 20px rgba(0,0,0,0.3);">
@@ -352,13 +388,42 @@
             </div>
             <div style="padding:20px;text-align:center;">
                 <div id="modal-photo-frame" style="width:100%;min-height:400px;max-height:70vh;border-radius:12px;border:2px dashed #cbd5e1;display:flex;align-items:center;justify-content:center;overflow:hidden;background:#1e293b;position:relative;">
-                    {{-- Placeholder --}}
-                    <div id="modal-no-photo" style="color:#94a3b8;font-size:13px;z-index:1;">
-                        <svg style="width:48px;height:48px;margin:0 auto 8px;color:#475569;" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6.827 6.175A2.31 2.31 0 015.186 7.23c-.38.054-.757.112-1.134.175C2.999 7.58 2.25 8.507 2.25 9.574V18a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9.574c0-1.067-.75-1.994-1.802-2.169a47.865 47.865 0 00-1.134-.175 2.31 2.31 0 01-1.64-1.055l-.822-1.316a2.192 2.192 0 00-1.736-1.039 48.774 48.774 0 00-5.232 0 2.192 2.192 0 00-1.736 1.039l-.821 1.316z"/><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 12.75a4.5 4.5 0 11-9 0 4.5 4.5 0 019 0z"/></svg>
-                        Rasm yuklanmagan
+                    {{-- Placeholder + body-shape yo'l-yo'rig'i (rasm yo'q paytda) --}}
+                    <div id="modal-no-photo" style="color:#94a3b8;font-size:13px;z-index:2;text-align:center;padding:20px;">
+                        <svg style="width:160px;height:213px;margin:0 auto 12px;display:block;" viewBox="0 0 300 400">
+                            <rect x="2" y="2" width="296" height="396" fill="none" stroke="#475569" stroke-width="2" stroke-dasharray="8 6" rx="4"/>
+                            <ellipse cx="150" cy="135" rx="56" ry="72" fill="none" stroke="#64748b" stroke-width="3"/>
+                            <path d="M126 200 Q126 215 118 224" fill="none" stroke="#64748b" stroke-width="2.5"/>
+                            <path d="M174 200 Q174 215 182 224" fill="none" stroke="#64748b" stroke-width="2.5"/>
+                            <path d="M118 224 Q72 238 38 268 Q18 290 8 330 L0 400" fill="none" stroke="#64748b" stroke-width="2.5" opacity="0.7"/>
+                            <path d="M182 224 Q228 238 262 268 Q282 290 292 330 L300 400" fill="none" stroke="#64748b" stroke-width="2.5" opacity="0.7"/>
+                        </svg>
+                        Rasm yuklanmagan<br>
+                        <span style="font-size:11px;color:#64748b;">Talabani yashil siluetga mos qilib oling</span>
                     </div>
                     {{-- Tushirilgan rasm --}}
                     <img id="modal-photo-img" style="max-width:100%;max-height:70vh;width:auto;height:auto;object-fit:contain;display:none;z-index:1;" alt="">
+                    {{-- Preview overlay — rasm tanlangandan keyin tutor sifatni ko'z bilan tekshiradi --}}
+                    <svg id="modal-photo-overlay" viewBox="0 0 300 400" preserveAspectRatio="xMidYMid meet"
+                         style="display:none;position:absolute;top:50%;left:50%;height:100%;aspect-ratio:3/4;transform:translate(-50%,-50%);pointer-events:none;z-index:3;">
+                        <ellipse cx="150" cy="135" rx="56" ry="72" fill="none" stroke="#22c55e" stroke-width="2.5" opacity="0.85" stroke-dasharray="6 4"/>
+                        <path d="M118 224 Q72 238 38 268 Q18 290 8 330 L0 400" fill="none" stroke="#22c55e" stroke-width="2" opacity="0.6" stroke-dasharray="6 4"/>
+                        <path d="M182 224 Q228 238 262 268 Q282 290 292 330 L300 400" fill="none" stroke="#22c55e" stroke-width="2" opacity="0.6" stroke-dasharray="6 4"/>
+                    </svg>
+                </div>
+                {{-- Sifat talablari paneli --}}
+                <div id="photo-standards-panel" style="margin-top:12px;padding:10px 12px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;text-align:left;">
+                    <div style="font-size:12px;font-weight:700;color:#15803d;margin-bottom:6px;display:flex;align-items:center;gap:6px;">
+                        <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Standartlar
+                    </div>
+                    <ul style="font-size:11.5px;color:#166534;line-height:1.55;margin:0;padding-left:18px;">
+                        <li>Bosh markazda, yelkalargacha ko'rinib tursin (yashil silueta)</li>
+                        <li>Yuz kadr balandligining kamida 35% ini egallashi shart</li>
+                        <li>Oq tibbiy xalat va oq fon</li>
+                        <li>Yorug'lik yuzga teng tushsin (ko'lankalar yo'q)</li>
+                        <li>Ko'zoynak/niqob/qalpoqcha bo'lmasin, ifodaning betarafligi</li>
+                    </ul>
                 </div>
                 <div id="modal-rejection-banner" style="display:none;margin-top:10px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:10px;text-align:left;">
                     <div style="font-size:12px;font-weight:700;color:#dc2626;margin-bottom:3px;">Rad etildi</div>
@@ -454,6 +519,7 @@
                         document.getElementById('photo-file-btn').style.display = 'none';
                         document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
                         document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
+                        document.getElementById('modal-photo-overlay').style.display = 'block';
                     }, 'image/jpeg', 0.92);
                 };
                 tempImg.src = e.target.result;
@@ -523,6 +589,7 @@
                 document.getElementById('photo-file-btn').style.display = 'none';
                 document.getElementById('modal-photo-frame').style.borderStyle = 'solid';
                 document.getElementById('modal-photo-frame').style.borderColor = '#10b981';
+                document.getElementById('modal-photo-overlay').style.display = 'block';
             }, 'image/jpeg', 0.92);
         }
 
@@ -557,12 +624,14 @@
                 rejBanner.style.display = 'none';
             }
 
+            var overlay = document.getElementById('modal-photo-overlay');
             if (photoUrl) {
                 img.src = photoUrl;
                 img.style.display = 'block';
                 noPhoto.style.display = 'none';
                 frame.style.borderStyle = 'solid';
                 frame.style.borderColor = '#3b82f6';
+                if (overlay) overlay.style.display = 'block';
                 document.getElementById('photo-btn-text').textContent = 'Qayta tushirish';
                 document.getElementById('photo-capture-btn').style.display = isPhotoFilterView ? 'none' : 'flex';
                 document.getElementById('photo-file-btn').style.display = isPhotoFilterView ? 'none' : 'flex';
@@ -572,6 +641,7 @@
                 noPhoto.style.display = 'block';
                 frame.style.borderStyle = 'dashed';
                 frame.style.borderColor = '#cbd5e1';
+                if (overlay) overlay.style.display = 'none';
                 document.getElementById('photo-btn-text').textContent = 'Kamerani ochish';
                 document.getElementById('photo-capture-btn').style.display = isPhotoFilterView ? 'none' : 'flex';
                 document.getElementById('photo-file-btn').style.display = isPhotoFilterView ? 'none' : 'flex';

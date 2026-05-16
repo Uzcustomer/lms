@@ -17,6 +17,7 @@ class RetakeApplication extends Model
     public const REJECTED_BY_REGISTRAR = 'registrar';
     public const REJECTED_BY_ACADEMIC_DEPT = 'academic_dept';
     public const REJECTED_BY_SYSTEM_HEMIS = 'system_hemis';
+    public const REJECTED_BY_WINDOW_CLOSED = 'window_closed';
 
     protected $fillable = [
         'group_id',
@@ -32,6 +33,13 @@ class RetakeApplication extends Model
         'has_oske',
         'has_test',
         'has_sinov',
+        'oske_score',
+        'test_score',
+        'joriy_score',
+        'joriy_graded_by_name',
+        'joriy_graded_at',
+        'final_grade_value',
+        'final_grade_set_at',
 
         'dean_status', 'dean_user_id', 'dean_user_name', 'dean_decision_at', 'dean_reason',
         'registrar_status', 'registrar_user_id', 'registrar_user_name', 'registrar_decision_at', 'registrar_reason',
@@ -49,6 +57,12 @@ class RetakeApplication extends Model
         'has_oske' => 'boolean',
         'has_test' => 'boolean',
         'has_sinov' => 'boolean',
+        'oske_score' => 'decimal:2',
+        'test_score' => 'decimal:2',
+        'joriy_score' => 'decimal:2',
+        'joriy_graded_at' => 'datetime',
+        'final_grade_value' => 'decimal:2',
+        'final_grade_set_at' => 'datetime',
         'dean_decision_at' => 'datetime',
         'registrar_decision_at' => 'datetime',
         'academic_dept_decision_at' => 'datetime',
@@ -99,12 +113,22 @@ class RetakeApplication extends Model
                 self::REJECTED_BY_REGISTRAR => 'Registrator',
                 self::REJECTED_BY_ACADEMIC_DEPT => 'O\'quv bo\'limi',
                 self::REJECTED_BY_SYSTEM_HEMIS => 'Tizim (HEMIS)',
+                self::REJECTED_BY_WINDOW_CLOSED => "Oyna yopildi (muddat o'tdi)",
                 default => 'Tizim',
             };
             return "Rad etilgan: {$whoLabel}";
         }
 
         // pending — qaysi bosqichda ekanligi
+
+        // O'quv bo'limi oldindan tasdiqlagan, ammo hali guruhga biriktirilmagan
+        // (final_status hali pending). Bu yangi 2-bosqichli oqimning oraliq holati.
+        if ($this->academic_dept_status === self::STATUS_APPROVED
+            && $this->dean_status === self::STATUS_APPROVED
+            && $this->registrar_status === self::STATUS_APPROVED) {
+            return 'O\'quv bo\'limi tasdiqladi — guruhga biriktirilmoqda';
+        }
+
         if ($this->academic_dept_status === self::STATUS_PENDING
             && $this->dean_status === self::STATUS_APPROVED
             && $this->registrar_status === self::STATUS_APPROVED) {

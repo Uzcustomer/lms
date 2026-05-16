@@ -95,6 +95,7 @@ class KtrController extends Controller
             'cs.total_acload',
             'cs.credit',
             'cs.subject_details',
+            'cs.closing_form',
             'c.education_type_name',
             'f.name as faculty_name',
             'sp.name as specialty_name',
@@ -225,6 +226,7 @@ class KtrController extends Controller
             'subject_name' => 'cs.subject_name',
             'total_acload' => 'cs.total_acload',
             'credit' => 'cs.credit',
+            'closing_form' => 'cs.closing_form',
         ];
 
         $orderByColumn = $sortMap[$sortColumn] ?? 'f.name';

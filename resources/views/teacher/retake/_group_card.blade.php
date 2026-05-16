@@ -4,9 +4,16 @@
     $otherStatusField = $role === 'dean' ? 'registrar_status' : 'dean_status';
     $otherLabel = $role === 'dean' ? __('Registrator') : __('Dekan');
     $canBulkDelete = $canBulkDelete ?? false;
+    $canBulkDecide = $canBulkDecide ?? false;
+    $rowNumber = $rowNumber ?? null;
+
+    // Bu guruh kutilayotgan holatda bormi? (rang/tartib uchun)
+    $hasPending = $group->applications->contains(function ($app) use ($myStatusField) {
+        return $app->{$myStatusField} === 'pending' && $app->final_status === 'pending';
+    });
 @endphp
 
-<div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+<div class="bg-white rounded-xl shadow-sm border {{ $hasPending ? 'border-amber-200 ring-1 ring-amber-100' : 'border-gray-100' }} overflow-hidden"
      x-data="{ openReject: null, openApprove: null, openVerifyReject: false }">
     <div class="p-4 border-b border-gray-100 flex items-start justify-between flex-wrap gap-3">
         @if($canBulkDelete)
@@ -21,6 +28,11 @@
                         }"
                        class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
             </label>
+        @endif
+        @if($rowNumber !== null)
+            <div class="flex-shrink-0 w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm {{ $hasPending ? 'bg-amber-100 text-amber-800' : 'bg-blue-50 text-blue-700' }}">
+                {{ $rowNumber }}
+            </div>
         @endif
         <div class="flex-1">
             <p class="text-sm font-semibold text-gray-900">
@@ -43,7 +55,7 @@
         <div class="flex gap-2">
             <a href="{{ route('admin.retake.receipt', $group->id) }}"
                target="_blank"
-               class="text-xs text-blue-600 hover:underline">{{ __('Kvitansiya') }}</a>
+               class="text-xs text-blue-600 hover:underline">{{ __("Tushuntirish xati") }}</a>
         </div>
     </div>
 
@@ -59,8 +71,25 @@
     {{-- Fanlar --}}
     <div class="divide-y divide-gray-100">
         @foreach($group->applications as $app)
+            @php
+                $myAppStatus = $app->{$myStatusField};
+                $isPendingForMe = $myAppStatus === 'pending' && $app->final_status === 'pending';
+            @endphp
             <div class="p-4">
                 <div class="flex items-start justify-between flex-wrap gap-3">
+                    @if($canBulkDecide && $isPendingForMe)
+                        <label class="flex items-center pt-1 cursor-pointer">
+                            <input type="checkbox"
+                                   :checked="bulkApps.includes({{ $app->id }})"
+                                   @change="if ($event.target.checked) {
+                                        if (!bulkApps.includes({{ $app->id }})) bulkApps.push({{ $app->id }});
+                                   } else {
+                                        const idx = bulkApps.indexOf({{ $app->id }});
+                                        if (idx > -1) bulkApps.splice(idx, 1);
+                                   }"
+                                   class="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+                        </label>
+                    @endif
                     <div class="flex-1 min-w-[200px]">
                         <p class="text-sm font-medium text-gray-900">
                             {{ $app->subject_name }}
@@ -138,15 +167,10 @@
                         @php $myStatus = $app->{$myStatusField}; @endphp
                         @if($myStatus === 'pending' && $app->final_status === 'pending')
                             <div class="flex gap-2">
-                                @if($role === 'registrar')
-                                    {{-- Registrator: grade va OSKE/TEST modali orqali tasdiqlaydi --}}
-                                    <button type="button"
-                                            @click="openApprove = {{ $app->id }}"
-                                            class="px-3 py-1.5 text-xs font-medium bg-green-600 text-white rounded-md hover:bg-green-700">
-                                        {{ __('Tasdiqlash') }}
-                                    </button>
+                                @if(false)
+                                    {{-- (eski) Registrator modali olib tashlandi — endi to'g'ridan tasdiqlaydi --}}
                                 @else
-                                    {{-- Dekan: darhol tasdiqlaydi --}}
+                                    {{-- Dekan/Registrator: darhol tasdiqlaydi --}}
                                     <form method="POST" action="{{ route('admin.retake.decide', $app->id) }}" class="inline">
                                         @csrf
                                         <input type="hidden" name="decision" value="approved">
@@ -232,110 +256,17 @@
                     </div>
                 </div>
 
-                {{-- Registrator tasdiqlash modal: baho va OSKE/TEST flaglari --}}
-                @if($role === 'registrar')
-                    <div x-show="openApprove === {{ $app->id }}"
-                         x-cloak
-                         class="fixed inset-0 z-50 flex items-center justify-center p-4"
-                         @keydown.escape.window="openApprove = null">
-                        <div class="fixed inset-0 bg-black bg-opacity-50" @click="openApprove = null"></div>
-                        <div class="relative bg-white rounded-xl shadow-xl max-w-md w-full p-5 z-10">
-                            <h4 class="text-sm font-bold text-gray-900 mb-2">
-                                {{ __('Tasdiqlash — oldingi baholar') }}
-                            </h4>
-                            <p class="text-xs text-gray-500 mb-4">
-                                {{ $app->subject_name }} ({{ $app->semester_name }})
-                            </p>
-                            <form method="POST" action="{{ route('admin.retake.decide', $app->id) }}" class="space-y-3">
-                                @csrf
-                                <input type="hidden" name="decision" value="approved">
-
-                                <div class="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label class="block text-xs font-medium text-gray-700 mb-1">
-                                            {{ __('Joriy bahosi') }} <span class="text-red-500">*</span>
-                                        </label>
-                                        <input type="number"
-                                               name="previous_joriy_grade"
-                                               step="0.1"
-                                               min="0"
-                                               max="100"
-                                               required
-                                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                    </div>
-                                    <div>
-                                        <label class="block text-xs font-medium text-gray-700 mb-1">
-                                            {{ __('Mustaqil ta\'lim bahosi') }} <span class="text-red-500">*</span>
-                                        </label>
-                                        <input type="number"
-                                               name="previous_mustaqil_grade"
-                                               step="0.1"
-                                               min="0"
-                                               max="100"
-                                               required
-                                               class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500">
-                                    </div>
-                                </div>
-
-                                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 space-y-2">
-                                    <p class="text-[11px] font-medium text-amber-900">
-                                        {{ __("Qayta o'qishda topshiriladi") }}:
-                                    </p>
-                                    <label class="flex items-center gap-2 text-xs text-gray-700">
-                                        <input type="checkbox" name="has_oske" value="1"
-                                               class="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
-                                        <span>{{ __('OSKE') }}</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 text-xs text-gray-700">
-                                        <input type="checkbox" name="has_test" value="1"
-                                               class="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
-                                        <span>{{ __('TEST') }}</span>
-                                    </label>
-                                    <label class="flex items-center gap-2 text-xs text-gray-700">
-                                        <input type="checkbox" name="has_sinov" value="1"
-                                               class="w-4 h-4 rounded border-gray-300 text-amber-600 focus:ring-amber-500">
-                                        <span>{{ __('Sinov fan') }}</span>
-                                    </label>
-                                </div>
-
-                                <div class="flex gap-2 pt-2">
-                                    <button type="button"
-                                            @click="openApprove = null"
-                                            class="flex-1 px-3 py-2 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
-                                        {{ __('Bekor qilish') }}
-                                    </button>
-                                    <button type="submit"
-                                            class="flex-1 px-3 py-2 text-xs bg-green-600 text-white rounded-lg hover:bg-green-700">
-                                        {{ __('Tasdiqlash') }}
-                                    </button>
-                                </div>
+                {{-- Registrator endi qo'shimcha ma'lumot so'ramaydi: tasdiqlash to'g'ridan
+                     shu yerda yozildi (modalsiz, oddiy POST). Forma quyida — tugma orqali ko'rinmaydi. --}}
+                @if(false && $role === 'registrar')
+                    <div>
                             </form>
                         </div>
                     </div>
                 @endif
 
-                {{-- Tasdiqlangandan keyin: oldingi baholar va OSKE/TEST/Sinov fan flaglarini ko'rsatish --}}
-                @if($app->registrar_status === 'approved' && ($app->previous_joriy_grade !== null || $app->has_oske || $app->has_test || $app->has_sinov))
-                    <div class="mt-2 text-[11px] text-gray-700 bg-gray-50 rounded-md px-2 py-1.5">
-                        @if($app->previous_joriy_grade !== null)
-                            <span>{{ __('Joriy') }}: <span class="font-medium">{{ rtrim(rtrim(number_format($app->previous_joriy_grade, 2, '.', ''), '0'), '.') }}</span></span>
-                            <span class="mx-1 text-gray-300">·</span>
-                            <span>{{ __('Mustaqil') }}: <span class="font-medium">{{ rtrim(rtrim(number_format($app->previous_mustaqil_grade, 2, '.', ''), '0'), '.') }}</span></span>
-                        @endif
-                        @if($app->has_oske || $app->has_test || $app->has_sinov)
-                            @php
-                                $tags = [];
-                                if ($app->has_oske) $tags[] = 'OSKE';
-                                if ($app->has_test) $tags[] = 'TEST';
-                                if ($app->has_sinov) $tags[] = __('Sinov fan');
-                            @endphp
-                            <span class="mx-1 text-gray-300">·</span>
-                            <span class="text-amber-700">{{ __("Qayta topshiriladi") }}:
-                                <span class="font-medium">{{ implode(', ', $tags) }}</span>
-                            </span>
-                        @endif
-                    </div>
-                @endif
+                {{-- Eski oldingi baholar va OSKE/TEST flaglar registrator tomonidan
+                     belgilanmaydi (foydalanuvchi talabiga ko'ra olib tashlandi). --}}
             </div>
         @endforeach
     </div>

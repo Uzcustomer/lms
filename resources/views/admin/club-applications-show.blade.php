@@ -119,7 +119,7 @@
                 {{-- Kafedra mudiri uchun: tasdiqlash / rad etish --}}
                 @php
                     $activeRole = session('active_role', '');
-                    $canManage = in_array($activeRole, ['kafedra_mudiri']);
+                    $canManage = in_array($activeRole, ['kafedra_mudiri', 'kichik_admin']);
                 @endphp
                 @if($canManage && $application->status === 'pending')
                     <div class="p-5" x-data="{ showReject: false }">

@@ -218,6 +218,16 @@
                                 </button>
                             </div>
                         </div>
+                        <div class="filter-item" style="margin-left:auto;max-width:280px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Ism bo'yicha qidiruv (barcha sanalar)</label>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <input type="text" id="search_student_name" class="date-input" placeholder="FISH kiriting..." autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();searchByName();}" style="flex:1;" />
+                                <button type="button" class="btn-tartibga" onclick="searchByName()" style="background:#10b981;border-color:#059669;white-space:nowrap;">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    Qidirish
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -470,10 +480,22 @@
         }
 
         // ========== TARTIBGA SOLISH ==========
+        function searchByName() {
+            var nameQ = ($('#search_student_name').val() || '').trim();
+            if (!nameQ) {
+                alert("Iltimos, qidirish uchun talaba ismini kiriting.");
+                $('#search_student_name').focus();
+                return;
+            }
+            loadTartibgaSol();
+        }
+
         function loadTartibgaSol() {
+            var nameQ = ($('#search_student_name').val() || '').trim();
             var params = {
-                date_from: $('#date_from').val() || '',
-                date_to: $('#date_to').val() || '',
+                date_from: nameQ ? '' : ($('#date_from').val() || ''),
+                date_to:   nameQ ? '' : ($('#date_to').val()   || ''),
+                student_name: nameQ,
             };
 
             $('#empty-state').hide(); $('#table-area').hide(); $('#loading-state').show();
@@ -763,9 +785,11 @@
 
         // ========== EXCEL (Quiz natijalar) ==========
         function downloadExcel() {
+            var nameQ = ($('#search_student_name').val() || '').trim();
             var params = {
-                date_from: $('#date_from').val() || '',
-                date_to: $('#date_to').val() || '',
+                date_from: nameQ ? '' : ($('#date_from').val() || ''),
+                date_to:   nameQ ? '' : ($('#date_to').val()   || ''),
+                student_name: nameQ,
                 export: 'excel',
             };
             window.location.href = dataUrl + '?' + $.param(params);
@@ -1074,18 +1098,20 @@
                     html += '<td><div style="font-weight:600;">' + esc(g.original_fan_name) + '</div><div style="font-size:11px;color:#94a3b8;">ID: ' + g.original_fan_id + '</div></td>';
                     html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
                     html += '<td>';
-                    if (g.yn_turi === 'jn_mavzu') {
-                        html += '<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;background:#fef3c7;color:#92400e;">' + esc(g.mavzu_shakl || g.shakl || 'Mavzu') + '</span>';
-                    } else if (g.yn_turi) {
-                        html += '<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;' + (g.yn_turi === 'oski' ? 'background:#dbeafe;color:#1e40af;' : 'background:#d1fae5;color:#065f46;') + '">' + (g.yn_turi === 'oski' ? 'OSKI' : 'Test') + '</span>';
-                    } else {
-                        // Dinamik: 1-mavzu..N-mavzu opsiyalari yuklanadigan fanning lesson_count'iga qarab to'ladi
-                        html += '<select class="reupload-yn-turi-select" data-key="' + esc(g.key) + '" style="padding:5px;border:1px solid #fca5a5;border-radius:6px;font-size:12px;background:#fef2f2;min-width:120px;">';
-                        html += '<option value="">Tanlang</option>';
-                        html += '<option value="oski">OSKI</option>';
-                        html += '<option value="test">Test</option>';
-                        html += '</select>';
+                    // Har bir qator uchun YN turi tanlovi doim ochiq bo'ladi:
+                    // OSKI/Test + mavzular (1..N). Default — qatordagi joriy qiymat.
+                    var defaultYnTuri = '';
+                    if (g.yn_turi === 'oski' || g.yn_turi === 'test') {
+                        defaultYnTuri = g.yn_turi;
+                    } else if (g.yn_turi === 'jn_mavzu') {
+                        var m = String(g.mavzu_shakl || g.shakl || '').match(/(\d+)\s*-\s*mavzu/i);
+                        if (m && m[1]) defaultYnTuri = 'mavzu_' + m[1];
                     }
+                    html += '<select class="reupload-yn-turi-select" data-key="' + esc(g.key) + '" data-default="' + esc(defaultYnTuri) + '" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;min-width:140px;">';
+                    html += '<option value="">Tanlang</option>';
+                    html += '<option value="oski">OSKI</option>';
+                    html += '<option value="test">Test</option>';
+                    html += '</select>';
                     html += '</td>';
                     html += '<td>';
                     if (g.available_subjects && g.available_subjects.length > 0) {
@@ -1137,7 +1163,7 @@
                     if (ynSel.length === 0) return;
                     var fanSel = $('.reupload-subject-select[data-key="' + $.escapeSelector(key) + '"]');
                     var lc = parseInt(fanSel.find(':selected').data('lesson-count')) || 0;
-                    var current = ynSel.val() || '';
+                    var current = ynSel.val() || ynSel.data('default') || '';
 
                     var optsHtml = '<option value="">Tanlang</option>';
                     optsHtml += '<option value="oski"' + (current === 'oski' ? ' selected' : '') + '>OSKI</option>';

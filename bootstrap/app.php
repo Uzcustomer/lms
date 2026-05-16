@@ -23,6 +23,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'force.password.change' => \App\Http\Middleware\ForcePasswordChange::class,
             'force.student.contact' => \App\Http\Middleware\ForceStudentContact::class,
             'nazoratchi.readonly' => \App\Http\Middleware\NazoratchiReadOnly::class,
+            'enforce.assigned.computer' => \App\Http\Middleware\EnforceAssignedComputer::class,
         ]);
 
         // Nazoratchi rolida ishlayotgan har qanday foydalanuvchi uchun yozish
@@ -45,6 +46,12 @@ return Application::configure(basePath: dirname(__DIR__))
             'moodle/import',
             'moodle/should-sync',
             'moodle/exam-event',
+            // Admin AJAX yuz tahlili — admin middleware + auth allaqachon himoya qiladi.
+            // CSRF tokeni sessiyada saqlanadi va bulk paytida konkurensiya + 504
+            // kaskadlari natijasida "419 Page Expired" pullaridan saqlanish uchun
+            // ushbu idempotent endpointlar CSRF'dan ozod etiladi.
+            'admin/student-photos/*/check-similarity',
+            'admin/student-photos/*/check-quality',
         ]);
 
     })
@@ -73,11 +80,28 @@ return Application::configure(basePath: dirname(__DIR__))
         $schedule->command('import:teachers')->cron('0 0 */2 * *'); // Every 2 days at midnight
 //        $schedule->command('grades:close-expired')->everyMinute();
         $schedule->command('grades:close-expired')->everyThirtyMinutes()->withoutOverlapping(30);
+
+        // YN test markazi: har minutda — kompyuter raqamini ochish, "tayyorlaning",
+        // "kirsangiz bo'ladi", overflow → zahira, no-show holatlari.
+        $schedule->job(new \App\Jobs\ExamScheduleTickJob())->everyMinute()->withoutOverlapping(2);
+
+        // Qayta o'qish: muddati o'tgan oynalardagi pending arizalar avtomatik
+        // rad ETILMAYDI. Dekan/Registrator/O'quv bo'limi qo'lda tasdiqlaydi
+        // yoki rad etadi. Avtomatik rad qilish o'chirildi (foydalanuvchi talabiga ko'ra) —
+        // kerak bo'lsa qo'lda: `php artisan retake:close-expired-windows` ishga tushirish mumkin.
+        // $schedule->command('retake:close-expired-windows')->dailyAt('02:00')->withoutOverlapping(30);
 //        $schedule->command('app:test-cron')->everyFifteenSeconds();
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        // CSRF token muddati tugaganda — formga qaytarib xabar chiqarish
+        // CSRF token muddati tugaganda — formga qaytarib xabar chiqarish.
+        // AJAX (Accept: application/json) so'rovlar uchun esa JSON 419 qaytariladi,
+        // chunki redirect() AJAX javobida "Unexpected token '<'" xatosini keltirib chiqaradi.
         $exceptions->renderable(function (\Illuminate\Session\TokenMismatchException $e, $request) {
+            if ($request->expectsJson() || $request->ajax()) {
+                return response()->json([
+                    'error' => 'Sessiya yangilandi. Sahifani yangilang va qayta urinib ko\'ring.',
+                ], 419);
+            }
             return redirect()->back()->withInput($request->except('_token', 'password'))->with('status', 'Sessiya yangilandi. Iltimos, qaytadan urinib ko\'ring.');
         });
 

@@ -320,6 +320,17 @@ class Student extends Authenticatable
         return $this->hasOne(\App\Models\StudentVisaInfo::class);
     }
 
+    public function disabilityInfo()
+    {
+        return $this->hasOne(\App\Models\StudentDisabilityInfo::class);
+    }
+
+    public function isDisabled(): bool
+    {
+        return !empty($this->social_category_name)
+            && stripos($this->social_category_name, 'nogiron') !== false;
+    }
+
     public function faceDescriptor()
     {
         return $this->hasOne(\App\Models\FaceIdDescriptor::class);

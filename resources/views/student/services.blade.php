@@ -47,6 +47,19 @@
                 <span class="text-[11px] text-gray-400 mt-1 text-center">{{ __("Akademik qarzdorliklar uchun") }}</span>
             </a>
 
+            {{-- 4. Qayta o'qish jurnali --}}
+            <a href="{{ route('student.retake-journal.index') }}"
+               class="flex flex-col items-center bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-[0.98] transition-all duration-150"
+               style="padding:16px 10px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
+                <div class="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center mb-3">
+                    <svg class="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-bold text-gray-800 text-center leading-tight">{{ __("Qayta o'qish jurnali") }}</span>
+                <span class="text-[11px] text-gray-400 mt-1 text-center">{{ __("Baholar va mustaqil ta'lim") }}</span>
+            </a>
+
             {{-- 4. Pasport ma'lumotlari (faqat bitiruvchilar uchun) --}}
             @if(Auth::guard('student')->user()->is_graduate)
             <a href="{{ route('student.passport.index') }}"

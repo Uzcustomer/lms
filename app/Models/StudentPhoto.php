@@ -10,6 +10,9 @@ class StudentPhoto extends Model
     public const STATUS_APPROVED = 'approved';
     public const STATUS_REJECTED = 'rejected';
 
+    public const SOURCE_TEACHER_UPLOAD = 'teacher_upload';
+    public const SOURCE_REGISTRATOR_WEBCAM = 'registrator_webcam';
+
     protected $fillable = [
         'student_id_number',
         'full_name',
@@ -18,6 +21,7 @@ class StudentPhoto extends Model
         'uploaded_by',
         'uploaded_by_teacher_id',
         'photo_path',
+        'source',
         'status',
         'reviewed_by_name',
         'reviewed_at',
@@ -25,11 +29,24 @@ class StudentPhoto extends Model
         'similarity_score',
         'similarity_status',
         'similarity_checked_at',
+        'similarity_hemis',
+        'similarity_mark',
+        'captured_by_user_id',
         'quality_score',
         'quality_passed',
         'quality_issues',
         'quality_ok',
         'quality_checked_at',
+        'face_height_ratio',
+        'face_embedding',
+        'embedding_extracted_at',
+        'moodle_synced_at',
+        'moodle_sync_status',
+        'moodle_sync_error',
+        'moodle_file_hash',
+        'moodle_response',
+        'descriptor_confirmed_at',
+        'descriptor_confirmed_notified_at',
     ];
 
     protected $casts = [
@@ -41,7 +58,21 @@ class StudentPhoto extends Model
         'quality_issues' => 'array',
         'quality_ok' => 'array',
         'quality_checked_at' => 'datetime',
+        'face_height_ratio' => 'decimal:4',
+        'face_embedding' => 'array',
+        'embedding_extracted_at' => 'datetime',
+        'similarity_hemis' => 'decimal:2',
+        'similarity_mark' => 'decimal:2',
+        'moodle_synced_at' => 'datetime',
+        'moodle_response' => 'array',
+        'descriptor_confirmed_at' => 'datetime',
+        'descriptor_confirmed_notified_at' => 'datetime',
     ];
+
+    public function isDescriptorConfirmed(): bool
+    {
+        return $this->status === self::STATUS_APPROVED && $this->descriptor_confirmed_at !== null;
+    }
 
     public function getPhotoUrlAttribute(): string
     {

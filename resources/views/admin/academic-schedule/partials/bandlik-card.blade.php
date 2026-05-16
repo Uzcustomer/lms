@@ -73,6 +73,25 @@
             </span>
         </div>
 
+        @if(($card['pending_time_count'] ?? 0) > 0)
+            <div class="flex items-center justify-between text-sm">
+                <span class="text-gray-500 inline-flex items-center gap-1.5">
+                    <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                    Vaqti qo'yilmagan
+                </span>
+                <span class="inline-flex items-center gap-1">
+                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-amber-100 text-amber-800">
+                        {{ $card['pending_time_count'] }} guruh
+                    </span>
+                    @if(($card['pending_time_students'] ?? 0) > 0)
+                        <span class="text-xs text-gray-500">({{ $card['pending_time_students'] }} talaba)</span>
+                    @endif
+                </span>
+            </div>
+        @endif
+
         <div class="pt-1">
             <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
                 <span>Bandlik</span>

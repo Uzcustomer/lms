@@ -13,25 +13,39 @@ use Illuminate\Support\Facades\Log;
 
 class MoodleExamBookingService
 {
-    private const ATTEMPT_LABEL = '1-urinish';
-
     public function __construct(
         private readonly ?string $wsUrl = null,
         private readonly ?string $wsToken = null,
     ) {}
 
     /**
-     * Book a single (schedule, yn_type) on Moodle and persist the outcome on the schedule.
+     * Book a single (schedule, yn_type, attempt) on Moodle and persist the
+     * outcome on the schedule.
      *
      * @param string $ynType "oski" or "test"
+     * @param bool $unscheduled When true, push a date-only "unscheduled" hold:
+     *                          Moodle records the booking and blocks the quiz,
+     *                          but no time window / start cutoff is sent. Used
+     *                          when the schedule has a date but no exam time yet.
+     * @param int $attempt 1 = attempt-1 columns (oski_ / test_), 2 = resit
+     *                     columns (_resit_), 3 = resit2 columns (_resit2_).
+     *                     Each attempt is a separate Moodle quiz, named
+     *                     "..._{attempt}-urinish".
      * @return array{ok:bool, skipped?:bool, reason?:string, calls?:array}
      */
-    public function book(ExamSchedule $schedule, string $ynType): array
+    public function book(ExamSchedule $schedule, string $ynType, bool $unscheduled = false, int $attempt = 1): array
     {
         $ynType = strtolower($ynType);
         if (!in_array($ynType, ['oski', 'test'], true)) {
-            return $this->fail($schedule, $ynType, 'invalid yn_type: ' . $ynType);
+            return ['ok' => false, 'error' => 'invalid yn_type: ' . $ynType, 'calls' => []];
         }
+        if (!in_array($attempt, [1, 2, 3], true)) {
+            return ['ok' => false, 'error' => 'invalid attempt: ' . $attempt, 'calls' => []];
+        }
+
+        // Column prefix for this attempt: 1 = oski/test, 2 = *_resit, 3 = *_resit2.
+        // The *_date / *_time / *_moodle_* columns all share this prefix.
+        $prefix = $this->attemptPrefix($ynType, $attempt);
 
         $url = $this->wsUrl ?: (string) config('services.moodle.ws_url');
         $token = $this->wsToken ?: (string) config('services.moodle.ws_token');
@@ -39,66 +53,133 @@ class MoodleExamBookingService
             return ['ok' => false, 'skipped' => true, 'reason' => 'Moodle WS not configured'];
         }
 
-        $dateField = $ynType . '_date';
-        $timeField = $ynType . '_time';
-        $naField = $ynType . '_na';
+        $dateField = $prefix . '_date';
+        $timeField = $prefix . '_time';
 
-        if ($schedule->{$naField}) {
+        // The N/A flag exists for attempt 1 only — resits have no N/A.
+        if ($attempt === 1 && $schedule->{$ynType . '_na'}) {
             return ['ok' => false, 'skipped' => true, 'reason' => 'yn marked N/A'];
         }
-        if (empty($schedule->{$dateField}) || empty($schedule->{$timeField})) {
-            return ['ok' => false, 'skipped' => true, 'reason' => 'date or time missing'];
+        if (empty($schedule->{$dateField})) {
+            return ['ok' => false, 'skipped' => true, 'reason' => 'date missing'];
         }
 
-        $startsAt = $this->combineDateTime($schedule->{$dateField}, $schedule->{$timeField});
-        if (!$startsAt) {
-            return $this->fail($schedule, $ynType, 'cannot parse date/time');
+        if ($unscheduled) {
+            // Date-only hold: the test-centre has not picked a time yet. No
+            // window / cutoff is computed - Moodle records the booking as
+            // "unscheduled" and keeps the quiz closed until a full booking
+            // (with real times) replaces it. examstart carries the exam date
+            // (midnight) so the proctor page can still show "Test sanasi".
+            $timeopen = 0;
+            $timeclose = 0;
+            $timelimit = 0;
+            $startCutoff = 0;
+            $examTime = $this->examDateMidnight($schedule->{$dateField});
+        } else {
+            if (empty($schedule->{$timeField})) {
+                return ['ok' => false, 'skipped' => true, 'reason' => 'date or time missing'];
+            }
+
+            $startsAt = $this->combineDateTime($schedule->{$dateField}, $schedule->{$timeField});
+            if (!$startsAt) {
+                return $this->fail($schedule, $prefix, 'cannot parse date/time');
+            }
+            // The real exam start (e.g. 14:00) — sent as-is so the proctor page
+            // shows the LMS time, not the computed +window+buffer cutoff.
+            $examTime = $startsAt->getTimestamp();
+
+            // open_window_minutes = +/- entry grace (early/late cutoff for FaceID
+            // login & quiz entry), independent of slot duration. Default 10.
+            $window = max(1, (int) config('services.moodle.open_window_minutes', 10));
+            // attempt_start_buffer_minutes = extra grace AFTER the late entry
+            // cutoff during which the student is still allowed to click "Start
+            // attempt". Solves the "FaceID at 15:44, but the page navigation /
+            // click takes 30 sec, hits the start_cutoff at 15:45 and the quiz
+            // refuses" problem. Doesn't extend the FaceID login window itself
+            // (that's still controlled by $window), only the quiz start cutoff
+            // on Moodle side.
+            $attemptBuffer = max(0, (int) config('services.moodle.attempt_start_buffer_minutes', 2));
+            $capacity = ExamCapacityService::getSettingsForDate($startsAt->toDateString());
+            $duration = max(1, (int) ($capacity['test_duration_minutes'] ?? 15));
+            // closeBuffer = how long after the late-entry cutoff the quiz stays
+            // open, so a student starting at the cutoff still has the full
+            // duration. We default it to the exam duration; an env override
+            // remains available if a site wants something different.
+            $closeBuffer = max(1, (int) config('services.moodle.close_buffer_minutes', $duration));
+
+            $timeopen = $startsAt->copy()->subMinutes($window)->getTimestamp();
+            // After exam_time + window + attemptBuffer: no NEW attempt starts.
+            // The +attemptBuffer minutes are the grace between a FaceID login
+            // landing right on the late-entry edge and the student actually
+            // clicking "Start attempt".
+            $startCutoff = $startsAt->copy()->addMinutes($window + $attemptBuffer)->getTimestamp();
+            // timeclose is wider so in-progress attempts run their full Moodle timelimit.
+            $timeclose = $startsAt->copy()->addMinutes($window + $attemptBuffer + $closeBuffer)->getTimestamp();
+            $timelimit = max(0, (int) config('services.moodle.timelimit_seconds', 0));
         }
 
-        $window = max(1, (int) config('services.moodle.open_window_minutes', 10));
-        $closeBuffer = max(1, (int) config('services.moodle.close_buffer_minutes', 30));
-        $timeopen = $startsAt->copy()->subMinutes($window)->getTimestamp();
-        // After exam_time + window: no NEW attempt starts (handled by quizaccess plugin).
-        $startCutoff = $startsAt->copy()->addMinutes($window)->getTimestamp();
-        // timeclose is wider so in-progress attempts run their full Moodle timelimit.
-        $timeclose = $startsAt->copy()->addMinutes($window + $closeBuffer)->getTimestamp();
-        $timelimit = max(0, (int) config('services.moodle.timelimit_seconds', 0));
-
-        $courseIdnumber = $this->resolveCourseIdnumber($schedule, $ynType);
-        if (!$courseIdnumber) {
-            return $this->fail(
-                $schedule,
-                $ynType,
-                'course_idnumber not found — make sure quizzes were imported at least once for this group/subject'
-            );
+        // Resolve the stable middle of the Moodle quiz name - subject + semester
+        // + faculty + direction - from the real quiz names Moodle itself
+        // recorded for this group in hemis_quiz_results (the Diagnostika
+        // import). cm.idnumber is empty on the Moodle install and
+        // course.idnumber is unreliable, so the quiz NAME is the only
+        // dependable key. We never reconstruct it from tokens - we replay what
+        // Moodle already told us.
+        $quizMiddle = $this->resolveQuizMiddle($schedule, $ynType);
+        if ($quizMiddle === null) {
+            // No usable Moodle quiz history for this group, so we cannot derive
+            // the real quiz name. Leave it for the proctor to add via the
+            // "Add manual booking" fallback on the Moodle proctor page.
+            return [
+                'ok' => false,
+                'skipped' => true,
+                'reason' => 'no usable Moodle quiz history for this group - proctor manual booking needed',
+            ];
         }
 
-        $studentsByLang = $this->studentsByLanguage($schedule->group_hemis_id);
+        $fanId = (string) $schedule->subject_id;
+        // Academic year lets Moodle drop same-named quizzes left over from a
+        // previous year (the course category name starts with this).
+        $academicYear = (string) ($schedule->education_year ?? '');
+
+        // Per-student schedule (individual grafik) — Moodle bookingni faqat
+        // shu talabaga tushiramiz. Aks holda guruh sathidagi yozuv —
+        // barcha guruh talabalariga tushadi.
+        $perStudentHemisId = !empty($schedule->student_hemis_id)
+            ? (string) $schedule->student_hemis_id
+            : null;
+        $studentsByLang = $this->studentsByLanguage($schedule->group_hemis_id, $perStudentHemisId);
         if (empty($studentsByLang)) {
-            return $this->fail($schedule, $ynType, 'no students in group ' . $schedule->group_hemis_id);
+            $reason = $perStudentHemisId !== null
+                ? 'student ' . $perStudentHemisId . ' not found in group ' . $schedule->group_hemis_id
+                : 'no students in group ' . $schedule->group_hemis_id;
+            return $this->fail($schedule, $prefix, $reason);
         }
 
         $calls = [];
         $allOk = true;
 
         foreach ($studentsByLang as $langCode => $usernames) {
-            $quizIdnumber = $this->buildQuizIdnumber($ynType, $langCode);
+            $quizName = $this->buildQuizName($ynType, $langCode, $quizMiddle, $attempt);
             $payload = [
                 'wstoken' => $token,
                 'wsfunction' => 'local_hemisexport_book_group_exam',
                 'moodlewsrestformat' => 'json',
-                'course_idnumber' => $courseIdnumber,
-                'quiz_idnumber' => $quizIdnumber,
+                'quiz_name' => $quizName,
+                'fan_id' => $fanId,
+                'academic_year' => $academicYear,
                 'timeopen' => $timeopen,
                 'timeclose' => $timeclose,
                 'timelimit' => $timelimit,
                 'start_cutoff' => $startCutoff,
+                'unscheduled' => $unscheduled ? 1 : 0,
+                'exam_time' => $examTime,
                 'students' => array_values($usernames),
             ];
 
             $callResult = $this->call($url, $payload);
             $callResult['lang'] = $langCode;
-            $callResult['quiz_idnumber'] = $quizIdnumber;
+            $callResult['quiz_name'] = $quizName;
             $callResult['student_count'] = count($usernames);
             $calls[] = $callResult;
 
@@ -109,17 +190,52 @@ class MoodleExamBookingService
 
         $result = [
             'ok' => $allOk,
-            'course_idnumber' => $courseIdnumber,
+            'unscheduled' => $unscheduled,
+            'attempt' => $attempt,
+            'quiz_middle' => $quizMiddle,
+            'fan_id' => $fanId,
+            'academic_year' => $academicYear,
             'timeopen' => $timeopen,
             'timeclose' => $timeclose,
             'timelimit' => $timelimit,
             'start_cutoff' => $startCutoff,
+            'exam_time' => $examTime,
             'calls' => $calls,
         ];
 
-        $this->persistResult($schedule, $ynType, $result);
+        $this->persistResult($schedule, $prefix, $result);
 
         return $result;
+    }
+
+    /**
+     * Column prefix for a (yn_type, attempt) pair — the *_date / *_time /
+     * *_moodle_* columns all share it: attempt 1 = "oski"/"test",
+     * attempt 2 = "*_resit", attempt 3 = "*_resit2".
+     */
+    private function attemptPrefix(string $ynType, int $attempt): string
+    {
+        return match ($attempt) {
+            2 => $ynType . '_resit',
+            3 => $ynType . '_resit2',
+            default => $ynType,
+        };
+    }
+
+    /**
+     * Midnight (Unix ts) of an exam date — used as examstart for unscheduled
+     * holds, where only the date is known. Returns 0 if the date won't parse.
+     */
+    private function examDateMidnight(mixed $date): int
+    {
+        try {
+            $carbon = $date instanceof Carbon
+                ? $date->copy()
+                : Carbon::parse((string) $date, config('app.timezone'));
+            return $carbon->startOfDay()->getTimestamp();
+        } catch (\Throwable) {
+            return 0;
+        }
     }
 
     private function combineDateTime(mixed $date, mixed $time): ?Carbon
@@ -136,20 +252,28 @@ class MoodleExamBookingService
     }
 
     /**
-     * Find the Moodle course_idnumber for this (group, subject) pair.
+     * Resolve the stable "middle" of the Moodle quiz name for this
+     * (group, subject): the "{subject}_{N-sem}_{faculty}_{direction}" segment,
+     * which is identical across language and attempt number.
      *
-     * Format used by local_hemisexport:
-     *   {fan_id}_{OSKI|TEST}_{N}-SEM_{spec}_{form}
+     * Source of truth = hemis_quiz_results.attempt_name, the real quiz names
+     * Moodle pushed back during the Diagnostika results import. cm.idnumber is
+     * empty on the Moodle install and course.idnumber is unreliable, so the
+     * quiz NAME is the only dependable key.
      *
-     * Strategy:
-     *  1) Direct: find a hemis_quiz_results row matching (fan_id=subject_id) for any
-     *     student in this group; swap token 2 to the requested yn_type.
-     *  2) Fallback: this group hasn't taken this subject yet, but the suffix
-     *     (tokens 4+) and N-SEM are group-/semester-specific, so we extract them
-     *     from the group's *other* quiz history and rebuild the idnumber with
-     *     the schedule's subject_id at token 1.
+     * Resolution order:
+     *  1. This group already sat a {prefix} ({lang}) quiz for THIS subject -
+     *     replay that exact middle.
+     *  2. First {prefix} for this subject for this group: take the
+     *     "{N-sem}_{faculty}_{direction}" tail from any of the group's recorded
+     *     quiz names in the matching semester and prepend this schedule's
+     *     subject name. The tail is group-specific and identical across
+     *     subjects, so this rebuilds the real Moodle quiz name.
+     *
+     * Returns null when the group has no usable recorded attempt at all - the
+     * caller then skips the booking for a proctor to add manually.
      */
-    private function resolveCourseIdnumber(ExamSchedule $schedule, string $ynType): ?string
+    private function resolveQuizMiddle(ExamSchedule $schedule, string $ynType): ?string
     {
         $groupStudentIds = Student::where('group_id', $schedule->group_hemis_id)
             ->whereNotNull('student_id_number')
@@ -159,138 +283,145 @@ class MoodleExamBookingService
             return null;
         }
 
-        $direct = HemisQuizResult::query()
-            ->whereNotNull('course_idnumber')
+        $prefix = $ynType === 'oski' ? 'OSKI' : 'YN test';
+
+        // 1. This group already has a {prefix} quiz recorded for this subject -
+        //    replay that exact middle.
+        $names = HemisQuizResult::query()
             ->where('fan_id', $schedule->subject_id)
             ->whereIn('student_id', $groupStudentIds)
+            ->whereNotNull('attempt_name')
+            ->where('attempt_name', 'LIKE', $prefix . ' (%')
             ->orderByDesc('synced_at')
             ->orderByDesc('id')
-            ->value('course_idnumber');
+            ->pluck('attempt_name');
 
-        if ($direct) {
-            return $this->swapYnToken((string) $direct, $ynType);
+        foreach ($names as $name) {
+            $middle = $this->extractQuizMiddle((string) $name, $prefix);
+            if ($middle !== null) {
+                return $middle;
+            }
         }
 
-        return $this->buildCourseIdnumberFromGroupPattern($schedule, $ynType, $groupStudentIds);
-    }
-
-    /**
-     * Build a course_idnumber by extracting the suffix + N-SEM from the group's
-     * other course_idnumber records and substituting the requested subject_id and
-     * yn_type at the front.
-     *
-     * @param array<int, string> $studentIds
-     */
-    private function buildCourseIdnumberFromGroupPattern(
-        ExamSchedule $schedule,
-        string $ynType,
-        array $studentIds,
-    ): ?string {
-        $rows = HemisQuizResult::query()
-            ->whereNotNull('course_idnumber')
-            ->whereIn('student_id', $studentIds)
-            ->select('course_idnumber', 'semester')
-            ->get();
-        if ($rows->isEmpty()) {
+        // 2. First {prefix} for this group+subject. The "{N-sem}_{faculty}_
+        //    {direction}" tail is group-specific and identical across subjects,
+        //    so lift it off any of the group's recorded quiz names in the same
+        //    semester and prepend this schedule's subject name.
+        $subjectName = $this->stripGroupSuffix(trim((string) $schedule->subject_name));
+        $targetNsem = $this->resolveTargetNsem($schedule);
+        if ($subjectName === '' || $targetNsem === null) {
             return null;
         }
 
-        $suffixCounts = [];
-        $nSemBySemester = [];
-        $nSemTotals = [];
+        $anyNames = HemisQuizResult::query()
+            ->whereIn('student_id', $groupStudentIds)
+            ->whereNotNull('attempt_name')
+            ->where(function ($q) {
+                $q->where('attempt_name', 'LIKE', 'YN test (%')
+                  ->orWhere('attempt_name', 'LIKE', 'OSKI (%')
+                  ->orWhere('attempt_name', 'LIKE', 'JN (%');
+            })
+            ->orderByDesc('synced_at')
+            ->orderByDesc('id')
+            ->pluck('attempt_name');
 
-        foreach ($rows as $row) {
-            $tokens = explode('_', (string) $row->course_idnumber);
-            if (count($tokens) < 4) {
-                continue;
-            }
-            $nSem = $tokens[2];
-            $suffix = implode('_', array_slice($tokens, 3));
-            $suffixCounts[$suffix] = ($suffixCounts[$suffix] ?? 0) + 1;
-            $nSemTotals[$nSem] = ($nSemTotals[$nSem] ?? 0) + 1;
-            if (!empty($row->semester)) {
-                $nSemBySemester[(string) $row->semester][$nSem] =
-                    ($nSemBySemester[(string) $row->semester][$nSem] ?? 0) + 1;
-            }
-        }
-
-        if (empty($suffixCounts) || empty($nSemTotals)) {
-            return null;
-        }
-
-        arsort($suffixCounts);
-        $suffix = (string) array_key_first($suffixCounts);
-
-        // Resolve N-SEM, in order of confidence:
-        //  1) Authoritative: from semesters table — name like "10-semestr" → "10-SEM"
-        //  2) From group's records whose `semester` column matches schedule.semester_code
-        //  3) Most common N-SEM in group's history
-        $nSem = $this->nSemFromSemesterCode((string) $schedule->semester_code);
-
-        if (!$nSem) {
-            $semKey = (string) $schedule->semester_code;
-            if (!empty($nSemBySemester[$semKey])) {
-                arsort($nSemBySemester[$semKey]);
-                $nSem = (string) array_key_first($nSemBySemester[$semKey]);
+        foreach ($anyNames as $name) {
+            $tail = $this->extractMiddleTail((string) $name);
+            if ($tail !== null && str_starts_with($tail, $targetNsem . '_')) {
+                return $subjectName . '_' . $tail;
             }
         }
 
-        if (!$nSem) {
-            arsort($nSemTotals);
-            $nSem = (string) array_key_first($nSemTotals);
-        }
-
-        return $schedule->subject_id . '_' . strtoupper($ynType) . '_' . $nSem . '_' . $suffix;
+        return null;
     }
 
     /**
-     * Map LMS semester_code to the "{N}-SEM" token used in Moodle course_idnumber.
-     * The semesters table stores name like "10-semestr"; we extract the leading number.
+     * The "{N}-sem" token for this schedule's semester, e.g. "2-sem".
+     * The semesters table stores names like "2-semestr".
      */
-    private function nSemFromSemesterCode(string $semesterCode): ?string
+    private function resolveTargetNsem(ExamSchedule $schedule): ?string
     {
-        $name = Semester::where('code', $semesterCode)->value('name');
-        if (!$name) {
-            return null;
-        }
-        if (preg_match('/(\d+)/', (string) $name, $m)) {
-            return $m[1] . '-SEM';
+        $name = Semester::where('code', $schedule->semester_code)->value('name');
+        if ($name && preg_match('/(\d+)/', (string) $name, $m)) {
+            return $m[1] . '-sem';
         }
         return null;
     }
 
     /**
-     * Swap the YN-type token (2nd underscore-separated segment) to match $ynType.
-     * Example: "436_TEST_8-SEM_DAV-1_D" + "oski" => "436_OSKI_8-SEM_DAV-1_D"
+     * Drop a trailing parallel-stream suffix — " (a)", " (b)", " (c)" — from a
+     * HEMIS subject name. Mark carries it on subject_name for split groups, but
+     * the Moodle quiz name never includes it, so it must come off before the
+     * quiz name is rebuilt in resolveQuizMiddle() step 2.
      */
-    private function swapYnToken(string $idnumber, string $ynType): string
+    private function stripGroupSuffix(string $name): string
     {
-        $tokens = explode('_', $idnumber);
-        if (count($tokens) < 2) {
-            return $idnumber;
+        return trim(preg_replace('/\s*\([A-Za-z0-9]{1,4}\)\s*$/u', '', $name));
+    }
+
+    /**
+     * Strip the "{type} ({lang})_" prefix and the trailing "_{shakl}" off a
+     * full Moodle quiz name, leaving the language-/attempt-independent middle.
+     *
+     * "YN test (uzb)_Tibbiy kimyo_2-sem_DAV-2_D_1-urinish" => "Tibbiy kimyo_2-sem_DAV-2_D"
+     */
+    private function extractQuizMiddle(string $quizName, string $prefix): ?string
+    {
+        $pattern = '/^' . preg_quote($prefix, '/') . '\\s*\\([^)]*\\)_(.+)_[^_]+$/u';
+        if (preg_match($pattern, trim($quizName), $m)) {
+            $middle = trim($m[1]);
+            return $middle !== '' ? $middle : null;
         }
-        $current = strtoupper($tokens[1]);
-        $target = strtoupper($ynType);
-        if ($current === 'OSKI' || $current === 'TEST') {
-            $tokens[1] = $target;
+        return null;
+    }
+
+    /**
+     * Lift the "{N-sem}_{faculty}_{direction}" tail off a full Moodle quiz
+     * name (any type - YN test / OSKI / JN), dropping the type/lang prefix,
+     * the subject name and the trailing "_{shakl}".
+     *
+     * "YN test (uzb)_Gistologiya, sitologiya_2-sem_DAV-2_D_1-urinish" => "2-sem_DAV-2_D"
+     * "JN (uzb)_8_Rus tili_2-sem_DAV-2_D_13-mavzu"                    => "2-sem_DAV-2_D"
+     */
+    private function extractMiddleTail(string $quizName): ?string
+    {
+        if (preg_match('/_(\d+-sem_.+)_[^_]+$/u', trim($quizName), $m)) {
+            return trim($m[1]);
         }
-        return implode('_', $tokens);
+        return null;
+    }
+
+    /**
+     * Build the target Moodle quiz name for the given language and attempt,
+     * e.g. "YN test (uzb)_{middle}_2-urinish".
+     */
+    private function buildQuizName(string $ynType, string $langCode, string $quizMiddle, int $attempt = 1): string
+    {
+        $prefix = $ynType === 'oski' ? 'OSKI' : 'YN test';
+        return $prefix . ' (' . $langCode . ')_' . $quizMiddle . '_' . $attempt . '-urinish';
     }
 
     /**
      * Group student usernames (= student_id_number) by their effective exam language.
      * Effective = student.exam_language_code (override) ?? group.education_lang_code.
      *
+     * @param string|null $studentHemisId Per-student schedule (individual grafik)
+     *                                     bo'lsa, faqat shu talabaga filtrlaymiz —
+     *                                     Moodle booking guruh emas, shu talabagagina
+     *                                     tushadi.
      * @return array<string, array<int, string>> [langCode => [username, ...]]
      */
-    private function studentsByLanguage(string $groupHemisId): array
+    private function studentsByLanguage(string $groupHemisId, ?string $studentHemisId = null): array
     {
         $group = Group::where('group_hemis_id', $groupHemisId)->first();
         $defaultLang = $this->normalizeLang($group?->education_lang_code);
 
-        $students = Student::where('group_id', $groupHemisId)
-            ->whereNotNull('student_id_number')
-            ->get(['student_id_number', 'exam_language_code']);
+        $studentsQuery = Student::where('group_id', $groupHemisId)
+            ->whereNotNull('student_id_number');
+        if ($studentHemisId !== null) {
+            $studentsQuery->where('hemis_id', $studentHemisId);
+        }
+        $students = $studentsQuery->get(['student_id_number', 'exam_language_code']);
 
         $bucket = [];
         foreach ($students as $st) {
@@ -319,27 +450,13 @@ class MoodleExamBookingService
         if (in_array($code, $map, true)) {
             return $code;
         }
-        // Best-effort short→long
+        // Best-effort short->long
         return match ($code) {
             'uz', 'oz', 'uzb' => 'uzb',
             'ru', 'rus' => 'rus',
             'en', 'eng' => 'eng',
             default => $code,
         };
-    }
-
-    private function buildQuizIdnumber(string $ynType, string $langCode): string
-    {
-        $template = (string) config(
-            'services.moodle.quiz_idnumber_template',
-            'YN {yn} ({lang})_{attempt}-urinish'
-        );
-        return strtr($template, [
-            '{yn}' => strtolower($ynType),
-            '{YN}' => strtoupper($ynType),
-            '{lang}' => $langCode,
-            '{attempt}' => '1',
-        ]);
     }
 
     /**
@@ -366,9 +483,13 @@ class MoodleExamBookingService
         }
     }
 
-    private function persistResult(ExamSchedule $schedule, string $ynType, array $result): void
+    /**
+     * Persist the push outcome onto the schedule's {$prefix}_moodle_* columns,
+     * where $prefix is the attempt-specific column prefix (oski / oski_resit /
+     * oski_resit2 / test / test_resit / test_resit2).
+     */
+    private function persistResult(ExamSchedule $schedule, string $prefix, array $result): void
     {
-        $prefix = $ynType;
         $errorText = null;
         if (!($result['ok'] ?? false)) {
             $errors = [];
@@ -382,7 +503,7 @@ class MoodleExamBookingService
                     );
                 }
             }
-            // Top-level `error` (e.g. "course_idnumber not found") wins when there
+            // Top-level `error` (e.g. "cannot parse date/time") wins when there
             // are no per-language calls; otherwise prepend it to per-call details.
             $topLevel = (string) ($result['error'] ?? '');
             if ($topLevel !== '' && empty($errors)) {
@@ -401,10 +522,10 @@ class MoodleExamBookingService
         ])->save();
     }
 
-    private function fail(ExamSchedule $schedule, string $ynType, string $message): array
+    private function fail(ExamSchedule $schedule, string $prefix, string $message): array
     {
         $result = ['ok' => false, 'error' => $message, 'calls' => []];
-        $this->persistResult($schedule, $ynType, $result);
+        $this->persistResult($schedule, $prefix, $result);
         return $result;
     }
 }

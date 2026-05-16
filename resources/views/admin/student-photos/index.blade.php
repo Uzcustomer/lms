@@ -48,11 +48,54 @@
                 quality: null, qualityLoading: false, qualityError: null,
             },
             reject: { open: false, id: null, name: '' },
+            bulkReject: {
+                open: false, ids: '', reason: 'Yuz aniqlanmadi (Moodle enroll)',
+                loading: false, result: null, error: null,
+            },
+            openBulkRejectByIds() {
+                this.bulkReject = {
+                    open: true, ids: '', reason: 'Yuz aniqlanmadi (Moodle enroll)',
+                    loading: false, result: null, error: null,
+                };
+            },
+            async submitBulkRejectByIds() {
+                this.bulkReject.loading = true;
+                this.bulkReject.error = null;
+                this.bulkReject.result = null;
+                try {
+                    const res = await fetch(`{{ route('admin.student-photos.bulk-reject-by-ids') }}`, {
+                        method: 'POST',
+                        headers: {
+                            'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
+                            'Accept': 'application/json',
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            idnumbers: this.bulkReject.ids,
+                            rejection_reason: this.bulkReject.reason,
+                        }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok || !data.ok) {
+                        this.bulkReject.error = data.error || ('HTTP ' + res.status);
+                    } else {
+                        this.bulkReject.result = data;
+                    }
+                } catch (e) {
+                    this.bulkReject.error = e.message;
+                } finally {
+                    this.bulkReject.loading = false;
+                }
+            },
             bulk: {
                 open: false, phase: 'confirm', // confirm | running | done
                 ids: [], total: 0, processed: 0, succeeded: 0, failed: 0,
                 currentName: '', cancel: false, errors: [],
-                runQuality: true,
+                runQuality: true, runSimilarity: true,
+                // Konkurensiya = 1 (default): sessiya bo'g'iqligi va AI servis
+                // overload'iga olib kelmaslik uchun. Slayder bilan oshirish mumkin.
+                concurrency: 1,
+                inflight: [],
             },
             openLightbox(src, alt) { this.lightbox = { open: true, src, alt }; },
             openCompare(photoId, profile, uploaded, title, existing, existingQuality) {
@@ -61,6 +104,18 @@
                     photoId, loading: false, result: existing || null, error: null,
                     quality: existingQuality || null, qualityLoading: false, qualityError: null,
                 };
+            },
+            // Server JSON o'rniga HTML xato sahifasini qaytarsa (500/502/504),
+            // res.json() noto'g'ri JSON xatosi tashlaydi. Bu helper xom matnni
+            // o'qib, JSON bo'lsa parse qiladi, aks holda holat kodi bilan xato qaytaradi.
+            async _safeJson(res) {
+                const text = await res.text();
+                try {
+                    return { data: JSON.parse(text), parsed: true };
+                } catch (_) {
+                    const snippet = text ? text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 140) : '';
+                    return { data: { error: `HTTP ${res.status}${snippet ? ' — ' + snippet : ''}` }, parsed: false };
+                }
             },
             async runQualityCheck() {
                 this.compare.qualityLoading = true;
@@ -73,9 +128,11 @@
                             'Accept': 'application/json',
                         },
                     });
-                    const data = await res.json();
+                    const { data, parsed } = await this._safeJson(res);
                     if (!res.ok) {
                         this.compare.qualityError = data.error || 'Nomaʼlum xatolik';
+                    } else if (!parsed) {
+                        this.compare.qualityError = 'Server JSON o\'rniga noto\'g\'ri javob qaytardi: ' + (data.error || '');
                     } else {
                         this.compare.quality = data;
                     }
@@ -97,9 +154,11 @@
                             'Accept': 'application/json',
                         },
                     });
-                    const data = await res.json();
+                    const { data, parsed } = await this._safeJson(res);
                     if (!res.ok) {
                         this.compare.error = data.error || 'Nomaʼlum xatolik';
+                    } else if (!parsed) {
+                        this.compare.error = 'Server JSON o\'rniga noto\'g\'ri javob qaytardi: ' + (data.error || '');
                     } else {
                         this.compare.result = data;
                     }
@@ -121,51 +180,97 @@
                     processed: 0, succeeded: 0, failed: 0,
                     currentName: '', cancel: false, errors: [],
                     runQuality: true, runSimilarity: true,
+                    concurrency: 1,
+                    inflight: [],
                 };
+            },
+            // POST + AbortController bilan timeout. Cheksiz osilib qolmaslik uchun.
+            // Server JSON o'rniga HTML qaytarsa ham (nginx 504, Laravel debug sahifasi),
+            // tushunarli xato xabarini chiqaradi.
+            async _bulkPost(url, csrf, timeoutMs) {
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), timeoutMs);
+                try {
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                        signal: controller.signal,
+                    });
+                    if (res.ok) return { ok: true };
+                    const text = await res.text();
+                    let errMsg = 'HTTP ' + res.status;
+                    try {
+                        const j = JSON.parse(text);
+                        if (j && j.error) errMsg = j.error;
+                    } catch (_) {
+                        const snippet = text.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80);
+                        if (snippet) errMsg += ' — ' + snippet;
+                    }
+                    return { ok: false, error: errMsg };
+                } catch (e) {
+                    if (e.name === 'AbortError') {
+                        return { ok: false, error: `Timeout: AI servis ${Math.round(timeoutMs / 1000)} soniyada javob bermadi` };
+                    }
+                    return { ok: false, error: e.message };
+                } finally {
+                    clearTimeout(timer);
+                }
+            },
+            async _bulkProcessOne(id, csrf) {
+                this.bulk.inflight = [...this.bulk.inflight, id];
+                let okOne = true;
+                try {
+                    const tasks = [];
+                    if (this.bulk.runSimilarity) {
+                        tasks.push(this._bulkPost(`/admin/student-photos/${id}/check-similarity`, csrf, 60000)
+                            .then(r => { if (!r.ok) { okOne = false; this.bulk.errors.push(`#${id} (similarity): ${r.error}`); } }));
+                    }
+                    if (this.bulk.runQuality) {
+                        tasks.push(this._bulkPost(`/admin/student-photos/${id}/check-quality`, csrf, 60000)
+                            .then(r => { if (!r.ok) { okOne = false; this.bulk.errors.push(`#${id} (quality): ${r.error}`); } }));
+                    }
+                    await Promise.all(tasks);
+                    if (okOne) { this.bulk.succeeded++; } else { this.bulk.failed++; }
+                } catch (e) {
+                    this.bulk.failed++;
+                    this.bulk.errors.push(`#${id}: ${e.message}`);
+                } finally {
+                    this.bulk.inflight = this.bulk.inflight.filter(x => x !== id);
+                    this.bulk.processed++;
+                    this.bulk.currentName = this.bulk.inflight.length
+                        ? `#${this.bulk.inflight.join(', #')} (${this.bulk.processed}/${this.bulk.total})`
+                        : `${this.bulk.processed}/${this.bulk.total}`;
+                }
             },
             async runBulk() {
                 this.bulk.phase = 'running';
+                this.bulk.processed = 0;
+                this.bulk.succeeded = 0;
+                this.bulk.failed = 0;
+                this.bulk.errors = [];
+                this.bulk.inflight = [];
                 const csrf = document.querySelector('meta[name=csrf-token]').content;
-                for (let i = 0; i < this.bulk.ids.length; i++) {
-                    if (this.bulk.cancel) break;
-                    const id = this.bulk.ids[i];
-                    this.bulk.currentName = `#${id} (${i + 1}/${this.bulk.total})`;
-                    let okOne = true;
-                    try {
-                        if (this.bulk.runSimilarity) {
-                            const r1 = await fetch(`/admin/student-photos/${id}/check-similarity`, {
-                                method: 'POST',
-                                headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
-                            });
-                            if (!r1.ok) {
-                                okOne = false;
-                                const err = await r1.json().catch(() => ({}));
-                                this.bulk.errors.push(`#${id} (similarity): ${err.error || ('HTTP ' + r1.status)}`);
-                            }
-                        }
-                        if (this.bulk.runQuality) {
-                            const r2 = await fetch(`/admin/student-photos/${id}/check-quality`, {
-                                method: 'POST',
-                                headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
-                            });
-                            if (!r2.ok) {
-                                okOne = false;
-                                const err = await r2.json().catch(() => ({}));
-                                this.bulk.errors.push(`#${id} (quality): ${err.error || ('HTTP ' + r2.status)}`);
-                            }
-                        }
-                        if (okOne) { this.bulk.succeeded++; } else { this.bulk.failed++; }
-                    } catch (e) {
-                        this.bulk.failed++;
-                        this.bulk.errors.push(`#${id}: ${e.message}`);
+                const queue = [...this.bulk.ids];
+                const concurrency = Math.max(1, Math.min(this.bulk.concurrency || 3, 5));
+
+                const worker = async () => {
+                    while (queue.length && !this.bulk.cancel) {
+                        const id = queue.shift();
+                        if (id === undefined) break;
+                        await this._bulkProcessOne(id, csrf);
                     }
-                    this.bulk.processed = i + 1;
-                }
+                };
+                const workers = [];
+                for (let i = 0; i < concurrency; i++) workers.push(worker());
+                await Promise.all(workers);
                 this.bulk.phase = 'done';
             },
             rowQuality: { id: null, loading: false, error: null },
             async runRowQuality(photoId) {
                 this.rowQuality = { id: photoId, loading: true, error: null };
+                const timeoutMs = 60000;
+                const controller = new AbortController();
+                const timer = setTimeout(() => controller.abort(), timeoutMs);
                 try {
                     const res = await fetch(`/admin/student-photos/${photoId}/check-quality`, {
                         method: 'POST',
@@ -173,18 +278,27 @@
                             'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content,
                             'Accept': 'application/json',
                         },
+                        signal: controller.signal,
                     });
-                    const data = await res.json();
+                    const { data, parsed } = await this._safeJson(res);
                     if (!res.ok) {
-                        this.rowQuality.error = data.error || 'Xatolik';
+                        this.rowQuality.error = data.error || ('HTTP ' + res.status);
                         alert('Sifat tekshiruvi xato: ' + this.rowQuality.error);
+                    } else if (!parsed) {
+                        this.rowQuality.error = 'Server JSON o\'rniga noto\'g\'ri javob qaytardi: ' + (data.error || '');
+                        alert('Xatolik: ' + this.rowQuality.error);
                     } else {
                         location.reload();
                     }
                 } catch (e) {
-                    this.rowQuality.error = e.message;
-                    alert('Xatolik: ' + e.message);
+                    if (e.name === 'AbortError') {
+                        this.rowQuality.error = `Timeout: AI servis ${Math.round(timeoutMs / 1000)} soniyada javob bermadi`;
+                    } else {
+                        this.rowQuality.error = e.message;
+                    }
+                    alert('Xatolik: ' + this.rowQuality.error);
                 } finally {
+                    clearTimeout(timer);
                     this.rowQuality.loading = false;
                 }
             },
@@ -414,6 +528,17 @@
                                        class="sp-text-input" style="flex:1;min-width:0;" />
                             </div>
                         </div>
+                        <div class="filter-item" style="min-width: 180px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#a855f7;"></span> Moodle holati</label>
+                            <select name="moodle_sync" class="select2-sp" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="confirmed" {{ request('moodle_sync') == 'confirmed' ? 'selected' : '' }}>Moodle'da tasdiqlangan</option>
+                                <option value="sent_unconfirmed" {{ request('moodle_sync') == 'sent_unconfirmed' ? 'selected' : '' }}>Yuborilgan, tasdiq kutilmoqda</option>
+                                <option value="face_api_failed" {{ request('moodle_sync') == 'face_api_failed' ? 'selected' : '' }}>Moodle: yuz topilmadi</option>
+                                <option value="failed" {{ request('moodle_sync') == 'failed' ? 'selected' : '' }}>Yuborish xatosi</option>
+                                <option value="never" {{ request('moodle_sync') == 'never' ? 'selected' : '' }}>Hech qachon yuborilmagan</option>
+                            </select>
+                        </div>
                         <div class="filter-item" style="flex: 1; min-width: 180px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:6px;flex-wrap:wrap;">
@@ -460,13 +585,19 @@
                                 class="inline-flex items-center gap-1 px-2 py-1.5 text-xs text-gray-500 hover:text-gray-700">
                             Tanlovni tozalash
                         </button>
+                        <button type="button" @click="openBulkRejectByIds()"
+                                class="inline-flex items-center gap-1.5 px-3 py-1.5 bg-red-700 text-white text-xs font-semibold rounded-md hover:bg-red-800"
+                                title="Talaba ID ro'yxatini paste qilib, mos approved rasmlarni rad etish">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/></svg>
+                            Ro'yxat bo'yicha rad etish
+                        </button>
                     </div>
                 </div>
 
                 <div class="p-6 pt-3">
                     {{-- Jadval --}}
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                    <div class="student-photos-table-wrap">
+                        <table class="student-photos-table w-full divide-y divide-gray-200 text-sm table-auto">
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-3 py-2 text-center font-medium text-gray-600">
@@ -661,8 +792,18 @@
                                                 @if($photo->reviewed_by_name)
                                                     <div class="text-[11px] text-gray-500 mt-0.5">{{ $photo->reviewed_by_name }}</div>
                                                 @endif
+                                                @if($photo->descriptor_confirmed_at)
+                                                    <div class="mt-1"><span class="inline-block px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-medium" title="Moodle face-api descriptori muvaffaqiyatli yozilgan">Moodle ✓</span></div>
+                                                @elseif($photo->moodle_synced_at)
+                                                    <div class="mt-1"><span class="inline-block px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[10px] font-medium" title="Moodle'ga yuborilgan, descriptor tasdig'i kutilmoqda">Moodle: kutilmoqda</span></div>
+                                                @else
+                                                    <div class="mt-1"><span class="inline-block px-2 py-0.5 rounded-full bg-gray-100 text-gray-700 text-[10px] font-medium" title="Hali Moodle'ga yuborilmagan (queue ishga tushgani kutilmoqda)">Moodle: navbatda</span></div>
+                                                @endif
                                             @elseif($photo->status === 'rejected')
                                                 <span class="inline-block px-2 py-0.5 rounded-full bg-red-100 text-red-800 text-xs font-medium" title="{{ $photo->rejection_reason }}">Rad etilgan</span>
+                                                @if($photo->moodle_sync_status === 'moodle_face_api_failed')
+                                                    <div class="mt-1"><span class="inline-block px-2 py-0.5 rounded-full bg-rose-100 text-rose-800 text-[10px] font-medium" title="{{ $photo->moodle_sync_error }}">Moodle: yuz topilmadi</span></div>
+                                                @endif
                                                 @if($photo->rejection_reason)
                                                     <div class="text-[11px] text-gray-500 mt-0.5 max-w-[180px] truncate" title="{{ $photo->rejection_reason }}">{{ $photo->rejection_reason }}</div>
                                                 @endif
@@ -853,6 +994,80 @@
                         </button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        {{-- Ro'yxat bo'yicha rad etish modali --}}
+        <div x-show="bulkReject.open" x-cloak x-transition.opacity
+             class="fixed inset-0 z-50 bg-black/60 flex items-center justify-center p-4"
+             @click.self="if (!bulkReject.loading) bulkReject.open = false"
+             @keydown.escape.window="if (!bulkReject.loading) bulkReject.open = false">
+            <div class="bg-white rounded-lg shadow-2xl max-w-xl w-full p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-1">Ro'yxat bo'yicha rad etish</h3>
+                <p class="text-xs text-gray-500 mb-4">
+                    Talaba ID raqamlarini pastdagi maydonga joylashtiring (har qatorga bitta yoki vergul bilan ajratilgan).
+                    Faqat hozirda <strong>tasdiqlangan</strong> holatdagi rasmlar rad etiladi.
+                </p>
+
+                <template x-if="!bulkReject.result">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Talaba IDlar</label>
+                        <textarea x-model="bulkReject.ids" rows="8"
+                                  :disabled="bulkReject.loading"
+                                  class="w-full rounded-md border-gray-300 shadow-sm text-sm font-mono mb-3"
+                                  placeholder="368231101075&#10;368241100401&#10;..."></textarea>
+
+                        <label class="block text-sm font-medium text-gray-700 mb-1">Rad etish sababi</label>
+                        <input type="text" x-model="bulkReject.reason" maxlength="500"
+                               :disabled="bulkReject.loading"
+                               class="w-full rounded-md border-gray-300 shadow-sm text-sm mb-3" />
+
+                        <div x-show="bulkReject.error" class="text-sm text-red-600 mb-3" x-text="bulkReject.error"></div>
+
+                        <div class="flex justify-end gap-2">
+                            <button type="button" @click="bulkReject.open = false"
+                                    :disabled="bulkReject.loading"
+                                    class="px-4 py-2 bg-gray-100 text-gray-700 text-sm rounded-md hover:bg-gray-200 disabled:opacity-50">
+                                Bekor qilish
+                            </button>
+                            <button type="button" @click="submitBulkRejectByIds()"
+                                    :disabled="bulkReject.loading || !bulkReject.ids.trim() || !bulkReject.reason.trim()"
+                                    class="px-4 py-2 bg-red-700 text-white text-sm font-semibold rounded-md hover:bg-red-800 disabled:opacity-50">
+                                <span x-show="!bulkReject.loading">Rad etish</span>
+                                <span x-show="bulkReject.loading">Yuborilmoqda…</span>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+
+                <template x-if="bulkReject.result">
+                    <div>
+                        <div class="rounded-md bg-emerald-50 border border-emerald-200 p-4 mb-4 text-sm">
+                            <div>Yuborilgan IDlar: <strong x-text="bulkReject.result.requested"></strong></div>
+                            <div>Approved rasmga mos kelgan: <strong x-text="bulkReject.result.matched"></strong></div>
+                            <div>Rad etilgan: <strong class="text-red-700" x-text="bulkReject.result.updated"></strong></div>
+                            <div>Topilmadi (yoki approved emas): <strong x-text="bulkReject.result.missing_count"></strong></div>
+                        </div>
+
+                        <template x-if="bulkReject.result.missing && bulkReject.result.missing.length">
+                            <div class="mb-4">
+                                <div class="text-xs font-semibold text-gray-600 mb-1">
+                                    Topilmagan IDlar (birinchi <span x-text="bulkReject.result.missing.length"></span> ta):
+                                </div>
+                                <textarea readonly rows="4"
+                                          class="w-full rounded-md border-gray-200 bg-gray-50 text-xs font-mono"
+                                          x-text="bulkReject.result.missing.join('\n')"></textarea>
+                            </div>
+                        </template>
+
+                        <div class="flex justify-end gap-2">
+                            <button type="button" @click="bulkReject.open = false; window.location.reload();"
+                                    class="px-4 py-2 bg-indigo-600 text-white text-sm font-semibold rounded-md hover:bg-indigo-700">
+                                Yopish va sahifani yangilash
+                            </button>
+                        </div>
+                    </div>
+                </template>
             </div>
         </div>
 
@@ -1057,10 +1272,18 @@
                                 <span>Rasm sifati tekshiruvi (markaz, framing, oq xalat, yoritish)</span>
                             </label>
                         </div>
+                        <div class="space-y-2 rounded-md border border-gray-200 p-3 bg-gray-50">
+                            <div class="text-xs font-bold uppercase text-gray-500 mb-1">Parallellik (bir vaqtda nechta rasm)</div>
+                            <div class="flex items-center gap-2">
+                                <input type="range" min="1" max="5" step="1" x-model.number="bulk.concurrency"
+                                       class="flex-1">
+                                <span class="text-sm font-semibold w-8 text-center" x-text="bulk.concurrency"></span>
+                            </div>
+                            <div class="text-[11px] text-gray-500">Ko'p qilsangiz tezroq, lekin AI servisni ortiqcha yuklamasligi kerak.</div>
+                        </div>
                         <div class="text-xs text-gray-500">
-                            Har bir rasm
-                            <span x-text="((bulk.runSimilarity ? 3 : 0) + (bulk.runQuality ? 3 : 0)) + '-' + ((bulk.runSimilarity ? 5 : 0) + (bulk.runQuality ? 5 : 0))"></span>
-                            soniya oladi. Taxminiy vaqt: <strong x-text="Math.ceil(bulk.total * ((bulk.runSimilarity ? 3 : 0) + (bulk.runQuality ? 4 : 0)) / 60) + ' daqiqa'"></strong>.
+                            Similarity va quality endi parallel ishlaydi. Taxminiy vaqt:
+                            <strong x-text="Math.ceil(bulk.total * Math.max(bulk.runSimilarity ? 4 : 0, bulk.runQuality ? 4 : 0) / Math.max(1, bulk.concurrency) / 60) + ' daqiqa'"></strong>.
                             Natija avtomat bazaga saqlanadi. Tahlil chog'ida oynani yopmang.
                         </div>
                         <div class="flex justify-end gap-2 pt-2">
@@ -1093,8 +1316,20 @@
                                 <span class="text-green-700">✓ <span x-text="bulk.succeeded"></span></span>
                                 &nbsp;·&nbsp;
                                 <span class="text-red-700">✗ <span x-text="bulk.failed"></span></span>
+                                &nbsp;·&nbsp;
+                                <span class="text-indigo-700">⏳ <span x-text="bulk.inflight.length"></span></span>
                             </span>
                         </div>
+                        <template x-if="bulk.errors.length > 0">
+                            <details class="rounded-md bg-red-50 border border-red-200 text-red-800 px-3 py-2 text-xs">
+                                <summary class="cursor-pointer font-semibold">Joriy xatoliklar (<span x-text="bulk.errors.length"></span>)</summary>
+                                <ul class="mt-2 space-y-0.5 max-h-32 overflow-y-auto">
+                                    <template x-for="err in bulk.errors.slice(-50)" :key="err">
+                                        <li x-text="err"></li>
+                                    </template>
+                                </ul>
+                            </details>
+                        </template>
                         <div class="flex justify-end">
                             <button type="button" @click="bulk.cancel = true"
                                     :disabled="bulk.cancel"
@@ -1178,7 +1413,12 @@
                 numberDebounce = setTimeout(function() { $form.trigger('submit'); }, 600);
             });
 
-            // Matn qidiruv — Enter bosilganda submit bo'ladi (default brauzer xatti-harakati)
+            // Matn qidiruv — debounce bilan auto-submit (Enter ham ishlaydi)
+            var searchDebounce;
+            $form.find('input[name=search]').on('input', function() {
+                clearTimeout(searchDebounce);
+                searchDebounce = setTimeout(function() { $form.trigger('submit'); }, 500);
+            });
         });
     </script>
 
@@ -1216,6 +1456,25 @@
         .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
         .select2-container--classic .select2-selection--single:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
         .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height: 34px; padding-left: 10px; padding-right: 52px; color: #1e293b; font-size: 0.8rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* Jadval butun content kengligini egallaydi. Ustunlar kontentiga
+           qarab proporsional kengayadi, so'zlar oddiy joyda (bo'sh joy/defis)
+           uziladi — harf-harf parchalanmaydi. Tor xizmat ustunlari (checkbox,
+           #, Rasm, AI%, Sifat, Solishtirish, Ruxsat) kontentiga yopishadi va
+           matnli ustunlarga joy beradi. Kerak bo'lganda gorizontal scroll. */
+        .student-photos-table-wrap { overflow-x: auto; }
+        .student-photos-table { width: 100%; }
+        .student-photos-table th,
+        .student-photos-table td {
+            vertical-align: top;
+        }
+        .student-photos-table th:nth-child(1), .student-photos-table td:nth-child(1) { width: 1%; white-space: nowrap; }
+        .student-photos-table th:nth-child(2), .student-photos-table td:nth-child(2) { width: 1%; white-space: nowrap; }
+        .student-photos-table th:nth-child(9), .student-photos-table td:nth-child(9) { width: 1%; white-space: nowrap; text-align: right; padding-right: 0.25rem; }
+        .student-photos-table th:nth-child(11), .student-photos-table td:nth-child(11) { width: 1%; white-space: nowrap; }
+        .student-photos-table th:nth-child(12), .student-photos-table td:nth-child(12) { width: 350px; max-width: 350px; white-space: normal; word-break: break-word; }
+        .student-photos-table th:nth-child(13), .student-photos-table td:nth-child(13) { width: 1%; white-space: nowrap; }
+        .student-photos-table th:nth-child(14), .student-photos-table td:nth-child(14) { width: 1%; white-space: nowrap; }
+
         .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 34px; width: 22px; background: transparent; border-left: none; right: 0; }
         .select2-container--classic .select2-selection--single .select2-selection__clear { position: absolute; right: 22px; top: 50%; transform: translateY(-50%); font-size: 16px; font-weight: bold; color: #94a3b8; cursor: pointer; padding: 2px 6px; z-index: 2; background: #fff; border-radius: 50%; line-height: 1; transition: all 0.15s; }
         .select2-container--classic .select2-selection--single .select2-selection__clear:hover { color: #fff; background: #ef4444; }

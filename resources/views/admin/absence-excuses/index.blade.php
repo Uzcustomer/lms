@@ -230,6 +230,12 @@
                                                                 @method('DELETE')
                                                                 <button type="submit" class="text-red-500 hover:text-red-700 font-medium">O'chirish</button>
                                                             </form>
+                                                            @if($exc->status === 'approved')
+                                                            <form method="POST" action="{{ route('admin.absence-excuses.reset-to-pending', $exc->id) }}" onsubmit="return confirm('Ariza pending holatiga qaytariladi va PDF o\'chiriladi. Davom etilsinmi?')">
+                                                                @csrf
+                                                                <button type="submit" class="text-amber-600 hover:text-amber-800 font-medium">Qaytarish</button>
+                                                            </form>
+                                                            @endif
                                                             @endif
                                                         </div>
                                                     </td>
@@ -444,6 +450,12 @@
                                                     @method('DELETE')
                                                     <button type="submit" class="text-red-500 hover:text-red-700 font-medium">O'chirish</button>
                                                 </form>
+                                                @if($excuse->status === 'approved')
+                                                <form method="POST" action="{{ route('admin.absence-excuses.reset-to-pending', $excuse->id) }}" onsubmit="return confirm('Ariza pending holatiga qaytariladi va PDF o\'chiriladi. Davom etilsinmi?')">
+                                                    @csrf
+                                                    <button type="submit" class="text-amber-600 hover:text-amber-800 font-medium">Qaytarish</button>
+                                                </form>
+                                                @endif
                                                 @endif
                                             </div>
                                         </td>

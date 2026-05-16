@@ -38,6 +38,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\View\View;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Maatwebsite\Excel\Facades\Excel;
 use Yajra\DataTables\Facades\DataTables;
 
@@ -130,6 +131,514 @@ class StudentController extends Controller
             ->pluck('country_name');
 
         return view('admin.students.index', compact('students', 'educationTypes', 'countries'));
+    }
+
+    public function statistics(Request $request)
+    {
+        // Faqat aktiv talabalar (student_status_code = 11) bo'yicha sanaymiz.
+        // Ta'lim turi va jinsi bo'yicha kesim — "Umumiy" tabidagi kartalar uchun.
+        $rows = DB::table('students')
+            ->selectRaw('education_type_name, gender_name, COUNT(*) as total')
+            ->where('student_status_code', 11)
+            ->groupBy('education_type_name', 'gender_name')
+            ->get();
+
+        $byEduGender = [];
+        foreach ($rows as $r) {
+            $type   = trim((string) $r->education_type_name);
+            $gender = strtolower(trim((string) $r->gender_name));
+            if ($type === '') {
+                continue;
+            }
+            if (!isset($byEduGender[$type])) {
+                $byEduGender[$type] = ['male' => 0, 'female' => 0, 'total' => 0];
+            }
+            $byEduGender[$type]['total'] += (int) $r->total;
+            // Erkak / Erkaklar / Male / etc.
+            if (str_starts_with($gender, 'erkak') || $gender === 'male' || $gender === 'm') {
+                $byEduGender[$type]['male'] += (int) $r->total;
+            } elseif (str_starts_with($gender, 'ayol') || str_starts_with($gender, 'xotin')
+                    || $gender === 'female' || $gender === 'f') {
+                $byEduGender[$type]['female'] += (int) $r->total;
+            }
+        }
+
+        // Bakalavr / Magistratura / Ordinatura kartalari — DB nomi farq qilishi
+        // mumkin (Bakalavriat, Magistr, Ordinatura...), shuning uchun moslama.
+        $aliases = [
+            'bakalavr'    => ['bakalavr', 'bakalavriat'],
+            'magistr'     => ['magistratura', 'magistr'],
+            'ordinatura'  => ['ordinatura'],
+        ];
+        $resolve = function (array $keys) use ($byEduGender) {
+            $out = ['male' => 0, 'female' => 0, 'total' => 0];
+            foreach ($byEduGender as $type => $stat) {
+                $low = mb_strtolower($type);
+                foreach ($keys as $k) {
+                    if (str_contains($low, $k)) {
+                        $out['male']   += $stat['male'];
+                        $out['female'] += $stat['female'];
+                        $out['total']  += $stat['total'];
+                        break;
+                    }
+                }
+            }
+            return $out;
+        };
+
+        $stats = [
+            'bakalavr'   => $resolve($aliases['bakalavr']),
+            'magistr'    => $resolve($aliases['magistr']),
+            'ordinatura' => $resolve($aliases['ordinatura']),
+        ];
+        $stats['total'] = [
+            'male'   => array_sum(array_column($byEduGender, 'male')),
+            'female' => array_sum(array_column($byEduGender, 'female')),
+            'total'  => array_sum(array_column($byEduGender, 'total')),
+        ];
+
+        // Yoshi kesimi — 30 yoshdan kichik / katta (birth_date asosida).
+        $ageRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->whereNotNull('birth_date')
+            ->selectRaw("SUM(TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) < 30) as younger,
+                         SUM(TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) >= 30) as older")
+            ->first();
+        $ageStats = [
+            'younger' => (int) ($ageRows->younger ?? 0),
+            'older'   => (int) ($ageRows->older ?? 0),
+        ];
+
+        // To'lov shakli kesimi — Davlat granti / To'lov-kontrakt.
+        $payRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('payment_form_name, COUNT(*) as total')
+            ->groupBy('payment_form_name')
+            ->get();
+        $payStats = ['grant' => 0, 'contract' => 0];
+        foreach ($payRows as $p) {
+            $name = mb_strtolower(trim((string) $p->payment_form_name));
+            if (str_contains($name, 'grant') || str_contains($name, 'byudjet') || str_contains($name, 'budjet')) {
+                $payStats['grant'] += (int) $p->total;
+            } else {
+                // qolganlari (to'lov-kontrakt, kontrakt, shartnoma, ...) kontraktga
+                $payStats['contract'] += (int) $p->total;
+            }
+        }
+
+        // Kurslar kesimi — ta'lim turi × kurs (level_code) × jins × semestr.
+        // Kurslar tabidagi KPI raqamlari va stacked bar chart uchun.
+        $courseRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->whereNotNull('level_code')
+            ->selectRaw('education_type_name, level_code, gender_name, semester_code, COUNT(*) as total')
+            ->groupBy('education_type_name', 'level_code', 'gender_name', 'semester_code')
+            ->get();
+
+        $eduKeyOf = function (string $type): ?string {
+            $low = mb_strtolower($type);
+            if (str_contains($low, 'bakalavr')) return 'bakalavr';
+            if (str_contains($low, 'magistr')) return 'magistr';
+            if (str_contains($low, 'ordinatura')) return 'ordinatura';
+            return null;
+        };
+
+        // courseStats[eduKey][level] = ['total','male','female','semesters'=>[sem=>count]]
+        $courseStats = [];
+        // courseTotals[level] = jami (barcha ta'lim turlari) — KPI kartalar uchun
+        $courseTotals = [];
+        // HEMIS level_code odatda 11..16 ko'rinishida (11=1-kurs ... 16=6-kurs).
+        // Toza 1..8 ko'rinishi ham bo'lishi mumkin — ikkalasini ham qo'llaymiz.
+        $toCourse = function ($raw): int {
+            $n = (int) $raw;
+            if ($n >= 11 && $n <= 20) {
+                return $n - 10;       // 11→1, 12→2, ... 16→6
+            }
+            return $n;                // allaqachon 1..8 bo'lsa
+        };
+        foreach ($courseRows as $r) {
+            $eduKey = $eduKeyOf((string) $r->education_type_name);
+            if ($eduKey === null) continue;
+            $level = $toCourse($r->level_code);
+            if ($level < 1 || $level > 8) continue;
+            $cnt = (int) $r->total;
+            $gender = mb_strtolower(trim((string) $r->gender_name));
+
+            if (!isset($courseStats[$eduKey][$level])) {
+                $courseStats[$eduKey][$level] = ['total' => 0, 'male' => 0, 'female' => 0, 'semesters' => []];
+            }
+            $courseStats[$eduKey][$level]['total'] += $cnt;
+            if (str_starts_with($gender, 'erkak') || $gender === 'male' || $gender === 'm') {
+                $courseStats[$eduKey][$level]['male'] += $cnt;
+            } elseif (str_starts_with($gender, 'ayol') || str_starts_with($gender, 'xotin')
+                    || $gender === 'female' || $gender === 'f') {
+                $courseStats[$eduKey][$level]['female'] += $cnt;
+            }
+            $sem = (string) ($r->semester_code ?? '');
+            if ($sem !== '') {
+                $courseStats[$eduKey][$level]['semesters'][$sem] =
+                    ($courseStats[$eduKey][$level]['semesters'][$sem] ?? 0) + $cnt;
+            }
+
+            $courseTotals[$level] = ($courseTotals[$level] ?? 0) + $cnt;
+        }
+        ksort($courseTotals);
+
+        // Ijtimoiy toifalar kesimi — social_category_name bo'yicha.
+        // "Boshqa" / bo'sh qiymatlar — ijtimoiy toifasi yo'q deb hisoblanadi.
+        $socialRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('social_category_name, COUNT(*) as total')
+            ->groupBy('social_category_name')
+            ->get();
+        $socialStats = [];          // [name => count] — faqat haqiqiy toifalar
+        $socialHasCategory = 0;     // toifasi bor talabalar jami
+        foreach ($socialRows as $s) {
+            $name = trim((string) $s->social_category_name);
+            $low = mb_strtolower($name);
+            if ($name === '' || str_contains($low, 'boshqa') || $low === "yo'q" || $low === 'yoq') {
+                continue;
+            }
+            $socialStats[$name] = (int) $s->total;
+            $socialHasCategory += (int) $s->total;
+        }
+        arsort($socialStats);
+
+        // Fuqaroligi kesimi — citizenship_name × ta'lim turi (stacked bar uchun).
+        $citRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('citizenship_name, education_type_name, COUNT(*) as total')
+            ->groupBy('citizenship_name', 'education_type_name')
+            ->get();
+        // citizenshipStats[citName] = ['total'=>n, 'edu'=>[eduKey=>n]]
+        $citizenshipStats = [];
+        foreach ($citRows as $r) {
+            $cit = trim((string) $r->citizenship_name);
+            if ($cit === '') {
+                $cit = 'Boshqa';
+            }
+            $eduKey = $eduKeyOf((string) $r->education_type_name) ?? 'other';
+            if (!isset($citizenshipStats[$cit])) {
+                $citizenshipStats[$cit] = ['total' => 0, 'edu' => ['bakalavr' => 0, 'magistr' => 0, 'ordinatura' => 0, 'other' => 0]];
+            }
+            $citizenshipStats[$cit]['total'] += (int) $r->total;
+            $citizenshipStats[$cit]['edu'][$eduKey] += (int) $r->total;
+        }
+        uasort($citizenshipStats, fn($a, $b) => $b['total'] <=> $a['total']);
+
+        // Davlat (country) kesimi — eng ko'p mamlakatlar (aylanma chart uchun).
+        $countryRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('country_name, COUNT(*) as total')
+            ->groupBy('country_name')
+            ->orderByDesc('total')
+            ->get();
+        $countryStats = [];
+        foreach ($countryRows as $c) {
+            $name = trim((string) $c->country_name);
+            if ($name === '') {
+                $name = 'Boshqa';
+            }
+            $countryStats[$name] = ($countryStats[$name] ?? 0) + (int) $c->total;
+        }
+        arsort($countryStats);
+
+        // Yashash joyi kesimi — ta'lim turi × accommodation_name (stacked bar uchun).
+        $accomRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('accommodation_name, education_type_name, COUNT(*) as total')
+            ->groupBy('accommodation_name', 'education_type_name')
+            ->get();
+        // accomStats[name] = ['total'=>n, 'edu'=>[eduKey=>n]]
+        $accomStats = [];
+        foreach ($accomRows as $r) {
+            $name = trim((string) $r->accommodation_name);
+            if ($name === '') {
+                $name = 'Boshqa';
+            }
+            $eduKey = $eduKeyOf((string) $r->education_type_name) ?? 'other';
+            if (!isset($accomStats[$name])) {
+                $accomStats[$name] = ['total' => 0, 'edu' => ['bakalavr' => 0, 'magistr' => 0, 'ordinatura' => 0, 'other' => 0]];
+            }
+            $accomStats[$name]['total'] += (int) $r->total;
+            $accomStats[$name]['edu'][$eduKey] += (int) $r->total;
+        }
+        uasort($accomStats, fn($a, $b) => $b['total'] <=> $a['total']);
+
+        // Viloyatlar kesimi — province_name × gender_name × education_type
+        // (gorizontal/vertikal bar chart, edu tab filtri uchun).
+        $provRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('province_name, gender_name, education_type_name, COUNT(*) as total')
+            ->groupBy('province_name', 'gender_name', 'education_type_name')
+            ->get();
+        $eduBuckets = ['all', 'bakalavr', 'magistr', 'ordinatura'];
+        $provinceByEdu = array_fill_keys($eduBuckets, []);
+        foreach ($provRows as $r) {
+            $name = trim((string) $r->province_name);
+            if ($name === '') { $name = 'Boshqa'; }
+            $gender = mb_strtolower(trim((string) $r->gender_name));
+            $ek = $eduKeyOf((string) $r->education_type_name);
+            $cnt = (int) $r->total;
+            $isMale   = str_starts_with($gender, 'erkak') || $gender === 'male' || $gender === 'm';
+            $isFemale = str_starts_with($gender, 'ayol') || str_starts_with($gender, 'xotin')
+                     || $gender === 'female' || $gender === 'f';
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                if (!isset($provinceByEdu[$bucket][$name])) {
+                    $provinceByEdu[$bucket][$name] = ['total' => 0, 'male' => 0, 'female' => 0];
+                }
+                $provinceByEdu[$bucket][$name]['total'] += $cnt;
+                if ($isMale)   $provinceByEdu[$bucket][$name]['male']   += $cnt;
+                if ($isFemale) $provinceByEdu[$bucket][$name]['female'] += $cnt;
+            }
+        }
+        foreach ($provinceByEdu as $k => $arr) {
+            uasort($arr, fn($a, $b) => $b['total'] <=> $a['total']);
+            $provinceByEdu[$k] = $arr;
+        }
+        $provinceStats = $provinceByEdu['all']; // legacy alias
+
+        // Yosh kesimini ta'lim turi bo'yicha (edu tab filtri uchun).
+        $ageRowsEdu = DB::table('students')
+            ->where('student_status_code', 11)
+            ->whereNotNull('birth_date')
+            ->selectRaw("education_type_name,
+                         SUM(TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) < 30) as younger,
+                         SUM(TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) >= 30) as older")
+            ->groupBy('education_type_name')
+            ->get();
+        $ageByEdu = array_fill_keys($eduBuckets, ['younger' => 0, 'older' => 0]);
+        foreach ($ageRowsEdu as $r) {
+            $ek = $eduKeyOf((string) $r->education_type_name);
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                $ageByEdu[$bucket]['younger'] += (int) $r->younger;
+                $ageByEdu[$bucket]['older']   += (int) $r->older;
+            }
+        }
+
+        // To'lov shakli ta'lim turi bo'yicha
+        $payRowsEdu = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('payment_form_name, education_type_name, COUNT(*) as total')
+            ->groupBy('payment_form_name', 'education_type_name')
+            ->get();
+        $payByEdu = array_fill_keys($eduBuckets, ['grant' => 0, 'contract' => 0]);
+        foreach ($payRowsEdu as $p) {
+            $name = mb_strtolower(trim((string) $p->payment_form_name));
+            $ek = $eduKeyOf((string) $p->education_type_name);
+            $key = (str_contains($name, 'grant') || str_contains($name, 'byudjet') || str_contains($name, 'budjet'))
+                ? 'grant' : 'contract';
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                $payByEdu[$bucket][$key] += (int) $p->total;
+            }
+        }
+
+        // Ijtimoiy toifalar ta'lim turi bo'yicha
+        $socialRowsEdu = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('social_category_name, education_type_name, COUNT(*) as total')
+            ->groupBy('social_category_name', 'education_type_name')
+            ->get();
+        $socialByEdu = array_fill_keys($eduBuckets, []);
+        $socialHasCategoryByEdu = array_fill_keys($eduBuckets, 0);
+        foreach ($socialRowsEdu as $s) {
+            $name = trim((string) $s->social_category_name);
+            $low = mb_strtolower($name);
+            if ($name === '' || str_contains($low, 'boshqa') || $low === "yo'q" || $low === 'yoq') {
+                continue;
+            }
+            $ek = $eduKeyOf((string) $s->education_type_name);
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                $socialByEdu[$bucket][$name] = ($socialByEdu[$bucket][$name] ?? 0) + (int) $s->total;
+                $socialHasCategoryByEdu[$bucket] += (int) $s->total;
+            }
+        }
+        foreach ($socialByEdu as $k => $arr) { arsort($arr); $socialByEdu[$k] = $arr; }
+
+        // Davlatlar ta'lim turi bo'yicha
+        $countryRowsEdu = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('country_name, education_type_name, COUNT(*) as total')
+            ->groupBy('country_name', 'education_type_name')
+            ->get();
+        $countryByEdu = array_fill_keys($eduBuckets, []);
+        foreach ($countryRowsEdu as $c) {
+            $name = trim((string) $c->country_name);
+            if ($name === '') { $name = 'Boshqa'; }
+            $ek = $eduKeyOf((string) $c->education_type_name);
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                $countryByEdu[$bucket][$name] = ($countryByEdu[$bucket][$name] ?? 0) + (int) $c->total;
+            }
+        }
+        foreach ($countryByEdu as $k => $arr) { arsort($arr); $countryByEdu[$k] = $arr; }
+
+        // Fuqaroligi ta'lim turi bo'yicha (jami count, edu split saqlanadi citizenshipStats da)
+        $citizenshipByEdu = array_fill_keys($eduBuckets, []);
+        foreach ($citizenshipStats as $cName => $cData) {
+            $citizenshipByEdu['all'][$cName] = ($citizenshipByEdu['all'][$cName] ?? 0) + (int) $cData['total'];
+            foreach (['bakalavr','magistr','ordinatura'] as $bucket) {
+                $citizenshipByEdu[$bucket][$cName] = ($citizenshipByEdu[$bucket][$cName] ?? 0)
+                    + (int) ($cData['edu'][$bucket] ?? 0);
+            }
+        }
+        foreach ($citizenshipByEdu as $k => $arr) { arsort($arr); $citizenshipByEdu[$k] = $arr; }
+
+        return view('admin.students.statistics', compact(
+            'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals',
+            'socialStats', 'socialHasCategory',
+            'citizenshipStats', 'countryStats',
+            'accomStats', 'provinceStats',
+            'ageByEdu', 'payByEdu', 'socialByEdu', 'socialHasCategoryByEdu',
+            'countryByEdu', 'citizenshipByEdu', 'provinceByEdu'
+        ));
+    }
+
+    public function disabledIndex(Request $request)
+    {
+        $disabledFilter = function ($q) {
+            $q->whereRaw('LOWER(social_category_name) LIKE ?', ['%nogiron%']);
+        };
+
+        $hasInfoTable = Schema::hasTable('student_disability_infos');
+
+        $query = Student::query()->where($disabledFilter);
+        if ($hasInfoTable) {
+            $query->with('disabilityInfo');
+        }
+
+        if ($request->filled('disability_type')) {
+            $query->where('social_category_code', $request->disability_type);
+        }
+
+        if ($request->filled('full_name')) {
+            $query->where('full_name', 'like', '%' . $request->full_name . '%');
+        }
+
+        if ($request->filled('student_id_number')) {
+            $query->where('student_id_number', $request->student_id_number);
+        }
+
+        if ($request->filled('department')) {
+            $query->where('department_id', $request->department);
+        }
+
+        if ($request->filled('group')) {
+            $query->where('group_id', $request->group);
+        }
+
+        if ($request->filled('level_code')) {
+            $query->where('level_code', $request->level_code);
+        }
+
+        if ($hasInfoTable && $request->filled('info_status')) {
+            if ($request->info_status === 'filled') {
+                $query->whereHas('disabilityInfo');
+            } elseif ($request->info_status === 'empty') {
+                $query->whereDoesntHave('disabilityInfo');
+            }
+        }
+
+        if ($request->filled('student_status')) {
+            if ($request->student_status === 'expelled') {
+                $query->whereRaw('LOWER(student_status_name) LIKE ?', ['%chetlash%']);
+            } elseif ($request->student_status === 'active') {
+                $query->where(function ($q) {
+                    $q->whereNull('student_status_name')
+                      ->orWhereRaw('LOWER(student_status_name) NOT LIKE ?', ['%chetlash%']);
+                });
+            }
+        }
+
+        $perPage = (int) $request->get('per_page', 50);
+        $students = $query->orderBy('full_name')->paginate($perPage)->appends($request->query());
+
+        $totalAll = Student::where($disabledFilter)->count();
+        $totalFilled = $hasInfoTable
+            ? Student::where($disabledFilter)->whereHas('disabilityInfo')->count()
+            : 0;
+        $totalEmpty = $totalAll - $totalFilled;
+        $totalExpelled = Student::where($disabledFilter)
+            ->whereRaw('LOWER(student_status_name) LIKE ?', ['%chetlash%'])
+            ->count();
+
+        $disabilityTypes = Student::select('social_category_code', 'social_category_name')
+            ->where($disabledFilter)
+            ->whereNotNull('social_category_code')
+            ->distinct()
+            ->orderBy('social_category_name')
+            ->get();
+
+        $departments = Student::select('department_id', 'department_name')
+            ->where($disabledFilter)
+            ->whereNotNull('department_id')
+            ->distinct()
+            ->orderBy('department_name')
+            ->get();
+
+        $groups = Student::select('group_id', 'group_name')
+            ->where($disabledFilter)
+            ->whereNotNull('group_id')
+            ->distinct()
+            ->orderBy('group_name')
+            ->get();
+
+        $levels = Student::select('level_code', 'level_name')
+            ->where($disabledFilter)
+            ->whereNotNull('level_code')
+            ->distinct()
+            ->orderBy('level_code')
+            ->get();
+
+        return view('admin.students.disabled', compact(
+            'students', 'disabilityTypes', 'departments', 'groups', 'levels',
+            'totalAll', 'totalFilled', 'totalEmpty', 'totalExpelled', 'hasInfoTable'
+        ));
+    }
+
+    public function disabledInfo(Student $student)
+    {
+        if (!Schema::hasTable('student_disability_infos')) {
+            return response()->json(['error' => 'Migratsiya bajarilmagan.'], 503);
+        }
+
+        $info = \App\Models\StudentDisabilityInfo::where('student_id', $student->id)->first();
+        $hasCertificate = $info && Schema::hasColumn('student_disability_infos', 'certificate_path') && $info->certificate_path;
+
+        return response()->json([
+            'student' => [
+                'id' => $student->id,
+                'full_name' => $student->full_name,
+                'student_id_number' => $student->student_id_number,
+                'department_name' => $student->department_name,
+                'specialty_name' => $student->specialty_name,
+                'group_name' => $student->group_name,
+                'level_name' => $student->level_name,
+                'social_category_name' => $student->social_category_name,
+            ],
+            'info' => $info ? [
+                'examined_at' => optional($info->examined_at)->format('d.m.Y'),
+                'disability_group' => \App\Models\StudentDisabilityInfo::GROUPS[$info->disability_group] ?? $info->disability_group,
+                'disability_reason' => $info->disability_reason,
+                'disability_duration' => optional($info->disability_duration)->format('d.m.Y'),
+                'reexamination_at' => optional($info->reexamination_at)->format('d.m.Y'),
+                'updated_at' => optional($info->updated_at)->format('d.m.Y H:i'),
+            ] : null,
+            'certificate_url' => $hasCertificate ? route('admin.students.disabled.certificate', $student->id) : null,
+        ]);
+    }
+
+    public function disabledCertificate(Student $student)
+    {
+        $info = \App\Models\StudentDisabilityInfo::where('student_id', $student->id)->firstOrFail();
+        if (!$info->certificate_path) {
+            abort(404);
+        }
+        return \Storage::disk('public')->response($info->certificate_path);
     }
 
     public function getFilterDepartments(Request $request)

@@ -29,6 +29,20 @@ class QuizResultController extends Controller
     }
 
     /**
+     * "1-urinish" / "2-urinish" / "3-urinish" → 1/2/3.
+     * shakl noma'lum bo'lsa attempt_number ga fallback.
+     */
+    public static function parseAttemptFromShakl(?string $shakl, $attemptNumber = null): int
+    {
+        if (is_string($shakl) && preg_match('/^(\d+)-urinish$/i', trim($shakl), $m)) {
+            $n = (int) $m[1];
+            if ($n >= 1 && $n <= 3) return $n;
+        }
+        $n = (int) ($attemptNumber ?? 1);
+        return $n >= 1 ? $n : 1;
+    }
+
+    /**
      * Diagnostika sahifasi — yangi dizayn bilan.
      */
     public function diagnostikaPage(Request $request)
@@ -700,8 +714,13 @@ class QuizResultController extends Controller
             $query = HemisQuizResult::where('is_active', 1);
 
             // Bitta (talaba, fan, quiz_type, shakl) bo'yicha eng yuqori bahoga ega bo'lgan
-            // urinishni qoldirish — diagnostikaData bilan bir xil mantiq.
-            $query->whereNotExists(function ($sub) {
+            // urinishni qoldirish — diagnostikaData bilan bir xil mantiq, lekin dedup
+            // foydalanuvchi tanlagan sana oralig'i ichida qo'llaniladi. Aks holda,
+            // oraliqdan tashqaridagi balandroq urinishlar shu oraliqdagi yozuvni
+            // yashirib qo'yishi mumkin edi.
+            $dateFrom = $request->filled('date_from') ? $request->date_from : null;
+            $dateTo   = $request->filled('date_to')   ? $request->date_to   : null;
+            $query->whereNotExists(function ($sub) use ($dateFrom, $dateTo) {
                 $sub->select(\Illuminate\Support\Facades\DB::raw(1))
                     ->from('hemis_quiz_results as h2')
                     ->where('h2.is_active', 1)
@@ -716,13 +735,21 @@ class QuizResultController extends Controller
                                  ->whereColumn('h2.attempt_id', '>', 'hemis_quiz_results.attempt_id');
                           });
                     });
+                if ($dateFrom) $sub->whereDate('h2.date_finish', '>=', $dateFrom);
+                if ($dateTo)   $sub->whereDate('h2.date_finish', '<=', $dateTo);
             });
 
-            if ($request->filled('date_from')) {
-                $query->whereDate('date_finish', '>=', $request->date_from);
-            }
-            if ($request->filled('date_to')) {
-                $query->whereDate('date_finish', '<=', $request->date_to);
+            // Ism bo'yicha qidiruv: kiritilgan bo'lsa, barcha sanalarda qidiriladi
+            // (date_from/date_to e'tiborga olinmaydi).
+            if ($request->filled('student_name')) {
+                $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
+            } else {
+                if ($request->filled('date_from')) {
+                    $query->whereDate('date_finish', '>=', $request->date_from);
+                }
+                if ($request->filled('date_to')) {
+                    $query->whereDate('date_finish', '<=', $request->date_to);
+                }
             }
 
             $results = $query->orderBy('student_id')->orderBy('fan_id')->orderBy('date_finish')->get();
@@ -1917,6 +1944,23 @@ class QuizResultController extends Controller
                 continue;
             }
 
+            // Semestr filtri — natija semestri talaba joriy semestriga mos kelmasa
+            // (masalan 5-semestr natijasi 6-semestrga, yoki aksincha) — yuklamaymiz.
+            // Diagnostika jadvalidagi SEMESTR ustuni shu mantiq asosida.
+            $resultSemNum = null;
+            if (!empty($result->semester) && preg_match('/(\d+)/', (string) $result->semester, $sm)) {
+                $resultSemNum = (int) $sm[1];
+            }
+            $studentSemNum = null;
+            if (!empty($student->semester_name) && preg_match('/(\d+)/', (string) $student->semester_name, $ssm)) {
+                $studentSemNum = (int) $ssm[1];
+            }
+            if ($resultSemNum !== null && $studentSemNum !== null && $resultSemNum !== $studentSemNum) {
+                $rowInfo['error'] = "Semestr mos kelmadi: natija {$resultSemNum}-semestr, talaba {$studentSemNum}-semestrda — yuklanmadi";
+                $errors[] = $rowInfo;
+                continue;
+            }
+
             $group = Group::where('group_hemis_id', $student->group_id)->first();
             if (!$group) {
                 $rowInfo['error'] = "Talaba guruhida guruh topilmadi";
@@ -2012,6 +2056,7 @@ class QuizResultController extends Controller
                     'grade' => round($result->grade),
                     'deadline' => now(),
                     'quiz_result_id' => $result->id,
+                    'attempt' => self::parseAttemptFromShakl($result->shakl, $result->attempt_number),
                     'is_final' => true,
                 ]);
 

@@ -52,6 +52,26 @@
             background: #ddd6fe !important;
         }
 
+        /* Talabaning joriy bosqichi (12-shakl/12-qo'shimcha/12a/...) badge'i */
+        .stage-badge {
+            display: inline-block;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 1px 5px;
+            border-radius: 8px;
+            margin-left: 4px;
+            line-height: 1.4;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+        .stage-badge.stage-green  { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+        .stage-badge.stage-amber  { background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; }
+        .stage-badge.stage-orange { background: #ffedd5; color: #9a3412; border: 1px solid #fdba74; }
+        .stage-badge.stage-red    { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+        .stage-badge.stage-blue   { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+        .stage-badge.stage-indigo { background: #e0e7ff; color: #3730a3; border: 1px solid #a5b4fc; }
+        .stage-badge.stage-gray   { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+
         .tab-content {
             overflow-x: auto;
             -webkit-overflow-scrolling: touch;
@@ -945,7 +965,7 @@
                                         @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @forelse($lectureLessonDates as $idx => $date)
                                                 @php
                                                     $scheduledPairs = $lecturePairsByDate[$date] ?? [];
@@ -1000,7 +1020,7 @@
                                         @php $studentLecture = $lectureAttendance[$student->hemis_id] ?? []; @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @forelse($lectureColumns as $idx => $col)
                                                 @php
                                                     $lectureMark = $studentLecture[$col['date']][$col['pair']] ?? null;
@@ -1055,6 +1075,10 @@
                             $openLessonRoles = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
                             $canOpenLesson = (auth()->guard('web')->user()?->hasAnyRole($openLessonRoles) ?? false)
                                 || (auth()->guard('teacher')->user()?->hasAnyRole($openLessonRoles) ?? false);
+                            // OSKI/Test hujayralariga topshirilgan sana tooltipini ko'rsatish ruxsati
+                            $examDateTooltipRoles = ['admin', 'superadmin', 'registrator_ofisi'];
+                            $canSeeExamDateTooltip = (auth()->guard('web')->user()?->hasAnyRole($examDateTooltipRoles) ?? false)
+                                || (auth()->guard('teacher')->user()?->hasAnyRole($examDateTooltipRoles) ?? false);
                             $isOqituvchi = is_active_oqituvchi();
                             $isImpersonatingAdmin = session('impersonating') && session('impersonator_id');
                             $missedDatesLookup = array_flip($missedDates ?? []);
@@ -1091,8 +1115,20 @@
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">JN %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">MT %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">ON %</th>
-                                        <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">OSKI</th>
-                                        <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">Test</th>
+                                        <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">1-urinish</span></th>
+                                        @if(!empty($ynSubmission12a) || array_filter($oskiAttempt2Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">2-urinish</span></th>
+                                        @endif
+                                        @if(!empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">3-urinish</span></th>
+                                        @endif
+                                        <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) Test bahosi">Test<br><span class="text-[9px] font-normal">1-urinish</span></th>
+                                        @if(!empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">2-urinish</span></th>
+                                        @endif
+                                        @if(!empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">3-urinish</span></th>
+                                        @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;">Dav %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">YN</th>
                                     </tr>
@@ -1181,7 +1217,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @forelse($jbLessonDates as $idx => $date)
                                                 @php
                                                     $dayGrades = $studentJbGrades[$date] ?? [];
@@ -1195,8 +1231,27 @@
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                     $isRetake = $hasRetakeInDay[$date] ?? false;
                                                     $hasNonFinalInDay = $hasGrades && collect($dayGrades)->contains(fn($g) => !($g['is_final'] ?? true));
+
+                                                    // Kunlik baholarni kim qo'yganini hover tooltipga yig'amiz
+                                                    $dayGraderLines = [];
+                                                    if ($hasGrades) {
+                                                        foreach ($dayGrades as $pair => $gd) {
+                                                            $uid = $gd['graded_by_user_id'] ?? null;
+                                                            $eid = $gd['employee_id'] ?? null;
+                                                            $gName = ($uid && isset($mtGraderUserNames[$uid]))
+                                                                ? $mtGraderUserNames[$uid]
+                                                                : (($eid && isset($mtGraderEmployeeNames[$eid])) ? $mtGraderEmployeeNames[$eid] : null);
+                                                            if (!$gName) {
+                                                                $gName = (!empty($gd['employee_name']) && $gd['employee_name'] !== 'Manual Entry')
+                                                                    ? $gd['employee_name']
+                                                                    : ($gd['retake_by'] ?? null);
+                                                            }
+                                                            $dayGraderLines[] = '(' . $pair . ') ' . round($gd['grade'], 0) . ($gName ? ' — ' . $gName : '');
+                                                        }
+                                                    }
+                                                    $dayTitle = implode(' | ', $dayGraderLines);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!}>
+                                                <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($jbLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!} @if($dayTitle) title="{{ $dayTitle }}" @endif>
                                                     @if($hasGrades)
                                                         @php
                                                             $hasTeacherGradeInDay = collect($dayGrades)->contains(fn($g) => ($g['hemis_id'] ?? null) == 88888888);
@@ -1214,7 +1269,7 @@
                                                             $dateKeyForSababli = \Carbon\Carbon::parse($date)->format('Y-m-d');
                                                             $hemisSababliDay = !empty($hemisSababliByKey[$student->hemis_id][$dateKeyForSababli] ?? []);
                                                         @endphp
-                                                        @if($hasApprovedExcuse || $hemisSababliDay)
+                                                        @if($daySababli || $hemisSababliDay)
                                                             <span class="excuse-nb-cell font-medium" title="Sababli">NB <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg></span>
                                                         @else
                                                             <span class="{{ $daySababli ? 'text-green-600' : 'text-red-600' }} font-medium">NB</span>
@@ -1227,28 +1282,178 @@
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
-                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
+                                            @php
+                                                $mtGraderLines = [];
+                                                foreach ($studentMtGrades as $date => $dayGrades) {
+                                                    foreach ($dayGrades as $pair => $gd) {
+                                                        $uid = $gd['graded_by_user_id'] ?? null;
+                                                        $eid = $gd['employee_id'] ?? null;
+                                                        $gName = ($uid && isset($mtGraderUserNames[$uid]))
+                                                            ? $mtGraderUserNames[$uid]
+                                                            : (($eid && isset($mtGraderEmployeeNames[$eid])) ? $mtGraderEmployeeNames[$eid] : null);
+                                                        if (!$gName) {
+                                                            $gName = $gd['employee_name'] ?? ($gd['retake_by'] ?? null);
+                                                        }
+                                                        $val = round($gd['grade'], 0);
+                                                        $dStr = \Carbon\Carbon::parse($date)->format('d.m');
+                                                        $mtGraderLines[] = $gName
+                                                            ? "{$dStr}({$pair}) {$val} — {$gName}"
+                                                            : "{$dStr}({$pair}) {$val}";
+                                                    }
+                                                }
+                                                $mtTooltip = implode(' | ', $mtGraderLines);
+                                            @endphp
+                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}" @if($mtTooltip) title="{{ $mtTooltip }}" @endif><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             @php
                                                 $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
                                                 $testRounded = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiA2 = isset($oskiAttempt2Map[$student->hemis_id]) ? round($oskiAttempt2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiA3 = isset($oskiAttempt3Map[$student->hemis_id]) ? round($oskiAttempt3Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testA2 = isset($testAttempt2Map[$student->hemis_id]) ? round($testAttempt2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testA3 = isset($testAttempt3Map[$student->hemis_id]) ? round($testAttempt3Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+
+                                                // Sababli ariza orqali asosiy OSKI/Test (attempt=1) tahrir
+                                                $isOskiSababli = in_array($student->hemis_id, $sababliOskiStudents ?? [], true);
+                                                $isTestSababli = in_array($student->hemis_id, $sababliTestStudents ?? [], true);
+
+                                                // 2-urinish va 3-urinish ustunlariga edit ruxsati
+                                                $stageHere = ($studentStages[$student->hemis_id]['stage'] ?? null);
+                                                $eligible12a = !empty($ynSubmission12a) && in_array($stageHere, [
+                                                    \App\Services\YnAttemptStatusService::STAGE_IN_12A,
+                                                    \App\Services\YnAttemptStatusService::STAGE_12A_PASSED,
+                                                ], true);
+                                                $eligible12b = !empty($ynSubmission12b) && in_array($stageHere, [
+                                                    \App\Services\YnAttemptStatusService::STAGE_IN_12B,
+                                                    \App\Services\YnAttemptStatusService::STAGE_12B_PASSED,
+                                                ], true);
+
+                                                $oskiResitDate = !empty($examSchedule) ? ($examSchedule->oski_resit_date ?? null) : null;
+                                                $oski2ResitDate = !empty($examSchedule) ? ($examSchedule->oski_resit2_date ?? null) : null;
+                                                $testResitDate = !empty($examSchedule) ? ($examSchedule->test_resit_date ?? null) : null;
+                                                $test2ResitDate = !empty($examSchedule) ? ($examSchedule->test_resit2_date ?? null) : null;
+
+                                                $showOski2Col = !empty($ynSubmission12a) || array_filter($oskiAttempt2Map ?? []);
+                                                $showOski3Col = !empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []);
+                                                $showTest2Col = !empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []);
+                                                $showTest3Col = !empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []);
                                             @endphp
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ !empty($other['oski_sababli']) ? 'sababli-retake-cell' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }})" title="Bosib OSKI bahosini kiriting" @elseif(!empty($other['oski_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
-                                                @if($canAdminEditExam && $oskiRounded !== null)
-                                                    <span class="font-bold text-blue-600">{{ $oskiRounded }}</span>
-                                                @else
-                                                    {{ $oskiRounded !== null ? $oskiRounded : '' }}
+                                            {{-- Asosiy OSKI (1-urinish) — sababli orqali yoki superadmin orqali tahrirlash --}}
+                                            @php
+                                                $oskiClickable = $isOskiSababli || $isSuperAdmin;
+                                                $oskiClickHandler = $isOskiSababli
+                                                    ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiRounded !== null ? $oskiRounded : 'null') . ", 1, true)"
+                                                    : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 1)";
+                                                $oski1DateStr = $oskiAttempt1DateMap[$student->hemis_id] ?? null;
+                                                $oskiBaseTitle = $isOskiSababli ? 'Sababli OSKI — bahoni kiriting'
+                                                    : ($isSuperAdmin ? 'Superadmin: OSKI bahosini o\'zgartirish'
+                                                        : (!empty($other['oski_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
+                                                $oskiDatePart = ($canSeeExamDateTooltip && $oskiRounded !== null && $oski1DateStr) ? "Topshirilgan: {$oski1DateStr}" : '';
+                                                $oskiTitle = trim($oskiDatePart && $oskiBaseTitle ? "{$oskiDatePart} | {$oskiBaseTitle}" : ($oskiDatePart ?: $oskiBaseTitle));
+                                            @endphp
+                                            <td class="px-1 py-1 text-center {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
+                                                @if($oskiClickable) onclick="{{ $oskiClickHandler }}" @endif
+                                                @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
+                                                @if($oskiRounded !== null)
+                                                    <span class="font-bold {{ $oskiRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isOskiSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $oskiRounded }}</span>
+                                                @elseif($isSuperAdmin)
+                                                    <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ !empty($other['test_sababli']) ? 'sababli-retake-cell' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }})" title="Bosib Test bahosini kiriting" @elseif(!empty($other['test_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
-                                                @if($canAdminEditExam && $testRounded !== null)
-                                                    <span class="font-bold text-blue-600">{{ $testRounded }}</span>
-                                                @else
-                                                    {{ $testRounded !== null ? $testRounded : '' }}
+                                            {{-- 2-urinish OSKI ustuni --}}
+                                            @if($showOski2Col)
+                                                @php
+                                                    $oski2Clickable = $eligible12a || ($isSuperAdmin && $oskiA2 !== null);
+                                                    $oski2Handler = $eligible12a
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiA2 !== null ? $oskiA2 : 'null') . ", 2, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 2)";
+                                                    $oski2DateStr = $oskiAttempt2DateMap[$student->hemis_id] ?? null;
+                                                    $oski2BaseTitle = $eligible12a ? '2-urinish OSKI' . ($oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish OSKI tahrirlash';
+                                                    $oski2DatePart = ($canSeeExamDateTooltip && $oskiA2 !== null && $oski2DateStr) ? "Topshirilgan: {$oski2DateStr}" : '';
+                                                    $oski2Title = trim($oski2DatePart ? "{$oski2DatePart} | {$oski2BaseTitle}" : $oski2BaseTitle);
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $oski2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($oski2Clickable) onclick="{{ $oski2Handler }}" @endif
+                                                    title="{{ $oski2Title }}">
+                                                    @if($oskiA2 !== null)<span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $oskiA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 3-urinish OSKI ustuni --}}
+                                            @if($showOski3Col)
+                                                @php
+                                                    $oski3Clickable = $eligible12b || ($isSuperAdmin && $oskiA3 !== null);
+                                                    $oski3Handler = $eligible12b
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiA3 !== null ? $oskiA3 : 'null') . ", 3, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 3)";
+                                                    $oski3DateStr = $oskiAttempt3DateMap[$student->hemis_id] ?? null;
+                                                    $oski3BaseTitle = $eligible12b ? '3-urinish OSKI' . ($oski2ResitDate ? ' (' . \Carbon\Carbon::parse($oski2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish OSKI tahrirlash';
+                                                    $oski3DatePart = ($canSeeExamDateTooltip && $oskiA3 !== null && $oski3DateStr) ? "Topshirilgan: {$oski3DateStr}" : '';
+                                                    $oski3Title = trim($oski3DatePart ? "{$oski3DatePart} | {$oski3BaseTitle}" : $oski3BaseTitle);
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $oski3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($oski3Clickable) onclick="{{ $oski3Handler }}" @endif
+                                                    title="{{ $oski3Title }}">
+                                                    @if($oskiA3 !== null)<span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $oskiA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- Asosiy Test (1-urinish) — sababli yoki superadmin orqali tahrirlash --}}
+                                            @php
+                                                $testClickable = $isTestSababli || $isSuperAdmin;
+                                                $testClickHandler = $isTestSababli
+                                                    ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
+                                                    : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
+                                                $test1DateStr = $testAttempt1DateMap[$student->hemis_id] ?? null;
+                                                $testBaseTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
+                                                    : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish'
+                                                        : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
+                                                $testDatePart = ($canSeeExamDateTooltip && $testRounded !== null && $test1DateStr) ? "Topshirilgan: {$test1DateStr}" : '';
+                                                $testTitle = trim($testDatePart && $testBaseTitle ? "{$testDatePart} | {$testBaseTitle}" : ($testDatePart ?: $testBaseTitle));
+                                            @endphp
+                                            <td class="px-1 py-1 text-center {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
+                                                @if($testClickable) onclick="{{ $testClickHandler }}" @endif
+                                                @if($testTitle) title="{{ $testTitle }}" @endif>
+                                                @if($testRounded !== null)
+                                                    <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
+                                                @elseif($isSuperAdmin)
+                                                    <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
+                                            {{-- 2-urinish Test ustuni --}}
+                                            @if($showTest2Col)
+                                                @php
+                                                    $test2Clickable = $eligible12a || ($isSuperAdmin && $testA2 !== null);
+                                                    $test2Handler = $eligible12a
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testA2 !== null ? $testA2 : 'null') . ", 2, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 2)";
+                                                    $test2DateStr = $testAttempt2DateMap[$student->hemis_id] ?? null;
+                                                    $test2BaseTitle = $eligible12a ? '2-urinish Test' . ($testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish Test tahrirlash';
+                                                    $test2DatePart = ($canSeeExamDateTooltip && $testA2 !== null && $test2DateStr) ? "Topshirilgan: {$test2DateStr}" : '';
+                                                    $test2Title = trim($test2DatePart ? "{$test2DatePart} | {$test2BaseTitle}" : $test2BaseTitle);
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $test2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($test2Clickable) onclick="{{ $test2Handler }}" @endif
+                                                    title="{{ $test2Title }}">
+                                                    @if($testA2 !== null)<span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $testA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 3-urinish Test ustuni --}}
+                                            @if($showTest3Col)
+                                                @php
+                                                    $test3Clickable = $eligible12b || ($isSuperAdmin && $testA3 !== null);
+                                                    $test3Handler = $eligible12b
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testA3 !== null ? $testA3 : 'null') . ", 3, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 3)";
+                                                    $test3DateStr = $testAttempt3DateMap[$student->hemis_id] ?? null;
+                                                    $test3BaseTitle = $eligible12b ? '3-urinish Test' . ($test2ResitDate ? ' (' . \Carbon\Carbon::parse($test2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish Test tahrirlash';
+                                                    $test3DatePart = ($canSeeExamDateTooltip && $testA3 !== null && $test3DateStr) ? "Topshirilgan: {$test3DateStr}" : '';
+                                                    $test3Title = trim($test3DatePart ? "{$test3DatePart} | {$test3BaseTitle}" : $test3BaseTitle);
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $test3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($test3Clickable) onclick="{{ $test3Handler }}" @endif
+                                                    title="{{ $test3Title }}">
+                                                    @if($testA3 !== null)<span class="font-bold {{ $testA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $testA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
                                             @php
                                                 $consent = ($ynConsents ?? collect())->get($student->hemis_id);
@@ -1292,8 +1497,20 @@
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 55px;">JN %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">MT %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">ON %</th>
-                                        <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">OSKI</th>
-                                        <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">Test</th>
+                                        <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">1-urinish</span></th>
+                                        @if(!empty($ynSubmission12a) || array_filter($oskiAttempt2Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">2-urinish</span></th>
+                                        @endif
+                                        @if(!empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">3-urinish</span></th>
+                                        @endif
+                                        <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) Test bahosi">Test<br><span class="text-[9px] font-normal">1-urinish</span></th>
+                                        @if(!empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">2-urinish</span></th>
+                                        @endif
+                                        @if(!empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">3-urinish</span></th>
+                                        @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;">Dav %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">YN</th>
                                     </tr>
@@ -1380,7 +1597,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($jbColumns as $colIndex => $col)
                                                 @php
@@ -1397,8 +1614,25 @@
                                                     $uniqueGrades = array_unique($gradeValues);
                                                     $isInconsistent = count($uniqueGrades) > 1;
                                                     $isNonFinal = $gradeData && !($gradeData['is_final'] ?? true);
+
+                                                    // Bahoni kim qo'yganini aniqlash — hover tooltip uchun
+                                                    $cellGrader = null;
+                                                    if ($gradeData) {
+                                                        $uid = $gradeData['graded_by_user_id'] ?? null;
+                                                        $eid = $gradeData['employee_id'] ?? null;
+                                                        if ($uid && isset($mtGraderUserNames[$uid])) {
+                                                            $cellGrader = $mtGraderUserNames[$uid];
+                                                        } elseif ($eid && isset($mtGraderEmployeeNames[$eid])) {
+                                                            $cellGrader = $mtGraderEmployeeNames[$eid];
+                                                        } elseif (!empty($gradeData['employee_name']) && $gradeData['employee_name'] !== 'Manual Entry') {
+                                                            $cellGrader = $gradeData['employee_name'];
+                                                        } elseif (!empty($gradeData['retake_by'])) {
+                                                            $cellGrader = $gradeData['retake_by'];
+                                                        }
+                                                    }
+                                                    $cellTitle = $cellGrader ? ('Baho qo\'ygan: ' . $cellGrader) : '';
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!}>
+                                                <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}" {!! $isRetake ? 'style="background:#c9c9c9;"' : '' !!} @if($cellTitle) title="{{ $cellTitle }}" @endif>
                                                     @php
                                                         $colDateStr = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
                                                         $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
@@ -1581,15 +1815,15 @@
                                                                 <span class="{{ $nbColorClass }} font-medium">NB</span>
                                                                 <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3 text-amber-500" viewBox="0 0 20 20" fill="currentColor"><path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" /></svg>
                                                             </div>
-                                                        @elseif($hasApprovedExcuse && !$hasRetake && ((!$excuseAlreadySaved && $canEnterExcuseGrade) || (auth()->user()?->hasRole('superadmin') ?? false)))
+                                                        @elseif($lmsSababli && !$hasRetake && ((!$excuseAlreadySaved && $canEnterExcuseGrade) || (auth()->user()?->hasRole('superadmin') ?? false)))
                                                             {{-- Sababli NB — modal orqali baho kiritish (superadmin YN snapshot/muddat cheklovlaridan tashqari) --}}
                                                             <div class="excuse-nb-cell editable-cell cursor-pointer hover:bg-amber-100"
-                                                                 onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $approvedExcuses[$student->hemis_id]->id }})"
+                                                                 onclick="openExcuseModal('{{ $student->hemis_id }}', '{{ $student->full_name }}', {{ $gradeRecordId }}, {{ $excuseData->id }})"
                                                                  title="Sababli — bosib baho kiriting{{ !$isAdminRole && $excuseDeadlineStr ? ' (muddat: ' . $excuseDeadlineStr . ')' : '' }}">
                                                                 <span class="text-green-600 font-medium">NB</span>
                                                                 <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg>
                                                             </div>
-                                                        @elseif($hasApprovedExcuse && !$hasRetake)
+                                                        @elseif($lmsSababli && !$hasRetake)
                                                             {{-- Dekan / muddat o'tgan / excuse snapshot allaqachon yuborilgan — faqat ko'rish --}}
                                                             <span class="text-green-600 font-medium"
                                                                   title="{{ $excuseDeadlinePassed && !$isAdminRole ? 'Sababli baho kiritish muddati o\'tgan (' . $excuseDeadlineStr . ')' : 'Sababli — baho kiritishga ruxsat yo\'q' }}">NB</span>
@@ -1650,6 +1884,13 @@
                                                                  title="Bosib baho kiriting">
                                                                 <span class="text-gray-400">-</span>
                                                             </div>
+                                                        @elseif($isSuperAdmin && $isEmpty)
+                                                            {{-- Superadmin: bo'sh katakka ham baho qo'yish (YN cheklovlaridan tashqari) --}}
+                                                            <div class="editable-cell cursor-pointer hover:bg-purple-50"
+                                                                 onclick="makeEditableEmpty(this, '{{ $student->hemis_id }}', '{{ $col['date'] }}', '{{ $col['pair'] }}', '{{ $subjectId }}', '{{ $semesterCode }}')"
+                                                                 title="Superadmin: bosib baho kiriting">
+                                                                <span class="text-purple-300">-</span>
+                                                            </div>
                                                         @else
                                                             <span class="text-gray-300">-</span>
                                                         @endif
@@ -1659,28 +1900,178 @@
                                                 <td class="px-1 py-1 text-center text-gray-300">-</td>
                                             @endforelse
                                             <td class="px-1 py-1 text-center"><span class="font-bold {{ $jnAverage < ($minimumLimit ?? 60) ? 'grade-fail' : 'text-blue-600' }}">{{ $jnAverage }}</span><span class="text-gray-400 text-xs"> ({{ $totalJbDaysForAverage }})</span></td>
-                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}"><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
+                                            @php
+                                                $mtGraderLines = [];
+                                                foreach ($studentMtGrades as $date => $dayGrades) {
+                                                    foreach ($dayGrades as $pair => $gd) {
+                                                        $uid = $gd['graded_by_user_id'] ?? null;
+                                                        $eid = $gd['employee_id'] ?? null;
+                                                        $gName = ($uid && isset($mtGraderUserNames[$uid]))
+                                                            ? $mtGraderUserNames[$uid]
+                                                            : (($eid && isset($mtGraderEmployeeNames[$eid])) ? $mtGraderEmployeeNames[$eid] : null);
+                                                        if (!$gName) {
+                                                            $gName = $gd['employee_name'] ?? ($gd['retake_by'] ?? null);
+                                                        }
+                                                        $val = round($gd['grade'], 0);
+                                                        $dStr = \Carbon\Carbon::parse($date)->format('d.m');
+                                                        $mtGraderLines[] = $gName
+                                                            ? "{$dStr}({$pair}) {$val} — {$gName}"
+                                                            : "{$dStr}({$pair}) {$val}";
+                                                    }
+                                                }
+                                                $mtTooltip = implode(' | ', $mtGraderLines);
+                                            @endphp
+                                            <td class="px-1 py-1 text-center mt-cell-{{ $student->hemis_id }}" @if($mtTooltip) title="{{ $mtTooltip }}" @endif><span class="font-bold" style="color: {{ $mtAverage < ($minimumLimit ?? 60) ? '#dc2626' : '#2563eb' }};">{{ $mtAverage }}</span></td>
                                             <td class="px-1 py-1 text-center">{{ $other['on'] ? round($other['on'], 0, PHP_ROUND_HALF_UP) : '' }}</td>
                                             @php
                                                 $oskiRounded = $other['oski'] ? round($other['oski'], 0, PHP_ROUND_HALF_UP) : null;
                                                 $testRounded = $other['test'] ? round($other['test'], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiA2 = isset($oskiAttempt2Map[$student->hemis_id]) ? round($oskiAttempt2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiA3 = isset($oskiAttempt3Map[$student->hemis_id]) ? round($oskiAttempt3Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testA2 = isset($testAttempt2Map[$student->hemis_id]) ? round($testAttempt2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testA3 = isset($testAttempt3Map[$student->hemis_id]) ? round($testAttempt3Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+
+                                                // Sababli ariza orqali asosiy OSKI/Test (attempt=1) tahrir
+                                                $isOskiSababli = in_array($student->hemis_id, $sababliOskiStudents ?? [], true);
+                                                $isTestSababli = in_array($student->hemis_id, $sababliTestStudents ?? [], true);
+
+                                                // 2-urinish va 3-urinish ustunlariga edit ruxsati
+                                                $stageHere = ($studentStages[$student->hemis_id]['stage'] ?? null);
+                                                $eligible12a = !empty($ynSubmission12a) && in_array($stageHere, [
+                                                    \App\Services\YnAttemptStatusService::STAGE_IN_12A,
+                                                    \App\Services\YnAttemptStatusService::STAGE_12A_PASSED,
+                                                ], true);
+                                                $eligible12b = !empty($ynSubmission12b) && in_array($stageHere, [
+                                                    \App\Services\YnAttemptStatusService::STAGE_IN_12B,
+                                                    \App\Services\YnAttemptStatusService::STAGE_12B_PASSED,
+                                                ], true);
+
+                                                $oskiResitDate = !empty($examSchedule) ? ($examSchedule->oski_resit_date ?? null) : null;
+                                                $oski2ResitDate = !empty($examSchedule) ? ($examSchedule->oski_resit2_date ?? null) : null;
+                                                $testResitDate = !empty($examSchedule) ? ($examSchedule->test_resit_date ?? null) : null;
+                                                $test2ResitDate = !empty($examSchedule) ? ($examSchedule->test_resit2_date ?? null) : null;
+
+                                                $showOski2Col = !empty($ynSubmission12a) || array_filter($oskiAttempt2Map ?? []);
+                                                $showOski3Col = !empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []);
+                                                $showTest2Col = !empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []);
+                                                $showTest3Col = !empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []);
                                             @endphp
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ !empty($other['oski_sababli']) ? 'sababli-retake-cell' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 101, {{ $oskiRounded !== null ? $oskiRounded : 'null' }})" title="Bosib OSKI bahosini kiriting" @elseif(!empty($other['oski_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
-                                                @if($canAdminEditExam && $oskiRounded !== null)
-                                                    <span class="font-bold text-blue-600">{{ $oskiRounded }}</span>
-                                                @else
-                                                    {{ $oskiRounded !== null ? $oskiRounded : '' }}
+                                            {{-- Asosiy OSKI (1-urinish) — sababli orqali yoki superadmin orqali tahrirlash --}}
+                                            @php
+                                                $oskiClickable = $isOskiSababli || $isSuperAdmin;
+                                                $oskiClickHandler = $isOskiSababli
+                                                    ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiRounded !== null ? $oskiRounded : 'null') . ", 1, true)"
+                                                    : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 1)";
+                                                $oski1DateStr = $oskiAttempt1DateMap[$student->hemis_id] ?? null;
+                                                $oskiBaseTitle = $isOskiSababli ? 'Sababli OSKI — bahoni kiriting'
+                                                    : ($isSuperAdmin ? 'Superadmin: OSKI bahosini o\'zgartirish'
+                                                        : (!empty($other['oski_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
+                                                $oskiDatePart = ($canSeeExamDateTooltip && $oskiRounded !== null && $oski1DateStr) ? "Topshirilgan: {$oski1DateStr}" : '';
+                                                $oskiTitle = trim($oskiDatePart && $oskiBaseTitle ? "{$oskiDatePart} | {$oskiBaseTitle}" : ($oskiDatePart ?: $oskiBaseTitle));
+                                            @endphp
+                                            <td class="px-1 py-1 text-center {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
+                                                @if($oskiClickable) onclick="{{ $oskiClickHandler }}" @endif
+                                                @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
+                                                @if($oskiRounded !== null)
+                                                    <span class="font-bold {{ $oskiRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isOskiSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $oskiRounded }}</span>
+                                                @elseif($isSuperAdmin)
+                                                    <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
-                                            <td class="px-1 py-1 text-center {{ $canAdminEditExam ? 'cursor-pointer hover:bg-blue-50' : '' }} {{ !empty($other['test_sababli']) ? 'sababli-retake-cell' : '' }}"
-                                                @if($canAdminEditExam) onclick="editExamGrade(this, '{{ $student->hemis_id }}', 102, {{ $testRounded !== null ? $testRounded : 'null' }})" title="Bosib Test bahosini kiriting" @elseif(!empty($other['test_sababli'])) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>
-                                                @if($canAdminEditExam && $testRounded !== null)
-                                                    <span class="font-bold text-blue-600">{{ $testRounded }}</span>
-                                                @else
-                                                    {{ $testRounded !== null ? $testRounded : '' }}
+                                            {{-- 2-urinish OSKI ustuni --}}
+                                            @if($showOski2Col)
+                                                @php
+                                                    $oski2Clickable = $eligible12a || ($isSuperAdmin && $oskiA2 !== null);
+                                                    $oski2Handler = $eligible12a
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiA2 !== null ? $oskiA2 : 'null') . ", 2, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 2)";
+                                                    $oski2DateStr = $oskiAttempt2DateMap[$student->hemis_id] ?? null;
+                                                    $oski2BaseTitle = $eligible12a ? '2-urinish OSKI' . ($oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish OSKI tahrirlash';
+                                                    $oski2DatePart = ($canSeeExamDateTooltip && $oskiA2 !== null && $oski2DateStr) ? "Topshirilgan: {$oski2DateStr}" : '';
+                                                    $oski2Title = trim($oski2DatePart ? "{$oski2DatePart} | {$oski2BaseTitle}" : $oski2BaseTitle);
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $oski2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($oski2Clickable) onclick="{{ $oski2Handler }}" @endif
+                                                    title="{{ $oski2Title }}">
+                                                    @if($oskiA2 !== null)<span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $oskiA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 3-urinish OSKI ustuni --}}
+                                            @if($showOski3Col)
+                                                @php
+                                                    $oski3Clickable = $eligible12b || ($isSuperAdmin && $oskiA3 !== null);
+                                                    $oski3Handler = $eligible12b
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiA3 !== null ? $oskiA3 : 'null') . ", 3, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 3)";
+                                                    $oski3DateStr = $oskiAttempt3DateMap[$student->hemis_id] ?? null;
+                                                    $oski3BaseTitle = $eligible12b ? '3-urinish OSKI' . ($oski2ResitDate ? ' (' . \Carbon\Carbon::parse($oski2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish OSKI tahrirlash';
+                                                    $oski3DatePart = ($canSeeExamDateTooltip && $oskiA3 !== null && $oski3DateStr) ? "Topshirilgan: {$oski3DateStr}" : '';
+                                                    $oski3Title = trim($oski3DatePart ? "{$oski3DatePart} | {$oski3BaseTitle}" : $oski3BaseTitle);
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $oski3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($oski3Clickable) onclick="{{ $oski3Handler }}" @endif
+                                                    title="{{ $oski3Title }}">
+                                                    @if($oskiA3 !== null)<span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $oskiA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- Asosiy Test (1-urinish) — sababli yoki superadmin orqali tahrirlash --}}
+                                            @php
+                                                $testClickable = $isTestSababli || $isSuperAdmin;
+                                                $testClickHandler = $isTestSababli
+                                                    ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
+                                                    : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
+                                                $test1DateStr = $testAttempt1DateMap[$student->hemis_id] ?? null;
+                                                $testBaseTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
+                                                    : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish'
+                                                        : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
+                                                $testDatePart = ($canSeeExamDateTooltip && $testRounded !== null && $test1DateStr) ? "Topshirilgan: {$test1DateStr}" : '';
+                                                $testTitle = trim($testDatePart && $testBaseTitle ? "{$testDatePart} | {$testBaseTitle}" : ($testDatePart ?: $testBaseTitle));
+                                            @endphp
+                                            <td class="px-1 py-1 text-center {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
+                                                @if($testClickable) onclick="{{ $testClickHandler }}" @endif
+                                                @if($testTitle) title="{{ $testTitle }}" @endif>
+                                                @if($testRounded !== null)
+                                                    <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
+                                                @elseif($isSuperAdmin)
+                                                    <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
+                                            {{-- 2-urinish Test ustuni --}}
+                                            @if($showTest2Col)
+                                                @php
+                                                    $test2Clickable = $eligible12a || ($isSuperAdmin && $testA2 !== null);
+                                                    $test2Handler = $eligible12a
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testA2 !== null ? $testA2 : 'null') . ", 2, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 2)";
+                                                    $test2DateStr = $testAttempt2DateMap[$student->hemis_id] ?? null;
+                                                    $test2BaseTitle = $eligible12a ? '2-urinish Test' . ($testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish Test tahrirlash';
+                                                    $test2DatePart = ($canSeeExamDateTooltip && $testA2 !== null && $test2DateStr) ? "Topshirilgan: {$test2DateStr}" : '';
+                                                    $test2Title = trim($test2DatePart ? "{$test2DatePart} | {$test2BaseTitle}" : $test2BaseTitle);
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $test2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($test2Clickable) onclick="{{ $test2Handler }}" @endif
+                                                    title="{{ $test2Title }}">
+                                                    @if($testA2 !== null)<span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $testA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 3-urinish Test ustuni --}}
+                                            @if($showTest3Col)
+                                                @php
+                                                    $test3Clickable = $eligible12b || ($isSuperAdmin && $testA3 !== null);
+                                                    $test3Handler = $eligible12b
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testA3 !== null ? $testA3 : 'null') . ", 3, false)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 3)";
+                                                    $test3DateStr = $testAttempt3DateMap[$student->hemis_id] ?? null;
+                                                    $test3BaseTitle = $eligible12b ? '3-urinish Test' . ($test2ResitDate ? ' (' . \Carbon\Carbon::parse($test2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish Test tahrirlash';
+                                                    $test3DatePart = ($canSeeExamDateTooltip && $testA3 !== null && $test3DateStr) ? "Topshirilgan: {$test3DateStr}" : '';
+                                                    $test3Title = trim($test3DatePart ? "{$test3DatePart} | {$test3BaseTitle}" : $test3BaseTitle);
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $test3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                    @if($test3Clickable) onclick="{{ $test3Handler }}" @endif
+                                                    title="{{ $test3Title }}">
+                                                    @if($testA3 !== null)<span class="font-bold {{ $testA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $testA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
                                             @php
                                                 $consent = ($ynConsents ?? collect())->get($student->hemis_id);
@@ -1751,11 +2142,137 @@
                             </p>
                         </div>
                         <div>
+                            @php
+                                // Sababli retake qilgan talabalar soni — 12-qo'shimcha shaklga tushadiganlar
+                                // (modal $endif tashqarida bo'lgani uchun har doim e'lon qilinishi shart)
+                                $sababliStudentsCount = 0;
+                                foreach (($students ?? []) as $__stu) {
+                                    $__h = $__stu->hemis_id;
+                                    $__hasSababli = false;
+                                    foreach ((($jbGrades ?? [])[$__h] ?? []) as $__dateGrades) {
+                                        foreach ($__dateGrades as $__g) {
+                                            if (!empty($__g['retake_was_sababli'])) { $__hasSababli = true; break 2; }
+                                        }
+                                    }
+                                    if (!$__hasSababli) {
+                                        foreach ((($mtGrades ?? [])[$__h] ?? []) as $__dateGrades) {
+                                            foreach ($__dateGrades as $__g) {
+                                                if (!empty($__g['retake_was_sababli'])) { $__hasSababli = true; break 2; }
+                                            }
+                                        }
+                                    }
+                                    if (!$__hasSababli) {
+                                        $__o = ($otherGrades ?? [])[$__h] ?? [];
+                                        if (!empty($__o['on_sababli']) || !empty($__o['oski_sababli']) || !empty($__o['test_sababli'])) {
+                                            $__hasSababli = true;
+                                        }
+                                    }
+                                    if ($__hasSababli) $sababliStudentsCount++;
+                                }
+
+                                // 12a/12b uchun yiqilgan talabalar soni — stage bo'yicha
+                                $failed12aCount = 0; // 12a ga tushadiganlar (V<60, JN/MT to'g'ri yoki pullik — hammasi 12a-shaklga)
+                                $failed12bCount = 0;
+                                foreach (($students ?? []) as $__stu) {
+                                    $__stage = ($studentStages[$__stu->hemis_id]['stage'] ?? null);
+                                    if (in_array($__stage, [
+                                        \App\Services\YnAttemptStatusService::STAGE_IN_12A,
+                                        \App\Services\YnAttemptStatusService::STAGE_IN_12A_PULLIK,
+                                    ], true)) {
+                                        $failed12aCount++;
+                                    }
+                                    if (in_array($__stage, [
+                                        \App\Services\YnAttemptStatusService::STAGE_IN_12B,
+                                        \App\Services\YnAttemptStatusService::STAGE_IN_12B_PULLIK,
+                                    ], true)) {
+                                        $failed12bCount++;
+                                    }
+                                }
+
+                                $authUserForRoles = auth()->guard('web')->user() ?? auth()->guard('teacher')->user();
+                                $isAdminRoleForTransfer = ($authUserForRoles?->hasAnyRole(['admin', 'superadmin']) ?? false);
+                                // Yakuniy qilish — registrator ofisiga ham ruxsat (lekin o'qituvchiga emas)
+                                $canFinalizeForm = ($authUserForRoles?->hasAnyRole(['admin', 'superadmin', 'registrator_ofisi']) ?? false);
+                            @endphp
+
+                            @if($isAdminRoleForTransfer && isset($ynSubmission) && $ynSubmission && empty($ynSubmission12a ?? null) && $failed12aCount > 0)
+                                <a href="{{ route('admin.academic-schedule.index') }}"
+                                    class="inline-flex items-center px-4 py-2 mr-2 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition shadow-sm text-sm"
+                                    title="V<60 olgan {{ $failed12aCount }} ta talaba uchun 2-urinish (12a-shakl) OSKI/Test sanasi belgilash">
+                                    2-urinish sana belgilash
+                                    <span class="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-white text-amber-700">{{ $failed12aCount }}</span>
+                                </a>
+                            @endif
+
+                            @if($isAdminRoleForTransfer && !empty($ynSubmission12a ?? null) && empty($ynSubmission12b ?? null) && $failed12bCount > 0)
+                                <a href="{{ route('admin.academic-schedule.index') }}"
+                                    class="inline-flex items-center px-4 py-2 mr-2 bg-orange-500 text-white font-semibold rounded-lg hover:bg-orange-600 transition shadow-sm text-sm"
+                                    title="12a-shakldan ham yiqilgan {{ $failed12bCount }} ta talaba uchun 3-urinish (12b-shakl) sanasi belgilash">
+                                    3-urinish sana belgilash
+                                    <span class="ml-1 inline-flex items-center justify-center w-5 h-5 text-xs font-bold rounded-full bg-white text-orange-700">{{ $failed12bCount }}</span>
+                                </a>
+                            @endif
+
+                            @php
+                                $isFinal12 = isset($ynSubmission) && $ynSubmission && ($ynSubmission->status ?? null) === 'final';
+                                $isFinal12a = !empty($ynSubmission12a) && ($ynSubmission12a->status ?? null) === 'final';
+                                $isFinal12b = !empty($ynSubmission12b) && ($ynSubmission12b->status ?? null) === 'final';
+                            @endphp
+
+                            @if(!empty($ynSubmission12b ?? null))
+                                <div class="{{ $isFinal12b ? 'bg-orange-200 border-2 border-orange-600' : 'bg-orange-100' }} text-orange-800 px-4 py-2 rounded-lg font-medium text-sm mr-2">
+                                    @if($isFinal12b) 🔒 @endif 12b shakl @if($isFinal12b) yakuniy @else faol @endif
+                                    @if(!empty($examSchedule) && ($examSchedule->oski_resit2_date || $examSchedule->test_resit2_date))
+                                        <div class="text-xs text-orange-700 mt-1">
+                                            @if($examSchedule->oski_resit2_date) OSKI: {{ \Carbon\Carbon::parse($examSchedule->oski_resit2_date)->format('d.m.Y') }} @endif
+                                            @if($examSchedule->test_resit2_date) | Test: {{ \Carbon\Carbon::parse($examSchedule->test_resit2_date)->format('d.m.Y') }} @endif
+                                        </div>
+                                    @endif
+                                    @if($isFinal12b && $ynSubmission12b->finalized_at)
+                                        <div class="text-[10px] text-orange-600 mt-1">{{ \Carbon\Carbon::parse($ynSubmission12b->finalized_at)->format('d.m.Y H:i') }}</div>
+                                    @endif
+                                    @if($canFinalizeForm && !$isFinal12b)
+                                        <button type="button" onclick="openFinalizeModal(3)"
+                                            class="mt-1 inline-flex items-center px-2 py-0.5 bg-orange-600 text-white text-[11px] font-semibold rounded hover:bg-orange-700">
+                                            🔒 Yakuniy qilish
+                                        </button>
+                                    @endif
+                                </div>
+                            @elseif(!empty($ynSubmission12a ?? null))
+                                <div class="{{ $isFinal12a ? 'bg-amber-200 border-2 border-amber-600' : 'bg-amber-100' }} text-amber-800 px-4 py-2 rounded-lg font-medium text-sm mr-2">
+                                    @if($isFinal12a) 🔒 @endif 12a shakl @if($isFinal12a) yakuniy @else faol @endif
+                                    @if(!empty($examSchedule) && ($examSchedule->oski_resit_date || $examSchedule->test_resit_date))
+                                        <div class="text-xs text-amber-700 mt-1">
+                                            @if($examSchedule->oski_resit_date) OSKI: {{ \Carbon\Carbon::parse($examSchedule->oski_resit_date)->format('d.m.Y') }} @endif
+                                            @if($examSchedule->test_resit_date) | Test: {{ \Carbon\Carbon::parse($examSchedule->test_resit_date)->format('d.m.Y') }} @endif
+                                        </div>
+                                    @endif
+                                    @if($isFinal12a && $ynSubmission12a->finalized_at)
+                                        <div class="text-[10px] text-amber-600 mt-1">{{ \Carbon\Carbon::parse($ynSubmission12a->finalized_at)->format('d.m.Y H:i') }}</div>
+                                    @endif
+                                    @if($canFinalizeForm && !$isFinal12a)
+                                        <button type="button" onclick="openFinalizeModal(2)"
+                                            class="mt-1 inline-flex items-center px-2 py-0.5 bg-amber-600 text-white text-[11px] font-semibold rounded hover:bg-amber-700">
+                                            🔒 Yakuniy qilish
+                                        </button>
+                                    @endif
+                                </div>
+                            @endif
+
                             @if(isset($ynSubmission) && $ynSubmission)
-                                <div class="bg-blue-100 text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
-                                    YN ga yuborilgan ({{ $ynSubmission->submitted_at?->format('d.m.Y H:i') ?? '-' }})
+                                <div class="{{ $isFinal12 ? 'bg-blue-200 border-2 border-blue-600' : 'bg-blue-100' }} text-blue-800 px-4 py-2 rounded-lg font-medium text-sm">
+                                    @if($isFinal12) 🔒 @endif YN ga yuborilgan ({{ $ynSubmission->submitted_at?->format('d.m.Y H:i') ?? '-' }})
                                     @if($ynSubmission->submittedBy)
                                         <div class="text-xs text-blue-600 mt-1">Yuborgan: {{ $ynSubmission->submittedBy->name }}</div>
+                                    @endif
+                                    @if($isFinal12 && $ynSubmission->finalized_at)
+                                        <div class="text-[10px] text-blue-600 mt-1">Yakuniylashtirildi: {{ \Carbon\Carbon::parse($ynSubmission->finalized_at)->format('d.m.Y H:i') }}</div>
+                                    @endif
+                                    @if($canFinalizeForm && !$isFinal12)
+                                        <button type="button" onclick="openFinalizeModal(1)"
+                                            class="mt-1 inline-flex items-center px-2 py-0.5 bg-blue-600 text-white text-[11px] font-semibold rounded hover:bg-blue-700">
+                                            🔒 Yakuniy qilish
+                                        </button>
                                     @endif
                                 </div>
                             @elseif($canSubmitYn ?? false)
@@ -1996,6 +2513,88 @@
                     </div>
                 </div>
 
+                {{-- 12a / 12b ga o'tkazish modali --}}
+                <div id="transfer-modal" class="fixed inset-0 z-50 hidden">
+                    <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeTransferModal()"></div>
+                    <div class="fixed inset-0 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-xl shadow-2xl w-full max-w-lg relative">
+                            <div class="px-6 py-4 border-b border-gray-200">
+                                <h3 class="text-lg font-bold text-gray-800" id="transfer-modal-title">Talabalarni 12a ga o'tkazish</h3>
+                                <p class="text-sm text-gray-500 mt-1" id="transfer-modal-desc"></p>
+                            </div>
+                            <div class="px-6 py-4 space-y-4">
+                                <div class="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-800">
+                                    <strong id="transfer-modal-count">0</strong> ta talaba <strong id="transfer-modal-form">12a-shaklga</strong> o'tkaziladi.
+                                    Ular OSKI/Test ni qayta topshirishadi. JN/MT baholari o'zgarmaydi.
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-1">OSKI sanasi</label>
+                                    <div class="flex gap-2">
+                                        <input type="date" id="transfer-oski-date" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+                                        <input type="time" id="transfer-oski-time" class="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500" placeholder="HH:MM">
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label class="block text-sm font-semibold text-gray-700 mb-1">Test sanasi</label>
+                                    <div class="flex gap-2">
+                                        <input type="date" id="transfer-test-date" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500">
+                                        <input type="time" id="transfer-test-time" class="w-28 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-amber-500 focus:border-amber-500" placeholder="HH:MM">
+                                    </div>
+                                </div>
+
+                                <p class="text-xs text-gray-500">
+                                    Kamida bittasi (OSKI yoki Test) belgilanishi kerak. Bu sanalar "exam_schedules" ga saqlanadi va talabalarga ko'rinadi.
+                                </p>
+                            </div>
+                            <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                                <button type="button" onclick="closeTransferModal()"
+                                    class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition text-sm">
+                                    Bekor qilish
+                                </button>
+                                <button type="button" id="transfer-submit-btn" onclick="submitTransfer()"
+                                    class="px-5 py-2.5 bg-amber-500 text-white font-semibold rounded-lg hover:bg-amber-600 transition shadow-sm text-sm">
+                                    Tasdiqlash va o'tkazish
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                {{-- Yakuniylash modali — kontekstli ogohlantirish bilan --}}
+                <div id="finalize-modal" class="fixed inset-0 z-50 hidden">
+                    <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeFinalizeModal()"></div>
+                    <div class="fixed inset-0 flex items-center justify-center p-4">
+                        <div class="bg-white rounded-xl shadow-2xl w-full max-w-2xl relative max-h-[85vh] flex flex-col">
+                            <div class="px-6 py-4 border-b border-gray-200 flex-shrink-0">
+                                <h3 class="text-lg font-bold text-gray-800" id="finalize-modal-title">Shaklni yakuniy qilish</h3>
+                                <p class="text-sm text-gray-500 mt-1" id="finalize-modal-desc">Yakuniy bo'lgandan keyin sababli arizalar tuzatish dalolatnomasi sifatida qo'shiladi.</p>
+                            </div>
+                            <div class="px-6 py-4 overflow-y-auto flex-1" id="finalize-modal-body">
+                                <div id="finalize-loading" class="text-center py-8 text-gray-500">
+                                    <svg class="animate-spin w-6 h-6 mx-auto mb-2" fill="none" viewBox="0 0 24 24">
+                                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
+                                    </svg>
+                                    Yuklanmoqda...
+                                </div>
+                                <div id="finalize-warning-content" class="hidden"></div>
+                            </div>
+                            <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3 flex-shrink-0">
+                                <button type="button" onclick="closeFinalizeModal()"
+                                    class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition text-sm">
+                                    Bekor qilish
+                                </button>
+                                <button type="button" id="finalize-submit-btn" onclick="submitFinalize()"
+                                    class="px-5 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition shadow-sm text-sm">
+                                    Yakuniy qilish
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 {{-- Sababli baholar paneli — YN yuborilgandan keyin ko'rinadi --}}
                 @if(isset($ynSubmission) && $ynSubmission && $approvedExcuses->isNotEmpty())
                 <div class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg">
@@ -2195,7 +2794,7 @@
                                         @endphp
                                         <tr id="mt-row-{{ $student->hemis_id }}" {!! $rowBg ? 'style="background:' . $rowBg . '"' : '' !!}>
                                             <td class="px-2 py-1 text-center" style="color: #111827;">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="font-size: 12px; {{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="font-size: 12px; {{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             <td class="px-1 py-1 text-center" id="mt-file-{{ $student->hemis_id }}">
                                                 @if($hasFile)
                                                     <div class="mt-file-cell" style="display: flex; flex-direction: column; align-items: center; gap: 2px; position: relative;">
@@ -2217,6 +2816,22 @@
                                                     </div>
                                                 @else
                                                     <span style="color: #f87171; font-size: 12px; font-weight: 500;">Yuklanmagan</span>
+                                                @endif
+                                                @php
+                                                    $superadminMtUpload = (auth()->user()?->hasRole('superadmin') ?? false)
+                                                        && \App\Models\Setting::get('feature_superadmin_mt_upload_after_deadline', '0') === '1';
+                                                @endphp
+                                                @if($superadminMtUpload)
+                                                    <div style="margin-top:4px;">
+                                                        <input type="file" id="sa-mt-file-{{ $student->hemis_id }}" style="display:none;"
+                                                               onchange="superadminUploadMt('{{ $student->hemis_id }}')">
+                                                        <button type="button"
+                                                                onclick="document.getElementById('sa-mt-file-{{ $student->hemis_id }}').click()"
+                                                                style="font-size:10px; padding:2px 8px; background:#7c3aed; color:#fff; border:none; border-radius:5px; cursor:pointer;"
+                                                                title="Superadmin: muddatdan keyin ham fayl yuklash">
+                                                            ⬆ Fayl yuklash
+                                                        </button>
+                                                    </div>
                                                 @endif
                                             </td>
                                             <td class="px-1 py-1 text-center">
@@ -2371,7 +2986,7 @@
                                             @endphp
                                             <tr>
                                                 <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                                <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                                <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                                 @foreach($mtLessonDates as $idx => $date)
                                                     @php
                                                         $dayGrades = $studentMtGrades[$date] ?? [];
@@ -2386,7 +3001,24 @@
                                                         $isRetake = $hasRetakeInDay[$date] ?? false;
                                                         $hasNonFinalInDay = $hasGrades && collect($dayGrades)->contains(fn($g) => !($g['is_final'] ?? true));
                                                     @endphp
-                                                    <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}">
+                                                    @php
+                                                        $dayGraderLines = [];
+                                                        if ($hasGrades) {
+                                                            foreach ($dayGrades as $pair => $gd) {
+                                                                $uid = $gd['graded_by_user_id'] ?? null;
+                                                                $eid = $gd['employee_id'] ?? null;
+                                                                $gName = ($uid && isset($mtGraderUserNames[$uid]))
+                                                                    ? $mtGraderUserNames[$uid]
+                                                                    : (($eid && isset($mtGraderEmployeeNames[$eid])) ? $mtGraderEmployeeNames[$eid] : null);
+                                                                $val = round($gd['grade'], 0);
+                                                                $dayGraderLines[] = $gName
+                                                                    ? "({$pair}) {$val} — {$gName}"
+                                                                    : "({$pair}) {$val}";
+                                                            }
+                                                        }
+                                                        $dayTitle = implode(' | ', $dayGraderLines);
+                                                    @endphp
+                                                    <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($mtLessonDates) - 1 ? 'date-end' : '' }} {{ count($dayGrades) > 1 ? 'tooltip-cell' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $hasNonFinalInDay ? 'non-final-grade' : '' }}" @if($dayTitle) title="{{ $dayTitle }}" @endif>
                                                         @if($hasGrades)
                                                             <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} font-medium">{{ $dayAvg }}</span>
                                                             @if(count($dayGrades) > 1)
@@ -2459,7 +3091,7 @@
                                         @endphp
                                         <tr>
                                             <td class="px-2 py-1 text-gray-900 text-center">{{ $index + 1 }}</td>
-                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}</td>
+                                            <td class="px-2 py-1 uppercase text-xs student-name-cell" data-student-hemis-id="{{ $student->hemis_id }}" style="{{ ($student->student_status_code ?? '') == '60' ? 'color: #dc2626; font-weight: 600;' : 'color: #111827;' }}">{{ $student->full_name }}@if(!empty($studentStages[$student->hemis_id]))<span class="stage-badge stage-{{ $studentStages[$student->hemis_id]['color'] }}" title="{{ $studentStages[$student->hemis_id]['label'] }} (V={{ $studentStages[$student->hemis_id]['v'] }})">{{ $studentStages[$student->hemis_id]['short'] }}</span>@endif</td>
                                             @php $prevDate = null; @endphp
                                             @forelse($mtColumns as $colIndex => $col)
                                                 @php
@@ -2478,9 +3110,25 @@
                                                     $isNonFinal = $gradeData && !($gradeData['is_final'] ?? true);
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $isFirstOfDate ? 'detailed-date-start' : '' }} {{ $isLastOfDate ? 'detailed-date-end' : '' }} {{ $isInconsistent ? 'inconsistent-grade' : '' }} {{ $isNonFinal ? 'non-final-grade' : '' }}">
-                                                    @php $retakeSababli = !empty($gradeData['retake_was_sababli']); @endphp
+                                                    @php
+                                                        $retakeSababli = !empty($gradeData['retake_was_sababli']);
+                                                        $graderName = null;
+                                                        if ($gradeData) {
+                                                            $uid = $gradeData['graded_by_user_id'] ?? null;
+                                                            $eid = $gradeData['employee_id'] ?? null;
+                                                            if ($uid && isset($mtGraderUserNames[$uid])) {
+                                                                $graderName = $mtGraderUserNames[$uid];
+                                                            } elseif ($eid && isset($mtGraderEmployeeNames[$eid])) {
+                                                                $graderName = $mtGraderEmployeeNames[$eid];
+                                                            }
+                                                        }
+                                                        $cellTitleParts = [];
+                                                        if ($retakeSababli) $cellTitleParts[] = "Sababli ariza — 12-qo'shimcha shaklga tushadi";
+                                                        if ($graderName) $cellTitleParts[] = "Baho qo'ygan: {$graderName}";
+                                                        $cellTitle = implode(' · ', $cellTitleParts);
+                                                    @endphp
                                                     @if($grade !== null)
-                                                        <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} {{ $retakeSababli ? 'sababli-retake-cell' : '' }} font-medium" @if($retakeSababli) title="Sababli ariza — 12-qo'shimcha shaklga tushadi" @endif>{{ round($grade, 0) }}</span>
+                                                        <span class="{{ $isRetake ? 'grade-retake' : 'text-gray-900' }} {{ $retakeSababli ? 'sababli-retake-cell' : '' }} font-medium" @if($cellTitle) title="{{ $cellTitle }}" @endif>{{ round($grade, 0) }}</span>
                                                     @elseif($isAbsent)
                                                         <span class="text-red-600 font-medium">NB</span>
                                                     @else
@@ -3159,16 +3807,23 @@
         }
 
         // OSKI/Test baho kiritish vaqtinchalik yopilgan
-        function editExamGrade(cell, studentHemisId, typeCode, currentValue) {
-            return;
+        function editExamGrade(cell, studentHemisId, typeCode, currentValue, attempt, isSababli) {
+            attempt = attempt || 1;
+            isSababli = isSababli === true;
+            // Asosiy urinish (attempt=1) faqat sababli ariza bilan kelishi mumkin
+            if (attempt === 1 && !isSababli) {
+                alert('Asosiy urinish OSKI/Test baholarini bu yerdan kiritib bo\'lmaydi.');
+                return;
+            }
             if (cell.querySelector('input')) return;
-            var typeNames = {101: 'OSKI', 102: 'Test'};
+            var formLabel = attempt === 3 ? '12b' : (attempt === 2 ? '12a' : 'sababli');
+            var borderColor = isSababli ? '#7c3aed' : '#f59e0b';
             var original = cell.innerHTML;
             var input = document.createElement('input');
             input.type = 'number'; input.min = '0'; input.max = '100'; input.step = '1';
             input.value = currentValue !== null ? currentValue : '';
-            input.placeholder = '0-100';
-            input.style.cssText = 'width:50px;padding:2px 4px;text-align:center;font-size:12px;border:2px solid #3b82f6;border-radius:4px;outline:none;';
+            input.placeholder = formLabel + ' 0-100';
+            input.style.cssText = 'width:60px;padding:2px 4px;text-align:center;font-size:12px;border:2px solid ' + borderColor + ';border-radius:4px;outline:none;';
             cell.innerHTML = '';
             cell.appendChild(input);
             input.focus();
@@ -3189,16 +3844,21 @@
                         student_hemis_id: studentHemisId,
                         subject_id: '{{ $subject->subject_id ?? "" }}',
                         semester_code: '{{ $semesterCode ?? "" }}',
+                        group_hemis_id: '{{ $group->group_hemis_id ?? "" }}',
                         training_type_code: typeCode,
-                        grade: parseFloat(val)
+                        grade: parseFloat(val),
+                        attempt: attempt,
+                        is_sababli: isSababli
                     })
                 })
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
                         var rounded = Math.round(data.grade);
-                        cell.innerHTML = '<span class="font-bold text-blue-600">' + rounded + '</span>';
-                        cell.onclick = function() { editExamGrade(this, studentHemisId, typeCode, rounded); };
+                        var color = isSababli ? 'text-violet-700' : 'text-amber-700';
+                        var tag = isSababli ? '' : '<span class="text-[9px] text-amber-600 ml-0.5">' + formLabel + '</span>';
+                        cell.innerHTML = '<span class="font-bold ' + color + '">' + rounded + '</span>' + tag;
+                        cell.onclick = function() { editExamGrade(this, studentHemisId, typeCode, rounded, attempt, isSababli); };
                     } else {
                         alert(data.message || 'Xatolik');
                         cell.innerHTML = original;
@@ -3376,6 +4036,47 @@
                 }
             })
             .catch(() => alert('Server xatosi'));
+        }
+
+        // Superadmin: talaba nomidan MT fayl yuklash (muddatdan keyin ham)
+        function superadminUploadMt(studentHemisId) {
+            var input = document.getElementById('sa-mt-file-' + studentHemisId);
+            if (!input || !input.files || !input.files.length) return;
+            var file = input.files[0];
+
+            var fileCell = document.getElementById('mt-file-' + studentHemisId);
+            var prevHtml = fileCell ? fileCell.innerHTML : '';
+            if (fileCell) fileCell.innerHTML = '<span style="color:#6b7280;font-size:12px;">⏳ Yuklanmoqda…</span>';
+
+            var fd = new FormData();
+            fd.append('student_hemis_id', studentHemisId);
+            fd.append('subject_id', mtGradeConfig.subjectId);
+            fd.append('semester_code', mtGradeConfig.semesterCode);
+            fd.append('file', file);
+
+            fetch('{{ route("admin.journal.superadmin-upload-mt") }}', {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': mtGradeConfig.csrfToken,
+                    'Accept': 'application/json'
+                },
+                body: fd
+            })
+            .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+            .then(({ ok, data }) => {
+                if (ok && data.success) {
+                    // Sahifani yangilaymiz — fayl ustuni va baho kiritish maydonlari
+                    // to'g'ri holatga kelishi uchun.
+                    location.reload();
+                } else {
+                    alert(data.message || 'Xatolik');
+                    if (fileCell) fileCell.innerHTML = prevHtml;
+                }
+            })
+            .catch(() => {
+                alert('Server xatosi');
+                if (fileCell) fileCell.innerHTML = prevHtml;
+            });
         }
 
         // Update MT tab badge count after grading
@@ -3601,6 +4302,60 @@
             });
             function blurHandler() { if (!saving) save(); }
             input.addEventListener('blur', blurHandler);
+        }
+
+        // Superadmin: OSKI yoki Test bahosini bevosita o'zgartirish
+        // (sababli ariza yoki resit zarurati bo'lmasdan).
+        function superadminEditExam(cellTd, hemisId, subjectId, semesterCode, ttype, attempt) {
+            if (currentEditingCell) return;
+            const span = cellTd.querySelector('span.font-bold');
+            const currentVal = span ? span.textContent.trim() : '';
+            const yn = ttype == 101 ? 'OSKI' : 'Test';
+            const attLabel = attempt === 1 ? '' : ' (' + attempt + '-urinish)';
+            const raw = prompt('Superadmin: ' + yn + attLabel + ' bahosini kiriting (0–100):', currentVal);
+            if (raw === null) return;
+            const val = parseFloat(raw);
+            if (isNaN(val) || val < 0 || val > 100) {
+                alert('Baho 0 va 100 oralig\'ida bo\'lishi kerak.');
+                return;
+            }
+            currentEditingCell = cellTd;
+            const originalHTML = cellTd.innerHTML;
+            cellTd.innerHTML = '<span class="text-gray-500 text-xs">...</span>';
+
+            fetch('{{ route("admin.journal.superadmin-edit-exam-grade") }}', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json','X-CSRF-TOKEN':'{{ csrf_token() }}','Accept':'application/json'},
+                body: JSON.stringify({
+                    student_hemis_id: hemisId,
+                    subject_id: subjectId,
+                    semester_code: semesterCode,
+                    training_type_code: ttype,
+                    attempt: attempt,
+                    grade: val,
+                })
+            })
+            .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+            .then(({ ok, data }) => {
+                if (ok && data.success) {
+                    const rounded = Math.round(data.grade);
+                    const colorClass = attempt === 2 ? 'text-amber-700'
+                                     : attempt === 3 ? 'text-orange-700'
+                                     : 'text-blue-600';
+                    cellTd.innerHTML = '<span class="font-bold ' + colorClass + '">' + rounded + '</span>';
+                    // Saqlangani aniq ko'rinishi va boshqa hisob-kitoblar
+                    // (JN/MT% kabi) qaytadan to'g'ri chiqishi uchun sahifani yangilaymiz.
+                    setTimeout(() => window.location.reload(), 300);
+                } else {
+                    alert(data.message || 'Xatolik');
+                    cellTd.innerHTML = originalHTML;
+                }
+            })
+            .catch(() => {
+                alert('Tarmoq xatosi');
+                cellTd.innerHTML = originalHTML;
+            })
+            .finally(() => { currentEditingCell = null; });
         }
 
         // Retake grade functionality - Excel-like inline editing
@@ -4745,6 +5500,195 @@
 
         function closeYnWeightsModal() {
             document.getElementById('yn-weights-modal').classList.add('hidden');
+        }
+
+        // 12a / 12b ga o'tkazish modali
+        var _transferAttempt = 2;
+        function openTransferModal(attempt) {
+            _transferAttempt = attempt;
+            var formLabel = attempt === 2 ? '12a-shaklga' : '12b-shaklga';
+            var titleLabel = attempt === 2 ? 'Talabalarni 12a ga o\'tkazish' : 'Talabalarni 12b ga o\'tkazish';
+            var descLabel = attempt === 2
+                ? 'Yiqilgan talabalar uchun 1-urinish OSKI/Test sanalarini belgilang.'
+                : '12a dan ham yiqilgan talabalar uchun 2-urinish OSKI/Test sanalarini belgilang.';
+            var count = attempt === 2 ? {{ $failed12aCount ?? 0 }} : {{ $failed12bCount ?? 0 }};
+
+            document.getElementById('transfer-modal-title').textContent = titleLabel;
+            document.getElementById('transfer-modal-desc').textContent = descLabel;
+            document.getElementById('transfer-modal-form').textContent = formLabel;
+            document.getElementById('transfer-modal-count').textContent = count;
+            document.getElementById('transfer-oski-date').value = '';
+            document.getElementById('transfer-oski-time').value = '';
+            document.getElementById('transfer-test-date').value = '';
+            document.getElementById('transfer-test-time').value = '';
+            document.getElementById('transfer-modal').classList.remove('hidden');
+        }
+        function closeTransferModal() {
+            document.getElementById('transfer-modal').classList.add('hidden');
+        }
+        function submitTransfer() {
+            var oskiDate = document.getElementById('transfer-oski-date').value;
+            var oskiTime = document.getElementById('transfer-oski-time').value;
+            var testDate = document.getElementById('transfer-test-date').value;
+            var testTime = document.getElementById('transfer-test-time').value;
+
+            if (!oskiDate && !testDate) {
+                alert('Kamida OSKI yoki Test sanasini belgilang.');
+                return;
+            }
+
+            var btn = document.getElementById('transfer-submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Yuborilmoqda...';
+
+            fetch('{{ route("admin.journal.transfer-to-next-attempt") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                    attempt: _transferAttempt,
+                    oski_date: oskiDate || null,
+                    oski_time: oskiTime || null,
+                    test_date: testDate || null,
+                    test_time: testTime || null
+                })
+            })
+            .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+            .then(({ ok, data }) => {
+                if (ok && data.success) {
+                    alert(data.message || 'Muvaffaqiyatli o\'tkazildi.');
+                    location.reload();
+                } else {
+                    alert('Xatolik: ' + (data.message || 'Noma\'lum xato'));
+                    btn.disabled = false;
+                    btn.textContent = 'Tasdiqlash va o\'tkazish';
+                }
+            })
+            .catch(err => {
+                alert('Tarmoq xatosi: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Tasdiqlash va o\'tkazish';
+            });
+        }
+
+        // Yakuniylash modali — kontekstli ogohlantirish
+        var _finalizeAttempt = 1;
+        var _finalizeOverride = false;
+        function openFinalizeModal(attempt) {
+            _finalizeAttempt = attempt;
+            _finalizeOverride = false;
+            var formLabels = {1: 'YN (asosiy)', 2: '12a-shakl', 3: '12b-shakl'};
+            document.getElementById('finalize-modal-title').textContent = formLabels[attempt] + ' yakuniy qilish';
+            document.getElementById('finalize-loading').classList.remove('hidden');
+            document.getElementById('finalize-warning-content').classList.add('hidden');
+            document.getElementById('finalize-warning-content').innerHTML = '';
+            document.getElementById('finalize-modal').classList.remove('hidden');
+
+            var btn = document.getElementById('finalize-submit-btn');
+            btn.disabled = false;
+            btn.textContent = 'Yakuniy qilish';
+
+            var url = '{{ route("admin.journal.finalization-warning-data") }}'
+                + '?subject_id={{ $subjectId }}&semester_code={{ $semesterCode }}&group_hemis_id={{ $group->group_hemis_id }}';
+
+            fetch(url, { headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content') } })
+                .then(r => r.json())
+                .then(data => {
+                    document.getElementById('finalize-loading').classList.add('hidden');
+                    var content = document.getElementById('finalize-warning-content');
+                    content.classList.remove('hidden');
+                    if (!data.success) {
+                        content.innerHTML = '<p class="text-red-600">Xatolik: ' + (data.message || '?') + '</p>';
+                        return;
+                    }
+                    if (data.count === 0) {
+                        content.innerHTML = '<div class="rounded-lg bg-green-50 border border-green-200 p-4 text-sm text-green-800">'
+                            + '<strong>✓ Hech kim NB olmagan</strong> oxirgi ' + data.window_days + ' kun ichida. '
+                            + 'Yakuniy qilish xavfsiz.</div>';
+                        return;
+                    }
+                    var html = '<div class="rounded-lg bg-amber-50 border border-amber-300 p-4 mb-3">';
+                    html += '<div class="flex items-start gap-2 mb-2">';
+                    html += '<svg class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">'
+                        + '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>';
+                    html += '<div><strong class="text-amber-900">Diqqat:</strong> <span class="text-amber-800">'
+                        + 'Quyidagi ' + data.count + ' ta talaba oxirgi ' + data.window_days + ' kunda darslarga yoki imtihonlarga kelmagan. '
+                        + 'Ularning sababli ma\'lumotnomasi kelishi mumkin.</span></div></div>';
+                    html += '<div class="overflow-x-auto rounded-lg border border-amber-200 bg-white max-h-64 overflow-y-auto">';
+                    html += '<table class="min-w-full text-xs">';
+                    html += '<thead class="bg-amber-100 sticky top-0"><tr>'
+                        + '<th class="px-2 py-1 text-left font-semibold text-amber-900">FISH</th>'
+                        + '<th class="px-2 py-1 text-left font-semibold text-amber-900">Sana</th>'
+                        + '<th class="px-2 py-1 text-left font-semibold text-amber-900">Juftlik</th>'
+                        + '<th class="px-2 py-1 text-left font-semibold text-amber-900">Turi</th>'
+                        + '<th class="px-2 py-1 text-left font-semibold text-amber-900">Fan</th></tr></thead><tbody>';
+                    data.absentees.forEach(function(a) {
+                        var d = a.lesson_date ? new Date(a.lesson_date).toLocaleDateString('uz-UZ') : '-';
+                        html += '<tr class="border-t border-amber-100">'
+                            + '<td class="px-2 py-1 text-gray-900">' + (a.full_name || a.student_hemis_id) + '</td>'
+                            + '<td class="px-2 py-1 text-gray-700">' + d + '</td>'
+                            + '<td class="px-2 py-1 text-gray-700">' + (a.lesson_pair_name || '-') + '</td>'
+                            + '<td class="px-2 py-1 text-gray-700">' + (a.training_type_name || '-') + '</td>'
+                            + '<td class="px-2 py-1 text-gray-700">' + (a.subject_name || '-') + '</td>'
+                            + '</tr>';
+                    });
+                    html += '</tbody></table></div>';
+                    html += '<p class="text-xs text-amber-700 mt-2">Yakuniy qilingandan keyin sababli arizalar "Tuzatish dalolatnomasi" sifatida qo\'shiladi.</p>';
+                    html += '</div>';
+                    content.innerHTML = html;
+                    _finalizeOverride = true;
+                })
+                .catch(err => {
+                    document.getElementById('finalize-loading').classList.add('hidden');
+                    document.getElementById('finalize-warning-content').classList.remove('hidden');
+                    document.getElementById('finalize-warning-content').innerHTML = '<p class="text-red-600">Tarmoq xatosi: ' + err.message + '</p>';
+                });
+        }
+        function closeFinalizeModal() {
+            document.getElementById('finalize-modal').classList.add('hidden');
+        }
+        function submitFinalize() {
+            var btn = document.getElementById('finalize-submit-btn');
+            btn.disabled = true;
+            btn.textContent = 'Yuborilmoqda...';
+
+            fetch('{{ route("admin.journal.finalize-attempt") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                    attempt: _finalizeAttempt,
+                    override_warning: _finalizeOverride
+                })
+            })
+            .then(r => r.json().then(d => ({ ok: r.ok, data: d })))
+            .then(({ ok, data }) => {
+                if (ok && data.success) {
+                    alert(data.message || 'Yakuniylashtirildi.');
+                    location.reload();
+                } else {
+                    alert('Xatolik: ' + (data.message || 'Noma\'lum xato'));
+                    btn.disabled = false;
+                    btn.textContent = 'Yakuniy qilish';
+                }
+            })
+            .catch(err => {
+                alert('Tarmoq xatosi: ' + err.message);
+                btn.disabled = false;
+                btn.textContent = 'Yakuniy qilish';
+            });
         }
 
         function updateYnWeightsTotal() {

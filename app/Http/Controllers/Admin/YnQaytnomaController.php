@@ -16,6 +16,7 @@ use App\Models\StudentGrade;
 use App\Models\Teacher;
 use App\Models\YnStudentGrade;
 use App\Models\YnSubmission;
+use App\Services\JnMtCalculator;
 use App\Models\ContractList;
 use App\Models\Setting;
 use App\Models\DocumentVerification;
@@ -424,10 +425,13 @@ class YnQaytnomaController extends Controller
 
                 if (!$subject) continue;
 
-                // Har bir talaba uchun eng oxirgi snapshotni olish (tarixli)
-                $latestSnapshots = YnStudentGrade::latestPerStudent($submission->id)->get();
-                $savedGrades = $latestSnapshots->pluck('jn', 'student_hemis_id')->toArray();
-                $savedMtGrades = $latestSnapshots->pluck('mt', 'student_hemis_id')->toArray();
+                // JN/MT ni snapshotdan emas, jurnal mantig'i bilan jonli (live) hisoblash —
+                // shunda YN-oldi Word jurnal "ixcham" tabidagi qiymatlarga to'liq mos keladi.
+                $liveGrades = app(JnMtCalculator::class)->computeForGroup(
+                    $group->group_hemis_id,
+                    (int) $submission->subject_id,
+                    $semesterCode
+                );
 
                 // Talabalar ro'yxatini olish
                 $students = Student::select('full_name as student_name', 'student_id_number as student_id', 'hemis_id')
@@ -436,10 +440,10 @@ class YnQaytnomaController extends Controller
                     ->orderBy('full_name')
                     ->get();
 
-                // Saqlangan snapshot baholarni biriktirish
+                // Live hisoblangan baholarni biriktirish
                 foreach ($students as $student) {
-                    $student->jn = $savedGrades[$student->hemis_id] ?? 0;
-                    $student->mt = $savedMtGrades[$student->hemis_id] ?? 0;
+                    $student->jn = $liveGrades[$student->hemis_id]['jn'] ?? 0;
+                    $student->mt = $liveGrades[$student->hemis_id]['mt'] ?? 0;
                 }
 
                 // Get teachers for this subject and group

@@ -117,6 +117,10 @@
                                     <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                                     Excel
                                 </button>
+                                <button type="button" id="btn-ar-export" class="btn-ar-export" onclick="startAcademicRecordsExport()" title="Tanlangan filtr asosida academic_records'ni Excelga yuklash (background)">
+                                    <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10a2 2 0 002 2h12a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H6a2 2 0 00-2 2z"/></svg>
+                                    <span id="ar-export-label">Academic records</span>
+                                </button>
                                 <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                     Hisoblash
@@ -507,19 +511,34 @@
                     for (var g = 0; g < grades.length; g++) {
                         var gr = grades[g];
                         var isDebt = gr.is_debt || false;
-                        var point = (!isDebt && gr.total_point !== null && gr.total_point !== undefined) ? gr.total_point : '-';
-                        var grade = (!isDebt && gr.grade !== null && gr.grade !== undefined && gr.grade !== '') ? String(gr.grade) : '-';
+                        var isOrphan = gr.is_orphan || false;
+                        var point = (gr.total_point !== null && gr.total_point !== undefined) ? gr.total_point : '-';
+                        var grade = (gr.grade !== null && gr.grade !== undefined && gr.grade !== '') ? String(gr.grade) : '-';
+                        if (isDebt) { point = '-'; grade = '-'; }
                         var gradeClass = isDebt ? 'cell-fail' : 'cell-pass';
-                        var rowBg = isDebt ? 'background:#fef2f2;' : 'background:#fff;';
+                        var rowBg;
+                        if (isOrphan) {
+                            rowBg = 'background:#fef9c3;';   // sariq — orphan
+                        } else if (isDebt) {
+                            rowBg = 'background:#fef2f2;';
+                        } else {
+                            rowBg = 'background:#fff;';
+                        }
                         gh += '<tr style="' + rowBg + '">';
                         gh += '<td>' + (g + 1) + '</td>';
-                        gh += '<td style="text-align:left;font-weight:500;">' + esc(gr.subject_name) + '</td>';
+                        gh += '<td style="text-align:left;font-weight:500;">' + esc(gr.subject_name);
+                        if (isOrphan) {
+                            gh += ' <span style="font-size:10px;font-weight:600;background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:1px 6px;border-radius:8px;margin-left:4px;" title="Curriculum_subjects va student_subjects-da yo&apos;q, lekin academic_records-da bor">Notanish</span>';
+                        }
+                        gh += '</td>';
                         gh += '<td>' + esc(gr.credit) + '</td>';
                         gh += '<td>' + esc(gr.total_acload) + '</td>';
                         gh += '<td class="' + gradeClass + '">' + esc(point) + '</td>';
                         gh += '<td>' + (isDebt ? '<span style="color:#94a3b8;">—</span>' : '<span class="badge badge-indigo">' + esc(grade) + '</span>') + '</td>';
                         gh += '<td>';
-                        if (isDebt) {
+                        if (isOrphan) {
+                            gh += '<span style="display:inline-block;padding:2px 8px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:4px;font-size:11px;font-weight:600;">Faqat AR\'da</span>';
+                        } else if (isDebt) {
                             gh += '<span class="reason-badge">Qarzdor</span>';
                         } else {
                             gh += '<span style="color:#16a34a;font-weight:600;font-size:12px;">&#10003;</span>';
@@ -547,6 +566,83 @@
             params.export = type;
             var query = $.param(params);
             window.location.href = '{{ route($dataRouteName ?? 'admin.reports.debtors.data') }}?' + query;
+        }
+
+        var arExportPollTimer = null;
+        var arExportKey = null;
+
+        function setArBtnState(label, disabled) {
+            $('#ar-export-label').text(label);
+            $('#btn-ar-export').prop('disabled', !!disabled);
+        }
+
+        function startAcademicRecordsExport() {
+            if (arExportPollTimer) {
+                alert("Eksport allaqachon ishlamoqda. Iltimos kutib turing.");
+                return;
+            }
+            var params = getFilters();
+            setArBtnState('Boshlanmoqda...', true);
+            $.ajax({
+                url: '{{ route("admin.reports.debtors.export-academic-records.start") }}',
+                method: 'POST',
+                data: $.extend({}, params, { _token: '{{ csrf_token() }}' }),
+                success: function(resp) {
+                    if (resp.export_key) {
+                        arExportKey = resp.export_key;
+                        setArBtnState(resp.message || 'Ishlamoqda...', true);
+                        pollArExport();
+                    } else {
+                        setArBtnState('Academic records', false);
+                        alert('Eksport boshlanmadi');
+                    }
+                },
+                error: function(xhr) {
+                    setArBtnState('Academic records', false);
+                    alert('Xato: ' + (xhr.responseJSON && xhr.responseJSON.message ? xhr.responseJSON.message : xhr.statusText));
+                }
+            });
+        }
+
+        function pollArExport() {
+            if (!arExportKey) return;
+            arExportPollTimer = setTimeout(function() {
+                $.ajax({
+                    url: '{{ route("admin.reports.debtors.export-academic-records.status") }}',
+                    data: { export_key: arExportKey },
+                    success: function(resp) {
+                        if (!resp || resp.status === 'error') {
+                            stopArPolling('Academic records');
+                            alert(resp && resp.message ? resp.message : 'Status olishda xato');
+                            return;
+                        }
+                        if (resp.status === 'done') {
+                            var keyForDownload = arExportKey;
+                            stopArPolling('Academic records');
+                            window.location.href = '{{ route("admin.reports.debtors.export-academic-records.download") }}?export_key=' + encodeURIComponent(keyForDownload);
+                            return;
+                        }
+                        if (resp.status === 'failed') {
+                            stopArPolling('Academic records');
+                            alert('Eksport muvaffaqiyatsiz: ' + (resp.message || ''));
+                            return;
+                        }
+                        var pct = resp.percent || 0;
+                        setArBtnState((resp.message || 'Ishlamoqda') + ' ' + pct + '%', true);
+                        pollArExport();
+                    },
+                    error: function() {
+                        pollArExport();
+                    }
+                });
+            }, 2500);
+        }
+
+        function stopArPolling(label) {
+            if (arExportPollTimer) clearTimeout(arExportPollTimer);
+            arExportPollTimer = null;
+            arExportKey = null;
+            setArBtnState(label, false);
         }
 
         function renderPagination(res) {
@@ -629,6 +725,10 @@
         .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
         .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); box-shadow: 0 4px 12px rgba(22,163,74,0.4); transform: translateY(-1px); }
         .btn-excel:disabled { cursor: not-allowed; opacity: 0.5; }
+
+        .btn-ar-export { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #7c3aed, #a855f7); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(124,58,237,0.3); height: 36px; }
+        .btn-ar-export:hover:not(:disabled) { background: linear-gradient(135deg, #6d28d9, #9333ea); box-shadow: 0 4px 12px rgba(124,58,237,0.4); transform: translateY(-1px); }
+        .btn-ar-export:disabled { cursor: progress; opacity: 0.7; }
 
         .excel-dropdown { position: relative; display: inline-block; }
         .excel-menu { display: none; position: absolute; bottom: 100%; left: 0; margin-bottom: 4px; background: #fff; border-radius: 10px; box-shadow: 0 8px 30px rgba(0,0,0,0.15); border: 1px solid #e2e8f0; min-width: 200px; z-index: 100; overflow: hidden; }

@@ -172,6 +172,7 @@ class RetakeGroupService
                 'semester_name' => $data['semester_name'],
                 'teacher_id' => $teacher->id,
                 'teacher_name' => $teacher->full_name,
+                'teacher_phones' => $this->normalizePhones($data['teacher_phones'] ?? null),
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
                 'max_students' => $data['max_students'] ?? null,
@@ -310,6 +311,10 @@ class RetakeGroupService
             }
         }
 
+        if (array_key_exists('teacher_phones', $data)) {
+            $update['teacher_phones'] = $this->normalizePhones($data['teacher_phones']);
+        }
+
         if (!empty($data['teacher_id']) && $data['teacher_id'] !== $group->teacher_id) {
             $teacher = Teacher::find($data['teacher_id']);
             if (!$teacher) {
@@ -373,6 +378,23 @@ class RetakeGroupService
             ->where('status', RetakeGroup::STATUS_SCHEDULED)
             ->whereDate('start_date', '<', today()->subDay())
             ->get();
+    }
+
+    /**
+     * Telefon raqamlar massivini tozalash (bo'sh elementlarni olib tashlash,
+     * trim qilish, dublikatlarni o'chirish).
+     */
+    private function normalizePhones(mixed $phones): ?array
+    {
+        if (!is_array($phones)) {
+            return null;
+        }
+        $clean = array_values(array_unique(array_filter(array_map(
+            fn ($p) => trim((string) $p),
+            $phones
+        ), fn ($p) => $p !== '')));
+
+        return empty($clean) ? null : $clean;
     }
 
     private function validateData(array $data, bool $partial = false): void

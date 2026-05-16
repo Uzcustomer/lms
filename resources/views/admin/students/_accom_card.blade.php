@@ -5,6 +5,7 @@
     $cId = $canvasId ?? 'accomChart';
 @endphp
 <div class="course-bar-card">
+    @include('admin.students._excel_btn', ['kind' => 'accom', 'canvas' => $cId])
     <h3>Yashash joyi</h3>
     <div class="stat-card-kpis" style="flex-wrap:wrap; gap:28px; margin-bottom:12px;">
         @php $idx = 0; @endphp

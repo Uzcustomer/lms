@@ -296,6 +296,22 @@
         color: #fff; border-color: transparent;
         box-shadow: 0 3px 10px -3px rgba(79, 70, 229, .55);
     }
+
+    /* Excel yuklab olish tugmasi — har chart kartasining yuqori o'ng burchagida */
+    .chart-excel-btn {
+        position: absolute; top: 14px; right: 14px;
+        padding: 6px 12px; font-size: 12px; font-weight: 600;
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: #fff; border: 0; border-radius: 8px;
+        box-shadow: 0 3px 10px -3px rgba(16, 185, 129, .55);
+        cursor: pointer; transition: all .15s ease;
+        display: inline-flex; align-items: center; gap: 6px;
+    }
+    .chart-excel-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 6px 16px -4px rgba(16, 185, 129, .65);
+    }
+    .stat-card, .pie-card, .course-bar-card { position: relative; }
 </style>
 
 <div class="stats-aurora-bg">
@@ -548,6 +564,7 @@
             {{-- Pie chartlar — Yoshi va To'lov shakli kesimi --}}
             <div class="pie-grid">
                 <div class="pie-card">
+                    @include('admin.students._excel_btn', ['kind' => 'age', 'canvas' => 'ageChart'])
                     <h3>Yoshi</h3>
                     @include('admin.students._edu_tabs', ['group' => 'age-ageChart'])
                     <div class="pie-body">
@@ -585,6 +602,7 @@
                     </div>
                 </div>
                 <div class="pie-card">
+                    @include('admin.students._excel_btn', ['kind' => 'pay', 'canvas' => 'payChart'])
                     <h3>To'lov shakli</h3>
                     @include('admin.students._edu_tabs', ['group' => 'pay-payChart'])
                     <div class="pie-body">
@@ -626,6 +644,7 @@
             {{-- Yarim kenglikdagi kartalar: Kurslar + Ijtimoiy toifalar --}}
             <div class="half-grid">
                 <div class="stat-card">
+                    @include('admin.students._excel_btn', ['kind' => 'course', 'canvas' => 'courseChartUmumiy'])
                     <h3>Kurslar bo'yicha taqsimot</h3>
                     @php
                         $courseLevels = array_keys($courseTotals);
@@ -644,6 +663,7 @@
                     </div>
                 </div>
                 <div class="stat-card">
+                    @include('admin.students._excel_btn', ['kind' => 'social', 'canvas' => 'socialChart'])
                     <h3>Ijtimoiy toifalar</h3>
                     <div class="stat-card-kpis">
                         <div>
@@ -669,6 +689,7 @@
             <div class="half-grid">
                 {{-- Davlatlar bo'yicha aylanma chart (barcha mamlakatlar) --}}
                 <div class="stat-card">
+                    @include('admin.students._excel_btn', ['kind' => 'country', 'canvas' => 'countryChartUmumiy'])
                     <h3>Davlatlar bo'yicha taqsimot</h3>
                     <div class="stat-card-kpis" style="margin-bottom:14px;">
                         <div>
@@ -705,6 +726,7 @@
                 </div>
                 {{-- Fuqaroligi — ta'lim turi bo'yicha stacked bar --}}
                 <div class="stat-card">
+                    @include('admin.students._excel_btn', ['kind' => 'cit', 'canvas' => 'citChartUmumiy'])
                     <h3>Fuqaroligi</h3>
                     <div class="stat-card-kpis">
                         <div>
@@ -749,6 +771,7 @@
         <div x-show="inner.talabalar === 'yoshi'" x-cloak>
             <div class="pie-grid">
                 <div class="pie-card">
+                    @include('admin.students._excel_btn', ['kind' => 'age', 'canvas' => 'ageChartTab'])
                     <h3>Yoshi bo'yicha taqsimot</h3>
                     @include('admin.students._edu_tabs', ['group' => 'age-ageChartTab'])
                     <div class="pie-body">
@@ -825,6 +848,7 @@
 
             {{-- KPI raqamlar --}}
             <div class="course-bar-card" style="margin-top:0">
+                @include('admin.students._excel_btn', ['kind' => 'course-totals', 'canvas' => 'courseChart'])
                 <h3>Kurslar</h3>
                 <div style="display:flex; flex-wrap:wrap; gap:36px;">
                     @foreach($allLevels as $lvl)
@@ -839,6 +863,7 @@
 
             {{-- Stacked bar chart --}}
             <div class="course-bar-card">
+                @include('admin.students._excel_btn', ['kind' => 'course', 'canvas' => 'courseChart'])
                 <h3>Ta'lim turi bo'yicha kurslar taqsimoti</h3>
                 <div class="course-bar-wrap">
                     <canvas id="courseChart"></canvas>
@@ -851,6 +876,7 @@
         {{-- Ijtimoiy toifa tabi — to'liq kenglikdagi gorizontal bar chart --}}
         <div x-show="inner.talabalar === 'ijtimoiy_toifa'" x-cloak>
             <div class="course-bar-card" style="margin-top:0">
+                @include('admin.students._excel_btn', ['kind' => 'social', 'canvas' => 'socialChartTab'])
                 <h3>Ijtimoiy toifalar</h3>
                 <div class="stat-card-kpis">
                     <div>
@@ -873,6 +899,7 @@
         {{-- To'lov shakli tabi — pie chart + ko'rsatkichlar --}}
         <div x-show="inner.talabalar === 'tolov_shakli'" x-cloak>
             <div class="course-bar-card" style="margin-top:0">
+                @include('admin.students._excel_btn', ['kind' => 'pay', 'canvas' => 'payChartTab'])
                 <h3>To'lov shakli</h3>
                 <div class="stat-card-kpis" style="margin-bottom:18px;">
                     <div>
@@ -932,6 +959,7 @@
             <div class="half-grid">
                 {{-- Chap: Fuqaroligi (ta'lim turi bo'yicha stacked bar) --}}
                 <div class="stat-card">
+                    @include('admin.students._excel_btn', ['kind' => 'cit', 'canvas' => 'citChart'])
                     <h3>Fuqaroligi</h3>
                     <div class="stat-card-kpis">
                         <div>
@@ -954,6 +982,7 @@
                 </div>
                 {{-- O'ng: Fuqaroligi (aylanma — davlatlar) --}}
                 <div class="stat-card">
+                    @include('admin.students._excel_btn', ['kind' => 'country', 'canvas' => 'countryChart'])
                     <h3>Fuqaroligi (aylanma)</h3>
                     <div class="stat-card-kpis">
                         <div>
@@ -1007,6 +1036,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script>
 (function () {
     const DURATION = 900;            // ms
@@ -1618,9 +1648,130 @@
         });
     }
 
+    // ─── Excel eksport — har chart kartasining yuqori o'ng burchagidagi tugma
+    const EDU_LABEL = { all: 'Hammasi', bakalavr: 'Bakalavr', magistr: 'Magistratura', ordinatura: 'Ordinatura' };
+
+    function buildExcelRows(kind, edu) {
+        if (kind === 'age') {
+            const cfg = getEduJson('ageEduData');
+            const d = (cfg && cfg[edu]) || {};
+            const y = parseInt(d.younger || 0, 10);
+            const o = parseInt(d.older || 0, 10);
+            return [['Yosh guruhi', 'Talabalar soni'], ["30 yoshdan kichiklar", y], ["30 yoshdan oshganlar", o], ['Jami', y + o]];
+        }
+        if (kind === 'pay') {
+            const cfg = getEduJson('payEduData');
+            const d = (cfg && cfg[edu]) || {};
+            const g = parseInt(d.grant || 0, 10);
+            const c = parseInt(d.contract || 0, 10);
+            return [["To'lov shakli", 'Talabalar soni'], ['Davlat granti', g], ["To'lov-kontrakt", c], ['Jami', g + c]];
+        }
+        if (kind === 'social') {
+            const cfg = getEduJson('socialEduData');
+            const e = cfg && cfg.byEdu ? cfg.byEdu[edu] : null;
+            if (!e) return [];
+            const rows = [['Ijtimoiy toifa', 'Talabalar soni']];
+            e.labels.forEach((l, i) => rows.push([l, parseInt(e.data[i]) || 0]));
+            return rows;
+        }
+        if (kind === 'country') {
+            const cfg = getEduJson('countryEduData');
+            const e = cfg && cfg.byEdu ? cfg.byEdu[edu] : null;
+            if (!e) return [];
+            const rows = [['Davlat', 'Talabalar soni']];
+            e.labels.forEach((l, i) => rows.push([l, parseInt(e.data[i]) || 0]));
+            return rows;
+        }
+        if (kind === 'cit') {
+            const cfg = getEduJson('citEduData');
+            const e = cfg && cfg.byEdu ? cfg.byEdu[edu] : null;
+            if (!e) return [];
+            const rows = [['Fuqarolik', 'Talabalar soni']];
+            e.labels.forEach((l, i) => rows.push([l, parseInt(e.data[i]) || 0]));
+            return rows;
+        }
+        if (kind === 'province') {
+            const cfg = getProvinceCfg();
+            const e = cfg && cfg.byEdu ? cfg.byEdu[edu] : null;
+            if (!e) return [];
+            const rows = [['Viloyat', 'Erkaklar', 'Ayollar', 'Jami']];
+            e.labels.forEach((l, i) => {
+                const m = parseInt(e.male[i]) || 0;
+                const f = parseInt(e.female[i]) || 0;
+                rows.push([l, m, f, m + f]);
+            });
+            return rows;
+        }
+        if (kind === 'course') {
+            const cfg = getCourseCfg();
+            if (!cfg) return [];
+            const rows = [['Ta\'lim turi', ...cfg.levels.map(l => l + '-kurs'), 'Jami']];
+            cfg.eduLabels.forEach((eduLbl, idx) => {
+                const ek = cfg.eduKeys[idx];
+                const counts = cfg.levels.map(lvl => (cfg.data[ek] && cfg.data[ek][lvl] ? cfg.data[ek][lvl].total : 0));
+                rows.push([eduLbl, ...counts, counts.reduce((a, b) => a + b, 0)]);
+            });
+            return rows;
+        }
+        if (kind === 'course-totals') {
+            const cfg = getCourseCfg();
+            if (!cfg) return [];
+            const rows = [['Kurs', 'Jami talabalar']];
+            cfg.levels.forEach(lvl => {
+                let total = 0;
+                cfg.eduKeys.forEach(ek => {
+                    if (cfg.data[ek] && cfg.data[ek][lvl]) total += cfg.data[ek][lvl].total;
+                });
+                rows.push([lvl + '-kurs', total]);
+            });
+            return rows;
+        }
+        if (kind === 'accom') {
+            const cfg = getAccomCfg();
+            if (!cfg) return [];
+            const rows = [['Yashash joyi', ...cfg.eduLabels, 'Jami']];
+            cfg.labels.forEach(name => {
+                const counts = cfg.eduKeys.map(ek => (cfg.stats[name] && cfg.stats[name].edu ? (cfg.stats[name].edu[ek] || 0) : 0));
+                rows.push([name, ...counts, counts.reduce((a, b) => a + b, 0)]);
+            });
+            return rows;
+        }
+        return [];
+    }
+
+    function exportChartToExcel(kind, canvasId, edu) {
+        if (typeof XLSX === 'undefined') {
+            alert('Excel kutubxonasi yuklanmadi.');
+            return;
+        }
+        const rows = buildExcelRows(kind, edu);
+        if (!rows.length) { alert('Eksport qilinadigan ma\'lumot yo\'q.'); return; }
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        const wb = XLSX.utils.book_new();
+        const sheetName = (kind + '_' + edu).slice(0, 31);
+        XLSX.utils.book_append_sheet(wb, ws, sheetName);
+        const today = new Date().toISOString().slice(0, 10);
+        const file = canvasId + '_' + (EDU_LABEL[edu] || edu) + '_' + today + '.xlsx';
+        XLSX.writeFile(wb, file);
+    }
+
+    function bindExcelBtns() {
+        document.querySelectorAll('.chart-excel-btn').forEach(btn => {
+            if (btn.dataset.bound === '1') return;
+            btn.dataset.bound = '1';
+            btn.addEventListener('click', () => {
+                const kind = btn.dataset.chart;
+                const canvasId = btn.dataset.canvas;
+                const canvas = document.getElementById(canvasId);
+                const edu = canvas ? (canvas.dataset.edu || 'all') : 'all';
+                exportChartToExcel(kind, canvasId, edu);
+            });
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         // Boshlang'ich ko'rinadigan (Umumiy) chartlar
-        setTimeout(() => { window.statsRenderCharts(); bindEduTabs(); }, 50);
+        setTimeout(() => { window.statsRenderCharts(); bindEduTabs(); bindExcelBtns(); }, 50);
     });
 })();
 </script>

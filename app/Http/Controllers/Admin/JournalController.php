@@ -1652,25 +1652,21 @@ class JournalController extends Controller
                 // shartlar barchasi bajarilganda hisoblanadi:
                 //   - weight > 0 (imtihon umuman olinishi kerak)
                 //   - baho kiritilmagan
-                //   - exam_schedules da kelajakdagi sana belgilangan (bugun va undan keyin)
-                // Eslatma: imtihon kunining O'ZI hali "bo'lmagan" deb qaraladi —
-                // talaba kun oxirigacha "1-urinish" da qoladi. Ertasi kundan
-                // boshlab (today > oski_date) "2-urinish"/"Pullik" ko'rinadi.
-                // Aks holda (sana belgilanmagan, sana o'tgan, baho kiritilgan)
-                // imtihon bo'lib o'tgan deb qaraladi va computeV natijasi
-                // badge'ni belgilaydi. Davomat ≥25% (V=-3) holati esa darhol
-                // ko'rsatiladi.
+                //   - exam_schedules da kelajakdagi sana belgilangan (today < oski_date)
+                // Aks holda (sana yo'q, sana o'tgan, baho kiritilgan) imtihon
+                // bo'lib o'tgan deb qaraladi va computeV natijasi badge'ni belgilaydi.
+                // Davomat ≥25% (V=-3) holati esa darhol ko'rsatiladi.
                 $today = now()->format('Y-m-d');
                 $oskiDone = !$hasOskiForWeights
                     || ($main['oski'] ?? null) !== null
                     || !$examSchedule
                     || !$examSchedule->oski_date
-                    || $examSchedule->oski_date->format('Y-m-d') < $today;
+                    || $examSchedule->oski_date->format('Y-m-d') <= $today;
                 $testDone = !$hasTestForWeights
                     || ($main['test'] ?? null) !== null
                     || !$examSchedule
                     || !$examSchedule->test_date
-                    || $examSchedule->test_date->format('Y-m-d') < $today;
+                    || $examSchedule->test_date->format('Y-m-d') <= $today;
                 $oneUrinishEnded = $oskiDone && $testDone;
                 $isDavomatFail = ($main['v'] ?? null) === -3;
                 $isInPostMainStage = !in_array($stageKey, [

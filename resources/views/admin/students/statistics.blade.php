@@ -1372,8 +1372,8 @@
             });
             return;
         }
-        // Tanlangan ta'lim turi — oddiy bar (fuqarolik turi bo'yicha)
-        const eduCfg = getEduJson('citEduData');
+        // Tanlangan ta'lim turi — oddiy bar (fuqarolik turi bo'yicha).
+        // eduCfg yuqorida (KPI uchun) allaqachon olingan — qayta o'qimaymiz.
         if (!eduCfg || !eduCfg.byEdu || !eduCfg.byEdu[e]) return;
         const labels = eduCfg.byEdu[e].labels;
         const data = eduCfg.byEdu[e].data;

@@ -41,6 +41,13 @@ class ExamDateRoleService
      *  o'tib ketgan urinish sanasini ro'yxatga olish uchun ishlatiladi. */
     public const SETTING_ALLOW_PAST_DATES = 'allow_past_exam_dates';
 
+    /** Setting kaliti: ertangi kunga imtihon belgilash uchun bugungi soat
+     *  cutoff. Default 18:00. Dekanat / Registrator / O'quv bo'limi rollari
+     *  ushbu soatdan keyin ertangi kunga sana qo'ya olmaydi — Test markaziga
+     *  vaqtlarni belgilash uchun yetarli vaqt qoldirish maqsadida. Admin
+     *  rollar bu cheklovga ega emas. */
+    public const SETTING_DATE_SUBMISSION_CUTOFF_HOUR = 'exam_date_submission_cutoff_hour';
+
     /**
      * Whether the test-centre role may currently edit today's exam times.
      */
@@ -71,6 +78,31 @@ class ExamDateRoleService
     public static function setAllowPastExamDates(bool $value): void
     {
         \App\Models\Setting::set(self::SETTING_ALLOW_PAST_DATES, $value ? '1' : '0');
+    }
+
+    /**
+     * Ertangi kunga imtihon sanasi belgilanishi mumkin bo'lgan oxirgi soat
+     * (0–23). Default 18 (ya'ni soat 18:00 dan keyin ertangi kunga sana
+     * belgilab bo'lmaydi). Faqat non-admin (dekanat, registrator ofisi,
+     * o'quv bo'limi) rollariga taalluqli.
+     */
+    public static function examDateSubmissionCutoffHour(): int
+    {
+        $raw = \App\Models\Setting::get(self::SETTING_DATE_SUBMISSION_CUTOFF_HOUR, 18);
+        $hour = (int) $raw;
+        if ($hour < 0 || $hour > 23) {
+            return 18;
+        }
+        return $hour;
+    }
+
+    /**
+     * Persist the submission cutoff hour. Admin-only caller.
+     */
+    public static function setExamDateSubmissionCutoffHour(int $hour): void
+    {
+        $hour = max(0, min(23, $hour));
+        \App\Models\Setting::set(self::SETTING_DATE_SUBMISSION_CUTOFF_HOUR, (string) $hour);
     }
 
     /**

@@ -327,6 +327,7 @@ class AcademicScheduleController extends Controller
         }
 
         $allowPastExamDates = ExamDateRoleService::allowPastExamDates();
+        $examDateSubmissionCutoffHour = ExamDateRoleService::examDateSubmissionCutoffHour();
 
         return view('admin.academic-schedule.index', compact(
             'scheduleData',
@@ -360,6 +361,7 @@ class AcademicScheduleController extends Controller
             'testCenterLoad',
             'testCenterCapacity',
             'allowPastExamDates',
+            'examDateSubmissionCutoffHour',
         ));
     }
 
@@ -2202,6 +2204,13 @@ class AcademicScheduleController extends Controller
         $canEditSaved = $isAdmin || ExamDateRoleService::roleHasAnyAccess($activeRole);
         $allowPastDates = ExamDateRoleService::allowPastExamDates();
         $minDate = $isAdmin ? $today : $today->copy()->addDay();
+        // Ertangi kunga sana belgilash uchun bugungi oxirgi soat (default 18:00).
+        // Dekanat / Registrator ofisi / O'quv bo'limi rollari uchun: agar hozir
+        // ushbu soatdan keyin bo'lsa, ertangi kunga sana qo'yish bloklanadi —
+        // Test markaziga vaqtlarni belgilash uchun yetarli vaqt qoldirish maqsadida.
+        $submissionCutoffHour = ExamDateRoleService::examDateSubmissionCutoffHour();
+        $blockTomorrowNow = !$isAdmin && now()->hour >= $submissionCutoffHour;
+        $tomorrowStr = $today->copy()->addDay()->format('Y-m-d');
 
         // Per-row permission validatsiyasi uchun (curriculum_hemis_id, semester_code) → level_code map
         $groupIds = collect($validSchedules)->pluck('group_hemis_id')->filter()->unique()->values();
@@ -2242,11 +2251,12 @@ class AcademicScheduleController extends Controller
                 $schedule['group_hemis_id'] . '_' . $schedule['subject_id'] . '_' . $schedule['semester_code']
             );
 
-            // 2- va 3-urinish (resit) sanalari uchun "ertadan" cheklovi yumshatilgan —
-            // bugungi kunni ham belgilash mumkin (registrator ofisi shoshilinch
-            // hollarda o'sha kun davomida resit tashkil qilishi kerak bo'lishi mumkin).
+            // Bugungi kunni belgilash huquqi faqat adminda. Dekanat, Registrator
+            // ofisi va O'quv bo'limi rollari 1-urinish ham, qayta urinishlar ham
+            // bo'lsin — eng kamida ertangi kunga sana qo'ya oladi. Shu tariqa
+            // Test markaziga vaqtlarni belgilashga yetarli muddat qoladi.
             $rowUrinishVal = (int) ($schedule['urinish'] ?? 1);
-            $rowMinDate = ($rowUrinishVal >= 2) ? $today : $minDate;
+            $rowMinDate = ($isAdmin && $rowUrinishVal >= 2) ? $today : $minDate;
 
             if (!empty($schedule['oski_date']) && !$allowPastDates) {
                 $alreadySaved = $existingRec && $existingRec->oski_date
@@ -2256,9 +2266,15 @@ class AcademicScheduleController extends Controller
                     if ($oskiDate->lt($rowMinDate)) {
                         return redirect()->back()->with('error', $isAdmin
                             ? 'OSKI sanasi o\'tgan kunni qo\'yib bo\'lmaydi.'
-                            : ($rowUrinishVal >= 2
-                                ? 'OSKI sanasi o\'tgan kunni qo\'yib bo\'lmaydi (resit uchun bugun ham bo\'ladi).'
-                                : 'OSKI sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.'));
+                            : 'OSKI sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
+                    }
+                    if ($blockTomorrowNow && $oskiDate->format('Y-m-d') === $tomorrowStr) {
+                        return redirect()->back()->with('error', sprintf(
+                            'OSKI sanasini ertangi kunga (%s) belgilab bo\'lmaydi: hozir soat %02d:00 dan kech. Test markaziga vaqtlarni belgilashga muddat qolishi uchun ertangi kunga sana faqat soat %02d:00 gacha qo\'yiladi. Iltimos, kelgusi kunlardan birini tanlang.',
+                            \Carbon\Carbon::parse($tomorrowStr)->format('d.m.Y'),
+                            $submissionCutoffHour,
+                            $submissionCutoffHour
+                        ));
                     }
                 }
             }
@@ -2270,9 +2286,15 @@ class AcademicScheduleController extends Controller
                     if ($testDate->lt($rowMinDate)) {
                         return redirect()->back()->with('error', $isAdmin
                             ? 'Test sanasi o\'tgan kunni qo\'yib bo\'lmaydi.'
-                            : ($rowUrinishVal >= 2
-                                ? 'Test sanasi o\'tgan kunni qo\'yib bo\'lmaydi (resit uchun bugun ham bo\'ladi).'
-                                : 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.'));
+                            : 'Test sanasi kamida ertadan bo\'lishi kerak. Bugun yoki o\'tgan kunni qo\'yib bo\'lmaydi.');
+                    }
+                    if ($blockTomorrowNow && $testDate->format('Y-m-d') === $tomorrowStr) {
+                        return redirect()->back()->with('error', sprintf(
+                            'Test sanasini ertangi kunga (%s) belgilab bo\'lmaydi: hozir soat %02d:00 dan kech. Test markaziga vaqtlarni belgilashga muddat qolishi uchun ertangi kunga sana faqat soat %02d:00 gacha qo\'yiladi. Iltimos, kelgusi kunlardan birini tanlang.',
+                            \Carbon\Carbon::parse($tomorrowStr)->format('d.m.Y'),
+                            $submissionCutoffHour,
+                            $submissionCutoffHour
+                        ));
                     }
                 }
             }

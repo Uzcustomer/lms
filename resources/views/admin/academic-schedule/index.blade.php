@@ -840,6 +840,21 @@
                 if (inputDate <= today) {
                     err = 'Imtihon sanasi kamida ertadan bo\'lishi kerak (bugun qo\'yib bo\'lmaydi)';
                 }
+                @if(!($isAdmin ?? false))
+                // Cheklov 3: dekanat / registrator / o'quv bo'limi uchun ertangi kunga
+                // sana belgilash uchun bugungi soat cutoff (default 18:00). Shu tariqa
+                // Test markaziga vaqtlarni belgilashga muddat qoladi.
+                if (!err) {
+                    var cutoffHour = {{ (int) ($examDateSubmissionCutoffHour ?? 18) }};
+                    var tomorrow = new Date();
+                    tomorrow.setHours(0, 0, 0, 0);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    if (inputDate.getTime() === tomorrow.getTime() && new Date().getHours() >= cutoffHour) {
+                        var hh = cutoffHour < 10 ? '0' + cutoffHour : '' + cutoffHour;
+                        err = 'Ertangi kunga sana belgilash uchun soat ' + hh + ':00 o\'tib ketgan. Iltimos, kelgusi kunlardan birini tanlang.';
+                    }
+                }
+                @endif
                 @endif
             }
             if (err) {

@@ -48,6 +48,15 @@ class ExamDateRoleService
      *  rollar bu cheklovga ega emas. */
     public const SETTING_DATE_SUBMISSION_CUTOFF_HOUR = 'exam_date_submission_cutoff_hour';
 
+    /** Setting kaliti: dekanat / registrator / o'quv bo'limi rollari uchun
+     *  bugungi kunni YN sanasi sifatida qo'yishga ruxsat berish. Default
+     *  o'chirilgan — bu rollar faqat ertangi va undan keyingi sanalarni
+     *  belgilay oladi (Test markaziga vaqt belgilashga muddat qoldirish
+     *  uchun). Toggle yoqilsa, shoshilinch hollarda (masalan, oqim
+     *  buzilganda) bugungi kunni ham qo'yish mumkin bo'ladi. Ish tugagach
+     *  o'chirib qo'yish tavsiya etiladi. */
+    public const SETTING_ALLOW_TODAY_DATES = 'allow_today_exam_dates';
+
     /**
      * Whether the test-centre role may currently edit today's exam times.
      */
@@ -103,6 +112,22 @@ class ExamDateRoleService
     {
         $hour = max(0, min(23, $hour));
         \App\Models\Setting::set(self::SETTING_DATE_SUBMISSION_CUTOFF_HOUR, (string) $hour);
+    }
+
+    /**
+     * Non-admin rollari uchun bugungi YN sanasi qo'yishga ruxsat etilganmi.
+     */
+    public static function allowTodayExamDates(): bool
+    {
+        return (bool) \App\Models\Setting::get(self::SETTING_ALLOW_TODAY_DATES, false);
+    }
+
+    /**
+     * Persist the "allow today exam dates" toggle. Admin-only caller.
+     */
+    public static function setAllowTodayExamDates(bool $value): void
+    {
+        \App\Models\Setting::set(self::SETTING_ALLOW_TODAY_DATES, $value ? '1' : '0');
     }
 
     /**

@@ -157,6 +157,11 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
             'Ariza semestri',
             'Kredit',
             'Summa (UZS)',
+            'To\'lov yuklangan',
+            'To\'lov holati',
+            'To\'lovni tasdiqlagan',
+            'To\'lov tasdiqlangan sanasi',
+            'To\'lov rad etish sababi',
             'Dekan qarori',
             'Dekan',
             'Dekan sanasi',
@@ -183,6 +188,7 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
     public function map($app): array
     {
         $student = $app->group?->student;
+        $group = $app->group;
         $rg = $app->retakeGroup;
 
         return [
@@ -198,7 +204,13 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
             $app->subject_name,
             $app->semester_name,
             (float) $app->credit,
-            number_format((float) ($app->group->receipt_amount ?? 0), 0, '.', ' '),
+            number_format((float) ($group->receipt_amount ?? 0), 0, '.', ' '),
+
+            optional($group?->payment_uploaded_at)->format('Y-m-d H:i'),
+            $this->paymentStatusLabel($group?->payment_verification_status),
+            $group?->payment_verified_by_name ?? '',
+            optional($group?->payment_verified_at)->format('Y-m-d H:i'),
+            $group?->payment_rejection_reason ?? '',
 
             $this->statusLabel($app->dean_status),
             $app->dean_user_name ?? ($app->deanUser?->full_name ?? ''),
@@ -242,6 +254,16 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
             'rejected' => 'Rad etildi',
             'pending' => 'Kutilmoqda',
             default => '—',
+        };
+    }
+
+    private function paymentStatusLabel(?string $status): string
+    {
+        return match ($status) {
+            'approved' => 'Tasdiqlandi',
+            'rejected' => 'Rad etildi',
+            'pending' => 'Tekshirilmoqda',
+            default => 'Yuklanmagan',
         };
     }
 

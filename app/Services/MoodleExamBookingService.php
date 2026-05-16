@@ -142,9 +142,18 @@ class MoodleExamBookingService
         // previous year (the course category name starts with this).
         $academicYear = (string) ($schedule->education_year ?? '');
 
-        $studentsByLang = $this->studentsByLanguage($schedule->group_hemis_id);
+        // Per-student schedule (individual grafik) — Moodle bookingni faqat
+        // shu talabaga tushiramiz. Aks holda guruh sathidagi yozuv —
+        // barcha guruh talabalariga tushadi.
+        $perStudentHemisId = !empty($schedule->student_hemis_id)
+            ? (string) $schedule->student_hemis_id
+            : null;
+        $studentsByLang = $this->studentsByLanguage($schedule->group_hemis_id, $perStudentHemisId);
         if (empty($studentsByLang)) {
-            return $this->fail($schedule, $prefix, 'no students in group ' . $schedule->group_hemis_id);
+            $reason = $perStudentHemisId !== null
+                ? 'student ' . $perStudentHemisId . ' not found in group ' . $schedule->group_hemis_id
+                : 'no students in group ' . $schedule->group_hemis_id;
+            return $this->fail($schedule, $prefix, $reason);
         }
 
         $calls = [];
@@ -396,16 +405,23 @@ class MoodleExamBookingService
      * Group student usernames (= student_id_number) by their effective exam language.
      * Effective = student.exam_language_code (override) ?? group.education_lang_code.
      *
+     * @param string|null $studentHemisId Per-student schedule (individual grafik)
+     *                                     bo'lsa, faqat shu talabaga filtrlaymiz —
+     *                                     Moodle booking guruh emas, shu talabagagina
+     *                                     tushadi.
      * @return array<string, array<int, string>> [langCode => [username, ...]]
      */
-    private function studentsByLanguage(string $groupHemisId): array
+    private function studentsByLanguage(string $groupHemisId, ?string $studentHemisId = null): array
     {
         $group = Group::where('group_hemis_id', $groupHemisId)->first();
         $defaultLang = $this->normalizeLang($group?->education_lang_code);
 
-        $students = Student::where('group_id', $groupHemisId)
-            ->whereNotNull('student_id_number')
-            ->get(['student_id_number', 'exam_language_code']);
+        $studentsQuery = Student::where('group_id', $groupHemisId)
+            ->whereNotNull('student_id_number');
+        if ($studentHemisId !== null) {
+            $studentsQuery->where('hemis_id', $studentHemisId);
+        }
+        $students = $studentsQuery->get(['student_id_number', 'exam_language_code']);
 
         $bucket = [];
         foreach ($students as $st) {

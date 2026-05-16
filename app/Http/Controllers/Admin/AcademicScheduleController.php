@@ -2021,8 +2021,11 @@ class AcademicScheduleController extends Controller
             ->get()
             ->mapWithKeys(fn($s) => [$s->curriculum_hemis_id . '_' . $s->code => (string) $s->level_code]);
 
-        // Mavjud jadvallar
-        $scheduleQuery = ExamSchedule::query();
+        // Mavjud jadvallar — faqat guruh sathidagi yozuvlar (student_hemis_id NULL).
+        // Per-student (individual grafik) yozuvlari $perStudentMap orqali alohida
+        // yuklanadi. Bu yerda ham per-student qatorlar olinsa, keyBy ularni guruh
+        // qatori ustiga yozib yuboradi va sahifada noto'g'ri sana ko'rsatadi.
+        $scheduleQuery = ExamSchedule::query()->whereNull('student_hemis_id');
         if ($selectedDepartment) $scheduleQuery->where('department_hemis_id', $selectedDepartment);
         if ($selectedSpecialty) $scheduleQuery->where('specialty_hemis_id', $selectedSpecialty);
         if ($selectedGroup) $scheduleQuery->where('group_hemis_id', $selectedGroup);
@@ -2184,16 +2187,30 @@ class AcademicScheduleController extends Controller
         $userId = auth()->id();
         $today = \Carbon\Carbon::today();
 
-        // Mavjud yozuvlarni oldindan yuklash (allaqachon saqlangan sanalarni validatsiyadan o'tkazib yuborish uchun)
-        $existingForValidation = ExamSchedule::where(function ($q) use ($validSchedules) {
+        // Mavjud yozuvlarni oldindan yuklash (allaqachon saqlangan sanalarni
+        // validatsiyadan o'tkazib yuborish uchun). Per-student yozuvlari guruh
+        // yozuvi bilan key-da ustma-ust tushmasligi uchun student_hemis_id ham
+        // hisobga olinadi.
+        $hasStudentColForVal = \Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', 'student_hemis_id');
+        $validationKey = function ($groupId, $subjectId, $semCode, $studentId): string {
+            return $groupId . '_' . $subjectId . '_' . $semCode . '_' . ($studentId ?? '');
+        };
+        $existingForValidation = ExamSchedule::where(function ($q) use ($validSchedules, $hasStudentColForVal) {
             foreach ($validSchedules as $s) {
-                $q->orWhere(function ($sub) use ($s) {
+                $q->orWhere(function ($sub) use ($s, $hasStudentColForVal) {
                     $sub->where('group_hemis_id', $s['group_hemis_id'])
                         ->where('subject_id', $s['subject_id'])
                         ->where('semester_code', $s['semester_code']);
+                    if ($hasStudentColForVal) {
+                        if (!empty($s['student_hemis_id'])) {
+                            $sub->where('student_hemis_id', $s['student_hemis_id']);
+                        } else {
+                            $sub->whereNull('student_hemis_id');
+                        }
+                    }
                 });
             }
-        })->get()->keyBy(fn($r) => $r->group_hemis_id . '_' . $r->subject_id . '_' . $r->semester_code);
+        })->get()->keyBy(fn($r) => $validationKey($r->group_hemis_id, $r->subject_id, $r->semester_code, $r->student_hemis_id ?? null));
 
         // Cheklov 2: Faqat YANGI sanalar kamida ertadan bo'lishi kerak (allaqachon saqlangan sanalar tekshirilmaydi)
         // Admin roli uchun bugungi kunni ham belgilash mumkin
@@ -2256,7 +2273,12 @@ class AcademicScheduleController extends Controller
 
         foreach ($validSchedules as $schedule) {
             $existingRec = $existingForValidation->get(
-                $schedule['group_hemis_id'] . '_' . $schedule['subject_id'] . '_' . $schedule['semester_code']
+                $validationKey(
+                    $schedule['group_hemis_id'],
+                    $schedule['subject_id'],
+                    $schedule['semester_code'],
+                    $schedule['student_hemis_id'] ?? null
+                )
             );
 
             // Bugungi kunni belgilash huquqi faqat adminda. Dekanat, Registrator
@@ -2325,7 +2347,12 @@ class AcademicScheduleController extends Controller
 
             foreach ($validSchedules as $schedule) {
                 $existingRec = $existingForValidation->get(
-                    $schedule['group_hemis_id'] . '_' . $schedule['subject_id'] . '_' . $schedule['semester_code']
+                    $validationKey(
+                        $schedule['group_hemis_id'],
+                        $schedule['subject_id'],
+                        $schedule['semester_code'],
+                        $schedule['student_hemis_id'] ?? null
+                    )
                 );
 
                 $oskiNa = !empty($schedule['oski_na']);
@@ -2508,9 +2535,14 @@ class AcademicScheduleController extends Controller
                 // Urinish bo'yicha qaysi DB ustuniga yozish kerakligini aniqlaymiz.
                 // Form har bir virtual qator uchun oski_date/test_date submit qiladi,
                 // lekin urinish=2 bo'lsa oski_resit_date, urinish=3 bo'lsa oski_resit2_date.
+                // Vaqt (oski_time/test_time) ham xuddi shu tarzda map qilinadi —
+                // individual grafik (per-student) qatorlarda registrator vaqtni ham
+                // sana bilan birga belgilashi mumkin.
                 $rowUrinish = (int) ($schedule['urinish'] ?? 1);
                 $oskiCol = match ($rowUrinish) { 2 => 'oski_resit_date', 3 => 'oski_resit2_date', default => 'oski_date' };
                 $testCol = match ($rowUrinish) { 2 => 'test_resit_date', 3 => 'test_resit2_date', default => 'test_date' };
+                $oskiTimeCol = match ($rowUrinish) { 2 => 'oski_resit_time', 3 => 'oski_resit2_time', default => 'oski_time' };
+                $testTimeCol = match ($rowUrinish) { 2 => 'test_resit_time', 3 => 'test_resit2_time', default => 'test_time' };
 
                 // Cheklov 1: Allaqachon saqlangan sanani o'zgartirish mumkin emas
                 $newOskiDate = !empty($schedule['oski_date']) ? $schedule['oski_date'] : null;
@@ -2561,6 +2593,29 @@ class AcademicScheduleController extends Controller
                     // 2/3-urinish uchun resit ustuniga yozish (na flaglarini bu yerda saqlamaymiz)
                     $fillData[$oskiCol] = $newOskiDate;
                     $fillData[$testCol] = $newTestDate;
+                }
+                // Per-student qatorlarda forma vaqtni ham yuborishi mumkin
+                // (registrator individual grafikka sana+vaqt belgilaydi). Vaqt
+                // H:i formatda kelishi kutiladi; bo'sh bo'lsa null saqlanadi.
+                $normalizeTime = function ($raw): ?string {
+                    if (empty($raw)) return null;
+                    $raw = trim((string) $raw);
+                    if (!preg_match('/^(\d{1,2}):(\d{2})$/', $raw, $m)) return null;
+                    $h = (int) $m[1]; $mn = (int) $m[2];
+                    if ($h < 0 || $h > 23 || $mn < 0 || $mn > 59) return null;
+                    return sprintf('%02d:%02d', $h, $mn);
+                };
+                if (array_key_exists('oski_time', $schedule)) {
+                    $newOskiTime = $normalizeTime($schedule['oski_time']);
+                    if ($newOskiDate !== null || $newOskiTime === null) {
+                        $fillData[$oskiTimeCol] = $newOskiTime;
+                    }
+                }
+                if (array_key_exists('test_time', $schedule)) {
+                    $newTestTime = $normalizeTime($schedule['test_time']);
+                    if ($newTestDate !== null || $newTestTime === null) {
+                        $fillData[$testTimeCol] = $newTestTime;
+                    }
                 }
                 $record->fill($fillData);
 

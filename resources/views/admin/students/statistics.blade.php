@@ -564,8 +564,8 @@
                                 <span class="pie-legend-text">
                                     <span class="pie-legend-label">30 yoshdan kichiklar</span>
                                     <span class="pie-legend-value">
-                                        <span data-count="{{ $younger }}">{{ number_format($younger, 0, '.', ' ') }}</span>
-                                        <span class="pie-legend-pct">{{ $ageTotal > 0 ? number_format($younger * 100 / $ageTotal, 1) : 0 }}%</span>
+                                        <span data-count="{{ $younger }}" data-kpi="younger">{{ number_format($younger, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct" data-kpi="younger-pct">{{ $ageTotal > 0 ? number_format($younger * 100 / $ageTotal, 1) : 0 }}%</span>
                                     </span>
                                 </span>
                             </div>
@@ -576,8 +576,8 @@
                                 <span class="pie-legend-text">
                                     <span class="pie-legend-label">30 yoshdan oshganlar</span>
                                     <span class="pie-legend-value">
-                                        <span data-count="{{ $older }}">{{ number_format($older, 0, '.', ' ') }}</span>
-                                        <span class="pie-legend-pct">{{ $ageTotal > 0 ? number_format($older * 100 / $ageTotal, 1) : 0 }}%</span>
+                                        <span data-count="{{ $older }}" data-kpi="older">{{ number_format($older, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct" data-kpi="older-pct">{{ $ageTotal > 0 ? number_format($older * 100 / $ageTotal, 1) : 0 }}%</span>
                                     </span>
                                 </span>
                             </div>
@@ -601,8 +601,8 @@
                                 <span class="pie-legend-text">
                                     <span class="pie-legend-label">Davlat granti</span>
                                     <span class="pie-legend-value">
-                                        <span data-count="{{ $grant }}">{{ number_format($grant, 0, '.', ' ') }}</span>
-                                        <span class="pie-legend-pct">{{ $payTotal > 0 ? number_format($grant * 100 / $payTotal, 1) : 0 }}%</span>
+                                        <span data-count="{{ $grant }}" data-kpi="grant">{{ number_format($grant, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct" data-kpi="grant-pct">{{ $payTotal > 0 ? number_format($grant * 100 / $payTotal, 1) : 0 }}%</span>
                                     </span>
                                 </span>
                             </div>
@@ -613,8 +613,8 @@
                                 <span class="pie-legend-text">
                                     <span class="pie-legend-label">To'lov-kontrakt</span>
                                     <span class="pie-legend-value">
-                                        <span data-count="{{ $contract }}">{{ number_format($contract, 0, '.', ' ') }}</span>
-                                        <span class="pie-legend-pct">{{ $payTotal > 0 ? number_format($contract * 100 / $payTotal, 1) : 0 }}%</span>
+                                        <span data-count="{{ $contract }}" data-kpi="contract">{{ number_format($contract, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct" data-kpi="contract-pct">{{ $payTotal > 0 ? number_format($contract * 100 / $payTotal, 1) : 0 }}%</span>
                                     </span>
                                 </span>
                             </div>
@@ -648,12 +648,12 @@
                     <div class="stat-card-kpis">
                         <div>
                             <span class="lbl">Jami talabalar</span>
-                            <span class="val" data-count="{{ $totalActive }}">{{ number_format($totalActive, 0, '.', ' ') }}</span>
+                            <span class="val" data-count="{{ $totalActive }}" data-kpi="total-active">{{ number_format($totalActive, 0, '.', ' ') }}</span>
                         </div>
                         <div>
                             <span class="lbl">Ijtimoiy toifasi bor (Boshqa'siz)</span>
-                            <span class="val" data-count="{{ $socialHasCategory }}">{{ number_format($socialHasCategory, 0, '.', ' ') }}</span>
-                            <div class="pct">{{ $socialPct }}%</div>
+                            <span class="val" data-count="{{ $socialHasCategory }}" data-kpi="social-has">{{ number_format($socialHasCategory, 0, '.', ' ') }}</span>
+                            <div class="pct" data-kpi="social-pct">{{ $socialPct }}%</div>
                         </div>
                     </div>
                     @include('admin.students._edu_tabs', ['group' => 'social-socialChart'])
@@ -673,11 +673,11 @@
                     <div class="stat-card-kpis" style="margin-bottom:14px;">
                         <div>
                             <span class="lbl">Jami (barcha davlatlar)</span>
-                            <span class="val" data-count="{{ $countryTotal }}">{{ number_format($countryTotal, 0, '.', ' ') }}</span>
+                            <span class="val" data-count="{{ $countryTotal }}" data-kpi="country-total">{{ number_format($countryTotal, 0, '.', ' ') }}</span>
                         </div>
                         <div>
                             <span class="lbl">Davlatlar soni</span>
-                            <span class="val" data-count="{{ count($countryStats) }}">{{ count($countryStats) }}</span>
+                            <span class="val" data-count="{{ count($countryStats) }}" data-kpi="country-count">{{ count($countryStats) }}</span>
                         </div>
                     </div>
                     @include('admin.students._edu_tabs', ['group' => 'country-countryChartUmumiy'])
@@ -709,15 +709,15 @@
                     <div class="stat-card-kpis">
                         <div>
                             <span class="lbl">O'zbekiston fuqarosi</span>
-                            <span class="val" data-count="{{ $citUz }}">{{ number_format($citUz, 0, '.', ' ') }}</span>
+                            <span class="val" data-count="{{ $citUz }}" data-kpi="cit-uz">{{ number_format($citUz, 0, '.', ' ') }}</span>
                         </div>
                         <div>
                             <span class="lbl">Xorijiy davlat fuqarosi</span>
-                            <span class="val" data-count="{{ $citForeign }}">{{ number_format($citForeign, 0, '.', ' ') }}</span>
+                            <span class="val" data-count="{{ $citForeign }}" data-kpi="cit-foreign">{{ number_format($citForeign, 0, '.', ' ') }}</span>
                         </div>
                         <div>
                             <span class="lbl">Fuqaroligi yo'q shaxs</span>
-                            <span class="val" data-count="{{ $citNone }}">{{ number_format($citNone, 0, '.', ' ') }}</span>
+                            <span class="val" data-count="{{ $citNone }}" data-kpi="cit-none">{{ number_format($citNone, 0, '.', ' ') }}</span>
                         </div>
                     </div>
                     @include('admin.students._edu_tabs', ['group' => 'cit-citChartUmumiy'])
@@ -765,8 +765,8 @@
                                 <span class="pie-legend-text">
                                     <span class="pie-legend-label">30 yoshdan kichiklar</span>
                                     <span class="pie-legend-value">
-                                        <span data-count="{{ $younger }}">{{ number_format($younger, 0, '.', ' ') }}</span>
-                                        <span class="pie-legend-pct">{{ $ageTotal > 0 ? number_format($younger * 100 / $ageTotal, 1) : 0 }}%</span>
+                                        <span data-count="{{ $younger }}" data-kpi="younger">{{ number_format($younger, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct" data-kpi="younger-pct">{{ $ageTotal > 0 ? number_format($younger * 100 / $ageTotal, 1) : 0 }}%</span>
                                     </span>
                                 </span>
                             </div>
@@ -777,8 +777,8 @@
                                 <span class="pie-legend-text">
                                     <span class="pie-legend-label">30 yoshdan oshganlar</span>
                                     <span class="pie-legend-value">
-                                        <span data-count="{{ $older }}">{{ number_format($older, 0, '.', ' ') }}</span>
-                                        <span class="pie-legend-pct">{{ $ageTotal > 0 ? number_format($older * 100 / $ageTotal, 1) : 0 }}%</span>
+                                        <span data-count="{{ $older }}" data-kpi="older">{{ number_format($older, 0, '.', ' ') }}</span>
+                                        <span class="pie-legend-pct" data-kpi="older-pct">{{ $ageTotal > 0 ? number_format($older * 100 / $ageTotal, 1) : 0 }}%</span>
                                     </span>
                                 </span>
                             </div>
@@ -855,7 +855,7 @@
                 <div class="stat-card-kpis">
                     <div>
                         <span class="lbl">Jami talabalar</span>
-                        <span class="val" data-count="{{ $totalActive }}">{{ number_format($totalActive, 0, '.', ' ') }}</span>
+                        <span class="val" data-count="{{ $totalActive }}" data-kpi="total-active">{{ number_format($totalActive, 0, '.', ' ') }}</span>
                     </div>
                     <div>
                         <span class="lbl">Ijtimoiy toifasi bor (Boshqa'siz)</span>
@@ -877,17 +877,17 @@
                 <div class="stat-card-kpis" style="margin-bottom:18px;">
                     <div>
                         <span class="lbl">Davlat granti</span>
-                        <span class="val" data-count="{{ $grant }}">{{ number_format($grant, 0, '.', ' ') }}</span>
-                        <div class="pct">{{ $payTotal > 0 ? number_format($grant * 100 / $payTotal, 1) : 0 }}%</div>
+                        <span class="val" data-count="{{ $grant }}" data-kpi="grant">{{ number_format($grant, 0, '.', ' ') }}</span>
+                        <div class="pct" data-kpi="grant-pct">{{ $payTotal > 0 ? number_format($grant * 100 / $payTotal, 1) : 0 }}%</div>
                     </div>
                     <div>
                         <span class="lbl">To'lov-kontrakt</span>
-                        <span class="val" data-count="{{ $contract }}">{{ number_format($contract, 0, '.', ' ') }}</span>
-                        <div class="pct">{{ $payTotal > 0 ? number_format($contract * 100 / $payTotal, 1) : 0 }}%</div>
+                        <span class="val" data-count="{{ $contract }}" data-kpi="contract">{{ number_format($contract, 0, '.', ' ') }}</span>
+                        <div class="pct" data-kpi="contract-pct">{{ $payTotal > 0 ? number_format($contract * 100 / $payTotal, 1) : 0 }}%</div>
                     </div>
                     <div>
                         <span class="lbl">Jami</span>
-                        <span class="val" data-count="{{ $payTotal }}">{{ number_format($payTotal, 0, '.', ' ') }}</span>
+                        <span class="val" data-count="{{ $payTotal }}" data-kpi="pay-total">{{ number_format($payTotal, 0, '.', ' ') }}</span>
                     </div>
                 </div>
                 @include('admin.students._edu_tabs', ['group' => 'pay-payChartTab'])
@@ -936,15 +936,15 @@
                     <div class="stat-card-kpis">
                         <div>
                             <span class="lbl">O'zbekiston fuqarosi</span>
-                            <span class="val" data-count="{{ $citUz }}">{{ number_format($citUz, 0, '.', ' ') }}</span>
+                            <span class="val" data-count="{{ $citUz }}" data-kpi="cit-uz">{{ number_format($citUz, 0, '.', ' ') }}</span>
                         </div>
                         <div>
                             <span class="lbl">Xorijiy davlat fuqarosi</span>
-                            <span class="val" data-count="{{ $citForeign }}">{{ number_format($citForeign, 0, '.', ' ') }}</span>
+                            <span class="val" data-count="{{ $citForeign }}" data-kpi="cit-foreign">{{ number_format($citForeign, 0, '.', ' ') }}</span>
                         </div>
                         <div>
                             <span class="lbl">Fuqaroligi yo'q shaxs</span>
-                            <span class="val" data-count="{{ $citNone }}">{{ number_format($citNone, 0, '.', ' ') }}</span>
+                            <span class="val" data-count="{{ $citNone }}" data-kpi="cit-none">{{ number_format($citNone, 0, '.', ' ') }}</span>
                         </div>
                     </div>
                     @include('admin.students._edu_tabs', ['group' => 'cit-citChart'])
@@ -958,7 +958,7 @@
                     <div class="stat-card-kpis">
                         <div>
                             <span class="lbl">Eng ko'p mamlakatlar</span>
-                            <span class="val" data-count="{{ $countryTotal }}">{{ number_format($countryTotal, 0, '.', ' ') }}</span>
+                            <span class="val" data-count="{{ $countryTotal }}" data-kpi="country-total">{{ number_format($countryTotal, 0, '.', ' ') }}</span>
                         </div>
                     </div>
                     @include('admin.students._edu_tabs', ['group' => 'country-countryChart'])
@@ -1092,6 +1092,20 @@
         return _eduJsonCache[id];
     }
 
+    // KPI yordamchilar — chart kartasi ichidagi qiymatlarni yangilash uchun.
+    const _fmtNum = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
+    function _findCard(canvas) {
+        return canvas.closest('.pie-card, .stat-card, .course-bar-card');
+    }
+    function _kpi(scope, key, txt) {
+        if (!scope) return;
+        const el = scope.querySelector('[data-kpi="' + key + '"]');
+        if (el) el.textContent = txt;
+    }
+    function _pct(num, total) {
+        return (total > 0 ? (num * 100 / total).toFixed(1) : '0.0') + '%';
+    }
+
     function renderAge(id, edu) {
         const c = document.getElementById(id);
         if (!c) return;
@@ -1109,6 +1123,12 @@
             ["30 yoshdan kichiklar", "30 yoshdan oshganlar"],
             [younger, older],
             ['#6366f1', '#22c55e']);
+        const total = younger + older;
+        const card = _findCard(c);
+        _kpi(card, 'younger', _fmtNum(younger));
+        _kpi(card, 'younger-pct', _pct(younger, total));
+        _kpi(card, 'older', _fmtNum(older));
+        _kpi(card, 'older-pct', _pct(older, total));
     }
     function renderPay(id, edu) {
         const c = document.getElementById(id);
@@ -1127,6 +1147,13 @@
             ["Davlat granti", "To'lov-kontrakt"],
             [grant, contract],
             ['#a855f7', '#f43f5e']);
+        const total = grant + contract;
+        const card = _findCard(c);
+        _kpi(card, 'grant',        _fmtNum(grant));
+        _kpi(card, 'grant-pct',    _pct(grant, total));
+        _kpi(card, 'contract',     _fmtNum(contract));
+        _kpi(card, 'contract-pct', _pct(contract, total));
+        _kpi(card, 'pay-total',    _fmtNum(total));
     }
 
     // ─── Kurslar stacked bar chart ─────────────────────────────────────
@@ -1221,6 +1248,7 @@
         if (!canvas) return;
         const e = edu || canvas.dataset.edu || 'all';
         const eduCfg = getEduJson('socialEduData');
+        const ageCfg = getEduJson('ageEduData'); // total active per edu
         let labels, data, colors;
         if (eduCfg && eduCfg.byEdu && eduCfg.byEdu[e]) {
             labels = eduCfg.byEdu[e].labels;
@@ -1232,6 +1260,17 @@
             labels = cfg.labels; data = cfg.data;
             colors = labels.map((_, i) => cfg.colors[i % cfg.colors.length]);
         }
+        // KPI: total-active (shu edu uchun), social-has, social-pct
+        const card = _findCard(canvas);
+        const socialHas = data.reduce((a, b) => a + (parseInt(b) || 0), 0);
+        let totalActive = 0;
+        if (ageCfg && ageCfg[e]) {
+            totalActive = (parseInt(ageCfg[e].younger) || 0) + (parseInt(ageCfg[e].older) || 0);
+        }
+        _kpi(card, 'total-active', _fmtNum(totalActive));
+        _kpi(card, 'social-has',   _fmtNum(socialHas));
+        _kpi(card, 'social-pct',   _pct(socialHas, totalActive));
+
         const existing = Chart.getChart(canvas);
         if (existing) existing.destroy();
 
@@ -1286,6 +1325,25 @@
         const existing = Chart.getChart(canvas);
         if (existing) existing.destroy();
         const fmt = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
+
+        // KPI yangilash — har edu uchun citizenshipByEdu dan O'zbek/Xorijiy/Yo'q
+        const eduCfg = getEduJson('citEduData');
+        const card = _findCard(canvas);
+        if (eduCfg && eduCfg.byEdu && eduCfg.byEdu[e]) {
+            const labels = eduCfg.byEdu[e].labels;
+            const data   = eduCfg.byEdu[e].data;
+            let citUz = 0, citForeign = 0, citNone = 0;
+            labels.forEach((name, i) => {
+                const low = (name || '').toString().toLowerCase();
+                const cnt = parseInt(data[i]) || 0;
+                if (low.includes('zbek')) citUz += cnt;
+                else if (low.includes('shaxs') || low.includes('apatrid') || low.includes('yoq') || low.includes("yo'q")) citNone += cnt;
+                else citForeign += cnt;
+            });
+            _kpi(card, 'cit-uz',      _fmtNum(citUz));
+            _kpi(card, 'cit-foreign', _fmtNum(citForeign));
+            _kpi(card, 'cit-none',    _fmtNum(citNone));
+        }
 
         const cfg = getCitCfg();
         if (e === 'all' && cfg) {
@@ -1367,6 +1425,12 @@
             labels = cfg.labels; data = cfg.data;
             colors = labels.map((_, i) => cfg.colors[i % cfg.colors.length]);
         }
+        // KPI: country-total + country-count
+        const total = data.reduce((a, b) => a + (parseInt(b) || 0), 0);
+        const card = _findCard(canvas);
+        _kpi(card, 'country-total', _fmtNum(total));
+        _kpi(card, 'country-count', String(labels.length));
+
         new Chart(canvas, {
             type: 'doughnut',
             data: {
@@ -1470,6 +1534,13 @@
         const cfg = getProvinceCfg();
         if (!cfg || !cfg.byEdu || !cfg.byEdu[e]) return;
         const byEdu = cfg.byEdu[e];
+        // KPI: jami erkak / ayol shu edu uchun
+        const maleSum   = byEdu.male.reduce((a, b)   => a + (parseInt(b) || 0), 0);
+        const femaleSum = byEdu.female.reduce((a, b) => a + (parseInt(b) || 0), 0);
+        const card = _findCard(canvas);
+        _kpi(card, 'prov-male',   _fmtNum(maleSum));
+        _kpi(card, 'prov-female', _fmtNum(femaleSum));
+
         const existing = Chart.getChart(canvas);
         if (existing) existing.destroy();
         const fmt = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');

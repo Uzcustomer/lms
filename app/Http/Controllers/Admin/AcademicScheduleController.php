@@ -4920,40 +4920,64 @@ class AcademicScheduleController extends Controller
         }
 
         // 2/3-urinish (resit) uchun haqiqiy talabalar sonini hisoblash —
-        // butun guruh emas, faqat yiqilganlar (pullik/held_back chiqariladi).
-        $statusByKey = [];
+        // butun guruh emas, faqat yiqilganlar. computeStudentAttemptStatuses
+        // qoidalari bilan to'liq mos kelmasligi mumkin (V<60 ning aniq
+        // formulasi murakkab), lekin amaliy yetarli darajada — bir BATCH
+        // DB so'rovi orqali. 504 timeout xavfini oldini olish uchun har
+        // (group, subject, semester) uchun computeStudentAttemptStatuses
+        // chaqirilmaydi.
+        $resitEligibleMap = []; // [group|subject|semester|attempt] => count of distinct hemis_ids
         if ($allItems->isNotEmpty()) {
-            $pseudoScheduleData = collect();
-            foreach ($allItems as $it) {
-                if (empty($it['semester_code']) || empty($it['subject_id'])) continue;
-                $gid = $it['group_hemis_id'];
-                if (!$pseudoScheduleData->has($gid)) {
-                    $pseudoScheduleData->put($gid, collect());
-                }
-                $tripleKey = $gid . '|' . $it['subject_id'] . '|' . $it['semester_code'];
-                $alreadyAdded = $pseudoScheduleData->get($gid)
-                    ->contains(fn($x) => ($x['group']->group_hemis_id . '|' . $x['subject']->subject_id . '|' . $x['subject']->semester_code) === $tripleKey);
-                if (!$alreadyAdded) {
-                    $pseudoScheduleData->get($gid)->push([
-                        'group' => (object) ['group_hemis_id' => $gid],
-                        'subject' => (object) [
-                            'subject_id' => $it['subject_id'],
-                            'semester_code' => $it['semester_code'],
-                        ],
+            $resitTriples = $allItems->filter(fn($it) => (int) ($it['attempt'] ?? 1) >= 2 && empty($it['student_hemis_id']))
+                ->unique(fn($it) => $it['group_hemis_id'] . '|' . $it['subject_id'] . '|' . $it['semester_code'])
+                ->values();
+            if ($resitTriples->isNotEmpty()) {
+                $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+                $subjectIds = $resitTriples->pluck('subject_id')->unique()->all();
+                $semCodes = $resitTriples->pluck('semester_code')->unique()->all();
+                $groupIdsForResit = $resitTriples->pluck('group_hemis_id')->unique()->all();
+                try {
+                    $resitQuery = \Illuminate\Support\Facades\DB::table('student_grades as sg')
+                        ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                        ->whereIn('st.group_id', $groupIdsForResit)
+                        ->where('st.student_status_code', 11)
+                        ->whereIn('sg.subject_id', $subjectIds)
+                        ->whereIn('sg.semester_code', $semCodes)
+                        ->whereIn('sg.training_type_code', [101, 102])
+                        ->whereNull('sg.deleted_at');
+                    if ($hasAttemptCol) {
+                        // failed1 (attempt 1 da yiqilgan) yoki explicit attempt>=2 record bo'lsa eligible.
+                        $resitQuery->where(function ($w) {
+                            $w->where('sg.attempt', '>=', 2)
+                              ->orWhere(function ($x) {
+                                  $x->where(function ($y) { $y->where('sg.attempt', 1)->orWhereNull('sg.attempt'); })
+                                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                              });
+                        });
+                    } else {
+                        // attempt ustuni yo'q bo'lsa, oddiy "grade<60" tekshiruv.
+                        $resitQuery->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                    }
+                    $resitRows = $resitQuery
+                        ->select('st.group_id', 'sg.subject_id', 'sg.semester_code',
+                            \Illuminate\Support\Facades\DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
+                        ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
+                        ->get();
+                    foreach ($resitRows as $r) {
+                        $k2 = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|2';
+                        $k3 = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|3';
+                        $resitEligibleMap[$k2] = (int) $r->cnt;
+                        $resitEligibleMap[$k3] = (int) $r->cnt;
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('bandlikKursatkichi: resit count failed', [
+                        'error' => $e->getMessage(),
                     ]);
                 }
             }
-            try {
-                $statusByKey = $this->computeStudentAttemptStatuses($pseudoScheduleData);
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichi: status hisoblashda xato', [
-                    'error' => $e->getMessage(),
-                ]);
-                $statusByKey = [];
-            }
         }
 
-        $eligibleCountForItem = function (array $item) use ($studentCounts, $statusByKey): int {
+        $eligibleCountForItem = function (array $item) use ($studentCounts, $resitEligibleMap): int {
             $attemptN = (int) ($item['attempt'] ?? 1);
             if (!empty($item['student_hemis_id'])) {
                 return 1; // individual grafik — faqat shu talaba
@@ -4962,18 +4986,13 @@ class AcademicScheduleController extends Controller
             if ($attemptN <= 1) {
                 return $totalGroup;
             }
-            $key = $item['group_hemis_id'] . '|' . ($item['subject_id'] ?? '') . '|' . ($item['semester_code'] ?? '');
-            $studs = $statusByKey[$key] ?? null;
-            if (!is_array($studs) || empty($studs)) {
-                return $totalGroup;
+            $key = $item['group_hemis_id'] . '|' . ($item['subject_id'] ?? '') . '|' . ($item['semester_code'] ?? '') . '|' . $attemptN;
+            if (array_key_exists($key, $resitEligibleMap)) {
+                return $resitEligibleMap[$key];
             }
-            $cnt = 0;
-            foreach ($studs as $st) {
-                if (!empty($st['pullik']) || !empty($st['held_back'])) continue;
-                if ($attemptN === 2 && !empty($st['failed1'])) $cnt++;
-                if ($attemptN === 3 && !empty($st['failed2'])) $cnt++;
-            }
-            return $cnt;
+            // Resit eligibility ma'lumotini topa olmaganda 0 ga moyil bo'lamiz —
+            // hech kim yiqilmagan bo'lsa, 2-urinishga hech kim kelmaydi.
+            return 0;
         };
 
         // Har bir sana uchun karta ma'lumotlari. Vaqti qo'yilmagan yozuvlar
@@ -5123,66 +5142,67 @@ class AcademicScheduleController extends Controller
         }
 
         // 2/3-urinish (resit) uchun mos talabalar sonini hisoblash —
-        // butun guruh emas, faqat yiqilganlar. computeStudentAttemptStatuses
-        // har talaba uchun failed1/failed2/pullik/held_back statuslarini
-        // qaytaradi. Bandlik sahifasida bandlik = haqiqatan kelishi mumkin
-        // bo'lganlar soni bo'lishi kerak.
-        $statusByKey = [];
+        // butun guruh emas, faqat yiqilganlar. Bitta batch DB so'rovi.
+        $resitEligibleMap = [];
         if ($allGroups->isNotEmpty()) {
-            $pseudoScheduleData = collect();
-            foreach ($allGroups as $grp) {
-                if (empty($grp['semester_code'])) continue;
-                $gid = $grp['group_hemis_id'];
-                if (!$pseudoScheduleData->has($gid)) {
-                    $pseudoScheduleData->put($gid, collect());
-                }
-                $tripleKey = $gid . '|' . $grp['subject_id'] . '|' . $grp['semester_code'];
-                $alreadyAdded = $pseudoScheduleData->get($gid)
-                    ->contains(fn($it) => ($it['group']->group_hemis_id . '|' . $it['subject']->subject_id . '|' . $it['subject']->semester_code) === $tripleKey);
-                if (!$alreadyAdded) {
-                    $pseudoScheduleData->get($gid)->push([
-                        'group' => (object) ['group_hemis_id' => $gid],
-                        'subject' => (object) [
-                            'subject_id' => $grp['subject_id'],
-                            'semester_code' => $grp['semester_code'],
-                        ],
+            $resitTriples = $allGroups->filter(fn($g) => (int) ($g['attempt'] ?? 1) >= 2 && empty($g['student_hemis_id']))
+                ->unique(fn($g) => $g['group_hemis_id'] . '|' . $g['subject_id'] . '|' . $g['semester_code'])
+                ->values();
+            if ($resitTriples->isNotEmpty()) {
+                $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+                $subjectIds = $resitTriples->pluck('subject_id')->unique()->all();
+                $semCodes = $resitTriples->pluck('semester_code')->unique()->all();
+                $groupIdsForResit = $resitTriples->pluck('group_hemis_id')->unique()->all();
+                try {
+                    $resitQuery = \Illuminate\Support\Facades\DB::table('student_grades as sg')
+                        ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                        ->whereIn('st.group_id', $groupIdsForResit)
+                        ->where('st.student_status_code', 11)
+                        ->whereIn('sg.subject_id', $subjectIds)
+                        ->whereIn('sg.semester_code', $semCodes)
+                        ->whereIn('sg.training_type_code', [101, 102])
+                        ->whereNull('sg.deleted_at');
+                    if ($hasAttemptCol) {
+                        $resitQuery->where(function ($w) {
+                            $w->where('sg.attempt', '>=', 2)
+                              ->orWhere(function ($x) {
+                                  $x->where(function ($y) { $y->where('sg.attempt', 1)->orWhereNull('sg.attempt'); })
+                                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                              });
+                        });
+                    } else {
+                        $resitQuery->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                    }
+                    $resitRows = $resitQuery
+                        ->select('st.group_id', 'sg.subject_id', 'sg.semester_code',
+                            \Illuminate\Support\Facades\DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
+                        ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
+                        ->get();
+                    foreach ($resitRows as $r) {
+                        $k2 = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|2';
+                        $k3 = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|3';
+                        $resitEligibleMap[$k2] = (int) $r->cnt;
+                        $resitEligibleMap[$k3] = (int) $r->cnt;
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: resit count failed', [
+                        'error' => $e->getMessage(),
                     ]);
                 }
-            }
-            try {
-                $statusByKey = $this->computeStudentAttemptStatuses($pseudoScheduleData);
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: status hisoblashda xato', [
-                    'error' => $e->getMessage(),
-                ]);
-                $statusByKey = [];
             }
         }
 
         // Per-group helper: berilgan urinish uchun haqiqiy talabalar soni.
-        $eligibleCount = function (array $grp, int $totalGroupCount) use ($statusByKey): int {
+        $eligibleCount = function (array $grp, int $totalGroupCount) use ($resitEligibleMap): int {
             $attemptN = (int) ($grp['attempt'] ?? 1);
-            // Per-student row (individual grafik): hisob 1 ta — faqat shu talaba.
             if (!empty($grp['student_hemis_id'])) {
                 return 1;
             }
             if ($attemptN <= 1) {
                 return $totalGroupCount;
             }
-            $key = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code'];
-            $studs = $statusByKey[$key] ?? null;
-            if (!is_array($studs) || empty($studs)) {
-                // Status hisobini olib bo'lmasa, eski xatti-harakat (butun guruh).
-                // Bu Foydalanuvchi ko'ziga "ko'p" ko'rinadi, lekin xavfsiz fallback.
-                return $totalGroupCount;
-            }
-            $cnt = 0;
-            foreach ($studs as $st) {
-                if (!empty($st['pullik']) || !empty($st['held_back'])) continue;
-                if ($attemptN === 2 && !empty($st['failed1'])) $cnt++;
-                if ($attemptN === 3 && !empty($st['failed2'])) $cnt++;
-            }
-            return $cnt;
+            $key = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code'] . '|' . $attemptN;
+            return array_key_exists($key, $resitEligibleMap) ? $resitEligibleMap[$key] : 0;
         };
 
         // Quiz topshirganlar: computer_assignments jadvalidan real-time

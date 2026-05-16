@@ -27,6 +27,7 @@ use App\Models\StudentNotification;
 use App\Services\AutoAssignService;
 use App\Services\ExamCapacityService;
 use App\Services\ExamDateRoleService;
+use App\Services\ActivityLogService;
 use App\Services\TelegramService;
 use App\Jobs\BookMoodleGroupExam;
 use App\Jobs\AssignComputersJob;
@@ -2424,6 +2425,27 @@ class AcademicScheduleController extends Controller
                             $delQuery->whereNull('student_hemis_id');
                         }
                     }
+                    // O'chirishdan oldin auditga oldingi qiymatlarni saqlaymiz —
+                    // "vaqt qaerga ketdi" tahqiqotida bu eng muhim ma'lumot.
+                    $toDelete = $delQuery->get();
+                    foreach ($toDelete as $rowBeingDeleted) {
+                        ActivityLogService::log(
+                            'delete',
+                            'exam_schedule',
+                            'YN sanasi o\'chirildi: ' . ($rowBeingDeleted->subject_name ?: ('ID ' . $rowBeingDeleted->id))
+                                . ' (guruh ' . $rowBeingDeleted->group_hemis_id . ')',
+                            $rowBeingDeleted,
+                            $rowBeingDeleted->only([
+                                'oski_date', 'oski_time', 'oski_na',
+                                'test_date', 'test_time', 'test_na',
+                                'oski_resit_date', 'oski_resit_time',
+                                'oski_resit2_date', 'oski_resit2_time',
+                                'test_resit_date', 'test_resit_time',
+                                'test_resit2_date', 'test_resit2_time',
+                            ]),
+                            null
+                        );
+                    }
                     $delQuery->delete();
                     continue;
                 }
@@ -2573,7 +2595,39 @@ class AcademicScheduleController extends Controller
                 $resitOpened12b = ($record->isDirty('oski_resit2_date') && !empty($record->oski_resit2_date))
                     || ($record->isDirty('test_resit2_date') && !empty($record->test_resit2_date));
 
+                // Audit log: faqat sana/vaqt/NA holatlari o'zgargan bo'lsagina yozamiz —
+                // mansab yangilash, Moodle sync timestamp kabi servisning ichki
+                // o'zgarishlari log'ni shovqin bilan to'ldirib yubormasligi uchun.
+                // getDirty() / getOriginal() ni save() dan AVVAL ushlaymiz, chunki
+                // save chaqirilgach syncOriginal tufayli dirty ro'yxati bo'shab qoladi.
+                $auditWatched = [
+                    'oski_date', 'oski_time', 'oski_na',
+                    'test_date', 'test_time', 'test_na',
+                    'oski_resit_date', 'oski_resit_time',
+                    'oski_resit2_date', 'oski_resit2_time',
+                    'test_resit_date', 'test_resit_time',
+                    'test_resit2_date', 'test_resit2_time',
+                ];
+                $auditDirty = array_intersect_key($record->getDirty(), array_flip($auditWatched));
+                $auditOriginal = $record->exists
+                    ? collect($record->getOriginal())->only(array_keys($auditDirty))->toArray()
+                    : null;
+                $auditWasNew = !$record->exists;
+
                 $record->save();
+
+                if (!empty($auditDirty) || $auditWasNew) {
+                    ActivityLogService::log(
+                        $auditWasNew ? 'create' : 'update',
+                        'exam_schedule',
+                        ($auditWasNew ? 'YN sanasi qo\'shildi' : 'YN sanasi/vaqti yangilandi')
+                            . ': ' . ($record->subject_name ?: ('ID ' . $record->id))
+                            . ' (guruh ' . $record->group_hemis_id . ')',
+                        $record,
+                        $auditOriginal,
+                        !empty($auditDirty) ? $auditDirty : null
+                    );
+                }
 
                 // Sana belgilangan bo'lsa — yn_submission(attempt=2/3) ni avtomatik yaratish
                 $this->autoOpenAttemptIfNeeded($record, 2, $resitOpened12a, $userId);
@@ -2660,6 +2714,12 @@ class AcademicScheduleController extends Controller
             return redirect()->back()->with('error', 'Yozuv topilmadi.');
         }
 
+        // Audit uchun eski qiymatlarni saqlab qo'yamiz (sana + vaqt + na).
+        $clearedSnapshot = $record->only([
+            'oski_date', 'oski_time', 'oski_na',
+            'test_date', 'test_time', 'test_na',
+        ]);
+
         if ($dateType === 'oski') {
             $record->oski_date = null;
             $record->oski_na = false;
@@ -2670,14 +2730,19 @@ class AcademicScheduleController extends Controller
 
         $record->updated_by = auth()->id() ?? auth('teacher')->id();
 
+        $typeLabel = $dateType === 'oski' ? 'OSKI' : 'Test';
+        $auditDescription = "{$typeLabel} sanasi o'chirildi: " . ($record->subject_name ?: ('ID ' . $record->id))
+            . ' (guruh ' . $record->group_hemis_id . ')';
+
         // Agar ikkala sana ham bo'sh bo'lsa — yozuvni o'chiramiz
         if (!$record->oski_date && !$record->oski_na && !$record->test_date && !$record->test_na) {
             $record->delete();
+            ActivityLogService::log('delete', 'exam_schedule', $auditDescription, $record, $clearedSnapshot, null);
         } else {
             $record->save();
+            ActivityLogService::log('update', 'exam_schedule', $auditDescription, $record, $clearedSnapshot, $record->only(array_keys($clearedSnapshot)));
         }
 
-        $typeLabel = $dateType === 'oski' ? 'OSKI' : 'Test';
         return redirect()->back()->with('success', "{$typeLabel} sanasi muvaffaqiyatli o'chirildi.");
     }
 
@@ -3933,6 +3998,19 @@ class AcademicScheduleController extends Controller
         }
 
         $examSchedule->update([$timeColumn => $request->test_time]);
+
+        // Audit: vaqt o'zgartirishlarini alohida log qilamiz — "vaqt qaerga ketdi"
+        // tahqiqotida bu eng tez topiladigan ma'lumot.
+        ActivityLogService::log(
+            'update',
+            'exam_schedule_time',
+            $ynLabel . ' vaqti ' . ($timeChanged ? 'o\'zgartirildi' : 'belgilandi')
+                . ': ' . ($examSchedule->subject_name ?: ('ID ' . $examSchedule->id))
+                . ' (guruh ' . $examSchedule->group_hemis_id . ')',
+            $examSchedule,
+            [$timeColumn => $oldTime],
+            [$timeColumn => $request->test_time]
+        );
 
         // Both date and time are now set → assign computers + book on Moodle.
         // Hozircha kompyuter va Moodle bron qilish faqat 1-urinish uchun ishlaydi;

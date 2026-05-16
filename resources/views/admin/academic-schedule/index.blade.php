@@ -571,13 +571,22 @@
                                                     if ($itemUrinish === 1) {
                                                         $stuValueOski = $stuRow['oski_date'] ?? '';
                                                         $stuValueTest = $stuRow['test_date'] ?? '';
+                                                        $stuValueOskiTime = $stuRow['oski_time'] ?? '';
+                                                        $stuValueTestTime = $stuRow['test_time'] ?? '';
                                                     } elseif ($itemUrinish === 2) {
                                                         $stuValueOski = $stuRow['oski_resit_date'] ?? '';
                                                         $stuValueTest = $stuRow['test_resit_date'] ?? '';
+                                                        $stuValueOskiTime = $stuRow['oski_resit_time'] ?? '';
+                                                        $stuValueTestTime = $stuRow['test_resit_time'] ?? '';
                                                     } else {
                                                         $stuValueOski = $stuRow['oski_resit2_date'] ?? '';
                                                         $stuValueTest = $stuRow['test_resit2_date'] ?? '';
+                                                        $stuValueOskiTime = $stuRow['oski_resit2_time'] ?? '';
+                                                        $stuValueTestTime = $stuRow['test_resit2_time'] ?? '';
                                                     }
+                                                    // H:i:s formatdan H:i ga qisqartirish (DB time column odatda H:i:s saqlaydi)
+                                                    if ($stuValueOskiTime) $stuValueOskiTime = substr($stuValueOskiTime, 0, 5);
+                                                    if ($stuValueTestTime) $stuValueTestTime = substr($stuValueTestTime, 0, 5);
                                                     // Qarz fanlari: o'tgan semestrlardagi (academic_records'da yo'q)
                                                     // + joriy semestrdagi BARCHA failed fanlar (controller pre-pass'dan)
                                                     $stuPastDebts = $stuRow['past_debts'] ?? [];
@@ -637,12 +646,24 @@
                                                                    title="{{ $blockedTitle }}"
                                                                    style="font-size:10px; padding:2px 4px; border:1px solid #fca5a5; border-radius:4px; max-width:135px; background:#fee2e2;color:#991b1b;cursor:not-allowed;" />
                                                         @else
-                                                            <input type="text" id="stu_oski_{{ $rowIndex }}"
-                                                                   name="schedules[{{ $rowIndex }}][oski_date]"
-                                                                   class="exam-sc-date" autocomplete="off"
-                                                                   data-initial-value="{{ $stuValueOski }}"
-                                                                   title="{{ $itemUrinish }}-urinish OSKI sanasi"
-                                                                   style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
+                                                            <div style="display:flex; flex-direction:column; gap:3px; align-items:center;">
+                                                                <input type="text" id="stu_oski_{{ $rowIndex }}"
+                                                                       name="schedules[{{ $rowIndex }}][oski_date]"
+                                                                       class="exam-sc-date" autocomplete="off"
+                                                                       data-initial-value="{{ $stuValueOski }}"
+                                                                       title="{{ $itemUrinish }}-urinish OSKI sanasi"
+                                                                       style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
+                                                                @if($itemUrinish > 1)
+                                                                <input type="text" name="schedules[{{ $rowIndex }}][oski_time]"
+                                                                       value="{{ $stuValueOskiTime }}"
+                                                                       placeholder="HH:MM" maxlength="5"
+                                                                       class="stu-time-input"
+                                                                       autocomplete="off"
+                                                                       oninput="formatStuTime(this)"
+                                                                       title="Individual OSKI vaqti (HH:MM). Bo'sh bo'lsa Test markazi belgilaydi."
+                                                                       style="font-size:10px; padding:1px 4px; border:1px dashed {{ $stuBorderColor }}; border-radius:4px; max-width:65px; text-align:center; color:#475569;" />
+                                                                @endif
+                                                            </div>
                                                         @endif
                                                     </td>
                                                     <td style="text-align:center;padding:4px 8px;">
@@ -654,12 +675,24 @@
                                                                    title="{{ $blockedTitle }}"
                                                                    style="font-size:10px; padding:2px 4px; border:1px solid #fca5a5; border-radius:4px; max-width:135px; background:#fee2e2;color:#991b1b;cursor:not-allowed;" />
                                                         @else
-                                                            <input type="text" id="stu_test_{{ $rowIndex }}"
-                                                                   name="schedules[{{ $rowIndex }}][test_date]"
-                                                                   class="exam-sc-date" autocomplete="off"
-                                                                   data-initial-value="{{ $stuValueTest }}"
-                                                                   title="{{ $itemUrinish }}-urinish Test sanasi"
-                                                                   style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
+                                                            <div style="display:flex; flex-direction:column; gap:3px; align-items:center;">
+                                                                <input type="text" id="stu_test_{{ $rowIndex }}"
+                                                                       name="schedules[{{ $rowIndex }}][test_date]"
+                                                                       class="exam-sc-date" autocomplete="off"
+                                                                       data-initial-value="{{ $stuValueTest }}"
+                                                                       title="{{ $itemUrinish }}-urinish Test sanasi"
+                                                                       style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
+                                                                @if($itemUrinish > 1)
+                                                                <input type="text" name="schedules[{{ $rowIndex }}][test_time]"
+                                                                       value="{{ $stuValueTestTime }}"
+                                                                       placeholder="HH:MM" maxlength="5"
+                                                                       class="stu-time-input"
+                                                                       autocomplete="off"
+                                                                       oninput="formatStuTime(this)"
+                                                                       title="Individual Test vaqti (HH:MM). Bo'sh bo'lsa Test markazi belgilaydi."
+                                                                       style="font-size:10px; padding:1px 4px; border:1px dashed {{ $stuBorderColor }}; border-radius:4px; max-width:65px; text-align:center; color:#475569;" />
+                                                                @endif
+                                                            </div>
                                                         @endif
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][closing_form]" value="{{ $cf }}">
@@ -873,6 +906,21 @@
             inp.title = '';
             syncHidden(inp);
             return true;
+        }
+
+        // Individual talaba vaqt inputi: HH:MM formatga avto formatlash.
+        // Foydalanuvchi raqam kiritganda ":" avto qo'shadi.
+        function formatStuTime(inp) {
+            var v = (inp.value || '').replace(/[^0-9:]/g, '');
+            if (v.length === 2 && inp.value.length < 3 && !v.includes(':')) {
+                v = v + ':';
+            }
+            if (v.length > 5) v = v.substring(0, 5);
+            inp.value = v;
+            // Validatsiya: H:MM yoki HH:MM bo'lishi va vaqt diapazonda
+            var m = v.match(/^(\d{1,2}):(\d{2})$/);
+            var valid = !v || (m && parseInt(m[1], 10) <= 23 && parseInt(m[2], 10) <= 59);
+            inp.style.borderColor = valid ? '' : '#ef4444';
         }
 
         function syncHidden(inp) {

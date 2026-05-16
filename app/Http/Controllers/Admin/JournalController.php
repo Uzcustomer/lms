@@ -1091,7 +1091,7 @@ class JournalController extends Controller
             // guruhdan ketgan/o'tkazilgan talabalarning eski submissionlari badge'ga
             // ta'sir qilmasligi uchun (aks holda hammasi baholangan bo'lsa ham
             // badge "3" deb chiqib turaverardi).
-            $visibleHemisIdsForBadge = array_flip(array_map('strval', collect($studentHemisIds ?? [])->all()));
+            $visibleHemisIdsForBadge = array_flip(array_map('strval', $studentHemisIds ?? []));
             foreach ($mtSubmissions as $hemisId => $sub) {
                 if (!isset($visibleHemisIdsForBadge[(string) $hemisId])) {
                     continue;

@@ -84,6 +84,15 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
             };
         }
 
+        // To'lov holati bo'yicha filtr (registrator)
+        if (!empty($f['payment_status'])) {
+            $status = $f['payment_status'];
+            $q->whereHas('group', function ($g) use ($status) {
+                $g->whereNotNull('payment_uploaded_at')
+                  ->where('payment_verification_status', $status);
+            });
+        }
+
         // Talabaning filtri
         $department  = $f['department']  ?? $f['department_id']  ?? null;
         $specialty   = $f['specialty']   ?? $f['specialty_id']   ?? null;

@@ -156,11 +156,17 @@ class RetakeApprovalController extends Controller
         $stats = $this->calculateStats($role, $user);
 
         // Registrator uchun: to'lov cheki tekshirilishi kutilayotganlar soni
+        // va tasdiqlangan to'lovlar soni
         $paymentToVerifyCount = 0;
+        $paymentApprovedCount = 0;
         if ($role === 'registrar') {
             $paymentToVerifyCount = RetakeApplicationGroup::query()
                 ->whereNotNull('payment_uploaded_at')
                 ->where('payment_verification_status', 'pending')
+                ->count();
+            $paymentApprovedCount = RetakeApplicationGroup::query()
+                ->whereNotNull('payment_uploaded_at')
+                ->where('payment_verification_status', 'approved')
                 ->count();
         }
 
@@ -177,6 +183,7 @@ class RetakeApprovalController extends Controller
             'dateTo' => $dateTo,
             'stats' => $stats,
             'paymentToVerifyCount' => $paymentToVerifyCount,
+            'paymentApprovedCount' => $paymentApprovedCount,
             'minReasonLength' => \App\Models\RetakeSetting::rejectReasonMinLength(),
             'educationTypes' => $educationTypes,
             'subjects' => $subjects,
@@ -206,9 +213,16 @@ class RetakeApprovalController extends Controller
             'search' => $request->input('search'),
         ];
 
-        // 'filter' qiymatini Export uchun aniqlashtiramiz
+        // 'filter' qiymatini Export uchun aniqlashtiramiz.
+        // To'lov holatlari alohida payment_status param sifatida uzatiladi.
         $filterValue = $filters['filter'] ?? null;
-        if ($filterValue === 'pending_mine' || $filterValue === 'all' || $filterValue === 'payment_to_verify') {
+        if ($filterValue === 'payment_to_verify') {
+            $filters['payment_status'] = 'pending';
+            $filters['filter'] = null;
+        } elseif ($filterValue === 'payment_approved') {
+            $filters['payment_status'] = 'approved';
+            $filters['filter'] = null;
+        } elseif ($filterValue === 'pending_mine' || $filterValue === 'all') {
             $filters['filter'] = null;
         }
 
@@ -613,6 +627,13 @@ class RetakeApprovalController extends Controller
         if ($filter === 'payment_to_verify' && $role === 'registrar') {
             $query->whereNotNull('payment_uploaded_at')
                   ->where('payment_verification_status', 'pending');
+            return;
+        }
+
+        // Registrator uchun: to'lov cheki tasdiqlangan guruhlar
+        if ($filter === 'payment_approved' && $role === 'registrar') {
+            $query->whereNotNull('payment_uploaded_at')
+                  ->where('payment_verification_status', 'approved');
             return;
         }
 

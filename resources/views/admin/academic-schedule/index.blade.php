@@ -837,13 +837,19 @@
                 var today = new Date();
                 today.setHours(0, 0, 0, 0);
                 var inputDate = new Date(year, month - 1, day);
+                @if(($isAdmin ?? false) || ($allowTodayExamDates ?? false))
+                // Admin yoki "Bugunni qo'yish" toggle yoqilgan — bugun ham mumkin,
+                // faqat o'tib ketgan kunlar bloklanadi.
+                if (inputDate < today) {
+                    err = 'Imtihon sanasi o\'tgan kunni qo\'yib bo\'lmaydi';
+                }
+                @else
                 if (inputDate <= today) {
                     err = 'Imtihon sanasi kamida ertadan bo\'lishi kerak (bugun qo\'yib bo\'lmaydi)';
                 }
-                @if(!($isAdmin ?? false))
-                // Cheklov 3: dekanat / registrator / o'quv bo'limi uchun ertangi kunga
-                // sana belgilash uchun bugungi soat cutoff (default 18:00). Shu tariqa
-                // Test markaziga vaqtlarni belgilashga muddat qoladi.
+                // Cheklov 3: ertangi kunga sana belgilash uchun bugungi soat cutoff
+                // (default 18:00). Shu tariqa Test markaziga vaqtlarni belgilashga
+                // muddat qoladi. "Bugunni qo'yish" yoqilgan bo'lsa, cutoff ham o'chiriladi.
                 if (!err) {
                     var cutoffHour = {{ (int) ($examDateSubmissionCutoffHour ?? 18) }};
                     var tomorrow = new Date();

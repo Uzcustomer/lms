@@ -328,6 +328,7 @@ class AcademicScheduleController extends Controller
         }
 
         $allowPastExamDates = ExamDateRoleService::allowPastExamDates();
+        $allowTodayExamDates = ExamDateRoleService::allowTodayExamDates();
         $examDateSubmissionCutoffHour = ExamDateRoleService::examDateSubmissionCutoffHour();
 
         return view('admin.academic-schedule.index', compact(
@@ -362,6 +363,7 @@ class AcademicScheduleController extends Controller
             'testCenterLoad',
             'testCenterCapacity',
             'allowPastExamDates',
+            'allowTodayExamDates',
             'examDateSubmissionCutoffHour',
         ));
     }
@@ -2204,13 +2206,18 @@ class AcademicScheduleController extends Controller
         // Saqlangan sanani o'zgartirish — admin yoki sozlamalarda ruxsat etilgan rol
         $canEditSaved = $isAdmin || ExamDateRoleService::roleHasAnyAccess($activeRole);
         $allowPastDates = ExamDateRoleService::allowPastExamDates();
-        $minDate = $isAdmin ? $today : $today->copy()->addDay();
+        // Toggle: yoqilsa, non-admin rollari ham bugungi kunni qo'ya oladi
+        // (shoshilinch hollar uchun admin tomonidan vaqtincha ochiladi).
+        $allowToday = ExamDateRoleService::allowTodayExamDates();
+        $minDate = ($isAdmin || $allowToday) ? $today : $today->copy()->addDay();
         // Ertangi kunga sana belgilash uchun bugungi oxirgi soat (default 18:00).
         // Dekanat / Registrator ofisi / O'quv bo'limi rollari uchun: agar hozir
         // ushbu soatdan keyin bo'lsa, ertangi kunga sana qo'yish bloklanadi —
         // Test markaziga vaqtlarni belgilash uchun yetarli vaqt qoldirish maqsadida.
+        // "Bugunni qo'yish" toggle yoqilgan bo'lsa cutoff ham yumshatiladi (bugunni
+        // qo'ya olgandan keyin ertaga uchun 18:00 cutoff mantiqsiz bo'lib qoladi).
         $submissionCutoffHour = ExamDateRoleService::examDateSubmissionCutoffHour();
-        $blockTomorrowNow = !$isAdmin && now()->hour >= $submissionCutoffHour;
+        $blockTomorrowNow = !$isAdmin && !$allowToday && now()->hour >= $submissionCutoffHour;
         $tomorrowStr = $today->copy()->addDay()->format('Y-m-d');
 
         // Per-row permission validatsiyasi uchun (curriculum_hemis_id, semester_code) → level_code map

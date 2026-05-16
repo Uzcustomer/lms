@@ -303,7 +303,7 @@
                         </div>
                         <div style="text-align: left;">
                             <div style="font-size: 17px; font-weight: 700; color: #7f1d1d;">YN sanasi siyosati</div>
-                            <div style="font-size: 13px; color: #991b1b; margin-top: 2px;">O'tib ketgan (past) sanani YN kuni sifatida qo'yishga ruxsat</div>
+                            <div style="font-size: 13px; color: #991b1b; margin-top: 2px;">O'tib ketgan / bugungi sana, 18:00 cutoff — non-admin rollari uchun cheklovlar</div>
                         </div>
                     </div>
                     <svg width="20" height="20" :style="open ? 'transform: rotate(180deg)' : ''" style="width: 20px; height: 20px; min-width: 20px; color: #991b1b; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
@@ -331,6 +331,37 @@
                                 <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Yoqilsa, YN kuni sifatida bugundan oldingi sanani ham qo'yish mumkin.</div>
                             </div>
                         </label>
+
+                        <input type="hidden" name="allow_today_dates" value="0">
+                        <label style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px; border: 1px solid {{ $allowTodayExamDates ? '#f59e0b' : '#e5e7eb' }}; background: {{ $allowTodayExamDates ? '#fffbeb' : '#fff' }}; cursor: pointer; margin-bottom: 16px;">
+                            <input type="checkbox" name="allow_today_dates" value="1" {{ $allowTodayExamDates ? 'checked' : '' }} style="width: 18px; height: 18px; accent-color: #f59e0b;">
+                            <div>
+                                <div style="font-size: 14px; font-weight: 600; color: #0f172a;">Bugungi sanani belgilashga ruxsat</div>
+                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+                                    Sukut bo'yicha dekanat / registrator ofisi / o'quv bo'limi bugungi kunni
+                                    qo'ya olmaydi (Test markaziga vaqt belgilashga muddat qoldirish uchun).
+                                    Shoshilinch hollarda — masalan, oqim buzilganda — bu toggle'ni vaqtincha
+                                    yoqib, bugungi kunni ham qo'ydirish mumkin. Yoqilsa, ertangi kun uchun
+                                    {{ $examDateSubmissionCutoffHour }}:00 cutoff cheklovi ham olib tashlanadi.
+                                    Ish tugagach o'chirib qo'ying.
+                                </div>
+                            </div>
+                        </label>
+
+                        <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; margin-bottom: 16px;">
+                            <div style="flex: 1;">
+                                <div style="font-size: 14px; font-weight: 600; color: #0f172a;">Ertangi kunga sana belgilash cutoff soati</div>
+                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+                                    Non-admin rollari ushbu soatdan keyin ertangi kunga sana qo'ya olmaydi
+                                    (default <strong>18:00</strong>). Bu soatgacha tegishli rollar erkin
+                                    ishlay oladi. 0–23 oralig'ida.
+                                </div>
+                            </div>
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <input type="number" name="submission_cutoff_hour" value="{{ $examDateSubmissionCutoffHour }}" min="0" max="23" required style="width: 80px; padding: 8px 10px; border: 2px solid #cbd5e1; border-radius: 8px; font-size: 16px; font-weight: 700; color: #0f172a; text-align: center; outline: none;">
+                                <span style="font-size: 14px; color: #64748b; font-weight: 600;">:00</span>
+                            </div>
+                        </div>
 
                         <div style="display: flex; justify-content: flex-end;">
                             <button type="submit" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(239,68,68,0.3);">

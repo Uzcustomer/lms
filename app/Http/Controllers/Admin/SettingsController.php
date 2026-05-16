@@ -41,6 +41,10 @@ class SettingsController extends Controller
 
         // YN sanasi: o'tib ketgan (past) sanani qo'yishga ruxsat toggle'i
         $data['allowPastExamDates'] = ExamDateRoleService::allowPastExamDates();
+        // YN sanasi: bugungi sanani non-admin uchun qo'yishga ruxsat toggle'i
+        $data['allowTodayExamDates'] = ExamDateRoleService::allowTodayExamDates();
+        // Ertangi kunga sana belgilash uchun bugungi cutoff soat (default 18)
+        $data['examDateSubmissionCutoffHour'] = ExamDateRoleService::examDateSubmissionCutoffHour();
 
         // Test markazi sig'imi sozlamalari
         $data['examCapacity'] = ExamCapacityService::getSettings();
@@ -255,8 +259,14 @@ class SettingsController extends Controller
     {
         $request->validate([
             'allow_past_dates' => 'nullable|in:0,1',
+            'allow_today_dates' => 'nullable|in:0,1',
+            'submission_cutoff_hour' => 'nullable|integer|min:0|max:23',
         ]);
         ExamDateRoleService::setAllowPastExamDates((bool) $request->input('allow_past_dates', 0));
+        ExamDateRoleService::setAllowTodayExamDates((bool) $request->input('allow_today_dates', 0));
+        if ($request->filled('submission_cutoff_hour')) {
+            ExamDateRoleService::setExamDateSubmissionCutoffHour((int) $request->input('submission_cutoff_hour'));
+        }
 
         return redirect()->route('admin.settings', ['tab' => 'exam-date-policy'])
             ->with('success', 'YN sanasi siyosati yangilandi.');

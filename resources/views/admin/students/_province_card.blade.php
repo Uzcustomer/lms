@@ -5,6 +5,7 @@
     $cId = $canvasId ?? 'provinceChart';
 @endphp
 <div class="course-bar-card">
+    @include('admin.students._excel_btn', ['kind' => 'province', 'canvas' => $cId])
     <h3>Viloyatlar</h3>
     @include('admin.students._edu_tabs', ['group' => 'province-' . $cId])
     <div class="stat-card-kpis" style="margin-bottom:12px;">

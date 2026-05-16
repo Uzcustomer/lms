@@ -267,6 +267,8 @@ class RetakeGroupController extends Controller
             'semester_id' => 'required|string',
             'semester_name' => 'required|string|max:255',
             'teacher_id' => 'required|integer|exists:teachers,id',
+            'teacher_phones' => 'required|array|min:1|max:5',
+            'teacher_phones.*' => 'required|string|min:7|max:30',
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
             'max_students' => 'nullable|integer|min:1',
@@ -403,6 +405,8 @@ class RetakeGroupController extends Controller
         $data = $request->validate([
             'name' => 'sometimes|string|max:255',
             'teacher_id' => 'sometimes|integer|exists:teachers,id',
+            'teacher_phones' => 'sometimes|array|min:1|max:5',
+            'teacher_phones.*' => 'required|string|min:7|max:30',
             'start_date' => 'sometimes|date',
             'end_date' => 'sometimes|date',
             'max_students' => 'sometimes|nullable|integer|min:1',

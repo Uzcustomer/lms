@@ -471,6 +471,32 @@
                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                             </div>
 
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-medium text-gray-700 mb-1">
+                                    {{ __("O'qituvchi telefon raqami") }} <span class="text-red-500">*</span>
+                                    <span class="text-[10px] font-normal text-gray-500">({{ __("bir nechta qo'shish mumkin") }})</span>
+                                </label>
+                                <div class="space-y-1.5">
+                                    <template x-for="(phone, idx) in teacherPhones" :key="idx">
+                                        <div class="flex gap-1.5">
+                                            <input type="tel" name="teacher_phones[]" required
+                                                   x-model="teacherPhones[idx]"
+                                                   placeholder="+998 90 123 45 67"
+                                                   class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                            <button type="button" @click="removePhone(idx)" x-show="teacherPhones.length > 1"
+                                                    class="px-2.5 py-1 text-xs bg-red-50 text-red-700 rounded-lg hover:bg-red-100"
+                                                    title="{{ __('O\'chirish') }}">
+                                                ✕
+                                            </button>
+                                        </div>
+                                    </template>
+                                    <button type="button" @click="addPhone()" x-show="teacherPhones.length < 5"
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg">
+                                        + {{ __("Yana raqam qo'shish") }}
+                                    </button>
+                                </div>
+                            </div>
+
                             {{-- Sanalar — qabul oynasidan avtomatik olinadi, tahrirlanmaydi --}}
                             <div class="md:col-span-2">
                                 <label class="block text-xs font-medium text-gray-700 mb-1">
@@ -623,6 +649,9 @@
                     applications: [],
                     teachers: [],
                     selected: [],
+                    teacherPhones: [''],
+                    addPhone() { if (this.teacherPhones.length < 5) this.teacherPhones.push(''); },
+                    removePhone(idx) { if (this.teacherPhones.length > 1) this.teacherPhones.splice(idx, 1); },
                     assessmentType: '',
                     oskeDate: '',
                     testDate: '',
@@ -721,6 +750,7 @@
                         this.applications = [];
                         this.teachers = [];
                         this.selected = [];
+                        this.teacherPhones = [''];
                         this.assessmentType = '';
                         this.oskeDate = '';
                         this.testDate = '';

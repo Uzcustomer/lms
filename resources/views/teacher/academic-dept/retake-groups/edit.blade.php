@@ -44,7 +44,12 @@
 
             @php $editable = $group->isEditable() || $canOverride; @endphp
 
-            <form method="POST" action="{{ route('admin.retake-groups.update', $group->id) }}" class="mt-4 space-y-3">
+            <form method="POST" action="{{ route('admin.retake-groups.update', $group->id) }}" class="mt-4 space-y-3"
+                  x-data="{
+                      phones: @js(!empty($group->teacher_phones) ? $group->teacher_phones : ['']),
+                      add() { if (this.phones.length < 5) this.phones.push(''); },
+                      remove(i) { if (this.phones.length > 1) this.phones.splice(i, 1); }
+                  }">
                 @csrf @method('PUT')
 
                 <div>
@@ -64,6 +69,32 @@
                             </option>
                         @endforeach
                     </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">
+                        {{ __("O'qituvchi telefon raqami") }} <span class="text-red-500">*</span>
+                        <span class="text-[10px] font-normal text-gray-500">({{ __("bir nechta qo'shish mumkin") }})</span>
+                    </label>
+                    <div class="space-y-1.5">
+                        <template x-for="(phone, idx) in phones" :key="idx">
+                            <div class="flex gap-1.5">
+                                <input type="tel" name="teacher_phones[]" required
+                                       x-model="phones[idx]"
+                                       placeholder="+998 90 123 45 67"
+                                       {{ $editable ? '' : 'disabled' }}
+                                       class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
+                                <button type="button" @click="remove(idx)" x-show="phones.length > 1 && {{ $editable ? 'true' : 'false' }}"
+                                        class="px-2.5 py-1 text-xs bg-red-50 text-red-700 rounded-lg hover:bg-red-100">✕</button>
+                            </div>
+                        </template>
+                        @if($editable)
+                            <button type="button" @click="add()" x-show="phones.length < 5"
+                                    class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg">
+                                + {{ __("Yana raqam qo'shish") }}
+                            </button>
+                        @endif
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">

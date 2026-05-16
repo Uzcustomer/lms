@@ -18,6 +18,7 @@
                     $tabs['pending_mine'] = ['label' => "Tasdiq kutmoqda", 'color' => 'amber', 'icon' => '⏳', 'count' => $stats['pending'] ?? 0];
                     if ($role === 'registrar') {
                         $tabs['payment_to_verify'] = ['label' => "To'lov tekshirish", 'color' => 'orange', 'icon' => '💰', 'count' => $paymentToVerifyCount ?? 0];
+                        $tabs['payment_approved'] = ['label' => "To'lov tasdiqlangan", 'color' => 'teal', 'icon' => '🧾', 'count' => $paymentApprovedCount ?? 0];
                     }
                     $tabs['approved'] = ['label' => "Tasdiqlangan", 'color' => 'green', 'icon' => '✓', 'count' => $stats['approved'] ?? 0];
                     $tabs['rejected'] = ['label' => "Rad etilgan", 'color' => 'red', 'icon' => '✕', 'count' => $stats['rejected'] ?? 0];
@@ -29,6 +30,7 @@
                         $activeBg = match($tab['color']) {
                             'amber' => 'bg-amber-50 border-b-2 border-amber-500 text-amber-800',
                             'orange' => 'bg-orange-50 border-b-2 border-orange-500 text-orange-800',
+                            'teal' => 'bg-teal-50 border-b-2 border-teal-500 text-teal-800',
                             'green' => 'bg-green-50 border-b-2 border-green-500 text-green-800',
                             'red' => 'bg-red-50 border-b-2 border-red-500 text-red-800',
                             'gray' => 'bg-gray-100 border-b-2 border-gray-500 text-gray-900',

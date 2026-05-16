@@ -365,38 +365,136 @@ class StudentController extends Controller
         }
         uasort($accomStats, fn($a, $b) => $b['total'] <=> $a['total']);
 
-        // Viloyatlar kesimi — province_name × gender_name (gorizontal bar chart).
+        // Viloyatlar kesimi — province_name × gender_name × education_type
+        // (gorizontal/vertikal bar chart, edu tab filtri uchun).
         $provRows = DB::table('students')
             ->where('student_status_code', 11)
-            ->selectRaw('province_name, gender_name, COUNT(*) as total')
-            ->groupBy('province_name', 'gender_name')
+            ->selectRaw('province_name, gender_name, education_type_name, COUNT(*) as total')
+            ->groupBy('province_name', 'gender_name', 'education_type_name')
             ->get();
-        $provinceStats = [];
+        $eduBuckets = ['all', 'bakalavr', 'magistr', 'ordinatura'];
+        $provinceByEdu = array_fill_keys($eduBuckets, []);
         foreach ($provRows as $r) {
             $name = trim((string) $r->province_name);
-            if ($name === '') {
-                $name = 'Boshqa';
-            }
+            if ($name === '') { $name = 'Boshqa'; }
             $gender = mb_strtolower(trim((string) $r->gender_name));
-            if (!isset($provinceStats[$name])) {
-                $provinceStats[$name] = ['total' => 0, 'male' => 0, 'female' => 0];
-            }
+            $ek = $eduKeyOf((string) $r->education_type_name);
             $cnt = (int) $r->total;
-            $provinceStats[$name]['total'] += $cnt;
-            if (str_starts_with($gender, 'erkak') || $gender === 'male' || $gender === 'm') {
-                $provinceStats[$name]['male'] += $cnt;
-            } elseif (str_starts_with($gender, 'ayol') || str_starts_with($gender, 'xotin')
-                    || $gender === 'female' || $gender === 'f') {
-                $provinceStats[$name]['female'] += $cnt;
+            $isMale   = str_starts_with($gender, 'erkak') || $gender === 'male' || $gender === 'm';
+            $isFemale = str_starts_with($gender, 'ayol') || str_starts_with($gender, 'xotin')
+                     || $gender === 'female' || $gender === 'f';
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                if (!isset($provinceByEdu[$bucket][$name])) {
+                    $provinceByEdu[$bucket][$name] = ['total' => 0, 'male' => 0, 'female' => 0];
+                }
+                $provinceByEdu[$bucket][$name]['total'] += $cnt;
+                if ($isMale)   $provinceByEdu[$bucket][$name]['male']   += $cnt;
+                if ($isFemale) $provinceByEdu[$bucket][$name]['female'] += $cnt;
             }
         }
-        uasort($provinceStats, fn($a, $b) => $b['total'] <=> $a['total']);
+        foreach ($provinceByEdu as $k => $arr) {
+            uasort($arr, fn($a, $b) => $b['total'] <=> $a['total']);
+            $provinceByEdu[$k] = $arr;
+        }
+        $provinceStats = $provinceByEdu['all']; // legacy alias
+
+        // Yosh kesimini ta'lim turi bo'yicha (edu tab filtri uchun).
+        $ageRowsEdu = DB::table('students')
+            ->where('student_status_code', 11)
+            ->whereNotNull('birth_date')
+            ->selectRaw("education_type_name,
+                         SUM(TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) < 30) as younger,
+                         SUM(TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) >= 30) as older")
+            ->groupBy('education_type_name')
+            ->get();
+        $ageByEdu = array_fill_keys($eduBuckets, ['younger' => 0, 'older' => 0]);
+        foreach ($ageRowsEdu as $r) {
+            $ek = $eduKeyOf((string) $r->education_type_name);
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                $ageByEdu[$bucket]['younger'] += (int) $r->younger;
+                $ageByEdu[$bucket]['older']   += (int) $r->older;
+            }
+        }
+
+        // To'lov shakli ta'lim turi bo'yicha
+        $payRowsEdu = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('payment_form_name, education_type_name, COUNT(*) as total')
+            ->groupBy('payment_form_name', 'education_type_name')
+            ->get();
+        $payByEdu = array_fill_keys($eduBuckets, ['grant' => 0, 'contract' => 0]);
+        foreach ($payRowsEdu as $p) {
+            $name = mb_strtolower(trim((string) $p->payment_form_name));
+            $ek = $eduKeyOf((string) $p->education_type_name);
+            $key = (str_contains($name, 'grant') || str_contains($name, 'byudjet') || str_contains($name, 'budjet'))
+                ? 'grant' : 'contract';
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                $payByEdu[$bucket][$key] += (int) $p->total;
+            }
+        }
+
+        // Ijtimoiy toifalar ta'lim turi bo'yicha
+        $socialRowsEdu = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('social_category_name, education_type_name, COUNT(*) as total')
+            ->groupBy('social_category_name', 'education_type_name')
+            ->get();
+        $socialByEdu = array_fill_keys($eduBuckets, []);
+        $socialHasCategoryByEdu = array_fill_keys($eduBuckets, 0);
+        foreach ($socialRowsEdu as $s) {
+            $name = trim((string) $s->social_category_name);
+            $low = mb_strtolower($name);
+            if ($name === '' || str_contains($low, 'boshqa') || $low === "yo'q" || $low === 'yoq') {
+                continue;
+            }
+            $ek = $eduKeyOf((string) $s->education_type_name);
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                $socialByEdu[$bucket][$name] = ($socialByEdu[$bucket][$name] ?? 0) + (int) $s->total;
+                $socialHasCategoryByEdu[$bucket] += (int) $s->total;
+            }
+        }
+        foreach ($socialByEdu as $k => $arr) { arsort($arr); $socialByEdu[$k] = $arr; }
+
+        // Davlatlar ta'lim turi bo'yicha
+        $countryRowsEdu = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('country_name, education_type_name, COUNT(*) as total')
+            ->groupBy('country_name', 'education_type_name')
+            ->get();
+        $countryByEdu = array_fill_keys($eduBuckets, []);
+        foreach ($countryRowsEdu as $c) {
+            $name = trim((string) $c->country_name);
+            if ($name === '') { $name = 'Boshqa'; }
+            $ek = $eduKeyOf((string) $c->education_type_name);
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                $countryByEdu[$bucket][$name] = ($countryByEdu[$bucket][$name] ?? 0) + (int) $c->total;
+            }
+        }
+        foreach ($countryByEdu as $k => $arr) { arsort($arr); $countryByEdu[$k] = $arr; }
+
+        // Fuqaroligi ta'lim turi bo'yicha (jami count, edu split saqlanadi citizenshipStats da)
+        $citizenshipByEdu = array_fill_keys($eduBuckets, []);
+        foreach ($citizenshipStats as $cName => $cData) {
+            $citizenshipByEdu['all'][$cName] = ($citizenshipByEdu['all'][$cName] ?? 0) + (int) $cData['total'];
+            foreach (['bakalavr','magistr','ordinatura'] as $bucket) {
+                $citizenshipByEdu[$bucket][$cName] = ($citizenshipByEdu[$bucket][$cName] ?? 0)
+                    + (int) ($cData['edu'][$bucket] ?? 0);
+            }
+        }
+        foreach ($citizenshipByEdu as $k => $arr) { arsort($arr); $citizenshipByEdu[$k] = $arr; }
 
         return view('admin.students.statistics', compact(
             'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals',
             'socialStats', 'socialHasCategory',
             'citizenshipStats', 'countryStats',
-            'accomStats', 'provinceStats'
+            'accomStats', 'provinceStats',
+            'ageByEdu', 'payByEdu', 'socialByEdu', 'socialHasCategoryByEdu',
+            'countryByEdu', 'citizenshipByEdu', 'provinceByEdu'
         ));
     }
 

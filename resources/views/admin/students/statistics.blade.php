@@ -281,6 +281,21 @@
         color: #94a3b8; font-size: 13px;
         min-height: 200px;
     }
+
+    /* Edu-filter tablari (har karta ichida) */
+    .edu-tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 12px; }
+    .edu-tab-btn {
+        padding: 5px 12px; font-size: 12px; font-weight: 600;
+        background: rgba(255, 255, 255, 0.55); color: #475569;
+        border: 1px solid rgba(255, 255, 255, 0.55); border-radius: 8px;
+        cursor: pointer; transition: all .15s ease;
+    }
+    .edu-tab-btn:hover { background: rgba(255, 255, 255, 0.85); color: #1e293b; }
+    .edu-tab-btn.active {
+        background: linear-gradient(135deg, #6366f1, #4f46e5);
+        color: #fff; border-color: transparent;
+        box-shadow: 0 3px 10px -3px rgba(79, 70, 229, .55);
+    }
 </style>
 
 <div class="stats-aurora-bg">
@@ -411,14 +426,57 @@
                 'stats'     => $accomStats,
             ]);
 
-            // Viloyatlar — vertical grouped bar chart (Erkak/Ayol)
-            $provinceStats = $provinceStats ?? [];
-            $provMaleTotal = array_sum(array_column($provinceStats, 'male'));
-            $provFemaleTotal = array_sum(array_column($provinceStats, 'female'));
+            // Viloyatlar — edu-tab bilan
+            $provinceByEdu = $provinceByEdu ?? ['all' => $provinceStats ?? []];
             $provinceJson = json_encode([
-                'labels' => array_keys($provinceStats),
-                'male'   => array_column($provinceStats, 'male'),
-                'female' => array_column($provinceStats, 'female'),
+                'byEdu' => array_map(function ($byName) {
+                    return [
+                        'labels' => array_keys($byName),
+                        'male'   => array_column($byName, 'male'),
+                        'female' => array_column($byName, 'female'),
+                    ];
+                }, $provinceByEdu),
+            ]);
+
+            // Yoshi — edu-tab bilan
+            $ageByEdu = $ageByEdu ?? ['all' => $ageStats ?? ['younger' => 0, 'older' => 0]];
+            $ageEduJson = json_encode($ageByEdu);
+
+            // To'lov shakli — edu-tab bilan
+            $payByEdu = $payByEdu ?? ['all' => $payStats ?? ['grant' => 0, 'contract' => 0]];
+            $payEduJson = json_encode($payByEdu);
+
+            // Ijtimoiy toifalar — edu-tab bilan
+            $socialByEdu = $socialByEdu ?? ['all' => $socialStats ?? []];
+            $socialHasCategoryByEdu = $socialHasCategoryByEdu ?? ['all' => $socialHasCategory ?? 0];
+            $socialEduJson = json_encode([
+                'byEdu' => array_map(fn($arr) => [
+                    'labels' => array_keys($arr),
+                    'data'   => array_values($arr),
+                ], $socialByEdu),
+                'totals' => $socialHasCategoryByEdu,
+                'colors' => $socialColors,
+            ]);
+
+            // Davlatlar — edu-tab bilan
+            $countryByEdu = $countryByEdu ?? ['all' => $countryStats ?? []];
+            $countryEduJson = json_encode([
+                'byEdu' => array_map(fn($arr) => [
+                    'labels' => array_keys($arr),
+                    'data'   => array_values($arr),
+                ], $countryByEdu),
+                'colors' => $countryColors,
+            ]);
+
+            // Fuqaroligi (countries) — edu-tab bilan: har edu uchun
+            // citizenship_name => total (oddiy bar)
+            $citizenshipByEdu = $citizenshipByEdu ?? ['all' => []];
+            $citEduJson = json_encode([
+                'byEdu' => array_map(fn($arr) => [
+                    'labels' => array_keys($arr),
+                    'data'   => array_values($arr),
+                ], $citizenshipByEdu),
+                'colors' => $citColors,
             ]);
         @endphp
 
@@ -491,9 +549,10 @@
             <div class="pie-grid">
                 <div class="pie-card">
                     <h3>Yoshi</h3>
+                    @include('admin.students._edu_tabs', ['group' => 'age-ageChart'])
                     <div class="pie-body">
                         <div class="pie-canvas-wrap">
-                            <canvas id="ageChart"
+                            <canvas id="ageChart" data-edu-render="age" data-edu="all"
                                     data-younger="{{ $younger }}"
                                     data-older="{{ $older }}"></canvas>
                         </div>
@@ -527,9 +586,10 @@
                 </div>
                 <div class="pie-card">
                     <h3>To'lov shakli</h3>
+                    @include('admin.students._edu_tabs', ['group' => 'pay-payChart'])
                     <div class="pie-body">
                         <div class="pie-canvas-wrap">
-                            <canvas id="payChart"
+                            <canvas id="payChart" data-edu-render="pay" data-edu="all"
                                     data-grant="{{ $grant }}"
                                     data-contract="{{ $contract }}"></canvas>
                         </div>
@@ -596,8 +656,9 @@
                             <div class="pct">{{ $socialPct }}%</div>
                         </div>
                     </div>
+                    @include('admin.students._edu_tabs', ['group' => 'social-socialChart'])
                     <div class="social-bar-wrap">
-                        <canvas id="socialChart"></canvas>
+                        <canvas id="socialChart" data-edu-render="social" data-edu="all"></canvas>
                     </div>
                 </div>
             </div>
@@ -619,9 +680,10 @@
                             <span class="val" data-count="{{ count($countryStats) }}">{{ count($countryStats) }}</span>
                         </div>
                     </div>
+                    @include('admin.students._edu_tabs', ['group' => 'country-countryChartUmumiy'])
                     <div class="pie-body" style="align-items:flex-start;">
                         <div class="pie-canvas-wrap" style="height:240px;width:240px;">
-                            <canvas id="countryChartUmumiy"></canvas>
+                            <canvas id="countryChartUmumiy" data-edu-render="country" data-edu="all"></canvas>
                         </div>
                         <div class="pie-legend" style="gap:10px;max-height:240px;overflow-y:auto;">
                             @php $ci = 0; @endphp
@@ -658,8 +720,9 @@
                             <span class="val" data-count="{{ $citNone }}">{{ number_format($citNone, 0, '.', ' ') }}</span>
                         </div>
                     </div>
+                    @include('admin.students._edu_tabs', ['group' => 'cit-citChartUmumiy'])
                     <div class="social-bar-wrap" style="height:300px;">
-                        <canvas id="citChartUmumiy"></canvas>
+                        <canvas id="citChartUmumiy" data-edu-render="cit" data-edu="all"></canvas>
                     </div>
                 </div>
             </div>
@@ -673,6 +736,13 @@
             {{-- Viloyatlar — vertical grouped bar (Erkak/Ayol) --}}
             @include('admin.students._province_card', ['canvasId' => 'provinceChartUmumiy'])
             <script type="application/json" id="provinceChartData">{!! $provinceJson !!}</script>
+
+            {{-- Edu-tab filtri uchun har bir chartning per-edu ma'lumotlari --}}
+            <script type="application/json" id="ageEduData">{!! $ageEduJson !!}</script>
+            <script type="application/json" id="payEduData">{!! $payEduJson !!}</script>
+            <script type="application/json" id="socialEduData">{!! $socialEduJson !!}</script>
+            <script type="application/json" id="countryEduData">{!! $countryEduJson !!}</script>
+            <script type="application/json" id="citEduData">{!! $citEduJson !!}</script>
         </div>
 
         {{-- Yoshi tabi — pie chart --}}
@@ -680,9 +750,10 @@
             <div class="pie-grid">
                 <div class="pie-card">
                     <h3>Yoshi bo'yicha taqsimot</h3>
+                    @include('admin.students._edu_tabs', ['group' => 'age-ageChartTab'])
                     <div class="pie-body">
                         <div class="pie-canvas-wrap">
-                            <canvas id="ageChartTab"
+                            <canvas id="ageChartTab" data-edu-render="age" data-edu="all"
                                     data-younger="{{ $younger }}"
                                     data-older="{{ $older }}"></canvas>
                         </div>
@@ -792,8 +863,9 @@
                         <div class="pct">{{ $socialPct }}%</div>
                     </div>
                 </div>
+                @include('admin.students._edu_tabs', ['group' => 'social-socialChartTab'])
                 <div style="position:relative; height:420px; margin-top:10px;">
-                    <canvas id="socialChartTab"></canvas>
+                    <canvas id="socialChartTab" data-edu-render="social" data-edu="all"></canvas>
                 </div>
             </div>
         </div>
@@ -818,9 +890,10 @@
                         <span class="val" data-count="{{ $payTotal }}">{{ number_format($payTotal, 0, '.', ' ') }}</span>
                     </div>
                 </div>
+                @include('admin.students._edu_tabs', ['group' => 'pay-payChartTab'])
                 <div class="pie-body">
                     <div class="pie-canvas-wrap">
-                        <canvas id="payChartTab"
+                        <canvas id="payChartTab" data-edu-render="pay" data-edu="all"
                                 data-grant="{{ $grant }}"
                                 data-contract="{{ $contract }}"></canvas>
                     </div>
@@ -874,8 +947,9 @@
                             <span class="val" data-count="{{ $citNone }}">{{ number_format($citNone, 0, '.', ' ') }}</span>
                         </div>
                     </div>
+                    @include('admin.students._edu_tabs', ['group' => 'cit-citChart'])
                     <div class="social-bar-wrap" style="height:340px;">
-                        <canvas id="citChart"></canvas>
+                        <canvas id="citChart" data-edu-render="cit" data-edu="all"></canvas>
                     </div>
                 </div>
                 {{-- O'ng: Fuqaroligi (aylanma — davlatlar) --}}
@@ -887,8 +961,9 @@
                             <span class="val" data-count="{{ $countryTotal }}">{{ number_format($countryTotal, 0, '.', ' ') }}</span>
                         </div>
                     </div>
+                    @include('admin.students._edu_tabs', ['group' => 'country-countryChart'])
                     <div class="social-bar-wrap" style="height:340px;">
-                        <canvas id="countryChart"></canvas>
+                        <canvas id="countryChart" data-edu-render="country" data-edu="all"></canvas>
                     </div>
                 </div>
             </div>
@@ -1006,20 +1081,51 @@
         });
     }
 
-    function renderAge(id) {
+    // Helper: edu-by JSON skriptidan ma'lumotni o'qib oladi (cache bilan)
+    const _eduJsonCache = {};
+    function getEduJson(id) {
+        if (id in _eduJsonCache) return _eduJsonCache[id];
+        const el = document.getElementById(id);
+        if (!el) { _eduJsonCache[id] = null; return null; }
+        try { _eduJsonCache[id] = JSON.parse(el.textContent); }
+        catch (e) { _eduJsonCache[id] = null; }
+        return _eduJsonCache[id];
+    }
+
+    function renderAge(id, edu) {
         const c = document.getElementById(id);
         if (!c) return;
+        const e = edu || c.dataset.edu || 'all';
+        const cfg = getEduJson('ageEduData');
+        let younger, older;
+        if (cfg && cfg[e]) {
+            younger = parseInt(cfg[e].younger || 0, 10);
+            older   = parseInt(cfg[e].older || 0, 10);
+        } else {
+            younger = parseInt(c.dataset.younger || '0', 10);
+            older   = parseInt(c.dataset.older || '0', 10);
+        }
         makePie(c,
             ["30 yoshdan kichiklar", "30 yoshdan oshganlar"],
-            [parseInt(c.dataset.younger || '0', 10), parseInt(c.dataset.older || '0', 10)],
+            [younger, older],
             ['#6366f1', '#22c55e']);
     }
-    function renderPay(id) {
+    function renderPay(id, edu) {
         const c = document.getElementById(id);
         if (!c) return;
+        const e = edu || c.dataset.edu || 'all';
+        const cfg = getEduJson('payEduData');
+        let grant, contract;
+        if (cfg && cfg[e]) {
+            grant    = parseInt(cfg[e].grant || 0, 10);
+            contract = parseInt(cfg[e].contract || 0, 10);
+        } else {
+            grant    = parseInt(c.dataset.grant || '0', 10);
+            contract = parseInt(c.dataset.contract || '0', 10);
+        }
         makePie(c,
             ["Davlat granti", "To'lov-kontrakt"],
-            [parseInt(c.dataset.grant || '0', 10), parseInt(c.dataset.contract || '0', 10)],
+            [grant, contract],
             ['#a855f7', '#f43f5e']);
     }
 
@@ -1110,24 +1216,34 @@
         return socialCfg;
     }
 
-    function renderSocialChart(id) {
+    function renderSocialChart(id, edu) {
         const canvas = document.getElementById(id);
         if (!canvas) return;
-        const cfg = getSocialCfg();
-        if (!cfg) return;
+        const e = edu || canvas.dataset.edu || 'all';
+        const eduCfg = getEduJson('socialEduData');
+        let labels, data, colors;
+        if (eduCfg && eduCfg.byEdu && eduCfg.byEdu[e]) {
+            labels = eduCfg.byEdu[e].labels;
+            data   = eduCfg.byEdu[e].data;
+            colors = labels.map((_, i) => eduCfg.colors[i % eduCfg.colors.length]);
+        } else {
+            const cfg = getSocialCfg();
+            if (!cfg) return;
+            labels = cfg.labels; data = cfg.data;
+            colors = labels.map((_, i) => cfg.colors[i % cfg.colors.length]);
+        }
         const existing = Chart.getChart(canvas);
         if (existing) existing.destroy();
 
         const fmt = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
-        const colors = cfg.labels.map((_, i) => cfg.colors[i % cfg.colors.length]);
 
         new Chart(canvas, {
             type: 'bar',
             data: {
-                labels: cfg.labels,
+                labels: labels,
                 datasets: [{
                     label: 'Talabalar soni',
-                    data: cfg.data,
+                    data: data,
                     backgroundColor: colors,
                     borderRadius: 5,
                     borderWidth: 0,
@@ -1163,35 +1279,60 @@
         try { citCfg = JSON.parse(el.textContent); } catch (e) { citCfg = false; }
         return citCfg;
     }
-    function renderCitChart(id) {
+    function renderCitChart(id, edu) {
         const canvas = document.getElementById(id || 'citChart');
         if (!canvas) return;
-        const cfg = getCitCfg();
-        if (!cfg) return;
+        const e = edu || canvas.dataset.edu || 'all';
         const existing = Chart.getChart(canvas);
         if (existing) existing.destroy();
         const fmt = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
 
-        // Har fuqarolik turi uchun bitta dataset — ta'lim turlari bo'yicha stacked
-        const datasets = cfg.labels.map((cit, i) => ({
-            label: cit,
-            data: cfg.eduKeys.map(ek => (cfg.stats[cit] && cfg.stats[cit].edu ? (cfg.stats[cit].edu[ek] || 0) : 0)),
-            backgroundColor: cfg.colors[i % cfg.colors.length],
-            borderWidth: 1, borderColor: '#fff', borderRadius: 4,
-        }));
+        const cfg = getCitCfg();
+        if (e === 'all' && cfg) {
+            // Stacked bar — ta'lim turi bo'yicha (mavjud xulq)
+            const datasets = cfg.labels.map((cit, i) => ({
+                label: cit,
+                data: cfg.eduKeys.map(ek => (cfg.stats[cit] && cfg.stats[cit].edu ? (cfg.stats[cit].edu[ek] || 0) : 0)),
+                backgroundColor: cfg.colors[i % cfg.colors.length],
+                borderWidth: 1, borderColor: '#fff', borderRadius: 4,
+            }));
+            new Chart(canvas, {
+                type: 'bar',
+                data: { labels: cfg.eduLabels, datasets: datasets },
+                options: {
+                    responsive: true, maintainAspectRatio: false,
+                    animation: { duration: 1000, easing: 'easeOutCubic' },
+                    scales: {
+                        x: { stacked: true, grid: { display: false } },
+                        y: { stacked: true, beginAtZero: true, ticks: { callback: (v) => fmt(v) } },
+                    },
+                    plugins: {
+                        legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 12, boxWidth: 14 } },
+                        tooltip: { callbacks: { label: (ctx) => ' ' + ctx.dataset.label + ': ' + fmt(ctx.parsed.y) } }
+                    }
+                }
+            });
+            return;
+        }
+        // Tanlangan ta'lim turi — oddiy bar (fuqarolik turi bo'yicha)
+        const eduCfg = getEduJson('citEduData');
+        if (!eduCfg || !eduCfg.byEdu || !eduCfg.byEdu[e]) return;
+        const labels = eduCfg.byEdu[e].labels;
+        const data = eduCfg.byEdu[e].data;
+        const colors = labels.map((_, i) => eduCfg.colors[i % eduCfg.colors.length]);
         new Chart(canvas, {
             type: 'bar',
-            data: { labels: cfg.eduLabels, datasets: datasets },
+            data: { labels: labels, datasets: [{ label: 'Talabalar', data: data, backgroundColor: colors, borderRadius: 4 }] },
             options: {
                 responsive: true, maintainAspectRatio: false,
                 animation: { duration: 1000, easing: 'easeOutCubic' },
                 scales: {
-                    x: { stacked: true, grid: { display: false } },
-                    y: { stacked: true, beginAtZero: true, ticks: { callback: (v) => fmt(v) } },
+                    x: { grid: { display: false } },
+                    y: { beginAtZero: true, ticks: { callback: (v) => fmt(v) } },
                 },
                 plugins: {
-                    legend: { position: 'bottom', labels: { font: { size: 12 }, padding: 12, boxWidth: 14 } },
-                    tooltip: { callbacks: { label: (ctx) => ' ' + ctx.dataset.label + ': ' + fmt(ctx.parsed.y) } }
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (ctx) => ' ' + fmt(ctx.parsed.y) + ' talaba' } }
                 }
             }
         });
@@ -1209,17 +1350,28 @@
     function renderCountryChart(id) {
         const canvas = document.getElementById(id || 'countryChart');
         if (!canvas) return;
-        const cfg = getCountryCfg();
-        if (!cfg) return;
+        const e = canvas.dataset.edu || 'all';
         const existing = Chart.getChart(canvas);
         if (existing) existing.destroy();
         const fmt = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
-        const colors = cfg.labels.map((_, i) => cfg.colors[i % cfg.colors.length]);
+
+        const eduCfg = getEduJson('countryEduData');
+        let labels, data, colors;
+        if (eduCfg && eduCfg.byEdu && eduCfg.byEdu[e]) {
+            labels = eduCfg.byEdu[e].labels;
+            data   = eduCfg.byEdu[e].data;
+            colors = labels.map((_, i) => eduCfg.colors[i % eduCfg.colors.length]);
+        } else {
+            const cfg = getCountryCfg();
+            if (!cfg) return;
+            labels = cfg.labels; data = cfg.data;
+            colors = labels.map((_, i) => cfg.colors[i % cfg.colors.length]);
+        }
         new Chart(canvas, {
             type: 'doughnut',
             data: {
-                labels: cfg.labels,
-                datasets: [{ data: cfg.data, backgroundColor: colors, borderWidth: 3, borderColor: '#fff', hoverOffset: 6 }]
+                labels: labels,
+                datasets: [{ data: data, backgroundColor: colors, borderWidth: 3, borderColor: '#fff', hoverOffset: 6 }]
             },
             options: {
                 responsive: true, maintainAspectRatio: false, cutout: '58%',
@@ -1314,8 +1466,10 @@
     function renderProvinceChart(id) {
         const canvas = document.getElementById(id);
         if (!canvas) return;
+        const e = canvas.dataset.edu || 'all';
         const cfg = getProvinceCfg();
-        if (!cfg) return;
+        if (!cfg || !cfg.byEdu || !cfg.byEdu[e]) return;
+        const byEdu = cfg.byEdu[e];
         const existing = Chart.getChart(canvas);
         if (existing) existing.destroy();
         const fmt = (n) => Number(n).toLocaleString('uz-UZ').replace(/,/g, ' ');
@@ -1323,10 +1477,10 @@
         new Chart(canvas, {
             type: 'bar',
             data: {
-                labels: cfg.labels,
+                labels: byEdu.labels,
                 datasets: [
-                    { label: 'Erkaklar', data: cfg.male,   backgroundColor: '#3b82f6', borderRadius: 4 },
-                    { label: 'Ayollar',  data: cfg.female, backgroundColor: '#ec4899', borderRadius: 4 },
+                    { label: 'Erkaklar', data: byEdu.male,   backgroundColor: '#3b82f6', borderRadius: 4 },
+                    { label: 'Ayollar',  data: byEdu.female, backgroundColor: '#ec4899', borderRadius: 4 },
                 ],
             },
             options: {
@@ -1365,9 +1519,37 @@
         renderProvinceChart('provinceChartTab');
     };
 
+    // Edu-tab click handler — har chart kartasidagi Hammasi/Bakalavr/Magistr/Ordinatura
+    function bindEduTabs() {
+        document.querySelectorAll('.edu-tabs').forEach(group => {
+            group.querySelectorAll('.edu-tab-btn').forEach(btn => {
+                if (btn.dataset.bound === '1') return;
+                btn.dataset.bound = '1';
+                btn.addEventListener('click', () => {
+                    group.querySelectorAll('.edu-tab-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    const edu = btn.dataset.edu || 'all';
+                    // Group nomi: '<chartKind>-<canvasId>'
+                    const parts = (group.dataset.eduTabs || '').split('-');
+                    const canvasId = parts.slice(1).join('-');
+                    const canvas = document.getElementById(canvasId);
+                    if (!canvas) return;
+                    canvas.dataset.edu = edu;
+                    const kind = canvas.dataset.eduRender;
+                    if (kind === 'age')      renderAge(canvasId, edu);
+                    else if (kind === 'pay')      renderPay(canvasId, edu);
+                    else if (kind === 'social')   renderSocialChart(canvasId, edu);
+                    else if (kind === 'country')  renderCountryChart(canvasId);
+                    else if (kind === 'cit')      renderCitChart(canvasId, edu);
+                    else if (kind === 'province') renderProvinceChart(canvasId);
+                });
+            });
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         // Boshlang'ich ko'rinadigan (Umumiy) chartlar
-        setTimeout(window.statsRenderCharts, 50);
+        setTimeout(() => { window.statsRenderCharts(); bindEduTabs(); }, 50);
     });
 })();
 </script>

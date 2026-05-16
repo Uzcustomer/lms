@@ -897,6 +897,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{groupId}/edit', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'edit'])->name('edit');
             Route::put('/{groupId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'update'])->name('update');
             Route::post('/{groupId}/publish', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'publish'])->name('publish');
+            Route::get('/{groupId}/eligible-applications', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'eligibleApplications'])->name('eligible-applications');
+            Route::post('/{groupId}/add-students', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'addStudents'])->name('add-students');
             Route::post('/{groupId}/override-status', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'overrideStatus'])->name('override-status');
             Route::delete('/{groupId}', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'destroy'])->name('destroy');
             Route::post('/{groupId}/restore', [\App\Http\Controllers\Teacher\AcademicDept\RetakeGroupController::class, 'restore'])->name('restore');

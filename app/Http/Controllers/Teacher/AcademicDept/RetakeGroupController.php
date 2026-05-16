@@ -302,6 +302,76 @@ class RetakeGroupController extends Controller
     }
 
     /**
+     * AJAX: mavjud guruhga qo'shilishi mumkin bo'lgan arizalar ro'yxati.
+     * Guruhlanmagan, dekan+registrator+o'quv bo'limi tasdiqlagan, to'lov chekisi
+     * tasdiqlangan barcha arizalar.
+     */
+    public function eligibleApplications(int $groupId): JsonResponse
+    {
+        $this->authorize();
+        RetakeGroup::findOrFail($groupId); // mavjudligini tekshirish
+
+        $apps = RetakeApplication::with(['group.student'])
+            ->where('dean_status', 'approved')
+            ->where('registrar_status', 'approved')
+            ->where('academic_dept_status', 'approved')
+            ->where('final_status', 'pending')
+            ->whereNull('retake_group_id')
+            ->whereHas('group', function ($q) {
+                $q->whereNotNull('payment_uploaded_at')
+                  ->where('payment_verification_status', 'approved');
+            })
+            ->orderBy('subject_name')
+            ->orderBy('semester_name')
+            ->limit(1000)
+            ->get();
+
+        $applications = $apps->map(function (RetakeApplication $a) {
+            $student = $a->group->student ?? null;
+            return [
+                'id' => $a->id,
+                'student_name' => $student?->full_name ?? '— talaba topilmadi',
+                'student_hemis_id' => $a->student_hemis_id,
+                'department_name' => $student?->department_name ?? '',
+                'specialty_name' => $student?->specialty_name ?? '',
+                'level_name' => $student?->level_name ?? $student?->level_code ?? '',
+                'group_name' => $student?->group_name ?? '',
+                'subject_name' => $a->subject_name,
+                'semester_name' => $a->semester_name,
+                'credit' => (float) $a->credit,
+            ];
+        });
+
+        return response()->json(['applications' => $applications]);
+    }
+
+    /**
+     * Mavjud guruhga qo'shimcha talabalar qo'shish.
+     */
+    public function addStudents(Request $request, int $groupId): RedirectResponse
+    {
+        $this->authorize();
+
+        $data = $request->validate([
+            'application_ids' => 'required|array|min:1',
+            'application_ids.*' => 'integer',
+        ]);
+
+        $group = RetakeGroup::findOrFail($groupId);
+
+        try {
+            /** @var Teacher $actor */
+            $actor = RetakeAccess::currentStaff();
+            $count = $this->groupService->addApplicationsToGroup($group, $data['application_ids'], $actor);
+        } catch (ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors());
+        }
+
+        return redirect()->route('admin.retake-groups.edit', $groupId)
+            ->with('success', "{$count} ta talaba guruhga qo'shildi");
+    }
+
+    /**
      * Guruhni tahrirlash sahifasi.
      */
     public function edit(int $groupId)

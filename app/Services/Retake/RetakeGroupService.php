@@ -209,6 +209,61 @@ class RetakeGroupService
     }
 
     /**
+     * Mavjud guruhga qo'shimcha talaba (ariza)larni qo'shish.
+     *
+     * Guruh `forming` bo'lsa — arizalar oddiy attach (draft) qilinadi.
+     * Guruh `scheduled`/`in_progress` bo'lsa — academicApprove orqali
+     * to'liq tasdiqlanadi (final_status='approved').
+     *
+     * @return int Qo'shilgan arizalar soni
+     */
+    public function addApplicationsToGroup(RetakeGroup $group, array $applicationIds, Teacher $actor): int
+    {
+        if ($group->status === RetakeGroup::STATUS_COMPLETED) {
+            throw ValidationException::withMessages([
+                'group' => "Tugagan guruhga talaba qo'shib bo'lmaydi",
+            ]);
+        }
+
+        $apps = RetakeApplication::whereIn('id', $applicationIds)
+            ->where('dean_status', 'approved')
+            ->where('registrar_status', 'approved')
+            ->where('academic_dept_status', 'approved')
+            ->where('final_status', 'pending')
+            ->whereNull('retake_group_id')
+            ->get();
+
+        if ($apps->isEmpty()) {
+            throw ValidationException::withMessages([
+                'application_ids' => "Tanlangan arizalar yaroqsiz yoki allaqachon guruhga biriktirilgan",
+            ]);
+        }
+
+        $shouldApprove = $group->status !== RetakeGroup::STATUS_FORMING;
+
+        DB::transaction(function () use ($group, $apps, $actor, $shouldApprove) {
+            foreach ($apps as $app) {
+                if ($shouldApprove) {
+                    $this->applicationService->academicApprove($app, $actor, $group->id);
+                } else {
+                    $app->update(['retake_group_id' => $group->id]);
+                    RetakeApplicationLog::create([
+                        'application_id' => $app->id,
+                        'group_id' => $app->group_id,
+                        'user_id' => $actor->id,
+                        'user_type' => 'teacher',
+                        'user_name' => $actor->full_name,
+                        'action' => RetakeApplicationLog::ACTION_GROUP_ASSIGNED,
+                        'metadata' => ['retake_group_id' => $group->id, 'draft' => true, 'added_later' => true],
+                    ]);
+                }
+            }
+        });
+
+        return $apps->count();
+    }
+
+    /**
      * Forming holatidagi guruhni "publish" qilish — talabalarni tasdiqlash.
      */
     public function publish(RetakeGroup $group, Teacher $actor): RetakeGroup

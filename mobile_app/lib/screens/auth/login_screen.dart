@@ -1,9 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../services/api_service.dart';
-import '../../services/biometric_service.dart';
 import '../../utils/page_transitions.dart';
+import 'face_login_screen.dart';
 import 'verify_2fa_screen.dart';
 
 enum _Role { student, staff }
@@ -20,12 +19,8 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _idCtrl = TextEditingController();
   final _pwCtrl = TextEditingController();
-  final _biometricService = BiometricService();
-  final _apiService = ApiService();
   bool _showPw = false;
   bool _remember = true;
-  bool _biometricAvailable = false;
-  bool _biometricEnabled = false;
 
   static const _ink = Color(0xFF0F1B3D);
 
@@ -34,23 +29,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Color get _accentSoft =>
       _role == _Role.student ? const Color(0xFF2950C8) : const Color(0xFF14B8A6);
   bool get _isStudent => _role == _Role.student;
-
-  @override
-  void initState() {
-    super.initState();
-    _checkBiometric();
-  }
-
-  Future<void> _checkBiometric() async {
-    final available = await _biometricService.isAvailable();
-    final enabled = await _biometricService.isEnabled();
-    final hasToken = await _apiService.isLoggedIn();
-    if (!mounted) return;
-    setState(() {
-      _biometricAvailable = available;
-      _biometricEnabled = enabled && hasToken;
-    });
-  }
 
   @override
   void dispose() {
@@ -78,75 +56,30 @@ class _LoginScreenState extends State<LoginScreen> {
           builder: (_) => Verify2faScreen(login: _idCtrl.text.trim()),
         ),
       );
-      return;
-    }
-
-    if (auth.state == AuthState.authenticated || auth.state == AuthState.profileIncomplete) {
-      await _maybePromptEnableBiometric();
-    }
-  }
-
-  Future<void> _maybePromptEnableBiometric() async {
-    if (!_biometricAvailable) return;
-    final already = await _biometricService.isEnabled();
-    if (already) return;
-    if (!mounted) return;
-
-    final accept = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Face ID yoqilsinmi?', style: TextStyle(fontWeight: FontWeight.w700)),
-        content: const Text(
-          "Keyingi safar tezroq kirish uchun yuz tanish (Face ID / Face Unlock) yoqishni xohlaysizmi?",
-          style: TextStyle(fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Yo`q'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _accent),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yoqish', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (accept == true) {
-      final ok = await _biometricService.authenticate(
-        reason: 'Face ID ni yoqish uchun yuzingizni tasdiqlang',
-      );
-      if (ok) {
-        await _biometricService.setEnabled(true);
-      }
     }
   }
 
   Future<void> _faceIdLogin() async {
-    if (!_biometricAvailable) {
+    if (!_isStudent) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bu qurilmada Face ID mavjud emas')),
+        const SnackBar(content: Text('Face ID faqat talabalar uchun')),
       );
       return;
     }
 
-    final hasToken = await _apiService.isLoggedIn();
-    if (!hasToken) {
+    final login = _idCtrl.text.trim();
+    if (login.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Avval bir marta login va parol bilan kiring')),
+        const SnackBar(content: Text('Avval Login (talaba ID) ni kiriting')),
       );
       return;
     }
 
-    final ok = await _biometricService.authenticate();
-    if (!ok) return;
-    if (!mounted) return;
-
-    final auth = context.read<AuthProvider>();
-    await auth.checkAuth();
+    Navigator.of(context).push(
+      SlideFadePageRoute(
+        builder: (_) => FaceLoginScreen(login: login),
+      ),
+    );
   }
 
   void _onRoleChanged(_Role r) {
@@ -529,26 +462,14 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildFaceIdButton() {
-    final disabled = !_biometricAvailable || !_biometricEnabled;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: disabled
-          ? () => ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(!_biometricAvailable
-                      ? 'Bu qurilmada Face ID mavjud emas'
-                      : 'Avval bir marta login va parol bilan kiring'),
-                ),
-              )
-          : _faceIdLogin,
+      onTap: _faceIdLogin,
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: Border.all(
-            color: disabled ? _ink.withOpacity(0.15) : _accent,
-            width: 1.5,
-          ),
+          border: Border.all(color: _accent, width: 1.5),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
@@ -558,7 +479,7 @@ class _LoginScreenState extends State<LoginScreen> {
               width: 24,
               height: 24,
               decoration: BoxDecoration(
-                color: disabled ? _ink.withOpacity(0.15) : _accent,
+                color: _accent,
                 borderRadius: BorderRadius.circular(6),
               ),
               alignment: Alignment.center,
@@ -572,7 +493,7 @@ class _LoginScreenState extends State<LoginScreen> {
             Text(
               'Face ID orqali kirish',
               style: TextStyle(
-                color: disabled ? _ink.withOpacity(0.4) : _accent,
+                color: _accent,
                 fontSize: 13.5,
                 fontWeight: FontWeight.w700,
               ),

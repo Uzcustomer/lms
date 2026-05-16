@@ -53,13 +53,21 @@ class _AiChatScreenState extends State<AiChatScreen>
       final cache = StudentDataCache();
       await cache.ensureFresh(force: force);
       final builder = StudentContextBuilder(cache);
-      final context = builder.build();
-      _gemini.setStudentContext(context);
+      final ctx = builder.build();
+      _gemini.setStudentContext(ctx);
       if (mounted) {
         setState(() {
           _contextLoading = false;
           _contextLoaded = cache.hasData;
         });
+        if (!cache.hasData) {
+          await cache.refresh();
+          if (mounted && cache.hasData) {
+            final ctx2 = StudentContextBuilder(cache).build();
+            _gemini.setStudentContext(ctx2);
+            setState(() => _contextLoaded = true);
+          }
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -441,10 +449,11 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   Widget _buildHeader(double statusBarH) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
-      decoration: const BoxDecoration(
-        color: Color(0xFF0A1A3A),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(18),
           bottomRight: Radius.circular(18),
@@ -630,7 +639,6 @@ class _AiChatScreenState extends State<AiChatScreen>
     final surface = isDark
         ? Colors.white.withOpacity(0.08)
         : Colors.white.withOpacity(0.85);
-    final border = isDark ? Colors.white12 : Colors.grey.shade200;
     final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
@@ -647,7 +655,6 @@ class _AiChatScreenState extends State<AiChatScreen>
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: border),
           ),
           child: Row(
             children: [
@@ -1144,7 +1151,6 @@ class _AiChatScreenState extends State<AiChatScreen>
         decoration: BoxDecoration(
           color: isDark ? Colors.white10 : Colors.grey.shade100,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade200),
         ),
         child: Row(
           children: [

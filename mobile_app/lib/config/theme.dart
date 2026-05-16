@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class AppTheme {
-  static const Color primaryColor = Color(0xFF0D3D6D);
-  static const Color primaryLight = Color(0xFF2C4A6E);
-  static const Color primaryDark = Color(0xFF0F1C32);
+  static const Color primaryColor = Color(0xFF1E3A8A);
+  static const Color primaryLight = Color(0xFF2950C8);
+  static const Color primaryDark = Color(0xFF0F1B3D);
   static const Color accentColor = Color(0xFF26A69A);
   static const Color backgroundColor = Color(0xFFECEEF3);
   static const Color surfaceColor = Colors.white;
@@ -95,6 +95,12 @@ class AppTheme {
   static const Color darkTextPrimary = Color(0xFFE0E0E0);
   static const Color darkTextSecondary = Color(0xFF9E9E9E);
   static const Color darkDivider = Color(0xFF424242);
+  // Light-gray border for cards, inputs and selects in dark mode
+  static const Color darkBorderColor = Color(0xFFCFD3DC);
+  // Header / bottom-nav background in dark mode (clearly lighter than scaffold)
+  static const Color darkHeaderColor = Color(0xFF3D4250);
+  // Unified card border — gray, works on both light and dark surfaces
+  static const Color cardBorderColor = Color(0xFFCBD5E1);
 
   static ThemeData get darkTheme {
     return ThemeData(
@@ -138,11 +144,11 @@ class AppTheme {
         fillColor: darkCard,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: darkDivider),
+          borderSide: const BorderSide(color: darkBorderColor),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: darkDivider),
+          borderSide: const BorderSide(color: darkBorderColor),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),

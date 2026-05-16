@@ -133,8 +133,8 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
           Container(
             padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
             height: statusBarH + 64,
-            decoration: const BoxDecoration(
-              color: Color(0xFF0A1A3A),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(18),
                 bottomRight: Radius.circular(18),
@@ -207,7 +207,6 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                 decoration: BoxDecoration(
                                   color: cardColor,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
                                 ),
                                 child: Center(
                                   child: Text(
@@ -361,7 +360,6 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                               decoration: BoxDecoration(
                                 color: cardColor,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
                               ),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               child: TextFormField(

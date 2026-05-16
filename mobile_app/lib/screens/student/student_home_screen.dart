@@ -20,6 +20,17 @@ class StudentHomeScreen extends StatefulWidget {
     state?._onTabTapped(0);
   }
 
+  /// Notifier the dashboard sets when the user taps a subject card so the
+  /// Grades screen scrolls to that subject's card after the tab switch.
+  static final ValueNotifier<int?> pendingSubjectScroll =
+      ValueNotifier<int?>(null);
+
+  /// Switch to the Grades tab and scroll to the given subject's card.
+  static void openSubject(BuildContext context, int subjectId) {
+    pendingSubjectScroll.value = subjectId;
+    switchToGrades(context);
+  }
+
   @override
   State<StudentHomeScreen> createState() => _StudentHomeScreenState();
 }
@@ -58,6 +69,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
 
     final goingRight = _currentIndex > _previousIndex;
     final slideBegin = Offset(goingRight ? 0.08 : -0.08, 0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final navBg = isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A);
 
     return Scaffold(
       extendBody: true,
@@ -86,11 +99,11 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
         child: Container(
           margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: const Color(0xFF0A1A3A),
+            color: navBg,
             borderRadius: BorderRadius.circular(28),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0A1A3A).withAlpha(50),
+                color: navBg.withAlpha(50),
                 blurRadius: 16,
                 offset: const Offset(0, 4),
               ),

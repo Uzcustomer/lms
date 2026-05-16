@@ -64,9 +64,15 @@ class GeminiService {
         '- Tibbiyot, anatomiya, fiziologiya, farmakologiya bo\'yicha ham yordam ber\n'
         '- Foydalanuvchi rasm, PDF, audio yoki video yuborsa, uni diqqat bilan tahlil qil\n'
         '- Agar ma\'lumot yetarli bo\'lmasa, qaysi sahifaga borish kerakligini tushuntir\n'
-        '- "Men shaxsiy ma\'lumotlarga ega emasman" deb javob berma — ma\'lumotlar quyida\n'
+        '- HECH QACHON "Men shaxsiy ma\'lumotlarga ega emasman" deb javob berma — '
+        'barcha ma\'lumotlar QUYIDA berilgan. Har bir fan nomi, bahosi, davomati bor\n'
+        '- Talaba baholarini so\'rasa, quyidagi "FANLAR VA BAHOLAR" bo\'limidagi har bir '
+        'fanni JN, MT, ON, OSKI, TEST, YN ballari bilan batafsil ko\'rsat\n'
         '- Imtihon/dars/muddat haqida gapirsang [O\'TGAN] yoki [KELGUSI] yorlig\'iga '
-        'qarab tahlil qil. O\'tgan voqealarni tavsiya qilma\n';
+        'qarab tahlil qil. O\'tgan voqealarni tavsiya qilma\n'
+        '- Baholarni tahlil qilganda eng past va eng yuqori baholarni aniqlash, '
+        'diqqat qilish kerak bo\'lgan fanlarni tavsiya qilish, GPA ni hisoblash '
+        'va umumiy tahlil ber\n';
 
     if (_studentContext == null || _studentContext!.isEmpty) {
       return '$base\n\nTalaba ma\'lumotlari hali yuklanmagan.';

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import '../../config/theme.dart';
 import '../../config/aurora_themes.dart';
 import '../../providers/settings_provider.dart';
 
@@ -79,8 +80,8 @@ class _LibraryWebViewScreenState extends State<LibraryWebViewScreen> {
         children: [
           Container(
             padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
-            decoration: const BoxDecoration(
-              color: Color(0xFF0A1A3A),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(18),
                 bottomRight: Radius.circular(18),
@@ -130,11 +131,12 @@ class _LibraryWebViewScreenState extends State<LibraryWebViewScreen> {
   }
 
   Widget _buildHeader(double statusBarH) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
       height: statusBarH + 64,
-      decoration: const BoxDecoration(
-        color: Color(0xFF0A1A3A),
+      decoration: BoxDecoration(
+        color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(18),
           bottomRight: Radius.circular(18),

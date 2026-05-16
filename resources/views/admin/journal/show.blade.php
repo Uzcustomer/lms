@@ -2835,21 +2835,6 @@
                                                 @endif
                                             </td>
                                             <td class="px-1 py-1 text-center">
-                                                @php
-                                                    $mtGraderName = null;
-                                                    if ($gradeRow) {
-                                                        $uid = $gradeRow->graded_by_user_id ?? null;
-                                                        $eid = $gradeRow->employee_id ?? null;
-                                                        if ($uid && isset($mtGraderUserNames[$uid])) {
-                                                            $mtGraderName = $mtGraderUserNames[$uid];
-                                                        } elseif ($eid && isset($mtGraderEmployeeNames[$eid])) {
-                                                            $mtGraderName = $mtGraderEmployeeNames[$eid];
-                                                        } elseif (!empty($gradeRow->employee_name) && $gradeRow->employee_name !== 'Manual Entry') {
-                                                            $mtGraderName = $gradeRow->employee_name;
-                                                        }
-                                                    }
-                                                    $mtGradeTitle = $mtGraderName ? ('Baho qo\'ygan: ' . $mtGraderName) : '';
-                                                @endphp
                                                 @if($hasFile || $isAdminMt)
                                                     <input type="number"
                                                         id="mt-grade-{{ $student->hemis_id }}"
@@ -2858,7 +2843,6 @@
                                                         min="0" max="100" step="1"
                                                         value="{{ $hasGrade ? round($manualGrade) : '' }}"
                                                         data-student-id="{{ $student->hemis_id }}"
-                                                        @if($mtGradeTitle) title="{{ $mtGradeTitle }}" @endif
                                                         placeholder="0-100"
                                                         {{ $inputDisabled ? 'disabled' : '' }}>
                                                 @else

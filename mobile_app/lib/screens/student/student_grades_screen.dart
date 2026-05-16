@@ -126,11 +126,11 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   }
 
   /// Final (YN) grade for a subject — comes from the LMS journal via the
-  /// API. Returns null when no YN has been recorded yet, so the UI can
-  /// show an empty cell instead of a computed approximation.
+  /// API. The app never computes YN locally; until the journal sets a YN
+  /// for the subject, this returns null and the UI shows an empty cell.
   double? _getYn(Map<String, dynamic> subject) {
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
-    final raw = grades['yn'] ?? grades['total'];
+    final raw = grades['yn'];
     if (raw is num) {
       final d = raw.toDouble();
       return d > 0 ? d : null;
@@ -548,7 +548,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 const SizedBox(width: 12),
                 Column(
                   children: [
-                    Text('$total', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
+                    Text(total > 0 ? '$total' : '—', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
                       color: total >= 70 ? const Color(0xFF43A047) : total > 0 ? const Color(0xFFFF9800) : (isDark ? Colors.white38 : Colors.black26))),
                     Text('JAMI', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
                       color: isDark ? Colors.white38 : Colors.black38)),

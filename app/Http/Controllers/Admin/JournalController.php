@@ -1086,8 +1086,16 @@ class JournalController extends Controller
                 }
             }
 
-            // Count ungraded/resubmitted submissions for MT tab badge
+            // Count ungraded/resubmitted submissions for MT tab badge.
+            // Faqat hozir guruhda aktiv ko'rinayotgan talabalar bo'yicha sanaymiz —
+            // guruhdan ketgan/o'tkazilgan talabalarning eski submissionlari badge'ga
+            // ta'sir qilmasligi uchun (aks holda hammasi baholangan bo'lsa ham
+            // badge "3" deb chiqib turaverardi).
+            $visibleHemisIdsForBadge = array_flip(array_map('strval', $studentHemisIds ?? []));
             foreach ($mtSubmissions as $hemisId => $sub) {
+                if (!isset($visibleHemisIdsForBadge[(string) $hemisId])) {
+                    continue;
+                }
                 $gradeVal = $manualMtGrades[$hemisId] ?? null;
                 $gradeRowForBadge = $manualMtGradesRaw[$hemisId] ?? null;
                 $needsBadge = false;

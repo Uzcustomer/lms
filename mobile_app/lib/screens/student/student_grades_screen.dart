@@ -118,47 +118,28 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return grades['oski'] != null || grades['test'] != null;
   }
 
+  /// Total grade for averaging purposes — reads only what the LMS API
+  /// supplies, never computes locally. Returns 0 when no YN is set yet.
   double _getSubjectTotal(Map<String, dynamic> subject) {
-    final grades = subject['grades'] as Map<String, dynamic>? ?? {};
-    final vals = <num>[];
-    for (final k in ['jn', 'mt', 'on', 'oski', 'test']) {
-      final v = grades[k];
-      if (v != null && v is num) vals.add(v);
-    }
-    return vals.isNotEmpty ? vals.reduce((a, b) => a + b) / vals.length : 0;
+    final v = _getYn(subject);
+    return v ?? 0;
   }
 
-  static const Map<String, num> _defaultWeights = {
-    'jn': 50, 'mt': 20, 'on': 0, 'oski': 15, 'test': 15,
-  };
-
-  Map<String, num> _getWeights(Map<String, dynamic> subject) {
-    final raw = subject['weights'] ?? subject['coefficients'] ?? subject['koef'];
-    if (raw is Map) {
-      final result = <String, num>{};
-      for (final k in ['jn', 'mt', 'on', 'oski', 'test']) {
-        final w = raw[k];
-        if (w is num) result[k] = w;
-      }
-      if (result.isNotEmpty) return result;
-    }
-    return _defaultWeights;
-  }
-
-  double? _computeYn(Map<String, dynamic> subject) {
+  /// Final (YN) grade for a subject — comes from the LMS journal via the
+  /// API. Returns null when no YN has been recorded yet, so the UI can
+  /// show an empty cell instead of a computed approximation.
+  double? _getYn(Map<String, dynamic> subject) {
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
-    final weights = _getWeights(subject);
-    double sum = 0;
-    bool hasAny = false;
-    for (final k in ['jn', 'mt', 'on', 'oski', 'test']) {
-      final v = grades[k];
-      final w = weights[k] ?? 0;
-      if (v is num) {
-        sum += v * (w / 100);
-        hasAny = true;
-      }
+    final raw = grades['yn'] ?? grades['total'];
+    if (raw is num) {
+      final d = raw.toDouble();
+      return d > 0 ? d : null;
     }
-    return hasAny ? sum : null;
+    if (raw is String) {
+      final parsed = double.tryParse(raw);
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    return null;
   }
 
   double _calculateSemesterAvg(List subjects) {
@@ -177,7 +158,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     double bestGrade = 0;
     for (final s in subjects) {
       if (s is! Map<String, dynamic>) continue;
-      final yn = _computeYn(s);
+      final yn = _getYn(s);
       if (yn != null && yn > bestGrade) { bestGrade = yn; best = s; }
     }
     return best;
@@ -456,7 +437,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
   Widget _buildBestSubjectCard(Map<String, dynamic> subject, bool isDark) {
     final name = subject['subject_name']?.toString() ?? '';
-    final grade = _computeYn(subject)?.round() ?? 0;
+    final grade = _getYn(subject)?.round() ?? 0;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _buildGlassCard(
@@ -540,7 +521,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   Widget _buildSubjectCard(BuildContext context, Map<String, dynamic> subject, int index, bool isDark, AppLocalizations l) {
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
     final name = subject['subject_name']?.toString() ?? '';
-    final computedYn = _computeYn(subject);
+    final computedYn = _getYn(subject);
     final total = computedYn?.round() ?? 0;
     final isCompleted = _isSubjectCompleted(subject);
     final attendance = _getAttendancePercent(subject);

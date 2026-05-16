@@ -71,15 +71,10 @@ class YnAttemptStatusService
         ?array $bQoshimcha = null
     ): array {
         $passes = fn(?array $row) => $row !== null && self::isPassing($row);
-        // Pullik sharti — uchchasi ham bir vaqtning o'zida yomon bo'lganda:
-        //   1) JN bo'sh yoki <60, VA
-        //   2) MT bo'sh yoki <60, VA
-        //   3) davomat ≥25% (computeV -3 qaytaradi).
-        // Faqat bittasi yomon bo'lsa — pullik emas, in_12a/in_12b (2/3-urinish)
-        // sifatida hisoblanadi. (Ilgari OR mantiqi edi — har qaysi shart pullik
-        // ga olib kelardi; admin so'roviga ko'ra yumshatildi.)
-        $jnBad = fn(?array $row) => $row === null || (int) ($row['jn'] ?? 0) < 60;
-        $mtBad = fn(?array $row) => $row === null || (int) ($row['mt'] ?? 0) < 60;
+        $jnMtOk = fn(?array $row) => $row !== null
+            && (int)($row['jn'] ?? 0) >= 60
+            && (int)($row['mt'] ?? 0) >= 60;
+        // Davomat ≥ 25% bo'lsa computeV -3 qaytaradi (pullik deb hisoblash uchun)
         $davomatFailed = fn(?array $row) => $row !== null && ($row['v'] ?? null) === -3;
 
         // 1. Asosiy urinishda o'tgan?
@@ -92,13 +87,11 @@ class YnAttemptStatusService
             return ['stage' => self::STAGE_QOSHIMCHA_PASSED, 'reason' => '12-qo\'shimcha da V≥60'];
         }
 
-        // Pullik — JN va MT ikkalasi ham yomon (bo'sh yoki <60) VA davomat ≥25%.
-        // Sababli orqali tuzatilgan bo'lsa qoshimcha qiymatlari ishlatiladi.
+        // JN/MT past yoki davomat ≥25% bo'lsa va sababli orqali tuzatilmagan bo'lsa — pullik
+        // kategoriya. Bunday talaba 12a/12b ga aktiv kira olmaydi, lekin ro'yxatda turadi.
         $latestJnMtSource = $qoshimcha ?? $main;
-        $isPullikCondition = $jnBad($latestJnMtSource)
-            && $mtBad($latestJnMtSource)
-            && $davomatFailed($latestJnMtSource);
-        $pullikReason = 'JN/MT past va davomat ≥25% — pullik';
+        $isPullikCondition = !$jnMtOk($latestJnMtSource) || $davomatFailed($latestJnMtSource);
+        $pullikReason = $davomatFailed($latestJnMtSource) ? 'Davomat ≥25% — pullik' : 'JN/MT past — pullik';
 
         // 3. 12a urinishida o'tgan?
         if ($passes($a)) {

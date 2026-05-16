@@ -1647,30 +1647,16 @@ class JournalController extends Controller
                 $stageInfo = $svc::determineStage($main, $qoshimcha, $a, $aQoshimcha, $b, $bQoshimcha);
                 $stageKey = $stageInfo['stage'];
 
-                // 1-urinish imtihonlari hali kelmagan bo'lsa talabani 2-urinish/Pullik
-                // deb belgilamaslik. Imtihon "bo'lmagan" deb FAQAT quyidagi
-                // shartlar barchasi bajarilganda hisoblanadi:
-                //   - weight > 0 (imtihon umuman olinishi kerak)
-                //   - baho kiritilmagan
-                //   - exam_schedules da kelajakdagi sana belgilangan (bugun va undan keyin)
-                // Eslatma: imtihon kunining O'ZI hali "bo'lmagan" deb qaraladi —
-                // talaba kun oxirigacha "1-urinish" da qoladi. Ertasi kundan
-                // boshlab (today > oski_date) "2-urinish"/"Pullik" ko'rinadi.
-                // Aks holda (sana belgilanmagan, sana o'tgan, baho kiritilgan)
-                // imtihon bo'lib o'tgan deb qaraladi va computeV natijasi
-                // badge'ni belgilaydi. Davomat ≥25% (V=-3) holati esa darhol
-                // ko'rsatiladi.
+                // 1-urinish OSKI/Test imtihonlari hali bo'lmaganida (sanalar
+                // o'tib ketmagan) talabani 2-urinish/Pullik deb belgilamaslik.
+                // Davomat ≥25% (V=-3) holati esa darhol ko'rsatiladi.
                 $today = now()->format('Y-m-d');
-                $oskiDone = !$hasOskiForWeights
-                    || ($main['oski'] ?? null) !== null
-                    || !$examSchedule
-                    || !$examSchedule->oski_date
-                    || $examSchedule->oski_date->format('Y-m-d') < $today;
-                $testDone = !$hasTestForWeights
-                    || ($main['test'] ?? null) !== null
-                    || !$examSchedule
-                    || !$examSchedule->test_date
-                    || $examSchedule->test_date->format('Y-m-d') < $today;
+                $oskiDone = $hasOskiForWeights
+                    ? ($examSchedule && $examSchedule->oski_date && $examSchedule->oski_date->format('Y-m-d') <= $today)
+                    : true;
+                $testDone = $hasTestForWeights
+                    ? ($examSchedule && $examSchedule->test_date && $examSchedule->test_date->format('Y-m-d') <= $today)
+                    : true;
                 $oneUrinishEnded = $oskiDone && $testDone;
                 $isDavomatFail = ($main['v'] ?? null) === -3;
                 $isInPostMainStage = !in_array($stageKey, [

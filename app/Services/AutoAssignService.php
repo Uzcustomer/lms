@@ -89,18 +89,18 @@ class AutoAssignService
             return ['ok' => false, 'skipped' => true, 'reason' => 'no students in group'];
         }
 
-        $slotCapacity = $this->primaryComputerCount();
-        // Sozlamalardagi computer_count har slotda nechta talaba bo'lishi
-        // mumkinligini cheklaydi. Computer jadvalida ko'proq aktiv qator
-        // bo'lsa ham (masalan 62), bandlik UI 60/60 deb ko'rsatadi va admin
-        // 60 dan ortig'ini ko'rishni istamaydi. Shu sabab ikkalasining
-        // kichigini olamiz.
-        $configCap = (int) ($capacity['computer_count'] ?? 0);
-        if ($configCap > 0) {
-            $slotCapacity = min($slotCapacity, $configCap);
+        // Slot sig'imi = sozlamalardagi computer_count. primaryComputerCount
+        // (reserve pool ayrilgan aktiv kompyuterlar) faqat fallback. Reserve
+        // pool — failover uchun ajratilgan kompyuterlar bo'lib, slot
+        // rejalashtirilishini chegaralashi shart emas (zarurat bo'lsa ham
+        // ishlatiladi). Bandlik UI 60 ni ko'rsatib, distribute esa 45 ga
+        // chegaralasa, slotlar ataylab 45/60 (75%) bo'sh qolar edi.
+        $slotCapacity = (int) ($capacity['computer_count'] ?? 0);
+        if ($slotCapacity < 1) {
+            $slotCapacity = $this->primaryComputerCount();
         }
         if ($slotCapacity < 1) {
-            return ['ok' => false, 'skipped' => true, 'reason' => 'no primary computers configured'];
+            return ['ok' => false, 'skipped' => true, 'reason' => 'no slot capacity configured'];
         }
 
         $slotStart = Carbon::parse($dateStr . ' ' . substr($startTime, 0, 5));

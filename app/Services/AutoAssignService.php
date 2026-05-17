@@ -160,12 +160,20 @@ class AutoAssignService
             }
 
             $room = max(0, $slotCapacity - $alreadyBookedHere);
-            if ($room < 1) {
+            $needed = count($remaining);
+            // Guruh ATOMIK: butun guruh sig'masa, keyingi slotga o'tkaziladi.
+            // Avval distribute guruhni bo'lib slotlar oralig'iga sochar edi,
+            // bandlik display'i esa guruhni butunligicha test_time slotiga
+            // sanab "60 dan ortiq" ko'rsatardi. Endi bo'lish yo'q — qolgan
+            // joy boshqa kichikroq guruh (yoki 2-urinish backfill) tomonidan
+            // to'ldiriladi.
+            if ($room < $needed) {
                 $slotStart = $slotEnd->copy();
                 continue;
             }
 
-            $take = array_splice($remaining, 0, $room);
+            $take = $remaining;
+            $remaining = [];
             foreach ($take as $student) {
                 $createdRows[] = [
                     'exam_schedule_id' => $schedule->id,

@@ -469,6 +469,8 @@
                                                     <button type="button"
                                                             class="bk-word-export inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition"
                                                             data-items='@json($exportItems)'
+                                                            data-exam-date="{{ $date->format('Y-m-d') }}"
+                                                            data-exam-time="{{ $isNoTime ? '' : $slot['time'] }}"
                                                             title="Bu slotdagi guruhlar uchun 12-shakl YN oldi qaydnomasini Word formatida yuklab olish">
                                                         <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
@@ -658,6 +660,14 @@
                                     btn.disabled = true;
                                     btn.innerHTML = '<svg class="animate-spin w-3 h-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle style="opacity:0.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path style="opacity:0.75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Yuklanmoqda...';
 
+                                    const payload = {
+                                        items: items,
+                                        compact: true,
+                                        exam_date: btn.getAttribute('data-exam-date') || undefined,
+                                    };
+                                    const examTime = btn.getAttribute('data-exam-time');
+                                    if (examTime) payload.exam_time = examTime;
+
                                     fetch(url, {
                                         method: 'POST',
                                         headers: {
@@ -666,7 +676,7 @@
                                             'X-Requested-With': 'XMLHttpRequest',
                                             'X-CSRF-TOKEN': csrfToken,
                                         },
-                                        body: JSON.stringify({ items: items }),
+                                        body: JSON.stringify(payload),
                                     })
                                     .then(function(response) {
                                         if (!response.ok) {

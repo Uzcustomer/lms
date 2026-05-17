@@ -784,14 +784,38 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent) {
-            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent) {
+        // YN ga ruxsat — har bir talaba uchun (Ruxsat / Shartli / X). Test markazi
+        // view'i va vaqt qo'yish endpointlari shu xaritaga tayanadi. Hisob YN
+        // oldi qaydnoma bilan bir xil mantiq orqali (YnAdmissionService).
+        // Cache — bitta (group|subj|sem) uchun bir marta chaqirilsin.
+        $admissionService = app(\App\Services\YnAdmissionService::class);
+        $admissionCache = [];
+
+        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache) {
+            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache) {
                 $gHid = $item['group']->group_hemis_id;
                 $subjectId = $item['subject']->subject_id ?? null;
                 $semCode = $item['subject']->semester_code ?? null;
                 $statusKey = $gHid . '|' . $subjectId . '|' . $semCode;
                 $statusByStudent = $studentStatus[$statusKey] ?? [];
                 $studentList = $studentsByGroup->get($gHid, collect());
+
+                // Admission map (Ruxsat / Shartli / X) — bitta marta hisoblanadi.
+                $admissionKey = $gHid . '|' . $subjectId . '|' . $semCode;
+                if (!isset($admissionCache[$admissionKey])) {
+                    try {
+                        $admissionCache[$admissionKey] = ($gHid && $subjectId && $semCode)
+                            ? $admissionService->computeForGroup((string) $gHid, (string) $subjectId, (string) $semCode)
+                            : [];
+                    } catch (\Throwable $e) {
+                        \Log::warning('attachStudentsToSchedule: admission compute failed', [
+                            'group' => $gHid, 'subject' => $subjectId, 'sem' => $semCode,
+                            'error' => $e->getMessage(),
+                        ]);
+                        $admissionCache[$admissionKey] = [];
+                    }
+                }
+                $admissionByStudent = $admissionCache[$admissionKey];
 
                 // Guruhning OSKI/Test sanasi (asosiy schedule, student_hemis_id NULL).
                 // Sinov (test) / Normativ kabi closing_formlar uchun sana saqlanmaydi —
@@ -840,6 +864,7 @@ class AcademicScheduleController extends Controller
                     // Joriy semestrdagi BARCHA qarz fanlari (barcha rowlar bo'yicha)
                     $currentDebts = array_values($currentDebtsByStudent[$stu->hemis_id] ?? []);
                     usort($currentDebts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+                    $admission = $admissionByStudent[$stu->hemis_id] ?? null;
                     $rows[] = [
                         'hemis_id' => $stu->hemis_id,
                         'student_id_number' => $stu->student_id_number ?? null,
@@ -861,6 +886,9 @@ class AcademicScheduleController extends Controller
                         'is_held_back' => $stat['held_back'] ?? false,
                         'past_debts' => $pastDebts,
                         'current_semester_debts' => $currentDebts,
+                        // YN ga ruxsat (YN oldi qaydnoma bilan bir xil mantiq)
+                        'admission_status' => $admission['status'] ?? null,
+                        'admission_reasons' => $admission['reasons'] ?? [],
                     ];
                 }
                 $item['students'] = $rows;
@@ -3160,11 +3188,19 @@ class AcademicScheduleController extends Controller
             'items.*.group_hemis_id' => 'required|string',
             'items.*.semester_code' => 'required|string',
             'items.*.subject_id' => 'required|string',
+            // Bandlik ko'rsatkichidan chaqirilganda: imzo bloki va QR'siz "ish ro'yxati"
+            // varianti + slotning kirish sana/vaqti yuqorida ko'rsatiladi.
+            'compact' => 'nullable|boolean',
+            'exam_date' => 'nullable|date_format:Y-m-d',
+            'exam_time' => 'nullable|date_format:H:i',
         ]);
 
         try {
 
         $items = $request->items;
+        $compact = (bool) $request->boolean('compact');
+        $examDate = $request->input('exam_date');
+        $examTime = $request->input('exam_time');
         $files = [];
         $tempDir = storage_path('app/public/yn_oldi_qaydnoma');
 
@@ -3376,11 +3412,28 @@ class AcademicScheduleController extends Controller
                 ['alignment' => Jc::END, 'spaceAfter' => 150]
             );
 
-            // Jadval
+            // Test markazida slotga kirish sanasi va vaqti (faqat bandlikdan
+            // chaqirilganda — bandlik view'i exam_date/exam_time yuboradi).
+            if ($examDate) {
+                try {
+                    $examDateFmt = \Carbon\Carbon::createFromFormat('Y-m-d', $examDate)->format('d.m.Y');
+                } catch (\Throwable $e) {
+                    $examDateFmt = $examDate;
+                }
+                $examLine = 'Test markaziga kirish: ' . $examDateFmt . ($examTime ? ' ' . $examTime : '');
+                $section->addText(
+                    $examLine,
+                    ['bold' => true, 'size' => 12],
+                    ['alignment' => Jc::CENTER, 'spaceAfter' => 200]
+                );
+            }
+
+            // Jadval — sahifa o'rtasida joylashtiriladi
             $tableStyle = [
                 'borderSize' => 6,
                 'borderColor' => '000000',
                 'cellMargin' => 40,
+                'alignment' => 'center',
             ];
             $tableName = 'YnOldiTable_' . $subjectKey;
             $phpWord->addTableStyle($tableName, $tableStyle);
@@ -3542,66 +3595,71 @@ class AcademicScheduleController extends Controller
                 }
             }
 
-            // Imzolar
-            $section->addTextBreak(1);
-
-            $dekan = Teacher::whereHas('deanFaculties', fn($q) => $q->where('dean_faculties.department_hemis_id', $department->department_hemis_id ?? ''))
-                ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
-                ->first();
-
-            $signTable = $section->addTable();
-            $signRow = $signTable->addRow();
-            $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
-            $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($allMaruzaText), ['size' => 11]);
-
-            // QR code yaratish
-            $generatedBy = null;
-            if (auth()->guard('teacher')->check()) {
-                $generatedBy = auth()->guard('teacher')->user()->full_name ?? auth()->guard('teacher')->user()->name ?? null;
-            } elseif (auth()->guard('web')->check()) {
-                $generatedBy = auth()->guard('web')->user()->name ?? null;
-            }
-
-            $verification = DocumentVerification::createForDocument([
-                'document_type' => 'YN oldi qaydnoma',
-                'subject_name' => $subject->subject_name,
-                'group_names' => implode(', ', $groupNames),
-                'semester_name' => $semester->name ?? null,
-                'department_name' => $department->name ?? null,
-                'generated_by' => $generatedBy,
-            ]);
-
-            $verificationUrl = $verification->getVerificationUrl();
+            // Imzolar va QR — faqat to'liq (rasmiy) versiyada. Bandlik ko'rsatkichidan
+            // chaqirilganda (compact=true) operator uchun toza ro'yxat chiqadi: imzo
+            // bloki, QR va PDF verifikatsiya — kerak emas.
+            $verification = null;
             $qrImagePath = null;
-
-            try {
-                $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?data=' . urlencode($verificationUrl) . '&size=200x200';
-                $client = new \GuzzleHttp\Client();
-                $qrTempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_qr.png';
-                $response = $client->request('GET', $qrApiUrl, [
-                    'verify' => false,
-                    'sink' => $qrTempPath,
-                    'timeout' => 10,
-                ]);
-                if ($response->getStatusCode() == 200 && file_exists($qrTempPath) && filesize($qrTempPath) > 0) {
-                    $qrImagePath = $qrTempPath;
-                }
-            } catch (\Exception $e) {
-                // QR code generatsiyasi muvaffaqiyatsiz bo'lsa, davom etamiz
-            }
-
-            if ($qrImagePath) {
+            if (!$compact) {
                 $section->addTextBreak(1);
-                $section->addImage($qrImagePath, [
-                    'width' => 80,
-                    'height' => 80,
-                    'alignment' => Jc::START,
+
+                $dekan = Teacher::whereHas('deanFaculties', fn($q) => $q->where('dean_faculties.department_hemis_id', $department->department_hemis_id ?? ''))
+                    ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
+                    ->first();
+
+                $signTable = $section->addTable();
+                $signRow = $signTable->addRow();
+                $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
+                $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($allMaruzaText), ['size' => 11]);
+
+                // QR code yaratish
+                $generatedBy = null;
+                if (auth()->guard('teacher')->check()) {
+                    $generatedBy = auth()->guard('teacher')->user()->full_name ?? auth()->guard('teacher')->user()->name ?? null;
+                } elseif (auth()->guard('web')->check()) {
+                    $generatedBy = auth()->guard('web')->user()->name ?? null;
+                }
+
+                $verification = DocumentVerification::createForDocument([
+                    'document_type' => 'YN oldi qaydnoma',
+                    'subject_name' => $subject->subject_name,
+                    'group_names' => implode(', ', $groupNames),
+                    'semester_name' => $semester->name ?? null,
+                    'department_name' => $department->name ?? null,
+                    'generated_by' => $generatedBy,
                 ]);
-                $section->addText(
-                    'Hujjat haqiqiyligini tekshirish uchun QR kodni skanerlang',
-                    ['size' => 8, 'italic' => true, 'color' => '666666'],
-                    ['spaceAfter' => 0]
-                );
+
+                $verificationUrl = $verification->getVerificationUrl();
+
+                try {
+                    $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?data=' . urlencode($verificationUrl) . '&size=200x200';
+                    $client = new \GuzzleHttp\Client();
+                    $qrTempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_qr.png';
+                    $response = $client->request('GET', $qrApiUrl, [
+                        'verify' => false,
+                        'sink' => $qrTempPath,
+                        'timeout' => 10,
+                    ]);
+                    if ($response->getStatusCode() == 200 && file_exists($qrTempPath) && filesize($qrTempPath) > 0) {
+                        $qrImagePath = $qrTempPath;
+                    }
+                } catch (\Exception $e) {
+                    // QR code generatsiyasi muvaffaqiyatsiz bo'lsa, davom etamiz
+                }
+
+                if ($qrImagePath) {
+                    $section->addTextBreak(1);
+                    $section->addImage($qrImagePath, [
+                        'width' => 80,
+                        'height' => 80,
+                        'alignment' => Jc::START,
+                    ]);
+                    $section->addText(
+                        'Hujjat haqiqiyligini tekshirish uchun QR kodni skanerlang',
+                        ['size' => 8, 'italic' => true, 'color' => '666666'],
+                        ['spaceAfter' => 0]
+                    );
+                }
             }
 
             $groupNamesStr = str_replace(['/', '\\', ' '], '_', implode('_', $groupNames));
@@ -3612,31 +3670,34 @@ class AcademicScheduleController extends Controller
             $objWriter = IOFactory::createWriter($phpWord, 'Word2007');
             $objWriter->save($tempPath);
 
-            // Hujjatni PDF ga aylantirib doimiy saqlash (tekshirish sahifasi uchun)
-            try {
-                $pdfStorageDir = storage_path('app/public/documents/verified');
-                if (!is_dir($pdfStorageDir)) {
-                    mkdir($pdfStorageDir, 0755, true);
+            // Hujjatni PDF ga aylantirib doimiy saqlash (tekshirish sahifasi uchun).
+            // Compact rejimda verification yaratilmaydi — PDF ham kerak emas.
+            if ($verification) {
+                try {
+                    $pdfStorageDir = storage_path('app/public/documents/verified');
+                    if (!is_dir($pdfStorageDir)) {
+                        mkdir($pdfStorageDir, 0755, true);
+                    }
+
+                    $pdfCommand = sprintf(
+                        'soffice --headless --convert-to pdf --outdir %s %s 2>&1',
+                        escapeshellarg($pdfStorageDir),
+                        escapeshellarg($tempPath)
+                    );
+                    exec($pdfCommand, $pdfOutput, $pdfReturnCode);
+
+                    $generatedPdfName = pathinfo(basename($tempPath), PATHINFO_FILENAME) . '.pdf';
+                    $generatedPdfFullPath = $pdfStorageDir . '/' . $generatedPdfName;
+
+                    if ($pdfReturnCode === 0 && file_exists($generatedPdfFullPath)) {
+                        $permanentPdfName = $verification->token . '.pdf';
+                        $permanentPdfPath = $pdfStorageDir . '/' . $permanentPdfName;
+                        rename($generatedPdfFullPath, $permanentPdfPath);
+                        $verification->update(['document_path' => 'documents/verified/' . $permanentPdfName]);
+                    }
+                } catch (\Throwable $e) {
+                    // PDF saqlash muvaffaqiyatsiz bo'lsa, davom etamiz
                 }
-
-                $pdfCommand = sprintf(
-                    'soffice --headless --convert-to pdf --outdir %s %s 2>&1',
-                    escapeshellarg($pdfStorageDir),
-                    escapeshellarg($tempPath)
-                );
-                exec($pdfCommand, $pdfOutput, $pdfReturnCode);
-
-                $generatedPdfName = pathinfo(basename($tempPath), PATHINFO_FILENAME) . '.pdf';
-                $generatedPdfFullPath = $pdfStorageDir . '/' . $generatedPdfName;
-
-                if ($pdfReturnCode === 0 && file_exists($generatedPdfFullPath)) {
-                    $permanentPdfName = $verification->token . '.pdf';
-                    $permanentPdfPath = $pdfStorageDir . '/' . $permanentPdfName;
-                    rename($generatedPdfFullPath, $permanentPdfPath);
-                    $verification->update(['document_path' => 'documents/verified/' . $permanentPdfName]);
-                }
-            } catch (\Throwable $e) {
-                // PDF saqlash muvaffaqiyatsiz bo'lsa, davom etamiz
             }
 
             // QR vaqtinchalik faylni tozalash
@@ -4579,6 +4640,22 @@ class AcademicScheduleController extends Controller
             'computer_number' => 'required|integer|min:1',
         ]);
 
+        // X (YN ga ruxsat yo'q) talabaga kompyuter biriktirib bo'lmaydi.
+        $admission = app(\App\Services\YnAdmissionService::class)
+            ->statusForStudent(
+                (string) $request->student_hemis_id,
+                (string) $request->group_hemis_id,
+                (string) $request->subject_id,
+                (string) $request->semester_code
+            );
+        if ($admission === \App\Services\YnAdmissionService::STATUS_X) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu talabaga YN ga ruxsat yo\'q (X holati) — kompyuter biriktirib bo\'lmaydi.',
+                'admission_status' => $admission,
+            ], 422);
+        }
+
         $schedule = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
@@ -4643,6 +4720,24 @@ class AcademicScheduleController extends Controller
             'attempt' => 'required|integer|in:2,3',
             'test_time' => 'required|date_format:H:i',
         ]);
+
+        // YN ga ruxsat tekshiruvi — YN oldi qaydnomadagi qaror bilan bir xil.
+        // X (ruxsat yo'q) bo'lgan talabaga vaqt qo'yib bo'lmaydi: JN/MT < limit
+        // yoki davomat ≥ 25% bo'lsa, talaba YN/test ga umuman kirita olmaydi.
+        $admission = app(\App\Services\YnAdmissionService::class)
+            ->statusForStudent(
+                (string) $request->student_hemis_id,
+                (string) $request->group_hemis_id,
+                (string) $request->subject_id,
+                (string) $request->semester_code
+            );
+        if ($admission === \App\Services\YnAdmissionService::STATUS_X) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu talabaga YN ga ruxsat yo\'q (X holati). YN oldi qaydnoma asosida JN/MT yoki davomat shartlari bajarilmagan — vaqt qo\'yib bo\'lmaydi.',
+                'admission_status' => $admission,
+            ], 422);
+        }
 
         $columns = [
             'OSKI' => [
@@ -6058,6 +6153,36 @@ class AcademicScheduleController extends Controller
             ->first();
         if (!$schedule) {
             return response()->json(['success' => false, 'message' => 'Jadval topilmadi.'], 404);
+        }
+
+        // YN ga ruxsati yo'q (X) talabalarni qo'lda biriktirishga kiritmaslik —
+        // ro'yxatda bo'lsa, butun so'rovni rad etib qaysi talabalar bloklanganini
+        // aniq xabar qilamiz (yaxshi UX).
+        $admissionMap = app(\App\Services\YnAdmissionService::class)
+            ->computeForGroup(
+                (string) $request->group_hemis_id,
+                (string) $request->subject_id,
+                (string) $request->semester_code
+            );
+        $deniedIds = [];
+        foreach ($request->input('assignments') as $a) {
+            $hid = (string) ($a['student_hemis_id'] ?? '');
+            if ($hid === '') continue;
+            $st = $admissionMap[$hid]['status'] ?? null;
+            if ($st === \App\Services\YnAdmissionService::STATUS_X) {
+                $deniedIds[] = $hid;
+            }
+        }
+        if (!empty($deniedIds)) {
+            $deniedNames = Student::whereIn('hemis_id', $deniedIds)
+                ->pluck('full_name', 'hemis_id')
+                ->toArray();
+            $labels = array_map(fn($hid) => $deniedNames[$hid] ?? $hid, $deniedIds);
+            return response()->json([
+                'success' => false,
+                'message' => 'Quyidagi talabalarga YN ga ruxsat yo\'q (X holati) — biriktirib bo\'lmaydi: ' . implode(', ', $labels),
+                'denied_hemis_ids' => $deniedIds,
+            ], 422);
         }
 
         $ynKey = $request->yn_type === 'OSKI' ? 'oski' : 'test';

@@ -2929,6 +2929,138 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Kunlik monitoring uchun Excel eksport — 3 sahifa: kunlik xulosa,
+     * sync gap (attempt_id ro'yxati) va mark gap (talaba/fan/baho).
+     */
+    public function kunlikMonitoringExport(Request $request)
+    {
+        $request->validate([
+            'date_from' => 'required|date_format:Y-m-d',
+            'date_to'   => 'required|date_format:Y-m-d',
+        ]);
+
+        ini_set('memory_limit', '512M');
+        set_time_limit(300);
+
+        $dateFrom = $request->input('date_from');
+        $dateTo   = $request->input('date_to');
+
+        $svc = app(\App\Services\MoodleSyncMonitorService::class);
+        $resp = $svc->getDailySummary($dateFrom, $dateTo);
+        if (!($resp['ok'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'error' => $resp['error'] ?? 'Moodle WS error',
+            ], 502);
+        }
+
+        $days = $resp['days'] ?? [];
+
+        // Bulk: barcha attempt_id larni yig'ish
+        $allMoodleIds = [];
+        $perDay = []; // date => [attempt_ids]
+        foreach ($days as $d) {
+            $ids = array_map('intval', (array) ($d['attempt_ids'] ?? []));
+            $perDay[$d['date']] = $ids;
+            foreach ($ids as $aid) {
+                $allMoodleIds[$aid] = true;
+            }
+        }
+        $allMoodleIds = array_keys($allMoodleIds);
+
+        // Sync qilinganlar (attempt_id => row)
+        $syncedByAttempt = collect();
+        if (!empty($allMoodleIds)) {
+            $syncedByAttempt = DB::table('hemis_quiz_results')
+                ->whereIn('attempt_id', $allMoodleIds)
+                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_name', 'quiz_type', 'date_finish', 'grade')
+                ->get()
+                ->keyBy('attempt_id');
+        }
+
+        $gradedIds = [];
+        if ($syncedByAttempt->isNotEmpty()) {
+            $qrIds = $syncedByAttempt->pluck('id')->map(fn($v) => (int) $v)->all();
+            $rows = DB::table('student_grades')
+                ->whereIn('quiz_result_id', $qrIds)
+                ->whereNotNull('quiz_result_id')
+                ->pluck('quiz_result_id');
+            foreach ($rows as $qrId) {
+                $gradedIds[(int) $qrId] = true;
+            }
+        }
+
+        // Kun bo'yicha summary va sync/mark gap ro'yxatlari
+        $summaryDays = [];
+        $missingSync = []; // date => [attempt_ids]
+        $missingMark = []; // date => [{attempt_id, student_id, ...}]
+
+        foreach ($days as $d) {
+            $date = (string) $d['date'];
+            $attemptIds = $perDay[$date] ?? [];
+            $moodleCount = (int) ($d['count'] ?? count($attemptIds));
+
+            $syncedAttemptIds = [];
+            $markedDayCount = 0;
+            $dayMissingMark = [];
+
+            foreach ($attemptIds as $aid) {
+                if ($syncedByAttempt->has($aid)) {
+                    $syncedAttemptIds[] = $aid;
+                    $row = $syncedByAttempt->get($aid);
+                    $qrId = (int) $row->id;
+                    if (isset($gradedIds[$qrId])) {
+                        $markedDayCount++;
+                    } else {
+                        $dayMissingMark[] = [
+                            'attempt_id'   => (int) $row->attempt_id,
+                            'student_id'   => $row->student_id,
+                            'student_name' => $row->student_name,
+                            'fan_name'     => $row->fan_name,
+                            'quiz_type'    => $row->quiz_type,
+                            'date_finish'  => $row->date_finish,
+                            'grade'        => $row->grade,
+                        ];
+                    }
+                }
+            }
+
+            $dayMissingSync = array_values(array_diff($attemptIds, $syncedAttemptIds));
+            $syncedCount = count($syncedAttemptIds);
+            $syncGap = $moodleCount - $syncedCount;
+            $markGap = $syncedCount - $markedDayCount;
+
+            $status = 'ok';
+            if ($syncGap > 0) $status = 'sync_gap';
+            elseif ($markGap > 0) $status = 'mark_gap';
+
+            $summaryDays[] = [
+                'date'         => $date,
+                'moodle_count' => $moodleCount,
+                'synced_count' => $syncedCount,
+                'graded_count' => $markedDayCount,
+                'sync_gap'     => $syncGap,
+                'mark_gap'     => $markGap,
+                'status'       => $status,
+            ];
+
+            if (!empty($dayMissingSync)) {
+                $missingSync[$date] = $dayMissingSync;
+            }
+            if (!empty($dayMissingMark)) {
+                $missingMark[$date] = $dayMissingMark;
+            }
+        }
+
+        $filename = 'kunlik-monitoring_' . $dateFrom . '_' . $dateTo . '.xlsx';
+
+        return \Maatwebsite\Excel\Facades\Excel::download(
+            new \App\Exports\KunlikMonitoringExport($summaryDays, $missingSync, $missingMark, $dateFrom, $dateTo),
+            $filename
+        );
+    }
+
+    /**
      * Bitta kun ichida yo'qotilgan attemptlar tafsiloti — sync va mark
      * bosqichlarida tushib qolgan attempt_id ro'yxati va sinxronlanganlar
      * uchun talaba/fan ma'lumotlari.

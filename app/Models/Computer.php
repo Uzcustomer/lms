@@ -75,7 +75,14 @@ class Computer extends Model
         if (!empty($explicit)) {
             return array_map('intval', $explicit);
         }
-        $count = max(0, (int) config('services.moodle.reserve_computers_count', 5));
+        // ExamCapacityService.reserve_count — UI'dan boshqariladi.
+        // Fallback: config'dagi eski qiymat (default 5).
+        try {
+            $count = (int) (\App\Services\ExamCapacityService::getSettings()['reserve_count'] ?? 0);
+        } catch (\Throwable $e) {
+            $count = (int) config('services.moodle.reserve_computers_count', 5);
+        }
+        $count = max(0, $count);
         if ($count === 0) {
             return [];
         }

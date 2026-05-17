@@ -191,6 +191,29 @@
                     </div>
                 @endif
 
+                @php
+                    $tcReserve = (int) ($tcDefaults['reserve_count'] ?? 0);
+                    $tcCompCount = (int) ($tcDefaults['computer_count'] ?? 0);
+                    $tcEffectiveCap = \App\Services\AutoAssignService::effectiveSlotCapacity($tcDefaults);
+                @endphp
+                <div style="margin:0 16px 8px;padding:10px 14px;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;gap:14px;font-size:12px;color:#3730a3;">
+                    <span style="display:inline-flex;align-items:center;gap:6px;">
+                        <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                        Jami kompyuterlar: <strong>{{ $tcCompCount }}</strong>
+                    </span>
+                    <span style="display:inline-flex;align-items:center;gap:6px;color:#991b1b;">
+                        🔒 Reserve (failover): <strong>{{ $tcReserve }}</strong>
+                    </span>
+                    <span style="display:inline-flex;align-items:center;gap:6px;color:#065f46;">
+                        ✓ Slot uchun aktiv: <strong>{{ $tcEffectiveCap }}</strong>
+                    </span>
+                    @if(request()->routeIs('admin.*'))
+                        <span style="margin-left:auto;font-size:11px;color:#6366f1;">
+                            <a href="{{ route('admin.settings') }}?tab=exam-capacity" style="color:#3730a3;font-weight:600;text-decoration:underline;">Sozlamalar →</a>
+                        </span>
+                    @endif
+                </div>
+
                 @if($tcCanBulkTimes && ($tcMissingTimeCount > 0 || $tcWithTimeCount > 0))
                     <div style="margin:0 16px 12px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
                         <svg style="width:18px;height:18px;color:#d97706;" fill="none" stroke="currentColor" viewBox="0 0 24 24">

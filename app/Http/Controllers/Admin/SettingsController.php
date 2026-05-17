@@ -209,6 +209,7 @@ class SettingsController extends Controller
     {
         $request->validate([
             'computer_count' => 'required|integer|min:1|max:10000',
+            'reserve_count' => 'nullable|integer|min:0|lt:computer_count',
             'test_duration_minutes' => 'required|integer|min:1|max:480',
             'work_hours_start' => 'required|date_format:H:i',
             'work_hours_end' => 'required|date_format:H:i|after:work_hours_start',
@@ -218,6 +219,7 @@ class SettingsController extends Controller
 
         ExamCapacityService::setSettings($request->only([
             'computer_count',
+            'reserve_count',
             'test_duration_minutes',
             'work_hours_start',
             'work_hours_end',

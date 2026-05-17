@@ -409,6 +409,15 @@
                                 </div>
                             </div>
 
+                            <div style="background: linear-gradient(135deg, #fee2e2, #fecaca); border-radius: 14px; padding: 18px; border: 1px solid #f87171;" title="Reserve pool — failover uchun ajratilgan kompyuterlar. Avto-vaqt belgilashda hisobga olinmaydi (har slotda boshqa talabalar uchun joy qoldiriladi).">
+                                <div style="font-size: 12px; font-weight: 700; color: #991b1b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Reserve kompyuterlar</div>
+                                <div style="display: flex; align-items: center; gap: 8px;">
+                                    <input type="number" name="reserve_count" value="{{ old('reserve_count', $examCapacity['reserve_count'] ?? 5) }}" min="0" max="100" style="width: 100%; padding: 10px 14px; border: 2px solid #dc2626; border-radius: 10px; font-size: 22px; font-weight: 800; color: #991b1b; text-align: center; background: rgba(255,255,255,0.7); outline: none;">
+                                    <span style="font-size: 14px; color: #991b1b; font-weight: 600;">ta</span>
+                                </div>
+                                <div style="font-size: 11px; color: #b91c1c; margin-top: 6px;">Failover uchun zaxira (slotda hisobga olinmaydi)</div>
+                            </div>
+
                             <div style="background: linear-gradient(135deg, #ccfbf1, #99f6e4); border-radius: 14px; padding: 18px; border: 1px solid #2dd4bf;">
                                 <div style="font-size: 12px; font-weight: 700; color: #115e59; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 10px;">Test davomiyligi</div>
                                 <div style="display: flex; align-items: center; gap: 8px;">

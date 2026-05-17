@@ -2907,6 +2907,17 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Diagnostika endpointi — eski va yangi Moodle WS funksiyalarini
+     * sinab ko'rib, raw javobni qaytaradi. "Access control exception"
+     * kabi xatolarni aniqlashtirish uchun.
+     */
+    public function kunlikMonitoringDiagnose(Request $request)
+    {
+        $svc = app(\App\Services\MoodleSyncMonitorService::class);
+        return response()->json($svc->diagnose());
+    }
+
+    /**
      * Bitta kun ichida yo'qotilgan attemptlar tafsiloti — sync va mark
      * bosqichlarida tushib qolgan attempt_id ro'yxati va sinxronlanganlar
      * uchun talaba/fan ma'lumotlari.

@@ -83,6 +83,10 @@
                     <label class="km-filter-label">&nbsp;</label>
                     <button id="kmLoad" class="km-btn">Yuklash</button>
                 </div>
+                <div class="km-filter-item">
+                    <label class="km-filter-label">&nbsp;</label>
+                    <button id="kmDiagnose" class="km-btn km-btn-quick" type="button">🔍 Diagnostika</button>
+                </div>
                 <div class="km-filter-item" style="margin-left: auto;">
                     <label class="km-filter-label">Tezkor</label>
                     <div style="display:flex; gap:6px;">
@@ -154,6 +158,7 @@
     (function(){
         const dataUrl = '{{ route($routePrefix . ".kunlik-monitoring.data") }}';
         const missingUrl = '{{ route($routePrefix . ".kunlik-monitoring.missing") }}';
+        const diagnoseUrl = '{{ route($routePrefix . ".kunlik-monitoring.diagnose") }}';
         const $ = id => document.getElementById(id);
 
         function fmtDate(d) {
@@ -359,6 +364,63 @@
         }
 
         $('kmLoad').addEventListener('click', loadData);
+
+        $('kmDiagnose').addEventListener('click', async () => {
+            $('kmModalTitle').textContent = 'Moodle WS diagnostika';
+            $('kmModalBody').innerHTML = `<div class="km-loading"><span class="km-spinner"></span>Tekshirilmoqda...</div>`;
+            $('kmModal').classList.add('km-show');
+
+            try {
+                const r = await fetch(diagnoseUrl, { headers: { 'Accept': 'application/json' } });
+                const body = await r.json();
+
+                const renderResult = (label, info, raw) => {
+                    const ok = raw.ok && !(raw.body && raw.body.exception);
+                    const color = ok ? '#15803d' : '#b91c1c';
+                    let detail = '';
+                    if (raw.body && raw.body.exception) {
+                        detail = `<div style="margin-top:6px;font-size:11px;">
+                            <div><strong>errorcode:</strong> ${raw.body.errorcode ?? '-'}</div>
+                            <div><strong>message:</strong> ${raw.body.message ?? '-'}</div>
+                            ${raw.body.debuginfo ? `<div><strong>debuginfo:</strong> <code style="word-break:break-all">${raw.body.debuginfo}</code></div>` : ''}
+                        </div>`;
+                    } else if (raw.error) {
+                        detail = `<div style="margin-top:6px;font-size:11px;color:#b91c1c;">${raw.error}</div>`;
+                    } else if (ok) {
+                        detail = `<div style="margin-top:6px;font-size:11px;color:#15803d;">✓ Javob OK (HTTP ${raw.http_status})</div>`;
+                    }
+                    return `<div class="km-section">
+                        <h3 class="km-section-title" style="color:${color};">${label} — ${ok ? 'OK ✓' : 'XATO ✗'}</h3>
+                        <div style="font-size:12px;font-family:ui-monospace,monospace;background:#f8fafc;padding:8px;border-radius:6px;border:1px solid #e2e8f0;">
+                            <strong>${info}</strong>
+                        </div>
+                        ${detail}
+                    </div>`;
+                };
+
+                let html = `<div style="font-size:12px;color:#475569;margin-bottom:14px;">
+                    <div><strong>WS URL:</strong> ${body.ws_url || '<em>not configured</em>'}</div>
+                    <div><strong>Token:</strong> ${body.has_token ? body.token_preview : '<em style="color:#b91c1c">not configured</em>'}</div>
+                </div>`;
+
+                html += renderResult('1) ESKI funksiya: local_quizexport_get_results', 'page=1, limit=1', body.old || {});
+                html += renderResult('2) YANGI funksiya: local_quizexport_get_daily_summary', 'kechagi va bugungi sana', body.new || {});
+
+                html += `<div class="km-section" style="margin-top:18px;padding:12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;">
+                    <strong style="color:#92400e;">Talqin:</strong>
+                    <ul style="margin:6px 0 0 18px;font-size:12px;color:#78350f;line-height:1.6;">
+                        <li>Ikkalasi <strong>OK</strong> bo'lsa — hammasi joyida.</li>
+                        <li>Ikkalasi <strong>XATO</strong> bo'lsa — token noto'g'ri yoki WS o'chirilgan.</li>
+                        <li>Faqat YANGI funksiya XATO bo'lsa (Access control) — funksiya hali ham service'ga to'liq bog'lanmagan: Moodle <em>web server</em>'ini restart qiling (php-fpm yoki apache), keyin qayta sinab ko'ring.</li>
+                    </ul>
+                </div>`;
+
+                $('kmModalBody').innerHTML = html;
+            } catch (e) {
+                $('kmModalBody').innerHTML = `<div class="km-empty" style="color:#b91c1c">Xato: ${e.message}</div>`;
+            }
+        });
+
         $('kmModalClose').addEventListener('click', () => $('kmModal').classList.remove('km-show'));
         $('kmModal').addEventListener('click', e => {
             if (e.target === $('kmModal')) $('kmModal').classList.remove('km-show');

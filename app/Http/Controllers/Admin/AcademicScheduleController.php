@@ -5007,6 +5007,8 @@ class AcademicScheduleController extends Controller
             }
 
             $carbonDate = \Carbon\Carbon::parse($dateStr);
+            // O'sha kunga moslangan kunlik sig'im (override hisobga olinadi).
+            $dayCapacity = ExamCapacityService::dailyCapacityForDate($dateStr);
             $dateCards->push([
                 'date' => $carbonDate,
                 'date_str' => $dateStr,
@@ -5014,6 +5016,7 @@ class AcademicScheduleController extends Controller
                 'group_count' => count($scheduledItems),
                 'total_students' => $totalStudents,
                 'max_occupied' => $maxOccupied,
+                'daily_capacity' => $dayCapacity,
                 'is_today' => $dateStr === $today,
                 'has_overflow' => $maxOccupied > $totalComputers,
                 'pending_time_count' => count($pendingItems),

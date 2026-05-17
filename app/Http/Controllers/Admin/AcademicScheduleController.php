@@ -3836,12 +3836,16 @@ class AcademicScheduleController extends Controller
      * Restricted to the test_markazi role only.
      */
     /**
-     * Resit yozuvi uchun sig'imni hisobga olib eng erta mavjud vaqt
+     * Resit yozuvi uchun sig'imni hisobga olib eng kam BAND mavjud vaqt
      * slotini topadi — slot occupancy in-memory map orqali (DB so'rovsiz).
      *
-     * $slotMap[date] = [['start_min' => 540, 'count' => 12], ...]  (start
-     * — sutka boshidan daqiqalar). Bitta slot duration daqiqaga teng deb
-     * qaraladi, intervallar oddiy chiziqli kesishish bilan tekshiriladi.
+     * Avval "birinchi mos slot" (first-fit) ishlatardi — natijada ertangi
+     * slotlar to'lib ketib, kech vaqtlar bo'sh qolardi. Endi "eng kam
+     * to'ldirilgan slot" (best-balance) ishlatiladi: barcha to'g'ri slotlar
+     * orasidan hozir EN KAM band bo'lganini tanlaydi. Tenglik bo'lsa
+     * ertaroq vaqtga ustunlik beriladi.
+     *
+     * $slotMap[date] = [['start_min' => 540, 'count' => 12], ...]
      */
     private function findResitSlot(
         \App\Models\ExamSchedule $schedule,
@@ -3872,6 +3876,8 @@ class AcademicScheduleController extends Controller
 
         $existing = $slotMap[$dateStr] ?? [];
 
+        $bestSlot = null;
+        $bestOccupancy = null;
         $candidateMin = $workStartMin;
         $iterations = 0;
         while ($iterations++ < 300 && ($candidateMin + $duration) <= $workEndMin) {
@@ -3896,17 +3902,24 @@ class AcademicScheduleController extends Controller
             }
 
             if ($concurrent + $groupCount <= $computerCount) {
-                // Topildi — slotMap'ga qo'shamiz, keyingi candidate ko'rsin
-                $slotMap[$dateStr][] = ['start_min' => $candStart, 'count' => $groupCount];
-                $h = intdiv($candStart, 60);
-                $m = $candStart % 60;
-                return sprintf('%02d:%02d', $h, $m);
+                // Eng kam band slotni tanlash (load balancing).
+                if ($bestOccupancy === null || $concurrent < $bestOccupancy) {
+                    $bestOccupancy = $concurrent;
+                    $bestSlot = $candStart;
+                }
             }
 
             $candidateMin += $duration;
         }
 
-        return null;
+        if ($bestSlot === null) {
+            return null;
+        }
+
+        $slotMap[$dateStr][] = ['start_min' => $bestSlot, 'count' => $groupCount];
+        $h = intdiv($bestSlot, 60);
+        $m = $bestSlot % 60;
+        return sprintf('%02d:%02d', $h, $m);
     }
 
     /**
@@ -4099,7 +4112,11 @@ class AcademicScheduleController extends Controller
 
                         if ($c['distribute']) {
                             // Full slot distribution for the primary attempt.
-                            $result = $service->distribute($schedule, $ynType, $startTime);
+                            // slotMap'ni distribute'ga uzatamiz — resit time'lar
+                            // (ComputerAssignment'da yo'q) ham sig'imda hisobga
+                            // olinishi uchun, aks holda slot to'lib ketishi mumkin.
+                            $extra = $slotMap[$dateStr] ?? [];
+                            $result = $service->distribute($schedule, $ynType, $startTime, $extra);
                             // distribute() o'zi bir necha slotni ishg'ol qiladi —
                             // map'ni yangilab keyingi resit candidate to'g'ri ko'rsin.
                             if (!empty($result['ok']) && !empty($result['slots'])) {

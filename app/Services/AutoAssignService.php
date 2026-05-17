@@ -34,7 +34,13 @@ class AutoAssignService
      * @param string $startTime "HH:mm" — earliest slot start for this group
      * @return array{ok:bool, count?:int, slots?:array<int,array{time:string,students:int}>, skipped?:bool, reason?:string}
      */
-    public function distribute(ExamSchedule $schedule, string $ynType, string $startTime): array
+    /**
+     * @param array<int,array{start_min:int,count:int}> $extraOccupancy
+     *        Slot-bo'yicha qo'shimcha bandlik (resit time'lar uchun, ular
+     *        ComputerAssignment'da yo'q). autoTimeAll bulk rejimida slot
+     *        ust-ust tushishini oldini olish uchun ishlatiladi.
+     */
+    public function distribute(ExamSchedule $schedule, string $ynType, string $startTime, array $extraOccupancy = []): array
     {
         $ynType = strtolower($ynType);
         if (!in_array($ynType, ['oski', 'test'], true)) {
@@ -129,6 +135,20 @@ class AutoAssignService
                     ComputerAssignment::STATUS_IN_PROGRESS,
                 ])
                 ->count();
+
+            // Resit yozuvlari ComputerAssignment'da emas — ExamSchedule.*_resit_time
+            // dan keladi. autoTimeAll ularni $extraOccupancy orqali uzatadi.
+            if (!empty($extraOccupancy)) {
+                $candStartMin = (int) ($slotStart->hour * 60 + $slotStart->minute);
+                $candEndMin = $candStartMin + $slotLength;
+                foreach ($extraOccupancy as $entry) {
+                    $eStart = (int) $entry['start_min'];
+                    $eEnd = $eStart + $slotLength;
+                    if ($eStart < $candEndMin && $eEnd > $candStartMin) {
+                        $alreadyBookedHere += (int) $entry['count'];
+                    }
+                }
+            }
 
             $room = max(0, $slotCapacity - $alreadyBookedHere);
             if ($room < 1) {

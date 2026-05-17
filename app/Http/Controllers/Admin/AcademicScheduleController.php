@@ -4196,43 +4196,13 @@ class AcademicScheduleController extends Controller
 
                     if (!empty($result['ok'])) {
                         $okCount++;
-                        // Avto-vaqt belgilangach Telegram + DB notification yuborish.
-                        // Per-student row (individual grafik) bo'lsa — faqat shu
-                        // talabaga. Guruh row bo'lsa — guruh talabalariga (individual
-                        // grafikdagilar chiqarib tashlanadi).
-                        try {
-                            $schedule->refresh();
-                            $assignedTime = $schedule->{$c['time']};
-                            if ($assignedTime) {
-                                $ynLabelLocal = $ynType === 'oski' ? 'OSKI' : 'Test';
-                                if ($attempt > 1) $ynLabelLocal .= ' (' . $attempt . '-urinish)';
-                                $dateVal = $schedule->{$c['date']};
-                                $dateFmt = $dateVal ? \Carbon\Carbon::parse($dateVal)->format('d.m.Y') : null;
-                                $timeHM = substr((string) $assignedTime, 0, 5);
-                                $studentsToNotify = !empty($schedule->student_hemis_id)
-                                    ? $this->singleStudentForNotify((string) $schedule->student_hemis_id)
-                                    : $this->groupStudentsForExamNotify(
-                                        (string) $schedule->group_hemis_id,
-                                        (string) $schedule->subject_id,
-                                        (string) $schedule->semester_code,
-                                        $c['date']
-                                    );
-                                $this->notifyStudentsExamTime(
-                                    $studentsToNotify,
-                                    $schedule->subject_name ?: 'Fan',
-                                    $ynType === 'oski' ? 'OSKI' : 'Test',
-                                    $ynLabelLocal,
-                                    $dateFmt,
-                                    $timeHM,
-                                    null  // bulk avto — odatda yangi (oldingi vaqt yo'q)
-                                );
-                            }
-                        } catch (\Throwable $ne) {
-                            \Illuminate\Support\Facades\Log::warning('autoTimeAll: notify failed', [
-                                'schedule_id' => $schedule->id,
-                                'error' => $ne->getMessage(),
-                            ]);
-                        }
+                        // Bulk autoTimeAll'da Telegram + DB notification YUBORILMAYDI:
+                        //  - Telegram API har xabar uchun ~0.5-2s — 100+ qator → 504 timeout
+                        //  - Avto-vaqt belgilash odatda bir necha marta qayta chaqiriladi
+                        //    (vaqtlarni sozlash uchun), shu sabab har safar talaba
+                        //    "vaqt o'zgardi" deb spam olishi shart emas.
+                        //  - Final vaqt belgilangach admin alohida (saveTestTime'dan)
+                        //    yoki manual broadcast'dan xabar yuboradi.
                     } else {
                         $label = strtoupper($ynType) . ($attempt > 1 ? " {$attempt}-urinish" : '');
                         $failures[] = sprintf(
@@ -4247,7 +4217,7 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        $msg = "Avto-vaqt belgilandi: {$okCount} ta.";
+        $msg = "Avto-vaqt belgilandi: {$okCount} ta. Talabalarga xabar yuborilmadi — vaqtlarni yakuniylashtirgach, alohida bildirgi yuboring.";
         if (!empty($failures)) {
             $shown = array_slice($failures, 0, 5);
             $more = count($failures) - count($shown);

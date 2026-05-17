@@ -1518,7 +1518,7 @@ class JournalController extends Controller
             // 12a (attempt=2) va 12b (attempt=3) OSKI/Test baholari (sababsiz va sababli alohida)
             // Asosiy otherGradesRaw kabi semester_code shartini yumshatamiz — diagnostika
             // boshqa semestr bilan saqlangan yozuvlarni ham qamrab oladi.
-            $fetchAttemptOskiTest = function (int $attempt, bool $excludeSababli) use ($studentHemisIds, $subjectId, $semesterCode, $hasAttemptColForStage) {
+            $fetchAttemptOskiTest = function (int $attempt, bool $excludeSababli) use ($studentHemisIds, $subjectId, $semesterCode, $hasAttemptColForStage, $educationYearCode, $minScheduleDate) {
                 if (!$hasAttemptColForStage) return [101 => [], 102 => []];
                 $rows = DB::table('student_grades')
                     ->whereNull('deleted_at')
@@ -1530,6 +1530,17 @@ class JournalController extends Controller
                     })
                     ->whereIn('training_type_code', [101, 102])
                     ->where('attempt', $attempt)
+                    // Joriy o'quv yili filtri: talaba ilgari boshqa guruhda
+                    // (chetlashtirilgan/qaytarilgan) bo'lib, o'sha vaqtdagi OSKI/Test
+                    // urinishlari hozirgi jurnalga oqib o'tmasligi uchun.
+                    ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
+                        $q2->where('education_year_code', $educationYearCode)
+                            ->orWhere(function ($q3) use ($minScheduleDate) {
+                                $q3->whereNull('education_year_code')
+                                    ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                            });
+                    }))
+                    ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
                     ->select('student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'retake_was_sababli', 'status', 'reason')
                     ->get();
                 $byType = [101 => [], 102 => []];
@@ -6823,12 +6834,30 @@ class JournalController extends Controller
         // OSKI va Test natijalarini olish
         $studentHemisIds = $students->pluck('hemis_id')->toArray();
 
+        // Joriy o'quv yilini aniqlash — show() dagi mantiq bilan bir xil.
+        // Bu talaba ilgari boshqa guruhda (chetlashtirilgan/qaytarilgan)
+        // bo'lgan eski OSKI/Test natijalarining yakuniy qaydnomaga oqib
+        // o'tishini oldini oladi.
+        $educationYearCode = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('education_year_code')
+            ->orderBy('lesson_date', 'desc')
+            ->value('education_year_code');
+
         $oskiGrades = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->where('training_type_code', 101)
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->select('student_hemis_id', DB::raw('ROUND(AVG(grade)) as avg_grade'))
             ->groupBy('student_hemis_id')
             ->pluck('avg_grade', 'student_hemis_id')
@@ -6840,6 +6869,10 @@ class JournalController extends Controller
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->where('training_type_code', 102)
+            ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode) {
+                $q2->where('education_year_code', $educationYearCode)
+                    ->orWhereNull('education_year_code');
+            }))
             ->select('student_hemis_id', DB::raw('ROUND(AVG(grade)) as avg_grade'))
             ->groupBy('student_hemis_id')
             ->pluck('avg_grade', 'student_hemis_id')

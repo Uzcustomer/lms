@@ -150,7 +150,7 @@ class ExamCapacityService
         }
         $ls = Carbon::createFromFormat('H:i', $s['lunch_start']);
         $le = Carbon::createFromFormat('H:i', $s['lunch_end']);
-        return max(0, $le->diffInMinutes($ls, false));
+        return max(0, $ls->diffInMinutes($le, false));
     }
 
     /**
@@ -162,7 +162,7 @@ class ExamCapacityService
         $s = $settings ?? self::getSettings();
         $start = Carbon::createFromFormat('H:i', $s['work_hours_start']);
         $end = Carbon::createFromFormat('H:i', $s['work_hours_end']);
-        $minutes = max(0, $end->diffInMinutes($start, false));
+        $minutes = max(0, $start->diffInMinutes($end, false));
         $minutes -= self::lunchMinutes($s);
         if ($minutes <= 0) {
             return 0;

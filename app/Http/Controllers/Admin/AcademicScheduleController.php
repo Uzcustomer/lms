@@ -3897,12 +3897,13 @@ class AcademicScheduleController extends Controller
      * Restricted to the test_markazi role only.
      */
     /**
-     * Resit yozuvi uchun sig'imni hisobga olib eng erta mavjud vaqt
-     * slotini topadi — slot occupancy in-memory map orqali (DB so'rovsiz).
+     * Resit yozuvi uchun sig'imni hisobga olib eng erta MOS slotni topadi
+     * (first-fit). Resit guruhlari odatda kichik (1-2 talaba), shu sabab
+     * first-fit ularni 1-urinish to'liq to'ldirmagan slotlarga ketma-ket
+     * to'ldirib boradi (masalan, 09:00 da 58/60 bo'lsa, 1 talabali resit
+     * shu yerga tushadi va slot 60 ga to'ladi).
      *
-     * $slotMap[date] = [['start_min' => 540, 'count' => 12], ...]  (start
-     * — sutka boshidan daqiqalar). Bitta slot duration daqiqaga teng deb
-     * qaraladi, intervallar oddiy chiziqli kesishish bilan tekshiriladi.
+     * $slotMap[date] = [['start_min' => 540, 'count' => 12], ...]
      */
     private function findResitSlot(
         \App\Models\ExamSchedule $schedule,
@@ -3956,8 +3957,8 @@ class AcademicScheduleController extends Controller
                 }
             }
 
+            // First-fit: birinchi mos slotda joylashtir
             if ($concurrent + $groupCount <= $computerCount) {
-                // Topildi — slotMap'ga qo'shamiz, keyingi candidate ko'rsin
                 $slotMap[$dateStr][] = ['start_min' => $candStart, 'count' => $groupCount];
                 $h = intdiv($candStart, 60);
                 $m = $candStart % 60;
@@ -4136,9 +4137,17 @@ class AcademicScheduleController extends Controller
         $okCount = 0;
         $failures = [];
 
-        foreach ($candidates as $schedule) {
-            foreach ($columnSets as $ynType => $attempts) {
-                foreach ($attempts as $attempt => $c) {
+        // Pass tartibi: avval BARCHA 1-urinishlar (distribute, 60 talabalik
+        // chunklar), so'ng 2-urinish (kichik resit guruhlari shu slotlarning
+        // qolgan joyiga first-fit qilib to'ladi), so'ng 3-urinish. Aks holda
+        // erta resit'lar slot boshini band qilib, 1-urinish guruhlari kech
+        // vaqtlarga ko'chib ketadi va slotlar bo'shashib qoladi.
+        foreach ([1, 2, 3] as $passAttempt) {
+            foreach ($candidates as $schedule) {
+                foreach ($columnSets as $ynType => $attempts) {
+                    $attempt = $passAttempt;
+                    if (!isset($attempts[$attempt])) continue;
+                    $c = $attempts[$attempt];
                     $dateVal = $schedule->{$c['date']};
                     if (empty($dateVal) || !empty($schedule->{$c['time']})) {
                         continue;
@@ -4160,7 +4169,11 @@ class AcademicScheduleController extends Controller
 
                         if ($c['distribute']) {
                             // Full slot distribution for the primary attempt.
-                            $result = $service->distribute($schedule, $ynType, $startTime);
+                            // slotMap'ni distribute'ga uzatamiz — resit time'lar
+                            // (ComputerAssignment'da yo'q) ham sig'imda hisobga
+                            // olinishi uchun, aks holda slot to'lib ketishi mumkin.
+                            $extra = $slotMap[$dateStr] ?? [];
+                            $result = $service->distribute($schedule, $ynType, $startTime, $extra);
                             // distribute() o'zi bir necha slotni ishg'ol qiladi —
                             // map'ni yangilab keyingi resit candidate to'g'ri ko'rsin.
                             if (!empty($result['ok']) && !empty($result['slots'])) {

@@ -2770,4 +2770,227 @@ class QuizResultController extends Controller
 
         return response()->json(['success' => true]);
     }
+
+    /**
+     * Kunlik monitoring sahifasi (Moodle ↔ LMS sync ↔ Mark reconciliation).
+     */
+    public function kunlikMonitoringPage(Request $request)
+    {
+        $routePrefix = $this->routePrefix();
+        return view('admin.kunlik-monitoring.index', compact('routePrefix'));
+    }
+
+    /**
+     * Kunlik monitoring uchun AJAX data. Moodle WS'dan kunlik attempt_id
+     * ro'yxati olinadi, LMS'dagi hemis_quiz_results va student_grades bilan
+     * solishtirilib, har kun uchun yo'qotish statistikasi qaytariladi.
+     */
+    public function kunlikMonitoringData(Request $request)
+    {
+        $request->validate([
+            'date_from' => 'required|date_format:Y-m-d',
+            'date_to'   => 'required|date_format:Y-m-d',
+        ]);
+
+        $dateFrom = $request->input('date_from');
+        $dateTo   = $request->input('date_to');
+
+        $svc = app(\App\Services\MoodleSyncMonitorService::class);
+        $resp = $svc->getDailySummary($dateFrom, $dateTo);
+
+        if (!($resp['ok'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'error' => $resp['error'] ?? 'Moodle WS error',
+            ], 502);
+        }
+
+        $days = $resp['days'] ?? [];
+
+        // Barcha attempt_id larni bitta listga yig'amiz — bulk query uchun.
+        $allMoodleIds = [];
+        foreach ($days as $d) {
+            foreach (($d['attempt_ids'] ?? []) as $aid) {
+                $allMoodleIds[(int) $aid] = true;
+            }
+        }
+        $allMoodleIds = array_keys($allMoodleIds);
+
+        // Hozirgi LMS holatini bulk olamiz: attempt_id => hemis_quiz_results.id.
+        $syncedMap = []; // attempt_id => quiz_result_id
+        if (!empty($allMoodleIds)) {
+            DB::table('hemis_quiz_results')
+                ->whereIn('attempt_id', $allMoodleIds)
+                ->select('attempt_id', 'id')
+                ->orderBy('attempt_id')
+                ->chunk(2000, function ($rows) use (&$syncedMap) {
+                    foreach ($rows as $r) {
+                        $syncedMap[(int) $r->attempt_id] = (int) $r->id;
+                    }
+                });
+        }
+
+        // Mark stage: qaysi quiz_result_id'lar uchun student_grades mavjud.
+        $gradedQuizResultIds = [];
+        if (!empty($syncedMap)) {
+            DB::table('student_grades')
+                ->whereIn('quiz_result_id', array_values($syncedMap))
+                ->whereNotNull('quiz_result_id')
+                ->select('quiz_result_id')
+                ->distinct()
+                ->chunk(2000, function ($rows) use (&$gradedQuizResultIds) {
+                    foreach ($rows as $r) {
+                        $gradedQuizResultIds[(int) $r->quiz_result_id] = true;
+                    }
+                });
+        }
+
+        // Har kun uchun statistika yig'amiz.
+        $result = [];
+        $totMoodle = 0;
+        $totSynced = 0;
+        $totGraded = 0;
+
+        foreach ($days as $d) {
+            $date = (string) $d['date'];
+            $attemptIds = array_map('intval', (array) ($d['attempt_ids'] ?? []));
+            $moodleCount = (int) ($d['count'] ?? count($attemptIds));
+
+            $syncedCount = 0;
+            $gradedCount = 0;
+            foreach ($attemptIds as $aid) {
+                if (isset($syncedMap[$aid])) {
+                    $syncedCount++;
+                    $qrId = $syncedMap[$aid];
+                    if (isset($gradedQuizResultIds[$qrId])) {
+                        $gradedCount++;
+                    }
+                }
+            }
+
+            $syncGap = $moodleCount - $syncedCount;
+            $markGap = $syncedCount - $gradedCount;
+
+            $status = 'ok';
+            if ($syncGap > 0) {
+                $status = 'sync_gap';
+            } elseif ($markGap > 0) {
+                $status = 'mark_gap';
+            }
+
+            $result[] = [
+                'date'         => $date,
+                'moodle_count' => $moodleCount,
+                'synced_count' => $syncedCount,
+                'graded_count' => $gradedCount,
+                'sync_gap'     => $syncGap,
+                'mark_gap'     => $markGap,
+                'status'       => $status,
+            ];
+
+            $totMoodle += $moodleCount;
+            $totSynced += $syncedCount;
+            $totGraded += $gradedCount;
+        }
+
+        return response()->json([
+            'success' => true,
+            'days' => $result,
+            'totals' => [
+                'moodle_count' => $totMoodle,
+                'synced_count' => $totSynced,
+                'graded_count' => $totGraded,
+                'sync_gap'     => $totMoodle - $totSynced,
+                'mark_gap'     => $totSynced - $totGraded,
+            ],
+        ]);
+    }
+
+    /**
+     * Bitta kun ichida yo'qotilgan attemptlar tafsiloti — sync va mark
+     * bosqichlarida tushib qolgan attempt_id ro'yxati va sinxronlanganlar
+     * uchun talaba/fan ma'lumotlari.
+     */
+    public function kunlikMonitoringMissing(Request $request)
+    {
+        $request->validate([
+            'date' => 'required|date_format:Y-m-d',
+        ]);
+        $date = $request->input('date');
+
+        $svc = app(\App\Services\MoodleSyncMonitorService::class);
+        $resp = $svc->getDailySummary($date, $date);
+        if (!($resp['ok'] ?? false)) {
+            return response()->json([
+                'success' => false,
+                'error' => $resp['error'] ?? 'Moodle WS error',
+            ], 502);
+        }
+
+        $days = $resp['days'] ?? [];
+        $moodleIds = [];
+        foreach ($days as $d) {
+            if ($d['date'] === $date) {
+                $moodleIds = array_map('intval', (array) ($d['attempt_ids'] ?? []));
+                break;
+            }
+        }
+
+        if (empty($moodleIds)) {
+            return response()->json([
+                'success' => true,
+                'date' => $date,
+                'moodle_count' => 0,
+                'missing_sync' => [],
+                'missing_mark' => [],
+            ]);
+        }
+
+        // hemis_quiz_results ichidagilar — attempt_id => row.
+        $synced = DB::table('hemis_quiz_results')
+            ->whereIn('attempt_id', $moodleIds)
+            ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_name', 'quiz_type', 'date_finish', 'grade')
+            ->get()
+            ->keyBy('attempt_id');
+
+        $syncedAttemptIds = $synced->keys()->map(fn($v) => (int) $v)->all();
+        $missingSyncIds = array_values(array_diff($moodleIds, $syncedAttemptIds));
+
+        // Hozir grade'i bor quiz_result_id lar.
+        $gradedIds = [];
+        if ($synced->isNotEmpty()) {
+            $qrIds = $synced->pluck('id')->map(fn($v) => (int) $v)->all();
+            $gradedIds = DB::table('student_grades')
+                ->whereIn('quiz_result_id', $qrIds)
+                ->whereNotNull('quiz_result_id')
+                ->pluck('quiz_result_id')
+                ->map(fn($v) => (int) $v)
+                ->unique()
+                ->flip()
+                ->toArray();
+        }
+
+        $missingMark = [];
+        foreach ($synced as $row) {
+            if (!isset($gradedIds[(int) $row->id])) {
+                $missingMark[] = [
+                    'attempt_id'   => (int) $row->attempt_id,
+                    'student_id'   => $row->student_id,
+                    'student_name' => $row->student_name,
+                    'fan_name'     => $row->fan_name,
+                    'quiz_type'    => $row->quiz_type,
+                    'date_finish'  => $row->date_finish,
+                    'grade'        => $row->grade,
+                ];
+            }
+        }
+
+        return response()->json([
+            'success' => true,
+            'date' => $date,
+            'moodle_count' => count($moodleIds),
+            'missing_sync' => $missingSyncIds,
+            'missing_mark' => $missingMark,
+        ]);
+    }
 }

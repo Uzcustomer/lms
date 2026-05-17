@@ -109,32 +109,29 @@ class AutoAssignService
             $slotStart = $workStart->copy();
         }
 
-        $remaining = $students->all();
+        $needed = $students->count();
         $createdRows = [];
         $slotReport = [];
         $now = now();
 
+        // BEST-FIT slot tanlash — barcha mos slotlar tekshiriladi, eng kam
+        // bo'sh joy qoldiradigan slot tanlanadi. Avval first-fit ishlatardi
+        // (eng ertasi) — endi to'ldirish maqsadida tightest-fit.
+        $bestSlotStart = null;
+        $bestLeftover = null;
+        $cursor = $slotStart->copy();
         $guard = 0;
-        while (!empty($remaining) && $guard++ < 100) {
-            $slotEnd = $slotStart->copy()->addMinutes($slotLength);
+        while ($guard++ < 200) {
+            $slotEnd = $cursor->copy()->addMinutes($slotLength);
+            if ($slotEnd->gt($workEnd)) break;
 
-            if ($slotEnd->gt($workEnd)) {
-                return [
-                    'ok' => false,
-                    'skipped' => true,
-                    'reason' => "no slot available in working hours; " . count($remaining) . ' students unplaced',
-                ];
-            }
-
-            // Skip lunch
-            if ($lunchStart && $lunchEnd && $slotStart->lt($lunchEnd) && $slotEnd->gt($lunchStart)) {
-                $slotStart = $lunchEnd->copy();
+            if ($lunchStart && $lunchEnd && $cursor->lt($lunchEnd) && $slotEnd->gt($lunchStart)) {
+                $cursor = $lunchEnd->copy();
                 continue;
             }
 
-            // How many other students from OTHER schedules already share this slot?
             $alreadyBookedHere = ComputerAssignment::query()
-                ->where('planned_end', '>', $slotStart)
+                ->where('planned_end', '>', $cursor)
                 ->where('planned_start', '<', $slotEnd)
                 ->where(function ($q) use ($schedule, $ynType) {
                     $q->where('exam_schedule_id', '!=', $schedule->id)
@@ -146,10 +143,8 @@ class AutoAssignService
                 ])
                 ->count();
 
-            // Resit yozuvlari ComputerAssignment'da emas — ExamSchedule.*_resit_time
-            // dan keladi. autoTimeAll ularni $extraOccupancy orqali uzatadi.
             if (!empty($extraOccupancy)) {
-                $candStartMin = (int) ($slotStart->hour * 60 + $slotStart->minute);
+                $candStartMin = (int) ($cursor->hour * 60 + $cursor->minute);
                 $candEndMin = $candStartMin + $slotLength;
                 foreach ($extraOccupancy as $entry) {
                     $eStart = (int) $entry['start_min'];
@@ -160,49 +155,53 @@ class AutoAssignService
                 }
             }
 
-            $room = max(0, $slotCapacity - $alreadyBookedHere);
-            $needed = count($remaining);
-            // Guruh ATOMIK: butun guruh sig'masa, keyingi slotga o'tkaziladi.
-            // Avval distribute guruhni bo'lib slotlar oralig'iga sochar edi,
-            // bandlik display'i esa guruhni butunligicha test_time slotiga
-            // sanab "60 dan ortiq" ko'rsatardi. Endi bo'lish yo'q — qolgan
-            // joy boshqa kichikroq guruh (yoki 2-urinish backfill) tomonidan
-            // to'ldiriladi.
-            if ($room < $needed) {
-                $slotStart = $slotEnd->copy();
-                continue;
+            $leftover = $slotCapacity - $alreadyBookedHere - $needed;
+            if ($leftover >= 0) {
+                if ($bestLeftover === null || $leftover < $bestLeftover) {
+                    $bestLeftover = $leftover;
+                    $bestSlotStart = $cursor->copy();
+                    if ($leftover === 0) break; // perfect fit
+                }
             }
 
-            $take = $remaining;
-            $remaining = [];
-            foreach ($take as $student) {
-                $createdRows[] = [
-                    'exam_schedule_id' => $schedule->id,
-                    'student_id_number' => (string) $student->student_id_number,
-                    'student_hemis_id' => (string) $student->hemis_id,
-                    'yn_type' => $ynType,
-                    'computer_number' => null,
-                    'planned_start' => $slotStart->copy(),
-                    'planned_end' => $slotEnd->copy(),
-                    'reveal_at' => null,
-                    'reveal_notified' => false,
-                    'approach_notified' => false,
-                    'ready_notified' => false,
-                    'is_reserve' => false,
-                    'is_pinned' => false,
-                    'status' => ComputerAssignment::STATUS_SCHEDULED,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
-            }
-
-            $slotReport[] = [
-                'time' => $slotStart->format('H:i'),
-                'students' => count($take),
-            ];
-
-            $slotStart = $slotEnd->copy();
+            $cursor = $slotEnd->copy();
         }
+
+        if ($bestSlotStart === null) {
+            return [
+                'ok' => false,
+                'skipped' => true,
+                'reason' => "no slot available in working hours; {$needed} students unplaced",
+            ];
+        }
+
+        $bestSlotEnd = $bestSlotStart->copy()->addMinutes($slotLength);
+        foreach ($students as $student) {
+            $createdRows[] = [
+                'exam_schedule_id' => $schedule->id,
+                'student_id_number' => (string) $student->student_id_number,
+                'student_hemis_id' => (string) $student->hemis_id,
+                'yn_type' => $ynType,
+                'computer_number' => null,
+                'planned_start' => $bestSlotStart->copy(),
+                'planned_end' => $bestSlotEnd->copy(),
+                'reveal_at' => null,
+                'reveal_notified' => false,
+                'approach_notified' => false,
+                'ready_notified' => false,
+                'is_reserve' => false,
+                'is_pinned' => false,
+                'status' => ComputerAssignment::STATUS_SCHEDULED,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        $slotReport[] = [
+            'time' => $bestSlotStart->format('H:i'),
+            'students' => $needed,
+        ];
+        $remaining = []; // hammasi joylandi
+        $slotStart = $bestSlotStart;
 
         if (!empty($remaining)) {
             return [

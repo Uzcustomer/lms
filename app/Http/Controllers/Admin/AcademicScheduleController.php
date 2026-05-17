@@ -3971,9 +3971,11 @@ class AcademicScheduleController extends Controller
      * Restricted to the test_markazi role only.
      */
     /**
-     * Berilgan count uchun sig'imli birinchi slotni topadi (first-fit).
-     * findResitSlot ning ichki yadrosi — bucket-asosli joylashtirish uchun
-     * ajratilgan. slotMap'ga yangi yozuvni qo'shadi.
+     * Berilgan count uchun BEST-FIT slot — sig'adi va eng KAM bo'sh joy
+     * qoldiradigan slot tanlanadi. Bir necha mos slot bo'lsa, eng ertasi.
+     * Avval first-fit ishlatardi; best-fit "tightest fit" packing beradi —
+     * deyarli to'la slotlarga aniq mos guruhlar tushadi, bo'sh slotlar
+     * keyinroq guruhlar uchun qoldiriladi.
      */
     private function findSlotForCount(
         int $count,
@@ -3984,8 +3986,6 @@ class AcademicScheduleController extends Controller
         if ($count <= 0) {
             return $capacity['work_hours_start'] ?? '09:00';
         }
-        // Reserve pool ayrilgan effective sig'im (distribute ham shuni
-        // ishlatadi) — 2-/3-urinish ham reserve'ni hurmat qilsin.
         $computerCount = AutoAssignService::effectiveSlotCapacity($capacity);
         $duration = max(1, (int) $capacity['test_duration_minutes']);
 
@@ -4000,6 +4000,9 @@ class AcademicScheduleController extends Controller
         $lunchEndMin = !empty($capacity['lunch_end']) ? $parseHm((string) $capacity['lunch_end']) : null;
 
         $existing = $slotMap[$dateStr] ?? [];
+
+        $bestStart = null;
+        $bestLeftover = null;
 
         $candidateMin = $workStartMin;
         $iterations = 0;
@@ -4022,17 +4025,29 @@ class AcademicScheduleController extends Controller
                 }
             }
 
-            if ($concurrent + $count <= $computerCount) {
-                $slotMap[$dateStr][] = ['start_min' => $candStart, 'count' => $count];
-                $h = intdiv($candStart, 60);
-                $m = $candStart % 60;
-                return sprintf('%02d:%02d', $h, $m);
+            $leftover = $computerCount - $concurrent - $count;
+            if ($leftover >= 0) {
+                // Best-fit: eng kam leftover (slot bo'shlig'i)
+                if ($bestLeftover === null || $leftover < $bestLeftover) {
+                    $bestLeftover = $leftover;
+                    $bestStart = $candStart;
+                    if ($leftover === 0) {
+                        break; // perfect fit — search'ni to'xtatamiz
+                    }
+                }
             }
 
             $candidateMin += $duration;
         }
 
-        return null;
+        if ($bestStart === null) {
+            return null;
+        }
+
+        $slotMap[$dateStr][] = ['start_min' => $bestStart, 'count' => $count];
+        $h = intdiv($bestStart, 60);
+        $m = $bestStart % 60;
+        return sprintf('%02d:%02d', $h, $m);
     }
 
     /**

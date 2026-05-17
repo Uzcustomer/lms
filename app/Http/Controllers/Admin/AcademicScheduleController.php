@@ -1309,9 +1309,14 @@ class AcademicScheduleController extends Controller
             }
         } catch (\Throwable $e) {}
 
-        // 2b) OSKI / Test attempt=2 baholari (12a) — failed_attempt2 ni aniqlash uchun
+        // 2b) OSKI / Test attempt=2 baholari (12a) — failed_attempt2 ni aniqlash uchun.
+        // $enrolledAttempt2Map: talaba 2-urinishga (12a ga) kirgan, ya'ni
+        // student_grades.attempt=2 yozuvi mavjud (baho bo'sh bo'lsa ham — qo'lda
+        // o'tkazilgan). Bu failed2 ni "kelmadi=yiqilgan" deb belgilashdan oldin
+        // talaba haqiqatdan 2-urinishga ro'yxatda bo'lganini tekshirish uchun.
         $examMap2 = [];
         $examLists2 = [];
+        $enrolledAttempt2Map = []; // hemis|subj|sem => true
         try {
             if ($hasAttemptCol) {
                 $rows = DB::table('student_grades')
@@ -1333,6 +1338,7 @@ class AcademicScheduleController extends Controller
                 $testTypes2 = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
 
                 foreach ($rows as $r) {
+                    $enrolledAttempt2Map[$r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code] = true;
                     $typeCode = (int) $r->training_type_code;
                     if ($typeCode === 103) {
                         if (!$r->quiz_result_id) continue;
@@ -1471,11 +1477,23 @@ class AcademicScheduleController extends Controller
                 $testFailed1 = $confirmFailed($testRequired, $testNum, $testDate);
                 $failed1 = $isPullik || $oskiFailed1 || $testFailed1;
 
-                $oski2Num = $oski2 !== null ? (float) $oski2 : null;
-                $test2Num = $test2 !== null ? (float) $test2 : null;
-                $oskiFailed2 = $confirmFailed($oskiRequired, $oski2Num, $oskiResitDate);
-                $testFailed2 = $confirmFailed($testRequired, $test2Num, $testResitDate);
-                $failed2 = $isPullik || $oskiFailed2 || $testFailed2;
+                // failed2 ni faqat 2-urinishga haqiqatdan kirgan talabalar uchun
+                // hisoblaymiz. Aks holda: 1-urinishdan o'tib ketgan talaba 12a ga
+                // umuman ro'yxatga olinmagan — 2-urinish sanasi o'tgan + bahosi yo'q
+                // bo'lsa ham "kelmadi=yiqilgan" deyish noto'g'ri.
+                // 2-urinishga kirgan deb hisoblanadi: 1-urinishdan o'tmagan
+                // ($failed1) YOKI student_grades.attempt=2 yozuvi mavjud.
+                $enrolledAttempt2 = $failed1
+                    || !empty($enrolledAttempt2Map[$hid . '|' . $s . '|' . $sem]);
+                if ($enrolledAttempt2) {
+                    $oski2Num = $oski2 !== null ? (float) $oski2 : null;
+                    $test2Num = $test2 !== null ? (float) $test2 : null;
+                    $oskiFailed2 = $confirmFailed($oskiRequired, $oski2Num, $oskiResitDate);
+                    $testFailed2 = $confirmFailed($testRequired, $test2Num, $testResitDate);
+                    $failed2 = $isPullik || $oskiFailed2 || $testFailed2;
+                } else {
+                    $failed2 = false;
+                }
 
                 $key = $g . '|' . $s . '|' . $sem;
                 if (!isset($result[$key])) $result[$key] = [];

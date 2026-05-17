@@ -3836,65 +3836,128 @@ class AcademicScheduleController extends Controller
      * Restricted to the test_markazi role only.
      */
     /**
-     * Resit (2-/3-urinish) yozuvi uchun sig'imni hisobga olib eng erta
-     * mavjud vaqt slotini topadi. Avval autoTimeAll har resit'ni
-     * work_hours_start ga muqobilsiz qo'yardi, natijada 130 talaba 09:00 ga
-     * yig'ilib qolardi.
+     * Resit yozuvi uchun sig'imni hisobga olib eng erta mavjud vaqt
+     * slotini topadi — slot occupancy in-memory map orqali (DB so'rovsiz).
      *
-     * Algoritm: ish boshlanishidan boshlab davomiylik qadami bilan boriladi,
-     * tushlik tanaffusi o'tkazib yuboriladi, har slotda
-     * concurrentStudentsForSlot + groupStudentCount <= computer_count
-     * shartini birinchi qondiradigan vaqt qaytariladi. Hech qanday slot
-     * topilmasa null.
+     * $slotMap[date] = [['start_min' => 540, 'count' => 12], ...]  (start
+     * — sutka boshidan daqiqalar). Bitta slot duration daqiqaga teng deb
+     * qaraladi, intervallar oddiy chiziqli kesishish bilan tekshiriladi.
      */
     private function findResitSlot(
         \App\Models\ExamSchedule $schedule,
         string $ynType,
         int $attempt,
         string $dateStr,
-        array $capacity
+        array $capacity,
+        array &$slotMap,
+        array $groupCountMap
     ): ?string {
         $computerCount = (int) $capacity['computer_count'];
         $duration = max(1, (int) $capacity['test_duration_minutes']);
-        $workStart = \Carbon\Carbon::parse($dateStr . ' ' . $capacity['work_hours_start']);
-        $workEnd = \Carbon\Carbon::parse($dateStr . ' ' . $capacity['work_hours_end']);
 
-        $groupCount = ExamCapacityService::groupStudentCount((string) $schedule->group_hemis_id);
+        $parseHm = function (string $hm): int {
+            $p = explode(':', $hm);
+            return ((int) ($p[0] ?? 0)) * 60 + ((int) ($p[1] ?? 0));
+        };
+
+        $workStartMin = $parseHm((string) $capacity['work_hours_start']);
+        $workEndMin = $parseHm((string) $capacity['work_hours_end']);
+        $lunchStartMin = !empty($capacity['lunch_start']) ? $parseHm((string) $capacity['lunch_start']) : null;
+        $lunchEndMin = !empty($capacity['lunch_end']) ? $parseHm((string) $capacity['lunch_end']) : null;
+
+        $groupCount = (int) ($groupCountMap[$schedule->group_hemis_id] ?? 0);
         if ($groupCount === 0) {
-            // Guruhda talaba topilmasa — vaqt belgilashning ma'nosi yo'q,
-            // baribir saveTestTime kabi ish boshlanishini qaytaramiz.
             return $capacity['work_hours_start'];
         }
 
-        $exclude = [
-            'group_hemis_id' => $schedule->group_hemis_id,
-            'subject_id' => $schedule->subject_id,
-            'semester_code' => $schedule->semester_code,
-            'yn_type' => strtolower($ynType),
-            'attempt' => $attempt,
-        ];
+        $existing = $slotMap[$dateStr] ?? [];
 
-        $candidate = $workStart->copy();
-        // Xavfsizlik chegarasi — sekin sonsiz tsikldan qochish uchun.
-        $maxIterations = 200;
-        $i = 0;
-        while ($i++ < $maxIterations && $candidate->copy()->addMinutes($duration)->lte($workEnd)) {
-            $candidateTime = $candidate->format('H:i');
+        $candidateMin = $workStartMin;
+        $iterations = 0;
+        while ($iterations++ < 300 && ($candidateMin + $duration) <= $workEndMin) {
+            $candStart = $candidateMin;
+            $candEnd = $candidateMin + $duration;
 
-            if (ExamCapacityService::overlapsLunch($dateStr, $candidateTime, $duration, $capacity)) {
-                $candidate->addMinutes($duration);
+            // Tushlik bilan kesishishni tekshirish
+            if ($lunchStartMin !== null && $lunchEndMin !== null
+                && $candStart < $lunchEndMin && $candEnd > $lunchStartMin) {
+                $candidateMin += $duration;
                 continue;
             }
 
-            $concurrent = ExamCapacityService::concurrentStudentsForSlot($dateStr, $candidateTime, $exclude);
-            if ($concurrent + $groupCount <= $computerCount) {
-                return $candidateTime;
+            // Mavjud yozuvlar bilan kesishadigan jami sig'im
+            $concurrent = 0;
+            foreach ($existing as $entry) {
+                $eStart = $entry['start_min'];
+                $eEnd = $eStart + $duration;
+                if ($eStart < $candEnd && $eEnd > $candStart) {
+                    $concurrent += $entry['count'];
+                }
             }
 
-            $candidate->addMinutes($duration);
+            if ($concurrent + $groupCount <= $computerCount) {
+                // Topildi — slotMap'ga qo'shamiz, keyingi candidate ko'rsin
+                $slotMap[$dateStr][] = ['start_min' => $candStart, 'count' => $groupCount];
+                $h = intdiv($candStart, 60);
+                $m = $candStart % 60;
+                return sprintf('%02d:%02d', $h, $m);
+            }
+
+            $candidateMin += $duration;
         }
 
         return null;
+    }
+
+    /**
+     * autoTimeAll uchun: berilgan sana oralig'idagi barcha schedule'lardan
+     * (yn_type × attempt) slot bandligini in-memory map'ga yig'adi.
+     * Qaytaradi [date => [['start_min' => 540, 'count' => 12], ...]].
+     */
+    private function buildAutoTimeSlotMap(string $from, string $to, array $groupCountMap): array
+    {
+        $specs = [
+            ['date' => 'oski_date',         'time' => 'oski_time',         'na' => 'oski_na'],
+            ['date' => 'oski_resit_date',   'time' => 'oski_resit_time',   'na' => null],
+            ['date' => 'oski_resit2_date',  'time' => 'oski_resit2_time',  'na' => null],
+            ['date' => 'test_date',         'time' => 'test_time',         'na' => 'test_na'],
+            ['date' => 'test_resit_date',   'time' => 'test_resit_time',   'na' => null],
+            ['date' => 'test_resit2_date',  'time' => 'test_resit2_time',  'na' => null],
+        ];
+
+        $rows = \App\Models\ExamSchedule::query()
+            ->where(function ($q) use ($from, $to, $specs) {
+                foreach ($specs as $s) {
+                    $q->orWhere(function ($qq) use ($from, $to, $s) {
+                        $qq->whereBetween($s['date'], [$from, $to])
+                           ->whereNotNull($s['time']);
+                    });
+                }
+            })
+            ->get();
+
+        $slotMap = [];
+        foreach ($rows as $row) {
+            foreach ($specs as $s) {
+                $d = $row->{$s['date']};
+                $t = $row->{$s['time']};
+                if (empty($d) || empty($t)) continue;
+                if ($s['na'] && !empty($row->{$s['na']})) continue;
+
+                $dateStr = $d instanceof \Carbon\Carbon ? $d->format('Y-m-d') : (string) $d;
+                if ($dateStr < $from || $dateStr > $to) continue;
+
+                $hm = substr((string) $t, 0, 5);
+                $parts = explode(':', $hm);
+                $startMin = ((int) $parts[0]) * 60 + ((int) ($parts[1] ?? 0));
+
+                $count = (int) ($groupCountMap[$row->group_hemis_id] ?? 0);
+                if ($count > 0) {
+                    $slotMap[$dateStr][] = ['start_min' => $startMin, 'count' => $count];
+                }
+            }
+        }
+        return $slotMap;
     }
 
     public function autoTimeAll(Request $request, AutoAssignService $service)
@@ -3979,6 +4042,36 @@ class AcademicScheduleController extends Controller
             return back()->with('warning', "Tanlangan oraliqda vaqt belgilashga muhtoj yozuv topilmadi.");
         }
 
+        // Sig'im tekshiruvini DB so'rovsiz qilish uchun in-memory slotMap
+        // tayyorlash. Sana oralig'idagi BARCHA yozuvlar (asosiy + resit)
+        // hisobga olinadi. Avval har candidate sayin DB so'rov bo'lgani uchun
+        // /auto-time-all 504 timeout berardi.
+        $dateCols = ['oski_date', 'oski_resit_date', 'oski_resit2_date', 'test_date', 'test_resit_date', 'test_resit2_date'];
+        $allRangeGroupIds = \App\Models\ExamSchedule::query()
+            ->where(function ($q) use ($from, $to, $dateCols) {
+                foreach ($dateCols as $col) {
+                    $q->orWhereBetween($col, [$from, $to]);
+                }
+            })
+            ->pluck('group_hemis_id');
+        $allGroupIds = $candidates->pluck('group_hemis_id')
+            ->merge($allRangeGroupIds)
+            ->unique()
+            ->filter()
+            ->values()
+            ->all();
+        $groupCountMap = [];
+        if (!empty($allGroupIds)) {
+            $groupCountMap = DB::table('students')
+                ->whereIn('group_id', $allGroupIds)
+                ->where('student_status_code', 11)
+                ->groupBy('group_id')
+                ->select('group_id', DB::raw('COUNT(*) as cnt'))
+                ->pluck('cnt', 'group_id')
+                ->all();
+        }
+        $slotMap = $this->buildAutoTimeSlotMap($from, $to, $groupCountMap);
+
         $okCount = 0;
         $failures = [];
 
@@ -4007,14 +4100,19 @@ class AcademicScheduleController extends Controller
                         if ($c['distribute']) {
                             // Full slot distribution for the primary attempt.
                             $result = $service->distribute($schedule, $ynType, $startTime);
+                            // distribute() o'zi bir necha slotni ishg'ol qiladi —
+                            // map'ni yangilab keyingi resit candidate to'g'ri ko'rsin.
+                            if (!empty($result['ok']) && !empty($result['slots'])) {
+                                foreach ($result['slots'] as $sl) {
+                                    if (empty($sl['time'])) continue;
+                                    $p = explode(':', substr((string) $sl['time'], 0, 5));
+                                    $sm = ((int) $p[0]) * 60 + ((int) ($p[1] ?? 0));
+                                    $slotMap[$dateStr][] = ['start_min' => $sm, 'count' => (int) ($sl['students'] ?? 0)];
+                                }
+                            }
                         } else {
-                            // Resit: pick the earliest slot that still has
-                            // capacity. Previously this just stamped
-                            // work_hours_start unconditionally, which piled
-                            // every 2-/3-urinish onto 09:00 and overflowed
-                            // the computer count.
                             $assignedTime = $this->findResitSlot(
-                                $schedule, $ynType, $attempt, $dateStr, $capacity
+                                $schedule, $ynType, $attempt, $dateStr, $capacity, $slotMap, $groupCountMap
                             );
                             if ($assignedTime === null) {
                                 $result = ['ok' => false, 'reason' => 'no slot with free capacity in work hours'];
@@ -4022,6 +4120,7 @@ class AcademicScheduleController extends Controller
                                 $schedule->{$c['time']} = $assignedTime;
                                 $schedule->save();
                                 $result = ['ok' => true];
+                                // slotMap allaqachon findResitSlot ichida yangilangan
                             }
                         }
                     } catch (\Throwable $e) {

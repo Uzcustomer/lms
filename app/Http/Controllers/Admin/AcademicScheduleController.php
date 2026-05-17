@@ -4283,6 +4283,44 @@ class AcademicScheduleController extends Controller
      * Past dates are skipped — they represent history, not future plans.
      * Restricted to test_markazi only.
      */
+    /**
+     * Bulk: vaqtlar yakunlangach talabalar Telegram + DB notification.
+     * autoTimeAll xabar yubormaydi (sekin + spam) — yakuniy tasdiqlangach
+     * shu endpoint ataylab chaqiriladi va queued job orqali bajariladi.
+     */
+    public function notifyAllExamTimes(Request $request)
+    {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
+        $user = auth()->user() ?? auth('teacher')->user();
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        $allowedBulkRoles = array_merge(
+            ExamDateRoleService::adminRoles(),
+            [\App\Enums\ProjectRole::TEST_CENTER->value]
+        );
+        if (!in_array($activeRole, $allowedBulkRoles, true)) {
+            return back()->with('error', "Bu amal faqat Test markazi va admin rollari uchun ochiq.");
+        }
+
+        $today = now()->format('Y-m-d');
+        $dateFrom = $request->input('date_from', $today);
+        $dateTo = $request->input('date_to', $today);
+        try {
+            $from = \Carbon\Carbon::parse($dateFrom)->format('Y-m-d');
+            $to = \Carbon\Carbon::parse($dateTo)->format('Y-m-d');
+        } catch (\Throwable $e) {
+            return back()->with('error', "Sana noto'g'ri formatda.");
+        }
+        if ($to < $from) {
+            $to = $from;
+        }
+
+        \App\Jobs\NotifyExamTimesJob::dispatch($from, $to);
+
+        return back()->with('success', "Xabarnomalar yuborish navbatga qo'yildi ({$from} – {$to}). Telegram orqali tarqalishi bir necha daqiqa olishi mumkin.");
+    }
+
     public function clearTimes(Request $request)
     {
         if ($deny = $this->ensureTestCenterAccess()) {

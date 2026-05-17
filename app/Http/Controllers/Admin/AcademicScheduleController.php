@@ -5051,7 +5051,9 @@ class AcademicScheduleController extends Controller
         if ($deny = $this->ensureTestCenterAccess()) {
             return $deny;
         }
-        $totalComputers = (int) ExamCapacityService::getSettings()['computer_count'];
+        $settings = ExamCapacityService::getSettingsForDate($date);
+        $totalComputers = (int) $settings['computer_count'];
+        $dailyCapacity = ExamCapacityService::dailyCapacity($settings);
 
         // Sana validatsiyasi
         try {
@@ -5284,6 +5286,8 @@ class AcademicScheduleController extends Controller
             'date' => $carbonDate,
             'slots' => $slots,
             'totalComputers' => $totalComputers,
+            'settings' => $settings,
+            'dailyCapacity' => $dailyCapacity,
         ]);
     }
 

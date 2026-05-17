@@ -4094,12 +4094,26 @@ class AcademicScheduleController extends Controller
         $failures = [];
 
         // Pass tartibi: avval BARCHA 1-urinishlar (distribute, 60 talabalik
-        // chunklar), so'ng 2-urinish (kichik resit guruhlari shu slotlarning
-        // qolgan joyiga first-fit qilib to'ladi), so'ng 3-urinish. Aks holda
-        // erta resit'lar slot boshini band qilib, 1-urinish guruhlari kech
-        // vaqtlarga ko'chib ketadi va slotlar bo'shashib qoladi.
+        // chunklar), so'ng 2-urinish (best-fit decreasing: katta resit guruhlari
+        // qolgan eng kichik mos joyga, shunda kichiklari kichik joylarga
+        // sig'adi), so'ng 3-urinish. Aks holda kichik guruhlar bo'sh slotlarni
+        // band qiladi va katta resit'larga joy qolmaydi.
+        //
+        // Resit pass'larida candidate'larni kattalikka qarab kamayish tartibida
+        // saralaymiz — first-fit ham FFD (first-fit decreasing) ga aylanadi,
+        // bu klassik bin-packing approximation.
+        $sortedByAttempt = [];
+        foreach ([1, 2, 3] as $att) {
+            $sortedByAttempt[$att] = $candidates;
+        }
+        foreach ([2, 3] as $att) {
+            $sortedByAttempt[$att] = $candidates->sortByDesc(function ($s) use ($groupCountMap) {
+                return (int) ($groupCountMap[$s->group_hemis_id] ?? 0);
+            })->values();
+        }
+
         foreach ([1, 2, 3] as $passAttempt) {
-            foreach ($candidates as $schedule) {
+            foreach ($sortedByAttempt[$passAttempt] as $schedule) {
                 foreach ($columnSets as $ynType => $attempts) {
                     $attempt = $passAttempt;
                     if (!isset($attempts[$attempt])) continue;

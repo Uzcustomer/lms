@@ -58,7 +58,19 @@
                         $hasLunch = $lunchStart && $lunchEnd;
                         $testDuration = (int) ($settings['test_duration_minutes'] ?? 15);
                         $dailyCapacity = (int) ($dailyCapacity ?? 0);
-                        $freeCapacity = max(0, $dailyCapacity - $totalStudents);
+
+                        // "Yana sig'adi" — har bir slotda alohida hisoblanadi:
+                        //  - bandlangan slotlar uchun: max(0, kompyuter - band)
+                        //  - hali bandlanmagan slotlar uchun: to'liq sig'im
+                        //  Sababi: agar bir slot to'lib ketgan bo'lsa, o'sha vaqtda
+                        //  qo'shimcha talaba sig'maydi — kunlik jami sig'imdan
+                        //  oddiy ayirish yolg'on ko'rsatkich beradi.
+                        $dailyMaxSlots = $totalComputers > 0 ? intdiv($dailyCapacity, $totalComputers) : 0;
+                        $unusedSlots = max(0, $dailyMaxSlots - $totalSlots);
+                        $totalOverflow = (int) $scheduledSlots->sum('overflow');
+                        $freeInScheduled = (int) $scheduledSlots->sum('free');
+                        $freeCapacity = $freeInScheduled + ($unusedSlots * $totalComputers);
+
                         $capacityPct = $dailyCapacity > 0 ? min(100, round(($totalStudents / $dailyCapacity) * 100)) : 0;
                         $capacityBarClass = $capacityPct >= 100 ? 'bg-red-500' : ($capacityPct >= 80 ? 'bg-orange-500' : ($capacityPct >= 50 ? 'bg-yellow-500' : 'bg-emerald-500'));
                         $submitPct = $totalStudents > 0 ? round(($totalSubmitted / $totalStudents) * 100) : 0;
@@ -104,7 +116,7 @@
 
                         {{-- Bo'sh sig'im --}}
                         <div class="inline-flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm hover:border-emerald-300 transition"
-                             title="Bugun yana shuncha talabani sig'dirsa bo'ladi">
+                             title="Boshqa vaqt slotlariga yana shuncha talabani sig'dirsa bo'ladi (har slot {{ $totalComputers }} kompyuterdan ortmasligi shartida)">
                             <svg class="w-4 h-4 {{ $freeCapacity > 0 ? 'text-emerald-600' : 'text-red-500' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
                             <div class="flex flex-col leading-tight">
                                 <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Yana sig'adi</span>
@@ -113,6 +125,12 @@
                                     <span class="text-[10px] text-slate-400 font-normal">talaba</span>
                                 </span>
                             </div>
+                            @if($totalOverflow > 0)
+                                <span class="ml-1 inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-red-50 border border-red-200 text-[10px] font-semibold text-red-700"
+                                      title="{{ $overflowSlots }} ta slotda sig'imdan ortiq {{ $totalOverflow }} talaba bor — ularni boshqa vaqtga ko'chirish kerak">
+                                    ⚠ {{ $totalOverflow }} ortiq
+                                </span>
+                            @endif
                         </div>
 
                         {{-- Slotlar --}}

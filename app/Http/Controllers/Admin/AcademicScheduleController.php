@@ -4158,7 +4158,23 @@ class AcademicScheduleController extends Controller
             })->values();
         }
 
+        // DEBUG: candidate tartibini log fayl'ga yozish — vaqtinchalik diagnostika
+        $debugLogPath = storage_path('logs/auto-time-all-' . now()->format('Y-m-d_H-i-s') . '.log');
+        $debugLog = function (string $msg) use ($debugLogPath) {
+            @file_put_contents($debugLogPath, '[' . now()->format('H:i:s.u') . '] ' . $msg . "\n", FILE_APPEND);
+        };
+        $debugLog("=== autoTimeAll BOSHLANDI ({$from} – {$to}) ===");
         foreach ([1, 2, 3] as $passAttempt) {
+            $debugLog("--- Pass {$passAttempt} candidate tartibi ---");
+            foreach ($sortedByAttempt[$passAttempt] as $idx => $s) {
+                $cnt = $this->resolveAttemptStudentCount($s, $passAttempt, $groupCountMap, $attemptNeedsMap);
+                $gname = optional($s->group)->name ?? $s->group_hemis_id;
+                $debugLog(sprintf("  #%03d schedule_id=%d group=%s subject=%s count=%d", $idx, $s->id, $gname, $s->subject_id ?? '?', $cnt));
+            }
+        }
+
+        foreach ([1, 2, 3] as $passAttempt) {
+            $debugLog(">>> Pass {$passAttempt} ishlashga kirishildi");
             foreach ($sortedByAttempt[$passAttempt] as $schedule) {
                 foreach ($columnSets as $ynType => $attempts) {
                     $attempt = $passAttempt;
@@ -4183,6 +4199,9 @@ class AcademicScheduleController extends Controller
                         $capacity = ExamCapacityService::getSettingsForDate($dateStr);
                         $startTime = $capacity['work_hours_start'] ?? '09:00';
 
+                        $debugGroupName = optional($schedule->group)->name ?? $schedule->group_hemis_id;
+                        $debugCount = $this->resolveAttemptStudentCount($schedule, $attempt, $groupCountMap, $attemptNeedsMap);
+
                         if ($c['distribute']) {
                             // distribute() ichida ComputerAssignment count
                             // qiladi — o'sha kungi 1-urinish CA'lari hisoblanadi.
@@ -4191,7 +4210,22 @@ class AcademicScheduleController extends Controller
                             // 1-urinish entry'lari CA'da allaqachon bor —
                             // ikki marta sanab ketmaslik uchun).
                             $extra = $resitSlotMap[$dateStr] ?? [];
+                            // slotMap'dagi joriy holatni qisqacha log qilaymiz
+                            $slotSummary = [];
+                            foreach (($slotMap[$dateStr] ?? []) as $e) {
+                                $h = intdiv($e['start_min'], 60);
+                                $m = $e['start_min'] % 60;
+                                $key = sprintf('%02d:%02d', $h, $m);
+                                $slotSummary[$key] = ($slotSummary[$key] ?? 0) + $e['count'];
+                            }
+                            ksort($slotSummary);
+                            $debugLog(sprintf("  distribute(%s %s, sched_id=%d, group=%s, count=%d) slot holati: %s",
+                                $ynType, $attempt, $schedule->id, $debugGroupName, $debugCount,
+                                json_encode($slotSummary, JSON_UNESCAPED_UNICODE)));
                             $result = $service->distribute($schedule, $ynType, $startTime, $extra);
+                            $debugLog(sprintf("    -> result: %s, slots: %s",
+                                $result['ok'] ? 'OK' : ('FAIL ' . ($result['reason'] ?? '')),
+                                json_encode($result['slots'] ?? [], JSON_UNESCAPED_UNICODE)));
                             // distribute() natijasini slotMap'ga qo'shamiz —
                             // keyingi pass'lar (resit) shu 1-urinish blokini
                             // ko'rsin.
@@ -4204,10 +4238,22 @@ class AcademicScheduleController extends Controller
                                 }
                             }
                         } else {
+                            $slotSummary = [];
+                            foreach (($slotMap[$dateStr] ?? []) as $e) {
+                                $h = intdiv($e['start_min'], 60);
+                                $m = $e['start_min'] % 60;
+                                $key = sprintf('%02d:%02d', $h, $m);
+                                $slotSummary[$key] = ($slotSummary[$key] ?? 0) + $e['count'];
+                            }
+                            ksort($slotSummary);
+                            $debugLog(sprintf("  resit(%s %s, sched_id=%d, group=%s, count=%d) slot holati: %s",
+                                $ynType, $attempt, $schedule->id, $debugGroupName, $debugCount,
+                                json_encode($slotSummary, JSON_UNESCAPED_UNICODE)));
                             $assignedTime = $this->findResitSlot(
                                 $schedule, $ynType, $attempt, $dateStr, $capacity,
                                 $slotMap, $groupCountMap, $attemptNeedsMap
                             );
+                            $debugLog(sprintf("    -> resit assigned: %s", $assignedTime ?? 'NULL'));
                             if ($assignedTime === null) {
                                 $result = ['ok' => false, 'reason' => 'no slot with free capacity in work hours'];
                             } else {
@@ -4262,7 +4308,8 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        $msg = "Avto-vaqt belgilandi: {$okCount} ta. Talabalarga xabar yuborilmadi — vaqtlarni yakuniylashtirgach, alohida bildirgi yuboring.";
+        $debugLog("=== TAMOM. ok={$okCount}, fail=" . count($failures) . " ===");
+        $msg = "Avto-vaqt belgilandi: {$okCount} ta. Talabalarga xabar yuborilmadi — vaqtlarni yakuniylashtirgach, alohida bildirgi yuboring. Diagnostika fayli: " . basename($debugLogPath);
         if (!empty($failures)) {
             $shown = array_slice($failures, 0, 5);
             $more = count($failures) - count($shown);

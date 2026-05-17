@@ -346,7 +346,7 @@
                                             <option value="red" data-color="#dc2626">Yuborilmagan</option>
                                         </select>
                                     </th>
-                                    <th></th>
+                                    <th><select class="col-filter" data-col="13"><option value="">Barchasi</option></select></th>
                                     <th>
                                         <select class="col-filter color-filter" data-col="14" data-filter-type="color">
                                             <option value="">Barchasi</option>
@@ -421,7 +421,7 @@
                                                     <span class="yn-submitted-no">Yuborilmagan</span>
                                                 @endif
                                             </td>
-                                            <td style="text-align:center;padding:4px 6px;">
+                                            <td style="text-align:center;padding:4px 6px;" data-sort-value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : 'Belgilanmagan' }}">
                                                 @php
                                                     // Test markazi roli: faqat kelajakdagi (>= ertaga) sanalarda vaqtni o'zgartirish mumkin.
                                                     $tcRowDateStr = ($item['yn_date_carbon'] ?? null)?->format('Y-m-d');

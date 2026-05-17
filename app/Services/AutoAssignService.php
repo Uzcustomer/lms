@@ -90,6 +90,15 @@ class AutoAssignService
         }
 
         $slotCapacity = $this->primaryComputerCount();
+        // Sozlamalardagi computer_count har slotda nechta talaba bo'lishi
+        // mumkinligini cheklaydi. Computer jadvalida ko'proq aktiv qator
+        // bo'lsa ham (masalan 62), bandlik UI 60/60 deb ko'rsatadi va admin
+        // 60 dan ortig'ini ko'rishni istamaydi. Shu sabab ikkalasining
+        // kichigini olamiz.
+        $configCap = (int) ($capacity['computer_count'] ?? 0);
+        if ($configCap > 0) {
+            $slotCapacity = min($slotCapacity, $configCap);
+        }
         if ($slotCapacity < 1) {
             return ['ok' => false, 'skipped' => true, 'reason' => 'no primary computers configured'];
         }

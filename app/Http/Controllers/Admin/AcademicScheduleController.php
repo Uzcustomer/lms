@@ -1659,8 +1659,26 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        $transformedData = $transformedData->map(function ($item) use ($studentCounts, $quizCounts, $ynSubmissions) {
-            $item['student_count'] = $studentCounts[$item['group']->group_hemis_id] ?? 0;
+        // 2- va 3-urinishlar uchun haqiqiy qayta topshiruvchi talabalar soni
+        // (butun guruh emas). 1-urinish uchun butun guruh hisoblanadi.
+        $attemptNeedsMap = $this->computeAttemptNeedsMap()['needs'];
+
+        $transformedData = $transformedData->map(function ($item) use ($studentCounts, $quizCounts, $ynSubmissions, $attemptNeedsMap) {
+            $attempt = (int) ($item['attempt'] ?? 1);
+            $groupHid = $item['group']->group_hemis_id;
+            $subjectId = $item['subject']->subject_id ?? '';
+            $semCode = $item['subject']->semester_code ?? '';
+
+            if ($attempt === 1) {
+                $item['student_count'] = $studentCounts[$groupHid] ?? 0;
+            } elseif (isset($item['students']) && is_array($item['students'])) {
+                // show_students yoqilganda har attempt uchun filtrlangan ro'yxat mavjud
+                $item['student_count'] = count($item['students']);
+            } else {
+                $needsKey = $groupHid . '|' . $subjectId . '|' . $semCode . '|' . $attempt;
+                $item['student_count'] = (int) ($attemptNeedsMap[$needsKey] ?? 0);
+            }
+
             $quizKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['yn_type'] ?? '');
             $item['quiz_count'] = $quizCounts[$quizKey] ?? 0;
             $ynKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['subject']->semester_code ?? '');
@@ -5303,6 +5321,99 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * Har bir guruh+fan+semestr uchun N-urinishda imtihon topshirishi kerak
+     * bo'lgan talabalar sonini hisoblaydi (2- va 3-urinishlar uchun).
+     *
+     * Manbalar:
+     *  - student_grades: oldingi urinishda V<60 olganlar
+     *  - student_grades.attempt=N: aniq qo'lda N-urinishga o'tkazilganlar
+     *  - yn_submissions.attempt=N: qog'oz ariza (12a/12b)
+     *
+     * Kalit format: "group_hemis_id|subject_id|semester_code|attempt"
+     *
+     * @return array{needs: array<string,int>, exists: array<string,int>}
+     */
+    private function computeAttemptNeedsMap(): array
+    {
+        $needsByKey = [];
+        $attemptExistsByKey = [];
+        try {
+            $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+
+            foreach ([2, 3] as $att) {
+                $check = $att === 2 ? 1 : 2;
+                $rows = DB::table('student_grades as sg')
+                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                    ->whereNull('sg.deleted_at')
+                    ->whereIn('sg.training_type_code', [101, 102])
+                    ->where(function ($q) {
+                        $q->where(function ($qq) {
+                            $qq->whereNotNull('sg.retake_grade')->where('sg.retake_grade', '<', 60);
+                        })->orWhere(function ($qq) {
+                            $qq->whereNull('sg.retake_grade')
+                               ->whereNotNull('sg.grade')
+                               ->where('sg.grade', '<', 60);
+                        });
+                    })
+                    ->when($hasAttemptCol, function ($q) use ($check) {
+                        $q->where(function ($qq) use ($check) {
+                            if ($check === 1) {
+                                $qq->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                            } else {
+                                $qq->where('sg.attempt', $check);
+                            }
+                        });
+                    })
+                    ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', DB::raw('COUNT(DISTINCT sg.student_hemis_id) as c'))
+                    ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
+                    ->get();
+                foreach ($rows as $r) {
+                    $needsByKey[$r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att] = (int) $r->c;
+                }
+            }
+
+            if ($hasAttemptCol) {
+                foreach ([2, 3] as $att) {
+                    $rows = DB::table('student_grades as sg')
+                        ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                        ->whereNull('sg.deleted_at')
+                        ->whereIn('sg.training_type_code', [101, 102])
+                        ->where('sg.attempt', $att)
+                        ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', DB::raw('COUNT(DISTINCT sg.student_hemis_id) as c'))
+                        ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
+                        ->get();
+                    foreach ($rows as $r) {
+                        $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att;
+                        $needsByKey[$key] = max($needsByKey[$key] ?? 0, (int) $r->c);
+                        $attemptExistsByKey[$key] = (int) $r->c;
+                    }
+                }
+            }
+
+            if (\Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt')) {
+                foreach ([2, 3] as $att) {
+                    $rows = DB::table('yn_submissions as yns')
+                        ->where('yns.attempt', $att)
+                        ->select('yns.group_hemis_id as group_id', 'yns.subject_id', 'yns.semester_code', DB::raw('1 as c'))
+                        ->groupBy('yns.group_hemis_id', 'yns.subject_id', 'yns.semester_code')
+                        ->get();
+                    foreach ($rows as $r) {
+                        $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att;
+                        if (!isset($needsByKey[$key])) {
+                            $needsByKey[$key] = 1;
+                        }
+                        $attemptExistsByKey[$key] = $attemptExistsByKey[$key] ?? 1;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('computeAttemptNeedsMap failed: ' . $e->getMessage());
+        }
+
+        return ['needs' => $needsByKey, 'exists' => $attemptExistsByKey];
+    }
+
+    /**
      * Har bir guruh+fan yozuvini urinishlar (1/2/3) bo'yicha alohida virtual
      * qatorlarga ajratish.
      *  - 1-urinish — har doim ko'rinadi
@@ -5331,90 +5442,9 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        // Talabalar qaysi urinishda V<60 bo'lib qolganligini aniqlash.
-        // Strict mantiq: faqat haqiqiy bahosi mavjud bo'lib, lekin <60 bo'lgan yozuvlar.
-        // Null/null yozuvlar (NB placeholderlar) inobatga olinmaydi.
-        // Guruh bo'yicha alohida filterlanadi (chunki har item alohida guruh).
-        $needsByKey = [];
-        $attemptExistsByKey = []; // Aniq signal: attempt=N yozuv mavjud (qo'lda 12a/12b ga o'tkazilgan)
-        try {
-            $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
-
-            foreach ([2, 3] as $att) {
-                $check = $att === 2 ? 1 : 2; // attempt=N kerakmi → attempt=(N-1) dagi V<60
-                $rows = DB::table('student_grades as sg')
-                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                    ->whereNull('sg.deleted_at')
-                    ->whereIn('sg.training_type_code', [101, 102])
-                    ->where(function ($q) {
-                        // Haqiqiy baho mavjud bo'lib, <60 bo'lsa
-                        $q->where(function ($qq) {
-                            $qq->whereNotNull('sg.retake_grade')->where('sg.retake_grade', '<', 60);
-                        })->orWhere(function ($qq) {
-                            $qq->whereNull('sg.retake_grade')
-                               ->whereNotNull('sg.grade')
-                               ->where('sg.grade', '<', 60);
-                        });
-                    })
-                    ->when($hasAttemptCol, function ($q) use ($check) {
-                        $q->where(function ($qq) use ($check) {
-                            if ($check === 1) {
-                                $qq->where('sg.attempt', 1)->orWhereNull('sg.attempt');
-                            } else {
-                                $qq->where('sg.attempt', $check);
-                            }
-                        });
-                    })
-                    ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', DB::raw('COUNT(DISTINCT sg.student_hemis_id) as c'))
-                    ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
-                    ->get();
-                foreach ($rows as $r) {
-                    $needsByKey[$r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att] = (int) $r->c;
-                }
-            }
-
-            // Qo'shimcha aniq signal: agar talaba allaqachon attempt=N (yoki katta)
-            // yozuviga ega bo'lsa (qo'lda 12a/12b ga o'tkazilgan, OSKI/Test bahosi NULL bo'lsa ham),
-            // baho<60 so'rovi uni topmaydi. Shuning uchun attempt=N mavjudligini ham
-            // alohida saqlab, suppress qilmaslik uchun ishlatamiz.
-            if ($hasAttemptCol) {
-                foreach ([2, 3] as $att) {
-                    $rows = DB::table('student_grades as sg')
-                        ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                        ->whereNull('sg.deleted_at')
-                        ->whereIn('sg.training_type_code', [101, 102])
-                        ->where('sg.attempt', $att)
-                        ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', DB::raw('COUNT(DISTINCT sg.student_hemis_id) as c'))
-                        ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
-                        ->get();
-                    foreach ($rows as $r) {
-                        $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att;
-                        $needsByKey[$key] = max($needsByKey[$key] ?? 0, (int) $r->c);
-                        $attemptExistsByKey[$key] = (int) $r->c;
-                    }
-                }
-            }
-
-            // yn_submissions.attempt — agar talaba 12a/12b shakliga o'tkazilgan bo'lsa
-            if (\Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt')) {
-                foreach ([2, 3] as $att) {
-                    $rows = DB::table('yn_submissions as yns')
-                        ->where('yns.attempt', $att)
-                        ->select('yns.group_hemis_id as group_id', 'yns.subject_id', 'yns.semester_code', DB::raw('1 as c'))
-                        ->groupBy('yns.group_hemis_id', 'yns.subject_id', 'yns.semester_code')
-                        ->get();
-                    foreach ($rows as $r) {
-                        $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att;
-                        if (!isset($needsByKey[$key])) {
-                            $needsByKey[$key] = 1;
-                        }
-                        $attemptExistsByKey[$key] = $attemptExistsByKey[$key] ?? 1;
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            \Log::warning('expandByUrinish needs check failed: ' . $e->getMessage());
-        }
+        $maps = $this->computeAttemptNeedsMap();
+        $needsByKey = $maps['needs'];
+        $attemptExistsByKey = $maps['exists'];
 
         return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey, $attemptExistsByKey, $groupSizes) {
             $expanded = collect();

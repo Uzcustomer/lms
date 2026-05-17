@@ -495,6 +495,12 @@
                                                             default => 'bg-slate-100 text-slate-700',
                                                         };
                                                     @endphp
+                                                    {{-- Group-level qator 0 talabani ifoda etayotgan bo'lsa
+                                                         (per-student qatorlar barchasini qoplagan), ko'rsatmaymiz —
+                                                         keraksiz "Qoldi: 0" satrlar bilan UI'ni shovqinlamaymiz. --}}
+                                                    @if($grpCnt === 0 && empty($grp['student_hemis_id']))
+                                                        @continue
+                                                    @endif
                                                     <div class="inline-flex items-center gap-2 px-2 py-1 rounded bg-gray-50 border border-gray-200">
                                                         <span class="inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-indigo-600 text-white text-[10px] font-bold" title="Guruhdagi jami talabalar">
                                                             {{ $grpCnt }}

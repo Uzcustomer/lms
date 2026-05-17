@@ -1635,23 +1635,33 @@ class AcademicScheduleController extends Controller
         $quizCounts = [];
         if (!empty($groupHemisIds) && !empty($subjectIds)) {
             try {
+                // Urinish (shakl) bo'yicha alohida hisoblash: "2-urinish" /
+                // "3-urinish" qatorlari shu urinishda topshirgan talabalarni
+                // ko'rsatsin. shakl null/bo'sh bo'lsa — 1-urinish hisoblanadi.
                 $quizRows = DB::table('hemis_quiz_results as hqr')
                     ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
                     ->whereIn('st.group_id', $groupHemisIds)
                     ->whereIn('hqr.fan_id', $subjectIds)
                     ->where('hqr.is_active', 1)
-                    ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
-                    ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
+                    ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', 'hqr.shakl')
+                    ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', 'hqr.shakl', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
                     ->get();
 
                 foreach ($quizRows as $row) {
                     if (in_array($row->quiz_type, $testTypes)) {
-                        $key = $row->group_id . '|' . $row->fan_id . '|Test';
+                        $ynType = 'Test';
                     } elseif (in_array($row->quiz_type, $oskiTypes)) {
-                        $key = $row->group_id . '|' . $row->fan_id . '|OSKI';
+                        $ynType = 'OSKI';
                     } else {
                         continue;
                     }
+                    $shakl = strtolower(trim((string) ($row->shakl ?? '')));
+                    $att = match ($shakl) {
+                        '2-urinish' => 2,
+                        '3-urinish' => 3,
+                        default => 1,
+                    };
+                    $key = $row->group_id . '|' . $row->fan_id . '|' . $ynType . '|' . $att;
                     $quizCounts[$key] = ($quizCounts[$key] ?? 0) + $row->cnt;
                 }
             } catch (\Throwable $e) {
@@ -1679,7 +1689,7 @@ class AcademicScheduleController extends Controller
                 $item['student_count'] = (int) ($attemptNeedsMap[$needsKey] ?? 0);
             }
 
-            $quizKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['yn_type'] ?? '');
+            $quizKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['yn_type'] ?? '') . '|' . $attempt;
             $item['quiz_count'] = $quizCounts[$quizKey] ?? 0;
             $ynKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '') . '|' . ($item['subject']->semester_code ?? '');
             $item['yn_submitted'] = isset($ynSubmissions[$ynKey]);
@@ -2005,7 +2015,7 @@ class AcademicScheduleController extends Controller
             ->select('group_id', DB::raw('COUNT(*) as cnt'))
             ->pluck('cnt', 'group_id');
 
-        // Quiz natijalar soni
+        // Quiz natijalar soni — urinish (shakl) bo'yicha alohida
         $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
 
@@ -2017,18 +2027,25 @@ class AcademicScheduleController extends Controller
                     ->whereIn('st.group_id', $groupHemisIds)
                     ->whereIn('hqr.fan_id', $subjectIds)
                     ->where('hqr.is_active', 1)
-                    ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type')
-                    ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
+                    ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', 'hqr.shakl')
+                    ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', 'hqr.shakl', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
                     ->get();
 
                 foreach ($quizRows as $row) {
                     if (in_array($row->quiz_type, $testTypes)) {
-                        $key = $row->group_id . '|' . $row->fan_id . '|Test';
+                        $ynType = 'Test';
                     } elseif (in_array($row->quiz_type, $oskiTypes)) {
-                        $key = $row->group_id . '|' . $row->fan_id . '|OSKI';
+                        $ynType = 'OSKI';
                     } else {
                         continue;
                     }
+                    $shakl = strtolower(trim((string) ($row->shakl ?? '')));
+                    $att = match ($shakl) {
+                        '2-urinish' => 2,
+                        '3-urinish' => 3,
+                        default => 1,
+                    };
+                    $key = $row->group_id . '|' . $row->fan_id . '|' . $ynType . '|' . $att;
                     $quizCounts[$key] = ($quizCounts[$key] ?? 0) + $row->cnt;
                 }
             } catch (\Throwable $e) {
@@ -2036,15 +2053,37 @@ class AcademicScheduleController extends Controller
             }
         }
 
+        // 2-/3-urinishlar uchun haqiqiy qayta topshiruvchi talabalar
+        $attemptNeedsMap = $this->computeAttemptNeedsMap()['needs'];
+
         $result = [];
         foreach ($items as $item) {
-            $key = $item['group_id'] . '|' . $item['subject_id'] . '|' . $item['yn_type'];
-            $sc = $studentCounts[$item['group_id']] ?? 0;
+            $attempt = (int) ($item['attempt'] ?? 1);
+            $gid = $item['group_id'];
+            $sid = $item['subject_id'];
+            $yn = $item['yn_type'];
+            $key = $gid . '|' . $sid . '|' . $yn . '|' . $attempt;
             $qc = $quizCounts[$key] ?? 0;
+            if ($attempt === 1) {
+                $sc = $studentCounts[$gid] ?? 0;
+            } else {
+                // semester_code refreshQuizCounts requestida kelmaydi —
+                // shuning uchun needsMap'dan shu group+subject uchun
+                // mavjud bo'lgan eng yuqori qiymatni olamiz (bir guruh+fan
+                // odatda bitta semestrga tegishli).
+                $sc = 0;
+                $prefix = $gid . '|' . $sid . '|';
+                foreach ($attemptNeedsMap as $k => $v) {
+                    if (str_starts_with($k, $prefix) && str_ends_with($k, '|' . $attempt)) {
+                        $sc = max($sc, (int) $v);
+                    }
+                }
+            }
             $result[] = [
-                'group_id' => $item['group_id'],
-                'subject_id' => $item['subject_id'],
-                'yn_type' => $item['yn_type'],
+                'group_id' => $gid,
+                'subject_id' => $sid,
+                'yn_type' => $yn,
+                'attempt' => $attempt,
                 'student_count' => $sc,
                 'quiz_count' => $qc,
             ];

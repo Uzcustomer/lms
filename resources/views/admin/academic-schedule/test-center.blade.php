@@ -1103,17 +1103,18 @@
             icon.classList.add('spinning');
             label.textContent = 'Yangilanmoqda...';
 
-            // Collect unique group+subject+yn_type combinations
+            // Collect unique group+subject+yn_type+attempt combinations
             var seen = {};
             var items = [];
             rows.forEach(function(row) {
                 var gid = row.getAttribute('data-group-id');
                 var sid = row.getAttribute('data-subject-id');
                 var yn = row.getAttribute('data-yn-type');
-                var key = gid + '|' + sid + '|' + yn;
+                var att = parseInt(row.getAttribute('data-attempt') || '1', 10);
+                var key = gid + '|' + sid + '|' + yn + '|' + att;
                 if (!seen[key]) {
                     seen[key] = true;
-                    items.push({ group_id: gid, subject_id: sid, yn_type: yn });
+                    items.push({ group_id: gid, subject_id: sid, yn_type: yn, attempt: att });
                 }
             });
 
@@ -1127,12 +1128,13 @@
                     // Build lookup
                     var lookup = {};
                     (data.counts || []).forEach(function(c) {
-                        lookup[c.group_id + '|' + c.subject_id + '|' + c.yn_type] = c;
+                        lookup[c.group_id + '|' + c.subject_id + '|' + c.yn_type + '|' + c.attempt] = c;
                     });
 
                     // Update each row
                     rows.forEach(function(row) {
-                        var key = row.getAttribute('data-group-id') + '|' + row.getAttribute('data-subject-id') + '|' + row.getAttribute('data-yn-type');
+                        var att = parseInt(row.getAttribute('data-attempt') || '1', 10);
+                        var key = row.getAttribute('data-group-id') + '|' + row.getAttribute('data-subject-id') + '|' + row.getAttribute('data-yn-type') + '|' + att;
                         var info = lookup[key];
                         if (!info) return;
 

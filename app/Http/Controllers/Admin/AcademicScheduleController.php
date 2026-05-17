@@ -3836,14 +3836,11 @@ class AcademicScheduleController extends Controller
      * Restricted to the test_markazi role only.
      */
     /**
-     * Resit yozuvi uchun sig'imni hisobga olib eng kam BAND mavjud vaqt
-     * slotini topadi — slot occupancy in-memory map orqali (DB so'rovsiz).
-     *
-     * Avval "birinchi mos slot" (first-fit) ishlatardi — natijada ertangi
-     * slotlar to'lib ketib, kech vaqtlar bo'sh qolardi. Endi "eng kam
-     * to'ldirilgan slot" (best-balance) ishlatiladi: barcha to'g'ri slotlar
-     * orasidan hozir EN KAM band bo'lganini tanlaydi. Tenglik bo'lsa
-     * ertaroq vaqtga ustunlik beriladi.
+     * Resit yozuvi uchun sig'imni hisobga olib eng erta MOS slotni topadi
+     * (first-fit). Resit guruhlari odatda kichik (1-2 talaba), shu sabab
+     * first-fit ularni 1-urinish to'liq to'ldirmagan slotlarga ketma-ket
+     * to'ldirib boradi (masalan, 09:00 da 58/60 bo'lsa, 1 talabali resit
+     * shu yerga tushadi va slot 60 ga to'ladi).
      *
      * $slotMap[date] = [['start_min' => 540, 'count' => 12], ...]
      */
@@ -3876,8 +3873,6 @@ class AcademicScheduleController extends Controller
 
         $existing = $slotMap[$dateStr] ?? [];
 
-        $bestSlot = null;
-        $bestOccupancy = null;
         $candidateMin = $workStartMin;
         $iterations = 0;
         while ($iterations++ < 300 && ($candidateMin + $duration) <= $workEndMin) {
@@ -3901,25 +3896,18 @@ class AcademicScheduleController extends Controller
                 }
             }
 
+            // First-fit: birinchi mos slotda joylashtir
             if ($concurrent + $groupCount <= $computerCount) {
-                // Eng kam band slotni tanlash (load balancing).
-                if ($bestOccupancy === null || $concurrent < $bestOccupancy) {
-                    $bestOccupancy = $concurrent;
-                    $bestSlot = $candStart;
-                }
+                $slotMap[$dateStr][] = ['start_min' => $candStart, 'count' => $groupCount];
+                $h = intdiv($candStart, 60);
+                $m = $candStart % 60;
+                return sprintf('%02d:%02d', $h, $m);
             }
 
             $candidateMin += $duration;
         }
 
-        if ($bestSlot === null) {
-            return null;
-        }
-
-        $slotMap[$dateStr][] = ['start_min' => $bestSlot, 'count' => $groupCount];
-        $h = intdiv($bestSlot, 60);
-        $m = $bestSlot % 60;
-        return sprintf('%02d:%02d', $h, $m);
+        return null;
     }
 
     /**
@@ -4088,9 +4076,17 @@ class AcademicScheduleController extends Controller
         $okCount = 0;
         $failures = [];
 
-        foreach ($candidates as $schedule) {
-            foreach ($columnSets as $ynType => $attempts) {
-                foreach ($attempts as $attempt => $c) {
+        // Pass tartibi: avval BARCHA 1-urinishlar (distribute, 60 talabalik
+        // chunklar), so'ng 2-urinish (kichik resit guruhlari shu slotlarning
+        // qolgan joyiga first-fit qilib to'ladi), so'ng 3-urinish. Aks holda
+        // erta resit'lar slot boshini band qilib, 1-urinish guruhlari kech
+        // vaqtlarga ko'chib ketadi va slotlar bo'shashib qoladi.
+        foreach ([1, 2, 3] as $passAttempt) {
+            foreach ($candidates as $schedule) {
+                foreach ($columnSets as $ynType => $attempts) {
+                    $attempt = $passAttempt;
+                    if (!isset($attempts[$attempt])) continue;
+                    $c = $attempts[$attempt];
                     $dateVal = $schedule->{$c['date']};
                     if (empty($dateVal) || !empty($schedule->{$c['time']})) {
                         continue;

@@ -137,6 +137,10 @@
                     $tcUser = auth()->user() ?? auth('teacher')->user();
                     $tcActiveRole = $tcUser ? session('active_role', $tcUser->getRoleNames()->first()) : null;
                     $tcIsTestMarkazi = $tcActiveRole === \App\Enums\ProjectRole::TEST_CENTER->value;
+                    $tcIsAdmin = in_array($tcActiveRole, \App\Services\ExamDateRoleService::adminRoles(), true);
+                    // Bulk vaqt sozlamalari (Vaqtlarni tozalash / Auto vaqt belgilash) —
+                    // Test markazi xodimi va adminlar uchun ochiq.
+                    $tcCanBulkTimes = $tcIsTestMarkazi || $tcIsAdmin;
                     // Admin sozlamalaridagi "Test markazi → Bugungi imtihonni o'zgartirish"
                     // toggle'i yoqilgan bo'lsa, test markazi bugungi sanaga ham vaqtni
                     // o'zgartira oladi (o'tgan sanalar baribir bloklangan).
@@ -187,7 +191,7 @@
                     </div>
                 @endif
 
-                @if($tcIsTestMarkazi && ($tcMissingTimeCount > 0 || $tcWithTimeCount > 0))
+                @if($tcCanBulkTimes && ($tcMissingTimeCount > 0 || $tcWithTimeCount > 0))
                     <div style="margin:0 16px 12px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
                         <svg style="width:18px;height:18px;color:#d97706;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>

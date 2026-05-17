@@ -4223,14 +4223,15 @@ class AcademicScheduleController extends Controller
         // Resit pass'larida candidate'larni kattalikka qarab kamayish tartibida
         // saralaymiz — first-fit ham FFD (first-fit decreasing) ga aylanadi,
         // bu klassik bin-packing approximation.
+        // FFD (First-Fit Decreasing) — har attempt uchun candidate'lar haqiqiy
+        // talaba soni bo'yicha kamayish tartibida saralanadi. 1-urinishda
+        // guruh ATOMIK joylashtirilgani uchun (bo'linmaydi), katta guruhlar
+        // avval ketishi bilan slotlar tahlikali fragmentlangan bo'shliqlar
+        // qoldirmaydi. 2-/3-urinishda esa katta resit'lar avval, kichik
+        // resit'lar oxirida — natijada kichiklari qolgan kichik bo'shliqlarga
+        // ehtiyot qilib joylashadi.
         $sortedByAttempt = [];
         foreach ([1, 2, 3] as $att) {
-            $sortedByAttempt[$att] = $candidates;
-        }
-        foreach ([2, 3] as $att) {
-            // Resit qatorlarini ASL talaba soni (qayta topshiruvchilar) bo'yicha
-            // saralaymiz, butun guruh emas. Aks holda 1 talabali resit 15 talabali
-            // deb saralanib, kichik bo'shliqlar bo'sh qoladi.
             $sortedByAttempt[$att] = $candidates->sortByDesc(function ($s) use ($att, $groupCountMap, $attemptNeedsMap) {
                 return $this->resolveAttemptStudentCount($s, $att, $groupCountMap, $attemptNeedsMap);
             })->values();

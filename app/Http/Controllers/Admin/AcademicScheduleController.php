@@ -4320,25 +4320,9 @@ class AcademicScheduleController extends Controller
             })->values();
         }
 
-        // DEBUG: candidate tartibini log fayl'ga yozish — vaqtinchalik diagnostika
-        $debugLogPath = storage_path('logs/auto-time-all-' . now()->format('Y-m-d_H-i-s') . '.log');
-        $debugLog = function (string $msg) use ($debugLogPath) {
-            @file_put_contents($debugLogPath, '[' . now()->format('H:i:s.u') . '] ' . $msg . "\n", FILE_APPEND);
-        };
-        $debugLog("=== autoTimeAll BOSHLANDI ({$from} – {$to}) ===");
-        foreach ([1, 2, 3] as $passAttempt) {
-            $debugLog("--- Pass {$passAttempt} candidate tartibi ---");
-            foreach ($sortedByAttempt[$passAttempt] as $idx => $s) {
-                $cnt = $this->resolveAttemptStudentCount($s, $passAttempt, $groupCountMap, $attemptNeedsMap);
-                $gname = optional($s->group)->name ?? $s->group_hemis_id;
-                $debugLog(sprintf("  #%03d schedule_id=%d group=%s subject=%s count=%d", $idx, $s->id, $gname, $s->subject_id ?? '?', $cnt));
-            }
-        }
-
         // === Pass 1 — 1-urinish: per-schedule distribute ===
         // 1-urinishda odatda bir guruh+fan uchun bitta group-level qator
         // bo'ladi. distribute() butun guruhni atomik joylashtiradi.
-        $debugLog(">>> Pass 1 ishlashga kirishildi");
         foreach ($sortedByAttempt[1] as $schedule) {
             foreach ($columnSets as $ynType => $attempts) {
                 $c = $attempts[1] ?? null;
@@ -4357,10 +4341,6 @@ class AcademicScheduleController extends Controller
 
                     $extra = $resitSlotMap[$dateStr] ?? [];
                     $result = $service->distribute($schedule, $ynType, $startTime, $extra);
-                    $debugLog(sprintf("  distribute(%s 1, sched_id=%d) -> %s, slots: %s",
-                        $ynType, $schedule->id,
-                        $result['ok'] ? 'OK' : ('FAIL ' . ($result['reason'] ?? '')),
-                        json_encode($result['slots'] ?? [], JSON_UNESCAPED_UNICODE)));
                     if (!empty($result['ok']) && !empty($result['slots'])) {
                         foreach ($result['slots'] as $sl) {
                             if (empty($sl['time'])) continue;
@@ -4393,7 +4373,6 @@ class AcademicScheduleController extends Controller
         // bilan bir xil sanada bo'lsa — birga bir slotga tushadi. Boshqa
         // sanali per-student'lar alohida bucket bo'ladi.
         foreach ([2, 3] as $passAttempt) {
-            $debugLog(">>> Pass {$passAttempt} (resit) bucket'larga ajratilmoqda");
             foreach ($columnSets as $ynType => $attempts) {
                 $c = $attempts[$passAttempt] ?? null;
                 if (!$c) continue;
@@ -4482,11 +4461,6 @@ class AcademicScheduleController extends Controller
                         $assignedTime = $this->findSlotForCount(
                             $b['count'], $b['date'], $capacity, $slotMap
                         );
-                        $debugLog(sprintf("  bucket(%s %d, group=%s, subj=%s, date=%s, count=%d, rows=%d) -> %s",
-                            $ynType, $passAttempt,
-                            optional($b['schedules'][0]->group)->name ?? $b['group_hemis_id'],
-                            $b['subject_id'], $b['date'], $b['count'], count($b['schedules']),
-                            $assignedTime ?? 'NULL'));
 
                         if ($assignedTime === null) {
                             foreach ($b['schedules'] as $s) {
@@ -4524,8 +4498,7 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        $debugLog("=== TAMOM. ok={$okCount}, fail=" . count($failures) . " ===");
-        $msg = "Avto-vaqt belgilandi: {$okCount} ta. Talabalarga xabar yuborilmadi — vaqtlarni yakuniylashtirgach, alohida bildirgi yuboring. Diagnostika fayli: " . basename($debugLogPath);
+        $msg = "Avto-vaqt belgilandi: {$okCount} ta. Talabalarga xabar yuborilmadi — vaqtlarni yakuniylashtirgach, alohida bildirgi yuboring.";
         if (!empty($failures)) {
             $shown = array_slice($failures, 0, 5);
             $more = count($failures) - count($shown);

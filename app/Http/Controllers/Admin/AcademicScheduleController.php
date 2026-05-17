@@ -3971,6 +3971,69 @@ class AcademicScheduleController extends Controller
      * Restricted to the test_markazi role only.
      */
     /**
+     * Berilgan count uchun sig'imli birinchi slotni topadi (first-fit).
+     * findResitSlot ning ichki yadrosi — bucket-asosli joylashtirish uchun
+     * ajratilgan. slotMap'ga yangi yozuvni qo'shadi.
+     */
+    private function findSlotForCount(
+        int $count,
+        string $dateStr,
+        array $capacity,
+        array &$slotMap
+    ): ?string {
+        if ($count <= 0) {
+            return $capacity['work_hours_start'] ?? '09:00';
+        }
+        $computerCount = (int) $capacity['computer_count'];
+        $duration = max(1, (int) $capacity['test_duration_minutes']);
+
+        $parseHm = function (string $hm): int {
+            $p = explode(':', $hm);
+            return ((int) ($p[0] ?? 0)) * 60 + ((int) ($p[1] ?? 0));
+        };
+
+        $workStartMin = $parseHm((string) $capacity['work_hours_start']);
+        $workEndMin = $parseHm((string) $capacity['work_hours_end']);
+        $lunchStartMin = !empty($capacity['lunch_start']) ? $parseHm((string) $capacity['lunch_start']) : null;
+        $lunchEndMin = !empty($capacity['lunch_end']) ? $parseHm((string) $capacity['lunch_end']) : null;
+
+        $existing = $slotMap[$dateStr] ?? [];
+
+        $candidateMin = $workStartMin;
+        $iterations = 0;
+        while ($iterations++ < 300 && ($candidateMin + $duration) <= $workEndMin) {
+            $candStart = $candidateMin;
+            $candEnd = $candidateMin + $duration;
+
+            if ($lunchStartMin !== null && $lunchEndMin !== null
+                && $candStart < $lunchEndMin && $candEnd > $lunchStartMin) {
+                $candidateMin += $duration;
+                continue;
+            }
+
+            $concurrent = 0;
+            foreach ($existing as $entry) {
+                $eStart = $entry['start_min'];
+                $eEnd = $eStart + $duration;
+                if ($eStart < $candEnd && $eEnd > $candStart) {
+                    $concurrent += $entry['count'];
+                }
+            }
+
+            if ($concurrent + $count <= $computerCount) {
+                $slotMap[$dateStr][] = ['start_min' => $candStart, 'count' => $count];
+                $h = intdiv($candStart, 60);
+                $m = $candStart % 60;
+                return sprintf('%02d:%02d', $h, $m);
+            }
+
+            $candidateMin += $duration;
+        }
+
+        return null;
+    }
+
+    /**
      * Resit yozuvi uchun sig'imni hisobga olib eng erta MOS slotni topadi
      * (first-fit). Resit guruhlari odatda kichik (1-2 talaba), shu sabab
      * first-fit ularni 1-urinish to'liq to'ldirmagan slotlarga ketma-ket
@@ -3994,63 +4057,10 @@ class AcademicScheduleController extends Controller
         array $groupCountMap,
         array $attemptNeedsMap
     ): ?string {
-        $computerCount = (int) $capacity['computer_count'];
-        $duration = max(1, (int) $capacity['test_duration_minutes']);
-
-        $parseHm = function (string $hm): int {
-            $p = explode(':', $hm);
-            return ((int) ($p[0] ?? 0)) * 60 + ((int) ($p[1] ?? 0));
-        };
-
-        $workStartMin = $parseHm((string) $capacity['work_hours_start']);
-        $workEndMin = $parseHm((string) $capacity['work_hours_end']);
-        $lunchStartMin = !empty($capacity['lunch_start']) ? $parseHm((string) $capacity['lunch_start']) : null;
-        $lunchEndMin = !empty($capacity['lunch_end']) ? $parseHm((string) $capacity['lunch_end']) : null;
-
         $groupCount = $this->resolveAttemptStudentCount(
             $schedule, $attempt, $groupCountMap, $attemptNeedsMap
         );
-        if ($groupCount === 0) {
-            return $capacity['work_hours_start'];
-        }
-
-        $existing = $slotMap[$dateStr] ?? [];
-
-        $candidateMin = $workStartMin;
-        $iterations = 0;
-        while ($iterations++ < 300 && ($candidateMin + $duration) <= $workEndMin) {
-            $candStart = $candidateMin;
-            $candEnd = $candidateMin + $duration;
-
-            // Tushlik bilan kesishishni tekshirish
-            if ($lunchStartMin !== null && $lunchEndMin !== null
-                && $candStart < $lunchEndMin && $candEnd > $lunchStartMin) {
-                $candidateMin += $duration;
-                continue;
-            }
-
-            // Mavjud yozuvlar bilan kesishadigan jami sig'im
-            $concurrent = 0;
-            foreach ($existing as $entry) {
-                $eStart = $entry['start_min'];
-                $eEnd = $eStart + $duration;
-                if ($eStart < $candEnd && $eEnd > $candStart) {
-                    $concurrent += $entry['count'];
-                }
-            }
-
-            // First-fit: birinchi mos slotda joylashtir
-            if ($concurrent + $groupCount <= $computerCount) {
-                $slotMap[$dateStr][] = ['start_min' => $candStart, 'count' => $groupCount];
-                $h = intdiv($candStart, 60);
-                $m = $candStart % 60;
-                return sprintf('%02d:%02d', $h, $m);
-            }
-
-            $candidateMin += $duration;
-        }
-
-        return null;
+        return $this->findSlotForCount($groupCount, $dateStr, $capacity, $slotMap);
     }
 
     /**
@@ -4308,136 +4318,190 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        foreach ([1, 2, 3] as $passAttempt) {
-            $debugLog(">>> Pass {$passAttempt} ishlashga kirishildi");
-            foreach ($sortedByAttempt[$passAttempt] as $schedule) {
-                foreach ($columnSets as $ynType => $attempts) {
-                    $attempt = $passAttempt;
-                    if (!isset($attempts[$attempt])) continue;
-                    $c = $attempts[$attempt];
-                    $dateVal = $schedule->{$c['date']};
-                    if (empty($dateVal) || !empty($schedule->{$c['time']})) {
-                        continue;
-                    }
-                    if ($c['na'] && !empty($schedule->{$c['na']})) {
-                        continue;
-                    }
+        // === Pass 1 — 1-urinish: per-schedule distribute ===
+        // 1-urinishda odatda bir guruh+fan uchun bitta group-level qator
+        // bo'ladi. distribute() butun guruhni atomik joylashtiradi.
+        $debugLog(">>> Pass 1 ishlashga kirishildi");
+        foreach ($sortedByAttempt[1] as $schedule) {
+            foreach ($columnSets as $ynType => $attempts) {
+                $c = $attempts[1] ?? null;
+                if (!$c) continue;
+                $dateVal = $schedule->{$c['date']};
+                if (empty($dateVal) || !empty($schedule->{$c['time']})) continue;
+                if ($c['na'] && !empty($schedule->{$c['na']})) continue;
 
+                $dateStr = $dateVal instanceof \Carbon\Carbon
+                    ? $dateVal->format('Y-m-d') : (string) $dateVal;
+                if ($dateStr < $from || $dateStr > $to) continue;
+
+                try {
+                    $capacity = ExamCapacityService::getSettingsForDate($dateStr);
+                    $startTime = $capacity['work_hours_start'] ?? '09:00';
+
+                    $extra = $resitSlotMap[$dateStr] ?? [];
+                    $result = $service->distribute($schedule, $ynType, $startTime, $extra);
+                    $debugLog(sprintf("  distribute(%s 1, sched_id=%d) -> %s, slots: %s",
+                        $ynType, $schedule->id,
+                        $result['ok'] ? 'OK' : ('FAIL ' . ($result['reason'] ?? '')),
+                        json_encode($result['slots'] ?? [], JSON_UNESCAPED_UNICODE)));
+                    if (!empty($result['ok']) && !empty($result['slots'])) {
+                        foreach ($result['slots'] as $sl) {
+                            if (empty($sl['time'])) continue;
+                            $p = explode(':', substr((string) $sl['time'], 0, 5));
+                            $sm = ((int) $p[0]) * 60 + ((int) ($p[1] ?? 0));
+                            $slotMap[$dateStr][] = ['start_min' => $sm, 'count' => (int) ($sl['students'] ?? 0)];
+                        }
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('autoTimeAll: pass1 failed', [
+                        'schedule_id' => $schedule->id, 'yn' => $ynType, 'error' => $e->getMessage(),
+                    ]);
+                    $result = ['ok' => false, 'reason' => $e->getMessage()];
+                }
+
+                if (!empty($result['ok'])) {
+                    $okCount++;
+                } else {
+                    $failures[] = sprintf('#%d %s (%s): %s',
+                        $schedule->id, strtoupper($ynType),
+                        $schedule->subject_name ?: $schedule->subject_id,
+                        $result['reason'] ?? "noma'lum sabab");
+                }
+            }
+        }
+
+        // === Pass 2/3 — resit: bucket bo'yicha atomik joylashtirish ===
+        // Bir (group, subject, sem, attempt, date) birikma bitta atomik
+        // birlik sifatida joylashadi. Per-student qatorlar guruh-level qator
+        // bilan bir xil sanada bo'lsa — birga bir slotga tushadi. Boshqa
+        // sanali per-student'lar alohida bucket bo'ladi.
+        foreach ([2, 3] as $passAttempt) {
+            $debugLog(">>> Pass {$passAttempt} (resit) bucket'larga ajratilmoqda");
+            foreach ($columnSets as $ynType => $attempts) {
+                $c = $attempts[$passAttempt] ?? null;
+                if (!$c) continue;
+
+                // Shu (ynType, attempt) bo'yicha barcha vaqt yo'q candidate'larni
+                // yig'amiz va (group, subject, sem) + per-student stats hisoblaymiz.
+                $candidatesForCol = [];
+                foreach ($candidates as $s) {
+                    $dateVal = $s->{$c['date']};
+                    if (empty($dateVal) || !empty($s->{$c['time']})) continue;
+                    if ($c['na'] && !empty($s->{$c['na']})) continue;
                     $dateStr = $dateVal instanceof \Carbon\Carbon
-                        ? $dateVal->format('Y-m-d')
-                        : (string) $dateVal;
-                    if ($dateStr < $from || $dateStr > $to) {
-                        continue;
+                        ? $dateVal->format('Y-m-d') : (string) $dateVal;
+                    if ($dateStr < $from || $dateStr > $to) continue;
+                    $candidatesForCol[] = ['schedule' => $s, 'date' => $dateStr];
+                }
+                if (empty($candidatesForCol)) continue;
+
+                // Har (group, subject, sem) uchun jami per-student qator soni
+                // (barcha sanalar bo'yicha) — group-level qator nechta talabani
+                // "qoplayotganini" hisoblash uchun kerak.
+                $totalPerStudentByCombo = [];
+                foreach ($candidatesForCol as $cc) {
+                    $s = $cc['schedule'];
+                    $comboKey = $s->group_hemis_id . '|' . $s->subject_id . '|' . $s->semester_code;
+                    if (!isset($totalPerStudentByCombo[$comboKey])) {
+                        $totalPerStudentByCombo[$comboKey] = 0;
                     }
+                    if (!empty($s->student_hemis_id)) {
+                        $totalPerStudentByCombo[$comboKey]++;
+                    }
+                }
 
+                // Bucket'larga ajratish: (group, subject, sem, date)
+                $buckets = [];
+                foreach ($candidatesForCol as $cc) {
+                    $s = $cc['schedule'];
+                    $key = $s->group_hemis_id . '|' . $s->subject_id . '|' . $s->semester_code . '|' . $cc['date'];
+                    if (!isset($buckets[$key])) {
+                        $buckets[$key] = [
+                            'group_hemis_id' => $s->group_hemis_id,
+                            'subject_id' => $s->subject_id,
+                            'subject_name' => $s->subject_name,
+                            'semester_code' => $s->semester_code,
+                            'date' => $cc['date'],
+                            'schedules' => [],
+                            'per_student_count' => 0,
+                            'has_group_level' => false,
+                        ];
+                    }
+                    $buckets[$key]['schedules'][] = $s;
+                    if (empty($s->student_hemis_id)) {
+                        $buckets[$key]['has_group_level'] = true;
+                    } else {
+                        $buckets[$key]['per_student_count']++;
+                    }
+                }
+
+                // Har bucket uchun haqiqiy talaba sonini hisoblash.
+                foreach ($buckets as &$b) {
+                    $needsKey = $b['group_hemis_id'] . '|' . $b['subject_id'] . '|' . $b['semester_code'] . '|' . $passAttempt;
+                    $totalRetakers = (int) ($attemptNeedsMap[$needsKey] ?? 0);
+                    $comboKey = $b['group_hemis_id'] . '|' . $b['subject_id'] . '|' . $b['semester_code'];
+                    $totalPerStudent = (int) ($totalPerStudentByCombo[$comboKey] ?? 0);
+
+                    if ($b['has_group_level']) {
+                        // Group-level qator "qolgan" retakerlarni ifoda etadi
+                        // (per-student override'siz qolganlar). Jami per-student
+                        // (barcha sanalar) ayriladi.
+                        $groupLevelRepresents = max(0, $totalRetakers - $totalPerStudent);
+                        $b['count'] = $b['per_student_count'] + $groupLevelRepresents;
+                    } else {
+                        // Faqat per-student'lar shu bucket'da — har biri 1 talaba.
+                        $b['count'] = $b['per_student_count'];
+                    }
+                }
+                unset($b);
+
+                // FFD: katta bucket'lar avval (kichik bucket'lar oxirgi
+                // qolgan kichik bo'shliqlarga ehtiyot bilan tushishadi).
+                usort($buckets, fn($a, $b) => $b['count'] <=> $a['count']);
+
+                foreach ($buckets as $b) {
                     try {
-                        $capacity = ExamCapacityService::getSettingsForDate($dateStr);
-                        $startTime = $capacity['work_hours_start'] ?? '09:00';
+                        $capacity = ExamCapacityService::getSettingsForDate($b['date']);
+                        $assignedTime = $this->findSlotForCount(
+                            $b['count'], $b['date'], $capacity, $slotMap
+                        );
+                        $debugLog(sprintf("  bucket(%s %d, group=%s, subj=%s, date=%s, count=%d, rows=%d) -> %s",
+                            $ynType, $passAttempt,
+                            optional($b['schedules'][0]->group)->name ?? $b['group_hemis_id'],
+                            $b['subject_id'], $b['date'], $b['count'], count($b['schedules']),
+                            $assignedTime ?? 'NULL'));
 
-                        $debugGroupName = optional($schedule->group)->name ?? $schedule->group_hemis_id;
-                        $debugCount = $this->resolveAttemptStudentCount($schedule, $attempt, $groupCountMap, $attemptNeedsMap);
+                        if ($assignedTime === null) {
+                            foreach ($b['schedules'] as $s) {
+                                $failures[] = sprintf('#%d %s %d-urinish (%s): no slot',
+                                    $s->id, strtoupper($ynType), $passAttempt,
+                                    $s->subject_name ?: $s->subject_id);
+                            }
+                            continue;
+                        }
 
-                        if ($c['distribute']) {
-                            // distribute() ichida ComputerAssignment count
-                            // qiladi — o'sha kungi 1-urinish CA'lari hisoblanadi.
-                            // Resit vaqtlar CA'da yo'q, shu sabab faqat ULARNI
-                            // extraOccupancy sifatida uzatamiz (slotMap'dagi
-                            // 1-urinish entry'lari CA'da allaqachon bor —
-                            // ikki marta sanab ketmaslik uchun).
-                            $extra = $resitSlotMap[$dateStr] ?? [];
-                            // slotMap'dagi joriy holatni qisqacha log qilaymiz
-                            $slotSummary = [];
-                            foreach (($slotMap[$dateStr] ?? []) as $e) {
-                                $h = intdiv($e['start_min'], 60);
-                                $m = $e['start_min'] % 60;
-                                $key = sprintf('%02d:%02d', $h, $m);
-                                $slotSummary[$key] = ($slotSummary[$key] ?? 0) + $e['count'];
-                            }
-                            ksort($slotSummary);
-                            $debugLog(sprintf("  distribute(%s %s, sched_id=%d, group=%s, count=%d) slot holati: %s",
-                                $ynType, $attempt, $schedule->id, $debugGroupName, $debugCount,
-                                json_encode($slotSummary, JSON_UNESCAPED_UNICODE)));
-                            $result = $service->distribute($schedule, $ynType, $startTime, $extra);
-                            $debugLog(sprintf("    -> result: %s, slots: %s",
-                                $result['ok'] ? 'OK' : ('FAIL ' . ($result['reason'] ?? '')),
-                                json_encode($result['slots'] ?? [], JSON_UNESCAPED_UNICODE)));
-                            // distribute() natijasini slotMap'ga qo'shamiz —
-                            // keyingi pass'lar (resit) shu 1-urinish blokini
-                            // ko'rsin.
-                            if (!empty($result['ok']) && !empty($result['slots'])) {
-                                foreach ($result['slots'] as $sl) {
-                                    if (empty($sl['time'])) continue;
-                                    $p = explode(':', substr((string) $sl['time'], 0, 5));
-                                    $sm = ((int) $p[0]) * 60 + ((int) ($p[1] ?? 0));
-                                    $slotMap[$dateStr][] = ['start_min' => $sm, 'count' => (int) ($sl['students'] ?? 0)];
-                                }
-                            }
-                        } else {
-                            $slotSummary = [];
-                            foreach (($slotMap[$dateStr] ?? []) as $e) {
-                                $h = intdiv($e['start_min'], 60);
-                                $m = $e['start_min'] % 60;
-                                $key = sprintf('%02d:%02d', $h, $m);
-                                $slotSummary[$key] = ($slotSummary[$key] ?? 0) + $e['count'];
-                            }
-                            ksort($slotSummary);
-                            $debugLog(sprintf("  resit(%s %s, sched_id=%d, group=%s, count=%d) slot holati: %s",
-                                $ynType, $attempt, $schedule->id, $debugGroupName, $debugCount,
-                                json_encode($slotSummary, JSON_UNESCAPED_UNICODE)));
-                            $assignedTime = $this->findResitSlot(
-                                $schedule, $ynType, $attempt, $dateStr, $capacity,
-                                $slotMap, $groupCountMap, $attemptNeedsMap
-                            );
-                            $debugLog(sprintf("    -> resit assigned: %s", $assignedTime ?? 'NULL'));
-                            if ($assignedTime === null) {
-                                $result = ['ok' => false, 'reason' => 'no slot with free capacity in work hours'];
-                            } else {
-                                $schedule->{$c['time']} = $assignedTime;
-                                $schedule->save();
-                                $result = ['ok' => true];
-                                // findResitSlot slotMap'ni yangilagan. resitSlotMap'ga
-                                // ham qo'shamiz — keyingi 1-urinish distribute'lar
-                                // (mavjud bo'lsa) ko'rsin. ASL talaba soni qo'shiladi
-                                // (butun guruh emas) — keyingi distribute sig'imni
-                                // to'g'ri hisoblasin.
-                                $p = explode(':', $assignedTime);
-                                $sm = ((int) $p[0]) * 60 + ((int) ($p[1] ?? 0));
-                                $cnt = $this->resolveAttemptStudentCount(
-                                    $schedule, $attempt, $groupCountMap, $attemptNeedsMap
-                                );
-                                if ($cnt > 0) {
-                                    $resitSlotMap[$dateStr][] = ['start_min' => $sm, 'count' => $cnt];
-                                }
-                            }
+                        // Barcha bucket schedules ga bir xil vaqt
+                        foreach ($b['schedules'] as $s) {
+                            $s->{$c['time']} = $assignedTime;
+                            $s->save();
+                            $okCount++;
+                        }
+                        // resitSlotMap'ga ham qo'shamiz (keyingi distribute uchun,
+                        // boshqa sanada bo'lsa ham foyda bersin)
+                        if ($b['count'] > 0) {
+                            $p = explode(':', $assignedTime);
+                            $sm = ((int) $p[0]) * 60 + ((int) ($p[1] ?? 0));
+                            $resitSlotMap[$b['date']][] = ['start_min' => $sm, 'count' => $b['count']];
                         }
                     } catch (\Throwable $e) {
-                        \Illuminate\Support\Facades\Log::warning('autoTimeAll: failed', [
-                            'schedule_id' => $schedule->id,
-                            'yn'          => $ynType,
-                            'attempt'     => $attempt,
-                            'message'     => $e->getMessage(),
+                        \Illuminate\Support\Facades\Log::warning('autoTimeAll: bucket failed', [
+                            'bucket' => $b['group_hemis_id'] . '|' . $b['subject_id'],
+                            'error' => $e->getMessage(),
                         ]);
-                        $result = ['ok' => false, 'reason' => $e->getMessage()];
-                    }
-
-                    if (!empty($result['ok'])) {
-                        $okCount++;
-                        // Bulk autoTimeAll'da Telegram + DB notification YUBORILMAYDI:
-                        //  - Telegram API har xabar uchun ~0.5-2s — 100+ qator → 504 timeout
-                        //  - Avto-vaqt belgilash odatda bir necha marta qayta chaqiriladi
-                        //    (vaqtlarni sozlash uchun), shu sabab har safar talaba
-                        //    "vaqt o'zgardi" deb spam olishi shart emas.
-                        //  - Final vaqt belgilangach admin alohida (saveTestTime'dan)
-                        //    yoki manual broadcast'dan xabar yuboradi.
-                    } else {
-                        $label = strtoupper($ynType) . ($attempt > 1 ? " {$attempt}-urinish" : '');
-                        $failures[] = sprintf(
-                            '#%d %s (%s): %s',
-                            $schedule->id,
-                            $label,
-                            $schedule->subject_name ?: $schedule->subject_id,
-                            $result['reason'] ?? "noma'lum sabab"
-                        );
+                        foreach ($b['schedules'] as $s) {
+                            $failures[] = sprintf('#%d %s %d-urinish: %s',
+                                $s->id, strtoupper($ynType), $passAttempt, $e->getMessage());
+                        }
                     }
                 }
             }
@@ -5747,8 +5811,25 @@ class AcademicScheduleController extends Controller
             }
         }
 
+        // Per-(group, subject, sem, attempt) bo'yicha shu sana ichidagi
+        // per-student qatorlar soni — group-level qator hisobida ikki marta
+        // sanab ketmaslik uchun. p22-07a misol: 5 per-student + 1 group-level
+        // bir slotda bo'lsa, group-level 5 retakerni qaytarsa, per-student'lar
+        // ham 5 ta sanaladi → jami 10. Endi group-level 5−5=0 ni qaytaradi.
+        $perStudentCountByCombo = [];
+        foreach ($allGroups as $grp) {
+            if (!empty($grp['student_hemis_id'])) {
+                $k = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code'] . '|' . $grp['attempt'];
+                $perStudentCountByCombo[$k] = ($perStudentCountByCombo[$k] ?? 0) + 1;
+            }
+        }
+
         // Per-group helper: berilgan urinish uchun haqiqiy talabalar soni.
-        $eligibleCount = function (array $grp, int $totalGroupCount) use ($resitEligibleMap): int {
+        // Main'dan $resitEligibleMap (batch DB so'rov bilan har group+subject+
+        // attempt uchun haqiqiy retakerlar soni). HEAD'dan $perStudentCountByCombo
+        // (group-level qator faqat "qolgan" retakerlarni ifoda etadi — per-student
+        // qatorlar bilan ikki marta sanab ketmaslik uchun ayriladi).
+        $eligibleCount = function (array $grp, int $totalGroupCount) use ($resitEligibleMap, $perStudentCountByCombo): int {
             $attemptN = (int) ($grp['attempt'] ?? 1);
             if (!empty($grp['student_hemis_id'])) {
                 return 1;
@@ -5757,7 +5838,11 @@ class AcademicScheduleController extends Controller
                 return $totalGroupCount;
             }
             $key = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code'] . '|' . $attemptN;
-            return array_key_exists($key, $resitEligibleMap) ? $resitEligibleMap[$key] : 0;
+            $totalRetakers = array_key_exists($key, $resitEligibleMap) ? $resitEligibleMap[$key] : 0;
+            // Per-student qatorlar ko'rsatadigan talabalar ayriladi — group-level
+            // qator faqat per-student override'siz qolgan retakerlarni ifoda etadi.
+            $perStudent = (int) ($perStudentCountByCombo[$key] ?? 0);
+            return max(0, $totalRetakers - $perStudent);
         };
 
         // Quiz topshirganlar: computer_assignments jadvalidan real-time

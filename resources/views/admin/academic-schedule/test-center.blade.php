@@ -97,7 +97,7 @@
                         </div>
                         <div class="filter-item" style="min-width: 120px;">
                             <label class="filter-label">&nbsp;</label>
-                            <div style="display:flex;gap:6px;align-items:center;">
+                            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
                                 <button type="button" class="btn-refresh" id="btn-refresh-quiz" onclick="refreshQuizCounts()">
                                     <svg class="refresh-icon" style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                                     <span id="refresh-label">Yangilash</span>
@@ -1680,7 +1680,7 @@
 
     <style>
         .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; overflow: visible; position: relative; z-index: 20; }
-        .filter-row { display: flex; gap: 10px; flex-wrap: nowrap; margin-bottom: 10px; align-items: flex-end; overflow: visible; }
+        .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end; overflow: visible; }
         .filter-row:last-child { margin-bottom: 0; }
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
         .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }

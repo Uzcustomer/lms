@@ -148,11 +148,51 @@ class MoodleExamBookingService
         $perStudentHemisId = !empty($schedule->student_hemis_id)
             ? (string) $schedule->student_hemis_id
             : null;
-        $studentsByLang = $this->studentsByLanguage($schedule->group_hemis_id, $perStudentHemisId);
+
+        // YN ga ruxsati yo'q (X) talabalarni Moodle bookingidan chiqarib
+        // tashlaymiz: ular kvizni umuman ocha olmasligi kerak. Hisob
+        // YnAdmissionService orqali — YN oldi qaydnoma bilan bir xil mantiq.
+        $deniedHemisIds = [];
+        try {
+            $admissionMap = app(YnAdmissionService::class)->computeForGroup(
+                (string) $schedule->group_hemis_id,
+                (string) $schedule->subject_id,
+                (string) $schedule->semester_code,
+            );
+            foreach ($admissionMap as $hid => $info) {
+                if (($info['status'] ?? null) === YnAdmissionService::STATUS_X) {
+                    $deniedHemisIds[] = (string) $hid;
+                }
+            }
+        } catch (\Throwable $e) {
+            // Admission tekshiruvi ishlamasa, eski (filtrsiz) xulqqa qaytamiz —
+            // booking butunlay to'xtab qolmasin.
+            Log::warning('MoodleExamBookingService: admission filter failed', [
+                'schedule_id' => $schedule->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+
+        // Per-student schedule X talaba bo'lsa — bookingni butunlay skip qilamiz.
+        if ($perStudentHemisId !== null && in_array($perStudentHemisId, $deniedHemisIds, true)) {
+            return [
+                'ok' => false,
+                'skipped' => true,
+                'reason' => 'student ' . $perStudentHemisId . ' has YN admission = X (jurnal shartlari bajarilmagan)',
+            ];
+        }
+
+        $studentsByLang = $this->studentsByLanguage(
+            $schedule->group_hemis_id,
+            $perStudentHemisId,
+            $perStudentHemisId === null ? $deniedHemisIds : []
+        );
         if (empty($studentsByLang)) {
             $reason = $perStudentHemisId !== null
                 ? 'student ' . $perStudentHemisId . ' not found in group ' . $schedule->group_hemis_id
-                : 'no students in group ' . $schedule->group_hemis_id;
+                : (count($deniedHemisIds) > 0
+                    ? 'no admitted students in group ' . $schedule->group_hemis_id . ' (' . count($deniedHemisIds) . ' X talaba chiqarib tashlandi)'
+                    : 'no students in group ' . $schedule->group_hemis_id);
             return $this->fail($schedule, $prefix, $reason);
         }
 
@@ -411,7 +451,7 @@ class MoodleExamBookingService
      *                                     tushadi.
      * @return array<string, array<int, string>> [langCode => [username, ...]]
      */
-    private function studentsByLanguage(string $groupHemisId, ?string $studentHemisId = null): array
+    private function studentsByLanguage(string $groupHemisId, ?string $studentHemisId = null, array $excludeHemisIds = []): array
     {
         $group = Group::where('group_hemis_id', $groupHemisId)->first();
         $defaultLang = $this->normalizeLang($group?->education_lang_code);
@@ -420,6 +460,9 @@ class MoodleExamBookingService
             ->whereNotNull('student_id_number');
         if ($studentHemisId !== null) {
             $studentsQuery->where('hemis_id', $studentHemisId);
+        }
+        if (!empty($excludeHemisIds)) {
+            $studentsQuery->whereNotIn('hemis_id', $excludeHemisIds);
         }
         $students = $studentsQuery->get(['student_id_number', 'exam_language_code']);
 

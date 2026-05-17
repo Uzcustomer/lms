@@ -784,14 +784,38 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent) {
-            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent) {
+        // YN ga ruxsat — har bir talaba uchun (Ruxsat / Shartli / X). Test markazi
+        // view'i va vaqt qo'yish endpointlari shu xaritaga tayanadi. Hisob YN
+        // oldi qaydnoma bilan bir xil mantiq orqali (YnAdmissionService).
+        // Cache — bitta (group|subj|sem) uchun bir marta chaqirilsin.
+        $admissionService = app(\App\Services\YnAdmissionService::class);
+        $admissionCache = [];
+
+        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache) {
+            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache) {
                 $gHid = $item['group']->group_hemis_id;
                 $subjectId = $item['subject']->subject_id ?? null;
                 $semCode = $item['subject']->semester_code ?? null;
                 $statusKey = $gHid . '|' . $subjectId . '|' . $semCode;
                 $statusByStudent = $studentStatus[$statusKey] ?? [];
                 $studentList = $studentsByGroup->get($gHid, collect());
+
+                // Admission map (Ruxsat / Shartli / X) — bitta marta hisoblanadi.
+                $admissionKey = $gHid . '|' . $subjectId . '|' . $semCode;
+                if (!isset($admissionCache[$admissionKey])) {
+                    try {
+                        $admissionCache[$admissionKey] = ($gHid && $subjectId && $semCode)
+                            ? $admissionService->computeForGroup((string) $gHid, (string) $subjectId, (string) $semCode)
+                            : [];
+                    } catch (\Throwable $e) {
+                        \Log::warning('attachStudentsToSchedule: admission compute failed', [
+                            'group' => $gHid, 'subject' => $subjectId, 'sem' => $semCode,
+                            'error' => $e->getMessage(),
+                        ]);
+                        $admissionCache[$admissionKey] = [];
+                    }
+                }
+                $admissionByStudent = $admissionCache[$admissionKey];
 
                 // Guruhning OSKI/Test sanasi (asosiy schedule, student_hemis_id NULL).
                 // Sinov (test) / Normativ kabi closing_formlar uchun sana saqlanmaydi —
@@ -840,6 +864,7 @@ class AcademicScheduleController extends Controller
                     // Joriy semestrdagi BARCHA qarz fanlari (barcha rowlar bo'yicha)
                     $currentDebts = array_values($currentDebtsByStudent[$stu->hemis_id] ?? []);
                     usort($currentDebts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+                    $admission = $admissionByStudent[$stu->hemis_id] ?? null;
                     $rows[] = [
                         'hemis_id' => $stu->hemis_id,
                         'student_id_number' => $stu->student_id_number ?? null,
@@ -861,6 +886,9 @@ class AcademicScheduleController extends Controller
                         'is_held_back' => $stat['held_back'] ?? false,
                         'past_debts' => $pastDebts,
                         'current_semester_debts' => $currentDebts,
+                        // YN ga ruxsat (YN oldi qaydnoma bilan bir xil mantiq)
+                        'admission_status' => $admission['status'] ?? null,
+                        'admission_reasons' => $admission['reasons'] ?? [],
                     ];
                 }
                 $item['students'] = $rows;
@@ -4418,6 +4446,22 @@ class AcademicScheduleController extends Controller
             'computer_number' => 'required|integer|min:1',
         ]);
 
+        // X (YN ga ruxsat yo'q) talabaga kompyuter biriktirib bo'lmaydi.
+        $admission = app(\App\Services\YnAdmissionService::class)
+            ->statusForStudent(
+                (string) $request->student_hemis_id,
+                (string) $request->group_hemis_id,
+                (string) $request->subject_id,
+                (string) $request->semester_code
+            );
+        if ($admission === \App\Services\YnAdmissionService::STATUS_X) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu talabaga YN ga ruxsat yo\'q (X holati) — kompyuter biriktirib bo\'lmaydi.',
+                'admission_status' => $admission,
+            ], 422);
+        }
+
         $schedule = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
@@ -4482,6 +4526,24 @@ class AcademicScheduleController extends Controller
             'attempt' => 'required|integer|in:2,3',
             'test_time' => 'required|date_format:H:i',
         ]);
+
+        // YN ga ruxsat tekshiruvi — YN oldi qaydnomadagi qaror bilan bir xil.
+        // X (ruxsat yo'q) bo'lgan talabaga vaqt qo'yib bo'lmaydi: JN/MT < limit
+        // yoki davomat ≥ 25% bo'lsa, talaba YN/test ga umuman kirita olmaydi.
+        $admission = app(\App\Services\YnAdmissionService::class)
+            ->statusForStudent(
+                (string) $request->student_hemis_id,
+                (string) $request->group_hemis_id,
+                (string) $request->subject_id,
+                (string) $request->semester_code
+            );
+        if ($admission === \App\Services\YnAdmissionService::STATUS_X) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu talabaga YN ga ruxsat yo\'q (X holati). YN oldi qaydnoma asosida JN/MT yoki davomat shartlari bajarilmagan — vaqt qo\'yib bo\'lmaydi.',
+                'admission_status' => $admission,
+            ], 422);
+        }
 
         $columns = [
             'OSKI' => [
@@ -5860,6 +5922,36 @@ class AcademicScheduleController extends Controller
             ->first();
         if (!$schedule) {
             return response()->json(['success' => false, 'message' => 'Jadval topilmadi.'], 404);
+        }
+
+        // YN ga ruxsati yo'q (X) talabalarni qo'lda biriktirishga kiritmaslik —
+        // ro'yxatda bo'lsa, butun so'rovni rad etib qaysi talabalar bloklanganini
+        // aniq xabar qilamiz (yaxshi UX).
+        $admissionMap = app(\App\Services\YnAdmissionService::class)
+            ->computeForGroup(
+                (string) $request->group_hemis_id,
+                (string) $request->subject_id,
+                (string) $request->semester_code
+            );
+        $deniedIds = [];
+        foreach ($request->input('assignments') as $a) {
+            $hid = (string) ($a['student_hemis_id'] ?? '');
+            if ($hid === '') continue;
+            $st = $admissionMap[$hid]['status'] ?? null;
+            if ($st === \App\Services\YnAdmissionService::STATUS_X) {
+                $deniedIds[] = $hid;
+            }
+        }
+        if (!empty($deniedIds)) {
+            $deniedNames = Student::whereIn('hemis_id', $deniedIds)
+                ->pluck('full_name', 'hemis_id')
+                ->toArray();
+            $labels = array_map(fn($hid) => $deniedNames[$hid] ?? $hid, $deniedIds);
+            return response()->json([
+                'success' => false,
+                'message' => 'Quyidagi talabalarga YN ga ruxsat yo\'q (X holati) — biriktirib bo\'lmaydi: ' . implode(', ', $labels),
+                'denied_hemis_ids' => $deniedIds,
+            ], 422);
         }
 
         $ynKey = $request->yn_type === 'OSKI' ? 'oski' : 'test';

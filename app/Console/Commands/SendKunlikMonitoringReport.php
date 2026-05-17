@@ -171,11 +171,11 @@ class SendKunlikMonitoringReport extends Command
                 ->whereNotNull('telegram_chat_id')
                 ->where('telegram_chat_id', '!=', '')
                 ->whereNotNull('telegram_verified_at')
-                ->get(['id', 'first_name', 'last_name', 'telegram_chat_id']);
+                ->get(['id', 'full_name', 'short_name', 'first_name', 'telegram_chat_id']);
             foreach ($teachers as $t) {
                 $chatId = (string) $t->telegram_chat_id;
                 if ($chatId !== '') {
-                    $name = trim(($t->last_name ?? '') . ' ' . ($t->first_name ?? ''));
+                    $name = $t->full_name ?: ($t->short_name ?: ($t->first_name ?: ''));
                     $out[$chatId] = 'Teacher #' . $t->id . ' ' . $name;
                 }
             }

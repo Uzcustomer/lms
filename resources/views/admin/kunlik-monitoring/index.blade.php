@@ -343,6 +343,7 @@
                         <th>F.I.Sh.</th>
                         <th>Fan</th>
                         <th>Quiz turi</th>
+                        <th>Quiz to'liq nomi</th>
                         <th>Tugatildi</th>
                         <th>Baho</th>
                     </tr></thead><tbody>` +
@@ -352,6 +353,7 @@
                         <td>${(r.student_name ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</td>
                         <td>${(r.fan_name ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</td>
                         <td>${(r.quiz_type ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</td>
+                        <td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#475569;">${(r.attempt_name ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</td>
                         <td>${r.date_finish ?? ''}</td>
                         <td>${r.grade ?? ''}</td>
                     </tr>`).join('') +

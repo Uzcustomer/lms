@@ -3803,8 +3803,12 @@ class AcademicScheduleController extends Controller
 
         $user = auth()->user() ?? auth('teacher')->user();
         $activeRole = session('active_role', $user?->getRoleNames()->first());
-        if ($activeRole !== \App\Enums\ProjectRole::TEST_CENTER->value) {
-            return back()->with('error', "Avto-vaqt belgilash faqat Test markazi roli uchun ochiq.");
+        $allowedBulkRoles = array_merge(
+            ExamDateRoleService::adminRoles(),
+            [\App\Enums\ProjectRole::TEST_CENTER->value]
+        );
+        if (!in_array($activeRole, $allowedBulkRoles, true)) {
+            return back()->with('error', "Avto-vaqt belgilash faqat Test markazi va admin rollari uchun ochiq.");
         }
 
         $today = now()->format('Y-m-d');
@@ -3999,8 +4003,12 @@ class AcademicScheduleController extends Controller
 
         $user = auth()->user() ?? auth('teacher')->user();
         $activeRole = session('active_role', $user?->getRoleNames()->first());
-        if ($activeRole !== \App\Enums\ProjectRole::TEST_CENTER->value) {
-            return back()->with('error', "Vaqtlarni tozalash faqat Test markazi roli uchun ochiq.");
+        $allowedBulkRoles = array_merge(
+            ExamDateRoleService::adminRoles(),
+            [\App\Enums\ProjectRole::TEST_CENTER->value]
+        );
+        if (!in_array($activeRole, $allowedBulkRoles, true)) {
+            return back()->with('error', "Vaqtlarni tozalash faqat Test markazi va admin rollari uchun ochiq.");
         }
 
         $today = now()->format('Y-m-d');

@@ -172,9 +172,75 @@
                         </div>
                     @endif
 
+                    {{-- Ustun bo'yicha filtrlar uchun unikal qiymatlarni hisoblash --}}
+                    @php
+                        $uniqueTimes = [];
+                        $hasNoTimeRow = false;
+                        $uniqueGroupNames = [];
+                        $uniqueSubjects = [];
+                        $uniqueYnTypes = [];
+                        $uniqueAttempts = [];
+                        $uniqueStudents = [];
+                        $uniqueSubmitted = [];
+                        $uniqueRemaining = [];
+                        $uniqueOccupied = [];
+                        $uniqueFree = [];
+                        $uniqueUsage = [];
+                        $uniqueStatuses = [];
+
+                        foreach ($slots as $slot) {
+                            $no = !empty($slot['no_time']);
+                            if ($no) {
+                                $hasNoTimeRow = true;
+                            } else {
+                                $uniqueTimes[(string) $slot['time']] = true;
+                            }
+                            foreach ($slot['groups'] as $g) {
+                                if (!empty($g['group_name'])) $uniqueGroupNames[(string) $g['group_name']] = true;
+                                if (!empty($g['subject_name'])) $uniqueSubjects[(string) $g['subject_name']] = true;
+                                if (!empty($g['yn_type'])) $uniqueYnTypes[(string) $g['yn_type']] = true;
+                                $uniqueAttempts[(int) ($g['attempt'] ?? 1)] = true;
+                            }
+                            $occ = (int) $slot['occupied'];
+                            $sub = (int) ($slot['submitted'] ?? 0);
+                            $rem = (int) ($slot['remaining'] ?? max(0, $occ - $sub));
+                            $uniqueStudents[$occ] = true;
+                            $uniqueSubmitted[$sub] = true;
+                            $uniqueRemaining[$rem] = true;
+                            if (!$no) {
+                                $uniqueOccupied[$occ] = true;
+                                $uniqueFree[(int) $slot['free']] = true;
+                                $uniqueUsage[(float) $slot['usage_percent']] = true;
+                                if ($slot['overflow'] > 0) {
+                                    $uniqueStatuses["Sig'imdan ortiq"] = true;
+                                } elseif ($slot['usage_percent'] >= 100) {
+                                    $uniqueStatuses["To'la band"] = true;
+                                } elseif ($slot['usage_percent'] >= 75) {
+                                    $uniqueStatuses['Yuqori bandlik'] = true;
+                                } else {
+                                    $uniqueStatuses['Normal'] = true;
+                                }
+                            } else {
+                                $uniqueStatuses["Vaqti qo'yilmagan"] = true;
+                            }
+                        }
+                        $sortedTimes = array_keys($uniqueTimes); sort($sortedTimes);
+                        $sortedGroupNames = array_keys($uniqueGroupNames); natcasesort($sortedGroupNames); $sortedGroupNames = array_values($sortedGroupNames);
+                        $sortedSubjects = array_keys($uniqueSubjects); natcasesort($sortedSubjects); $sortedSubjects = array_values($sortedSubjects);
+                        $sortedYnTypes = array_keys($uniqueYnTypes); sort($sortedYnTypes);
+                        $sortedAttempts = array_keys($uniqueAttempts); sort($sortedAttempts);
+                        $sortedStudents = array_keys($uniqueStudents); sort($sortedStudents, SORT_NUMERIC);
+                        $sortedSubmitted = array_keys($uniqueSubmitted); sort($sortedSubmitted, SORT_NUMERIC);
+                        $sortedRemaining = array_keys($uniqueRemaining); sort($sortedRemaining, SORT_NUMERIC);
+                        $sortedOccupied = array_keys($uniqueOccupied); sort($sortedOccupied, SORT_NUMERIC);
+                        $sortedFree = array_keys($uniqueFree); sort($sortedFree, SORT_NUMERIC);
+                        $sortedUsage = array_keys($uniqueUsage); sort($sortedUsage, SORT_NUMERIC);
+                        $sortedStatuses = array_keys($uniqueStatuses); sort($sortedStatuses);
+                    @endphp
+
                     {{-- Jadval --}}
                     <div class="overflow-x-auto border border-gray-200 rounded-lg">
-                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                        <table id="bk-table" class="min-w-full divide-y divide-gray-200 text-sm">
                             <thead class="bg-gray-50">
                                 <tr>
                                     <th class="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">#</th>
@@ -186,6 +252,106 @@
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Bo'sh</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Bandlik %</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Holat</th>
+                                </tr>
+                                <tr class="bg-gray-50 border-t border-gray-200">
+                                    <th class="px-2 py-1.5">
+                                        <button type="button" id="bk-filter-reset" class="w-full text-[10px] font-semibold text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 rounded px-1 py-0.5 transition" title="Filtrlarni tozalash">↺</button>
+                                    </th>
+                                    <th class="px-2 py-1.5">
+                                        <select data-bk-filter="time" class="bk-filter w-full text-xs border border-slate-300 rounded px-1 py-0.5 bg-white">
+                                            <option value="">Barchasi</option>
+                                            @foreach($sortedTimes as $t)
+                                                <option value="{{ $t }}">{{ $t }}</option>
+                                            @endforeach
+                                            @if($hasNoTimeRow)
+                                                <option value="__no_time__">Vaqti qo'yilmagan</option>
+                                            @endif
+                                        </select>
+                                    </th>
+                                    <th class="px-2 py-1.5">
+                                        <div class="flex gap-1">
+                                            <select data-bk-filter="group" class="bk-filter flex-1 min-w-0 text-xs border border-slate-300 rounded px-1 py-0.5 bg-white" title="Guruh nomi">
+                                                <option value="">Guruh</option>
+                                                @foreach($sortedGroupNames as $g)
+                                                    <option value="{{ $g }}">{{ $g }}</option>
+                                                @endforeach
+                                            </select>
+                                            <select data-bk-filter="subject" class="bk-filter flex-1 min-w-0 text-xs border border-slate-300 rounded px-1 py-0.5 bg-white" title="Fan">
+                                                <option value="">Fan</option>
+                                                @foreach($sortedSubjects as $s)
+                                                    <option value="{{ $s }}">{{ $s }}</option>
+                                                @endforeach
+                                            </select>
+                                            <select data-bk-filter="yn" class="bk-filter text-xs border border-slate-300 rounded px-1 py-0.5 bg-white" title="YN turi">
+                                                <option value="">YN</option>
+                                                @foreach($sortedYnTypes as $y)
+                                                    <option value="{{ $y }}">{{ $y }}</option>
+                                                @endforeach
+                                            </select>
+                                            <select data-bk-filter="attempt" class="bk-filter text-xs border border-slate-300 rounded px-1 py-0.5 bg-white" title="Urinish">
+                                                <option value="">Urinish</option>
+                                                @foreach($sortedAttempts as $a)
+                                                    <option value="{{ $a }}">{{ $a }}-urinish</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                    </th>
+                                    <th class="px-2 py-1.5">
+                                        <select data-bk-filter="students" class="bk-filter w-full text-xs border border-slate-300 rounded px-1 py-0.5 bg-white">
+                                            <option value="">Barchasi</option>
+                                            @foreach($sortedStudents as $v)
+                                                <option value="{{ $v }}">{{ $v }}</option>
+                                            @endforeach
+                                        </select>
+                                    </th>
+                                    <th class="px-2 py-1.5">
+                                        <div class="flex gap-1">
+                                            <select data-bk-filter="submitted" class="bk-filter flex-1 min-w-0 text-xs border border-slate-300 rounded px-1 py-0.5 bg-white" title="Topshirdi">
+                                                <option value="">Topshirdi</option>
+                                                @foreach($sortedSubmitted as $v)
+                                                    <option value="{{ $v }}">{{ $v }}</option>
+                                                @endforeach
+                                            </select>
+                                            <select data-bk-filter="remaining" class="bk-filter flex-1 min-w-0 text-xs border border-slate-300 rounded px-1 py-0.5 bg-white" title="Qoldi">
+                                                <option value="">Qoldi</option>
+                                                @foreach($sortedRemaining as $v)
+                                                    <option value="{{ $v }}">{{ $v }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+                                    </th>
+                                    <th class="px-2 py-1.5">
+                                        <select data-bk-filter="occupied" class="bk-filter w-full text-xs border border-slate-300 rounded px-1 py-0.5 bg-white">
+                                            <option value="">Barchasi</option>
+                                            @foreach($sortedOccupied as $v)
+                                                <option value="{{ $v }}">{{ $v }}</option>
+                                            @endforeach
+                                        </select>
+                                    </th>
+                                    <th class="px-2 py-1.5">
+                                        <select data-bk-filter="free" class="bk-filter w-full text-xs border border-slate-300 rounded px-1 py-0.5 bg-white">
+                                            <option value="">Barchasi</option>
+                                            @foreach($sortedFree as $v)
+                                                <option value="{{ $v }}">{{ $v }}</option>
+                                            @endforeach
+                                        </select>
+                                    </th>
+                                    <th class="px-2 py-1.5">
+                                        <select data-bk-filter="usage" class="bk-filter w-full text-xs border border-slate-300 rounded px-1 py-0.5 bg-white">
+                                            <option value="">Barchasi</option>
+                                            @foreach($sortedUsage as $v)
+                                                <option value="{{ $v }}">{{ rtrim(rtrim(number_format($v, 1, '.', ''), '0'), '.') }}%</option>
+                                            @endforeach
+                                        </select>
+                                    </th>
+                                    <th class="px-2 py-1.5">
+                                        <select data-bk-filter="status" class="bk-filter w-full text-xs border border-slate-300 rounded px-1 py-0.5 bg-white">
+                                            <option value="">Barchasi</option>
+                                            @foreach($sortedStatuses as $s)
+                                                <option value="{{ $s }}">{{ $s }}</option>
+                                            @endforeach
+                                        </select>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody class="bg-white divide-y divide-gray-100">
@@ -228,8 +394,32 @@
                                         $slotSubmitted = (int) ($slot['submitted'] ?? 0);
                                         $slotRemaining = (int) ($slot['remaining'] ?? max(0, $slotOccupied - $slotSubmitted));
                                         $submitPercent = $slotOccupied > 0 ? round(($slotSubmitted / $slotOccupied) * 100) : 0;
+
+                                        $rowGroupNames = [];
+                                        $rowSubjects = [];
+                                        $rowYnTypes = [];
+                                        $rowAttempts = [];
+                                        foreach ($slot['groups'] as $_g) {
+                                            if (!empty($_g['group_name'])) $rowGroupNames[] = $_g['group_name'];
+                                            if (!empty($_g['subject_name'])) $rowSubjects[] = $_g['subject_name'];
+                                            if (!empty($_g['yn_type'])) $rowYnTypes[] = $_g['yn_type'];
+                                            $rowAttempts[] = (int) ($_g['attempt'] ?? 1);
+                                        }
+                                        $dataTime = $isNoTime ? '__no_time__' : (string) $slot['time'];
                                     @endphp
-                                    <tr class="{{ $rowBg }} hover:bg-gray-50">
+                                    <tr class="bk-row {{ $rowBg }} hover:bg-gray-50"
+                                        data-time="{{ $dataTime }}"
+                                        data-groups="|{{ implode('|', array_unique($rowGroupNames)) }}|"
+                                        data-subjects="|{{ implode('|', array_unique($rowSubjects)) }}|"
+                                        data-yns="|{{ implode('|', array_unique($rowYnTypes)) }}|"
+                                        data-attempts="|{{ implode('|', array_unique($rowAttempts)) }}|"
+                                        data-students="{{ $slotOccupied }}"
+                                        data-submitted="{{ $slotSubmitted }}"
+                                        data-remaining="{{ $slotRemaining }}"
+                                        data-occupied="{{ $isNoTime ? '' : $slotOccupied }}"
+                                        data-free="{{ $isNoTime ? '' : (int) $slot['free'] }}"
+                                        data-usage="{{ $isNoTime ? '' : (float) $slot['usage_percent'] }}"
+                                        data-status="{{ $statusLabel }}">
                                         <td class="px-3 py-2 text-gray-500">{{ $i + 1 }}</td>
                                         <td class="px-3 py-2 text-center">
                                             @if($isNoTime)
@@ -341,9 +531,61 @@
                                         </td>
                                     </tr>
                                 @endforeach
+                                <tr id="bk-empty-row" class="hidden">
+                                    <td colspan="9" class="px-3 py-6 text-center text-sm text-slate-500">
+                                        Filtr bo'yicha mos qator topilmadi.
+                                    </td>
+                                </tr>
                             </tbody>
                         </table>
                     </div>
+
+                    <script>
+                        (function() {
+                            const filters = document.querySelectorAll('.bk-filter');
+                            const rows = document.querySelectorAll('#bk-table .bk-row');
+                            const emptyRow = document.getElementById('bk-empty-row');
+                            const resetBtn = document.getElementById('bk-filter-reset');
+
+                            function rowMatches(row) {
+                                for (const f of filters) {
+                                    const v = f.value;
+                                    if (!v) continue;
+                                    const key = f.dataset.bkFilter;
+                                    if (key === 'group' || key === 'subject' || key === 'yn' || key === 'attempt') {
+                                        const attr = key === 'group' ? 'groups' :
+                                                     key === 'subject' ? 'subjects' :
+                                                     key === 'yn' ? 'yns' : 'attempts';
+                                        const cell = row.dataset[attr] || '';
+                                        if (cell.indexOf('|' + v + '|') === -1) return false;
+                                    } else {
+                                        const cell = row.dataset[key];
+                                        if (cell === undefined || cell === '' || String(cell) !== v) return false;
+                                    }
+                                }
+                                return true;
+                            }
+
+                            function applyFilters() {
+                                let visible = 0;
+                                rows.forEach(r => {
+                                    if (rowMatches(r)) {
+                                        r.classList.remove('hidden');
+                                        visible++;
+                                    } else {
+                                        r.classList.add('hidden');
+                                    }
+                                });
+                                if (emptyRow) emptyRow.classList.toggle('hidden', visible !== 0 || rows.length === 0);
+                            }
+
+                            filters.forEach(f => f.addEventListener('change', applyFilters));
+                            if (resetBtn) resetBtn.addEventListener('click', function() {
+                                filters.forEach(f => { f.value = ''; });
+                                applyFilters();
+                            });
+                        })();
+                    </script>
                 @endif
             </div>
         </div>

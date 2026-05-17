@@ -3835,6 +3835,68 @@ class AcademicScheduleController extends Controller
      *
      * Restricted to the test_markazi role only.
      */
+    /**
+     * Resit (2-/3-urinish) yozuvi uchun sig'imni hisobga olib eng erta
+     * mavjud vaqt slotini topadi. Avval autoTimeAll har resit'ni
+     * work_hours_start ga muqobilsiz qo'yardi, natijada 130 talaba 09:00 ga
+     * yig'ilib qolardi.
+     *
+     * Algoritm: ish boshlanishidan boshlab davomiylik qadami bilan boriladi,
+     * tushlik tanaffusi o'tkazib yuboriladi, har slotda
+     * concurrentStudentsForSlot + groupStudentCount <= computer_count
+     * shartini birinchi qondiradigan vaqt qaytariladi. Hech qanday slot
+     * topilmasa null.
+     */
+    private function findResitSlot(
+        \App\Models\ExamSchedule $schedule,
+        string $ynType,
+        int $attempt,
+        string $dateStr,
+        array $capacity
+    ): ?string {
+        $computerCount = (int) $capacity['computer_count'];
+        $duration = max(1, (int) $capacity['test_duration_minutes']);
+        $workStart = \Carbon\Carbon::parse($dateStr . ' ' . $capacity['work_hours_start']);
+        $workEnd = \Carbon\Carbon::parse($dateStr . ' ' . $capacity['work_hours_end']);
+
+        $groupCount = ExamCapacityService::groupStudentCount((string) $schedule->group_hemis_id);
+        if ($groupCount === 0) {
+            // Guruhda talaba topilmasa — vaqt belgilashning ma'nosi yo'q,
+            // baribir saveTestTime kabi ish boshlanishini qaytaramiz.
+            return $capacity['work_hours_start'];
+        }
+
+        $exclude = [
+            'group_hemis_id' => $schedule->group_hemis_id,
+            'subject_id' => $schedule->subject_id,
+            'semester_code' => $schedule->semester_code,
+            'yn_type' => strtolower($ynType),
+            'attempt' => $attempt,
+        ];
+
+        $candidate = $workStart->copy();
+        // Xavfsizlik chegarasi — sekin sonsiz tsikldan qochish uchun.
+        $maxIterations = 200;
+        $i = 0;
+        while ($i++ < $maxIterations && $candidate->copy()->addMinutes($duration)->lte($workEnd)) {
+            $candidateTime = $candidate->format('H:i');
+
+            if (ExamCapacityService::overlapsLunch($dateStr, $candidateTime, $duration, $capacity)) {
+                $candidate->addMinutes($duration);
+                continue;
+            }
+
+            $concurrent = ExamCapacityService::concurrentStudentsForSlot($dateStr, $candidateTime, $exclude);
+            if ($concurrent + $groupCount <= $computerCount) {
+                return $candidateTime;
+            }
+
+            $candidate->addMinutes($duration);
+        }
+
+        return null;
+    }
+
     public function autoTimeAll(Request $request, AutoAssignService $service)
     {
         if ($deny = $this->ensureTestCenterAccess()) {
@@ -3946,10 +4008,21 @@ class AcademicScheduleController extends Controller
                             // Full slot distribution for the primary attempt.
                             $result = $service->distribute($schedule, $ynType, $startTime);
                         } else {
-                            // Resit: just stamp the time, like saveTestTime.
-                            $schedule->{$c['time']} = $startTime;
-                            $schedule->save();
-                            $result = ['ok' => true];
+                            // Resit: pick the earliest slot that still has
+                            // capacity. Previously this just stamped
+                            // work_hours_start unconditionally, which piled
+                            // every 2-/3-urinish onto 09:00 and overflowed
+                            // the computer count.
+                            $assignedTime = $this->findResitSlot(
+                                $schedule, $ynType, $attempt, $dateStr, $capacity
+                            );
+                            if ($assignedTime === null) {
+                                $result = ['ok' => false, 'reason' => 'no slot with free capacity in work hours'];
+                            } else {
+                                $schedule->{$c['time']} = $assignedTime;
+                                $schedule->save();
+                                $result = ['ok' => true];
+                            }
                         }
                     } catch (\Throwable $e) {
                         \Illuminate\Support\Facades\Log::warning('autoTimeAll: failed', [

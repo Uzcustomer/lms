@@ -5390,7 +5390,11 @@ class AcademicScheduleController extends Controller
         if ($deny = $this->ensureTestCenterAccess()) {
             return $deny;
         }
-        $totalComputers = (int) ExamCapacityService::getSettings()['computer_count'];
+        // Effective slot capacity — reserve pool ayrilgan, config bilan cheklangan.
+        $totalComputers = AutoAssignService::effectiveSlotCapacity(ExamCapacityService::getSettings());
+        if ($totalComputers < 1) {
+            $totalComputers = (int) ExamCapacityService::getSettings()['computer_count'];
+        }
         $today = now()->format('Y-m-d');
 
         // Bugundan keyingi (bugun kiradi) sanalar — vaqti qo'yilmaganlar ham
@@ -5642,8 +5646,10 @@ class AcademicScheduleController extends Controller
             }
 
             $carbonDate = \Carbon\Carbon::parse($dateStr);
-            // O'sha kunga moslangan kunlik sig'im (override hisobga olinadi).
-            $dayCapacity = ExamCapacityService::dailyCapacityForDate($dateStr);
+            // O'sha kunga moslangan kunlik sig'im — effective (reserve ayrilgan).
+            $daySettings = ExamCapacityService::getSettingsForDate($dateStr);
+            $daySettings['computer_count'] = $totalComputers;
+            $dayCapacity = ExamCapacityService::dailyCapacity($daySettings);
             $dateCards->push([
                 'date' => $carbonDate,
                 'date_str' => $dateStr,
@@ -5671,8 +5677,20 @@ class AcademicScheduleController extends Controller
             return $deny;
         }
         $settings = ExamCapacityService::getSettingsForDate($date);
-        $totalComputers = (int) $settings['computer_count'];
-        $dailyCapacity = ExamCapacityService::dailyCapacity($settings);
+        // Effective slot capacity = primary (reserve ayrilgan) ∩ config.
+        // Avval $totalComputers config'dan to'g'ridan-to'g'ri olinardi va
+        // bandlik 60 ni ko'rsatardi, distribute esa 55 ga (60-5 reserve)
+        // chegaralanardi → slotlar har doim 5 spotga kam to'lardi va UI
+        // 45/60 ko'rinardi. Endi UI ham 45/55 ko'rsatadi.
+        $totalComputers = AutoAssignService::effectiveSlotCapacity($settings);
+        if ($totalComputers < 1) {
+            $totalComputers = (int) $settings['computer_count'];
+        }
+        // dailyCapacity ham effective bo'yicha qayta hisoblaymiz —
+        // kunlik jami sig'im real (reserve ayrilgan) bo'lsin.
+        $settingsForCapacity = $settings;
+        $settingsForCapacity['computer_count'] = $totalComputers;
+        $dailyCapacity = ExamCapacityService::dailyCapacity($settingsForCapacity);
 
         // Sana validatsiyasi
         try {

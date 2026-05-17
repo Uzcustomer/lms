@@ -89,12 +89,13 @@ class AutoAssignService
             return ['ok' => false, 'skipped' => true, 'reason' => 'no students in group'];
         }
 
+        // Slot sig'imi = primaryComputerCount (reserve pool ayrilgan), lekin
+        // sozlamalardagi computer_count'dan oshmaydi. Reserve pool — failover
+        // uchun ajratilgan kompyuterlar (asosiy ishlamay qolsa zaxira); ularni
+        // slot rejalashtirishda band qilib ketmaslik kerak. Admin reserve
+        // sonini Computer.is_reserve_pool yoki services.moodle.reserve_computers_count
+        // orqali boshqaradi.
         $slotCapacity = $this->primaryComputerCount();
-        // Sozlamalardagi computer_count har slotda nechta talaba bo'lishi
-        // mumkinligini cheklaydi. Computer jadvalida ko'proq aktiv qator
-        // bo'lsa ham (masalan 62), bandlik UI 60/60 deb ko'rsatadi va admin
-        // 60 dan ortig'ini ko'rishni istamaydi. Shu sabab ikkalasining
-        // kichigini olamiz.
         $configCap = (int) ($capacity['computer_count'] ?? 0);
         if ($configCap > 0) {
             $slotCapacity = min($slotCapacity, $configCap);
@@ -403,5 +404,24 @@ class AutoAssignService
     private function primaryComputerCount(): int
     {
         return count($this->primaryPoolNumbers());
+    }
+
+    /**
+     * Controller-lar uchun yagona "effective slot capacity" helper.
+     * Sozlamalardagi computer_count va aktiv primary (reserve ayrilgan)
+     * kompyuterlarning eng kichigini qaytaradi. Reserve pool — failover,
+     * shu sabab slot rejalashtirishda hisobga olinmaydi.
+     */
+    public static function effectiveSlotCapacity(array $settings): int
+    {
+        $config = (int) ($settings['computer_count'] ?? 0);
+        $service = app(self::class);
+        $primary = $service->primaryComputerCount();
+        if ($primary < 1 && $config < 1) {
+            return 0;
+        }
+        if ($primary < 1) return $config;
+        if ($config < 1) return $primary;
+        return min($primary, $config);
     }
 }

@@ -3984,7 +3984,9 @@ class AcademicScheduleController extends Controller
         if ($count <= 0) {
             return $capacity['work_hours_start'] ?? '09:00';
         }
-        $computerCount = (int) $capacity['computer_count'];
+        // Reserve pool ayrilgan effective sig'im (distribute ham shuni
+        // ishlatadi) — 2-/3-urinish ham reserve'ni hurmat qilsin.
+        $computerCount = AutoAssignService::effectiveSlotCapacity($capacity);
         $duration = max(1, (int) $capacity['test_duration_minutes']);
 
         $parseHm = function (string $hm): int {

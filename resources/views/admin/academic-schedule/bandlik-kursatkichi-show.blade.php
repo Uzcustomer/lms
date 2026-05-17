@@ -1,7 +1,11 @@
 @php
-    $backRoute = request()->routeIs('admin.*')
+    $isAdminPrefix = request()->routeIs('admin.*');
+    $backRoute = $isAdminPrefix
         ? 'admin.academic-schedule.bandlik-kursatkichi'
         : 'teacher.academic-schedule.bandlik-kursatkichi';
+    $ynOldiWordRoute = $isAdminPrefix
+        ? 'admin.academic-schedule.test-center.generate-yn-oldi-word'
+        : 'teacher.academic-schedule.test-center.generate-yn-oldi-word';
 @endphp
 
 <x-app-layout>
@@ -440,15 +444,41 @@
                                         data-status="{{ $statusLabel }}">
                                         <td class="px-3 py-2 text-gray-500">{{ $i + 1 }}</td>
                                         <td class="px-3 py-2 text-center">
-                                            @if($isNoTime)
-                                                <span class="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold bg-amber-100 text-amber-800" title="Vaqti hali belgilanmagan">
-                                                    Vaqti qo'yilmagan
-                                                </span>
-                                            @else
-                                                <span class="inline-flex items-center px-2.5 py-1 rounded text-sm font-semibold bg-blue-100 text-blue-800">
-                                                    {{ $slot['time'] }}
-                                                </span>
-                                            @endif
+                                            <div class="flex flex-col items-center gap-1">
+                                                @if($isNoTime)
+                                                    <span class="inline-flex items-center px-2.5 py-1 rounded text-xs font-semibold bg-amber-100 text-amber-800" title="Vaqti hali belgilanmagan">
+                                                        Vaqti qo'yilmagan
+                                                    </span>
+                                                @else
+                                                    <span class="inline-flex items-center px-2.5 py-1 rounded text-sm font-semibold bg-blue-100 text-blue-800">
+                                                        {{ $slot['time'] }}
+                                                    </span>
+                                                @endif
+                                                @php
+                                                    $exportItems = [];
+                                                    foreach ($slot['groups'] as $_grp) {
+                                                        if (empty($_grp['group_hemis_id']) || empty($_grp['subject_id']) || empty($_grp['semester_code'])) continue;
+                                                        $exportItems[] = [
+                                                            'group_hemis_id' => (string) $_grp['group_hemis_id'],
+                                                            'subject_id'     => (string) $_grp['subject_id'],
+                                                            'semester_code'  => (string) $_grp['semester_code'],
+                                                        ];
+                                                    }
+                                                @endphp
+                                                @if(!empty($exportItems))
+                                                    <button type="button"
+                                                            class="bk-word-export inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 transition"
+                                                            data-items='@json($exportItems)'
+                                                            data-exam-date="{{ $date->format('Y-m-d') }}"
+                                                            data-exam-time="{{ $isNoTime ? '' : $slot['time'] }}"
+                                                            title="Bu slotdagi guruhlar uchun 12-shakl YN oldi qaydnomasini Word formatida yuklab olish">
+                                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                                                        </svg>
+                                                        Word
+                                                    </button>
+                                                @endif
+                                            </div>
                                         </td>
                                         <td class="px-3 py-2">
                                             <div class="flex flex-col gap-1.5">
@@ -601,6 +631,94 @@
                             if (resetBtn) resetBtn.addEventListener('click', function() {
                                 filters.forEach(f => { f.value = ''; });
                                 applyFilters();
+                            });
+                        })();
+
+                        // Slot bo'yicha "Word" tugmasi — 12-shakl YN oldi qaydnomasini yuklab olish.
+                        // Slotning barcha guruhlari (group+subject+semester) bitta POST'da yuboriladi va
+                        // server tomonida fan bo'yicha guruhlanib bitta .docx fayl qaytaradi (yoki
+                        // birdan ortiq fan bo'lsa .zip). Tugma data-items atributidan ro'yxatni o'qiydi.
+                        (function() {
+                            const url = @json(route($ynOldiWordRoute));
+                            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+                            document.querySelectorAll('.bk-word-export').forEach(function(btn) {
+                                btn.addEventListener('click', function(e) {
+                                    e.preventDefault();
+                                    let items;
+                                    try {
+                                        items = JSON.parse(btn.getAttribute('data-items') || '[]');
+                                    } catch (_) {
+                                        items = [];
+                                    }
+                                    if (!Array.isArray(items) || items.length === 0) {
+                                        alert("Bu slotda yuklab olish uchun guruh topilmadi.");
+                                        return;
+                                    }
+
+                                    const originalHTML = btn.innerHTML;
+                                    btn.disabled = true;
+                                    btn.innerHTML = '<svg class="animate-spin w-3 h-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle style="opacity:0.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path style="opacity:0.75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Yuklanmoqda...';
+
+                                    const payload = {
+                                        items: items,
+                                        compact: true,
+                                        exam_date: btn.getAttribute('data-exam-date') || undefined,
+                                    };
+                                    const examTime = btn.getAttribute('data-exam-time');
+                                    if (examTime) payload.exam_time = examTime;
+
+                                    fetch(url, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Accept': 'application/json',
+                                            'X-Requested-With': 'XMLHttpRequest',
+                                            'X-CSRF-TOKEN': csrfToken,
+                                        },
+                                        body: JSON.stringify(payload),
+                                    })
+                                    .then(function(response) {
+                                        if (!response.ok) {
+                                            return response.text().then(function(text) {
+                                                let msg = 'Xatolik: ' + response.status;
+                                                try { const j = JSON.parse(text); msg = j.error || j.message || msg; } catch (_) {}
+                                                throw new Error(msg);
+                                            });
+                                        }
+                                        const contentType = response.headers.get('content-type') || '';
+                                        if (contentType.indexOf('application/json') !== -1) {
+                                            return response.json().then(function(j) {
+                                                throw new Error(j.error || j.message || 'Kutilmagan javob');
+                                            });
+                                        }
+                                        let filename = 'yn_oldi_qaydnoma.docx';
+                                        const disposition = response.headers.get('Content-Disposition');
+                                        if (disposition) {
+                                            const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                                            if (match && match[1]) filename = match[1].replace(/['"]/g, '');
+                                        }
+                                        return response.blob().then(function(blob) { return { blob: blob, filename: filename }; });
+                                    })
+                                    .then(function(data) {
+                                        if (!data || !data.blob) return;
+                                        const objectUrl = window.URL.createObjectURL(data.blob);
+                                        const a = document.createElement('a');
+                                        a.href = objectUrl;
+                                        a.download = data.filename;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        window.URL.revokeObjectURL(objectUrl);
+                                        a.remove();
+                                    })
+                                    .catch(function(err) {
+                                        alert(err.message || 'Yuklab olishda xatolik');
+                                    })
+                                    .finally(function() {
+                                        btn.innerHTML = originalHTML;
+                                        btn.disabled = false;
+                                    });
+                                });
                             });
                         })();
                     </script>

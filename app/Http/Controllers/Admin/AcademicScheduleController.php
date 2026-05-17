@@ -784,14 +784,38 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent) {
-            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent) {
+        // YN ga ruxsat — har bir talaba uchun (Ruxsat / Shartli / X). Test markazi
+        // view'i va vaqt qo'yish endpointlari shu xaritaga tayanadi. Hisob YN
+        // oldi qaydnoma bilan bir xil mantiq orqali (YnAdmissionService).
+        // Cache — bitta (group|subj|sem) uchun bir marta chaqirilsin.
+        $admissionService = app(\App\Services\YnAdmissionService::class);
+        $admissionCache = [];
+
+        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache) {
+            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache) {
                 $gHid = $item['group']->group_hemis_id;
                 $subjectId = $item['subject']->subject_id ?? null;
                 $semCode = $item['subject']->semester_code ?? null;
                 $statusKey = $gHid . '|' . $subjectId . '|' . $semCode;
                 $statusByStudent = $studentStatus[$statusKey] ?? [];
                 $studentList = $studentsByGroup->get($gHid, collect());
+
+                // Admission map (Ruxsat / Shartli / X) — bitta marta hisoblanadi.
+                $admissionKey = $gHid . '|' . $subjectId . '|' . $semCode;
+                if (!isset($admissionCache[$admissionKey])) {
+                    try {
+                        $admissionCache[$admissionKey] = ($gHid && $subjectId && $semCode)
+                            ? $admissionService->computeForGroup((string) $gHid, (string) $subjectId, (string) $semCode)
+                            : [];
+                    } catch (\Throwable $e) {
+                        \Log::warning('attachStudentsToSchedule: admission compute failed', [
+                            'group' => $gHid, 'subject' => $subjectId, 'sem' => $semCode,
+                            'error' => $e->getMessage(),
+                        ]);
+                        $admissionCache[$admissionKey] = [];
+                    }
+                }
+                $admissionByStudent = $admissionCache[$admissionKey];
 
                 // Guruhning OSKI/Test sanasi (asosiy schedule, student_hemis_id NULL).
                 // Sinov (test) / Normativ kabi closing_formlar uchun sana saqlanmaydi —
@@ -840,6 +864,7 @@ class AcademicScheduleController extends Controller
                     // Joriy semestrdagi BARCHA qarz fanlari (barcha rowlar bo'yicha)
                     $currentDebts = array_values($currentDebtsByStudent[$stu->hemis_id] ?? []);
                     usort($currentDebts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+                    $admission = $admissionByStudent[$stu->hemis_id] ?? null;
                     $rows[] = [
                         'hemis_id' => $stu->hemis_id,
                         'student_id_number' => $stu->student_id_number ?? null,
@@ -861,6 +886,9 @@ class AcademicScheduleController extends Controller
                         'is_held_back' => $stat['held_back'] ?? false,
                         'past_debts' => $pastDebts,
                         'current_semester_debts' => $currentDebts,
+                        // YN ga ruxsat (YN oldi qaydnoma bilan bir xil mantiq)
+                        'admission_status' => $admission['status'] ?? null,
+                        'admission_reasons' => $admission['reasons'] ?? [],
                     ];
                 }
                 $item['students'] = $rows;
@@ -1281,9 +1309,14 @@ class AcademicScheduleController extends Controller
             }
         } catch (\Throwable $e) {}
 
-        // 2b) OSKI / Test attempt=2 baholari (12a) — failed_attempt2 ni aniqlash uchun
+        // 2b) OSKI / Test attempt=2 baholari (12a) — failed_attempt2 ni aniqlash uchun.
+        // $enrolledAttempt2Map: talaba 2-urinishga (12a ga) kirgan, ya'ni
+        // student_grades.attempt=2 yozuvi mavjud (baho bo'sh bo'lsa ham — qo'lda
+        // o'tkazilgan). Bu failed2 ni "kelmadi=yiqilgan" deb belgilashdan oldin
+        // talaba haqiqatdan 2-urinishga ro'yxatda bo'lganini tekshirish uchun.
         $examMap2 = [];
         $examLists2 = [];
+        $enrolledAttempt2Map = []; // hemis|subj|sem => true
         try {
             if ($hasAttemptCol) {
                 $rows = DB::table('student_grades')
@@ -1305,6 +1338,7 @@ class AcademicScheduleController extends Controller
                 $testTypes2 = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
 
                 foreach ($rows as $r) {
+                    $enrolledAttempt2Map[$r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code] = true;
                     $typeCode = (int) $r->training_type_code;
                     if ($typeCode === 103) {
                         if (!$r->quiz_result_id) continue;
@@ -1443,11 +1477,23 @@ class AcademicScheduleController extends Controller
                 $testFailed1 = $confirmFailed($testRequired, $testNum, $testDate);
                 $failed1 = $isPullik || $oskiFailed1 || $testFailed1;
 
-                $oski2Num = $oski2 !== null ? (float) $oski2 : null;
-                $test2Num = $test2 !== null ? (float) $test2 : null;
-                $oskiFailed2 = $confirmFailed($oskiRequired, $oski2Num, $oskiResitDate);
-                $testFailed2 = $confirmFailed($testRequired, $test2Num, $testResitDate);
-                $failed2 = $isPullik || $oskiFailed2 || $testFailed2;
+                // failed2 ni faqat 2-urinishga haqiqatdan kirgan talabalar uchun
+                // hisoblaymiz. Aks holda: 1-urinishdan o'tib ketgan talaba 12a ga
+                // umuman ro'yxatga olinmagan — 2-urinish sanasi o'tgan + bahosi yo'q
+                // bo'lsa ham "kelmadi=yiqilgan" deyish noto'g'ri.
+                // 2-urinishga kirgan deb hisoblanadi: 1-urinishdan o'tmagan
+                // ($failed1) YOKI student_grades.attempt=2 yozuvi mavjud.
+                $enrolledAttempt2 = $failed1
+                    || !empty($enrolledAttempt2Map[$hid . '|' . $s . '|' . $sem]);
+                if ($enrolledAttempt2) {
+                    $oski2Num = $oski2 !== null ? (float) $oski2 : null;
+                    $test2Num = $test2 !== null ? (float) $test2 : null;
+                    $oskiFailed2 = $confirmFailed($oskiRequired, $oski2Num, $oskiResitDate);
+                    $testFailed2 = $confirmFailed($testRequired, $test2Num, $testResitDate);
+                    $failed2 = $isPullik || $oskiFailed2 || $testFailed2;
+                } else {
+                    $failed2 = false;
+                }
 
                 $key = $g . '|' . $s . '|' . $sem;
                 if (!isset($result[$key])) $result[$key] = [];
@@ -2719,6 +2765,62 @@ class AcademicScheduleController extends Controller
                 $oskiTimeCol = match ($rowUrinish) { 2 => 'oski_resit_time', 3 => 'oski_resit2_time', default => 'oski_time' };
                 $testTimeCol = match ($rowUrinish) { 2 => 'test_resit_time', 3 => 'test_resit2_time', default => 'test_time' };
 
+                // Per-student qator: yuborilgan sana+vaqt guruh qatori bilan AYNAN bir xil
+                // bo'lsa, alohida yozuv yaratmaymiz (mavjud bo'lsa o'chiramiz). Per-student
+                // yozuvi faqat individual jadval — guruh sanasidan FARQLI vaqt yoki sana
+                // belgilash uchun mantiqan kerak. Bu form yoki brauzer autofill tufayli
+                // per-student inputlarga guruh sanasi noxosdan tushib qolishi natijasida
+                // 7-8 ta dublikat yozuv yaratilishining oldini oladi.
+                if ($studentHemisIdForRow) {
+                    $groupRowForCompare = ExamSchedule::where('group_hemis_id', $schedule['group_hemis_id'])
+                        ->where('subject_id', $schedule['subject_id'])
+                        ->where('semester_code', $schedule['semester_code'])
+                        ->whereNull('student_hemis_id')
+                        ->first();
+                    if ($groupRowForCompare) {
+                        $normTime = function ($t): ?string {
+                            if (empty($t)) return null;
+                            return substr((string) $t, 0, 5);
+                        };
+                        $groupOski = $groupRowForCompare->{$oskiCol}?->format('Y-m-d');
+                        $groupTest = $groupRowForCompare->{$testCol}?->format('Y-m-d');
+                        $groupOskiTime = $normTime($groupRowForCompare->{$oskiTimeCol} ?? null);
+                        $groupTestTime = $normTime($groupRowForCompare->{$testTimeCol} ?? null);
+                        $stuOski = !empty($schedule['oski_date']) ? $schedule['oski_date'] : null;
+                        $stuTest = !empty($schedule['test_date']) ? $schedule['test_date'] : null;
+                        $stuOskiTime = $normTime($schedule['oski_time'] ?? null);
+                        $stuTestTime = $normTime($schedule['test_time'] ?? null);
+                        $matchesGroup = ($stuOski === $groupOski)
+                            && ($stuTest === $groupTest)
+                            && ($stuOskiTime === $groupOskiTime)
+                            && ($stuTestTime === $groupTestTime);
+                        if ($matchesGroup) {
+                            if ($record->exists) {
+                                $oldVals = $record->only([
+                                    'oski_date', 'oski_time', 'oski_na',
+                                    'test_date', 'test_time', 'test_na',
+                                    'oski_resit_date', 'oski_resit_time',
+                                    'oski_resit2_date', 'oski_resit2_time',
+                                    'test_resit_date', 'test_resit_time',
+                                    'test_resit2_date', 'test_resit2_time',
+                                ]);
+                                ActivityLogService::log(
+                                    'delete',
+                                    'exam_schedule',
+                                    'Per-student YN yozuvi tozalandi (guruh bilan bir xil): '
+                                        . ($record->subject_name ?: ('ID ' . $record->id))
+                                        . ' (guruh ' . $record->group_hemis_id . ')',
+                                    $record,
+                                    $oldVals,
+                                    null
+                                );
+                                $record->delete();
+                            }
+                            continue;
+                        }
+                    }
+                }
+
                 // Cheklov 1: Allaqachon saqlangan sanani o'zgartirish mumkin emas
                 $newOskiDate = !empty($schedule['oski_date']) ? $schedule['oski_date'] : null;
                 $newOskiNa = $oskiNa;
@@ -3160,11 +3262,19 @@ class AcademicScheduleController extends Controller
             'items.*.group_hemis_id' => 'required|string',
             'items.*.semester_code' => 'required|string',
             'items.*.subject_id' => 'required|string',
+            // Bandlik ko'rsatkichidan chaqirilganda: imzo bloki va QR'siz "ish ro'yxati"
+            // varianti + slotning kirish sana/vaqti yuqorida ko'rsatiladi.
+            'compact' => 'nullable|boolean',
+            'exam_date' => 'nullable|date_format:Y-m-d',
+            'exam_time' => 'nullable|date_format:H:i',
         ]);
 
         try {
 
         $items = $request->items;
+        $compact = (bool) $request->boolean('compact');
+        $examDate = $request->input('exam_date');
+        $examTime = $request->input('exam_time');
         $files = [];
         $tempDir = storage_path('app/public/yn_oldi_qaydnoma');
 
@@ -3376,11 +3486,28 @@ class AcademicScheduleController extends Controller
                 ['alignment' => Jc::END, 'spaceAfter' => 150]
             );
 
-            // Jadval
+            // Test markazida slotga kirish sanasi va vaqti (faqat bandlikdan
+            // chaqirilganda — bandlik view'i exam_date/exam_time yuboradi).
+            if ($examDate) {
+                try {
+                    $examDateFmt = \Carbon\Carbon::createFromFormat('Y-m-d', $examDate)->format('d.m.Y');
+                } catch (\Throwable $e) {
+                    $examDateFmt = $examDate;
+                }
+                $examLine = 'Test markaziga kirish: ' . $examDateFmt . ($examTime ? ' ' . $examTime : '');
+                $section->addText(
+                    $examLine,
+                    ['bold' => true, 'size' => 12],
+                    ['alignment' => Jc::CENTER, 'spaceAfter' => 200]
+                );
+            }
+
+            // Jadval — sahifa o'rtasida joylashtiriladi
             $tableStyle = [
                 'borderSize' => 6,
                 'borderColor' => '000000',
                 'cellMargin' => 40,
+                'alignment' => 'center',
             ];
             $tableName = 'YnOldiTable_' . $subjectKey;
             $phpWord->addTableStyle($tableName, $tableStyle);
@@ -3542,66 +3669,71 @@ class AcademicScheduleController extends Controller
                 }
             }
 
-            // Imzolar
-            $section->addTextBreak(1);
-
-            $dekan = Teacher::whereHas('deanFaculties', fn($q) => $q->where('dean_faculties.department_hemis_id', $department->department_hemis_id ?? ''))
-                ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
-                ->first();
-
-            $signTable = $section->addTable();
-            $signRow = $signTable->addRow();
-            $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
-            $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($allMaruzaText), ['size' => 11]);
-
-            // QR code yaratish
-            $generatedBy = null;
-            if (auth()->guard('teacher')->check()) {
-                $generatedBy = auth()->guard('teacher')->user()->full_name ?? auth()->guard('teacher')->user()->name ?? null;
-            } elseif (auth()->guard('web')->check()) {
-                $generatedBy = auth()->guard('web')->user()->name ?? null;
-            }
-
-            $verification = DocumentVerification::createForDocument([
-                'document_type' => 'YN oldi qaydnoma',
-                'subject_name' => $subject->subject_name,
-                'group_names' => implode(', ', $groupNames),
-                'semester_name' => $semester->name ?? null,
-                'department_name' => $department->name ?? null,
-                'generated_by' => $generatedBy,
-            ]);
-
-            $verificationUrl = $verification->getVerificationUrl();
+            // Imzolar va QR — faqat to'liq (rasmiy) versiyada. Bandlik ko'rsatkichidan
+            // chaqirilganda (compact=true) operator uchun toza ro'yxat chiqadi: imzo
+            // bloki, QR va PDF verifikatsiya — kerak emas.
+            $verification = null;
             $qrImagePath = null;
-
-            try {
-                $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?data=' . urlencode($verificationUrl) . '&size=200x200';
-                $client = new \GuzzleHttp\Client();
-                $qrTempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_qr.png';
-                $response = $client->request('GET', $qrApiUrl, [
-                    'verify' => false,
-                    'sink' => $qrTempPath,
-                    'timeout' => 10,
-                ]);
-                if ($response->getStatusCode() == 200 && file_exists($qrTempPath) && filesize($qrTempPath) > 0) {
-                    $qrImagePath = $qrTempPath;
-                }
-            } catch (\Exception $e) {
-                // QR code generatsiyasi muvaffaqiyatsiz bo'lsa, davom etamiz
-            }
-
-            if ($qrImagePath) {
+            if (!$compact) {
                 $section->addTextBreak(1);
-                $section->addImage($qrImagePath, [
-                    'width' => 80,
-                    'height' => 80,
-                    'alignment' => Jc::START,
+
+                $dekan = Teacher::whereHas('deanFaculties', fn($q) => $q->where('dean_faculties.department_hemis_id', $department->department_hemis_id ?? ''))
+                    ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
+                    ->first();
+
+                $signTable = $section->addTable();
+                $signRow = $signTable->addRow();
+                $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
+                $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($allMaruzaText), ['size' => 11]);
+
+                // QR code yaratish
+                $generatedBy = null;
+                if (auth()->guard('teacher')->check()) {
+                    $generatedBy = auth()->guard('teacher')->user()->full_name ?? auth()->guard('teacher')->user()->name ?? null;
+                } elseif (auth()->guard('web')->check()) {
+                    $generatedBy = auth()->guard('web')->user()->name ?? null;
+                }
+
+                $verification = DocumentVerification::createForDocument([
+                    'document_type' => 'YN oldi qaydnoma',
+                    'subject_name' => $subject->subject_name,
+                    'group_names' => implode(', ', $groupNames),
+                    'semester_name' => $semester->name ?? null,
+                    'department_name' => $department->name ?? null,
+                    'generated_by' => $generatedBy,
                 ]);
-                $section->addText(
-                    'Hujjat haqiqiyligini tekshirish uchun QR kodni skanerlang',
-                    ['size' => 8, 'italic' => true, 'color' => '666666'],
-                    ['spaceAfter' => 0]
-                );
+
+                $verificationUrl = $verification->getVerificationUrl();
+
+                try {
+                    $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?data=' . urlencode($verificationUrl) . '&size=200x200';
+                    $client = new \GuzzleHttp\Client();
+                    $qrTempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_qr.png';
+                    $response = $client->request('GET', $qrApiUrl, [
+                        'verify' => false,
+                        'sink' => $qrTempPath,
+                        'timeout' => 10,
+                    ]);
+                    if ($response->getStatusCode() == 200 && file_exists($qrTempPath) && filesize($qrTempPath) > 0) {
+                        $qrImagePath = $qrTempPath;
+                    }
+                } catch (\Exception $e) {
+                    // QR code generatsiyasi muvaffaqiyatsiz bo'lsa, davom etamiz
+                }
+
+                if ($qrImagePath) {
+                    $section->addTextBreak(1);
+                    $section->addImage($qrImagePath, [
+                        'width' => 80,
+                        'height' => 80,
+                        'alignment' => Jc::START,
+                    ]);
+                    $section->addText(
+                        'Hujjat haqiqiyligini tekshirish uchun QR kodni skanerlang',
+                        ['size' => 8, 'italic' => true, 'color' => '666666'],
+                        ['spaceAfter' => 0]
+                    );
+                }
             }
 
             $groupNamesStr = str_replace(['/', '\\', ' '], '_', implode('_', $groupNames));
@@ -3612,31 +3744,34 @@ class AcademicScheduleController extends Controller
             $objWriter = IOFactory::createWriter($phpWord, 'Word2007');
             $objWriter->save($tempPath);
 
-            // Hujjatni PDF ga aylantirib doimiy saqlash (tekshirish sahifasi uchun)
-            try {
-                $pdfStorageDir = storage_path('app/public/documents/verified');
-                if (!is_dir($pdfStorageDir)) {
-                    mkdir($pdfStorageDir, 0755, true);
+            // Hujjatni PDF ga aylantirib doimiy saqlash (tekshirish sahifasi uchun).
+            // Compact rejimda verification yaratilmaydi — PDF ham kerak emas.
+            if ($verification) {
+                try {
+                    $pdfStorageDir = storage_path('app/public/documents/verified');
+                    if (!is_dir($pdfStorageDir)) {
+                        mkdir($pdfStorageDir, 0755, true);
+                    }
+
+                    $pdfCommand = sprintf(
+                        'soffice --headless --convert-to pdf --outdir %s %s 2>&1',
+                        escapeshellarg($pdfStorageDir),
+                        escapeshellarg($tempPath)
+                    );
+                    exec($pdfCommand, $pdfOutput, $pdfReturnCode);
+
+                    $generatedPdfName = pathinfo(basename($tempPath), PATHINFO_FILENAME) . '.pdf';
+                    $generatedPdfFullPath = $pdfStorageDir . '/' . $generatedPdfName;
+
+                    if ($pdfReturnCode === 0 && file_exists($generatedPdfFullPath)) {
+                        $permanentPdfName = $verification->token . '.pdf';
+                        $permanentPdfPath = $pdfStorageDir . '/' . $permanentPdfName;
+                        rename($generatedPdfFullPath, $permanentPdfPath);
+                        $verification->update(['document_path' => 'documents/verified/' . $permanentPdfName]);
+                    }
+                } catch (\Throwable $e) {
+                    // PDF saqlash muvaffaqiyatsiz bo'lsa, davom etamiz
                 }
-
-                $pdfCommand = sprintf(
-                    'soffice --headless --convert-to pdf --outdir %s %s 2>&1',
-                    escapeshellarg($pdfStorageDir),
-                    escapeshellarg($tempPath)
-                );
-                exec($pdfCommand, $pdfOutput, $pdfReturnCode);
-
-                $generatedPdfName = pathinfo(basename($tempPath), PATHINFO_FILENAME) . '.pdf';
-                $generatedPdfFullPath = $pdfStorageDir . '/' . $generatedPdfName;
-
-                if ($pdfReturnCode === 0 && file_exists($generatedPdfFullPath)) {
-                    $permanentPdfName = $verification->token . '.pdf';
-                    $permanentPdfPath = $pdfStorageDir . '/' . $permanentPdfName;
-                    rename($generatedPdfFullPath, $permanentPdfPath);
-                    $verification->update(['document_path' => 'documents/verified/' . $permanentPdfName]);
-                }
-            } catch (\Throwable $e) {
-                // PDF saqlash muvaffaqiyatsiz bo'lsa, davom etamiz
             }
 
             // QR vaqtinchalik faylni tozalash
@@ -4804,6 +4939,22 @@ class AcademicScheduleController extends Controller
             'computer_number' => 'required|integer|min:1',
         ]);
 
+        // X (YN ga ruxsat yo'q) talabaga kompyuter biriktirib bo'lmaydi.
+        $admission = app(\App\Services\YnAdmissionService::class)
+            ->statusForStudent(
+                (string) $request->student_hemis_id,
+                (string) $request->group_hemis_id,
+                (string) $request->subject_id,
+                (string) $request->semester_code
+            );
+        if ($admission === \App\Services\YnAdmissionService::STATUS_X) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu talabaga YN ga ruxsat yo\'q (X holati) — kompyuter biriktirib bo\'lmaydi.',
+                'admission_status' => $admission,
+            ], 422);
+        }
+
         $schedule = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
@@ -4868,6 +5019,24 @@ class AcademicScheduleController extends Controller
             'attempt' => 'required|integer|in:2,3',
             'test_time' => 'required|date_format:H:i',
         ]);
+
+        // YN ga ruxsat tekshiruvi — YN oldi qaydnomadagi qaror bilan bir xil.
+        // X (ruxsat yo'q) bo'lgan talabaga vaqt qo'yib bo'lmaydi: JN/MT < limit
+        // yoki davomat ≥ 25% bo'lsa, talaba YN/test ga umuman kirita olmaydi.
+        $admission = app(\App\Services\YnAdmissionService::class)
+            ->statusForStudent(
+                (string) $request->student_hemis_id,
+                (string) $request->group_hemis_id,
+                (string) $request->subject_id,
+                (string) $request->semester_code
+            );
+        if ($admission === \App\Services\YnAdmissionService::STATUS_X) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu talabaga YN ga ruxsat yo\'q (X holati). YN oldi qaydnoma asosida JN/MT yoki davomat shartlari bajarilmagan — vaqt qo\'yib bo\'lmaydi.',
+                'admission_status' => $admission,
+            ], 422);
+        }
 
         $columns = [
             'OSKI' => [
@@ -5365,40 +5534,64 @@ class AcademicScheduleController extends Controller
         }
 
         // 2/3-urinish (resit) uchun haqiqiy talabalar sonini hisoblash —
-        // butun guruh emas, faqat yiqilganlar (pullik/held_back chiqariladi).
-        $statusByKey = [];
+        // butun guruh emas, faqat yiqilganlar. computeStudentAttemptStatuses
+        // qoidalari bilan to'liq mos kelmasligi mumkin (V<60 ning aniq
+        // formulasi murakkab), lekin amaliy yetarli darajada — bir BATCH
+        // DB so'rovi orqali. 504 timeout xavfini oldini olish uchun har
+        // (group, subject, semester) uchun computeStudentAttemptStatuses
+        // chaqirilmaydi.
+        $resitEligibleMap = []; // [group|subject|semester|attempt] => count of distinct hemis_ids
         if ($allItems->isNotEmpty()) {
-            $pseudoScheduleData = collect();
-            foreach ($allItems as $it) {
-                if (empty($it['semester_code']) || empty($it['subject_id'])) continue;
-                $gid = $it['group_hemis_id'];
-                if (!$pseudoScheduleData->has($gid)) {
-                    $pseudoScheduleData->put($gid, collect());
-                }
-                $tripleKey = $gid . '|' . $it['subject_id'] . '|' . $it['semester_code'];
-                $alreadyAdded = $pseudoScheduleData->get($gid)
-                    ->contains(fn($x) => ($x['group']->group_hemis_id . '|' . $x['subject']->subject_id . '|' . $x['subject']->semester_code) === $tripleKey);
-                if (!$alreadyAdded) {
-                    $pseudoScheduleData->get($gid)->push([
-                        'group' => (object) ['group_hemis_id' => $gid],
-                        'subject' => (object) [
-                            'subject_id' => $it['subject_id'],
-                            'semester_code' => $it['semester_code'],
-                        ],
+            $resitTriples = $allItems->filter(fn($it) => (int) ($it['attempt'] ?? 1) >= 2 && empty($it['student_hemis_id']))
+                ->unique(fn($it) => $it['group_hemis_id'] . '|' . $it['subject_id'] . '|' . $it['semester_code'])
+                ->values();
+            if ($resitTriples->isNotEmpty()) {
+                $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+                $subjectIds = $resitTriples->pluck('subject_id')->unique()->all();
+                $semCodes = $resitTriples->pluck('semester_code')->unique()->all();
+                $groupIdsForResit = $resitTriples->pluck('group_hemis_id')->unique()->all();
+                try {
+                    $resitQuery = \Illuminate\Support\Facades\DB::table('student_grades as sg')
+                        ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                        ->whereIn('st.group_id', $groupIdsForResit)
+                        ->where('st.student_status_code', 11)
+                        ->whereIn('sg.subject_id', $subjectIds)
+                        ->whereIn('sg.semester_code', $semCodes)
+                        ->whereIn('sg.training_type_code', [101, 102])
+                        ->whereNull('sg.deleted_at');
+                    if ($hasAttemptCol) {
+                        // failed1 (attempt 1 da yiqilgan) yoki explicit attempt>=2 record bo'lsa eligible.
+                        $resitQuery->where(function ($w) {
+                            $w->where('sg.attempt', '>=', 2)
+                              ->orWhere(function ($x) {
+                                  $x->where(function ($y) { $y->where('sg.attempt', 1)->orWhereNull('sg.attempt'); })
+                                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                              });
+                        });
+                    } else {
+                        // attempt ustuni yo'q bo'lsa, oddiy "grade<60" tekshiruv.
+                        $resitQuery->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                    }
+                    $resitRows = $resitQuery
+                        ->select('st.group_id', 'sg.subject_id', 'sg.semester_code',
+                            \Illuminate\Support\Facades\DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
+                        ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
+                        ->get();
+                    foreach ($resitRows as $r) {
+                        $k2 = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|2';
+                        $k3 = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|3';
+                        $resitEligibleMap[$k2] = (int) $r->cnt;
+                        $resitEligibleMap[$k3] = (int) $r->cnt;
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('bandlikKursatkichi: resit count failed', [
+                        'error' => $e->getMessage(),
                     ]);
                 }
             }
-            try {
-                $statusByKey = $this->computeStudentAttemptStatuses($pseudoScheduleData);
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichi: status hisoblashda xato', [
-                    'error' => $e->getMessage(),
-                ]);
-                $statusByKey = [];
-            }
         }
 
-        $eligibleCountForItem = function (array $item) use ($studentCounts, $statusByKey): int {
+        $eligibleCountForItem = function (array $item) use ($studentCounts, $resitEligibleMap): int {
             $attemptN = (int) ($item['attempt'] ?? 1);
             if (!empty($item['student_hemis_id'])) {
                 return 1; // individual grafik — faqat shu talaba
@@ -5407,18 +5600,13 @@ class AcademicScheduleController extends Controller
             if ($attemptN <= 1) {
                 return $totalGroup;
             }
-            $key = $item['group_hemis_id'] . '|' . ($item['subject_id'] ?? '') . '|' . ($item['semester_code'] ?? '');
-            $studs = $statusByKey[$key] ?? null;
-            if (!is_array($studs) || empty($studs)) {
-                return $totalGroup;
+            $key = $item['group_hemis_id'] . '|' . ($item['subject_id'] ?? '') . '|' . ($item['semester_code'] ?? '') . '|' . $attemptN;
+            if (array_key_exists($key, $resitEligibleMap)) {
+                return $resitEligibleMap[$key];
             }
-            $cnt = 0;
-            foreach ($studs as $st) {
-                if (!empty($st['pullik']) || !empty($st['held_back'])) continue;
-                if ($attemptN === 2 && !empty($st['failed1'])) $cnt++;
-                if ($attemptN === 3 && !empty($st['failed2'])) $cnt++;
-            }
-            return $cnt;
+            // Resit eligibility ma'lumotini topa olmaganda 0 ga moyil bo'lamiz —
+            // hech kim yiqilmagan bo'lsa, 2-urinishga hech kim kelmaydi.
+            return 0;
         };
 
         // Har bir sana uchun karta ma'lumotlari. Vaqti qo'yilmagan yozuvlar
@@ -5573,39 +5761,53 @@ class AcademicScheduleController extends Controller
         }
 
         // 2/3-urinish (resit) uchun mos talabalar sonini hisoblash —
-        // butun guruh emas, faqat yiqilganlar. computeStudentAttemptStatuses
-        // har talaba uchun failed1/failed2/pullik/held_back statuslarini
-        // qaytaradi. Bandlik sahifasida bandlik = haqiqatan kelishi mumkin
-        // bo'lganlar soni bo'lishi kerak.
-        $statusByKey = [];
+        // butun guruh emas, faqat yiqilganlar. Bitta batch DB so'rovi.
+        $resitEligibleMap = [];
         if ($allGroups->isNotEmpty()) {
-            $pseudoScheduleData = collect();
-            foreach ($allGroups as $grp) {
-                if (empty($grp['semester_code'])) continue;
-                $gid = $grp['group_hemis_id'];
-                if (!$pseudoScheduleData->has($gid)) {
-                    $pseudoScheduleData->put($gid, collect());
-                }
-                $tripleKey = $gid . '|' . $grp['subject_id'] . '|' . $grp['semester_code'];
-                $alreadyAdded = $pseudoScheduleData->get($gid)
-                    ->contains(fn($it) => ($it['group']->group_hemis_id . '|' . $it['subject']->subject_id . '|' . $it['subject']->semester_code) === $tripleKey);
-                if (!$alreadyAdded) {
-                    $pseudoScheduleData->get($gid)->push([
-                        'group' => (object) ['group_hemis_id' => $gid],
-                        'subject' => (object) [
-                            'subject_id' => $grp['subject_id'],
-                            'semester_code' => $grp['semester_code'],
-                        ],
+            $resitTriples = $allGroups->filter(fn($g) => (int) ($g['attempt'] ?? 1) >= 2 && empty($g['student_hemis_id']))
+                ->unique(fn($g) => $g['group_hemis_id'] . '|' . $g['subject_id'] . '|' . $g['semester_code'])
+                ->values();
+            if ($resitTriples->isNotEmpty()) {
+                $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+                $subjectIds = $resitTriples->pluck('subject_id')->unique()->all();
+                $semCodes = $resitTriples->pluck('semester_code')->unique()->all();
+                $groupIdsForResit = $resitTriples->pluck('group_hemis_id')->unique()->all();
+                try {
+                    $resitQuery = \Illuminate\Support\Facades\DB::table('student_grades as sg')
+                        ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                        ->whereIn('st.group_id', $groupIdsForResit)
+                        ->where('st.student_status_code', 11)
+                        ->whereIn('sg.subject_id', $subjectIds)
+                        ->whereIn('sg.semester_code', $semCodes)
+                        ->whereIn('sg.training_type_code', [101, 102])
+                        ->whereNull('sg.deleted_at');
+                    if ($hasAttemptCol) {
+                        $resitQuery->where(function ($w) {
+                            $w->where('sg.attempt', '>=', 2)
+                              ->orWhere(function ($x) {
+                                  $x->where(function ($y) { $y->where('sg.attempt', 1)->orWhereNull('sg.attempt'); })
+                                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                              });
+                        });
+                    } else {
+                        $resitQuery->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                    }
+                    $resitRows = $resitQuery
+                        ->select('st.group_id', 'sg.subject_id', 'sg.semester_code',
+                            \Illuminate\Support\Facades\DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
+                        ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
+                        ->get();
+                    foreach ($resitRows as $r) {
+                        $k2 = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|2';
+                        $k3 = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|3';
+                        $resitEligibleMap[$k2] = (int) $r->cnt;
+                        $resitEligibleMap[$k3] = (int) $r->cnt;
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: resit count failed', [
+                        'error' => $e->getMessage(),
                     ]);
                 }
-            }
-            try {
-                $statusByKey = $this->computeStudentAttemptStatuses($pseudoScheduleData);
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: status hisoblashda xato', [
-                    'error' => $e->getMessage(),
-                ]);
-                $statusByKey = [];
             }
         }
 
@@ -5623,32 +5825,23 @@ class AcademicScheduleController extends Controller
         }
 
         // Per-group helper: berilgan urinish uchun haqiqiy talabalar soni.
-        $eligibleCount = function (array $grp, int $totalGroupCount) use ($statusByKey, $perStudentCountByCombo): int {
+        // Main'dan $resitEligibleMap (batch DB so'rov bilan har group+subject+
+        // attempt uchun haqiqiy retakerlar soni). HEAD'dan $perStudentCountByCombo
+        // (group-level qator faqat "qolgan" retakerlarni ifoda etadi — per-student
+        // qatorlar bilan ikki marta sanab ketmaslik uchun ayriladi).
+        $eligibleCount = function (array $grp, int $totalGroupCount) use ($resitEligibleMap, $perStudentCountByCombo): int {
             $attemptN = (int) ($grp['attempt'] ?? 1);
-            // Per-student row (individual grafik): hisob 1 ta — faqat shu talaba.
             if (!empty($grp['student_hemis_id'])) {
                 return 1;
             }
             if ($attemptN <= 1) {
                 return $totalGroupCount;
             }
-            $key = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code'];
-            $studs = $statusByKey[$key] ?? null;
-            if (!is_array($studs) || empty($studs)) {
-                $totalRetakers = $totalGroupCount;
-            } else {
-                $totalRetakers = 0;
-                foreach ($studs as $st) {
-                    if (!empty($st['pullik']) || !empty($st['held_back'])) continue;
-                    if ($attemptN === 2 && !empty($st['failed1'])) $totalRetakers++;
-                    if ($attemptN === 3 && !empty($st['failed2'])) $totalRetakers++;
-                }
-            }
-            // Group-level qator faqat "qolgan" retakerlarni ifoda etadi
-            // (per-student qator yo'qlar). Per-student qatorlar soni ayriladi
-            // — ikki marta sanab ketmaslik uchun.
-            $combinedKey = $key . '|' . $attemptN;
-            $perStudent = (int) ($perStudentCountByCombo[$combinedKey] ?? 0);
+            $key = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code'] . '|' . $attemptN;
+            $totalRetakers = array_key_exists($key, $resitEligibleMap) ? $resitEligibleMap[$key] : 0;
+            // Per-student qatorlar ko'rsatadigan talabalar ayriladi — group-level
+            // qator faqat per-student override'siz qolgan retakerlarni ifoda etadi.
+            $perStudent = (int) ($perStudentCountByCombo[$key] ?? 0);
             return max(0, $totalRetakers - $perStudent);
         };
 
@@ -6280,6 +6473,36 @@ class AcademicScheduleController extends Controller
             ->first();
         if (!$schedule) {
             return response()->json(['success' => false, 'message' => 'Jadval topilmadi.'], 404);
+        }
+
+        // YN ga ruxsati yo'q (X) talabalarni qo'lda biriktirishga kiritmaslik —
+        // ro'yxatda bo'lsa, butun so'rovni rad etib qaysi talabalar bloklanganini
+        // aniq xabar qilamiz (yaxshi UX).
+        $admissionMap = app(\App\Services\YnAdmissionService::class)
+            ->computeForGroup(
+                (string) $request->group_hemis_id,
+                (string) $request->subject_id,
+                (string) $request->semester_code
+            );
+        $deniedIds = [];
+        foreach ($request->input('assignments') as $a) {
+            $hid = (string) ($a['student_hemis_id'] ?? '');
+            if ($hid === '') continue;
+            $st = $admissionMap[$hid]['status'] ?? null;
+            if ($st === \App\Services\YnAdmissionService::STATUS_X) {
+                $deniedIds[] = $hid;
+            }
+        }
+        if (!empty($deniedIds)) {
+            $deniedNames = Student::whereIn('hemis_id', $deniedIds)
+                ->pluck('full_name', 'hemis_id')
+                ->toArray();
+            $labels = array_map(fn($hid) => $deniedNames[$hid] ?? $hid, $deniedIds);
+            return response()->json([
+                'success' => false,
+                'message' => 'Quyidagi talabalarga YN ga ruxsat yo\'q (X holati) — biriktirib bo\'lmaydi: ' . implode(', ', $labels),
+                'denied_hemis_ids' => $deniedIds,
+            ], 422);
         }
 
         $ynKey = $request->yn_type === 'OSKI' ? 'oski' : 'test';

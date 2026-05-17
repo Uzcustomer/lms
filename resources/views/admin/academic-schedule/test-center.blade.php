@@ -509,7 +509,13 @@
                                                     $stuBadgeFg = $attempt === 1 ? '#16a34a' : ($attempt === 3 ? '#ea580c' : '#d97706');
                                                     $stuPullik = !empty($stuRow['is_pullik']);
                                                     $stuHeldBack = !empty($stuRow['is_held_back']);
-                                                    $stuBlocked = ($attempt > 1) && ($stuPullik || $stuHeldBack);
+                                                    // YN ga ruxsat (YnAdmissionService — YN oldi qaydnoma bilan bir xil mantiq)
+                                                    $stuAdmission = $stuRow['admission_status'] ?? null;
+                                                    $stuAdmReasons = $stuRow['admission_reasons'] ?? [];
+                                                    $stuDeniedYn = $stuAdmission === 'X';
+                                                    // X (YN ga ruxsat yo'q) — vaqt/kompyuter qo'yishni bloklaymiz,
+                                                    // huddi pullik/held_back kabi. Ruxsat va Shartli — vaqt qo'yishga ruxsat beriladi.
+                                                    $stuBlocked = (($attempt > 1) && ($stuPullik || $stuHeldBack)) || $stuDeniedYn;
                                                     $stuPersonalDate = null;
                                                     if ($attempt === 2) {
                                                         $stuPersonalDate = ($item['yn_type'] === 'OSKI') ? ($stuRow['oski_resit_date'] ?? null) : ($stuRow['test_resit_date'] ?? null);
@@ -527,6 +533,22 @@
                                                             <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="4 tadan ortiq fandan qarz — kursdan qoldiriladi">4 tadan ortiq qarz</span>
                                                         @elseif($stuPullik && $attempt > 1)
                                                             <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="JN/MT past yoki davomat ≥25% — qayta topshira olmaydi">Pullik</span>
+                                                        @endif
+                                                        {{-- YN ga ruxsat badge'i (YN oldi qaydnoma bilan bir xil mantiq) --}}
+                                                        @if($stuAdmission === 'X')
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #f87171;"
+                                                                  title="YN ga ruxsat yo'q{{ !empty($stuAdmReasons) ? ': ' . implode('; ', $stuAdmReasons) : '' }}">
+                                                                ✕ YN ruxsat yo'q
+                                                            </span>
+                                                        @elseif($stuAdmission === 'Shartli')
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fff7ed;color:#9a3412;border:1px solid #fdba74;"
+                                                                  title="Kontrakt qarzdorlik bor — shartli ruxsat{{ !empty($stuAdmReasons) ? ': ' . implode('; ', $stuAdmReasons) : '' }}">
+                                                                ⚠ Shartli
+                                                            </span>
+                                                        @elseif($stuAdmission === 'Ruxsat')
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#dcfce7;color:#166534;border:1px solid #86efac;" title="YN ga ruxsat bor">
+                                                                ✓ Ruxsat
+                                                            </span>
                                                         @endif
                                                     </td>
                                                     <td style="text-align:center;font-size:9px;color:#64748b;">

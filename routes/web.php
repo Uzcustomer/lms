@@ -739,6 +739,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/data', [QuizResultController::class, 'yuklanmaganNatijalar'])->name('data');
         });
 
+        // Kunlik monitoring: Moodle ↔ LMS sync ↔ Mark reconciliation
+        Route::prefix('kunlik-monitoring')->name('kunlik-monitoring.')->group(function () {
+            Route::get('/', [QuizResultController::class, 'kunlikMonitoringPage'])->name('index');
+            Route::get('/data', [QuizResultController::class, 'kunlikMonitoringData'])->name('data');
+            Route::get('/missing', [QuizResultController::class, 'kunlikMonitoringMissing'])->name('missing');
+            Route::get('/diagnose', [QuizResultController::class, 'kunlikMonitoringDiagnose'])->name('diagnose');
+            Route::get('/export', [QuizResultController::class, 'kunlikMonitoringExport'])->name('export');
+        });
+
         // Test markazi: Quiz natijalar API (diagnostika, upload, import, export, destroy)
         Route::prefix('quiz-results')->name('quiz-results.')->group(function () {
             Route::get('/export', [QuizResultController::class, 'exportExcel'])->name('export');
@@ -1327,6 +1336,15 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::prefix('yuklanmagan-natijalar')->name('yuklanmagan-natijalar.')->group(function () {
             Route::get('/', [QuizResultController::class, 'yuklanmaganNatijalarPage'])->name('index');
             Route::get('/data', [QuizResultController::class, 'yuklanmaganNatijalar'])->name('data');
+        });
+
+        // Kunlik monitoring: Moodle ↔ LMS sync ↔ Mark reconciliation
+        Route::prefix('kunlik-monitoring')->name('kunlik-monitoring.')->group(function () {
+            Route::get('/', [QuizResultController::class, 'kunlikMonitoringPage'])->name('index');
+            Route::get('/data', [QuizResultController::class, 'kunlikMonitoringData'])->name('data');
+            Route::get('/missing', [QuizResultController::class, 'kunlikMonitoringMissing'])->name('missing');
+            Route::get('/diagnose', [QuizResultController::class, 'kunlikMonitoringDiagnose'])->name('diagnose');
+            Route::get('/export', [QuizResultController::class, 'kunlikMonitoringExport'])->name('export');
         });
 
         // Test markazi: Quiz natijalar API (diagnostika, upload, import, export, destroy)

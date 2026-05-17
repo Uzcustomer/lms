@@ -3972,19 +3972,29 @@ class AcademicScheduleController extends Controller
     }
 
     /**
-     * autoTimeAll uchun: berilgan sana oralig'idagi barcha schedule'lardan
-     * (yn_type × attempt) slot bandligini in-memory map'ga yig'adi.
-     * Qaytaradi [date => [['start_min' => 540, 'count' => 12], ...]].
+     * autoTimeAll uchun: berilgan sana oralig'idagi schedule'lardan
+     * (yn_type × attempt) slot bandligini in-memory map'larga yig'adi.
+     *
+     * Qaytaradi:
+     *   [
+     *     'all'   => [date => [['start_min', 'count'], ...]],  // hammasi
+     *     'resit' => [date => [['start_min', 'count'], ...]],  // faqat 2-/3-urinish
+     *   ]
+     *
+     * 1-urinish vaqtlari ComputerAssignment jadvalida bo'ladi, shu sabab
+     * distribute() ularni o'zi hisoblaydi. Resit vaqtlari esa faqat
+     * ExamSchedule da — distribute ularni ko'rmaydi, shuning uchun alohida
+     * 'resit' map'i extraOccupancy sifatida uzatiladi.
      */
     private function buildAutoTimeSlotMap(string $from, string $to, array $groupCountMap): array
     {
         $specs = [
-            ['date' => 'oski_date',         'time' => 'oski_time',         'na' => 'oski_na'],
-            ['date' => 'oski_resit_date',   'time' => 'oski_resit_time',   'na' => null],
-            ['date' => 'oski_resit2_date',  'time' => 'oski_resit2_time',  'na' => null],
-            ['date' => 'test_date',         'time' => 'test_time',         'na' => 'test_na'],
-            ['date' => 'test_resit_date',   'time' => 'test_resit_time',   'na' => null],
-            ['date' => 'test_resit2_date',  'time' => 'test_resit2_time',  'na' => null],
+            ['date' => 'oski_date',         'time' => 'oski_time',         'na' => 'oski_na', 'is_resit' => false],
+            ['date' => 'oski_resit_date',   'time' => 'oski_resit_time',   'na' => null,      'is_resit' => true],
+            ['date' => 'oski_resit2_date',  'time' => 'oski_resit2_time',  'na' => null,      'is_resit' => true],
+            ['date' => 'test_date',         'time' => 'test_time',         'na' => 'test_na', 'is_resit' => false],
+            ['date' => 'test_resit_date',   'time' => 'test_resit_time',   'na' => null,      'is_resit' => true],
+            ['date' => 'test_resit2_date',  'time' => 'test_resit2_time',  'na' => null,      'is_resit' => true],
         ];
 
         $rows = \App\Models\ExamSchedule::query()
@@ -3998,7 +4008,8 @@ class AcademicScheduleController extends Controller
             })
             ->get();
 
-        $slotMap = [];
+        $all = [];
+        $resit = [];
         foreach ($rows as $row) {
             foreach ($specs as $s) {
                 $d = $row->{$s['date']};
@@ -4014,12 +4025,16 @@ class AcademicScheduleController extends Controller
                 $startMin = ((int) $parts[0]) * 60 + ((int) ($parts[1] ?? 0));
 
                 $count = (int) ($groupCountMap[$row->group_hemis_id] ?? 0);
-                if ($count > 0) {
-                    $slotMap[$dateStr][] = ['start_min' => $startMin, 'count' => $count];
+                if ($count <= 0) continue;
+
+                $entry = ['start_min' => $startMin, 'count' => $count];
+                $all[$dateStr][] = $entry;
+                if ($s['is_resit']) {
+                    $resit[$dateStr][] = $entry;
                 }
             }
         }
-        return $slotMap;
+        return ['all' => $all, 'resit' => $resit];
     }
 
     public function autoTimeAll(Request $request, AutoAssignService $service)
@@ -4132,7 +4147,9 @@ class AcademicScheduleController extends Controller
                 ->pluck('cnt', 'group_id')
                 ->all();
         }
-        $slotMap = $this->buildAutoTimeSlotMap($from, $to, $groupCountMap);
+        $maps = $this->buildAutoTimeSlotMap($from, $to, $groupCountMap);
+        $slotMap = $maps['all'];             // findResitSlot uchun (hammasi)
+        $resitSlotMap = $maps['resit'];      // distribute uchun (faqat resit)
 
         $okCount = 0;
         $failures = [];
@@ -4168,14 +4185,17 @@ class AcademicScheduleController extends Controller
                         $startTime = $capacity['work_hours_start'] ?? '09:00';
 
                         if ($c['distribute']) {
-                            // Full slot distribution for the primary attempt.
-                            // slotMap'ni distribute'ga uzatamiz — resit time'lar
-                            // (ComputerAssignment'da yo'q) ham sig'imda hisobga
-                            // olinishi uchun, aks holda slot to'lib ketishi mumkin.
-                            $extra = $slotMap[$dateStr] ?? [];
+                            // distribute() ichida ComputerAssignment count
+                            // qiladi — o'sha kungi 1-urinish CA'lari hisoblanadi.
+                            // Resit vaqtlar CA'da yo'q, shu sabab faqat ULARNI
+                            // extraOccupancy sifatida uzatamiz (slotMap'dagi
+                            // 1-urinish entry'lari CA'da allaqachon bor —
+                            // ikki marta sanab ketmaslik uchun).
+                            $extra = $resitSlotMap[$dateStr] ?? [];
                             $result = $service->distribute($schedule, $ynType, $startTime, $extra);
-                            // distribute() o'zi bir necha slotni ishg'ol qiladi —
-                            // map'ni yangilab keyingi resit candidate to'g'ri ko'rsin.
+                            // distribute() natijasini slotMap'ga qo'shamiz —
+                            // keyingi pass'lar (resit) shu 1-urinish blokini
+                            // ko'rsin.
                             if (!empty($result['ok']) && !empty($result['slots'])) {
                                 foreach ($result['slots'] as $sl) {
                                     if (empty($sl['time'])) continue;
@@ -4194,7 +4214,15 @@ class AcademicScheduleController extends Controller
                                 $schedule->{$c['time']} = $assignedTime;
                                 $schedule->save();
                                 $result = ['ok' => true];
-                                // slotMap allaqachon findResitSlot ichida yangilangan
+                                // findResitSlot slotMap'ni yangilagan. resitSlotMap'ga
+                                // ham qo'shamiz — keyingi 1-urinish distribute'lar
+                                // mavjud bo'lsa (boshqa sana yoki keyingi run) ko'rsin.
+                                $p = explode(':', $assignedTime);
+                                $sm = ((int) $p[0]) * 60 + ((int) ($p[1] ?? 0));
+                                $gc = (int) ($groupCountMap[$schedule->group_hemis_id] ?? 0);
+                                if ($gc > 0) {
+                                    $resitSlotMap[$dateStr][] = ['start_min' => $sm, 'count' => $gc];
+                                }
                             }
                         }
                     } catch (\Throwable $e) {

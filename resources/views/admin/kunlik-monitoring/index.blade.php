@@ -85,6 +85,10 @@
                 </div>
                 <div class="km-filter-item">
                     <label class="km-filter-label">&nbsp;</label>
+                    <button id="kmExport" class="km-btn" type="button" style="background: linear-gradient(135deg, #d97706, #f59e0b); box-shadow: 0 2px 6px rgba(217,119,6,0.3);">📊 Excel</button>
+                </div>
+                <div class="km-filter-item">
+                    <label class="km-filter-label">&nbsp;</label>
                     <button id="kmDiagnose" class="km-btn km-btn-quick" type="button">🔍 Diagnostika</button>
                 </div>
                 <div class="km-filter-item" style="margin-left: auto;">
@@ -159,6 +163,7 @@
         const dataUrl = '{{ route($routePrefix . ".kunlik-monitoring.data") }}';
         const missingUrl = '{{ route($routePrefix . ".kunlik-monitoring.missing") }}';
         const diagnoseUrl = '{{ route($routePrefix . ".kunlik-monitoring.diagnose") }}';
+        const exportUrl = '{{ route($routePrefix . ".kunlik-monitoring.export") }}';
         const $ = id => document.getElementById(id);
 
         function fmtDate(d) {
@@ -364,6 +369,19 @@
         }
 
         $('kmLoad').addEventListener('click', loadData);
+
+        $('kmExport').addEventListener('click', () => {
+            const dateFrom = $('kmDateFrom').value;
+            const dateTo = $('kmDateTo').value;
+            if (!dateFrom || !dateTo) {
+                alert('Sana oralig\'ini tanlang');
+                return;
+            }
+            const url = new URL(exportUrl, window.location.origin);
+            url.searchParams.set('date_from', dateFrom);
+            url.searchParams.set('date_to', dateTo);
+            window.location.href = url.toString();
+        });
 
         $('kmDiagnose').addEventListener('click', async () => {
             $('kmModalTitle').textContent = 'Moodle WS diagnostika';

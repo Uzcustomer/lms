@@ -745,6 +745,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/data', [QuizResultController::class, 'kunlikMonitoringData'])->name('data');
             Route::get('/missing', [QuizResultController::class, 'kunlikMonitoringMissing'])->name('missing');
             Route::get('/diagnose', [QuizResultController::class, 'kunlikMonitoringDiagnose'])->name('diagnose');
+            Route::get('/export', [QuizResultController::class, 'kunlikMonitoringExport'])->name('export');
         });
 
         // Test markazi: Quiz natijalar API (diagnostika, upload, import, export, destroy)
@@ -1342,6 +1343,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/data', [QuizResultController::class, 'kunlikMonitoringData'])->name('data');
             Route::get('/missing', [QuizResultController::class, 'kunlikMonitoringMissing'])->name('missing');
             Route::get('/diagnose', [QuizResultController::class, 'kunlikMonitoringDiagnose'])->name('diagnose');
+            Route::get('/export', [QuizResultController::class, 'kunlikMonitoringExport'])->name('export');
         });
 
         // Test markazi: Quiz natijalar API (diagnostika, upload, import, export, destroy)

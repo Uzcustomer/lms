@@ -3138,11 +3138,19 @@ class AcademicScheduleController extends Controller
             'items.*.group_hemis_id' => 'required|string',
             'items.*.semester_code' => 'required|string',
             'items.*.subject_id' => 'required|string',
+            // Bandlik ko'rsatkichidan chaqirilganda: imzo bloki va QR'siz "ish ro'yxati"
+            // varianti + slotning kirish sana/vaqti yuqorida ko'rsatiladi.
+            'compact' => 'nullable|boolean',
+            'exam_date' => 'nullable|date_format:Y-m-d',
+            'exam_time' => 'nullable|date_format:H:i',
         ]);
 
         try {
 
         $items = $request->items;
+        $compact = (bool) $request->boolean('compact');
+        $examDate = $request->input('exam_date');
+        $examTime = $request->input('exam_time');
         $files = [];
         $tempDir = storage_path('app/public/yn_oldi_qaydnoma');
 
@@ -3354,11 +3362,28 @@ class AcademicScheduleController extends Controller
                 ['alignment' => Jc::END, 'spaceAfter' => 150]
             );
 
-            // Jadval
+            // Test markazida slotga kirish sanasi va vaqti (faqat bandlikdan
+            // chaqirilganda — bandlik view'i exam_date/exam_time yuboradi).
+            if ($examDate) {
+                try {
+                    $examDateFmt = \Carbon\Carbon::createFromFormat('Y-m-d', $examDate)->format('d.m.Y');
+                } catch (\Throwable $e) {
+                    $examDateFmt = $examDate;
+                }
+                $examLine = 'Test markaziga kirish: ' . $examDateFmt . ($examTime ? ' ' . $examTime : '');
+                $section->addText(
+                    $examLine,
+                    ['bold' => true, 'size' => 12],
+                    ['alignment' => Jc::CENTER, 'spaceAfter' => 200]
+                );
+            }
+
+            // Jadval — sahifa o'rtasida joylashtiriladi
             $tableStyle = [
                 'borderSize' => 6,
                 'borderColor' => '000000',
                 'cellMargin' => 40,
+                'alignment' => 'center',
             ];
             $tableName = 'YnOldiTable_' . $subjectKey;
             $phpWord->addTableStyle($tableName, $tableStyle);
@@ -3520,66 +3545,71 @@ class AcademicScheduleController extends Controller
                 }
             }
 
-            // Imzolar
-            $section->addTextBreak(1);
-
-            $dekan = Teacher::whereHas('deanFaculties', fn($q) => $q->where('dean_faculties.department_hemis_id', $department->department_hemis_id ?? ''))
-                ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
-                ->first();
-
-            $signTable = $section->addTable();
-            $signRow = $signTable->addRow();
-            $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
-            $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($allMaruzaText), ['size' => 11]);
-
-            // QR code yaratish
-            $generatedBy = null;
-            if (auth()->guard('teacher')->check()) {
-                $generatedBy = auth()->guard('teacher')->user()->full_name ?? auth()->guard('teacher')->user()->name ?? null;
-            } elseif (auth()->guard('web')->check()) {
-                $generatedBy = auth()->guard('web')->user()->name ?? null;
-            }
-
-            $verification = DocumentVerification::createForDocument([
-                'document_type' => 'YN oldi qaydnoma',
-                'subject_name' => $subject->subject_name,
-                'group_names' => implode(', ', $groupNames),
-                'semester_name' => $semester->name ?? null,
-                'department_name' => $department->name ?? null,
-                'generated_by' => $generatedBy,
-            ]);
-
-            $verificationUrl = $verification->getVerificationUrl();
+            // Imzolar va QR — faqat to'liq (rasmiy) versiyada. Bandlik ko'rsatkichidan
+            // chaqirilganda (compact=true) operator uchun toza ro'yxat chiqadi: imzo
+            // bloki, QR va PDF verifikatsiya — kerak emas.
+            $verification = null;
             $qrImagePath = null;
-
-            try {
-                $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?data=' . urlencode($verificationUrl) . '&size=200x200';
-                $client = new \GuzzleHttp\Client();
-                $qrTempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_qr.png';
-                $response = $client->request('GET', $qrApiUrl, [
-                    'verify' => false,
-                    'sink' => $qrTempPath,
-                    'timeout' => 10,
-                ]);
-                if ($response->getStatusCode() == 200 && file_exists($qrTempPath) && filesize($qrTempPath) > 0) {
-                    $qrImagePath = $qrTempPath;
-                }
-            } catch (\Exception $e) {
-                // QR code generatsiyasi muvaffaqiyatsiz bo'lsa, davom etamiz
-            }
-
-            if ($qrImagePath) {
+            if (!$compact) {
                 $section->addTextBreak(1);
-                $section->addImage($qrImagePath, [
-                    'width' => 80,
-                    'height' => 80,
-                    'alignment' => Jc::START,
+
+                $dekan = Teacher::whereHas('deanFaculties', fn($q) => $q->where('dean_faculties.department_hemis_id', $department->department_hemis_id ?? ''))
+                    ->whereHas('roles', fn($q) => $q->where('name', ProjectRole::DEAN->value))
+                    ->first();
+
+                $signTable = $section->addTable();
+                $signRow = $signTable->addRow();
+                $signRow->addCell(6500)->addText("Dekan: ___________________  " . ($dekan->full_name ?? ''), ['size' => 11]);
+                $signRow->addCell(6500)->addText("Ma'ruzachi: ___________________  " . ($allMaruzaText), ['size' => 11]);
+
+                // QR code yaratish
+                $generatedBy = null;
+                if (auth()->guard('teacher')->check()) {
+                    $generatedBy = auth()->guard('teacher')->user()->full_name ?? auth()->guard('teacher')->user()->name ?? null;
+                } elseif (auth()->guard('web')->check()) {
+                    $generatedBy = auth()->guard('web')->user()->name ?? null;
+                }
+
+                $verification = DocumentVerification::createForDocument([
+                    'document_type' => 'YN oldi qaydnoma',
+                    'subject_name' => $subject->subject_name,
+                    'group_names' => implode(', ', $groupNames),
+                    'semester_name' => $semester->name ?? null,
+                    'department_name' => $department->name ?? null,
+                    'generated_by' => $generatedBy,
                 ]);
-                $section->addText(
-                    'Hujjat haqiqiyligini tekshirish uchun QR kodni skanerlang',
-                    ['size' => 8, 'italic' => true, 'color' => '666666'],
-                    ['spaceAfter' => 0]
-                );
+
+                $verificationUrl = $verification->getVerificationUrl();
+
+                try {
+                    $qrApiUrl = 'https://api.qrserver.com/v1/create-qr-code/?data=' . urlencode($verificationUrl) . '&size=200x200';
+                    $client = new \GuzzleHttp\Client();
+                    $qrTempPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_qr.png';
+                    $response = $client->request('GET', $qrApiUrl, [
+                        'verify' => false,
+                        'sink' => $qrTempPath,
+                        'timeout' => 10,
+                    ]);
+                    if ($response->getStatusCode() == 200 && file_exists($qrTempPath) && filesize($qrTempPath) > 0) {
+                        $qrImagePath = $qrTempPath;
+                    }
+                } catch (\Exception $e) {
+                    // QR code generatsiyasi muvaffaqiyatsiz bo'lsa, davom etamiz
+                }
+
+                if ($qrImagePath) {
+                    $section->addTextBreak(1);
+                    $section->addImage($qrImagePath, [
+                        'width' => 80,
+                        'height' => 80,
+                        'alignment' => Jc::START,
+                    ]);
+                    $section->addText(
+                        'Hujjat haqiqiyligini tekshirish uchun QR kodni skanerlang',
+                        ['size' => 8, 'italic' => true, 'color' => '666666'],
+                        ['spaceAfter' => 0]
+                    );
+                }
             }
 
             $groupNamesStr = str_replace(['/', '\\', ' '], '_', implode('_', $groupNames));
@@ -3590,31 +3620,34 @@ class AcademicScheduleController extends Controller
             $objWriter = IOFactory::createWriter($phpWord, 'Word2007');
             $objWriter->save($tempPath);
 
-            // Hujjatni PDF ga aylantirib doimiy saqlash (tekshirish sahifasi uchun)
-            try {
-                $pdfStorageDir = storage_path('app/public/documents/verified');
-                if (!is_dir($pdfStorageDir)) {
-                    mkdir($pdfStorageDir, 0755, true);
+            // Hujjatni PDF ga aylantirib doimiy saqlash (tekshirish sahifasi uchun).
+            // Compact rejimda verification yaratilmaydi — PDF ham kerak emas.
+            if ($verification) {
+                try {
+                    $pdfStorageDir = storage_path('app/public/documents/verified');
+                    if (!is_dir($pdfStorageDir)) {
+                        mkdir($pdfStorageDir, 0755, true);
+                    }
+
+                    $pdfCommand = sprintf(
+                        'soffice --headless --convert-to pdf --outdir %s %s 2>&1',
+                        escapeshellarg($pdfStorageDir),
+                        escapeshellarg($tempPath)
+                    );
+                    exec($pdfCommand, $pdfOutput, $pdfReturnCode);
+
+                    $generatedPdfName = pathinfo(basename($tempPath), PATHINFO_FILENAME) . '.pdf';
+                    $generatedPdfFullPath = $pdfStorageDir . '/' . $generatedPdfName;
+
+                    if ($pdfReturnCode === 0 && file_exists($generatedPdfFullPath)) {
+                        $permanentPdfName = $verification->token . '.pdf';
+                        $permanentPdfPath = $pdfStorageDir . '/' . $permanentPdfName;
+                        rename($generatedPdfFullPath, $permanentPdfPath);
+                        $verification->update(['document_path' => 'documents/verified/' . $permanentPdfName]);
+                    }
+                } catch (\Throwable $e) {
+                    // PDF saqlash muvaffaqiyatsiz bo'lsa, davom etamiz
                 }
-
-                $pdfCommand = sprintf(
-                    'soffice --headless --convert-to pdf --outdir %s %s 2>&1',
-                    escapeshellarg($pdfStorageDir),
-                    escapeshellarg($tempPath)
-                );
-                exec($pdfCommand, $pdfOutput, $pdfReturnCode);
-
-                $generatedPdfName = pathinfo(basename($tempPath), PATHINFO_FILENAME) . '.pdf';
-                $generatedPdfFullPath = $pdfStorageDir . '/' . $generatedPdfName;
-
-                if ($pdfReturnCode === 0 && file_exists($generatedPdfFullPath)) {
-                    $permanentPdfName = $verification->token . '.pdf';
-                    $permanentPdfPath = $pdfStorageDir . '/' . $permanentPdfName;
-                    rename($generatedPdfFullPath, $permanentPdfPath);
-                    $verification->update(['document_path' => 'documents/verified/' . $permanentPdfName]);
-                }
-            } catch (\Throwable $e) {
-                // PDF saqlash muvaffaqiyatsiz bo'lsa, davom etamiz
             }
 
             // QR vaqtinchalik faylni tozalash

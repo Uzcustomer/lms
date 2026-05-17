@@ -5428,6 +5428,43 @@ class AcademicScheduleController extends Controller
                     }
                 }
             }
+
+            // Per-student exam_schedules: agar talabaga shaxsiy resit sanasi
+            // belgilangan bo'lsa (oski_resit_date / test_resit_date), demak u
+            // qayta topshiruvchi. Bu admin yoki sababli ariza orqali qo'shilgan
+            // bo'lishi mumkin — student_grades hali kelmagan bo'lsa ham.
+            if (\Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', 'student_hemis_id')) {
+                // 2-urinish — oski_resit_date yoki test_resit_date bor talabalar
+                $rows2 = DB::table('exam_schedules as es')
+                    ->join('students as st', 'st.hemis_id', '=', 'es.student_hemis_id')
+                    ->whereNotNull('es.student_hemis_id')
+                    ->where(function ($q) {
+                        $q->whereNotNull('es.oski_resit_date')
+                          ->orWhereNotNull('es.test_resit_date');
+                    })
+                    ->select('st.group_id', 'es.subject_id', 'es.semester_code', DB::raw('COUNT(DISTINCT es.student_hemis_id) as c'))
+                    ->groupBy('st.group_id', 'es.subject_id', 'es.semester_code')
+                    ->get();
+                foreach ($rows2 as $r) {
+                    $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|2';
+                    $needsByKey[$key] = max($needsByKey[$key] ?? 0, (int) $r->c);
+                }
+                // 3-urinish — resit2 sanasi
+                $rows3 = DB::table('exam_schedules as es')
+                    ->join('students as st', 'st.hemis_id', '=', 'es.student_hemis_id')
+                    ->whereNotNull('es.student_hemis_id')
+                    ->where(function ($q) {
+                        $q->whereNotNull('es.oski_resit2_date')
+                          ->orWhereNotNull('es.test_resit2_date');
+                    })
+                    ->select('st.group_id', 'es.subject_id', 'es.semester_code', DB::raw('COUNT(DISTINCT es.student_hemis_id) as c'))
+                    ->groupBy('st.group_id', 'es.subject_id', 'es.semester_code')
+                    ->get();
+                foreach ($rows3 as $r) {
+                    $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|3';
+                    $needsByKey[$key] = max($needsByKey[$key] ?? 0, (int) $r->c);
+                }
+            }
         } catch (\Throwable $e) {
             \Log::warning('computeAttemptNeedsMap failed: ' . $e->getMessage());
         }

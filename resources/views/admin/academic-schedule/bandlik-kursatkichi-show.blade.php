@@ -38,7 +38,7 @@
                         <p class="mt-3 text-sm text-yellow-800">Bu kunda belgilangan test vaqti topilmadi.</p>
                     </div>
                 @else
-                    {{-- Xulosa kartalar --}}
+                    {{-- Xulosa: kompakt interaktiv ko'rsatkichlar --}}
                     @php
                         $scheduledSlots = $slots->where('no_time', false);
                         $pendingSlots = $slots->where('no_time', true);
@@ -50,31 +50,109 @@
                         $totalRemaining = $scheduledSlots->sum('remaining');
                         $pendingGroups = $pendingSlots->sum(fn($r) => count($r['groups']));
                         $pendingStudents = $pendingSlots->sum('occupied');
+
+                        $workStart = $settings['work_hours_start'] ?? '09:00';
+                        $workEnd = $settings['work_hours_end'] ?? '17:00';
+                        $lunchStart = $settings['lunch_start'] ?? null;
+                        $lunchEnd = $settings['lunch_end'] ?? null;
+                        $hasLunch = $lunchStart && $lunchEnd;
+                        $testDuration = (int) ($settings['test_duration_minutes'] ?? 15);
+                        $dailyCapacity = (int) ($dailyCapacity ?? 0);
+                        $freeCapacity = max(0, $dailyCapacity - $totalStudents);
+                        $capacityPct = $dailyCapacity > 0 ? min(100, round(($totalStudents / $dailyCapacity) * 100)) : 0;
+                        $capacityBarClass = $capacityPct >= 100 ? 'bg-red-500' : ($capacityPct >= 80 ? 'bg-orange-500' : ($capacityPct >= 50 ? 'bg-yellow-500' : 'bg-emerald-500'));
+                        $submitPct = $totalStudents > 0 ? round(($totalSubmitted / $totalStudents) * 100) : 0;
                     @endphp
-                    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
-                        <div class="bg-indigo-50 border border-indigo-200 rounded-lg p-3">
-                            <div class="text-xs text-indigo-700 font-medium">Vaqt slotlari</div>
-                            <div class="text-2xl font-bold text-indigo-900">{{ $totalSlots }}</div>
+                    <div class="flex flex-wrap items-stretch gap-2 mb-4">
+                        {{-- Ish vaqti --}}
+                        <div class="inline-flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm hover:border-indigo-300 transition"
+                             title="Ish vaqti{{ $hasLunch ? ' · Tushlik: '.$lunchStart.'–'.$lunchEnd : '' }} · Bitta test: {{ $testDuration }} daq.">
+                            <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <div class="flex flex-col leading-tight">
+                                <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Ish vaqti</span>
+                                <span class="text-sm font-bold text-slate-800">
+                                    {{ $workStart }}<span class="text-slate-400 mx-0.5">–</span>{{ $workEnd }}
+                                </span>
+                            </div>
+                            @if($hasLunch)
+                                <span class="ml-1 inline-flex items-center px-1.5 py-0.5 rounded bg-amber-50 border border-amber-200 text-[10px] font-semibold text-amber-800" title="Tushlik tanaffusi">
+                                    🍴 {{ $lunchStart }}–{{ $lunchEnd }}
+                                </span>
+                            @endif
                         </div>
-                        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                            <div class="text-xs text-blue-700 font-medium">Jami talabalar</div>
-                            <div class="text-2xl font-bold text-blue-900">{{ $totalStudents }}</div>
+
+                        {{-- Sig'im: hozir / maksimal --}}
+                        <div class="inline-flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm hover:border-blue-300 transition"
+                             title="Hozir joylashtirilgan talabalar / Kunlik maksimal sig'im ({{ $totalComputers }} komputer × slotlar)">
+                            <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/></svg>
+                            <div class="flex flex-col leading-tight">
+                                <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Sig'im</span>
+                                <span class="text-sm font-bold">
+                                    <span class="text-blue-700">{{ $totalStudents }}</span>
+                                    <span class="text-slate-300">/</span>
+                                    <span class="text-slate-700">{{ $dailyCapacity }}</span>
+                                    <span class="text-[10px] text-slate-400 font-normal ml-0.5">talaba</span>
+                                </span>
+                            </div>
+                            <div class="flex flex-col items-end gap-0.5 ml-1">
+                                <div class="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                    <div class="{{ $capacityBarClass }} h-full transition-all" style="width: {{ $capacityPct }}%"></div>
+                                </div>
+                                <span class="text-[10px] text-slate-500 font-semibold">{{ $capacityPct }}%</span>
+                            </div>
                         </div>
-                        <div class="bg-emerald-50 border border-emerald-200 rounded-lg p-3">
-                            <div class="text-xs text-emerald-700 font-medium">Topshirganlar</div>
-                            <div class="text-2xl font-bold text-emerald-900">{{ $totalSubmitted }}</div>
+
+                        {{-- Bo'sh sig'im --}}
+                        <div class="inline-flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm hover:border-emerald-300 transition"
+                             title="Bugun yana shuncha talabani sig'dirsa bo'ladi">
+                            <svg class="w-4 h-4 {{ $freeCapacity > 0 ? 'text-emerald-600' : 'text-red-500' }}" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/></svg>
+                            <div class="flex flex-col leading-tight">
+                                <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Yana sig'adi</span>
+                                <span class="text-sm font-bold {{ $freeCapacity > 0 ? 'text-emerald-700' : 'text-red-600' }}">
+                                    {{ $freeCapacity }}
+                                    <span class="text-[10px] text-slate-400 font-normal">talaba</span>
+                                </span>
+                            </div>
                         </div>
-                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                            <div class="text-xs text-amber-700 font-medium">Qoldi</div>
-                            <div class="text-2xl font-bold text-amber-900">{{ $totalRemaining }}</div>
+
+                        {{-- Slotlar --}}
+                        <div class="inline-flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm hover:border-indigo-300 transition"
+                             title="Jami vaqt slotlari{{ $fullSlots > 0 ? ' · To\'la band: '.($fullSlots - $overflowSlots) : '' }}{{ $overflowSlots > 0 ? ' · Sig\'imdan ortiq: '.$overflowSlots : '' }}">
+                            <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                            <div class="flex flex-col leading-tight">
+                                <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Slotlar</span>
+                                <span class="text-sm font-bold text-indigo-900">{{ $totalSlots }}</span>
+                            </div>
+                            @if(($fullSlots - $overflowSlots) > 0)
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-yellow-50 border border-yellow-200 text-[10px] font-semibold text-yellow-800" title="To'la band slotlar">
+                                    {{ $fullSlots - $overflowSlots }} to'la
+                                </span>
+                            @endif
+                            @if($overflowSlots > 0)
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-red-50 border border-red-200 text-[10px] font-semibold text-red-700" title="Sig'imdan ortiq slotlar">
+                                    {{ $overflowSlots }} ortiq
+                                </span>
+                            @endif
                         </div>
-                        <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                            <div class="text-xs text-yellow-700 font-medium">To'la band slotlar</div>
-                            <div class="text-2xl font-bold text-yellow-900">{{ $fullSlots - $overflowSlots }}</div>
-                        </div>
-                        <div class="bg-red-50 border border-red-200 rounded-lg p-3">
-                            <div class="text-xs text-red-700 font-medium">Sig'imdan ortiq</div>
-                            <div class="text-2xl font-bold text-red-900">{{ $overflowSlots }}</div>
+
+                        {{-- Topshirdi / Qoldi --}}
+                        <div class="inline-flex items-center gap-2 px-3 py-2 bg-white rounded-lg border border-slate-200 shadow-sm hover:border-emerald-300 transition"
+                             title="Quizni topshirgan / hali topshirmagan talabalar">
+                            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <div class="flex flex-col leading-tight">
+                                <span class="text-[10px] uppercase tracking-wider text-slate-500 font-medium">Topshirdi / Qoldi</span>
+                                <span class="text-sm font-bold">
+                                    <span class="text-emerald-700">{{ $totalSubmitted }}</span>
+                                    <span class="text-slate-300">/</span>
+                                    <span class="text-amber-700">{{ $totalRemaining }}</span>
+                                </span>
+                            </div>
+                            <div class="flex flex-col items-end gap-0.5 ml-1">
+                                <div class="w-14 h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                    <div class="bg-emerald-500 h-full transition-all" style="width: {{ $submitPct }}%"></div>
+                                </div>
+                                <span class="text-[10px] text-slate-500 font-semibold">{{ $submitPct }}%</span>
+                            </div>
                         </div>
                     </div>
 

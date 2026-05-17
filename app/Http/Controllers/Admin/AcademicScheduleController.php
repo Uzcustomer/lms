@@ -2697,6 +2697,62 @@ class AcademicScheduleController extends Controller
                 $oskiTimeCol = match ($rowUrinish) { 2 => 'oski_resit_time', 3 => 'oski_resit2_time', default => 'oski_time' };
                 $testTimeCol = match ($rowUrinish) { 2 => 'test_resit_time', 3 => 'test_resit2_time', default => 'test_time' };
 
+                // Per-student qator: yuborilgan sana+vaqt guruh qatori bilan AYNAN bir xil
+                // bo'lsa, alohida yozuv yaratmaymiz (mavjud bo'lsa o'chiramiz). Per-student
+                // yozuvi faqat individual jadval — guruh sanasidan FARQLI vaqt yoki sana
+                // belgilash uchun mantiqan kerak. Bu form yoki brauzer autofill tufayli
+                // per-student inputlarga guruh sanasi noxosdan tushib qolishi natijasida
+                // 7-8 ta dublikat yozuv yaratilishining oldini oladi.
+                if ($studentHemisIdForRow) {
+                    $groupRowForCompare = ExamSchedule::where('group_hemis_id', $schedule['group_hemis_id'])
+                        ->where('subject_id', $schedule['subject_id'])
+                        ->where('semester_code', $schedule['semester_code'])
+                        ->whereNull('student_hemis_id')
+                        ->first();
+                    if ($groupRowForCompare) {
+                        $normTime = function ($t): ?string {
+                            if (empty($t)) return null;
+                            return substr((string) $t, 0, 5);
+                        };
+                        $groupOski = $groupRowForCompare->{$oskiCol}?->format('Y-m-d');
+                        $groupTest = $groupRowForCompare->{$testCol}?->format('Y-m-d');
+                        $groupOskiTime = $normTime($groupRowForCompare->{$oskiTimeCol} ?? null);
+                        $groupTestTime = $normTime($groupRowForCompare->{$testTimeCol} ?? null);
+                        $stuOski = !empty($schedule['oski_date']) ? $schedule['oski_date'] : null;
+                        $stuTest = !empty($schedule['test_date']) ? $schedule['test_date'] : null;
+                        $stuOskiTime = $normTime($schedule['oski_time'] ?? null);
+                        $stuTestTime = $normTime($schedule['test_time'] ?? null);
+                        $matchesGroup = ($stuOski === $groupOski)
+                            && ($stuTest === $groupTest)
+                            && ($stuOskiTime === $groupOskiTime)
+                            && ($stuTestTime === $groupTestTime);
+                        if ($matchesGroup) {
+                            if ($record->exists) {
+                                $oldVals = $record->only([
+                                    'oski_date', 'oski_time', 'oski_na',
+                                    'test_date', 'test_time', 'test_na',
+                                    'oski_resit_date', 'oski_resit_time',
+                                    'oski_resit2_date', 'oski_resit2_time',
+                                    'test_resit_date', 'test_resit_time',
+                                    'test_resit2_date', 'test_resit2_time',
+                                ]);
+                                ActivityLogService::log(
+                                    'delete',
+                                    'exam_schedule',
+                                    'Per-student YN yozuvi tozalandi (guruh bilan bir xil): '
+                                        . ($record->subject_name ?: ('ID ' . $record->id))
+                                        . ' (guruh ' . $record->group_hemis_id . ')',
+                                    $record,
+                                    $oldVals,
+                                    null
+                                );
+                                $record->delete();
+                            }
+                            continue;
+                        }
+                    }
+                }
+
                 // Cheklov 1: Allaqachon saqlangan sanani o'zgartirish mumkin emas
                 $newOskiDate = !empty($schedule['oski_date']) ? $schedule['oski_date'] : null;
                 $newOskiNa = $oskiNa;

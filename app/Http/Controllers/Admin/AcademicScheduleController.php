@@ -1535,10 +1535,12 @@ class AcademicScheduleController extends Controller
             $currentSemesterToggle, true, $dateFrom, $dateTo, true
         );
 
-        // Talabalarni ko'rsatish toggle yoqilgan bo'lsa — har item ga "students" massivi qo'shiladi
-        if ($showStudents) {
-            $scheduleData = $this->attachStudentsToSchedule($scheduleData);
-        }
+        // Talabalar ro'yxati har doim biriktiriladi — 2-/3-urinish qatorlarining
+        // student_count'ini aniq hisoblash uchun. attachStudentsToSchedule
+        // didNotAttend va explicit attempt=2 yozuvlarini hisobga oladi, shu
+        // sabab needsByKey lookup'idan ko'ra to'g'riroq natija beradi.
+        // showStudents toggle faqat UI'da ko'rsatishni boshqaradi, ma'lumotni emas.
+        $scheduleData = $this->attachStudentsToSchedule($scheduleData);
 
         $semesterMap = $currentSemesters->keyBy('code');
         $curriculumHemisIds = collect();
@@ -1682,8 +1684,25 @@ class AcademicScheduleController extends Controller
             if ($attempt === 1) {
                 $item['student_count'] = $studentCounts[$groupHid] ?? 0;
             } elseif (isset($item['students']) && is_array($item['students'])) {
-                // show_students yoqilganda har attempt uchun filtrlangan ro'yxat mavjud
-                $item['student_count'] = count($item['students']);
+                // attachStudentsToSchedule attempt-bo'yicha aniq belgi qo'yadi
+                // (failed_attempt1/2 — didNotAttend + V<60 + explicit attempt yozuvi).
+                // filterStudentsForAttempt fallback'i bo'sh ro'yxatda butun guruhni
+                // qaytarib yuborishi mumkin — count uchun bayroqni qat'iy
+                // tekshiramiz, shunda noaniq holatlar 0 chiqadi.
+                $flag = $attempt === 2 ? 'failed_attempt1' : 'failed_attempt2';
+                $cnt = 0;
+                foreach ($item['students'] as $s) {
+                    if (!empty($s[$flag])) {
+                        $cnt++;
+                    }
+                }
+                // Agar bayroq topilmasa-yu, lekin needsByKey'da yozuv bo'lsa,
+                // shu lookup'ni fallback sifatida ishlatamiz.
+                if ($cnt === 0) {
+                    $needsKey = $groupHid . '|' . $subjectId . '|' . $semCode . '|' . $attempt;
+                    $cnt = (int) ($attemptNeedsMap[$needsKey] ?? 0);
+                }
+                $item['student_count'] = $cnt;
             } else {
                 $needsKey = $groupHid . '|' . $subjectId . '|' . $semCode . '|' . $attempt;
                 $item['student_count'] = (int) ($attemptNeedsMap[$needsKey] ?? 0);

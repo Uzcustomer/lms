@@ -89,18 +89,19 @@ class AutoAssignService
             return ['ok' => false, 'skipped' => true, 'reason' => 'no students in group'];
         }
 
-        // Slot sig'imi = sozlamalardagi computer_count. primaryComputerCount
-        // (reserve pool ayrilgan aktiv kompyuterlar) faqat fallback. Reserve
-        // pool — failover uchun ajratilgan kompyuterlar bo'lib, slot
-        // rejalashtirilishini chegaralashi shart emas (zarurat bo'lsa ham
-        // ishlatiladi). Bandlik UI 60 ni ko'rsatib, distribute esa 45 ga
-        // chegaralasa, slotlar ataylab 45/60 (75%) bo'sh qolar edi.
-        $slotCapacity = (int) ($capacity['computer_count'] ?? 0);
-        if ($slotCapacity < 1) {
-            $slotCapacity = $this->primaryComputerCount();
+        // Slot sig'imi = primaryComputerCount (reserve pool ayrilgan), lekin
+        // sozlamalardagi computer_count'dan oshmaydi. Reserve pool — failover
+        // uchun ajratilgan kompyuterlar (asosiy ishlamay qolsa zaxira); ularni
+        // slot rejalashtirishda band qilib ketmaslik kerak. Admin reserve
+        // sonini Computer.is_reserve_pool yoki services.moodle.reserve_computers_count
+        // orqali boshqaradi.
+        $slotCapacity = $this->primaryComputerCount();
+        $configCap = (int) ($capacity['computer_count'] ?? 0);
+        if ($configCap > 0) {
+            $slotCapacity = min($slotCapacity, $configCap);
         }
         if ($slotCapacity < 1) {
-            return ['ok' => false, 'skipped' => true, 'reason' => 'no slot capacity configured'];
+            return ['ok' => false, 'skipped' => true, 'reason' => 'no primary computers configured'];
         }
 
         $slotStart = Carbon::parse($dateStr . ' ' . substr($startTime, 0, 5));
@@ -403,5 +404,24 @@ class AutoAssignService
     private function primaryComputerCount(): int
     {
         return count($this->primaryPoolNumbers());
+    }
+
+    /**
+     * Controller-lar uchun yagona "effective slot capacity" helper.
+     * Sozlamalardagi computer_count va aktiv primary (reserve ayrilgan)
+     * kompyuterlarning eng kichigini qaytaradi. Reserve pool — failover,
+     * shu sabab slot rejalashtirishda hisobga olinmaydi.
+     */
+    public static function effectiveSlotCapacity(array $settings): int
+    {
+        $config = (int) ($settings['computer_count'] ?? 0);
+        $service = app(self::class);
+        $primary = $service->primaryComputerCount();
+        if ($primary < 1 && $config < 1) {
+            return 0;
+        }
+        if ($primary < 1) return $config;
+        if ($config < 1) return $primary;
+        return min($primary, $config);
     }
 }

@@ -3842,6 +3842,11 @@ class AcademicScheduleController extends Controller
      * to'ldirib boradi (masalan, 09:00 da 58/60 bo'lsa, 1 talabali resit
      * shu yerga tushadi va slot 60 ga to'ladi).
      *
+     * Talaba soni: 2-/3-urinish uchun butun guruh emas, faqat qayta
+     * topshiruvchi talabalar soni hisoblanadi ($attemptNeedsMap orqali).
+     * Aks holda 1 talabali resit 15 talabali deb ko'rilib, kichik bo'shliqlar
+     * (masalan 16:30 da 1 ta) o'tkazib yuboriladi.
+     *
      * $slotMap[date] = [['start_min' => 540, 'count' => 12], ...]
      */
     private function findResitSlot(
@@ -3851,7 +3856,8 @@ class AcademicScheduleController extends Controller
         string $dateStr,
         array $capacity,
         array &$slotMap,
-        array $groupCountMap
+        array $groupCountMap,
+        array $attemptNeedsMap
     ): ?string {
         $computerCount = (int) $capacity['computer_count'];
         $duration = max(1, (int) $capacity['test_duration_minutes']);
@@ -3866,7 +3872,9 @@ class AcademicScheduleController extends Controller
         $lunchStartMin = !empty($capacity['lunch_start']) ? $parseHm((string) $capacity['lunch_start']) : null;
         $lunchEndMin = !empty($capacity['lunch_end']) ? $parseHm((string) $capacity['lunch_end']) : null;
 
-        $groupCount = (int) ($groupCountMap[$schedule->group_hemis_id] ?? 0);
+        $groupCount = $this->resolveAttemptStudentCount(
+            $schedule, $attempt, $groupCountMap, $attemptNeedsMap
+        );
         if ($groupCount === 0) {
             return $capacity['work_hours_start'];
         }
@@ -3911,6 +3919,33 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * Schedule + attempt uchun haqiqiy talaba sonini qaytaradi.
+     * 1-urinish: butun guruh. 2-/3-urinish: qayta topshiruvchi talabalar
+     * soni (needsByKey lookup'idan).
+     */
+    private function resolveAttemptStudentCount(
+        \App\Models\ExamSchedule $schedule,
+        int $attempt,
+        array $groupCountMap,
+        array $attemptNeedsMap
+    ): int {
+        if ($attempt === 1) {
+            return (int) ($groupCountMap[$schedule->group_hemis_id] ?? 0);
+        }
+        $key = $schedule->group_hemis_id . '|' . ($schedule->subject_id ?? '') . '|' . ($schedule->semester_code ?? '') . '|' . $attempt;
+        $needs = (int) ($attemptNeedsMap[$key] ?? 0);
+        if ($needs > 0) {
+            return $needs;
+        }
+        // Per-student qator (individual grafik) — student_hemis_id bo'lsa 1 talaba
+        if (!empty($schedule->student_hemis_id)) {
+            return 1;
+        }
+        // Fallback: butun guruh (xavfsiz over-estimate)
+        return (int) ($groupCountMap[$schedule->group_hemis_id] ?? 0);
+    }
+
+    /**
      * autoTimeAll uchun: berilgan sana oralig'idagi schedule'lardan
      * (yn_type × attempt) slot bandligini in-memory map'larga yig'adi.
      *
@@ -3925,15 +3960,15 @@ class AcademicScheduleController extends Controller
      * ExamSchedule da — distribute ularni ko'rmaydi, shuning uchun alohida
      * 'resit' map'i extraOccupancy sifatida uzatiladi.
      */
-    private function buildAutoTimeSlotMap(string $from, string $to, array $groupCountMap): array
+    private function buildAutoTimeSlotMap(string $from, string $to, array $groupCountMap, array $attemptNeedsMap = []): array
     {
         $specs = [
-            ['date' => 'oski_date',         'time' => 'oski_time',         'na' => 'oski_na', 'is_resit' => false],
-            ['date' => 'oski_resit_date',   'time' => 'oski_resit_time',   'na' => null,      'is_resit' => true],
-            ['date' => 'oski_resit2_date',  'time' => 'oski_resit2_time',  'na' => null,      'is_resit' => true],
-            ['date' => 'test_date',         'time' => 'test_time',         'na' => 'test_na', 'is_resit' => false],
-            ['date' => 'test_resit_date',   'time' => 'test_resit_time',   'na' => null,      'is_resit' => true],
-            ['date' => 'test_resit2_date',  'time' => 'test_resit2_time',  'na' => null,      'is_resit' => true],
+            ['date' => 'oski_date',         'time' => 'oski_time',         'na' => 'oski_na', 'is_resit' => false, 'attempt' => 1],
+            ['date' => 'oski_resit_date',   'time' => 'oski_resit_time',   'na' => null,      'is_resit' => true,  'attempt' => 2],
+            ['date' => 'oski_resit2_date',  'time' => 'oski_resit2_time',  'na' => null,      'is_resit' => true,  'attempt' => 3],
+            ['date' => 'test_date',         'time' => 'test_time',         'na' => 'test_na', 'is_resit' => false, 'attempt' => 1],
+            ['date' => 'test_resit_date',   'time' => 'test_resit_time',   'na' => null,      'is_resit' => true,  'attempt' => 2],
+            ['date' => 'test_resit2_date',  'time' => 'test_resit2_time',  'na' => null,      'is_resit' => true,  'attempt' => 3],
         ];
 
         $rows = \App\Models\ExamSchedule::query()
@@ -3963,7 +3998,11 @@ class AcademicScheduleController extends Controller
                 $parts = explode(':', $hm);
                 $startMin = ((int) $parts[0]) * 60 + ((int) ($parts[1] ?? 0));
 
-                $count = (int) ($groupCountMap[$row->group_hemis_id] ?? 0);
+                if ($s['is_resit']) {
+                    $count = $this->resolveAttemptStudentCount($row, $s['attempt'], $groupCountMap, $attemptNeedsMap);
+                } else {
+                    $count = (int) ($groupCountMap[$row->group_hemis_id] ?? 0);
+                }
                 if ($count <= 0) continue;
 
                 $entry = ['start_min' => $startMin, 'count' => $count];
@@ -4086,7 +4125,10 @@ class AcademicScheduleController extends Controller
                 ->pluck('cnt', 'group_id')
                 ->all();
         }
-        $maps = $this->buildAutoTimeSlotMap($from, $to, $groupCountMap);
+        // 2-/3-urinish qatorlarining ASL talaba soni (butun guruh emas, faqat
+        // qayta topshiruvchilar). FFD saralash va sig'im hisobida ishlatiladi.
+        $attemptNeedsMap = $this->computeAttemptNeedsMap()['needs'];
+        $maps = $this->buildAutoTimeSlotMap($from, $to, $groupCountMap, $attemptNeedsMap);
         $slotMap = $maps['all'];             // findResitSlot uchun (hammasi)
         $resitSlotMap = $maps['resit'];      // distribute uchun (faqat resit)
 
@@ -4107,8 +4149,11 @@ class AcademicScheduleController extends Controller
             $sortedByAttempt[$att] = $candidates;
         }
         foreach ([2, 3] as $att) {
-            $sortedByAttempt[$att] = $candidates->sortByDesc(function ($s) use ($groupCountMap) {
-                return (int) ($groupCountMap[$s->group_hemis_id] ?? 0);
+            // Resit qatorlarini ASL talaba soni (qayta topshiruvchilar) bo'yicha
+            // saralaymiz, butun guruh emas. Aks holda 1 talabali resit 15 talabali
+            // deb saralanib, kichik bo'shliqlar bo'sh qoladi.
+            $sortedByAttempt[$att] = $candidates->sortByDesc(function ($s) use ($att, $groupCountMap, $attemptNeedsMap) {
+                return $this->resolveAttemptStudentCount($s, $att, $groupCountMap, $attemptNeedsMap);
             })->values();
         }
 
@@ -4159,7 +4204,8 @@ class AcademicScheduleController extends Controller
                             }
                         } else {
                             $assignedTime = $this->findResitSlot(
-                                $schedule, $ynType, $attempt, $dateStr, $capacity, $slotMap, $groupCountMap
+                                $schedule, $ynType, $attempt, $dateStr, $capacity,
+                                $slotMap, $groupCountMap, $attemptNeedsMap
                             );
                             if ($assignedTime === null) {
                                 $result = ['ok' => false, 'reason' => 'no slot with free capacity in work hours'];
@@ -4169,12 +4215,16 @@ class AcademicScheduleController extends Controller
                                 $result = ['ok' => true];
                                 // findResitSlot slotMap'ni yangilagan. resitSlotMap'ga
                                 // ham qo'shamiz — keyingi 1-urinish distribute'lar
-                                // mavjud bo'lsa (boshqa sana yoki keyingi run) ko'rsin.
+                                // (mavjud bo'lsa) ko'rsin. ASL talaba soni qo'shiladi
+                                // (butun guruh emas) — keyingi distribute sig'imni
+                                // to'g'ri hisoblasin.
                                 $p = explode(':', $assignedTime);
                                 $sm = ((int) $p[0]) * 60 + ((int) ($p[1] ?? 0));
-                                $gc = (int) ($groupCountMap[$schedule->group_hemis_id] ?? 0);
-                                if ($gc > 0) {
-                                    $resitSlotMap[$dateStr][] = ['start_min' => $sm, 'count' => $gc];
+                                $cnt = $this->resolveAttemptStudentCount(
+                                    $schedule, $attempt, $groupCountMap, $attemptNeedsMap
+                                );
+                                if ($cnt > 0) {
+                                    $resitSlotMap[$dateStr][] = ['start_min' => $sm, 'count' => $cnt];
                                 }
                             }
                         }

@@ -157,7 +157,7 @@ class KunlikMonitoringMarkGapSheet implements FromArray, WithHeadings, WithStyle
 
     public function headings(): array
     {
-        return ['Sana', 'attempt_id', 'HEMIS ID', "F.I.Sh.", 'Fan', 'Quiz turi', 'Tugatildi', 'Baho'];
+        return ['Sana', 'attempt_id', 'HEMIS ID', "F.I.Sh.", 'Fan', 'Quiz turi', 'Quiz to\'liq nomi', 'Tugatildi', 'Baho'];
     }
 
     public function array(): array
@@ -172,13 +172,14 @@ class KunlikMonitoringMarkGapSheet implements FromArray, WithHeadings, WithStyle
                     $r['student_name'] ?? '',
                     $r['fan_name'] ?? '',
                     $r['quiz_type'] ?? '',
+                    $r['attempt_name'] ?? '',
                     $r['date_finish'] ?? '',
                     $r['grade'] ?? '',
                 ];
             }
         }
         if (empty($rows)) {
-            $rows[] = ['', '', '', '', '', '', '', "Mark bosqichida yo'qotish yo'q ✓"];
+            $rows[] = ['', '', '', '', '', '', '', '', "Mark bosqichida yo'qotish yo'q ✓"];
         }
         return $rows;
     }

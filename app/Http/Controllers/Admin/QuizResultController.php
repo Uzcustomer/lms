@@ -2973,7 +2973,7 @@ class QuizResultController extends Controller
         if (!empty($allMoodleIds)) {
             $syncedByAttempt = DB::table('hemis_quiz_results')
                 ->whereIn('attempt_id', $allMoodleIds)
-                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_name', 'quiz_type', 'date_finish', 'grade')
+                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_name', 'quiz_type', 'attempt_name', 'date_finish', 'grade')
                 ->get()
                 ->keyBy('attempt_id');
         }
@@ -3018,6 +3018,7 @@ class QuizResultController extends Controller
                             'student_name' => $row->student_name,
                             'fan_name'     => $row->fan_name,
                             'quiz_type'    => $row->quiz_type,
+                            'attempt_name' => $row->attempt_name,
                             'date_finish'  => $row->date_finish,
                             'grade'        => $row->grade,
                         ];
@@ -3104,7 +3105,7 @@ class QuizResultController extends Controller
             // hemis_quiz_results ichidagilar — attempt_id => row.
             $synced = DB::table('hemis_quiz_results')
                 ->whereIn('attempt_id', $moodleIds)
-                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_name', 'quiz_type', 'date_finish', 'grade')
+                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_name', 'quiz_type', 'attempt_name', 'date_finish', 'grade')
                 ->get()
                 ->keyBy('attempt_id');
 
@@ -3133,6 +3134,7 @@ class QuizResultController extends Controller
                         'student_name' => $row->student_name,
                         'fan_name'     => $row->fan_name,
                         'quiz_type'    => $row->quiz_type,
+                        'attempt_name' => $row->attempt_name,
                         'date_finish'  => $row->date_finish,
                         'grade'        => $row->grade,
                     ];

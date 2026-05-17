@@ -3,8 +3,15 @@
         ? 'admin.academic-schedule.bandlik-kursatkichi.show'
         : 'teacher.academic-schedule.bandlik-kursatkichi.show';
 
-    $percent = $totalComputers > 0 ? min(100, round(($card['max_occupied'] / $totalComputers) * 100)) : 0;
-    $realPercent = $totalComputers > 0 ? round(($card['max_occupied'] / $totalComputers) * 100) : 0;
+    // Bandlik = kunlik jami sig'imdan qancha foiz band qilingan
+    // (kunlik sig'im = barcha slotlar × kompyuterlar).
+    $dayCapacity = (int) ($card['daily_capacity'] ?? 0);
+    $totalStudentsCard = (int) ($card['total_students'] ?? 0);
+    $dayPercent = $dayCapacity > 0 ? round(($totalStudentsCard / $dayCapacity) * 100) : 0;
+    $dayPercentBar = min(100, $dayPercent);
+
+    // Eng yuqori slot bandligi (alohida ko'rsatkich — bitta slot band darajasi).
+    $peakPercent = $totalComputers > 0 ? round(($card['max_occupied'] / $totalComputers) * 100) : 0;
 @endphp
 
 <a href="{{ route($routeName, ['date' => $card['date_str']]) }}"
@@ -71,7 +78,7 @@
             <span class="font-semibold text-gray-900">{{ $card['total_students'] }}</span>
         </div>
 
-        <div class="flex items-center justify-between text-sm" title="Eng band slotda joylashtirilgan talabalar soni / mavjud kompyuterlar soni. {{ $card['has_overflow'] ? 'Bu slot sig\'imdan oshib ketgan — boshqa vaqtga ko\'chirish kerak.' : '' }}">
+        <div class="flex items-center justify-between text-sm" title="Eng band slotda joylashtirilgan talabalar soni / mavjud kompyuterlar soni ({{ $peakPercent }}%). {{ $card['has_overflow'] ? 'Bu slot sig\'imdan oshib ketgan — boshqa vaqtga ko\'chirish kerak.' : '' }}">
             <span class="text-gray-500 inline-flex items-center gap-1.5">
                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
@@ -102,21 +109,21 @@
             </div>
         @endif
 
-        <div class="pt-1">
+        <div class="pt-1" title="Kunlik jami sig'imning qancha qismi band qilingan: {{ $totalStudentsCard }} / {{ $dayCapacity }} talaba">
             <div class="flex items-center justify-between text-xs text-gray-500 mb-1">
-                <span>Bandlik</span>
-                <span @class(['font-semibold', 'text-red-600' => $card['has_overflow'], 'text-gray-700' => !$card['has_overflow']])>
-                    {{ $realPercent }}%
+                <span>Kunlik bandlik</span>
+                <span @class(['font-semibold', 'text-red-600' => $dayPercent >= 100, 'text-gray-700' => $dayPercent < 100])>
+                    {{ $dayPercent }}%
                 </span>
             </div>
             <div class="w-full bg-gray-200 rounded-full h-1.5 overflow-hidden">
                 @php
-                    if ($card['has_overflow']) $barColorHex = '#ef4444';
-                    elseif ($percent >= 75) $barColorHex = '#f97316';
-                    elseif ($percent >= 50) $barColorHex = '#eab308';
+                    if ($dayPercent >= 100) $barColorHex = '#ef4444';
+                    elseif ($dayPercentBar >= 75) $barColorHex = '#f97316';
+                    elseif ($dayPercentBar >= 50) $barColorHex = '#eab308';
                     else $barColorHex = '#22c55e';
                 @endphp
-                <div class="h-full transition-all" style="width: {{ $percent }}%; background-color: {{ $barColorHex }};"></div>
+                <div class="h-full transition-all" style="width: {{ $dayPercentBar }}%; background-color: {{ $barColorHex }};"></div>
             </div>
         </div>
 

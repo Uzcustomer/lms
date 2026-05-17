@@ -1535,12 +1535,10 @@ class AcademicScheduleController extends Controller
             $currentSemesterToggle, true, $dateFrom, $dateTo, true
         );
 
-        // Talabalar ro'yxati har doim biriktiriladi — 2-/3-urinish qatorlarining
-        // student_count'ini aniq hisoblash uchun. attachStudentsToSchedule
-        // didNotAttend va explicit attempt=2 yozuvlarini hisobga oladi, shu
-        // sabab needsByKey lookup'idan ko'ra to'g'riroq natija beradi.
-        // showStudents toggle faqat UI'da ko'rsatishni boshqaradi, ma'lumotni emas.
-        $scheduleData = $this->attachStudentsToSchedule($scheduleData);
+        // Talabalarni ko'rsatish toggle yoqilgan bo'lsa — har item ga "students" massivi qo'shiladi
+        if ($showStudents) {
+            $scheduleData = $this->attachStudentsToSchedule($scheduleData);
+        }
 
         $semesterMap = $currentSemesters->keyBy('code');
         $curriculumHemisIds = collect();
@@ -1631,45 +1629,11 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
-        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
-
+        // Topshirgan (quiz) statistikasi sahifa yuklanganda hisoblanmaydi —
+        // hemis_quiz_results bo'yicha guruh+fan+shakl bo'yicha agregat
+        // serverni og'irlashtiradi. "Yangilash" tugmasi orqali refreshQuizCounts
+        // AJAX endpoint chaqirilganda dynamic ravishda yuklanadi.
         $quizCounts = [];
-        if (!empty($groupHemisIds) && !empty($subjectIds)) {
-            try {
-                // Urinish (shakl) bo'yicha alohida hisoblash: "2-urinish" /
-                // "3-urinish" qatorlari shu urinishda topshirgan talabalarni
-                // ko'rsatsin. shakl null/bo'sh bo'lsa — 1-urinish hisoblanadi.
-                $quizRows = DB::table('hemis_quiz_results as hqr')
-                    ->join('students as st', 'st.student_id_number', '=', 'hqr.student_id')
-                    ->whereIn('st.group_id', $groupHemisIds)
-                    ->whereIn('hqr.fan_id', $subjectIds)
-                    ->where('hqr.is_active', 1)
-                    ->groupBy('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', 'hqr.shakl')
-                    ->select('st.group_id', 'hqr.fan_id', 'hqr.quiz_type', 'hqr.shakl', DB::raw('COUNT(DISTINCT hqr.student_id) as cnt'))
-                    ->get();
-
-                foreach ($quizRows as $row) {
-                    if (in_array($row->quiz_type, $testTypes)) {
-                        $ynType = 'Test';
-                    } elseif (in_array($row->quiz_type, $oskiTypes)) {
-                        $ynType = 'OSKI';
-                    } else {
-                        continue;
-                    }
-                    $shakl = strtolower(trim((string) ($row->shakl ?? '')));
-                    $att = match ($shakl) {
-                        '2-urinish' => 2,
-                        '3-urinish' => 3,
-                        default => 1,
-                    };
-                    $key = $row->group_id . '|' . $row->fan_id . '|' . $ynType . '|' . $att;
-                    $quizCounts[$key] = ($quizCounts[$key] ?? 0) + $row->cnt;
-                }
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('buildTestCenterData: hemis_quiz_results so\'rovi xatolik berdi: ' . $e->getMessage());
-            }
-        }
 
         // 2- va 3-urinishlar uchun haqiqiy qayta topshiruvchi talabalar soni
         // (butun guruh emas). 1-urinish uchun butun guruh hisoblanadi.

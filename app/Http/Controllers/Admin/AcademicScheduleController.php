@@ -2669,6 +2669,16 @@ class AcademicScheduleController extends Controller
                 $isPerStudent = !empty($schedule['student_hemis_id']);
 
                 if (!$hasAnyData) {
+                    // 2/3-urinish virtual qatori (guruh sathidagi) bo'sh kelgan bo'lsa,
+                    // hech narsa qilmaymiz. Aks holda guruh yozuvini o'chirish
+                    // 1-urinishning saqlangan oski_date/test_date sanalarini ham
+                    // yo'q qiladi (1-urinish va 2-urinish bitta exam_schedules
+                    // qatorida turli ustunlarda yashaydi). Resit ustunlari
+                    // allaqachon bo'sh — tozalashga hojat yo'q.
+                    $rowUrinishEmpty = (int) ($schedule['urinish'] ?? 1);
+                    if (!$isPerStudent && $rowUrinishEmpty >= 2) {
+                        continue;
+                    }
                     // Per-student rowni o'chirsa, faqat shu talabaning yozuvini tozalaymiz
                     $delQuery = ExamSchedule::where('group_hemis_id', $schedule['group_hemis_id'])
                         ->where('subject_id', $schedule['subject_id'])

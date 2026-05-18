@@ -228,6 +228,16 @@
                                 </button>
                             </div>
                         </div>
+                        <div class="filter-item" style="max-width:280px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Shakl bo'yicha qidiruv (barcha sanalar)</label>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <input type="text" id="search_shakl" class="date-input" placeholder="masalan: qo'shimcha" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();searchByShakl();}" style="flex:1;" />
+                                <button type="button" class="btn-tartibga" onclick="searchByShakl()" style="background:#0ea5e9;border-color:#0284c7;white-space:nowrap;">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    Qidirish
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -490,12 +500,25 @@
             loadTartibgaSol();
         }
 
+        function searchByShakl() {
+            var shaklQ = ($('#search_shakl').val() || '').trim();
+            if (!shaklQ) {
+                alert("Iltimos, qidirish uchun shakl matnini kiriting.");
+                $('#search_shakl').focus();
+                return;
+            }
+            loadTartibgaSol();
+        }
+
         function loadTartibgaSol() {
             var nameQ = ($('#search_student_name').val() || '').trim();
+            var shaklQ = ($('#search_shakl').val() || '').trim();
+            var hasGlobalSearch = nameQ || shaklQ;
             var params = {
-                date_from: nameQ ? '' : ($('#date_from').val() || ''),
-                date_to:   nameQ ? '' : ($('#date_to').val()   || ''),
+                date_from: hasGlobalSearch ? '' : ($('#date_from').val() || ''),
+                date_to:   hasGlobalSearch ? '' : ($('#date_to').val()   || ''),
                 student_name: nameQ,
+                shakl_search: shaklQ,
             };
 
             $('#empty-state').hide(); $('#table-area').hide(); $('#loading-state').show();

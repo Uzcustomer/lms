@@ -651,6 +651,9 @@ class QuizResultController extends Controller
         if ($request->filled('student_name')) {
             $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
         }
+        if ($request->filled('shakl_search')) {
+            $query->where('shakl', 'LIKE', '%' . $request->shakl_search . '%');
+        }
         if ($request->filled('student_id')) {
             $query->where('student_id', $request->student_id);
         }
@@ -739,11 +742,17 @@ class QuizResultController extends Controller
                 if ($dateTo)   $sub->whereDate('h2.date_finish', '<=', $dateTo);
             });
 
-            // Ism bo'yicha qidiruv: kiritilgan bo'lsa, barcha sanalarda qidiriladi
-            // (date_from/date_to e'tiborga olinmaydi).
-            if ($request->filled('student_name')) {
+            // Ism yoki shakl bo'yicha qidiruv: kiritilgan bo'lsa, barcha sanalarda
+            // qidiriladi (date_from/date_to e'tiborga olinmaydi).
+            $hasNameSearch = $request->filled('student_name');
+            $hasShaklSearch = $request->filled('shakl_search');
+            if ($hasNameSearch) {
                 $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
-            } else {
+            }
+            if ($hasShaklSearch) {
+                $query->where('shakl', 'LIKE', '%' . $request->shakl_search . '%');
+            }
+            if (!$hasNameSearch && !$hasShaklSearch) {
                 if ($request->filled('date_from')) {
                     $query->whereDate('date_finish', '>=', $request->date_from);
                 }
@@ -1680,6 +1689,10 @@ class QuizResultController extends Controller
 
         if ($request->filled('student_name')) {
             $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
+        }
+
+        if ($request->filled('shakl_search')) {
+            $query->where('shakl', 'LIKE', '%' . $request->shakl_search . '%');
         }
 
         if ($request->filled('student_id')) {

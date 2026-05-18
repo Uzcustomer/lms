@@ -1687,7 +1687,14 @@ class AcademicScheduleController extends Controller
 
         // 2- va 3-urinishlar uchun haqiqiy qayta topshiruvchi talabalar soni
         // (butun guruh emas). 1-urinish uchun butun guruh hisoblanadi.
-        $attemptNeedsMap = $this->computeAttemptNeedsMap()['needs'];
+        // Scope qilingan: faqat sahifada chiqqan guruh/fan/semestrlar uchun
+        // hisoblanadi. Lookup kalitlari aynan shulardan tashkil topgani uchun
+        // hech qanday qator tushib qolmaydi - faqat keraksiz so'rovlar
+        // (unscoped 8 ta SQL bilan butun student_grades/yn_submissions skani)
+        // qilinmaydi. Bu test-center sahifasini bir necha barobar tezlashtiradi.
+        $needSubjectIds = $transformedData->pluck('subject')->pluck('subject_id')->unique()->filter()->values()->toArray();
+        $needSemCodes = $transformedData->pluck('subject')->pluck('semester_code')->unique()->filter()->values()->toArray();
+        $attemptNeedsMap = $this->computeAttemptNeedsMap($groupHemisIds, $needSubjectIds, $needSemCodes)['needs'];
 
         $transformedData = $transformedData->map(function ($item) use ($studentCounts, $quizCounts, $ynSubmissions, $attemptNeedsMap) {
             $attempt = (int) ($item['attempt'] ?? 1);
@@ -2087,7 +2094,9 @@ class AcademicScheduleController extends Controller
         }
 
         // 2-/3-urinishlar uchun haqiqiy qayta topshiruvchi talabalar
-        $attemptNeedsMap = $this->computeAttemptNeedsMap()['needs'];
+        // (scope: request kelgan items dagi guruh/fan/semestrlar bilan cheklanadi)
+        $semCodes = collect($items)->pluck('semester_code')->unique()->filter()->values()->toArray();
+        $attemptNeedsMap = $this->computeAttemptNeedsMap($groupHemisIds, $subjectIds, $semCodes)['needs'];
 
         $result = [];
         foreach ($items as $item) {
@@ -4378,7 +4387,11 @@ class AcademicScheduleController extends Controller
         }
         // 2-/3-urinish qatorlarining ASL talaba soni (butun guruh emas, faqat
         // qayta topshiruvchilar). FFD saralash va sig'im hisobida ishlatiladi.
-        $attemptNeedsMap = $this->computeAttemptNeedsMap()['needs'];
+        // Scope: faqat shu auto-time batch'idagi guruhlar bilan cheklanadi -
+        // computeAttemptNeedsMap ichidagi 8 ta unfiltered so'rovni dramatik
+        // tezlashtiradi (lookup kalitlari aynan shu guruhlardan kelgani uchun
+        // hech qaysi candidate tushib qolmaydi).
+        $attemptNeedsMap = $this->computeAttemptNeedsMap($allGroupIds)['needs'];
         $maps = $this->buildAutoTimeSlotMap($from, $to, $groupCountMap, $attemptNeedsMap);
         $slotMap = $maps['all'];             // findResitSlot uchun (hammasi)
         $resitSlotMap = $maps['resit'];      // distribute uchun (faqat resit)

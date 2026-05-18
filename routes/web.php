@@ -761,6 +761,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/delete-student-grade', [QuizResultController::class, 'deleteStudentGrade'])->name('delete-student-grade');
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::post('/update-grade', [QuizResultController::class, 'updateGrade'])->name('update-grade');
+            Route::post('/update-fan-id', [QuizResultController::class, 'updateFanId'])->name('update-fan-id');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 
@@ -1360,6 +1361,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/delete-student-grade', [QuizResultController::class, 'deleteStudentGrade'])->name('delete-student-grade');
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::post('/update-grade', [QuizResultController::class, 'updateGrade'])->name('update-grade');
+            Route::post('/update-fan-id', [QuizResultController::class, 'updateFanId'])->name('update-fan-id');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 

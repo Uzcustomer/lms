@@ -742,7 +742,7 @@
                 html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.semester) + '</span></td>';
                 html += '<td><span class="badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;">' + esc(r.group) + '</span></td>';
                 html += '<td>' + fanCell + '</td>';
-                html += '<td><span class="badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;">' + esc(r.fan_id || '-') + '</span></td>';
+                html += '<td><span class="badge editable-fan-id" data-id="' + r.id + '" onclick="editFanId(this,' + r.id + ')" title="Fan ID ni tahrirlash uchun bosing" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;cursor:pointer;">' + esc(r.fan_id || '-') + '</span></td>';
                 html += '<td style="text-align:center;">' + ynBadge + '</td>';
                 html += '<td><span class="text-cell">' + esc(r.shakl) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade editable-grade" data-id="' + r.id + '" onclick="editGrade(this,' + r.id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + esc(r.grade) + '</span></td>';
@@ -979,6 +979,66 @@
                     if (e.key === 'Escape') {
                         td.innerHTML = '<span class="badge badge-grade editable-grade" data-id="' + id + '" onclick="editGrade(this,' + id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + currentGrade + '</span>';
                     }
+                });
+            };
+
+            window.editFanId = function(el, id) {
+                var currentFanId = el.textContent.trim();
+                if (currentFanId === '-') currentFanId = '';
+                var td = el.parentNode;
+                var input = document.createElement('input');
+                input.type = 'number';
+                input.min = '1';
+                input.value = currentFanId;
+                input.style.cssText = 'width:90px;padding:4px 6px;font-size:12px;font-weight:600;text-align:center;border:2px solid #3b82f6;border-radius:6px;outline:none;';
+                td.innerHTML = '';
+                td.appendChild(input);
+                input.focus();
+                input.select();
+
+                function restore(val) {
+                    td.innerHTML = '<span class="badge editable-fan-id" data-id="' + id + '" onclick="editFanId(this,' + id + ')" title="Fan ID ni tahrirlash uchun bosing" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;cursor:pointer;">' + (val || '-') + '</span>';
+                }
+
+                function saveFanId() {
+                    var newFanId = parseInt(input.value);
+                    if (isNaN(newFanId) || newFanId < 1) {
+                        alert('Fan ID raqam bo\'lishi kerak!');
+                        input.focus();
+                        return;
+                    }
+                    if (String(newFanId) === String(currentFanId)) {
+                        restore(currentFanId);
+                        return;
+                    }
+                    $.ajax({
+                        url: '{{ route($routePrefix . ".quiz-results.update-fan-id") }}',
+                        type: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrfToken },
+                        data: { id: id, fan_id: newFanId },
+                        success: function(data) {
+                            if (!data.success) {
+                                alert(data.message || 'Xatolik');
+                                restore(currentFanId);
+                                return;
+                            }
+                            var row = allData.find(function(r) { return r.id === id; });
+                            if (row) { row.fan_id = data.fan_id; row.fan_name = data.fan_name; }
+                            restore(newFanId);
+                            // Xulosa va boshqa derived qiymatlar yangilanishi uchun qayta sinxronlash
+                            loadTartibgaSol();
+                        },
+                        error: function(xhr) {
+                            alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                            restore(currentFanId);
+                        }
+                    });
+                }
+
+                input.addEventListener('blur', saveFanId);
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); saveFanId(); }
+                    if (e.key === 'Escape') { restore(currentFanId); }
                 });
             };
 

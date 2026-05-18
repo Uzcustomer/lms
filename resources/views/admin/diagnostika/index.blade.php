@@ -1654,10 +1654,11 @@
                     for (var i = 0; i < comparisons.length; i++) {
                         var c = comparisons[i];
                         var reasonLabel = c.existing_reason === 'quiz_result' ? 'Moodle' : (c.existing_reason || 'Noma\'lum');
-                        html += '<tr id="cmp-row-' + c.student_grade_id + '">';
+                        var rowBg = c.is_deleted ? 'background:#fef9c3;' : '';
+                        html += '<tr id="cmp-row-' + c.student_grade_id + '" style="' + rowBg + '">';
                         html += '<td style="text-align:center;"><input type="checkbox" class="cmp-row-cb" value="' + c.student_grade_id + '" onclick="updateCmpSelCount()"></td>';
                         html += '<td style="font-weight:600;">' + esc(c.student_name) + '<br><span style="font-size:10px;color:#94a3b8;">' + esc(c.student_id) + '</span></td>';
-                        html += '<td>' + esc(c.fan_name) + '<br><span style="font-size:10px;color:#94a3b8;">ID: ' + esc(c.fan_id) + '</span></td>';
+                        html += '<td>' + esc(c.fan_name) + '<br><span style="font-size:10px;color:#94a3b8;">ID: ' + esc(c.fan_id) + '</span>' + (c.is_deleted ? '<br><span style="font-size:10px;color:#b45309;font-weight:600;">⚠ Soft-deleted (orphan)</span>' : '') + '</td>';
                         html += '<td><span class="badge ' + (c.type === 'Test' ? 'badge-grade' : 'badge-oski') + '">' + esc(c.type) + '</span></td>';
                         html += '<td style="font-weight:700;color:#059669;font-size:14px;">' + esc(c.moodle_grade) + '</td>';
                         html += '<td style="font-weight:700;color:#dc2626;font-size:14px;">' + esc(c.existing_grade) + '</td>';

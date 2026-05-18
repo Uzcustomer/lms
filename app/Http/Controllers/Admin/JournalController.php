@@ -1402,10 +1402,13 @@ class JournalController extends Controller
             Log::warning('Sababli OSKI/Test openings query failed: ' . $e->getMessage());
         }
 
-        // exam_schedules dan OSKI/Test sanalarini olish
+        // exam_schedules dan OSKI/Test sanalarini olish.
+        // student_hemis_id IS NULL — faqat guruh sathidagi yozuv (per-student
+        // individual yozuvi guruh sanasi o'rniga ko'rinib qolmasligi uchun).
         $examSchedule = ExamSchedule::where('group_hemis_id', $group->group_hemis_id)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
+            ->whereNull('student_hemis_id')
             ->first();
 
         // YN ga yuborish huquqi: faqat shu fan+guruh juftligiga biriktirilgan o'qituvchi

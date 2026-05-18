@@ -2394,18 +2394,93 @@ class AcademicScheduleController extends Controller
             return redirect()->back()->with('error', 'Saqlash uchun ma\'lumot topilmadi.');
         }
 
+        // PHP max_input_vars limiti tufayli forma maydonlari kesilgan bo'lishi
+        // mumkin - bu holda oxirgi qatorlarning hidden fieldlari (jumladan
+        // group_hemis_id, subject_id) tushib qoladi va validSchedules filtri
+        // ularni jimgina o'tkazib yuboradi. Buni aniqlash uchun received vs
+        // expected ni solishtiramiz.
+        $receivedRowCount = count($schedules);
+        $expectedRowCount = (int) $request->input('_form_total_rows', $receivedRowCount);
+        $maxInputVars = (int) ini_get('max_input_vars');
+
         // Faqat to'liq ma'lumotga ega elementlarni filtrlash
-        // (max_input_vars limiti tufayli ba'zi maydonlar tushib qolishi mumkin)
         $validSchedules = [];
+        $incompleteRowCount = 0;
         foreach ($schedules as $key => $schedule) {
             if (!empty($schedule['group_hemis_id']) && !empty($schedule['subject_id']) && !empty($schedule['semester_code'])) {
                 $validSchedules[$key] = $schedule;
+            } else {
+                $incompleteRowCount++;
             }
         }
 
         if (empty($validSchedules)) {
             return redirect()->back()->with('error', 'Ma\'lumotlar to\'liq emas. Sahifani yangilab, qaytadan urinib ko\'ring.');
         }
+
+        // Kesilganni aniqlash: forma yuborgan row soni kutilgandan kam
+        // YOKI ko'p row to'liq emas - max_input_vars limit signalsi.
+        $truncationDetected = ($expectedRowCount > 0 && $receivedRowCount < $expectedRowCount)
+            || ($incompleteRowCount > 0 && $maxInputVars > 0 && ($receivedRowCount * 4) >= $maxInputVars);
+        if ($truncationDetected) {
+            $msg = sprintf(
+                'Diqqat: PHP max_input_vars (%d) limiti tufayli formdagi ba\'zi qatorlar saqlanmagan bo\'lishi mumkin. '
+                . 'Kutilgan: %d ta qator, qabul qilindi: %d ta. Iltimos, kichikroq partiyalarga bo\'lib saqlang yoki '
+                . 'serverda php.ini ichida max_input_vars qiymatini oshiring (masalan 10000).',
+                $maxInputVars,
+                $expectedRowCount ?: $receivedRowCount,
+                count($validSchedules)
+            );
+            session()->flash('warning', $msg);
+        }
+
+        // Group/subject metadata'ni serverdan yuklab olamiz - formada bu hidden
+        // fieldlar yo'q (max_input_vars'ni tejash uchun). Har row uchun
+        // department/specialty/curriculum/subject_name/closing_form to'ldiriladi.
+        $uniqueGroupIds = array_unique(array_filter(array_column($validSchedules, 'group_hemis_id')));
+        $uniqueSubjectKeys = [];
+        foreach ($validSchedules as $s) {
+            $uniqueSubjectKeys[$s['subject_id'] . '|' . $s['semester_code']] = [
+                'subject_id' => $s['subject_id'],
+                'semester_code' => $s['semester_code'],
+            ];
+        }
+
+        $groupMeta = !empty($uniqueGroupIds)
+            ? \App\Models\Group::whereIn('group_hemis_id', $uniqueGroupIds)
+                ->get(['group_hemis_id', 'department_hemis_id', 'specialty_hemis_id', 'curriculum_hemis_id'])
+                ->keyBy('group_hemis_id')
+            : collect();
+        $subjectMeta = collect();
+        if (!empty($uniqueSubjectKeys)) {
+            $subjectQuery = \App\Models\CurriculumSubject::query();
+            $subjectQuery->where(function ($q) use ($uniqueSubjectKeys) {
+                foreach ($uniqueSubjectKeys as $sk) {
+                    $q->orWhere(function ($sub) use ($sk) {
+                        $sub->where('subject_id', $sk['subject_id'])
+                            ->where('semester_code', $sk['semester_code']);
+                    });
+                }
+            });
+            $subjectMeta = $subjectQuery->get(['subject_id', 'semester_code', 'subject_name', 'closing_form'])
+                ->keyBy(fn($s) => $s->subject_id . '|' . $s->semester_code);
+        }
+
+        foreach ($validSchedules as &$schedule) {
+            $g = $groupMeta->get($schedule['group_hemis_id']);
+            if ($g) {
+                $schedule['department_hemis_id'] = $schedule['department_hemis_id'] ?? $g->department_hemis_id;
+                $schedule['specialty_hemis_id'] = $schedule['specialty_hemis_id'] ?? $g->specialty_hemis_id;
+                $schedule['curriculum_hemis_id'] = $schedule['curriculum_hemis_id'] ?? $g->curriculum_hemis_id;
+            }
+            $subKey = $schedule['subject_id'] . '|' . $schedule['semester_code'];
+            $sm = $subjectMeta->get($subKey);
+            if ($sm) {
+                $schedule['subject_name'] = $schedule['subject_name'] ?? $sm->subject_name;
+                $schedule['closing_form'] = $schedule['closing_form'] ?? $sm->closing_form;
+            }
+        }
+        unset($schedule);
 
         $currentSemester = Semester::where('current', true)->first();
         $educationYear = $currentSemester?->education_year;

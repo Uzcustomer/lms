@@ -397,16 +397,27 @@
                                             @php
                                                 $stuCnt = (int) ($item['student_count'] ?? 0);
                                                 $stuTooltipList = $item['tooltip_students'] ?? [];
-                                                if (!empty($stuTooltipList)) {
-                                                    // Native title HH attribute satrlarini \n bilan kechiriladi
-                                                    $stuTooltipTitle = implode("\n", $stuTooltipList);
+                                                $stuFailedCnt = (int) ($item['failed_count'] ?? 0);
+                                                $stuPassedCnt = (int) ($item['passed_count'] ?? $stuCnt);
+                                                // 1-urinish va yiqilganlar bor bo'lsa "passed/total" formatda ko'rsatamiz
+                                                // (masalan "7/10"). Aks holda oddiy son.
+                                                if (($item['urinish'] ?? 1) === 1 && $stuFailedCnt > 0) {
+                                                    $stuBadgeText = $stuPassedCnt . '/' . $stuCnt;
+                                                    $stuBadgeTitle = $stuFailedCnt . ' ta yiqilgan, ' . $stuPassedCnt . ' ta o\'tgan, jami ' . $stuCnt;
                                                 } else {
-                                                    $stuTooltipTitle = 'Ushbu urinishda imtihon topshiradigan talabalar soni';
+                                                    $stuBadgeText = (string) $stuCnt;
+                                                    $stuBadgeTitle = 'Ushbu urinishda imtihon topshiradigan talabalar soni';
+                                                }
+                                                if (!empty($stuTooltipList)) {
+                                                    // Native title HTML atribut satrlarini \n bilan kechiradi
+                                                    $stuTooltipTitle = $stuBadgeTitle . "\n\n" . implode("\n", $stuTooltipList);
+                                                } else {
+                                                    $stuTooltipTitle = $stuBadgeTitle;
                                                 }
                                             @endphp
                                             <td data-sort-value="{{ $stuCnt }}" style="text-align:center;padding:4px 8px;">
                                                 @if($stuCnt > 0)
-                                                    <span style="display:inline-block;min-width:28px;padding:2px 8px;border-radius:8px;font-size:12px;font-weight:600;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;cursor:help;" title="{{ $stuTooltipTitle }}">{{ $stuCnt }}</span>
+                                                    <span style="display:inline-block;min-width:28px;padding:2px 8px;border-radius:8px;font-size:12px;font-weight:600;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;cursor:help;" title="{{ $stuTooltipTitle }}">{{ $stuBadgeText }}</span>
                                                 @else
                                                     <span style="color:#cbd5e1;font-size:12px;">—</span>
                                                 @endif

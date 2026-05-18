@@ -177,25 +177,27 @@ class ExamDateRoleService
     }
 
     /**
-     * Default mapping (level_code -> roles[]). Eski xulq-atvorni saqlaydi:
-     * 4 va 5-kurs uchun "O'quv bo'limi" rollari.
+     * Default mapping (level_code -> roles[]). Registrator ofisi har bir kurs
+     * darajasiga ruxsatga ega — odatda u 1-urinish YN sanalarini ham qo'yadi.
+     * O'quv bo'limi rollari ham eski xulq-atvor bo'yicha barcha kurslarda.
      *
      * @return array<string, array<int, string>>
      */
     public static function defaultMapping(): array
     {
-        $oquv = [
+        $defaults = [
+            ProjectRole::REGISTRAR_OFFICE->value,
             ProjectRole::ACADEMIC_DEPARTMENT->value,
             ProjectRole::ACADEMIC_DEPARTMENT_HEAD->value,
         ];
 
         return [
-            '11' => $oquv,
-            '12' => $oquv,
-            '13' => $oquv,
-            '14' => $oquv,
-            '15' => $oquv,
-            '16' => $oquv,
+            '11' => $defaults,
+            '12' => $defaults,
+            '13' => $defaults,
+            '14' => $defaults,
+            '15' => $defaults,
+            '16' => $defaults,
         ];
     }
 

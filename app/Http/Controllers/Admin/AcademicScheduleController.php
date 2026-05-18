@@ -6066,7 +6066,7 @@ class AcademicScheduleController extends Controller
      *
      * @return array{needs: array<string,int>, exists: array<string,int>}
      */
-    private function computeAttemptNeedsMap(array $groupHemisIds = [], array $subjectIds = [], array $semesterCodes = []): array
+    private function computeAttemptNeedsMap(): array
     {
         $needsByKey = [];
         $attemptExistsByKey = [];
@@ -6077,9 +6077,6 @@ class AcademicScheduleController extends Controller
                 $check = $att === 2 ? 1 : 2;
                 $rows = DB::table('student_grades as sg')
                     ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                    ->when(!empty($groupHemisIds), fn($q) => $q->whereIn('st.group_id', $groupHemisIds))
-                    ->when(!empty($subjectIds), fn($q) => $q->whereIn('sg.subject_id', $subjectIds))
-                    ->when(!empty($semesterCodes), fn($q) => $q->whereIn('sg.semester_code', $semesterCodes))
                     ->whereNull('sg.deleted_at')
                     ->whereIn('sg.training_type_code', [101, 102])
                     ->where(function ($q) {
@@ -6112,9 +6109,6 @@ class AcademicScheduleController extends Controller
                 foreach ([2, 3] as $att) {
                     $rows = DB::table('student_grades as sg')
                         ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                        ->when(!empty($groupHemisIds), fn($q) => $q->whereIn('st.group_id', $groupHemisIds))
-                        ->when(!empty($subjectIds), fn($q) => $q->whereIn('sg.subject_id', $subjectIds))
-                        ->when(!empty($semesterCodes), fn($q) => $q->whereIn('sg.semester_code', $semesterCodes))
                         ->whereNull('sg.deleted_at')
                         ->whereIn('sg.training_type_code', [101, 102])
                         ->where('sg.attempt', $att)
@@ -6132,9 +6126,6 @@ class AcademicScheduleController extends Controller
             if (\Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt')) {
                 foreach ([2, 3] as $att) {
                     $rows = DB::table('yn_submissions as yns')
-                        ->when(!empty($groupHemisIds), fn($q) => $q->whereIn('yns.group_hemis_id', $groupHemisIds))
-                        ->when(!empty($subjectIds), fn($q) => $q->whereIn('yns.subject_id', $subjectIds))
-                        ->when(!empty($semesterCodes), fn($q) => $q->whereIn('yns.semester_code', $semesterCodes))
                         ->where('yns.attempt', $att)
                         ->select('yns.group_hemis_id as group_id', 'yns.subject_id', 'yns.semester_code', DB::raw('1 as c'))
                         ->groupBy('yns.group_hemis_id', 'yns.subject_id', 'yns.semester_code')
@@ -6157,9 +6148,6 @@ class AcademicScheduleController extends Controller
                 // 2-urinish — oski_resit_date yoki test_resit_date bor talabalar
                 $rows2 = DB::table('exam_schedules as es')
                     ->join('students as st', 'st.hemis_id', '=', 'es.student_hemis_id')
-                    ->when(!empty($groupHemisIds), fn($q) => $q->whereIn('st.group_id', $groupHemisIds))
-                    ->when(!empty($subjectIds), fn($q) => $q->whereIn('es.subject_id', $subjectIds))
-                    ->when(!empty($semesterCodes), fn($q) => $q->whereIn('es.semester_code', $semesterCodes))
                     ->whereNotNull('es.student_hemis_id')
                     ->where(function ($q) {
                         $q->whereNotNull('es.oski_resit_date')
@@ -6175,9 +6163,6 @@ class AcademicScheduleController extends Controller
                 // 3-urinish — resit2 sanasi
                 $rows3 = DB::table('exam_schedules as es')
                     ->join('students as st', 'st.hemis_id', '=', 'es.student_hemis_id')
-                    ->when(!empty($groupHemisIds), fn($q) => $q->whereIn('st.group_id', $groupHemisIds))
-                    ->when(!empty($subjectIds), fn($q) => $q->whereIn('es.subject_id', $subjectIds))
-                    ->when(!empty($semesterCodes), fn($q) => $q->whereIn('es.semester_code', $semesterCodes))
                     ->whereNotNull('es.student_hemis_id')
                     ->where(function ($q) {
                         $q->whereNotNull('es.oski_resit2_date')
@@ -6495,15 +6480,12 @@ class AcademicScheduleController extends Controller
         $allSubjectIds = array_keys($allSubjectIds);
         $allSemCodes = array_keys($allSemCodes);
 
-        // computeAttemptNeedsMap() ni guruh/fan/semestr bo'yicha scope qilamiz
-        // (sahifa bo'yicha cheklanmagan so'rovlar 502 timeout berardi). Bu funksiya
-        // failedHemisIdsByKey qamrab olmaydigan signallarni ham beradi:
-        //  - yn_submissions(attempt=2/3): admin qo'lda 12a/12b ochgan
-        //  - student_grades.attempt=N: aniq qo'lda urinishga o'tkazilgan
-        // Shu sababli ushbu chaqiruv 2-urinish qatori ko'rinishi uchun zarur.
-        $maps = $this->computeAttemptNeedsMap($allGroupHemisIds, $allSubjectIds, $allSemCodes);
-        $needsByKey = $maps['needs'];
-        $attemptExistsByKey = $maps['exists'];
+        // computeAttemptNeedsMap() oldin chaqirilardi (8 ta unfiltered SQL so'rov),
+        // lekin uning natijasini failedHemisIdsByKey qamrab oladi va aniqroq.
+        // Performance uchun shu yerda chaqirmaymiz - showStudents=false uchun
+        // failedHemisIdsByKey dan foydalanamiz.
+        $needsByKey = [];
+        $attemptExistsByKey = [];
 
         // Tooltip uchun yiqilgan talabalar hemis_id ro'yxati (group|subject|sem|attempt).
         // attachStudentsToSchedule yuklanmagan bo'lsa (showStudents=false), shu xarita
@@ -6612,11 +6594,6 @@ class AcademicScheduleController extends Controller
                 $row1['test_na_for_urinish'] = $item['test_na'] ?? false;
                 $row1['student_count'] = $countFor(1);
                 $row1['tooltip_students'] = $tooltipFor(1);
-                // 1-urinish uchun "passed/total" ko'rsatish — yiqilganlar bo'lsa
-                // badge "7/10" formatda chiqadi. Yiqilganlar = $countFor(2).
-                $row1FailedCount = $countFor(2);
-                $row1['passed_count'] = max(0, $row1['student_count'] - $row1FailedCount);
-                $row1['failed_count'] = $row1FailedCount;
 
                 // 2-urinish ko'rinish qoidasi:
                 //  - guruh sathida resit sanasi saqlangan, YOKI

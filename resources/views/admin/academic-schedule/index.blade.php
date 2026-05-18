@@ -25,6 +25,13 @@
                     </div>
                 @endif
 
+                @if(session('warning'))
+                    <div class="px-5 py-3 text-amber-800 bg-amber-50 border-b border-amber-200" role="alert">
+                        <strong class="font-bold">Diqqat!</strong>
+                        <span style="white-space:pre-line;">{{ session('warning') }}</span>
+                    </div>
+                @endif
+
                 @if(session('status'))
                     <div class="px-5 py-3 text-yellow-700 bg-yellow-50 border-b border-yellow-200" role="alert">
                         <span>{{ session('status') }}</span>
@@ -551,13 +558,12 @@
                                                 @endif
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">
-                                                <input type="hidden" name="schedules[{{ $rowIndex }}][subject_name]" value="{{ $item['subject']->subject_name }}">
-                                                <input type="hidden" name="schedules[{{ $rowIndex }}][department_hemis_id]" value="{{ $item['group']->department_hemis_id }}">
-                                                <input type="hidden" name="schedules[{{ $rowIndex }}][specialty_hemis_id]" value="{{ $item['group']->specialty_hemis_id }}">
-                                                <input type="hidden" name="schedules[{{ $rowIndex }}][curriculum_hemis_id]" value="{{ $item['group']->curriculum_hemis_id }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][semester_code]" value="{{ $item['subject']->semester_code }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
-                                                <input type="hidden" name="schedules[{{ $rowIndex }}][closing_form]" value="{{ $cf }}">
+                                                {{-- subject_name, department/specialty/curriculum_hemis_id, closing_form
+                                                     formda yuborilmaydi — store() ularni group_hemis_id va subject_id
+                                                     orqali serverdan qidirib oladi. Bu max_input_vars limitiga
+                                                     yetib bormaslik uchun (har row 13 dan 4 maydonga tushdi). --}}
                                             </td>
                                         </tr>
 
@@ -1226,7 +1232,20 @@
                 if (hasError) {
                     e.preventDefault();
                     alert('Sana xatosi: format noto\'g\'ri yoki imtihon sanasi bugun/o\'tgan kun qo\'yilgan.\nImtihon sanasi kamida ertadan bo\'lishi kerak (kk.oo.yyyy).');
+                    return;
                 }
+                // Server max_input_vars limitidan oshganda kesilganni
+                // aniqlay olishi uchun jadvaldagi haqiqiy row sonini yuboramiz.
+                var form = this;
+                var rowCount = document.querySelectorAll('tr.data-row').length;
+                var hidden = form.querySelector('input[name="_form_total_rows"]');
+                if (!hidden) {
+                    hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = '_form_total_rows';
+                    form.appendChild(hidden);
+                }
+                hidden.value = rowCount;
             });
         });
     </script>

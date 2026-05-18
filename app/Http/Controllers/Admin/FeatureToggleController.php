@@ -31,11 +31,24 @@ class FeatureToggleController extends Controller
         ],
     ];
 
+    private function ensureSuperadmin(): void
+    {
+        $activeRole = (string) session('active_role', '');
+        if ($activeRole === 'superadmin') {
+            return;
+        }
+
+        $user = auth('web')->user() ?? auth('teacher')->user();
+        if ($user && $user->roles()->where('name', 'superadmin')->exists()) {
+            return;
+        }
+
+        abort(403);
+    }
+
     public function index()
     {
-        if (!auth()->user()?->hasRole('superadmin')) {
-            abort(403);
-        }
+        $this->ensureSuperadmin();
 
         $toggles = [];
         foreach ($this->features as $key => $meta) {
@@ -52,9 +65,7 @@ class FeatureToggleController extends Controller
 
     public function update(Request $request)
     {
-        if (!auth()->user()?->hasRole('superadmin')) {
-            abort(403);
-        }
+        $this->ensureSuperadmin();
 
         $request->validate([
             'key' => 'required|string',

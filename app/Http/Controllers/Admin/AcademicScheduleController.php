@@ -6401,42 +6401,62 @@ class AcademicScheduleController extends Controller
 
                 $studentsAttachedList = (isset($item['students']) && is_array($item['students'])) ? $item['students'] : null;
                 $countFor = function (int $att) use ($studentsAttachedList, $groupSizes, $groupHid, $needsByKey, $needsKeyBase, $failedHemisIdsByKey) {
+                    // Asosiy hisob: studentsAttachedList bo'lsa undan, aks holda groupSizes / needsByKey dan
                     if (is_array($studentsAttachedList)) {
-                        if ($att === 1) return count($studentsAttachedList);
-                        $field = $att === 2 ? 'failed_attempt1' : 'failed_attempt2';
-                        return count(array_filter($studentsAttachedList, fn($s) => !empty($s[$field])));
+                        if ($att === 1) {
+                            $base = count($studentsAttachedList);
+                        } else {
+                            $field = $att === 2 ? 'failed_attempt1' : 'failed_attempt2';
+                            $base = count(array_filter($studentsAttachedList, fn($s) => !empty($s[$field])));
+                        }
+                    } elseif ($att === 1) {
+                        $base = (int) ($groupSizes[$groupHid] ?? 0);
+                    } else {
+                        $base = (int) ($needsByKey[$needsKeyBase . '|' . $att] ?? 0);
                     }
-                    if ($att === 1) {
-                        return (int) ($groupSizes[$groupHid] ?? 0);
-                    }
-                    // failedHemisIdsByKey to'liqroq - qatnashmaganlarni ham hisoblaydi
+                    if ($att === 1) return $base;
+                    // 2/3-urinish uchun failedHemisIdsByKey to'liqroq:
+                    // qatnashmaganlarni (NB) ham qamrab oladi - eski mantiq tashlab ketgan
+                    // talabalar shu yerda ushlanadi.
                     $failedCount = isset($failedHemisIdsByKey[$needsKeyBase . '|' . $att])
                         ? count($failedHemisIdsByKey[$needsKeyBase . '|' . $att])
                         : 0;
-                    $needsCount = (int) ($needsByKey[$needsKeyBase . '|' . $att] ?? 0);
-                    return max($failedCount, $needsCount);
+                    return max($base, $failedCount);
                 };
 
                 // Tooltip uchun talabalar ismlari ro'yxatini tayyorlaymiz.
                 // 1-urinish: guruhdagi barcha faol talabalar.
-                // 2/3-urinish: yiqilganlar - attachStudentsToSchedule yuklangan
-                // bo'lsa shu yerdan, aks holda failedHemisIdsByKey orqali.
+                // 2/3-urinish: failedHemisIdsByKey (eng to'liq) + studentsAttachedList
+                //   union — har ikkalasidan kelgan ismlar birlashtiriladi. failedHemisIdsByKey
+                //   qatnashmaganlarni ham qamrab oladi (eski mantiq tashlab ketgan).
                 $tooltipFor = function (int $att) use ($studentsAttachedList, $studentNamesByGroup, $failedHemisIdsByKey, $groupHid, $needsKeyBase) {
-                    $names = [];
                     if ($att === 1) {
                         $names = array_values($studentNamesByGroup[$groupHid] ?? []);
-                    } elseif (is_array($studentsAttachedList)) {
-                        $field = $att === 2 ? 'failed_attempt1' : 'failed_attempt2';
-                        foreach ($studentsAttachedList as $s) {
-                            if (!empty($s[$field])) $names[] = $s['full_name'] ?? '';
-                        }
-                    } else {
-                        $ids = $failedHemisIdsByKey[$needsKeyBase . '|' . $att] ?? [];
-                        $namesMap = $studentNamesByGroup[$groupHid] ?? [];
-                        foreach ($ids as $hid) {
-                            if (isset($namesMap[(string) $hid])) $names[] = $namesMap[(string) $hid];
+                        sort($names);
+                        return $names;
+                    }
+                    $namesMap = $studentNamesByGroup[$groupHid] ?? [];
+                    $unique = []; // hid => name
+                    // 1) failedHemisIdsByKey dan
+                    $ids = $failedHemisIdsByKey[$needsKeyBase . '|' . $att] ?? [];
+                    foreach ($ids as $hid) {
+                        if (isset($namesMap[(string) $hid])) {
+                            $unique[(string) $hid] = $namesMap[(string) $hid];
                         }
                     }
+                    // 2) studentsAttachedList dan (mavjud bo'lsa)
+                    if (is_array($studentsAttachedList)) {
+                        $field = $att === 2 ? 'failed_attempt1' : 'failed_attempt2';
+                        foreach ($studentsAttachedList as $s) {
+                            if (!empty($s[$field])) {
+                                $hid = (string) ($s['hemis_id'] ?? '');
+                                if ($hid !== '') {
+                                    $unique[$hid] = $s['full_name'] ?? '';
+                                }
+                            }
+                        }
+                    }
+                    $names = array_values($unique);
                     sort($names);
                     return $names;
                 };

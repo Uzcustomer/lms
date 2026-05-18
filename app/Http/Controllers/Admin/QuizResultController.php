@@ -2538,6 +2538,39 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Quiz natijasining fan_id va fan_name ni yangilash (inline edit).
+     */
+    public function updateFanId(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer|exists:hemis_quiz_results,id',
+            'fan_id' => 'required|integer',
+        ]);
+
+        $subject = CurriculumSubject::where('subject_id', $request->fan_id)->first();
+        if (!$subject) {
+            return response()->json([
+                'success' => false,
+                'message' => "Fan topilmadi (ID: {$request->fan_id})",
+            ], 404);
+        }
+
+        DB::table('hemis_quiz_results')
+            ->where('id', $request->id)
+            ->update([
+                'fan_id' => $request->fan_id,
+                'fan_name' => $subject->subject_name,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'fan_id' => $request->fan_id,
+            'fan_name' => $subject->subject_name,
+        ]);
+    }
+
+    /**
      * Moodle quiz results cron ni qo'lda ishga tushirish.
      */
     public function triggerCron()

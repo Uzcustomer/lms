@@ -2857,7 +2857,14 @@ class QuizResultController extends Controller
         ]);
 
         if ($request->filled('student_grade_ids')) {
-            $deleted = StudentGrade::whereIn('id', $request->student_grade_ids)->delete();
+            // Har bir qatorni alohida o'chirish — LogsActivity (deleted hook)
+            // audit log yozishi uchun. Mass delete model eventlarini chetlab o'tadi.
+            $grades = StudentGrade::whereIn('id', $request->student_grade_ids)->get();
+            $deleted = 0;
+            foreach ($grades as $grade) {
+                $grade->delete();
+                $deleted++;
+            }
             return response()->json([
                 'success' => true,
                 'deleted_count' => $deleted,

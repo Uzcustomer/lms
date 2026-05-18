@@ -6669,15 +6669,15 @@ class AcademicScheduleController extends Controller
                 //    guruh+fan qatorlari faqat tegishli yiqilganlar bo'lsa qoldiriladi
                 //    (jadval keraksiz to'lib ketmasligi uchun).
                 $rowsToAdd = [];
-                $includeRow1 = true;
-                if ($urinishFilter === '2') {
-                    $includeRow1 = $hasFailed1 || $show2;
-                } elseif ($urinishFilter === '3') {
-                    $includeRow1 = $hasFailed2 || $show3;
-                }
+                // Filter aniq urinish raqamiga sozlangan bo'lsa, faqat shu
+                // urinish qatori ko'rinadi. Filtersiz (null/'') esa hamma
+                // urinishlar ketma-ket ko'rsatiladi.
+                $includeRow1 = ($urinishFilter === null || $urinishFilter === '' || $urinishFilter === '1');
+                $includeRow2 = ($urinishFilter === null || $urinishFilter === '' || $urinishFilter === '2');
+                $includeRow3 = ($urinishFilter === null || $urinishFilter === '' || $urinishFilter === '3');
                 if ($includeRow1) $rowsToAdd[] = $row1;
-                if (($urinishFilter === null || $urinishFilter === '' || $urinishFilter === '2') && $row2) $rowsToAdd[] = $row2;
-                if (($urinishFilter === null || $urinishFilter === '' || $urinishFilter === '3') && $row3) $rowsToAdd[] = $row3;
+                if ($includeRow2 && $row2) $rowsToAdd[] = $row2;
+                if ($includeRow3 && $row3) $rowsToAdd[] = $row3;
 
                 foreach ($rowsToAdd as $r) {
                     if ($r) $expanded->push($r);

@@ -1353,8 +1353,11 @@ class QuizResultController extends Controller
             return ['code' => 'bad_grade', 'text' => 'Baho noto\'g\'ri', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
-        // 5) 1-urinish emas
-        if ($result->shakl && $result->shakl !== '1-urinish') {
+        // 5) 1-urinish emas — "N-urinish (qo'shimcha matn)" ham N-urinish deb hisoblanadi
+        $shaklNorm = preg_match('/^\s*(\d+)-urinish/iu', (string) $result->shakl, $um)
+            ? $um[1] . '-urinish'
+            : (string) $result->shakl;
+        if ($shaklNorm && $shaklNorm !== '1-urinish') {
             return ['code' => 'not_first', 'text' => '1-urinish emas', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
@@ -1903,8 +1906,14 @@ class QuizResultController extends Controller
             }
 
             // Faqat 1-urinish yuklanadi (OSKI/YN test) — qayta yuklashda bu filtr o'tkazib yuboriladi
-            if (!$request->input('skip_shakl_filter') && $result->shakl !== '1-urinish') {
-                $rowInfo['error'] = "Faqat 1-urinish yuklanadi (hozirgi: {$result->shakl})";
+            // Shakl "1-urinish (qo'shimcha farmoyishi borlar uchun)" kabi qo'shimcha matn bilan
+            // ham bo'lishi mumkin — birinchi "N-urinish" qismini ajratib olamiz.
+            $shaklRaw = (string) ($result->shakl ?? '');
+            $normalizedShakl = preg_match('/^\s*(\d+)-urinish/iu', $shaklRaw, $um)
+                ? $um[1] . '-urinish'
+                : $shaklRaw;
+            if (!$request->input('skip_shakl_filter') && $normalizedShakl !== '1-urinish') {
+                $rowInfo['error'] = "Faqat 1-urinish yuklanadi (hozirgi: {$shaklRaw})";
                 $errors[] = $rowInfo;
                 continue;
             }

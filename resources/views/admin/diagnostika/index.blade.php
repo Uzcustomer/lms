@@ -1228,24 +1228,176 @@
                 var ids = getSelectedIds();
                 if (ids.length === 0) return;
 
-                // Faqat "uploaded" tanlanganlarnigina o'chirish
-                var uploadedIds = [];
-                ids.forEach(function(id) {
-                    var row = allData.find(function(r) { return r.id === id; });
-                    if (row && row.xulosa_code === 'uploaded') {
-                        uploadedIds.push(id);
+                openSubjectPickerModal('delete', ids, $(this));
+            });
+
+            // Fan + YN turi tanlash modali (delete va compare uchun umumiy)
+            function openSubjectPickerModal(action, ids, btn) {
+                var origHtml = btn.html();
+                btn.prop('disabled', true).html('<span class="spinner-sm"></span> Yuklanmoqda...');
+
+                $.ajax({
+                    url: reuploadPreviewUrl, type: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ ids: ids }),
+                    success: function(data) {
+                        if (!data.success || !data.groups || data.groups.length === 0) {
+                            alert('Preview ma\'lumot olinmadi.');
+                            return;
+                        }
+                        showSubjectPickerModal(action, data.groups, ids);
+                    },
+                    error: function(xhr) {
+                        var msg = xhr.responseJSON?.message || 'Server xatosi';
+                        alert('Xato: ' + msg);
+                    },
+                    complete: function() { btn.prop('disabled', false).html(origHtml); }
+                });
+            }
+
+            function showSubjectPickerModal(action, groups, ids) {
+                var isDelete = action === 'delete';
+                var title = isDelete ? 'Bahoni o\'chirish — fan va YN turini tanlang' : 'Solishtirish — fan va YN turini tanlang';
+                var submitLabel = isDelete ? 'O\'chirish' : 'Solishtirish';
+                var submitClass = isDelete ? 'reupload-btn-confirm' : 'reupload-btn-confirm';
+
+                var html = '<div id="picker-modal-overlay" class="reupload-modal-overlay">';
+                html += '<div class="reupload-modal">';
+                html += '<div class="reupload-modal-header">';
+                html += '<h3>' + title + '</h3>';
+                html += '<button type="button" class="reupload-modal-close" onclick="closePickerModal()">&times;</button>';
+                html += '</div>';
+                html += '<div class="reupload-modal-body">';
+                html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Default — Moodledan kelgan fan va YN turi. Agar baho boshqa fanga/turiga yuklangan bo\'lsa, to\'g\'rilab tanlang.</p>';
+                html += '<table class="reupload-modal-table">';
+                html += '<thead><tr><th>#</th><th>Guruh</th><th>Semestr</th><th>Moodle fan</th><th>Baholar</th><th>YN turi</th><th>Fan</th></tr></thead>';
+                html += '<tbody>';
+                groups.forEach(function(g, i) {
+                    html += '<tr>';
+                    html += '<td>' + (i + 1) + '</td>';
+                    html += '<td><strong>' + esc(g.group_name) + '</strong></td>';
+                    html += '<td style="font-size:12px;color:#475569;">' + esc(g.semester_name || g.semester_code || '-') + '</td>';
+                    html += '<td><div style="font-weight:600;">' + esc(g.original_fan_name) + '</div><div style="font-size:11px;color:#94a3b8;">ID: ' + g.original_fan_id + '</div></td>';
+                    html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
+                    // YN turi — har doim tanlash mumkin
+                    html += '<td>';
+                    html += '<select class="picker-yn-turi-select" data-key="' + esc(g.key) + '" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;min-width:100px;">';
+                    var ynVal = g.yn_turi === 'oski' || g.yn_turi === 'test' ? g.yn_turi : '';
+                    html += '<option value="">Tanlang</option>';
+                    html += '<option value="oski"' + (ynVal === 'oski' ? ' selected' : '') + '>OSKI</option>';
+                    html += '<option value="test"' + (ynVal === 'test' ? ' selected' : '') + '>Test</option>';
+                    html += '</select>';
+                    html += '</td>';
+                    // Fan dropdown
+                    html += '<td>';
+                    if (g.available_subjects && g.available_subjects.length > 0) {
+                        var foundOriginal = g.available_subjects.some(function(s) {
+                            return String(s.subject_id) === String(g.original_fan_id);
+                        });
+                        var selectHtml = '<select class="picker-subject-select" data-key="' + esc(g.key) + '" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">';
+                        if (!foundOriginal) {
+                            selectHtml += '<option value="' + esc(g.original_fan_id) + '" selected style="color:#dc2626;">';
+                            selectHtml += esc(g.original_fan_name) + ' (Moodle, ID: ' + g.original_fan_id + ' — semestrda yo\'q)';
+                            selectHtml += '</option>';
+                            selectHtml += '<option disabled>──── Joriy semestr fanlari ────</option>';
+                        }
+                        g.available_subjects.forEach(function(s) {
+                            var selected = foundOriginal && String(s.subject_id) === String(g.original_fan_id);
+                            selectHtml += '<option value="' + esc(s.subject_id) + '"' + (selected ? ' selected' : '') + '>';
+                            selectHtml += esc(s.subject_name);
+                            if (s.subject_code) selectHtml += ' [' + esc(s.subject_code) + ']';
+                            selectHtml += ' (ID: ' + s.subject_id + ')';
+                            selectHtml += '</option>';
+                        });
+                        selectHtml += '</select>';
+                        html += selectHtml;
+                    } else {
+                        html += '<div style="color:#dc2626;font-size:12px;">Joriy semestrda fanlar topilmadi — faqat asl ID (' + g.original_fan_id + ') ishlatiladi</div>';
+                    }
+                    html += '</td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                html += '</div>';
+                html += '<div class="reupload-modal-footer">';
+                html += '<button type="button" onclick="closePickerModal()" class="reupload-btn-cancel">Bekor qilish</button>';
+                html += '<button type="button" id="picker-modal-submit" class="' + submitClass + '">' + submitLabel + '</button>';
+                html += '</div>';
+                html += '</div></div>';
+                $('body').append(html);
+
+                $('#picker-modal-submit').on('click', function() {
+                    var subjectOverrides = {};
+                    $('.picker-subject-select').each(function() {
+                        var key = $(this).data('key');
+                        var newSubjectId = $(this).val();
+                        var origFanId = key.split('_')[0];
+                        if (String(newSubjectId) !== String(origFanId)) {
+                            subjectOverrides[key] = newSubjectId;
+                        }
+                    });
+
+                    var ynTuriOverrides = {};
+                    var ynMissing = false;
+                    $('.picker-yn-turi-select').each(function() {
+                        var key = $(this).data('key');
+                        var val = $(this).val();
+                        if (!val) { ynMissing = true; $(this).css('border-color', '#dc2626'); }
+                        else { ynTuriOverrides[key] = val; $(this).css('border-color', '#cbd5e1'); }
+                    });
+                    if (ynMissing) { alert('YN turini tanlang (OSKI yoki Test)'); return; }
+
+                    var btn = $(this);
+                    btn.prop('disabled', true).html('<span class="spinner-sm"></span> ...');
+
+                    if (action === 'delete') {
+                        $.ajax({
+                            url: deleteGradesUrl, type: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrfToken },
+                            contentType: 'application/json',
+                            data: JSON.stringify({ ids: ids, subject_overrides: subjectOverrides, yn_turi_overrides: ynTuriOverrides }),
+                            success: function(data) {
+                                closePickerModal();
+                                var html = '';
+                                if (data.deleted_count > 0) {
+                                    html += '<div class="diag-msg diag-success"><strong>Muvaffaqiyatli!</strong> ' + data.deleted_count + ' ta baho sistemadan o\'chirildi.</div>';
+                                }
+                                if (data.error_count > 0) {
+                                    html += '<div class="diag-msg diag-error"><strong>' + data.error_count + ' ta xato:</strong><ul style="margin-top:4px;padding-left:20px;">';
+                                    data.errors.forEach(function(err) { html += '<li>' + esc(err.student_name) + ' — ' + esc(err.fan_name) + ': ' + esc(err.error) + '</li>'; });
+                                    html += '</ul></div>';
+                                }
+                                $('#upload-result').html(html).show();
+                                if (data.deleted_count > 0) loadTartibgaSol();
+                            },
+                            error: function(xhr) {
+                                alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                                btn.prop('disabled', false).html(submitLabel);
+                            }
+                        });
+                    } else {
+                        $.ajax({
+                            url: compareGradesUrl, type: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrfToken },
+                            contentType: 'application/json',
+                            data: JSON.stringify({ ids: ids, subject_overrides: subjectOverrides, yn_turi_overrides: ynTuriOverrides }),
+                            success: function(data) {
+                                closePickerModal();
+                                showCompareModal(data.comparisons || []);
+                            },
+                            error: function(xhr) {
+                                alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                                btn.prop('disabled', false).html(submitLabel);
+                            }
+                        });
                     }
                 });
+            }
 
-                if (uploadedIds.length === 0) {
-                    alert('Tanlangan natijalar orasida sistemaga yuklangani yo\'q.');
-                    return;
-                }
-
-                if (!confirm(uploadedIds.length + ' ta natijaning bahosini sistemadan o\'chirishni tasdiqlaysizmi?\n\nO\'chirilgan baholar jurnaldan ham yo\'qoladi.')) return;
-
-                sendDeleteRequest(uploadedIds, []);
-            });
+            window.closePickerModal = function() {
+                $('#picker-modal-overlay').remove();
+            };
 
             function sendDeleteRequest(ids, confirmedFanNames) {
                 var payload = { ids: ids };
@@ -1386,25 +1538,7 @@
             $('#btn-compare').on('click', function() {
                 var ids = getSelectedIds();
                 if (ids.length === 0) return;
-
-                var btn = $(this);
-                btn.prop('disabled', true);
-                var origHtml = btn.html();
-                btn.html('<span class="spinner-sm"></span> Tekshirilmoqda...');
-
-                $.ajax({
-                    url: compareGradesUrl, type: 'POST',
-                    headers: { 'X-CSRF-TOKEN': csrfToken },
-                    contentType: 'application/json',
-                    data: JSON.stringify({ ids: ids }),
-                    success: function(data) {
-                        showCompareModal(data.comparisons || []);
-                    },
-                    error: function(xhr) {
-                        alert(xhr.responseJSON?.message || 'Server xatosi');
-                    },
-                    complete: function() { btn.prop('disabled', false).html(origHtml); }
-                });
+                openSubjectPickerModal('compare', ids, $(this));
             });
 
             function showCompareModal(comparisons) {

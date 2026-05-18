@@ -2564,9 +2564,77 @@ class QuizResultController extends Controller
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:hemis_quiz_results,id',
             'confirmed_fan_names' => 'nullable|array', // conflict tasdiqlanganda yuboriladi
+            'subject_overrides' => 'nullable|array',   // { "<fan_id>_<group_id>": <subject_id> }
+            'yn_turi_overrides' => 'nullable|array',   // { "<fan_id>_<group_id>": "oski"|"test" }
         ]);
 
         $results = HemisQuizResult::whereIn('id', $request->ids)->get();
+
+        // Override yo'li (modal orqali fan + YN turi tanlangan bo'lsa):
+        // student_grades dan (student_hemis_id + subject_id + training_type_code + semester_code)
+        // bo'yicha o'chiramiz — bu orphan qatorlarni ham tutadi (quiz_result_id mos kelmasa ham).
+        $subjectOverrides = $request->input('subject_overrides', []);
+        $ynTuriOverrides = $request->input('yn_turi_overrides', []);
+        if (!empty($subjectOverrides) || !empty($ynTuriOverrides)) {
+            $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+            $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+            $deletedCount = 0;
+            $errors = [];
+            foreach ($results as $result) {
+                $student = Student::where('hemis_id', $result->student_id)
+                    ->orWhere('student_id_number', $result->student_id)
+                    ->first();
+                if (!$student) continue;
+
+                $key = $result->fan_id . '_' . ($student->group_id ?? '');
+                $targetSubjectId = $subjectOverrides[$key] ?? $result->fan_id;
+
+                $ynOverride = $ynTuriOverrides[$key] ?? null;
+                if ($ynOverride === 'oski') {
+                    $trainingTypeCode = 101;
+                } elseif ($ynOverride === 'test') {
+                    $trainingTypeCode = 102;
+                } elseif (in_array($result->quiz_type, $oskiTypes)) {
+                    $trainingTypeCode = 101;
+                } elseif (in_array($result->quiz_type, $testTypes)) {
+                    $trainingTypeCode = 102;
+                } else {
+                    $errors[] = [
+                        'id' => $result->id,
+                        'student_name' => $result->student_name,
+                        'fan_name' => $result->fan_name,
+                        'error' => 'YN turi aniqlanmadi',
+                    ];
+                    continue;
+                }
+
+                $removed = DB::table('student_grades')
+                    ->where('student_hemis_id', $student->hemis_id)
+                    ->where('subject_id', $targetSubjectId)
+                    ->where('training_type_code', $trainingTypeCode)
+                    ->where('semester_code', $student->semester_code)
+                    ->delete();
+
+                if ($removed > 0) {
+                    $deletedCount += $removed;
+                } else {
+                    $errors[] = [
+                        'id' => $result->id,
+                        'student_name' => $result->student_name,
+                        'fan_name' => $result->fan_name,
+                        'error' => 'Bu fan + YN turi kombinatsiyasi uchun baho topilmadi',
+                    ];
+                }
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'deleted_count' => $deletedCount,
+                'error_count' => count($errors),
+                'errors' => $errors,
+            ]);
+        }
 
         // Subject ID bo'yicha fan nomlarini guruhlash
         $subjectFanNames = [];
@@ -2660,9 +2728,13 @@ class QuizResultController extends Controller
         $request->validate([
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:hemis_quiz_results,id',
+            'subject_overrides' => 'nullable|array',
+            'yn_turi_overrides' => 'nullable|array',
         ]);
 
         $results = HemisQuizResult::whereIn('id', $request->ids)->get();
+        $subjectOverrides = $request->input('subject_overrides', []);
+        $ynTuriOverrides = $request->input('yn_turi_overrides', []);
 
         $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
@@ -2676,10 +2748,20 @@ class QuizResultController extends Controller
 
             if (!$student) continue;
 
-            // Quiz turini aniqlash
+            $key = $result->fan_id . '_' . ($student->group_id ?? '');
+            $targetSubjectId = $subjectOverrides[$key] ?? $result->fan_id;
+            $ynOverride = $ynTuriOverrides[$key] ?? null;
+
+            // Quiz turini aniqlash (override > quiz_type)
             $trainingTypeCode = null;
             $typeName = '-';
-            if (in_array($result->quiz_type, $oskiTypes)) {
+            if ($ynOverride === 'oski') {
+                $trainingTypeCode = 101;
+                $typeName = 'OSKI';
+            } elseif ($ynOverride === 'test') {
+                $trainingTypeCode = 102;
+                $typeName = 'Test';
+            } elseif (in_array($result->quiz_type, $oskiTypes)) {
                 $trainingTypeCode = 101;
                 $typeName = 'OSKI';
             } elseif (in_array($result->quiz_type, $testTypes)) {
@@ -2688,10 +2770,20 @@ class QuizResultController extends Controller
             }
             if (!$trainingTypeCode) continue;
 
-            // Mavjud baholarni topish
+            // Resolved subject nomi (override yoki original)
+            $resolvedFanName = $result->fan_name;
+            if ((int) $targetSubjectId !== (int) $result->fan_id) {
+                $cs = CurriculumSubject::where('subject_id', $targetSubjectId)->first();
+                if ($cs) {
+                    $resolvedFanName = $cs->subject_name;
+                }
+            }
+
+            // Mavjud baholarni topish (semestr ham filterda)
             $existingGrades = StudentGrade::where('student_hemis_id', $student->hemis_id)
-                ->where('subject_id', $result->fan_id)
+                ->where('subject_id', $targetSubjectId)
                 ->where('training_type_code', $trainingTypeCode)
+                ->where('semester_code', $student->semester_code)
                 ->get();
 
             if ($existingGrades->isEmpty()) continue;
@@ -2702,8 +2794,8 @@ class QuizResultController extends Controller
                     'student_grade_id' => $eg->id,
                     'student_id' => $result->student_id,
                     'student_name' => $student->full_name ?? $result->student_name,
-                    'fan_name' => $result->fan_name,
-                    'fan_id' => $result->fan_id,
+                    'fan_name' => $resolvedFanName,
+                    'fan_id' => $targetSubjectId,
                     'type' => $typeName,
                     'moodle_grade' => $result->grade,
                     'existing_grade' => $eg->grade,

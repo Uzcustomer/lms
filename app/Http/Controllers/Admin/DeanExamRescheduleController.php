@@ -244,7 +244,7 @@ class DeanExamRescheduleController extends Controller
         if ($groupIds === null) {
             return true;
         }
-        return in_array($schedule->group_hemis_id, $groupIds, true);
+        return in_array((string) $schedule->group_hemis_id, $groupIds, true);
     }
 
     private function scopedGroupHemisIds(): ?array
@@ -282,6 +282,7 @@ class DeanExamRescheduleController extends Controller
         return Group::whereIn('department_hemis_id', $facultyHemisIds)
             ->whereNotNull('group_hemis_id')
             ->pluck('group_hemis_id')
+            ->map(fn ($id) => (string) $id)
             ->unique()
             ->values()
             ->all();

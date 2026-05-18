@@ -2851,8 +2851,23 @@ class QuizResultController extends Controller
     public function deleteStudentGrade(Request $request)
     {
         $request->validate([
-            'student_grade_id' => 'required|integer',
+            'student_grade_id' => 'nullable|integer',
+            'student_grade_ids' => 'nullable|array',
+            'student_grade_ids.*' => 'integer',
         ]);
+
+        if ($request->filled('student_grade_ids')) {
+            $deleted = StudentGrade::whereIn('id', $request->student_grade_ids)->delete();
+            return response()->json([
+                'success' => true,
+                'deleted_count' => $deleted,
+                'message' => $deleted . ' ta baho o\'chirildi',
+            ]);
+        }
+
+        if (!$request->filled('student_grade_id')) {
+            return response()->json(['success' => false, 'message' => 'ID kerak'], 400);
+        }
 
         $grade = StudentGrade::find($request->student_grade_id);
         if (!$grade) {

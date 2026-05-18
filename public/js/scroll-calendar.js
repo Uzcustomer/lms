@@ -307,14 +307,21 @@
         var val = this.display.value.trim();
         if (!val) return;
         var d = null;
-        // dd.mm.yyyy
-        var m = val.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+        // dd.mm.yyyy / dd/mm/yyyy / dd-mm-yyyy (ajratuvchi: . / -)
+        var m = val.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/);
         if (m) {
             d = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
         }
-        // yyyy-mm-dd
+        // dd.mm.yy (2 raqamli yil → 20yy)
         if (!d) {
-            m = val.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            m = val.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{2})$/);
+            if (m) {
+                d = new Date(2000 + parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+            }
+        }
+        // yyyy-mm-dd / yyyy.mm.dd / yyyy/mm/dd (ISO va variantlari)
+        if (!d) {
+            m = val.match(/^(\d{4})[.\/\-](\d{1,2})[.\/\-](\d{1,2})$/);
             if (m) d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
         }
         if (d && !isNaN(d.getTime())) {

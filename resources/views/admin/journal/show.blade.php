@@ -1116,15 +1116,27 @@
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">MT %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">ON %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">1-urinish</span></th>
+                                        @if(array_filter($oskiQosh1Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan OSKI">OSKI<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
+                                        @endif
                                         @if(!empty($ynSubmission12a) || array_filter($oskiAttempt2Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">2-urinish</span></th>
+                                        @endif
+                                        @if(array_filter($oskiQosh2Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="2-urinish qo'shimcha farmoyish OSKI">OSKI 2<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
                                         @endif
                                         @if(!empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">3-urinish</span></th>
                                         @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) Test bahosi">Test<br><span class="text-[9px] font-normal">1-urinish</span></th>
+                                        @if(array_filter($testQosh1Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan Test">Test<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
+                                        @endif
                                         @if(!empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">2-urinish</span></th>
+                                        @endif
+                                        @if(array_filter($testQosh2Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="2-urinish qo'shimcha farmoyish Test">Test 2<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
                                         @endif
                                         @if(!empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">3-urinish</span></th>
@@ -1337,6 +1349,14 @@
                                                 $showOski3Col = !empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []);
                                                 $showTest2Col = !empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []);
                                                 $showTest3Col = !empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []);
+                                                $showOskiQ1Col = (bool) array_filter($oskiQosh1Map ?? []);
+                                                $showOskiQ2Col = (bool) array_filter($oskiQosh2Map ?? []);
+                                                $showTestQ1Col = (bool) array_filter($testQosh1Map ?? []);
+                                                $showTestQ2Col = (bool) array_filter($testQosh2Map ?? []);
+                                                $oskiQ1 = isset($oskiQosh1Map[$student->hemis_id]) ? round($oskiQosh1Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiQ2 = isset($oskiQosh2Map[$student->hemis_id]) ? round($oskiQosh2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testQ1 = isset($testQosh1Map[$student->hemis_id]) ? round($testQosh1Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testQ2 = isset($testQosh2Map[$student->hemis_id]) ? round($testQosh2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
                                             @endphp
                                             {{-- Asosiy OSKI (1-urinish) — sababli orqali yoki superadmin orqali tahrirlash --}}
                                             @php
@@ -1360,6 +1380,12 @@
                                                     <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
+                                            {{-- Qo'shimcha OSKI ustuni (sababli farmoyish) --}}
+                                            @if($showOskiQ1Col)
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="OSKI qo'shimcha (farmoyish)">
+                                                    @if($oskiQ1 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
                                             {{-- 2-urinish OSKI ustuni --}}
                                             @if($showOski2Col)
                                                 @php
@@ -1376,6 +1402,12 @@
                                                     @if($oski2Clickable) onclick="{{ $oski2Handler }}" @endif
                                                     title="{{ $oski2Title }}">
                                                     @if($oskiA2 !== null)<span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $oskiA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 2-urinish qo'shimcha OSKI ustuni --}}
+                                            @if($showOskiQ2Col)
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish OSKI qo'shimcha (farmoyish)">
+                                                    @if($oskiQ2 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish OSKI ustuni --}}
@@ -1418,6 +1450,12 @@
                                                     <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
+                                            {{-- Qo'shimcha Test ustuni (sababli farmoyish) --}}
+                                            @if($showTestQ1Col)
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish)">
+                                                    @if($testQ1 !== null)<span class="font-bold text-emerald-700">{{ $testQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
                                             {{-- 2-urinish Test ustuni --}}
                                             @if($showTest2Col)
                                                 @php
@@ -1434,6 +1472,12 @@
                                                     @if($test2Clickable) onclick="{{ $test2Handler }}" @endif
                                                     title="{{ $test2Title }}">
                                                     @if($testA2 !== null)<span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $testA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 2-urinish qo'shimcha Test ustuni --}}
+                                            @if($showTestQ2Col)
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish Test qo'shimcha (farmoyish)">
+                                                    @if($testQ2 !== null)<span class="font-bold text-emerald-700">{{ $testQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish Test ustuni --}}
@@ -1498,15 +1542,27 @@
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">MT %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">ON %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">1-urinish</span></th>
+                                        @if(array_filter($oskiQosh1Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan OSKI">OSKI<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
+                                        @endif
                                         @if(!empty($ynSubmission12a) || array_filter($oskiAttempt2Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">2-urinish</span></th>
+                                        @endif
+                                        @if(array_filter($oskiQosh2Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="2-urinish qo'shimcha farmoyish OSKI">OSKI 2<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
                                         @endif
                                         @if(!empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">3-urinish</span></th>
                                         @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) Test bahosi">Test<br><span class="text-[9px] font-normal">1-urinish</span></th>
+                                        @if(array_filter($testQosh1Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan Test">Test<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
+                                        @endif
                                         @if(!empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">2-urinish</span></th>
+                                        @endif
+                                        @if(array_filter($testQosh2Map ?? []))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="2-urinish qo'shimcha farmoyish Test">Test 2<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
                                         @endif
                                         @if(!empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">3-urinish</span></th>
@@ -1955,6 +2011,14 @@
                                                 $showOski3Col = !empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []);
                                                 $showTest2Col = !empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []);
                                                 $showTest3Col = !empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []);
+                                                $showOskiQ1Col = (bool) array_filter($oskiQosh1Map ?? []);
+                                                $showOskiQ2Col = (bool) array_filter($oskiQosh2Map ?? []);
+                                                $showTestQ1Col = (bool) array_filter($testQosh1Map ?? []);
+                                                $showTestQ2Col = (bool) array_filter($testQosh2Map ?? []);
+                                                $oskiQ1 = isset($oskiQosh1Map[$student->hemis_id]) ? round($oskiQosh1Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $oskiQ2 = isset($oskiQosh2Map[$student->hemis_id]) ? round($oskiQosh2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testQ1 = isset($testQosh1Map[$student->hemis_id]) ? round($testQosh1Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
+                                                $testQ2 = isset($testQosh2Map[$student->hemis_id]) ? round($testQosh2Map[$student->hemis_id], 0, PHP_ROUND_HALF_UP) : null;
                                             @endphp
                                             {{-- Asosiy OSKI (1-urinish) — sababli orqali yoki superadmin orqali tahrirlash --}}
                                             @php
@@ -1978,6 +2042,12 @@
                                                     <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
+                                            {{-- Qo'shimcha OSKI ustuni (sababli farmoyish) --}}
+                                            @if($showOskiQ1Col)
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="OSKI qo'shimcha (farmoyish)">
+                                                    @if($oskiQ1 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
                                             {{-- 2-urinish OSKI ustuni --}}
                                             @if($showOski2Col)
                                                 @php
@@ -1994,6 +2064,12 @@
                                                     @if($oski2Clickable) onclick="{{ $oski2Handler }}" @endif
                                                     title="{{ $oski2Title }}">
                                                     @if($oskiA2 !== null)<span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $oskiA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 2-urinish qo'shimcha OSKI ustuni --}}
+                                            @if($showOskiQ2Col)
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish OSKI qo'shimcha (farmoyish)">
+                                                    @if($oskiQ2 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish OSKI ustuni --}}
@@ -2036,6 +2112,12 @@
                                                     <span class="text-gray-300 text-xs">+</span>
                                                 @endif
                                             </td>
+                                            {{-- Qo'shimcha Test ustuni (sababli farmoyish) --}}
+                                            @if($showTestQ1Col)
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish)">
+                                                    @if($testQ1 !== null)<span class="font-bold text-emerald-700">{{ $testQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
                                             {{-- 2-urinish Test ustuni --}}
                                             @if($showTest2Col)
                                                 @php
@@ -2052,6 +2134,12 @@
                                                     @if($test2Clickable) onclick="{{ $test2Handler }}" @endif
                                                     title="{{ $test2Title }}">
                                                     @if($testA2 !== null)<span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $testA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                </td>
+                                            @endif
+                                            {{-- 2-urinish qo'shimcha Test ustuni --}}
+                                            @if($showTestQ2Col)
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish Test qo'shimcha (farmoyish)">
+                                                    @if($testQ2 !== null)<span class="font-bold text-emerald-700">{{ $testQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 3-urinish Test ustuni --}}

@@ -59,6 +59,7 @@ class StudentGrade extends Model
         "is_yn_locked",
         "is_final",
         "attempt",
+        "is_qoshimcha",
     ];
 
     public function student()

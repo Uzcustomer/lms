@@ -171,6 +171,8 @@
                 const url = new URL(SLOTS_URL, location.origin);
                 url.searchParams.set('date', PAGE_DATE);
                 url.searchParams.set('required_free', studentCount);
+                url.searchParams.set('exam_schedule_id', scheduleId);
+                url.searchParams.set('yn_type', ynType);
                 const resp = await fetch(url, { headers: { 'Accept': 'application/json' }});
                 const data = await resp.json();
                 const slots = data.slots || [];

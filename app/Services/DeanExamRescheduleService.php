@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\ComputerAssignment;
 use App\Models\DeanExamReschedule;
 use App\Models\ExamSchedule;
 use App\Models\Student;
@@ -45,10 +44,24 @@ class DeanExamRescheduleService
      * Berilgan kun uchun bo'sh slotlar ro'yxati. Agar $requiredFree berilsa,
      * kamida shuncha kompyuter bo'sh bo'lgan slotlar qaytariladi.
      *
+     * Bandlikni `ExamCapacityService::concurrentStudentsForSlot()` orqali
+     * hisoblaydi — ya'ni shu vaqt oralig'ida YN ga belgilangan guruhlardagi
+     * talabalar yig'indisi. Bu Bandlik ko'rsatkichi sahifasi bilan bir xil
+     * mantiq (oddiy `computer_assignments` jadvali kifoya emas — chunki ba'zi
+     * guruhlarga hali kompyuter biriktirilmagan bo'lishi mumkin).
+     *
+     * @param  array|null  $exclude  Berilgan guruhning o'z hissasini hisobdan
+     *                               chiqarish uchun (qarang
+     *                               ExamCapacityService::concurrentStudentsForSlot).
+     *
      * @return array<int, array{time:string, free:int, capacity:int}>
      */
-    public function availableSlots(string $date, ?Carbon $afterTime = null, int $requiredFree = 1): array
-    {
+    public function availableSlots(
+        string $date,
+        ?Carbon $afterTime = null,
+        int $requiredFree = 1,
+        ?array $exclude = null
+    ): array {
         $settings = ExamCapacityService::getSettingsForDate($date);
         $duration = max(1, (int) ($settings['test_duration_minutes'] ?? 15));
         $buffer = max(0, (int) config('services.moodle.computer_buffer_minutes', 0));
@@ -81,8 +94,12 @@ class DeanExamRescheduleService
                 && $slotStart->lt($lunchEnd) && $slotEnd->gt($lunchStart);
 
             if (!$overlapsLunch) {
-                $occupied = $this->occupiedComputerCount($slotStart, $slotEnd);
-                $free = max(0, $capacity - $occupied);
+                $concurrent = ExamCapacityService::concurrentStudentsForSlot(
+                    $date,
+                    $slotStart->format('H:i'),
+                    $exclude
+                );
+                $free = max(0, $capacity - $concurrent);
                 if ($free >= $requiredFree) {
                     $slots[] = [
                         'time' => $slotStart->format('H:i'),
@@ -99,33 +116,18 @@ class DeanExamRescheduleService
     }
 
     /**
-     * Guruh ko'chirilganda hisobdan chiqarish uchun: berilgan (schedule,
-     * yn_type) ning o'z ComputerAssignment'larini exclude qilib, vaqt
-     * oralig'ida band kompyuterlar sonini sanaydi. Default holatda hech
-     * narsa exclude qilinmaydi (umumiy bandlik).
+     * Berilgan ExamSchedule + yn_type uchun bandlik istisnosini quradi —
+     * concurrentStudentsForSlot() ga uzatish uchun.
      */
-    private function occupiedComputerCount(
-        Carbon $start,
-        Carbon $end,
-        ?int $excludeScheduleId = null,
-        ?string $excludeYnType = null,
-    ): int {
-        return (int) ComputerAssignment::query()
-            ->where('planned_end', '>', $start)
-            ->where('planned_start', '<', $end)
-            ->when(
-                $excludeScheduleId !== null && $excludeYnType !== null,
-                fn ($q) => $q->where(function ($q2) use ($excludeScheduleId, $excludeYnType) {
-                    $q2->where('exam_schedule_id', '!=', $excludeScheduleId)
-                        ->orWhere('yn_type', '!=', $excludeYnType);
-                })
-            )
-            ->whereIn('status', [
-                ComputerAssignment::STATUS_SCHEDULED,
-                ComputerAssignment::STATUS_IN_PROGRESS,
-            ])
-            ->distinct('computer_number')
-            ->count('computer_number');
+    public function excludeKeyFor(ExamSchedule $schedule, string $ynType): array
+    {
+        return [
+            'group_hemis_id' => $schedule->group_hemis_id,
+            'subject_id' => $schedule->subject_id,
+            'semester_code' => $schedule->semester_code,
+            'yn_type' => $ynType,
+            'attempt' => 1,
+        ];
     }
 
     /**
@@ -200,10 +202,17 @@ class DeanExamRescheduleService
         }
 
         // Yangi slotda guruh uchun yetarli bo'sh kompyuter borligini
-        // tekshirish (joriy guruh assignmentlarini exclude qilib).
+        // tekshirish — Bandlik ko'rsatkichi bilan bir xil mantiq:
+        // shu vaqt oralig'ida belgilangan YN guruhlari talabalari yig'indisi.
+        // Joriy guruhning o'z hissasi exclude qilinadi (chunki uni boshqa
+        // vaqtga ko'chiryapmiz).
         $capacity = (int) ($settings['computer_count'] ?? 60);
-        $occupied = $this->occupiedComputerCount($newStart, $newEnd, $schedule->id, $ynType);
-        $free = max(0, $capacity - $occupied);
+        $concurrent = ExamCapacityService::concurrentStudentsForSlot(
+            $date,
+            $newTime,
+            $this->excludeKeyFor($schedule, $ynType)
+        );
+        $free = max(0, $capacity - $concurrent);
         if ($free < $studentCount) {
             return [
                 'ok' => false,

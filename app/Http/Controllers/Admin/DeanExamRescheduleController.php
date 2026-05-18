@@ -61,7 +61,21 @@ class DeanExamRescheduleController extends Controller
 
         $date = $this->resolveDate($request);
         $requiredFree = max(1, (int) $request->input('required_free', 1));
-        $slots = $service->availableSlots($date->toDateString(), now(), $requiredFree);
+
+        // Agar (exam_schedule_id, yn_type) berilgan bo'lsa — bandlikni
+        // hisoblayotganda shu guruhning o'z hissasini chiqarib tashlaymiz,
+        // aks holda u o'ziga qarshi sanaladi.
+        $exclude = null;
+        $scheduleId = $request->input('exam_schedule_id');
+        $ynType = strtolower((string) $request->input('yn_type', ''));
+        if ($scheduleId && in_array($ynType, ['oski', 'test'], true)) {
+            $schedule = ExamSchedule::find((int) $scheduleId);
+            if ($schedule && $this->canTouchSchedule($schedule)) {
+                $exclude = $service->excludeKeyFor($schedule, $ynType);
+            }
+        }
+
+        $slots = $service->availableSlots($date->toDateString(), now(), $requiredFree, $exclude);
 
         return response()->json([
             'date' => $date->toDateString(),

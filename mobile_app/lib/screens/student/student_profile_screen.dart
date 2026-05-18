@@ -10,6 +10,7 @@ import '../../l10n/app_localizations.dart';
 import '../../services/api_service.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/settings_sheet.dart';
+import '../../widgets/notification_bell.dart';
 import 'student_home_screen.dart';
 
 class StudentProfileScreen extends StatefulWidget {
@@ -144,10 +145,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 const Spacer(),
                 Text(l.profile, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
                 const Spacer(),
-                IconButton(
-                  icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
-                  onPressed: () {},
-                ),
+                const NotificationBell(),
                 IconButton(
                   icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
                   onPressed: () => showSettingsSheet(context),

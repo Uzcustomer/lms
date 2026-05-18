@@ -15,6 +15,7 @@ import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/scale_tap.dart';
 import '../../widgets/settings_sheet.dart';
+import '../../widgets/notification_bell.dart';
 import 'student_home_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
@@ -381,10 +382,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               const Spacer(),
               Text(l.home, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
               const Spacer(),
-              IconButton(
-                icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
-                onPressed: () {},
-              ),
+              const NotificationBell(),
               IconButton(
                 icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
                 onPressed: () => showSettingsSheet(context),

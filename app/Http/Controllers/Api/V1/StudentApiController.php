@@ -1369,4 +1369,94 @@ class StudentApiController extends Controller
             ],
         ]);
     }
+
+    /**
+     * Paginated list of notifications for the authenticated student.
+     * Mirrors what the web /student/notifications page shows — but the API
+     * never auto-marks as read (the web page does). Mobile uses a separate
+     * mark-as-read endpoint.
+     */
+    public function notifications(Request $request): JsonResponse
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('student_notifications')) {
+            return response()->json([
+                'data' => [],
+                'unread_count' => 0,
+                'total' => 0,
+            ]);
+        }
+
+        $student = $request->user();
+        $perPage = min((int) $request->input('per_page', 30), 100);
+        $unreadOnly = $request->boolean('unread_only');
+
+        $query = \App\Models\StudentNotification::where('student_id', $student->id)
+            ->orderByDesc('created_at');
+        if ($unreadOnly) {
+            $query->whereNull('read_at');
+        }
+
+        $paginated = $query->paginate($perPage);
+        $unreadCount = \App\Models\StudentNotification::where('student_id', $student->id)
+            ->whereNull('read_at')->count();
+
+        return response()->json([
+            'data' => collect($paginated->items())->map(fn($n) => [
+                'id' => $n->id,
+                'type' => $n->type,
+                'title' => $n->title,
+                'message' => $n->message,
+                'link' => $n->link,
+                'data' => $n->data,
+                'read_at' => $n->read_at?->toIso8601String(),
+                'created_at' => $n->created_at?->toIso8601String(),
+            ])->values(),
+            'unread_count' => $unreadCount,
+            'total' => $paginated->total(),
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+        ]);
+    }
+
+    /** Just the unread count — for the bell-icon badge. */
+    public function notificationsUnreadCount(Request $request): JsonResponse
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('student_notifications')) {
+            return response()->json(['count' => 0]);
+        }
+
+        $count = \App\Models\StudentNotification::where('student_id', $request->user()->id)
+            ->whereNull('read_at')->count();
+
+        return response()->json(['count' => $count]);
+    }
+
+    /** Mark a single notification as read. */
+    public function markNotificationRead(Request $request, $id): JsonResponse
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('student_notifications')) {
+            return response()->json(['success' => true]);
+        }
+
+        \App\Models\StudentNotification::where('id', $id)
+            ->where('student_id', $request->user()->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['success' => true]);
+    }
+
+    /** Mark all notifications as read. */
+    public function markAllNotificationsRead(Request $request): JsonResponse
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('student_notifications')) {
+            return response()->json(['success' => true]);
+        }
+
+        \App\Models\StudentNotification::where('student_id', $request->user()->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['success' => true]);
+    }
 }

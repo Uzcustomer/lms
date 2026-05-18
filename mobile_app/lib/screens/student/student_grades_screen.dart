@@ -14,6 +14,7 @@ import '../../widgets/loading_widget.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/scale_tap.dart';
 import '../../widgets/settings_sheet.dart';
+import '../../widgets/notification_bell.dart';
 import 'student_home_screen.dart';
 
 class StudentGradesScreen extends StatefulWidget {
@@ -298,10 +299,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                           const Spacer(),
                           Text(l.grades, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
                           const Spacer(),
-                          IconButton(
-                            icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
-                            onPressed: () {},
-                          ),
+                          const NotificationBell(),
                           IconButton(
                             icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
                             onPressed: () => showSettingsSheet(context),

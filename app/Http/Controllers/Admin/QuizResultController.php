@@ -2049,20 +2049,19 @@ class QuizResultController extends Controller
                     'quiz_result_id' => $result->id,
                     'is_final' => true,
                     'attempt' => $attemptNum,
+                    'is_qoshimcha' => $hasQoshimchaPre = (preg_match('/\(.*qo\'?shimcha.*\)/iu', $shaklRaw) || mb_stripos($shaklRaw, 'farmoyish') !== false),
                 ]);
 
-                // "1-urinish (qo'shimcha farmoyishi borlar uchun)" yuklanganda — bu sababli
-                // kelolmagan talaba uchun. Agar talabaga 2-urinish (attempt=2) avtomatik
-                // belgilangan bo'lsa, uni o'chiramiz — chunki u 2-urinishga o'tkazilmasligi kerak.
-                $hasQoshimcha = preg_match('/\(.*qo\'?shimcha.*\)/iu', $shaklRaw)
-                    || mb_stripos($shaklRaw, 'farmoyish') !== false;
-                if ($attemptNum === 1 && $hasQoshimcha) {
+                // Qo'shimcha 1-urinish: agar avval avtomatik attempt=2 (sababsiz) qator
+                // bo'lsa o'chiramiz — bu talaba qo'shimchada sababli ravishda topshirdi.
+                if ($attemptNum === 1 && $hasQoshimchaPre) {
                     DB::table('student_grades')
                         ->where('student_hemis_id', $student->hemis_id)
                         ->where('subject_id', $subject->subject_id)
                         ->where('training_type_code', $trainingTypeCode)
                         ->where('semester_code', $semester->code ?? $student->semester_code)
                         ->where('attempt', 2)
+                        ->where('is_qoshimcha', 0)
                         ->delete();
                 }
 

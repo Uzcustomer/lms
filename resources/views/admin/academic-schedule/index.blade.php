@@ -387,10 +387,19 @@
                                                     {{ $itemUrinish }}-urinish
                                                 </span>
                                             </td>
-                                            @php $stuCnt = (int) ($item['student_count'] ?? 0); @endphp
+                                            @php
+                                                $stuCnt = (int) ($item['student_count'] ?? 0);
+                                                $stuTooltipList = $item['tooltip_students'] ?? [];
+                                                if (!empty($stuTooltipList)) {
+                                                    // Native title HH attribute satrlarini \n bilan kechiriladi
+                                                    $stuTooltipTitle = implode("\n", $stuTooltipList);
+                                                } else {
+                                                    $stuTooltipTitle = 'Ushbu urinishda imtihon topshiradigan talabalar soni';
+                                                }
+                                            @endphp
                                             <td data-sort-value="{{ $stuCnt }}" style="text-align:center;padding:4px 8px;">
                                                 @if($stuCnt > 0)
-                                                    <span style="display:inline-block;min-width:28px;padding:2px 8px;border-radius:8px;font-size:12px;font-weight:600;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;" title="Ushbu urinishda imtihon topshiradigan talabalar soni">{{ $stuCnt }}</span>
+                                                    <span style="display:inline-block;min-width:28px;padding:2px 8px;border-radius:8px;font-size:12px;font-weight:600;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;cursor:help;" title="{{ $stuTooltipTitle }}">{{ $stuCnt }}</span>
                                                 @else
                                                     <span style="color:#cbd5e1;font-size:12px;">—</span>
                                                 @endif

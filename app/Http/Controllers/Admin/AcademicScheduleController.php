@@ -6109,6 +6109,115 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * Tooltip uchun yiqilgan talabalar hemis_id ro'yxati.
+     * Qaytadi: 'group|subject|sem|attempt' => [hemis_id, ...]
+     * attempt=2 — 1-urinishdan yiqilganlar (V<60 yoki student_grades.attempt=2 yozuvi bor)
+     * attempt=3 — 12a dan yiqilganlar (attempt=2 da V<60 yoki attempt=3 yozuvi bor)
+     */
+    private function computeFailedHemisIdsByKey(array $groupHemisIds): array
+    {
+        $result = [];
+        if (empty($groupHemisIds)) return $result;
+        try {
+            $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+
+            // V<60 asosida yiqilganlar (attempt=1 / null -> 2-urinish, attempt=2 -> 3-urinish)
+            foreach ([2, 3] as $att) {
+                $checkAttempt = $att === 2 ? 1 : 2;
+                $rows = DB::table('student_grades as sg')
+                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                    ->whereIn('st.group_id', $groupHemisIds)
+                    ->whereNull('sg.deleted_at')
+                    ->whereIn('sg.training_type_code', [101, 102])
+                    ->where(function ($q) {
+                        $q->where(function ($qq) {
+                            $qq->whereNotNull('sg.retake_grade')->where('sg.retake_grade', '<', 60);
+                        })->orWhere(function ($qq) {
+                            $qq->whereNull('sg.retake_grade')
+                               ->whereNotNull('sg.grade')
+                               ->where('sg.grade', '<', 60);
+                        });
+                    })
+                    ->when($hasAttemptCol, function ($q) use ($checkAttempt) {
+                        $q->where(function ($qq) use ($checkAttempt) {
+                            if ($checkAttempt === 1) {
+                                $qq->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                            } else {
+                                $qq->where('sg.attempt', $checkAttempt);
+                            }
+                        });
+                    })
+                    ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.student_hemis_id')
+                    ->distinct()
+                    ->get();
+                foreach ($rows as $r) {
+                    $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att;
+                    $result[$key][] = (string) $r->student_hemis_id;
+                }
+            }
+
+            // Aniq attempt=2/3 yozuvi bor talabalar (qo'lda 12a/12b ga o'tkazilgan)
+            if ($hasAttemptCol) {
+                foreach ([2, 3] as $att) {
+                    $rows = DB::table('student_grades as sg')
+                        ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                        ->whereIn('st.group_id', $groupHemisIds)
+                        ->whereNull('sg.deleted_at')
+                        ->whereIn('sg.training_type_code', [101, 102])
+                        ->where('sg.attempt', $att)
+                        ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.student_hemis_id')
+                        ->distinct()
+                        ->get();
+                    foreach ($rows as $r) {
+                        $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att;
+                        $result[$key][] = (string) $r->student_hemis_id;
+                    }
+                }
+            }
+
+            // Per-student resit sanasi belgilangan talabalar
+            if (\Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', 'student_hemis_id')) {
+                $rows2 = DB::table('exam_schedules as es')
+                    ->join('students as st', 'st.hemis_id', '=', 'es.student_hemis_id')
+                    ->whereIn('st.group_id', $groupHemisIds)
+                    ->whereNotNull('es.student_hemis_id')
+                    ->where(function ($q) {
+                        $q->whereNotNull('es.oski_resit_date')->orWhereNotNull('es.test_resit_date');
+                    })
+                    ->select('st.group_id', 'es.subject_id', 'es.semester_code', 'es.student_hemis_id')
+                    ->distinct()
+                    ->get();
+                foreach ($rows2 as $r) {
+                    $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|2';
+                    $result[$key][] = (string) $r->student_hemis_id;
+                }
+                $rows3 = DB::table('exam_schedules as es')
+                    ->join('students as st', 'st.hemis_id', '=', 'es.student_hemis_id')
+                    ->whereIn('st.group_id', $groupHemisIds)
+                    ->whereNotNull('es.student_hemis_id')
+                    ->where(function ($q) {
+                        $q->whereNotNull('es.oski_resit2_date')->orWhereNotNull('es.test_resit2_date');
+                    })
+                    ->select('st.group_id', 'es.subject_id', 'es.semester_code', 'es.student_hemis_id')
+                    ->distinct()
+                    ->get();
+                foreach ($rows3 as $r) {
+                    $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|3';
+                    $result[$key][] = (string) $r->student_hemis_id;
+                }
+            }
+
+            // Unique
+            foreach ($result as $k => $ids) {
+                $result[$k] = array_values(array_unique($ids));
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('computeFailedHemisIdsByKey failed: ' . $e->getMessage());
+        }
+        return $result;
+    }
+
+    /**
      * Har bir guruh+fan yozuvini urinishlar (1/2/3) bo'yicha alohida virtual
      * qatorlarga ajratish.
      *  - 1-urinish — har doim ko'rinadi
@@ -6123,6 +6232,8 @@ class AcademicScheduleController extends Controller
         $allGroupHemisIds = $scheduleData->flatMap(fn($items) => $items->pluck('group')->pluck('group_hemis_id'))
             ->unique()->values()->toArray();
         $groupSizes = [];
+        // Tooltip uchun: guruh bo'yicha talabalar ismlari ro'yxati (badge'ga hover).
+        $studentNamesByGroup = [];
         if (!empty($allGroupHemisIds)) {
             try {
                 $groupSizes = DB::table('students')
@@ -6135,13 +6246,33 @@ class AcademicScheduleController extends Controller
             } catch (\Throwable $e) {
                 \Log::warning('groupSizes lookup failed: ' . $e->getMessage());
             }
+
+            // Talabalar ismlari ro'yxati (badge tooltip uchun)
+            try {
+                $rows = DB::table('students')
+                    ->whereIn('group_id', $allGroupHemisIds)
+                    ->where('student_status_code', 11)
+                    ->orderBy('full_name')
+                    ->select('hemis_id', 'full_name', 'group_id')
+                    ->get();
+                foreach ($rows as $r) {
+                    $studentNamesByGroup[$r->group_id][(string) $r->hemis_id] = $r->full_name;
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('studentNamesByGroup lookup failed: ' . $e->getMessage());
+            }
         }
 
         $maps = $this->computeAttemptNeedsMap();
         $needsByKey = $maps['needs'];
         $attemptExistsByKey = $maps['exists'];
 
-        return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey, $attemptExistsByKey, $groupSizes) {
+        // Tooltip uchun yiqilgan talabalar hemis_id ro'yxati (group|subject|sem|attempt).
+        // attachStudentsToSchedule yuklanmagan bo'lsa (showStudents=false), shu xarita
+        // 2/3-urinish badge hover'da kim yiqilganini ko'rsatish uchun ishlatiladi.
+        $failedHemisIdsByKey = $this->computeFailedHemisIdsByKey($allGroupHemisIds);
+
+        return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey, $attemptExistsByKey, $groupSizes, $studentNamesByGroup, $failedHemisIdsByKey) {
             $expanded = collect();
             foreach ($items as $item) {
                 $groupHid = $item['group']->group_hemis_id ?? '';
@@ -6160,6 +6291,30 @@ class AcademicScheduleController extends Controller
                         return (int) ($groupSizes[$groupHid] ?? 0);
                     }
                     return (int) ($needsByKey[$needsKeyBase . '|' . $att] ?? 0);
+                };
+
+                // Tooltip uchun talabalar ismlari ro'yxatini tayyorlaymiz.
+                // 1-urinish: guruhdagi barcha faol talabalar.
+                // 2/3-urinish: yiqilganlar - attachStudentsToSchedule yuklangan
+                // bo'lsa shu yerdan, aks holda failedHemisIdsByKey orqali.
+                $tooltipFor = function (int $att) use ($studentsAttachedList, $studentNamesByGroup, $failedHemisIdsByKey, $groupHid, $needsKeyBase) {
+                    $names = [];
+                    if ($att === 1) {
+                        $names = array_values($studentNamesByGroup[$groupHid] ?? []);
+                    } elseif (is_array($studentsAttachedList)) {
+                        $field = $att === 2 ? 'failed_attempt1' : 'failed_attempt2';
+                        foreach ($studentsAttachedList as $s) {
+                            if (!empty($s[$field])) $names[] = $s['full_name'] ?? '';
+                        }
+                    } else {
+                        $ids = $failedHemisIdsByKey[$needsKeyBase . '|' . $att] ?? [];
+                        $namesMap = $studentNamesByGroup[$groupHid] ?? [];
+                        foreach ($ids as $hid) {
+                            if (isset($namesMap[(string) $hid])) $names[] = $namesMap[(string) $hid];
+                        }
+                    }
+                    sort($names);
+                    return $names;
                 };
 
                 // Yiqilgan talabalar borligini avval aniqlaymiz - row2/row3
@@ -6186,6 +6341,7 @@ class AcademicScheduleController extends Controller
                 $row1['oski_na_for_urinish'] = $item['oski_na'] ?? false;
                 $row1['test_na_for_urinish'] = $item['test_na'] ?? false;
                 $row1['student_count'] = $countFor(1);
+                $row1['tooltip_students'] = $tooltipFor(1);
 
                 // 2-urinish ko'rinish qoidasi:
                 //  - guruh sathida resit sanasi saqlangan, YOKI
@@ -6206,6 +6362,7 @@ class AcademicScheduleController extends Controller
                     $row2['oski_na_for_urinish'] = false;
                     $row2['test_na_for_urinish'] = false;
                     $row2['student_count'] = $countFor(2);
+                    $row2['tooltip_students'] = $tooltipFor(2);
                 }
 
                 // 3-urinish — guruh sathida resit2 sanasi saqlangan YOKI
@@ -6222,6 +6379,7 @@ class AcademicScheduleController extends Controller
                     $row3['oski_na_for_urinish'] = false;
                     $row3['test_na_for_urinish'] = false;
                     $row3['student_count'] = $countFor(3);
+                    $row3['tooltip_students'] = $tooltipFor(3);
                 }
 
                 // View row1 ostida yiqilgan talabalarni dublikat qilib

@@ -2,15 +2,20 @@
 
 namespace App\Services;
 
+use App\Models\ComputerAssignment;
 use App\Models\DeanExamReschedule;
 use App\Models\ExamSchedule;
-use App\Models\Student;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Dekanat tomonidan kech qolgan guruhning butun imtihon vaqtini SHU KUN
- * ichida boshqa bo'sh slotga ko'chirish (guruh sathida).
+ * Dekanat tomonidan guruhdagi "qoldi" talabalarni (hali topshirmaganlar,
+ * status='scheduled') SHU KUN ichida boshqa bo'sh slotga ko'chirish.
+ *
+ * "Topshirdi" (finished/abandoned) yoki "in_progress" statusidagi talabalar
+ * o'z joylarida qoladi — faqat hali kelmagan/boshlamaganlar ko'chiriladi.
+ * Bu Bandlik ko'rsatkichi sahifasidagi "Topshirdi/Qoldi" mantiqi bilan
+ * mos.
  *
  * Cheklovlar:
  *   - Bir guruhning bir YN'ini bir kun ichida faqat BIR MARTA ko'chirish
@@ -18,16 +23,18 @@ use Illuminate\Support\Facades\DB;
  *     unique indeksi).
  *   - Yangi vaqt original sana bilan bir kunda bo'lishi shart.
  *   - Yangi vaqt ish soatlari ichida va tushlikka tushmasligi kerak.
- *   - Yangi slotda guruhdagi BARCHA talabalar uchun yetarli bo'sh
- *     kompyuter bo'lishi shart (ExamCapacityService settings).
+ *   - Yangi slotda QOLDI talabalar soni uchun yetarli bo'sh kompyuter
+ *     bo'lishi shart (ExamCapacityService::concurrentStudentsForSlot
+ *     bilan tekshiriladi).
  *
  * Test markazi rolining "edit today" toggle holatiga e'tibor bermaydi —
- * bu alohida dekanat huquqi.
+ * bu alohida dekanat huquqi. exam_schedules.{yn}_time ga tegmaydi —
+ * guruhning rasmiy vaqti o'zgarmaydi (Topshirgan talabalar tegmay qolsin).
+ * Faqat ko'chiriladigan talabalarning computer_assignments ustunlari
+ * yangilanadi.
  */
 class DeanExamRescheduleService
 {
-    public function __construct(private ComputerAssignmentService $computerAssignmentService) {}
-
     /**
      * Berilgan (exam_schedule, yn_type) uchun shu kun ichida dekanat
      * reschedule huquqidan allaqachon foydalanilganmi.
@@ -41,26 +48,31 @@ class DeanExamRescheduleService
     }
 
     /**
-     * Berilgan kun uchun bo'sh slotlar ro'yxati. Agar $requiredFree berilsa,
-     * kamida shuncha kompyuter bo'sh bo'lgan slotlar qaytariladi.
+     * Berilgan (schedule, yn_type) uchun shu kunga "qoldi" (status='scheduled')
+     * talabalar soni. Bu — dekanat ko'chira oladigan haqiqiy talabalar soni.
+     */
+    public function pendingCount(int $examScheduleId, string $ynType, string $date): int
+    {
+        return (int) ComputerAssignment::where('exam_schedule_id', $examScheduleId)
+            ->where('yn_type', $ynType)
+            ->whereDate('planned_start', $date)
+            ->where('status', ComputerAssignment::STATUS_SCHEDULED)
+            ->count();
+    }
+
+    /**
+     * Berilgan kun uchun bo'sh slotlar ro'yxati. Kamida $requiredFree
+     * kompyuter bo'sh bo'lgan slotlar qaytariladi.
      *
      * Bandlikni `ExamCapacityService::concurrentStudentsForSlot()` orqali
-     * hisoblaydi — ya'ni shu vaqt oralig'ida YN ga belgilangan guruhlardagi
-     * talabalar yig'indisi. Bu Bandlik ko'rsatkichi sahifasi bilan bir xil
-     * mantiq (oddiy `computer_assignments` jadvali kifoya emas — chunki ba'zi
-     * guruhlarga hali kompyuter biriktirilmagan bo'lishi mumkin).
-     *
-     * @param  array|null  $exclude  Berilgan guruhning o'z hissasini hisobdan
-     *                               chiqarish uchun (qarang
-     *                               ExamCapacityService::concurrentStudentsForSlot).
+     * hisoblaydi — Bandlik ko'rsatkichi bilan bir xil mantiq.
      *
      * @return array<int, array{time:string, free:int, capacity:int}>
      */
     public function availableSlots(
         string $date,
         ?Carbon $afterTime = null,
-        int $requiredFree = 1,
-        ?array $exclude = null
+        int $requiredFree = 1
     ): array {
         $settings = ExamCapacityService::getSettingsForDate($date);
         $duration = max(1, (int) ($settings['test_duration_minutes'] ?? 15));
@@ -94,12 +106,21 @@ class DeanExamRescheduleService
                 && $slotStart->lt($lunchEnd) && $slotEnd->gt($lunchStart);
 
             if (!$overlapsLunch) {
+                // exam_schedules orqali guruh-darajadagi yuk
                 $concurrent = ExamCapacityService::concurrentStudentsForSlot(
                     $date,
                     $slotStart->format('H:i'),
-                    $exclude
+                    null
                 );
-                $free = max(0, $capacity - $concurrent);
+                // Ilgari ko'chirilgan (dean-moved) talabalar exam_schedules da
+                // boshqa vaqtda turgan bo'lishi mumkin — ular computer_assignments
+                // orqali band kompyuterlarni egallaydi. Shu sababli ikkala
+                // ko'rsatkichdan eng yomonini olamiz.
+                $occupiedComputers = $this->occupiedComputerNumbers($slotStart, $slotEnd);
+                $intentFree = max(0, $capacity - $concurrent);
+                $physicalFree = max(0, $capacity - count($occupiedComputers));
+                $free = min($intentFree, $physicalFree);
+
                 if ($free >= $requiredFree) {
                     $slots[] = [
                         'time' => $slotStart->format('H:i'),
@@ -116,28 +137,45 @@ class DeanExamRescheduleService
     }
 
     /**
-     * Berilgan ExamSchedule + yn_type uchun bandlik istisnosini quradi —
-     * concurrentStudentsForSlot() ga uzatish uchun.
+     * Berilgan vaqt oralig'ida band bo'lgan distinct computer_number lar.
      */
-    public function excludeKeyFor(ExamSchedule $schedule, string $ynType): array
+    private function occupiedComputerNumbers(Carbon $start, Carbon $end, array $excludeAssignmentIds = []): array
     {
-        return [
-            'group_hemis_id' => $schedule->group_hemis_id,
-            'subject_id' => $schedule->subject_id,
-            'semester_code' => $schedule->semester_code,
-            'yn_type' => $ynType,
-            'attempt' => 1,
-        ];
+        return ComputerAssignment::query()
+            ->where('planned_end', '>', $start)
+            ->where('planned_start', '<', $end)
+            ->when(!empty($excludeAssignmentIds), fn ($q) => $q->whereNotIn('id', $excludeAssignmentIds))
+            ->whereIn('status', [
+                ComputerAssignment::STATUS_SCHEDULED,
+                ComputerAssignment::STATUS_IN_PROGRESS,
+            ])
+            ->pluck('computer_number')
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**
-     * Guruhning butun YN vaqtini boshqa slotga ko'chirish.
+     * Yangi slotda $needed ta bo'sh kompyuter raqamini topadi (eng kichik
+     * raqamdan boshlab). $excludeAssignmentIds — ko'chirilayotgan
+     * assignmentlarning o'zlarini hisobdan chiqarish uchun.
      *
-     * @param  int          $deanUserId  Dekanat user id (auditga yoziladi)
-     * @param  ExamSchedule $schedule
-     * @param  string       $ynType      'oski' yoki 'test'
-     * @param  string       $newTime     'HH:MM' formatda yangi vaqt
-     * @param  string|null  $reason      Ixtiyoriy izoh
+     * @return int[]|null  Bo'sh kompyuterlar yetmasa null
+     */
+    private function pickFreeComputers(Carbon $start, Carbon $end, int $needed, array $excludeAssignmentIds = []): ?array
+    {
+        $totalComputers = max(1, (int) config('services.moodle.total_computers', 60));
+        $occupied = $this->occupiedComputerNumbers($start, $end, $excludeAssignmentIds);
+        $available = array_values(array_diff(range(1, $totalComputers), $occupied));
+        if (count($available) < $needed) {
+            return null;
+        }
+        return array_slice($available, 0, $needed);
+    }
+
+    /**
+     * Guruhdagi "qoldi" talabalarini yangi vaqtga ko'chirish.
+     *
      * @return array{ok:bool, error?:string, reschedule?:DeanExamReschedule, student_count?:int}
      */
     public function reschedule(
@@ -193,35 +231,9 @@ class DeanExamRescheduleService
             return ['ok' => false, 'error' => 'Yangi vaqt joriy vaqtdan keyin bo\'lishi kerak.'];
         }
 
-        // Guruhdagi talabalar soni (assign() shu mantiqdan foydalanadi)
-        $studentCount = (int) Student::where('group_id', $schedule->group_hemis_id)
-            ->whereNotNull('student_id_number')
-            ->count();
-        if ($studentCount < 1) {
-            return ['ok' => false, 'error' => 'Guruhda imtihonga kiruvchi talabalar topilmadi.'];
-        }
-
-        // Yangi slotda guruh uchun yetarli bo'sh kompyuter borligini
-        // tekshirish — Bandlik ko'rsatkichi bilan bir xil mantiq:
-        // shu vaqt oralig'ida belgilangan YN guruhlari talabalari yig'indisi.
-        // Joriy guruhning o'z hissasi exclude qilinadi (chunki uni boshqa
-        // vaqtga ko'chiryapmiz).
-        $capacity = (int) ($settings['computer_count'] ?? 60);
-        $concurrent = ExamCapacityService::concurrentStudentsForSlot(
-            $date,
-            $newTime,
-            $this->excludeKeyFor($schedule, $ynType)
-        );
-        $free = max(0, $capacity - $concurrent);
-        if ($free < $studentCount) {
-            return [
-                'ok' => false,
-                'error' => "Yangi slotda yetarli bo'sh kompyuter yo'q: kerak {$studentCount}, bo'sh {$free}.",
-            ];
-        }
-
         return DB::transaction(function () use (
-            $deanUserId, $schedule, $ynType, $newTime, $newStart, $date, $timeField, $reason, $studentCount
+            $deanUserId, $schedule, $ynType, $newTime, $newStart, $newEnd,
+            $date, $timeField, $reason, $settings
         ) {
             // Race condition oldini olish — unique indeks ham bor.
             $alreadyUsed = DeanExamReschedule::where('exam_schedule_id', $schedule->id)
@@ -233,22 +245,81 @@ class DeanExamRescheduleService
                 return ['ok' => false, 'error' => 'Bu guruh uchun bugungi reschedule huquqidan allaqachon foydalanilgan.'];
             }
 
+            // Faqat "qoldi" — status='scheduled' assignmentlarini lock va o'qish.
+            // finished/abandoned/in_progress qatorlar tegmay qoladi.
+            $pending = ComputerAssignment::where('exam_schedule_id', $schedule->id)
+                ->where('yn_type', $ynType)
+                ->whereDate('planned_start', $date)
+                ->where('status', ComputerAssignment::STATUS_SCHEDULED)
+                ->lockForUpdate()
+                ->orderBy('id')
+                ->get();
+
+            $count = $pending->count();
+            if ($count === 0) {
+                return [
+                    'ok' => false,
+                    'error' => 'Bu guruhda ko\'chirilishi kerak bo\'lgan talaba yo\'q (hammasi topshirgan yoki ro\'yxat hali tuzilmagan).',
+                ];
+            }
+
+            // Sig'im tekshiruvi: ikkala ko'rsatkichdan eng yomon (guruh-darajadagi
+            // intent + computer-darajadagi haqiqiy bandlik).
+            $capacity = (int) ($settings['computer_count'] ?? 60);
+            $concurrent = ExamCapacityService::concurrentStudentsForSlot($date, $newTime, null);
+            $intentFree = max(0, $capacity - $concurrent);
+            $pendingIds = $pending->pluck('id')->all();
+            $computers = $this->pickFreeComputers($newStart, $newEnd, $count, $pendingIds);
+
+            if ($intentFree < $count) {
+                return [
+                    'ok' => false,
+                    'error' => "Yangi slotda yetarli bandlik yo'q: kerak {$count}, bo'sh {$intentFree}.",
+                ];
+            }
+            if ($computers === null) {
+                return [
+                    'ok' => false,
+                    'error' => "Yangi slotda yetarli bo'sh kompyuter qolmadi (raqamlar bo'yicha).",
+                ];
+            }
+
             $originalTime = $schedule->{$timeField}
                 ? substr((string) $schedule->{$timeField}, 0, 5)
                 : null;
 
-            // Guruh sathida vaqtni yangilash — saved() hooki Moodle ga re-push
-            // qiladi. assign() yangi vaqt asosida ComputerAssignment'larni
-            // qayta yaratadi (eski sxedullarni o'chirib).
-            $schedule->{$timeField} = $newTime;
-            $schedule->save();
+            // Har bir qoldi assignmentni yangi vaqt va yangi kompyuterga
+            // o'tkazish. status va actual_* maydonlar tegmaydi (assignment
+            // hali boshlanmagan, shuning uchun null bo'lishi kerak).
+            foreach ($pending as $i => $a) {
+                $oldStart = $a->planned_start;
+                $oldEnd = $a->planned_end;
+                $oldComputer = $a->computer_number;
 
-            $assignResult = $this->computerAssignmentService->assign($schedule, $ynType);
-            if (empty($assignResult['ok'])) {
-                // Transaksiya rollback bo'ladi (exception orqali)
-                throw new \RuntimeException(
-                    "Kompyuter biriktirishda xatolik: " . ($assignResult['reason'] ?? 'noma\'lum sabab')
-                );
+                $history = $a->history ?? [];
+                $history[] = [
+                    'event' => 'dean_reschedule',
+                    'at' => now()->toIso8601String(),
+                    'by_user_id' => $deanUserId,
+                    'from_start' => $oldStart?->toIso8601String(),
+                    'from_end' => $oldEnd?->toIso8601String(),
+                    'from_computer' => $oldComputer,
+                    'to_start' => $newStart->toIso8601String(),
+                    'to_end' => $newEnd->toIso8601String(),
+                    'to_computer' => $computers[$i],
+                    'reason' => $reason,
+                ];
+
+                $a->planned_start = $newStart;
+                $a->planned_end = $newEnd;
+                $a->computer_number = $computers[$i];
+                $a->is_pinned = true;
+                $a->reveal_at = null;
+                $a->reveal_notified = false;
+                $a->approach_notified = false;
+                $a->ready_notified = false;
+                $a->history = $history;
+                $a->save();
             }
 
             $log = DeanExamReschedule::create([
@@ -257,7 +328,7 @@ class DeanExamRescheduleService
                 'used_date' => $date,
                 'original_time' => $originalTime,
                 'new_time' => $newTime,
-                'student_count' => $assignResult['count'] ?? $studentCount,
+                'student_count' => $count,
                 'reason' => $reason,
                 'created_by' => $deanUserId,
             ]);
@@ -265,7 +336,7 @@ class DeanExamRescheduleService
             return [
                 'ok' => true,
                 'reschedule' => $log,
-                'student_count' => $assignResult['count'] ?? $studentCount,
+                'student_count' => $count,
             ];
         });
     }

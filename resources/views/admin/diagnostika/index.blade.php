@@ -336,7 +336,7 @@
                                         <th><select class="col-filter" data-col="fan_name"><option value="">Barchasi</option></select></th>
                                         <th><input type="text" class="col-filter-input" data-col="fan_id" placeholder="Fan ID..."></th>
                                         <th><select class="col-filter" data-col="yn_turi"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="shakl"><option value="">Barchasi</option></select></th>
+                                        <th><input type="text" class="col-filter-input" data-col="shakl" placeholder="Shakl..."></th>
                                         <th>
                                             <div class="adv-filter-wrap">
                                                 <button type="button" class="adv-filter-btn" onclick="toggleAdvFilter('baho')">

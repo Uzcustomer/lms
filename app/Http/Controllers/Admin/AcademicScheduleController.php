@@ -6067,6 +6067,114 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * TV displeyi: test markazi tashqarisida o'rnatilgan ekran uchun joriy
+     * kunning guruh kirish jadvali. Aeroportdagi uchish tabosiga o'xshash
+     * minimal, katta shriftli, autentifikatsiyasiz sahifa.
+     *
+     * Holat (kutilmoqda/tayyorlaning/hozir/tugadi) frontendda joriy vaqt
+     * asosida har soniyada qayta hisoblanadi — server faqat slot vaqti va
+     * davomiyligini beradi.
+     */
+    public function tvJadval(Request $request)
+    {
+        $dateParam = $request->query('date');
+        try {
+            $carbonDate = $dateParam
+                ? \Carbon\Carbon::createFromFormat('Y-m-d', $dateParam)
+                : now()->startOfDay();
+        } catch (\Throwable $e) {
+            $carbonDate = now()->startOfDay();
+        }
+        $date = $carbonDate->format('Y-m-d');
+
+        $settings = ExamCapacityService::getSettingsForDate($date);
+        $testDurationMinutes = (int) ($settings['test_duration_minutes'] ?? 15);
+
+        $schedules = ExamSchedule::with(['group'])
+            ->where(function ($q) use ($date) {
+                $q->where(function ($q2) use ($date) {
+                    $q2->where('oski_na', false)->whereDate('oski_date', $date);
+                })->orWhere(function ($q2) use ($date) {
+                    $q2->where('test_na', false)->whereDate('test_date', $date);
+                })->orWhere(function ($q2) use ($date) {
+                    $q2->whereDate('oski_resit_date', $date);
+                })->orWhere(function ($q2) use ($date) {
+                    $q2->whereDate('test_resit_date', $date);
+                })->orWhere(function ($q2) use ($date) {
+                    $q2->whereDate('oski_resit2_date', $date);
+                })->orWhere(function ($q2) use ($date) {
+                    $q2->whereDate('test_resit2_date', $date);
+                });
+            })
+            ->get();
+
+        $attemptDefs = [
+            ['OSKI', 1, 'oski_date', 'oski_time', 'oski_na'],
+            ['Test', 1, 'test_date', 'test_time', 'test_na'],
+            ['OSKI', 2, 'oski_resit_date', 'oski_resit_time', null],
+            ['Test', 2, 'test_resit_date', 'test_resit_time', null],
+            ['OSKI', 3, 'oski_resit2_date', 'oski_resit2_time', null],
+            ['Test', 3, 'test_resit2_date', 'test_resit2_time', null],
+        ];
+
+        // Per-student qatorlarni o'tkazib yuboramiz — TV uchun guruh-darajadagi
+        // qator yetarli (bir nechta retaker bir xil guruh+vaqtda bo'lsa,
+        // bir martagina ko'rinadi).
+        $items = [];
+        $seen = [];
+        foreach ($schedules as $schedule) {
+            if (!empty($schedule->student_hemis_id)) {
+                continue;
+            }
+            foreach ($attemptDefs as [$ynType, $attempt, $dateField, $timeField, $naField]) {
+                $dStr = $schedule->{$dateField}?->format('Y-m-d');
+                if ($dStr !== $date) continue;
+                if ($naField !== null && $schedule->{$naField}) continue;
+
+                $timeRaw = $schedule->{$timeField} ?? null;
+                if (!$timeRaw) continue;
+                $timeStr = \Carbon\Carbon::parse($timeRaw)->format('H:i');
+
+                $groupName = $schedule->group?->name ?? $schedule->group_hemis_id;
+                $subjectName = $schedule->subject_name ?? '';
+
+                $key = $timeStr . '|' . $groupName . '|' . $subjectName . '|' . $ynType . '|' . $attempt;
+                if (isset($seen[$key])) continue;
+                $seen[$key] = true;
+
+                $items[] = [
+                    'time' => $timeStr,
+                    'group_name' => $groupName,
+                    'subject_name' => $subjectName,
+                    'yn_type' => $ynType,
+                    'attempt' => $attempt,
+                ];
+            }
+        }
+
+        usort($items, function ($a, $b) {
+            return [$a['time'], $a['group_name']] <=> [$b['time'], $b['group_name']];
+        });
+
+        if ($request->wantsJson() || $request->query('format') === 'json') {
+            return response()->json([
+                'date' => $date,
+                'duration_minutes' => $testDurationMinutes,
+                'items' => $items,
+                'generated_at' => now()->toIso8601String(),
+            ])->header('Cache-Control', 'no-store, max-age=0');
+        }
+
+        return response()
+            ->view('admin.academic-schedule.tv-jadval', [
+                'date' => $carbonDate,
+                'items' => $items,
+                'testDurationMinutes' => $testDurationMinutes,
+            ])
+            ->header('Cache-Control', 'no-store, max-age=0');
+    }
+
+    /**
      * Har bir guruh+fan+semestr uchun N-urinishda imtihon topshirishi kerak
      * bo'lgan talabalar sonini hisoblaydi (2- va 3-urinishlar uchun).
      *

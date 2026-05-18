@@ -16,8 +16,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="divide-y divide-gray-100">
                     @foreach($groups as $g)
-                        <a href="{{ route('student.retake-journal.show', $g->id) }}"
-                           class="block p-4 hover:bg-gray-50 transition flex items-center justify-between flex-wrap gap-3">
+                        <div class="p-4 hover:bg-gray-50 transition flex items-center justify-between flex-wrap gap-3">
                             <div class="flex-1 min-w-0">
                                 <p class="text-sm font-semibold text-gray-900">{{ $g->subject_name }}</p>
                                 <p class="text-xs text-gray-500 mt-0.5">
@@ -38,8 +37,11 @@
                                     {{ $g->start_date->format('Y-m-d') }} → {{ $g->end_date->format('Y-m-d') }}
                                 </p>
                             </div>
-                            <span class="text-xs text-blue-600">{{ __("Ochish") }} →</span>
-                        </a>
+                            <a href="{{ route('student.retake-journal.show', $g->id) }}"
+                               class="text-xs text-blue-600 hover:underline whitespace-nowrap">
+                                {{ __("Ochish") }} →
+                            </a>
+                        </div>
                     @endforeach
                 </div>
             </div>

@@ -13,24 +13,21 @@ return new class extends Migration
             $table->foreignId('exam_schedule_id')
                 ->constrained('exam_schedules')
                 ->cascadeOnDelete();
-            $table->foreignId('computer_assignment_id')
-                ->constrained('computer_assignments')
-                ->cascadeOnDelete();
-            $table->string('student_hemis_id', 50)->index();
             $table->string('yn_type', 10);
             $table->date('used_date');
-            $table->dateTime('original_start');
-            $table->dateTime('original_end');
-            $table->unsignedSmallInteger('original_computer')->nullable();
-            $table->dateTime('new_start');
-            $table->dateTime('new_end');
-            $table->unsignedSmallInteger('new_computer');
+            $table->string('original_time', 5)->nullable();
+            $table->string('new_time', 5);
+            $table->unsignedSmallInteger('student_count');
             $table->text('reason')->nullable();
             $table->unsignedBigInteger('created_by')->comment('Dekanat user id');
             $table->timestamps();
 
-            // Bir talabaga bir kun ichida faqat bir marta dekanat reschedule qila oladi.
-            $table->unique(['student_hemis_id', 'used_date'], 'dean_reschedule_one_per_day');
+            // Bir guruhning bir YN'ini bir kun ichida faqat bir marta
+            // ko'chirish mumkin.
+            $table->unique(
+                ['exam_schedule_id', 'yn_type', 'used_date'],
+                'dean_reschedule_one_per_group_per_day'
+            );
         });
     }
 

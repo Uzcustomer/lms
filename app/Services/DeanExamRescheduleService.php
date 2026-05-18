@@ -4,44 +4,50 @@ namespace App\Services;
 
 use App\Models\ComputerAssignment;
 use App\Models\DeanExamReschedule;
+use App\Models\ExamSchedule;
+use App\Models\Student;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
- * Dekanat tomonidan kech qolgan talabaning imtihon vaqtini SHU KUN
- * ichida boshqa bo'sh slotga ko'chirish.
+ * Dekanat tomonidan kech qolgan guruhning butun imtihon vaqtini SHU KUN
+ * ichida boshqa bo'sh slotga ko'chirish (guruh sathida).
  *
  * Cheklovlar:
- *   - Bir talabaga bir kun ichida faqat BIR MARTA reschedule qilish mumkin
- *     (`dean_exam_reschedules.dean_reschedule_one_per_day` unique indeksi).
- *   - Yangi vaqt original sana bilan bir xil kunda bo'lishi shart.
- *   - Yangi vaqt ish soatlari ichida va tushlik vaqtiga ust-ust tushmasligi
- *     kerak.
- *   - Yangi vaqtda kamida bitta bo'sh kompyuter mavjud bo'lishi shart
- *     (ExamCapacityService settings: computer_count).
+ *   - Bir guruhning bir YN'ini bir kun ichida faqat BIR MARTA ko'chirish
+ *     mumkin (`dean_exam_reschedules.dean_reschedule_one_per_group_per_day`
+ *     unique indeksi).
+ *   - Yangi vaqt original sana bilan bir kunda bo'lishi shart.
+ *   - Yangi vaqt ish soatlari ichida va tushlikka tushmasligi kerak.
+ *   - Yangi slotda guruhdagi BARCHA talabalar uchun yetarli bo'sh
+ *     kompyuter bo'lishi shart (ExamCapacityService settings).
  *
  * Test markazi rolining "edit today" toggle holatiga e'tibor bermaydi —
  * bu alohida dekanat huquqi.
  */
 class DeanExamRescheduleService
 {
+    public function __construct(private ComputerAssignmentService $computerAssignmentService) {}
+
     /**
-     * Talaba uchun shu kun ichida dekanat reschedule huquqidan
-     * allaqachon foydalanilganmi.
+     * Berilgan (exam_schedule, yn_type) uchun shu kun ichida dekanat
+     * reschedule huquqidan allaqachon foydalanilganmi.
      */
-    public function alreadyUsedToday(string $studentHemisId, string $date): bool
+    public function alreadyUsedToday(int $examScheduleId, string $ynType, string $date): bool
     {
-        return DeanExamReschedule::where('student_hemis_id', $studentHemisId)
+        return DeanExamReschedule::where('exam_schedule_id', $examScheduleId)
+            ->where('yn_type', $ynType)
             ->whereDate('used_date', $date)
             ->exists();
     }
 
     /**
-     * Berilgan kun uchun bo'sh slotlar ro'yxati.
+     * Berilgan kun uchun bo'sh slotlar ro'yxati. Agar $requiredFree berilsa,
+     * kamida shuncha kompyuter bo'sh bo'lgan slotlar qaytariladi.
      *
      * @return array<int, array{time:string, free:int, capacity:int}>
      */
-    public function availableSlots(string $date, ?Carbon $afterTime = null): array
+    public function availableSlots(string $date, ?Carbon $afterTime = null, int $requiredFree = 1): array
     {
         $settings = ExamCapacityService::getSettingsForDate($date);
         $duration = max(1, (int) ($settings['test_duration_minutes'] ?? 15));
@@ -61,7 +67,6 @@ class DeanExamRescheduleService
 
         $cursor = $workStart->copy();
         if ($afterTime && $afterTime->gt($cursor)) {
-            // Joriy vaqtdan keyingi slotga yaxlitlash
             $minsFromStart = $workStart->diffInMinutes($afterTime);
             $skipSlots = (int) ceil($minsFromStart / $duration);
             $cursor = $workStart->copy()->addMinutes($skipSlots * $duration);
@@ -78,7 +83,7 @@ class DeanExamRescheduleService
             if (!$overlapsLunch) {
                 $occupied = $this->occupiedComputerCount($slotStart, $slotEnd);
                 $free = max(0, $capacity - $occupied);
-                if ($free > 0) {
+                if ($free >= $requiredFree) {
                     $slots[] = [
                         'time' => $slotStart->format('H:i'),
                         'free' => $free,
@@ -94,14 +99,27 @@ class DeanExamRescheduleService
     }
 
     /**
-     * Berilgan vaqt oralig'ida band kompyuterlar soni
-     * (ComputerAssignment.overlap).
+     * Guruh ko'chirilganda hisobdan chiqarish uchun: berilgan (schedule,
+     * yn_type) ning o'z ComputerAssignment'larini exclude qilib, vaqt
+     * oralig'ida band kompyuterlar sonini sanaydi. Default holatda hech
+     * narsa exclude qilinmaydi (umumiy bandlik).
      */
-    private function occupiedComputerCount(Carbon $start, Carbon $end): int
-    {
+    private function occupiedComputerCount(
+        Carbon $start,
+        Carbon $end,
+        ?int $excludeScheduleId = null,
+        ?string $excludeYnType = null,
+    ): int {
         return (int) ComputerAssignment::query()
             ->where('planned_end', '>', $start)
             ->where('planned_start', '<', $end)
+            ->when(
+                $excludeScheduleId !== null && $excludeYnType !== null,
+                fn ($q) => $q->where(function ($q2) use ($excludeScheduleId, $excludeYnType) {
+                    $q2->where('exam_schedule_id', '!=', $excludeScheduleId)
+                        ->orWhere('yn_type', '!=', $excludeYnType);
+                })
+            )
             ->whereIn('status', [
                 ComputerAssignment::STATUS_SCHEDULED,
                 ComputerAssignment::STATUS_IN_PROGRESS,
@@ -111,58 +129,44 @@ class DeanExamRescheduleService
     }
 
     /**
-     * Berilgan vaqt oralig'ida bo'sh kompyuter raqamini topish.
-     * $excludeAssignmentId — qayta belgilanayotgan o'sha talaba assignmenti
-     * (eski slotda turibsa, uni hisobdan chiqarish).
-     */
-    public function pickFreeComputer(Carbon $start, Carbon $end, ?int $excludeAssignmentId = null): ?int
-    {
-        $totalComputers = (int) config('services.moodle.total_computers', 60);
-        $totalComputers = max(1, $totalComputers);
-
-        $occupied = ComputerAssignment::query()
-            ->where('planned_end', '>', $start)
-            ->where('planned_start', '<', $end)
-            ->when($excludeAssignmentId, fn ($q) => $q->where('id', '!=', $excludeAssignmentId))
-            ->whereIn('status', [
-                ComputerAssignment::STATUS_SCHEDULED,
-                ComputerAssignment::STATUS_IN_PROGRESS,
-            ])
-            ->pluck('computer_number')
-            ->unique()
-            ->all();
-
-        $available = array_values(array_diff(range(1, $totalComputers), $occupied));
-        if (empty($available)) {
-            return null;
-        }
-        // Tasodifiy emas — eng kichik bo'sh raqam — proktor uchun
-        // jadval barqaror bo'lishi uchun.
-        return $available[0];
-    }
-
-    /**
-     * Reschedule operatsiyasini bajaradi.
+     * Guruhning butun YN vaqtini boshqa slotga ko'chirish.
      *
-     * @param  int     $deanUserId  Dekanat user id (auditga yoziladi)
-     * @param  ComputerAssignment  $assignment  Reschedule qilinadigan talaba assignmenti
-     * @param  string  $newTime     'HH:MM' formatda yangi vaqt
-     * @param  string|null  $reason  Ixtiyoriy izoh
-     * @return array{ok:bool, error?:string, reschedule?:DeanExamReschedule}
+     * @param  int          $deanUserId  Dekanat user id (auditga yoziladi)
+     * @param  ExamSchedule $schedule
+     * @param  string       $ynType      'oski' yoki 'test'
+     * @param  string       $newTime     'HH:MM' formatda yangi vaqt
+     * @param  string|null  $reason      Ixtiyoriy izoh
+     * @return array{ok:bool, error?:string, reschedule?:DeanExamReschedule, student_count?:int}
      */
     public function reschedule(
         int $deanUserId,
-        ComputerAssignment $assignment,
+        ExamSchedule $schedule,
+        string $ynType,
         string $newTime,
         ?string $reason = null
     ): array {
-        $originalStart = $assignment->planned_start;
-        $originalEnd = $assignment->planned_end;
-        $date = $originalStart->format('Y-m-d');
-
+        $ynType = strtolower($ynType);
+        if (!in_array($ynType, ['oski', 'test'], true)) {
+            return ['ok' => false, 'error' => "YN turi noto'g'ri (oski|test)."];
+        }
         if (!preg_match('/^\d{2}:\d{2}$/', $newTime)) {
             return ['ok' => false, 'error' => "Vaqt formati noto'g'ri (HH:MM)."];
         }
+
+        $dateField = $ynType . '_date';
+        $timeField = $ynType . '_time';
+        $naField = $ynType . '_na';
+
+        if ($schedule->{$naField}) {
+            return ['ok' => false, 'error' => 'Bu imtihon N/A deb belgilangan.'];
+        }
+        if (empty($schedule->{$dateField})) {
+            return ['ok' => false, 'error' => 'Bu imtihonga sana belgilanmagan.'];
+        }
+
+        $date = $schedule->{$dateField} instanceof Carbon
+            ? $schedule->{$dateField}->format('Y-m-d')
+            : Carbon::parse((string) $schedule->{$dateField})->format('Y-m-d');
 
         $settings = ExamCapacityService::getSettingsForDate($date);
         $duration = max(1, (int) ($settings['test_duration_minutes'] ?? 15));
@@ -175,90 +179,85 @@ class DeanExamRescheduleService
         }
         $newEnd = $newStart->copy()->addMinutes($duration + $buffer);
 
-        // Original sana bilan bir kun bo'lishi shart
-        if ($newStart->format('Y-m-d') !== $date) {
-            return ['ok' => false, 'error' => 'Yangi vaqt original sana bilan bir kunda bo\'lishi kerak.'];
-        }
-
-        // Ish soatlari ichida
         $workStart = Carbon::parse($date . ' ' . $settings['work_hours_start']);
         $workEnd = Carbon::parse($date . ' ' . $settings['work_hours_end']);
         if ($newStart->lt($workStart) || $newEnd->gt($workEnd)) {
             return ['ok' => false, 'error' => "Yangi vaqt ish soatlari ({$settings['work_hours_start']}–{$settings['work_hours_end']}) ichida bo'lishi kerak."];
         }
-
-        // Tushlik bilan ust-ust tushmasin
         if (ExamCapacityService::overlapsLunch($date, $newTime, $duration + $buffer, $settings)) {
             return ['ok' => false, 'error' => 'Yangi vaqt tushlik vaqtiga to\'g\'ri keladi.'];
         }
-
-        // O'tib ketgan vaqtga reschedule qilib bo'lmaydi
         if ($newStart->lte(now())) {
             return ['ok' => false, 'error' => 'Yangi vaqt joriy vaqtdan keyin bo\'lishi kerak.'];
         }
 
+        // Guruhdagi talabalar soni (assign() shu mantiqdan foydalanadi)
+        $studentCount = (int) Student::where('group_id', $schedule->group_hemis_id)
+            ->whereNotNull('student_id_number')
+            ->count();
+        if ($studentCount < 1) {
+            return ['ok' => false, 'error' => 'Guruhda imtihonga kiruvchi talabalar topilmadi.'];
+        }
+
+        // Yangi slotda guruh uchun yetarli bo'sh kompyuter borligini
+        // tekshirish (joriy guruh assignmentlarini exclude qilib).
+        $capacity = (int) ($settings['computer_count'] ?? 60);
+        $occupied = $this->occupiedComputerCount($newStart, $newEnd, $schedule->id, $ynType);
+        $free = max(0, $capacity - $occupied);
+        if ($free < $studentCount) {
+            return [
+                'ok' => false,
+                'error' => "Yangi slotda yetarli bo'sh kompyuter yo'q: kerak {$studentCount}, bo'sh {$free}.",
+            ];
+        }
+
         return DB::transaction(function () use (
-            $deanUserId, $assignment, $newStart, $newEnd, $originalStart, $originalEnd, $date, $reason
+            $deanUserId, $schedule, $ynType, $newTime, $newStart, $date, $timeField, $reason, $studentCount
         ) {
-            // Bir kunda bir marta cheklovini transaction ichida ham tekshirib
-            // ko'rish — race condition oldini olish. Aslida unique indeks ham bor.
-            $alreadyUsed = DeanExamReschedule::where('student_hemis_id', $assignment->student_hemis_id)
+            // Race condition oldini olish — unique indeks ham bor.
+            $alreadyUsed = DeanExamReschedule::where('exam_schedule_id', $schedule->id)
+                ->where('yn_type', $ynType)
                 ->whereDate('used_date', $date)
                 ->lockForUpdate()
                 ->exists();
             if ($alreadyUsed) {
-                return ['ok' => false, 'error' => 'Bu talaba uchun bugungi reschedule huquqidan allaqachon foydalanilgan.'];
+                return ['ok' => false, 'error' => 'Bu guruh uchun bugungi reschedule huquqidan allaqachon foydalanilgan.'];
             }
 
-            $newComputer = $this->pickFreeComputer($newStart, $newEnd, $assignment->id);
-            if (!$newComputer) {
-                return ['ok' => false, 'error' => 'Tanlangan vaqtda bo\'sh kompyuter qolmadi.'];
+            $originalTime = $schedule->{$timeField}
+                ? substr((string) $schedule->{$timeField}, 0, 5)
+                : null;
+
+            // Guruh sathida vaqtni yangilash — saved() hooki Moodle ga re-push
+            // qiladi. assign() yangi vaqt asosida ComputerAssignment'larni
+            // qayta yaratadi (eski sxedullarni o'chirib).
+            $schedule->{$timeField} = $newTime;
+            $schedule->save();
+
+            $assignResult = $this->computerAssignmentService->assign($schedule, $ynType);
+            if (empty($assignResult['ok'])) {
+                // Transaksiya rollback bo'ladi (exception orqali)
+                throw new \RuntimeException(
+                    "Kompyuter biriktirishda xatolik: " . ($assignResult['reason'] ?? 'noma\'lum sabab')
+                );
             }
-
-            $originalComputer = $assignment->computer_number;
-
-            // History audit ichiga ham qo'shamiz
-            $history = $assignment->history ?? [];
-            $history[] = [
-                'event' => 'dean_reschedule',
-                'at' => now()->toIso8601String(),
-                'by_user_id' => $deanUserId,
-                'from_start' => $originalStart?->toIso8601String(),
-                'from_end' => $originalEnd?->toIso8601String(),
-                'from_computer' => $originalComputer,
-                'to_start' => $newStart->toIso8601String(),
-                'to_end' => $newEnd->toIso8601String(),
-                'to_computer' => $newComputer,
-                'reason' => $reason,
-            ];
-
-            $assignment->planned_start = $newStart;
-            $assignment->planned_end = $newEnd;
-            $assignment->computer_number = $newComputer;
-            $assignment->is_pinned = true;
-            $assignment->status = ComputerAssignment::STATUS_SCHEDULED;
-            $assignment->actual_start = null;
-            $assignment->actual_end = null;
-            $assignment->history = $history;
-            $assignment->save();
 
             $log = DeanExamReschedule::create([
-                'exam_schedule_id' => $assignment->exam_schedule_id,
-                'computer_assignment_id' => $assignment->id,
-                'student_hemis_id' => $assignment->student_hemis_id,
-                'yn_type' => $assignment->yn_type,
+                'exam_schedule_id' => $schedule->id,
+                'yn_type' => $ynType,
                 'used_date' => $date,
-                'original_start' => $originalStart,
-                'original_end' => $originalEnd,
-                'original_computer' => $originalComputer,
-                'new_start' => $newStart,
-                'new_end' => $newEnd,
-                'new_computer' => $newComputer,
+                'original_time' => $originalTime,
+                'new_time' => $newTime,
+                'student_count' => $assignResult['count'] ?? $studentCount,
                 'reason' => $reason,
                 'created_by' => $deanUserId,
             ]);
 
-            return ['ok' => true, 'reschedule' => $log];
+            return [
+                'ok' => true,
+                'reschedule' => $log,
+                'student_count' => $assignResult['count'] ?? $studentCount,
+            ];
         });
     }
 }

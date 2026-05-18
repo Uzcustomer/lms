@@ -4,20 +4,23 @@ namespace App\Http\Controllers\Admin;
 
 use App\Enums\ProjectRole;
 use App\Http\Controllers\Controller;
-use App\Models\ComputerAssignment;
 use App\Models\DeanExamReschedule;
+use App\Models\ExamSchedule;
 use App\Models\Group;
+use App\Models\Student;
 use App\Services\DeanExamRescheduleService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 /**
- * Dekanat — kech qolgan talabani SHU KUN ichida boshqa vaqtga
- * o'tkazish sahifasi va endpointlari.
+ * Dekanat — kech qolgan guruhning YN vaqtini SHU KUN ichida boshqa vaqtga
+ * o'tkazish sahifasi va endpointlari (guruh sathida — butun guruh birga
+ * ko'chiriladi).
  *
- * Test markazi rolida "edit today" toggle o'chiq bo'lganda ham
- * dekanatga alohida ruxsat (har talabaga kunlik 1 marta).
+ * Test markazi rolida "edit today" toggle o'chiq bo'lganda ham dekanatga
+ * alohida ruxsat (bir guruhga kunlik 1 marta).
  */
 class DeanExamRescheduleController extends Controller
 {
@@ -33,17 +36,21 @@ class DeanExamRescheduleController extends Controller
         $this->ensureAccess();
 
         $date = $this->resolveDate($request);
-        $assignments = $this->todaysAssignments($date);
-        $usedHemisIds = DeanExamReschedule::whereDate('used_date', $date->toDateString())
-            ->pluck('student_hemis_id')
+        $rows = $this->todaysGroupExams($date);
+
+        // (exam_schedule_id, yn_type) larni "bugun ishlatilgan" bilan belgilash
+        $usedKeys = DeanExamReschedule::whereDate('used_date', $date->toDateString())
+            ->get(['exam_schedule_id', 'yn_type'])
+            ->map(fn ($r) => $r->exam_schedule_id . '|' . $r->yn_type)
             ->all();
+        $usedSet = array_flip($usedKeys);
 
         $availableSlots = $service->availableSlots($date->toDateString(), now());
 
         return view('admin.dean-exam-reschedule.index', [
             'date' => $date->toDateString(),
-            'assignments' => $assignments,
-            'usedHemisIds' => array_flip($usedHemisIds),
+            'rows' => $rows,
+            'usedSet' => $usedSet,
             'availableSlots' => $availableSlots,
         ]);
     }
@@ -53,7 +60,8 @@ class DeanExamRescheduleController extends Controller
         $this->ensureAccess();
 
         $date = $this->resolveDate($request);
-        $slots = $service->availableSlots($date->toDateString(), now());
+        $requiredFree = max(1, (int) $request->input('required_free', 1));
+        $slots = $service->availableSlots($date->toDateString(), now(), $requiredFree);
 
         return response()->json([
             'date' => $date->toDateString(),
@@ -66,24 +74,25 @@ class DeanExamRescheduleController extends Controller
         $this->ensureAccess();
 
         $data = $request->validate([
-            'computer_assignment_id' => ['required', 'integer', 'exists:computer_assignments,id'],
+            'exam_schedule_id' => ['required', 'integer', 'exists:exam_schedules,id'],
+            'yn_type' => ['required', 'in:oski,test'],
             'new_time' => ['required', 'regex:/^\d{2}:\d{2}$/'],
             'reason' => ['nullable', 'string', 'max:1000'],
         ]);
 
-        $assignment = ComputerAssignment::findOrFail($data['computer_assignment_id']);
+        $schedule = ExamSchedule::findOrFail($data['exam_schedule_id']);
 
-        // Faqat dekanat o'z fakulteti talabasini ko'chira oladi
-        if (!$this->canTouchAssignment($assignment)) {
+        if (!$this->canTouchSchedule($schedule)) {
             return response()->json([
                 'ok' => false,
-                'error' => 'Bu talaba sizning fakultetingizga tegishli emas.',
+                'error' => 'Bu guruh sizning fakultetingizga tegishli emas.',
             ], 403);
         }
 
         // Faqat bugungi imtihonni ko'chirish
-        $date = $assignment->planned_start?->format('Y-m-d');
-        if ($date !== Carbon::today()->toDateString()) {
+        $dateField = $data['yn_type'] . '_date';
+        $scheduleDate = $schedule->{$dateField}?->format('Y-m-d');
+        if ($scheduleDate !== Carbon::today()->toDateString()) {
             return response()->json([
                 'ok' => false,
                 'error' => 'Faqat bugungi imtihonni boshqa vaqtga ko\'chirish mumkin.',
@@ -93,7 +102,8 @@ class DeanExamRescheduleController extends Controller
         $user = $this->currentUser();
         $result = $service->reschedule(
             (int) $user->id,
-            $assignment,
+            $schedule,
+            $data['yn_type'],
             $data['new_time'],
             $data['reason'] ?? null,
         );
@@ -143,43 +153,86 @@ class DeanExamRescheduleController extends Controller
     }
 
     /**
-     * Dekanatning fakultetlariga (yoki admin uchun barchasiga) tegishli
-     * berilgan kunning ComputerAssignment ro'yxati.
+     * Berilgan kun uchun dekanat fakulteti doirasidagi (yoki admin uchun
+     * barchasi) ExamSchedule qatorlarini har bir YN turi bo'yicha alohida
+     * satr sifatida qaytaradi.
+     *
+     * @return \Illuminate\Support\Collection<int, object>
      */
-    private function todaysAssignments(Carbon $date)
+    private function todaysGroupExams(Carbon $date)
     {
-        $query = ComputerAssignment::query()
-            ->with(['student:hemis_id,full_name,group_id,student_id_number', 'examSchedule:id,subject_name,group_hemis_id'])
-            ->whereDate('planned_start', $date->toDateString())
-            ->whereIn('status', [
-                ComputerAssignment::STATUS_SCHEDULED,
-                ComputerAssignment::STATUS_ABANDONED,
-                ComputerAssignment::STATUS_IN_PROGRESS,
-            ]);
-
+        $dateStr = $date->toDateString();
         $groupIds = $this->scopedGroupHemisIds();
-        if ($groupIds !== null) {
-            // Talabani fakultet bo'yicha filter qilish — Student.group_id orqali
-            // (group_id aslida group_hemis_id ni saqlaydi, qarang Student model)
-            $query->whereHas('student', function ($q) use ($groupIds) {
-                $q->whereIn('group_id', $groupIds);
+
+        $query = ExamSchedule::query()
+            ->where(function ($q) use ($dateStr) {
+                $q->where(function ($q2) use ($dateStr) {
+                    $q2->whereDate('oski_date', $dateStr)
+                        ->where('oski_na', false)
+                        ->whereNotNull('oski_time');
+                })->orWhere(function ($q2) use ($dateStr) {
+                    $q2->whereDate('test_date', $dateStr)
+                        ->where('test_na', false)
+                        ->whereNotNull('test_time');
+                });
             });
+
+        if ($groupIds !== null) {
+            $query->whereIn('group_hemis_id', $groupIds);
         }
 
-        return $query->orderBy('planned_start')->get();
+        $schedules = $query->get();
+
+        // Guruh nomlari va talabalar soni
+        $allGroupIds = $schedules->pluck('group_hemis_id')->unique()->all();
+        $groups = Group::whereIn('group_hemis_id', $allGroupIds)
+            ->pluck('name', 'group_hemis_id');
+        $studentCounts = Student::whereIn('group_id', $allGroupIds)
+            ->whereNotNull('student_id_number')
+            ->selectRaw('group_id, COUNT(*) as cnt')
+            ->groupBy('group_id')
+            ->pluck('cnt', 'group_id');
+
+        $rows = collect();
+        foreach ($schedules as $s) {
+            foreach (['oski', 'test'] as $yn) {
+                $dateField = $yn . '_date';
+                $timeField = $yn . '_time';
+                $naField = $yn . '_na';
+
+                $rowDate = $s->{$dateField};
+                if (!$rowDate || $s->{$naField} || empty($s->{$timeField})) {
+                    continue;
+                }
+                if ($rowDate->format('Y-m-d') !== $dateStr) {
+                    continue;
+                }
+
+                $rows->push((object) [
+                    'exam_schedule_id' => $s->id,
+                    'yn_type' => $yn,
+                    'current_time' => substr((string) $s->{$timeField}, 0, 5),
+                    'group_hemis_id' => $s->group_hemis_id,
+                    'group_name' => $groups[$s->group_hemis_id] ?? '—',
+                    'subject_name' => $s->subject_name,
+                    'subject_id' => $s->subject_id,
+                    'student_count' => (int) ($studentCounts[$s->group_hemis_id] ?? 0),
+                ]);
+            }
+        }
+
+        return $rows
+            ->sortBy(['current_time', 'group_name'])
+            ->values();
     }
 
-    private function canTouchAssignment(ComputerAssignment $assignment): bool
+    private function canTouchSchedule(ExamSchedule $schedule): bool
     {
         $groupIds = $this->scopedGroupHemisIds();
         if ($groupIds === null) {
             return true; // admin
         }
-        $student = $assignment->student;
-        if (!$student) {
-            return false;
-        }
-        return in_array($student->group_id, $groupIds, true);
+        return in_array($schedule->group_hemis_id, $groupIds, true);
     }
 
     /**

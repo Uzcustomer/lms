@@ -6113,8 +6113,16 @@ class AcademicScheduleController extends Controller
      * Qaytadi: 'group|subject|sem|attempt' => [hemis_id, ...]
      * attempt=2 — 1-urinishdan yiqilganlar (V<60 yoki student_grades.attempt=2 yozuvi bor)
      * attempt=3 — 12a dan yiqilganlar (attempt=2 da V<60 yoki attempt=3 yozuvi bor)
+     *
+     * Yiqilgan deb hisoblanadi:
+     *   - student_grades da grade<60 (yoki retake_grade<60), YOKI
+     *   - student_grades.attempt=2/3 yozuvi mavjud (qo'lda 12a/12b ga o'tkazilgan), YOKI
+     *   - per-student exam_schedules da resit sanasi belgilangan, YOKI
+     *   - imtihon sanasi o'tgan, lekin talaba qatnashmagan (OSKI/Test bahosi yo'q).
+     *     closing_form ga qarab tegishli imtihon turi (OSKI yoki Test) uchun
+     *     baho yo'qligi tekshiriladi.
      */
-    private function computeFailedHemisIdsByKey(array $groupHemisIds): array
+    private function computeFailedHemisIdsByKey(array $groupHemisIds, $scheduleData = null): array
     {
         $result = [];
         if (empty($groupHemisIds)) return $result;
@@ -6211,10 +6219,119 @@ class AcademicScheduleController extends Controller
             foreach ($result as $k => $ids) {
                 $result[$k] = array_values(array_unique($ids));
             }
+
+            // Imtihon sanasi o'tgan lekin qatnashmaganlar (NB) ham yiqilgan deb hisoblanadi.
+            // Bu jurnal sahifasidagi V<60 (V=-1 "kelmadi") mantig'iga mos keladi.
+            if ($scheduleData !== null) {
+                $this->addMissedExamFailures($result, $groupHemisIds, $scheduleData);
+            }
         } catch (\Throwable $e) {
             \Log::warning('computeFailedHemisIdsByKey failed: ' . $e->getMessage());
         }
         return $result;
+    }
+
+    /**
+     * Imtihon sanasi o'tgan, lekin talaba qatnashmagan (yoki bahosi <60 dan boshqa
+     * sababga ko'ra yo'q) holatlarini topib, $result xaritasiga 2-urinish kerakli
+     * sifatida qo'shadi. closing_form ga qarab OSKI yoki Test bahosi talab
+     * qilinishi tekshiriladi.
+     */
+    private function addMissedExamFailures(array &$result, array $groupHemisIds, $scheduleData): void
+    {
+        try {
+            $today = now()->format('Y-m-d');
+
+            // Faqat passing (>=60) OSKI/Test baholarini olamiz - shu xaritada
+            // bo'lmagan talaba "qatnashmadi yoki yiqildi" deb hisoblanadi.
+            // attempt=1 yoki null - asosiy urinish.
+            $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+            $passedOski = []; // 'group|subject|sem' => [hemis_id => true]
+            $passedTest = [];
+
+            $passQuery = function (int $trainingTypeCode) use ($groupHemisIds, $hasAttemptCol) {
+                return DB::table('student_grades as sg')
+                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                    ->whereIn('st.group_id', $groupHemisIds)
+                    ->whereNull('sg.deleted_at')
+                    ->where('sg.training_type_code', $trainingTypeCode)
+                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) >= 60')
+                    ->when($hasAttemptCol, function ($q) {
+                        $q->where(function ($qq) {
+                            $qq->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                        });
+                    })
+                    ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.student_hemis_id')
+                    ->distinct()
+                    ->get();
+            };
+
+            foreach ($passQuery(101) as $r) {
+                $passedOski[$r->group_id . '|' . $r->subject_id . '|' . $r->semester_code][(string) $r->student_hemis_id] = true;
+            }
+            foreach ($passQuery(102) as $r) {
+                $passedTest[$r->group_id . '|' . $r->subject_id . '|' . $r->semester_code][(string) $r->student_hemis_id] = true;
+            }
+
+            // Guruh bo'yicha barcha faol talabalar
+            $studentsByGroup = [];
+            $rows = DB::table('students')
+                ->whereIn('group_id', $groupHemisIds)
+                ->where('student_status_code', 11)
+                ->select('hemis_id', 'group_id')
+                ->get();
+            foreach ($rows as $r) {
+                $studentsByGroup[$r->group_id][] = (string) $r->hemis_id;
+            }
+
+            // Har bir schedule item uchun closing_form va imtihon sanalariga qarab
+            // qatnashmaganlarni topish.
+            foreach ($scheduleData as $items) {
+                foreach ($items as $item) {
+                    $g = $item['group']->group_hemis_id ?? null;
+                    $s = $item['subject']->subject_id ?? null;
+                    $sem = $item['subject']->semester_code ?? null;
+                    if (!$g || !$s || !$sem) continue;
+
+                    $cf = $item['closing_form'] ?? null;
+                    // Normativ va sinov shakllari OSKI/Test orqali topshirilmaydi
+                    if (in_array($cf, ['normativ', 'sinov', 'none'], true)) continue;
+
+                    $needsOski = $cf === null || in_array($cf, ['oski', 'oski_test'], true);
+                    $needsTest = $cf === null || in_array($cf, ['test', 'oski_test'], true);
+
+                    $oskiDate = $item['oski_date'] ?? null;
+                    $testDate = $item['test_date'] ?? null;
+                    $oskiNa = !empty($item['oski_na']);
+                    $testNa = !empty($item['test_na']);
+
+                    // Imtihon o'tgan deb hisoblaymiz: NA yoki sana o'tmishda
+                    $oskiPassed = !$needsOski || $oskiNa || ($oskiDate && $oskiDate < $today);
+                    $testPassed = !$needsTest || $testNa || ($testDate && $testDate < $today);
+                    // Kamida bittasi o'tgan bo'lishi kerak — aks holda hali imtihon
+                    // umuman boshlanmagan, qatnashmadi deb belgilash erta
+                    if (!$oskiPassed && !$testPassed) continue;
+
+                    $key = $g . '|' . $s . '|' . $sem;
+                    foreach ($studentsByGroup[$g] ?? [] as $hid) {
+                        // Talaba o'tgan deb hisoblanadi: kerakli imtihon turlarining
+                        // har birida bahosi >=60. Aks holda yiqilgan.
+                        $oskiOk = !$needsOski || $oskiNa || !empty($passedOski[$key][$hid]);
+                        $testOk = !$needsTest || $testNa || !empty($passedTest[$key][$hid]);
+                        if (!$oskiOk || !$testOk) {
+                            $result[$key . '|2'][] = $hid;
+                        }
+                    }
+                }
+            }
+
+            // Dublikatlarni qaytadan tozalash (eski yiqilganlarga qo'shilgan bo'lishi mumkin)
+            foreach ($result as $k => $ids) {
+                $result[$k] = array_values(array_unique($ids));
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('addMissedExamFailures failed: ' . $e->getMessage());
+        }
     }
 
     /**
@@ -6270,7 +6387,9 @@ class AcademicScheduleController extends Controller
         // Tooltip uchun yiqilgan talabalar hemis_id ro'yxati (group|subject|sem|attempt).
         // attachStudentsToSchedule yuklanmagan bo'lsa (showStudents=false), shu xarita
         // 2/3-urinish badge hover'da kim yiqilganini ko'rsatish uchun ishlatiladi.
-        $failedHemisIdsByKey = $this->computeFailedHemisIdsByKey($allGroupHemisIds);
+        // scheduleData uzatamiz - closing_form va imtihon sanalariga qarab
+        // qatnashmagan talabalarni ham yiqilgan sifatida belgilash uchun.
+        $failedHemisIdsByKey = $this->computeFailedHemisIdsByKey($allGroupHemisIds, $scheduleData);
 
         return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey, $attemptExistsByKey, $groupSizes, $studentNamesByGroup, $failedHemisIdsByKey) {
             $expanded = collect();
@@ -6281,38 +6400,63 @@ class AcademicScheduleController extends Controller
                 $needsKeyBase = $groupHid . '|' . $subjectId . '|' . $semCode;
 
                 $studentsAttachedList = (isset($item['students']) && is_array($item['students'])) ? $item['students'] : null;
-                $countFor = function (int $att) use ($studentsAttachedList, $groupSizes, $groupHid, $needsByKey, $needsKeyBase) {
+                $countFor = function (int $att) use ($studentsAttachedList, $groupSizes, $groupHid, $needsByKey, $needsKeyBase, $failedHemisIdsByKey) {
+                    // Asosiy hisob: studentsAttachedList bo'lsa undan, aks holda groupSizes / needsByKey dan
                     if (is_array($studentsAttachedList)) {
-                        if ($att === 1) return count($studentsAttachedList);
-                        $field = $att === 2 ? 'failed_attempt1' : 'failed_attempt2';
-                        return count(array_filter($studentsAttachedList, fn($s) => !empty($s[$field])));
+                        if ($att === 1) {
+                            $base = count($studentsAttachedList);
+                        } else {
+                            $field = $att === 2 ? 'failed_attempt1' : 'failed_attempt2';
+                            $base = count(array_filter($studentsAttachedList, fn($s) => !empty($s[$field])));
+                        }
+                    } elseif ($att === 1) {
+                        $base = (int) ($groupSizes[$groupHid] ?? 0);
+                    } else {
+                        $base = (int) ($needsByKey[$needsKeyBase . '|' . $att] ?? 0);
                     }
-                    if ($att === 1) {
-                        return (int) ($groupSizes[$groupHid] ?? 0);
-                    }
-                    return (int) ($needsByKey[$needsKeyBase . '|' . $att] ?? 0);
+                    if ($att === 1) return $base;
+                    // 2/3-urinish uchun failedHemisIdsByKey to'liqroq:
+                    // qatnashmaganlarni (NB) ham qamrab oladi - eski mantiq tashlab ketgan
+                    // talabalar shu yerda ushlanadi.
+                    $failedCount = isset($failedHemisIdsByKey[$needsKeyBase . '|' . $att])
+                        ? count($failedHemisIdsByKey[$needsKeyBase . '|' . $att])
+                        : 0;
+                    return max($base, $failedCount);
                 };
 
                 // Tooltip uchun talabalar ismlari ro'yxatini tayyorlaymiz.
                 // 1-urinish: guruhdagi barcha faol talabalar.
-                // 2/3-urinish: yiqilganlar - attachStudentsToSchedule yuklangan
-                // bo'lsa shu yerdan, aks holda failedHemisIdsByKey orqali.
+                // 2/3-urinish: failedHemisIdsByKey (eng to'liq) + studentsAttachedList
+                //   union — har ikkalasidan kelgan ismlar birlashtiriladi. failedHemisIdsByKey
+                //   qatnashmaganlarni ham qamrab oladi (eski mantiq tashlab ketgan).
                 $tooltipFor = function (int $att) use ($studentsAttachedList, $studentNamesByGroup, $failedHemisIdsByKey, $groupHid, $needsKeyBase) {
-                    $names = [];
                     if ($att === 1) {
                         $names = array_values($studentNamesByGroup[$groupHid] ?? []);
-                    } elseif (is_array($studentsAttachedList)) {
-                        $field = $att === 2 ? 'failed_attempt1' : 'failed_attempt2';
-                        foreach ($studentsAttachedList as $s) {
-                            if (!empty($s[$field])) $names[] = $s['full_name'] ?? '';
-                        }
-                    } else {
-                        $ids = $failedHemisIdsByKey[$needsKeyBase . '|' . $att] ?? [];
-                        $namesMap = $studentNamesByGroup[$groupHid] ?? [];
-                        foreach ($ids as $hid) {
-                            if (isset($namesMap[(string) $hid])) $names[] = $namesMap[(string) $hid];
+                        sort($names);
+                        return $names;
+                    }
+                    $namesMap = $studentNamesByGroup[$groupHid] ?? [];
+                    $unique = []; // hid => name
+                    // 1) failedHemisIdsByKey dan
+                    $ids = $failedHemisIdsByKey[$needsKeyBase . '|' . $att] ?? [];
+                    foreach ($ids as $hid) {
+                        if (isset($namesMap[(string) $hid])) {
+                            $unique[(string) $hid] = $namesMap[(string) $hid];
                         }
                     }
+                    // 2) studentsAttachedList dan (mavjud bo'lsa)
+                    if (is_array($studentsAttachedList)) {
+                        $field = $att === 2 ? 'failed_attempt1' : 'failed_attempt2';
+                        foreach ($studentsAttachedList as $s) {
+                            if (!empty($s[$field])) {
+                                $hid = (string) ($s['hemis_id'] ?? '');
+                                if ($hid !== '') {
+                                    $unique[$hid] = $s['full_name'] ?? '';
+                                }
+                            }
+                        }
+                    }
+                    $names = array_values($unique);
                     sort($names);
                     return $names;
                 };
@@ -6329,8 +6473,13 @@ class AcademicScheduleController extends Controller
                     }
                 } else {
                     // Talabalar yuklanmagan (showStudents=false) — eski signallarga tayanamiz
-                    $hasFailed1 = isset($needsByKey[$needsKeyBase . '|2']) || isset($attemptExistsByKey[$needsKeyBase . '|2']);
-                    $hasFailed2 = isset($needsByKey[$needsKeyBase . '|3']) || isset($attemptExistsByKey[$needsKeyBase . '|3']);
+                    // failedHemisIdsByKey qatnashmaganlarni ham qamrab oladi
+                    $hasFailed1 = isset($needsByKey[$needsKeyBase . '|2'])
+                        || isset($attemptExistsByKey[$needsKeyBase . '|2'])
+                        || !empty($failedHemisIdsByKey[$needsKeyBase . '|2']);
+                    $hasFailed2 = isset($needsByKey[$needsKeyBase . '|3'])
+                        || isset($attemptExistsByKey[$needsKeyBase . '|3'])
+                        || !empty($failedHemisIdsByKey[$needsKeyBase . '|3']);
                 }
 
                 // 1-urinish — har doim

@@ -77,6 +77,11 @@ Route::get('/refresh-csrf', function () {
     return response()->json(['token' => csrf_token()]);
 });
 
+// TV displeyi: test markazi tashqarisidagi ekranda guruhlar kirish jadvali.
+// Public — login talab qilinmaydi, ichki tarmoq darajasida cheklash veb-server
+// konfiguratsiyasi (nginx allow/deny) orqali qilinadi.
+Route::get('/tv/jadval', [AcademicScheduleController::class, 'tvJadval'])->name('tv.jadval');
+
 // Sababli ariza tekshirish (QR kod orqali, public)
 Route::get('/absence-excuse/verify/{token}', [\App\Http\Controllers\AbsenceExcuseVerificationController::class, 'verify'])->name('absence-excuse.verify');
 Route::get('/absence-excuse/verify/{token}/pdf', [\App\Http\Controllers\AbsenceExcuseVerificationController::class, 'viewPdf'])->name('absence-excuse.verify.pdf');

@@ -2487,34 +2487,6 @@ class AcademicScheduleController extends Controller
         $userId = auth()->id();
         $today = \Carbon\Carbon::today();
 
-        // DIAGNOSTIKA: ba'zi qatorlar saqlanmayapti deb shikoyat bor.
-        // Har bir kelgan qatorni log qilamiz - keyin storage/logs/laravel.log
-        // dan oski_date/test_date qiymatlari va closing_form ko'rinadi.
-        // Tugatilgach o'chiriladi.
-        try {
-            $logRows = [];
-            foreach ($validSchedules as $idx => $s) {
-                $logRows[] = [
-                    'idx' => $idx,
-                    'group' => $s['group_hemis_id'] ?? null,
-                    'subject' => $s['subject_id'] ?? null,
-                    'sem' => $s['semester_code'] ?? null,
-                    'urinish' => $s['urinish'] ?? 1,
-                    'oski_date' => $s['oski_date'] ?? null,
-                    'test_date' => $s['test_date'] ?? null,
-                    'oski_na' => !empty($s['oski_na']),
-                    'test_na' => !empty($s['test_na']),
-                    'closing_form' => $s['closing_form'] ?? '(server lookup)',
-                    'student' => $s['student_hemis_id'] ?? null,
-                ];
-            }
-            \Log::info('[ExamSchedule.store] Received ' . count($logRows) . ' rows by user ' . $userId, [
-                'rows' => $logRows,
-            ]);
-        } catch (\Throwable $e) {
-            // log diagnostikasi xatosi asosiy oqimga ta'sir qilmasin
-        }
-
         // Mavjud yozuvlarni oldindan yuklash (allaqachon saqlangan sanalarni
         // validatsiyadan o'tkazib yuborish uchun). Per-student yozuvlari guruh
         // yozuvi bilan key-da ustma-ust tushmasligi uchun student_hemis_id ham

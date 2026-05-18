@@ -183,8 +183,24 @@
             }
         });
 
+        // Har bir keystroke'da yashirin maydonni yangilab turamiz - bu
+        // foydalanuvchi Save tugmasini bosib forma submit qilganda blur
+        // event'i kech yetsa ham (yoki umuman ishlamasa) qiymat allaqachon
+        // formaga jo'natilishga tayyor turishi uchun.
+        this.display.addEventListener('input', function() {
+            if (self.display.value.trim() !== '') {
+                self._parseManual();
+            } else {
+                self.input.value = '';
+            }
+        });
+
         this.display.addEventListener('blur', function() {
-            if (self.display.value.trim() !== '' && !self.isOpen) {
+            // Qiymat bor bo'lsa har doim parse qilamiz - isOpen ni tekshirib
+            // o'tkazib yuborish bug edi: foydalanuvchi qo'lda sana yozib,
+            // Enter bosmasdan Saqlash tugmasini bossa, blur kalendar hali
+            // ochiq turganda fire bo'lardi va yashirin input bo'sh qolardi.
+            if (self.display.value.trim() !== '') {
                 self._parseManual();
             }
         });

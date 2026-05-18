@@ -259,12 +259,16 @@ class DeanExamRescheduleController extends Controller
             return [];
         }
 
-        $user = $this->currentUser();
-        if (!$user || !method_exists($user, 'deanFaculties')) {
+        // deanFaculties() faqat Teacher modelida — web User'da bu metod
+        // yo'q. Shuning uchun har doim Teacher guard'idan o'qiymiz.
+        // currentUser()->user() web User'ni qaytarib qolsa, deanFaculties
+        // chaqirib bo'lmaydi.
+        $teacher = auth('teacher')->user();
+        if (!$teacher || !method_exists($teacher, 'deanFaculties')) {
             return [];
         }
 
-        $facultyHemisIds = $user->deanFaculties()
+        $facultyHemisIds = $teacher->deanFaculties()
             ->pluck('departments.department_hemis_id')
             ->filter()
             ->unique()

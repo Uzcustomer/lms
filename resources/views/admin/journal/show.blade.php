@@ -1117,26 +1117,26 @@
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">ON %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">1-urinish</span></th>
                                         @if(array_filter($oskiQosh1Map ?? []))
-                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan OSKI">OSKI<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan OSKI">OSKI<br><span class="text-[9px] font-normal">qo'shimcha farmoyish</span></th>
                                         @endif
                                         @if(!empty($ynSubmission12a) || array_filter($oskiAttempt2Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">2-urinish</span></th>
                                         @endif
                                         @if(array_filter($oskiQosh2Map ?? []))
-                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="2-urinish qo'shimcha farmoyish OSKI">OSKI 2<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="2-urinish qo'shimcha farmoyish OSKI">OSKI 2<br><span class="text-[9px] font-normal">qo'shimcha farmoyish</span></th>
                                         @endif
                                         @if(!empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">3-urinish</span></th>
                                         @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) Test bahosi">Test<br><span class="text-[9px] font-normal">1-urinish</span></th>
                                         @if(array_filter($testQosh1Map ?? []))
-                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan Test">Test<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan Test">Test<br><span class="text-[9px] font-normal">qo'shimcha farmoyish</span></th>
                                         @endif
                                         @if(!empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">2-urinish</span></th>
                                         @endif
                                         @if(array_filter($testQosh2Map ?? []))
-                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="2-urinish qo'shimcha farmoyish Test">Test 2<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="2-urinish qo'shimcha farmoyish Test">Test 2<br><span class="text-[9px] font-normal">qo'shimcha farmoyish</span></th>
                                         @endif
                                         @if(!empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">3-urinish</span></th>
@@ -1543,26 +1543,26 @@
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 40px;">ON %</th>
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">1-urinish</span></th>
                                         @if(array_filter($oskiQosh1Map ?? []))
-                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan OSKI">OSKI<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan OSKI">OSKI<br><span class="text-[9px] font-normal">qo'shimcha farmoyish</span></th>
                                         @endif
                                         @if(!empty($ynSubmission12a) || array_filter($oskiAttempt2Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">2-urinish</span></th>
                                         @endif
                                         @if(array_filter($oskiQosh2Map ?? []))
-                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="2-urinish qo'shimcha farmoyish OSKI">OSKI 2<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="2-urinish qo'shimcha farmoyish OSKI">OSKI 2<br><span class="text-[9px] font-normal">qo'shimcha farmoyish</span></th>
                                         @endif
                                         @if(!empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">3-urinish</span></th>
                                         @endif
                                         <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) Test bahosi">Test<br><span class="text-[9px] font-normal">1-urinish</span></th>
                                         @if(array_filter($testQosh1Map ?? []))
-                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan Test">Test<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan Test">Test<br><span class="text-[9px] font-normal">qo'shimcha farmoyish</span></th>
                                         @endif
                                         @if(!empty($ynSubmission12a) || array_filter($testAttempt2Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 50px;" title="2-urinish (12a-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">2-urinish</span></th>
                                         @endif
                                         @if(array_filter($testQosh2Map ?? []))
-                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="2-urinish qo'shimcha farmoyish Test">Test 2<br><span class="text-[9px] font-normal">qo'shimcha</span></th>
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 60px;" title="2-urinish qo'shimcha farmoyish Test">Test 2<br><span class="text-[9px] font-normal">qo'shimcha farmoyish</span></th>
                                         @endif
                                         @if(!empty($ynSubmission12b) || array_filter($testAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) Test bahosi">Test<br><span class="text-[9px] font-normal">3-urinish</span></th>

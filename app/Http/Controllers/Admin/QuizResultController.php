@@ -2012,10 +2012,17 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            // Dublikat tekshirish
-            $key = $result->student_id . '_' . $result->fan_id;
+            // Dublikat tekshirish (training_type ham hisobga olinadi — bir talaba
+            // bir fandan OSKI va Test ikkalasini ham topshirgan bo'lishi mumkin)
+            $dedupTypeHint = '';
+            if (in_array($result->quiz_type, ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'])) {
+                $dedupTypeHint = 'oski';
+            } elseif (in_array($result->quiz_type, ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'])) {
+                $dedupTypeHint = 'test';
+            }
+            $key = $result->student_id . '_' . $result->fan_id . '_' . $dedupTypeHint;
             if (isset($duplicateTracker[$key])) {
-                $rowInfo['error'] = "Dublikat: bu talaba+fan juftligi takrorlangan";
+                $rowInfo['error'] = "Dublikat: bu talaba+fan+tur juftligi takrorlangan";
                 $errors[] = $rowInfo;
                 continue;
             }

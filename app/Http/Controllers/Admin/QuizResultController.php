@@ -2812,8 +2812,9 @@ class QuizResultController extends Controller
                 }
             }
 
-            // Mavjud baholarni topish (semestr ham filterda)
-            $existingGrades = StudentGrade::where('student_hemis_id', $student->hemis_id)
+            // Mavjud baholarni topish (soft-deleted ham — orphan tozalash uchun)
+            $existingGrades = StudentGrade::withTrashed()
+                ->where('student_hemis_id', $student->hemis_id)
                 ->where('subject_id', $targetSubjectId)
                 ->where('training_type_code', $trainingTypeCode)
                 ->where('semester_code', $student->semester_code)
@@ -2835,6 +2836,7 @@ class QuizResultController extends Controller
                     'existing_reason' => $eg->reason,
                     'existing_date' => $eg->lesson_date ? \Carbon\Carbon::parse($eg->lesson_date)->format('d.m.Y') : '',
                     'quiz_result_id_ref' => $eg->quiz_result_id,
+                    'is_deleted' => !is_null($eg->deleted_at),
                 ];
             }
         }
@@ -2859,10 +2861,17 @@ class QuizResultController extends Controller
         if ($request->filled('student_grade_ids')) {
             // Har bir qatorni alohida o'chirish — LogsActivity (deleted hook)
             // audit log yozishi uchun. Mass delete model eventlarini chetlab o'tadi.
-            $grades = StudentGrade::whereIn('id', $request->student_grade_ids)->get();
+            // Soft-deleted qatorlar uchun forceDelete (DB dan butunlay olib tashlash).
+            $grades = StudentGrade::withTrashed()
+                ->whereIn('id', $request->student_grade_ids)
+                ->get();
             $deleted = 0;
             foreach ($grades as $grade) {
-                $grade->delete();
+                if ($grade->trashed()) {
+                    $grade->forceDelete();
+                } else {
+                    $grade->delete();
+                }
                 $deleted++;
             }
             return response()->json([
@@ -2876,12 +2885,16 @@ class QuizResultController extends Controller
             return response()->json(['success' => false, 'message' => 'ID kerak'], 400);
         }
 
-        $grade = StudentGrade::find($request->student_grade_id);
+        $grade = StudentGrade::withTrashed()->find($request->student_grade_id);
         if (!$grade) {
             return response()->json(['success' => false, 'message' => 'Baho topilmadi'], 404);
         }
 
-        $grade->delete();
+        if ($grade->trashed()) {
+            $grade->forceDelete();
+        } else {
+            $grade->delete();
+        }
 
         return response()->json(['success' => true, 'message' => 'Baho o\'chirildi']);
     }

@@ -6162,68 +6162,8 @@ class AcademicScheduleController extends Controller
                     return (int) ($needsByKey[$needsKeyBase . '|' . $att] ?? 0);
                 };
 
-                // 1-urinish — har doim
-                $row1 = $item;
-                $row1['urinish'] = 1;
-                $row1['oski_date_for_urinish'] = $item['oski_date'] ?? null;
-                $row1['test_date_for_urinish'] = $item['test_date'] ?? null;
-                $row1['oski_na_for_urinish'] = $item['oski_na'] ?? false;
-                $row1['test_na_for_urinish'] = $item['test_na'] ?? false;
-                $row1['student_count'] = $countFor(1);
-                // View 1-urinish qatori ostida yiqilgan talabalarni ko'rsatadi
-                // (stuUrinish=2/3 badge bilan), LEKIN agar guruh sathida resit
-                // sanasi saqlanib alohida 2/3-urinish qator chiqsa, o'sha talabalar
-                // ikki marta render qilinmasligi uchun ushbu bayroqlarni uzatamiz.
-                $row1['has_group_resit'] = !empty($item['oski_resit_date']) || !empty($item['test_resit_date']);
-                $row1['has_group_resit2'] = !empty($item['oski_resit2_date']) || !empty($item['test_resit2_date']);
-
-                // 2-urinish ko'rinish qoidasi:
-                //  Faqat guruh sathida resit sanasi saqlangan bo'lsa qator chiqadi.
-                //  Yiqilgan talabalar bo'lganda avtomatik qator yaratilmaydi —
-                //  ular 1-urinish qatori ostida ("Talabani ko'rsatish" yoqilganda)
-                //  shaxsiy "2-urinish" badge bilan ko'rinadi va har biriga individual
-                //  qayta topshirish sanasi qo'yiladi. Bu user qaror — guruh sathida
-                //  emas, har talabaga alohida 2-urinish sanasi belgilanadi.
-                $has2Data = !empty($item['oski_resit_date']) || !empty($item['test_resit_date']);
-                $show2 = $has2Data;
-
-                $row2 = null;
-                if ($show2) {
-                    $row2 = $item;
-                    $row2['urinish'] = 2;
-                    $row2['oski_date_for_urinish'] = $item['oski_resit_date'] ?? null;
-                    $row2['test_date_for_urinish'] = $item['test_resit_date'] ?? null;
-                    $row2['oski_na_for_urinish'] = false;
-                    $row2['test_na_for_urinish'] = false;
-                    $row2['student_count'] = $countFor(2);
-                }
-
-                // 3-urinish — xuddi shu mantiq, attempt=2 dan o'tmaganlar uchun
-                // Faqat guruh sathida resit2 sanasi saqlangan bo'lsa qator chiqadi.
-                // Aks holda yiqilganlar 1-urinish qatori ostida shaxsiy badge bilan ko'rinadi.
-                $has3Data = !empty($item['oski_resit2_date']) || !empty($item['test_resit2_date']);
-                $show3 = $has3Data;
-
-                $row3 = null;
-                if ($show3) {
-                    $row3 = $item;
-                    $row3['urinish'] = 3;
-                    $row3['oski_date_for_urinish'] = $item['oski_resit2_date'] ?? null;
-                    $row3['test_date_for_urinish'] = $item['test_resit2_date'] ?? null;
-                    $row3['oski_na_for_urinish'] = false;
-                    $row3['test_na_for_urinish'] = false;
-                    $row3['student_count'] = $countFor(3);
-                }
-
-                // Filter qo'llash
-                //  - 1-urinish qator HAR DOIM ko'rsatiladi (urinish=2/3 filterda ham),
-                //    chunki yiqilgan talabalar shu qator ostida shaxsiy "2-urinish"
-                //    badge bilan ko'rinadi. View talabalarni filterga moslab tanlaydi.
-                //  - 2/3-urinish qatorlari faqat guruh sathida resit sanalari saqlangan
-                //    bo'lsa chiqadi (yuqorida $show2/$show3 hisoblangan).
-                //  - urinish=2 filteri qo'yilganda — yiqilganlari yo'q guruh+fanlarni
-                //    chiqaramiz, jadval keraksiz to'lib ketmasligi uchun.
-                $rowsToAdd = [];
+                // Yiqilgan talabalar borligini avval aniqlaymiz - row2/row3
+                // ko'rinishi va row1 tagidagi badge mantiqi shularga tayanadi.
                 $hasFailed1 = false;
                 $hasFailed2 = false;
                 if (is_array($studentsAttachedList)) {
@@ -6238,9 +6178,66 @@ class AcademicScheduleController extends Controller
                     $hasFailed2 = isset($needsByKey[$needsKeyBase . '|3']) || isset($attemptExistsByKey[$needsKeyBase . '|3']);
                 }
 
+                // 1-urinish — har doim
+                $row1 = $item;
+                $row1['urinish'] = 1;
+                $row1['oski_date_for_urinish'] = $item['oski_date'] ?? null;
+                $row1['test_date_for_urinish'] = $item['test_date'] ?? null;
+                $row1['oski_na_for_urinish'] = $item['oski_na'] ?? false;
+                $row1['test_na_for_urinish'] = $item['test_na'] ?? false;
+                $row1['student_count'] = $countFor(1);
+
+                // 2-urinish ko'rinish qoidasi:
+                //  - guruh sathida resit sanasi saqlangan, YOKI
+                //  - guruhda 1-urinishdan yiqilgan (failed_attempt1) talaba bor.
+                //  Shu qatorga guruh sathida 2-urinish sana/vaqti qo'yiladi va
+                //  per-student qator ostida har talabaga alohida sana qo'yish ham
+                //  mumkin. Row1 ostida yiqilganlar dublikat bo'lmasligi uchun
+                //  view ushbu qator chiqsa, ularni row1 dan chiqarib tashlaydi.
+                $has2Data = !empty($item['oski_resit_date']) || !empty($item['test_resit_date']);
+                $show2 = $has2Data || $hasFailed1;
+
+                $row2 = null;
+                if ($show2) {
+                    $row2 = $item;
+                    $row2['urinish'] = 2;
+                    $row2['oski_date_for_urinish'] = $item['oski_resit_date'] ?? null;
+                    $row2['test_date_for_urinish'] = $item['test_resit_date'] ?? null;
+                    $row2['oski_na_for_urinish'] = false;
+                    $row2['test_na_for_urinish'] = false;
+                    $row2['student_count'] = $countFor(2);
+                }
+
+                // 3-urinish — guruh sathida resit2 sanasi saqlangan YOKI
+                // 12a dan yiqilgan (failed_attempt2) talaba bor bo'lsa chiqadi.
+                $has3Data = !empty($item['oski_resit2_date']) || !empty($item['test_resit2_date']);
+                $show3 = $has3Data || $hasFailed2;
+
+                $row3 = null;
+                if ($show3) {
+                    $row3 = $item;
+                    $row3['urinish'] = 3;
+                    $row3['oski_date_for_urinish'] = $item['oski_resit2_date'] ?? null;
+                    $row3['test_date_for_urinish'] = $item['test_resit2_date'] ?? null;
+                    $row3['oski_na_for_urinish'] = false;
+                    $row3['test_na_for_urinish'] = false;
+                    $row3['student_count'] = $countFor(3);
+                }
+
+                // View row1 ostida yiqilgan talabalarni dublikat qilib
+                // ko'rsatmasligi uchun row2/row3 ko'rinishini bildiramiz.
+                $row1['has_group_resit'] = $show2;
+                $row1['has_group_resit2'] = $show3;
+
+                // Filter qo'llash
+                //  - 1-urinish qator HAR DOIM ko'rsatiladi (urinish=2/3 filterda ham),
+                //    chunki yiqilganlar bo'lmaganda row2/row3 chiqmaydi va talabalar
+                //    boshqacha joyda ko'rinmasligi mumkin. urinish=2/3 filterida esa
+                //    guruh+fan qatorlari faqat tegishli yiqilganlar bo'lsa qoldiriladi
+                //    (jadval keraksiz to'lib ketmasligi uchun).
+                $rowsToAdd = [];
                 $includeRow1 = true;
                 if ($urinishFilter === '2') {
-                    // Faqat yiqilgan talabalari (yoki resit data) bor guruh+fanlarni qoldiramiz
                     $includeRow1 = $hasFailed1 || $show2;
                 } elseif ($urinishFilter === '3') {
                     $includeRow1 = $hasFailed2 || $show3;

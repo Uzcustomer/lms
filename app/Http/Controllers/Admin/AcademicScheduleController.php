@@ -6197,7 +6197,7 @@ class AcademicScheduleController extends Controller
      *     closing_form ga qarab tegishli imtihon turi (OSKI yoki Test) uchun
      *     baho yo'qligi tekshiriladi.
      */
-    private function computeFailedHemisIdsByKey(array $groupHemisIds, $scheduleData = null): array
+    private function computeFailedHemisIdsByKey(array $groupHemisIds, $scheduleData = null, array $subjectIds = [], array $semesterCodes = []): array
     {
         $result = [];
         if (empty($groupHemisIds)) return $result;
@@ -6210,6 +6210,8 @@ class AcademicScheduleController extends Controller
                 $rows = DB::table('student_grades as sg')
                     ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
                     ->whereIn('st.group_id', $groupHemisIds)
+                    ->when(!empty($subjectIds), fn($q) => $q->whereIn('sg.subject_id', $subjectIds))
+                    ->when(!empty($semesterCodes), fn($q) => $q->whereIn('sg.semester_code', $semesterCodes))
                     ->whereNull('sg.deleted_at')
                     ->whereIn('sg.training_type_code', [101, 102])
                     ->where(function ($q) {
@@ -6245,6 +6247,8 @@ class AcademicScheduleController extends Controller
                     $rows = DB::table('student_grades as sg')
                         ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
                         ->whereIn('st.group_id', $groupHemisIds)
+                        ->when(!empty($subjectIds), fn($q) => $q->whereIn('sg.subject_id', $subjectIds))
+                        ->when(!empty($semesterCodes), fn($q) => $q->whereIn('sg.semester_code', $semesterCodes))
                         ->whereNull('sg.deleted_at')
                         ->whereIn('sg.training_type_code', [101, 102])
                         ->where('sg.attempt', $att)
@@ -6263,6 +6267,8 @@ class AcademicScheduleController extends Controller
                 $rows2 = DB::table('exam_schedules as es')
                     ->join('students as st', 'st.hemis_id', '=', 'es.student_hemis_id')
                     ->whereIn('st.group_id', $groupHemisIds)
+                    ->when(!empty($subjectIds), fn($q) => $q->whereIn('es.subject_id', $subjectIds))
+                    ->when(!empty($semesterCodes), fn($q) => $q->whereIn('es.semester_code', $semesterCodes))
                     ->whereNotNull('es.student_hemis_id')
                     ->where(function ($q) {
                         $q->whereNotNull('es.oski_resit_date')->orWhereNotNull('es.test_resit_date');
@@ -6277,6 +6283,8 @@ class AcademicScheduleController extends Controller
                 $rows3 = DB::table('exam_schedules as es')
                     ->join('students as st', 'st.hemis_id', '=', 'es.student_hemis_id')
                     ->whereIn('st.group_id', $groupHemisIds)
+                    ->when(!empty($subjectIds), fn($q) => $q->whereIn('es.subject_id', $subjectIds))
+                    ->when(!empty($semesterCodes), fn($q) => $q->whereIn('es.semester_code', $semesterCodes))
                     ->whereNotNull('es.student_hemis_id')
                     ->where(function ($q) {
                         $q->whereNotNull('es.oski_resit2_date')->orWhereNotNull('es.test_resit2_date');
@@ -6298,7 +6306,7 @@ class AcademicScheduleController extends Controller
             // Imtihon sanasi o'tgan lekin qatnashmaganlar (NB) ham yiqilgan deb hisoblanadi.
             // Bu jurnal sahifasidagi V<60 (V=-1 "kelmadi") mantig'iga mos keladi.
             if ($scheduleData !== null) {
-                $this->addMissedExamFailures($result, $groupHemisIds, $scheduleData);
+                $this->addMissedExamFailures($result, $groupHemisIds, $scheduleData, $subjectIds, $semesterCodes);
             }
         } catch (\Throwable $e) {
             \Log::warning('computeFailedHemisIdsByKey failed: ' . $e->getMessage());
@@ -6312,7 +6320,7 @@ class AcademicScheduleController extends Controller
      * sifatida qo'shadi. closing_form ga qarab OSKI yoki Test bahosi talab
      * qilinishi tekshiriladi.
      */
-    private function addMissedExamFailures(array &$result, array $groupHemisIds, $scheduleData): void
+    private function addMissedExamFailures(array &$result, array $groupHemisIds, $scheduleData, array $subjectIds = [], array $semesterCodes = []): void
     {
         try {
             $today = now()->format('Y-m-d');
@@ -6324,10 +6332,12 @@ class AcademicScheduleController extends Controller
             $passedOski = []; // 'group|subject|sem' => [hemis_id => true]
             $passedTest = [];
 
-            $passQuery = function (int $trainingTypeCode) use ($groupHemisIds, $hasAttemptCol) {
+            $passQuery = function (int $trainingTypeCode) use ($groupHemisIds, $subjectIds, $semesterCodes, $hasAttemptCol) {
                 return DB::table('student_grades as sg')
                     ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
                     ->whereIn('st.group_id', $groupHemisIds)
+                    ->when(!empty($subjectIds), fn($q) => $q->whereIn('sg.subject_id', $subjectIds))
+                    ->when(!empty($semesterCodes), fn($q) => $q->whereIn('sg.semester_code', $semesterCodes))
                     ->whereNull('sg.deleted_at')
                     ->where('sg.training_type_code', $trainingTypeCode)
                     ->whereRaw('COALESCE(sg.retake_grade, sg.grade) >= 60')
@@ -6455,16 +6465,34 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        $maps = $this->computeAttemptNeedsMap();
-        $needsByKey = $maps['needs'];
-        $attemptExistsByKey = $maps['exists'];
+        // Sahifadagi guruh/fan/semestrlarni yig'amiz - so'rovlarni shularga
+        // scope qilamiz (bog'lanishsiz to'liq jadval scan'idan qochish uchun).
+        $allSubjectIds = [];
+        $allSemCodes = [];
+        foreach ($scheduleData as $items) {
+            foreach ($items as $item) {
+                $sid = $item['subject']->subject_id ?? null;
+                $sem = $item['subject']->semester_code ?? null;
+                if ($sid) $allSubjectIds[$sid] = true;
+                if ($sem) $allSemCodes[$sem] = true;
+            }
+        }
+        $allSubjectIds = array_keys($allSubjectIds);
+        $allSemCodes = array_keys($allSemCodes);
+
+        // computeAttemptNeedsMap() oldin chaqirilardi (8 ta unfiltered SQL so'rov),
+        // lekin uning natijasini failedHemisIdsByKey qamrab oladi va aniqroq.
+        // Performance uchun shu yerda chaqirmaymiz - showStudents=false uchun
+        // failedHemisIdsByKey dan foydalanamiz.
+        $needsByKey = [];
+        $attemptExistsByKey = [];
 
         // Tooltip uchun yiqilgan talabalar hemis_id ro'yxati (group|subject|sem|attempt).
         // attachStudentsToSchedule yuklanmagan bo'lsa (showStudents=false), shu xarita
         // 2/3-urinish badge hover'da kim yiqilganini ko'rsatish uchun ishlatiladi.
-        // scheduleData uzatamiz - closing_form va imtihon sanalariga qarab
-        // qatnashmagan talabalarni ham yiqilgan sifatida belgilash uchun.
-        $failedHemisIdsByKey = $this->computeFailedHemisIdsByKey($allGroupHemisIds, $scheduleData);
+        // scheduleData/subject/sem uzatamiz - so'rovlar scope qilingan bo'ladi va
+        // qatnashmagan talabalar ham hisobga olinadi.
+        $failedHemisIdsByKey = $this->computeFailedHemisIdsByKey($allGroupHemisIds, $scheduleData, $allSubjectIds, $allSemCodes);
 
         return $scheduleData->map(function ($items) use ($urinishFilter, $needsByKey, $attemptExistsByKey, $groupSizes, $studentNamesByGroup, $failedHemisIdsByKey) {
             $expanded = collect();

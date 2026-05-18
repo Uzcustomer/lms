@@ -2046,7 +2046,13 @@ class QuizResultController extends Controller
                     'deadline' => now(),
                     'quiz_result_id' => $result->id,
                     'is_final' => true,
+                    'attempt' => 1, // Diagnostikadan yuklangan baholar har doim 1-urinish
                 ]);
+
+                // DB darajasida ham aniq attempt=1 — agar boshqa joyda update qilinsa, oldi olinadi
+                if ($created && $created->exists) {
+                    DB::table('student_grades')->where('id', $created->id)->update(['attempt' => 1]);
+                }
 
                 if (!$created || !$created->exists || !$created->id) {
                     throw new \RuntimeException('StudentGrade saqlanmadi');

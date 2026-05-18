@@ -2067,7 +2067,23 @@ class QuizResultController extends Controller
                     'quiz_result_id' => $result->id,
                     'attempt' => self::parseAttemptFromShakl($result->shakl, $result->attempt_number),
                     'is_final' => true,
+                    'attempt' => 1, // Diagnostikadan yuklangan baholar har doim 1-urinish
                 ]);
+
+                // "1-urinish (qo'shimcha farmoyishi borlar uchun)" yuklanganda — bu sababli
+                // kelolmagan talaba uchun. Agar talabaga 2-urinish (attempt=2) avtomatik
+                // belgilangan bo'lsa, uni o'chiramiz — chunki u 2-urinishga o'tkazilmasligi kerak.
+                $hasQoshimcha = preg_match('/\(.*qo\'?shimcha.*\)/iu', $shaklRaw)
+                    || mb_stripos($shaklRaw, 'farmoyish') !== false;
+                if ($hasQoshimcha) {
+                    DB::table('student_grades')
+                        ->where('student_hemis_id', $student->hemis_id)
+                        ->where('subject_id', $subject->subject_id)
+                        ->where('training_type_code', $trainingTypeCode)
+                        ->where('semester_code', $semester->code ?? $student->semester_code)
+                        ->where('attempt', 2)
+                        ->delete();
+                }
 
                 if (!$created || !$created->exists || !$created->id) {
                     throw new \RuntimeException('StudentGrade saqlanmadi');

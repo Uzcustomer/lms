@@ -112,14 +112,30 @@ class DeanExamRescheduleController extends Controller
         }
 
         $user = $this->currentUser();
-        $result = $service->reschedule(
-            (int) $user->id,
-            $schedule,
-            $data['yn_type'],
-            $data['new_time'],
-            $data['reason'] ?? null,
-            (bool) ($data['force'] ?? false),
-        );
+
+        try {
+            $result = $service->reschedule(
+                (int) $user->id,
+                $schedule,
+                $data['yn_type'],
+                $data['new_time'],
+                $data['reason'] ?? null,
+                (bool) ($data['force'] ?? false),
+            );
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('dean-reschedule store error', [
+                'exam_schedule_id' => $schedule->id,
+                'yn_type' => $data['yn_type'],
+                'new_time' => $data['new_time'],
+                'user_id' => $user->id ?? null,
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+            return response()->json([
+                'ok' => false,
+                'error' => 'Saqlashda ichki xatolik: ' . $e->getMessage(),
+            ], 500);
+        }
 
         $status = $result['ok'] ? 200 : 422;
 

@@ -12,15 +12,15 @@ use App\Services\DeanExamRescheduleService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 /**
  * Dekanat — kech qolgan guruhning YN vaqtini SHU KUN ichida boshqa vaqtga
  * o'tkazish sahifasi va endpointlari (guruh sathida — butun guruh birga
  * ko'chiriladi).
  *
- * Test markazi rolida "edit today" toggle o'chiq bo'lganda ham dekanatga
- * alohida ruxsat (bir guruhga kunlik 1 marta).
+ * Slot ro'yxati — barcha ish vaqtlari (tushlikdan tashqari). Sig'im
+ * yetmasa slot ogohlantirish bilan ko'rsatiladi, dekanat ataylab tanlashi
+ * mumkin (force=true).
  */
 class DeanExamRescheduleController extends Controller
 {
@@ -36,9 +36,8 @@ class DeanExamRescheduleController extends Controller
         $this->ensureAccess();
 
         $date = $this->resolveDate($request);
-        $rows = $this->todaysGroupExams($date, $service);
+        $rows = $this->todaysGroupExams($date);
 
-        // (exam_schedule_id, yn_type) larni "bugun ishlatilgan" bilan belgilash
         $usedKeys = DeanExamReschedule::whereDate('used_date', $date->toDateString())
             ->get(['exam_schedule_id', 'yn_type'])
             ->map(fn ($r) => $r->exam_schedule_id . '|' . $r->yn_type)
@@ -62,10 +61,19 @@ class DeanExamRescheduleController extends Controller
         $date = $this->resolveDate($request);
         $requiredFree = max(1, (int) $request->input('required_free', 1));
 
-        // Service exam_schedules ga tegmaganligi uchun guruhning o'z
-        // hissasini hisobdan chiqarish shart emas — joriy vaqtda u haligacha
-        // eski vaqtda turibdi va yangi vaqtda yo'q.
-        $slots = $service->availableSlots($date->toDateString(), now(), $requiredFree);
+        // Guruhning o'z hissasini istisno qilish — yangi vaqtda o'ziga
+        // qarshi sanalmasin.
+        $exclude = null;
+        $scheduleId = $request->input('exam_schedule_id');
+        $ynType = strtolower((string) $request->input('yn_type', ''));
+        if ($scheduleId && in_array($ynType, ['oski', 'test'], true)) {
+            $schedule = ExamSchedule::find((int) $scheduleId);
+            if ($schedule && $this->canTouchSchedule($schedule)) {
+                $exclude = $service->excludeKeyFor($schedule, $ynType);
+            }
+        }
+
+        $slots = $service->availableSlots($date->toDateString(), now(), $requiredFree, $exclude);
 
         return response()->json([
             'date' => $date->toDateString(),
@@ -82,6 +90,7 @@ class DeanExamRescheduleController extends Controller
             'yn_type' => ['required', 'in:oski,test'],
             'new_time' => ['required', 'regex:/^\d{2}:\d{2}$/'],
             'reason' => ['nullable', 'string', 'max:1000'],
+            'force' => ['nullable', 'boolean'],
         ]);
 
         $schedule = ExamSchedule::findOrFail($data['exam_schedule_id']);
@@ -93,7 +102,6 @@ class DeanExamRescheduleController extends Controller
             ], 403);
         }
 
-        // Faqat bugungi imtihonni ko'chirish
         $dateField = $data['yn_type'] . '_date';
         $scheduleDate = $schedule->{$dateField}?->format('Y-m-d');
         if ($scheduleDate !== Carbon::today()->toDateString()) {
@@ -110,6 +118,7 @@ class DeanExamRescheduleController extends Controller
             $data['yn_type'],
             $data['new_time'],
             $data['reason'] ?? null,
+            (bool) ($data['force'] ?? false),
         );
 
         $status = $result['ok'] ? 200 : 422;
@@ -159,14 +168,11 @@ class DeanExamRescheduleController extends Controller
     /**
      * Berilgan kun uchun dekanat fakulteti doirasidagi (yoki admin uchun
      * barchasi) ExamSchedule qatorlarini har bir YN turi bo'yicha alohida
-     * satr sifatida qaytaradi. Har qatorda:
-     *   - student_count: guruhdagi jami talabalar
-     *   - submitted_count: status finished/abandoned (topshirdi yoki ketdi)
-     *   - pending_count: status scheduled (qoldi — ko'chirilishi mumkin)
+     * satr sifatida qaytaradi.
      *
      * @return \Illuminate\Support\Collection<int, object>
      */
-    private function todaysGroupExams(Carbon $date, DeanExamRescheduleService $service)
+    private function todaysGroupExams(Carbon $date)
     {
         $dateStr = $date->toDateString();
         $groupIds = $this->scopedGroupHemisIds();
@@ -190,7 +196,6 @@ class DeanExamRescheduleController extends Controller
 
         $schedules = $query->get();
 
-        // Guruh nomlari va talabalar soni
         $allGroupIds = $schedules->pluck('group_hemis_id')->unique()->all();
         $groups = Group::whereIn('group_hemis_id', $allGroupIds)
             ->pluck('name', 'group_hemis_id');
@@ -199,22 +204,6 @@ class DeanExamRescheduleController extends Controller
             ->selectRaw('group_id, COUNT(*) as cnt')
             ->groupBy('group_id')
             ->pluck('cnt', 'group_id');
-
-        // Status bo'yicha hisoblar — bir batch DB so'rovida.
-        $scheduleIds = $schedules->pluck('id')->all();
-        $statusCounts = [];
-        if (!empty($scheduleIds)) {
-            $rows = DB::table('computer_assignments')
-                ->whereIn('exam_schedule_id', $scheduleIds)
-                ->whereDate('planned_start', $dateStr)
-                ->groupBy('exam_schedule_id', 'yn_type', 'status')
-                ->selectRaw('exam_schedule_id, yn_type, status, COUNT(*) as cnt')
-                ->get();
-            foreach ($rows as $r) {
-                $key = $r->exam_schedule_id . '|' . strtolower((string) $r->yn_type);
-                $statusCounts[$key][$r->status] = (int) $r->cnt;
-            }
-        }
 
         $rows = collect();
         foreach ($schedules as $s) {
@@ -231,12 +220,6 @@ class DeanExamRescheduleController extends Controller
                     continue;
                 }
 
-                $key = $s->id . '|' . $yn;
-                $sc = $statusCounts[$key] ?? [];
-                $submitted = ($sc['finished'] ?? 0) + ($sc['abandoned'] ?? 0);
-                $pending = $sc['scheduled'] ?? 0;
-                $inProgress = $sc['in_progress'] ?? 0;
-
                 $rows->push((object) [
                     'exam_schedule_id' => $s->id,
                     'yn_type' => $yn,
@@ -246,9 +229,6 @@ class DeanExamRescheduleController extends Controller
                     'subject_name' => $s->subject_name,
                     'subject_id' => $s->subject_id,
                     'student_count' => (int) ($studentCounts[$s->group_hemis_id] ?? 0),
-                    'submitted_count' => $submitted,
-                    'in_progress_count' => $inProgress,
-                    'pending_count' => $pending,
                 ]);
             }
         }
@@ -262,14 +242,11 @@ class DeanExamRescheduleController extends Controller
     {
         $groupIds = $this->scopedGroupHemisIds();
         if ($groupIds === null) {
-            return true; // admin
+            return true;
         }
         return in_array($schedule->group_hemis_id, $groupIds, true);
     }
 
-    /**
-     * Dekanat ko'ra oladigan guruh hemis_id lari, yoki null (admin — barchasi).
-     */
     private function scopedGroupHemisIds(): ?array
     {
         $role = $this->activeRole();

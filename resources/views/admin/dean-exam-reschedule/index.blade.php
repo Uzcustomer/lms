@@ -15,7 +15,7 @@
                     </span>
                     <span style="color:#64748b;font-size:13px;">
                         Guruh kech qolsa, fakultet dekani guruhning butun YN vaqtini SHU KUN ichida boshqa
-                        bo'sh slotga o'tkaza oladi. Har guruhga kunlik <strong>1 marta</strong>.
+                        vaqtga o'tkaza oladi. Har guruhga kunlik <strong>1 marta</strong>.
                     </span>
                 </div>
 
@@ -31,7 +31,10 @@
                         Ko'rsatish
                     </button>
                     <div style="margin-left:auto;color:#64748b;font-size:13px;">
-                        Bo'sh slotlar: <strong style="color:#0f172a;">{{ count($availableSlots) }}</strong>
+                        Slotlar jami: <strong style="color:#0f172a;">{{ count($availableSlots) }}</strong>
+                        @php $enoughCount = collect($availableSlots)->where('enough', true)->count(); @endphp
+                        <span style="color:#94a3b8;">·</span>
+                        kamida 1 bo'shi bor: <strong style="color:#0f172a;">{{ $enoughCount }}</strong>
                     </div>
                 </form>
 
@@ -45,7 +48,6 @@
                                 <th style="text-align:left;padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;">Guruh</th>
                                 <th style="text-align:left;padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;">Fan</th>
                                 <th style="text-align:right;padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;">Talabalar</th>
-                                <th style="text-align:left;padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;">Topshirdi / Qoldi</th>
                                 <th style="text-align:left;padding:10px 12px;border-bottom:1px solid #e2e8f0;font-weight:600;">Amal</th>
                             </tr>
                         </thead>
@@ -54,7 +56,6 @@
                                 @php
                                     $key = $r->exam_schedule_id . '|' . $r->yn_type;
                                     $alreadyUsed = isset($usedSet[$key]);
-                                    $canMove = !$alreadyUsed && $r->pending_count > 0;
                                 @endphp
                                 <tr style="border-bottom:1px solid #f1f5f9;">
                                     <td style="padding:9px 12px;color:#64748b;">{{ $i + 1 }}</td>
@@ -76,43 +77,23 @@
                                         {{ $r->subject_name ?? '—' }}
                                     </td>
                                     <td style="padding:9px 12px;text-align:right;color:#0f172a;">{{ $r->student_count }}</td>
-                                    <td style="padding:9px 12px;white-space:nowrap;">
-                                        <span style="font-size:11px;padding:2px 7px;border-radius:6px;background:#dcfce7;color:#166534;font-weight:600;">
-                                            Topshirdi: {{ $r->submitted_count }}
-                                        </span>
-                                        <span style="font-size:11px;padding:2px 7px;border-radius:6px;margin-left:4px;
-                                            background:{{ $r->pending_count > 0 ? '#fef3c7' : '#f1f5f9' }};
-                                            color:{{ $r->pending_count > 0 ? '#92400e' : '#64748b' }};
-                                            font-weight:600;">
-                                            Qoldi: {{ $r->pending_count }}
-                                        </span>
-                                        @if($r->in_progress_count > 0)
-                                            <span style="font-size:11px;padding:2px 7px;border-radius:6px;margin-left:4px;background:#dbeafe;color:#1e40af;font-weight:600;">
-                                                Topshirmoqda: {{ $r->in_progress_count }}
-                                            </span>
-                                        @endif
-                                    </td>
                                     <td style="padding:9px 12px;">
                                         @if($alreadyUsed)
                                             <span style="font-size:11px;padding:3px 8px;border-radius:6px;background:#f1f5f9;color:#64748b;">
                                                 Bugun foydalanilgan
                                             </span>
-                                        @elseif($r->pending_count < 1)
-                                            <span style="font-size:11px;padding:3px 8px;border-radius:6px;background:#f1f5f9;color:#64748b;" title="Hali ko'chirish kerak bo'lgan talaba yo'q">
-                                                Qoldi yo'q
-                                            </span>
                                         @else
                                             <button type="button"
-                                                    onclick="openReschedule({{ $r->exam_schedule_id }}, '{{ $r->yn_type }}', '{{ addslashes($r->group_name) }}', '{{ $r->current_time }}', {{ $r->pending_count }})"
+                                                    onclick="openReschedule({{ $r->exam_schedule_id }}, '{{ $r->yn_type }}', '{{ addslashes($r->group_name) }}', '{{ $r->current_time }}', {{ $r->student_count }})"
                                                     style="height:30px;background:#1a3268;color:#fff;border:0;border-radius:6px;padding:0 12px;font-size:12px;font-weight:600;cursor:pointer;">
-                                                Qoldi ({{ $r->pending_count }}) ko'chirish
+                                                Vaqtni o'zgartirish
                                             </button>
                                         @endif
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" style="padding:48px 20px;text-align:center;color:#94a3b8;">
+                                    <td colspan="7" style="padding:48px 20px;text-align:center;color:#94a3b8;">
                                         Tanlangan kun uchun fakultetingiz guruhlariga vaqti qo'yilgan imtihon yo'q.
                                     </td>
                                 </tr>
@@ -137,20 +118,27 @@
                     <div id="rmGroup" style="font-size:14px;color:#0f172a;font-weight:600;"></div>
                     <div style="font-size:12px;color:#64748b;margin-top:8px;">Joriy vaqt</div>
                     <div id="rmOrig" style="font-size:14px;color:#0f172a;"></div>
-                    <div style="font-size:12px;color:#64748b;margin-top:8px;">Ko'chiriladi (qoldi)</div>
-                    <div id="rmCount" style="font-size:14px;color:#0f172a;font-weight:600;"></div>
-                    <div style="font-size:11px;color:#64748b;margin-top:4px;">
-                        Faqat hali topshirmagan/kelmaganlar ko'chiriladi. Topshirgan yoki imtihon davom etayotgan talabalar o'z joyida qoladi.
-                    </div>
+                    <div style="font-size:12px;color:#64748b;margin-top:8px;">Talabalar soni</div>
+                    <div id="rmCount" style="font-size:14px;color:#0f172a;"></div>
                 </div>
 
                 <label style="font-size:12px;color:#475569;font-weight:600;display:block;margin-bottom:6px;">
-                    Yangi vaqt (qoldi talabalar soniga yetadigan bo'sh slotlardan)
+                    Yangi vaqt
                 </label>
-                <select id="rmTime" style="width:100%;height:38px;border:1px solid #cbd5e1;border-radius:8px;padding:0 10px;font-size:13px;color:#1e293b;background:#fff;outline:none;">
+                <select id="rmTime" onchange="onSlotChanged()"
+                        style="width:100%;height:38px;border:1px solid #cbd5e1;border-radius:8px;padding:0 10px;font-size:13px;color:#1e293b;background:#fff;outline:none;">
                     <option value="">— yuklanmoqda —</option>
                 </select>
                 <div id="rmSlotInfo" style="margin-top:6px;color:#64748b;font-size:11px;"></div>
+
+                <div id="rmWarning" style="display:none;margin-top:10px;padding:10px 12px;border:1px solid #fed7aa;background:#fff7ed;border-radius:8px;color:#9a3412;font-size:12px;line-height:1.5;">
+                    <strong>Diqqat:</strong> tanlangan slotda yetarli bo'sh kompyuter yo'q.
+                    <span id="rmWarningDetail"></span>
+                    <label style="display:flex;align-items:center;gap:6px;margin-top:8px;cursor:pointer;">
+                        <input type="checkbox" id="rmForce" onchange="updateSubmitState()" style="cursor:pointer;" />
+                        <span>Tasdiqlayman — sig'imdan ortiq bo'lsa ham o'tkazib bering</span>
+                    </label>
+                </div>
 
                 <label style="font-size:12px;color:#475569;font-weight:600;display:block;margin-top:14px;margin-bottom:6px;">Izoh (ixtiyoriy)</label>
                 <textarea id="rmReason" rows="3" placeholder="Masalan: guruh kech qoldi, tushuntirish xati keltirildi..."
@@ -174,19 +162,24 @@
     <script>
         let rmScheduleId = null;
         let rmYnType = null;
+        let rmStudentCount = 0;
+        let rmSlots = [];
         const SLOTS_URL = '{{ route('admin.dean-exam-reschedule.slots') }}';
         const STORE_URL = '{{ route('admin.dean-exam-reschedule.store') }}';
         const PAGE_DATE = '{{ $date }}';
 
-        async function openReschedule(scheduleId, ynType, groupName, currentTime, pendingCount) {
+        async function openReschedule(scheduleId, ynType, groupName, currentTime, studentCount) {
             rmScheduleId = scheduleId;
             rmYnType = ynType;
+            rmStudentCount = studentCount;
             document.getElementById('rmGroup').textContent = groupName || '—';
             document.getElementById('rmOrig').textContent = currentTime || '—';
-            document.getElementById('rmCount').textContent = pendingCount + ' ta talaba';
+            document.getElementById('rmCount').textContent = studentCount + ' ta';
             document.getElementById('rmReason').value = '';
             document.getElementById('rmError').style.display = 'none';
             document.getElementById('rmSlotInfo').textContent = '';
+            document.getElementById('rmWarning').style.display = 'none';
+            document.getElementById('rmForce').checked = false;
 
             const sel = document.getElementById('rmTime');
             sel.innerHTML = '<option value="">— yuklanmoqda —</option>';
@@ -195,22 +188,75 @@
             try {
                 const url = new URL(SLOTS_URL, location.origin);
                 url.searchParams.set('date', PAGE_DATE);
-                url.searchParams.set('required_free', pendingCount);
+                url.searchParams.set('required_free', studentCount);
+                url.searchParams.set('exam_schedule_id', scheduleId);
+                url.searchParams.set('yn_type', ynType);
                 const resp = await fetch(url, { headers: { 'Accept': 'application/json' }});
                 const data = await resp.json();
-                const slots = data.slots || [];
-                if (!slots.length) {
-                    sel.innerHTML = '<option value="">— bo\'sh slot yo\'q —</option>';
+                rmSlots = data.slots || [];
+                if (!rmSlots.length) {
+                    sel.innerHTML = '<option value="">— slot yo\'q —</option>';
                     document.getElementById('rmSlotInfo').textContent =
-                        pendingCount + ' ta talabaga yetadigan bo\'sh slot bugun qolmadi.';
+                        'Bugun uchun bo\'sh slot qolmadi (ish vaqti tugadi).';
                     return;
                 }
-                sel.innerHTML = '<option value="">— tanlang —</option>' + slots.map(s =>
-                    `<option value="${s.time}">${s.time} (${s.free}/${s.capacity} bo'sh)</option>`
-                ).join('');
+                sel.innerHTML = '<option value="">— tanlang —</option>' + rmSlots.map(s => {
+                    const label = `${s.time} (${s.free}/${s.capacity} bo'sh)`;
+                    const suffix = s.enough ? '' : ' ⚠ yetmaydi';
+                    return `<option value="${s.time}" data-enough="${s.enough ? '1' : '0'}" data-free="${s.free}">${label}${suffix}</option>`;
+                }).join('');
+                onSlotChanged();
             } catch (e) {
                 sel.innerHTML = '<option value="">— xatolik —</option>';
                 document.getElementById('rmSlotInfo').textContent = 'Slotlarni yuklab bo\'lmadi: ' + e.message;
+            }
+        }
+
+        function onSlotChanged() {
+            const sel = document.getElementById('rmTime');
+            const opt = sel.options[sel.selectedIndex];
+            const warning = document.getElementById('rmWarning');
+            const detail = document.getElementById('rmWarningDetail');
+            const force = document.getElementById('rmForce');
+
+            if (!opt || !opt.value) {
+                warning.style.display = 'none';
+                force.checked = false;
+                updateSubmitState();
+                return;
+            }
+
+            const enough = opt.dataset.enough === '1';
+            if (enough) {
+                warning.style.display = 'none';
+                force.checked = false;
+            } else {
+                warning.style.display = 'block';
+                const free = parseInt(opt.dataset.free || '0', 10);
+                detail.textContent = ` Kerak: ${rmStudentCount} ta. Bo'sh: ${free} ta.`;
+            }
+            updateSubmitState();
+        }
+
+        function updateSubmitState() {
+            const sel = document.getElementById('rmTime');
+            const opt = sel.options[sel.selectedIndex];
+            const btn = document.getElementById('rmSubmit');
+            const force = document.getElementById('rmForce');
+
+            if (!opt || !opt.value) {
+                btn.disabled = false;
+                return;
+            }
+            const enough = opt.dataset.enough === '1';
+            if (!enough && !force.checked) {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
+            } else {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.style.cursor = 'pointer';
             }
         }
 
@@ -222,13 +268,22 @@
 
         async function submitReschedule() {
             if (!rmScheduleId || !rmYnType) return;
-            const time = document.getElementById('rmTime').value;
+            const sel = document.getElementById('rmTime');
+            const opt = sel.options[sel.selectedIndex];
+            const time = sel.value;
             const reason = document.getElementById('rmReason').value;
+            const force = document.getElementById('rmForce').checked;
             const errBox = document.getElementById('rmError');
             const btn = document.getElementById('rmSubmit');
 
             if (!time) {
                 errBox.textContent = 'Yangi vaqtni tanlang.';
+                errBox.style.display = 'block';
+                return;
+            }
+            const enough = opt && opt.dataset.enough === '1';
+            if (!enough && !force) {
+                errBox.textContent = 'Sig\'im yetarli emas — tasdiqlash katakchasini belgilang.';
                 errBox.style.display = 'block';
                 return;
             }
@@ -250,6 +305,7 @@
                         yn_type: rmYnType,
                         new_time: time,
                         reason: reason || null,
+                        force: force,
                     }),
                 });
                 const data = await resp.json();

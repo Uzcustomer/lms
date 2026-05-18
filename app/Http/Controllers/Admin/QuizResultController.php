@@ -1353,12 +1353,14 @@ class QuizResultController extends Controller
             return ['code' => 'bad_grade', 'text' => 'Baho noto\'g\'ri', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
-        // 5) 1-urinish emas — "N-urinish (qo'shimcha matn)" ham N-urinish deb hisoblanadi
-        $shaklNorm = preg_match('/^\s*(\d+)-urinish/iu', (string) $result->shakl, $um)
-            ? $um[1] . '-urinish'
-            : (string) $result->shakl;
-        if ($shaklNorm && $shaklNorm !== '1-urinish') {
-            return ['code' => 'not_first', 'text' => '1-urinish emas', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+        // 5) Yuklash uchun yaroqsiz urinish — faqat 1-urinish va 2-urinish (qo'shimcha
+        //    matn bilan ham) yuklanadi. 3+ urinish "yaroqsiz" deb belgilanadi.
+        $attemptNumXulosa = 1;
+        if (preg_match('/^\s*(\d+)-urinish/iu', (string) $result->shakl, $um)) {
+            $attemptNumXulosa = (int) $um[1];
+        }
+        if ($result->shakl && !in_array($attemptNumXulosa, [1, 2], true)) {
+            return ['code' => 'not_first', 'text' => '1/2-urinish emas', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
         // 6) Dublikat tekshiruvi (2O / 2T)
@@ -1905,15 +1907,15 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            // Faqat 1-urinish yuklanadi (OSKI/YN test) — qayta yuklashda bu filtr o'tkazib yuboriladi
-            // Shakl "1-urinish (qo'shimcha farmoyishi borlar uchun)" kabi qo'shimcha matn bilan
-            // ham bo'lishi mumkin — birinchi "N-urinish" qismini ajratib olamiz.
+            // 1-urinish va 2-urinish (qo'shimcha bilan ham) yuklanadi. Shakl boshidagi
+            // "N-urinish" raqamiga qarab attempt aniqlanadi.
             $shaklRaw = (string) ($result->shakl ?? '');
-            $normalizedShakl = preg_match('/^\s*(\d+)-urinish/iu', $shaklRaw, $um)
-                ? $um[1] . '-urinish'
-                : $shaklRaw;
-            if (!$request->input('skip_shakl_filter') && $normalizedShakl !== '1-urinish') {
-                $rowInfo['error'] = "Faqat 1-urinish yuklanadi (hozirgi: {$shaklRaw})";
+            $attemptNum = 1;
+            if (preg_match('/^\s*(\d+)-urinish/iu', $shaklRaw, $um)) {
+                $attemptNum = (int) $um[1];
+            }
+            if (!$request->input('skip_shakl_filter') && !in_array($attemptNum, [1, 2], true)) {
+                $rowInfo['error'] = "Faqat 1-urinish va 2-urinish yuklanadi (hozirgi: {$shaklRaw})";
                 $errors[] = $rowInfo;
                 continue;
             }
@@ -2046,7 +2048,7 @@ class QuizResultController extends Controller
                     'deadline' => now(),
                     'quiz_result_id' => $result->id,
                     'is_final' => true,
-                    'attempt' => 1, // Diagnostikadan yuklangan baholar har doim 1-urinish
+                    'attempt' => $attemptNum,
                 ]);
 
                 // "1-urinish (qo'shimcha farmoyishi borlar uchun)" yuklanganda — bu sababli
@@ -2054,7 +2056,7 @@ class QuizResultController extends Controller
                 // belgilangan bo'lsa, uni o'chiramiz — chunki u 2-urinishga o'tkazilmasligi kerak.
                 $hasQoshimcha = preg_match('/\(.*qo\'?shimcha.*\)/iu', $shaklRaw)
                     || mb_stripos($shaklRaw, 'farmoyish') !== false;
-                if ($hasQoshimcha) {
+                if ($attemptNum === 1 && $hasQoshimcha) {
                     DB::table('student_grades')
                         ->where('student_hemis_id', $student->hemis_id)
                         ->where('subject_id', $subject->subject_id)

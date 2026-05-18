@@ -33,7 +33,10 @@ class FeatureToggleController extends Controller
 
     public function index()
     {
-        if (!auth()->user()?->hasRole('superadmin')) {
+        // Superadmin teacher guard orqali kirgan bo'lishi ham mumkin (xodimlar
+        // teachers jadvalida); ikkala guardni ham qaraymiz.
+        $user = auth()->user() ?? auth('teacher')->user();
+        if (!$user || !$user->hasRole('superadmin')) {
             abort(403);
         }
 
@@ -52,7 +55,8 @@ class FeatureToggleController extends Controller
 
     public function update(Request $request)
     {
-        if (!auth()->user()?->hasRole('superadmin')) {
+        $user = auth()->user() ?? auth('teacher')->user();
+        if (!$user || !$user->hasRole('superadmin')) {
             abort(403);
         }
 

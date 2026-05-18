@@ -24,6 +24,16 @@
                                     {{ __("Guruh") }}: {{ $g->name }} ·
                                     {{ __("O'qituvchi") }}: {{ $g->teacher_name ?? '—' }}
                                 </p>
+                                @if(!empty($g->teacher_phones))
+                                    <p class="text-[11px] text-gray-600 mt-0.5 flex flex-wrap items-center gap-1">
+                                        <span>📞</span>
+                                        @foreach($g->teacher_phones as $phone)
+                                            <a href="tel:{{ preg_replace('/[^+\d]/', '', $phone) }}"
+                                               class="text-blue-600 hover:underline font-medium">{{ $phone }}</a>
+                                            @if(!$loop->last)<span class="text-gray-400">·</span>@endif
+                                        @endforeach
+                                    </p>
+                                @endif
                                 <p class="text-[11px] text-gray-500 mt-0.5">
                                     {{ $g->start_date->format('Y-m-d') }} → {{ $g->end_date->format('Y-m-d') }}
                                 </p>

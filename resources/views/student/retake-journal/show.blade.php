@@ -38,6 +38,16 @@
                 <div>
                     <p class="text-[9px] uppercase text-blue-100">{{ __("O'qituvchi") }}</p>
                     <p class="text-[11px] font-medium mt-0.5 truncate">{{ $group->teacher_name ?? '—' }}</p>
+                    @if(!empty($group->teacher_phones))
+                        <p class="text-[10px] mt-1 flex flex-wrap items-center gap-1">
+                            <span>📞</span>
+                            @foreach($group->teacher_phones as $phone)
+                                <a href="tel:{{ preg_replace('/[^+\d]/', '', $phone) }}"
+                                   class="underline text-white">{{ $phone }}</a>
+                                @if(!$loop->last)<span class="text-blue-200">·</span>@endif
+                            @endforeach
+                        </p>
+                    @endif
                 </div>
                 <div>
                     <p class="text-[9px] uppercase text-blue-100">{{ __("Davr") }}</p>

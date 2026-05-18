@@ -2093,17 +2093,30 @@ class QuizResultController extends Controller
                     'is_qoshimcha' => $hasQoshimchaPre = (preg_match('/\(.*qo\'?shimcha.*\)/iu', $shaklRaw) || mb_stripos($shaklRaw, 'farmoyish') !== false),
                 ]);
 
-                // Qo'shimcha 1-urinish: agar avval avtomatik attempt=2 (sababsiz) qator
-                // bo'lsa o'chiramiz — bu talaba qo'shimchada sababli ravishda topshirdi.
-                if ($attemptNum === 1 && $hasQoshimchaPre) {
+                // Qo'shimcha yuklanganda — bu talaba qo'shimcha farmoyish orqali
+                // topshirdi. Shu attempt'dagi asosiy (is_qoshimcha=0) qatorni hamda
+                // attempt=1 qo'shimcha bo'lsa, ortiqcha auto attempt=2 ni o'chiramiz.
+                if ($hasQoshimchaPre) {
                     DB::table('student_grades')
                         ->where('student_hemis_id', $student->hemis_id)
                         ->where('subject_id', $subject->subject_id)
                         ->where('training_type_code', $trainingTypeCode)
                         ->where('semester_code', $semester->code ?? $student->semester_code)
-                        ->where('attempt', 2)
+                        ->where('attempt', $attemptNum)
                         ->where('is_qoshimcha', 0)
+                        ->where('id', '!=', $created->id ?? 0)
                         ->delete();
+
+                    if ($attemptNum === 1) {
+                        DB::table('student_grades')
+                            ->where('student_hemis_id', $student->hemis_id)
+                            ->where('subject_id', $subject->subject_id)
+                            ->where('training_type_code', $trainingTypeCode)
+                            ->where('semester_code', $semester->code ?? $student->semester_code)
+                            ->where('attempt', 2)
+                            ->where('is_qoshimcha', 0)
+                            ->delete();
+                    }
                 }
 
                 if (!$created || !$created->exists || !$created->id) {

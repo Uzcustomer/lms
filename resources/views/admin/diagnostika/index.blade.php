@@ -1639,8 +1639,12 @@
                 if (comparisons.length === 0) {
                     html += '<div class="compare-empty">Tanlangan natijalar uchun sistemada mavjud OSKI/Test bahosi topilmadi.</div>';
                 } else {
+                    html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">';
+                    html += '<button onclick="bulkDeleteCompareGrades()" id="cmp-bulk-delete" class="btn-delete-grades" style="height:32px;font-size:12px;padding:6px 14px;">Tanlanganlarni o\'chirish (<span id="cmp-sel-count">0</span>)</button>';
+                    html += '</div>';
                     html += '<table class="compare-table">';
                     html += '<thead><tr>';
+                    html += '<th style="width:30px;"><input type="checkbox" id="cmp-select-all" onclick="toggleAllCompare(this)"></th>';
                     html += '<th>Talaba</th><th>Fan</th><th>Turi</th>';
                     html += '<th style="color:#059669;">Moodle baho</th>';
                     html += '<th style="color:#dc2626;">Sistemadagi baho</th>';
@@ -1651,6 +1655,7 @@
                         var c = comparisons[i];
                         var reasonLabel = c.existing_reason === 'quiz_result' ? 'Moodle' : (c.existing_reason || 'Noma\'lum');
                         html += '<tr id="cmp-row-' + c.student_grade_id + '">';
+                        html += '<td style="text-align:center;"><input type="checkbox" class="cmp-row-cb" value="' + c.student_grade_id + '" onclick="updateCmpSelCount()"></td>';
                         html += '<td style="font-weight:600;">' + esc(c.student_name) + '<br><span style="font-size:10px;color:#94a3b8;">' + esc(c.student_id) + '</span></td>';
                         html += '<td>' + esc(c.fan_name) + '<br><span style="font-size:10px;color:#94a3b8;">ID: ' + esc(c.fan_id) + '</span></td>';
                         html += '<td><span class="badge ' + (c.type === 'Test' ? 'badge-grade' : 'badge-oski') + '">' + esc(c.type) + '</span></td>';
@@ -1670,6 +1675,50 @@
 
             window.closeCompareModal = function() {
                 $('#compare-overlay').remove();
+            };
+
+            window.updateCmpSelCount = function() {
+                $('#cmp-sel-count').text($('.cmp-row-cb:checked').length);
+            };
+
+            window.toggleAllCompare = function(el) {
+                $('.cmp-row-cb').prop('checked', el.checked);
+                updateCmpSelCount();
+            };
+
+            window.bulkDeleteCompareGrades = function() {
+                var ids = $('.cmp-row-cb:checked').map(function() { return parseInt(this.value); }).get();
+                if (ids.length === 0) { alert('Hech narsa tanlanmagan'); return; }
+                if (!confirm(ids.length + ' ta bahoni sistemadan o\'chirishni tasdiqlaysizmi?')) return;
+
+                var btn = $('#cmp-bulk-delete');
+                btn.prop('disabled', true).html('O\'chirilmoqda...');
+
+                $.ajax({
+                    url: deleteStudentGradeUrl, type: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ student_grade_ids: ids }),
+                    success: function(data) {
+                        if (data.success) {
+                            ids.forEach(function(id) {
+                                $('#cmp-row-' + id).css({ background: '#fef2f2', opacity: 0.5 });
+                                $('#cmp-row-' + id + ' button').text('O\'chirildi').css({ background: '#9ca3af', cursor: 'default' }).prop('disabled', true);
+                                $('#cmp-row-' + id + ' .cmp-row-cb').prop('checked', false).prop('disabled', true);
+                            });
+                            updateCmpSelCount();
+                            btn.html('Tanlanganlarni o\'chirish (<span id="cmp-sel-count">0</span>)').prop('disabled', false);
+                            loadTartibgaSol();
+                        } else {
+                            alert(data.message || 'Xatolik');
+                            btn.prop('disabled', false).html('Tanlanganlarni o\'chirish (<span id="cmp-sel-count">' + ids.length + '</span>)');
+                        }
+                    },
+                    error: function(xhr) {
+                        alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                        btn.prop('disabled', false).html('Tanlanganlarni o\'chirish (<span id="cmp-sel-count">' + ids.length + '</span>)');
+                    }
+                });
             };
 
             window.deleteCompareGrade = function(gradeId) {

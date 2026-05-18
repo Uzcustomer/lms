@@ -40,6 +40,7 @@
             'formAction' => route('admin.retake-groups.index'),
             'educationTypes' => $educationTypes ?? collect(),
             'subjects' => $subjects ?? collect(),
+            'subjectMultiple' => true,
             'extraQueryFields' => array_filter([
                 'status' => $statusFilter !== 'all' ? $statusFilter : null,
                 'search' => $search ?: null,
@@ -65,13 +66,29 @@
             {{-- Bulk action panel (faqat kamida 1 ta tanlanganda) --}}
             <div x-show="selectedApps.length > 0" x-cloak
                  class="px-5 py-3 bg-blue-50 border-b border-blue-200 flex items-center justify-between flex-wrap gap-3">
-                <div class="text-xs text-blue-900 flex items-center gap-2">
+                <div class="text-xs text-blue-900 flex items-center gap-2 flex-wrap">
                     <span class="font-bold text-base text-blue-700" x-text="selectedApps.length"></span>
                     <span>{{ __("ta ariza tanlangan") }}</span>
                     <span class="text-blue-700">·</span>
-                    <span class="font-medium" x-text="selectedApps[0]?.subject_name"></span>
+                    <template x-if="selectedSubjectNames.length === 1">
+                        <span class="font-medium" x-text="selectedApps[0]?.subject_name"></span>
+                    </template>
+                    <template x-if="selectedSubjectNames.length > 1">
+                        <span class="font-medium inline-flex items-center gap-1">
+                            <span class="px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-bold"
+                                  x-text="'⛓ ' + selectedSubjectNames.length + ' ta fan'"></span>
+                            <span class="text-[11px] text-blue-800"
+                                  x-text="selectedSubjectNames.slice(0, 2).join(' / ') + (selectedSubjectNames.length > 2 ? ' …' : '')"></span>
+                        </span>
+                    </template>
                     <span class="text-blue-600">·</span>
-                    <span x-text="selectedApps[0]?.semester_name"></span>
+                    <template x-if="selectedSemesterNames.length === 1">
+                        <span x-text="selectedApps[0]?.semester_name"></span>
+                    </template>
+                    <template x-if="selectedSemesterNames.length > 1">
+                        <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-[10px] font-bold"
+                              x-text="'⚠ ' + selectedSemesterNames.length + ' ta semestr'"></span>
+                    </template>
                 </div>
                 <div class="flex gap-2">
                     <button type="button"
@@ -161,7 +178,7 @@
 
                 <div class="p-3 border-t border-gray-100 flex items-center justify-between flex-wrap gap-2">
                     <p class="text-[11px] text-gray-500">
-                        💡 {{ __("Bir xil fan + semestrdagi arizalarnigina tanlash mumkin (boshqa qatorlar avtomatik bloklanadi)") }}
+                        💡 {{ __("Har qanday arizani tanlash mumkin — fan va semestr har xil bo'lishi mumkin (turli curriculum talabalari bir guruhga birlashtirilishi uchun)") }}
                     </p>
                     {{ $pendingApps->links() }}
                 </div>
@@ -246,7 +263,13 @@
                         @endif
                     </a>
                     <form method="GET" action="{{ route('admin.retake-groups.index') }}" class="flex gap-2 items-center flex-wrap">
-                        @foreach(['education_type','department','specialty','level_code','semester_code','group','subject','per_page'] as $kept)
+                        @php
+                            $keptSubjects = is_array(request('subject')) ? request('subject') : (filled(request('subject')) ? [request('subject')] : []);
+                        @endphp
+                        @foreach($keptSubjects as $sId)
+                            <input type="hidden" name="subject[]" value="{{ $sId }}">
+                        @endforeach
+                        @foreach(['education_type','department','specialty','level_code','semester_code','group','per_page'] as $kept)
                             @if(request($kept))
                                 <input type="hidden" name="{{ $kept }}" value="{{ request($kept) }}">
                             @endif
@@ -407,8 +430,16 @@
                 <div class="fixed inset-0 bg-black bg-opacity-50" @click="closeFormation()"></div>
                 <div class="relative bg-white rounded-2xl shadow-xl max-w-3xl w-full p-6 z-10 my-8">
                     <h3 class="text-base font-bold text-gray-900 mb-1">{{ __("Guruh shakllantirish") }}</h3>
-                    <p class="text-xs text-gray-500 mb-4">
-                        <span x-text="formData.subject_name"></span> · <span x-text="formData.semester_name"></span>
+                    <p class="text-xs text-gray-500 mb-4 flex items-center gap-2 flex-wrap">
+                        <span x-text="formData.display_subject || formData.subject_name"></span>
+                        <template x-if="(formData.multi_subject_count || 1) > 1">
+                            <span class="inline-flex items-center px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 text-[10px] font-bold"
+                                  :title="'{{ __("Birlashtirilgan fanlar soni") }}: ' + formData.multi_subject_count">
+                                ⛓ <span x-text="formData.multi_subject_count"></span> {{ __("fan birlashtirildi") }}
+                            </span>
+                        </template>
+                        <span>·</span>
+                        <span x-text="formData.semester_name"></span>
                     </p>
 
                     <form method="POST" action="{{ route('admin.retake-groups.store') }}" class="space-y-4">
@@ -438,6 +469,32 @@
                                 <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Maks. talabalar (ixtiyoriy)") }}</label>
                                 <input type="number" name="max_students" min="1"
                                        class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                            </div>
+
+                            <div class="md:col-span-2">
+                                <label class="block text-xs font-medium text-gray-700 mb-1">
+                                    {{ __("O'qituvchi telefon raqami") }} <span class="text-red-500">*</span>
+                                    <span class="text-[10px] font-normal text-gray-500">({{ __("bir nechta qo'shish mumkin") }})</span>
+                                </label>
+                                <div class="space-y-1.5">
+                                    <template x-for="(phone, idx) in teacherPhones" :key="idx">
+                                        <div class="flex gap-1.5">
+                                            <input type="tel" name="teacher_phones[]" required
+                                                   x-model="teacherPhones[idx]"
+                                                   placeholder="+998 90 123 45 67"
+                                                   class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                            <button type="button" @click="removePhone(idx)" x-show="teacherPhones.length > 1"
+                                                    class="px-2.5 py-1 text-xs bg-red-50 text-red-700 rounded-lg hover:bg-red-100"
+                                                    title="{{ __('O\'chirish') }}">
+                                                ✕
+                                            </button>
+                                        </div>
+                                    </template>
+                                    <button type="button" @click="addPhone()" x-show="teacherPhones.length < 5"
+                                            class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg">
+                                        + {{ __("Yana raqam qo'shish") }}
+                                    </button>
+                                </div>
                             </div>
 
                             {{-- Sanalar — qabul oynasidan avtomatik olinadi, tahrirlanmaydi --}}
@@ -542,6 +599,10 @@
                                             <span class="ml-2 flex-1 text-xs">
                                                 <span class="font-medium text-gray-900" x-text="app.student_name"></span>
                                                 <span class="text-gray-500" x-text="' · ' + app.student_hemis_id"></span>
+                                                <template x-if="(formData.multi_subject_count || 1) > 1 && app.subject_name">
+                                                    <span class="ml-2 inline-block px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-medium"
+                                                          x-text="app.subject_name"></span>
+                                                </template>
                                                 <span class="block text-[11px] text-gray-500"
                                                       x-text="(app.department_name || '') + ' · ' + (app.specialty_name || '') + ' · ' + (app.level_name || '') + ' · ' + (app.group_name || '')"></span>
                                             </span>
@@ -588,6 +649,9 @@
                     applications: [],
                     teachers: [],
                     selected: [],
+                    teacherPhones: [''],
+                    addPhone() { if (this.teacherPhones.length < 5) this.teacherPhones.push(''); },
+                    removePhone(idx) { if (this.teacherPhones.length > 1) this.teacherPhones.splice(idx, 1); },
                     assessmentType: '',
                     oskeDate: '',
                     testDate: '',
@@ -597,21 +661,25 @@
                     pageApps: pageApps || [], // joriy sahifadagi barcha arizalar
                     selectedApps: [], // [{id, subject_id, subject_name, semester_id, semester_name}]
 
-                    // Joriy "lock guruhi" (birinchi tanlangan arizaning subject+semester'i) bo'yicha
-                    // sahifadagi shu fan/semestrga tegishli arizalar
+                    // Bulk-tanlashda hech qanday lock yo'q — har xil fan va har
+                    // xil semestrdagi arizalarni birga belgilash mumkin (turli
+                    // curriculum talabalari bir guruhga birlashishi uchun).
                     matchingPageApps() {
-                        if (this.selectedApps.length === 0) {
-                            // Hech narsa tanlanmagan — birinchi qator subject+semester'iga moslar
-                            if (this.pageApps.length === 0) return [];
-                            const ref = this.pageApps[0];
-                            return this.pageApps.filter(a =>
-                                a.subject_name === ref.subject_name && a.semester_name === ref.semester_name
-                            );
-                        }
-                        const ref = this.selectedApps[0];
-                        return this.pageApps.filter(a =>
-                            a.subject_name === ref.subject_name && a.semester_name === ref.semester_name
-                        );
+                        return this.pageApps.slice();
+                    },
+
+                    // Tanlangan arizalardagi unikal fan nomlari (modal preambula uchun)
+                    get selectedSubjectNames() {
+                        const set = new Set();
+                        this.selectedApps.forEach(a => set.add(a.subject_name));
+                        return Array.from(set);
+                    },
+
+                    // Tanlangan arizalardagi unikal semestrlar (preambula uchun)
+                    get selectedSemesterNames() {
+                        const set = new Set();
+                        this.selectedApps.forEach(a => set.add(a.semester_name));
+                        return Array.from(set);
                     },
 
                     get allPageSelected() {
@@ -631,10 +699,9 @@
                     get allSelected() { return this.applications.length > 0 && this.selected.length === this.applications.length; },
 
                     // ── Bulk tanlash mantiqi ─────────────────────────────────
+                    // Hech qanday lock yo'q — fan/semestr har xil bo'lishi mumkin.
                     isLocked(row) {
-                        if (this.selectedApps.length === 0) return false;
-                        const a = this.selectedApps[0];
-                        return a.subject_name !== row.subject_name || a.semester_name !== row.semester_name;
+                        return false;
                     },
 
                     toggleApp(row) {
@@ -653,11 +720,18 @@
                         if (this.selectedApps.length === 0) return;
                         const first = this.selectedApps[0];
                         const ids = this.selectedApps.map(a => a.id);
+                        const subjects = this.selectedSubjectNames;
+                        // Birlashtirilgan fan nomi (preambula uchun)
+                        const combinedSubject = subjects.length > 1
+                            ? subjects.slice(0, 2).join(' / ') + (subjects.length > 2 ? ' …' : '')
+                            : first.subject_name;
                         this.openFormation({
                             subject_id: first.subject_id,
-                            subject_name: first.subject_name,
+                            subject_name: first.subject_name, // birinchi tanlangan = "primary" subject
                             semester_id: first.semester_id,
                             semester_name: first.semester_name,
+                            display_subject: combinedSubject,
+                            multi_subject_count: subjects.length,
                         }, ids);
                     },
                     // ─────────────────────────────────────────────────────────
@@ -668,19 +742,31 @@
                             subject_name: data.subject_name,
                             semester_id: data.semester_id,
                             semester_name: data.semester_name,
-                            name: data.subject_name + ' — qayta o\'qish',
+                            display_subject: data.display_subject || data.subject_name,
+                            multi_subject_count: data.multi_subject_count || 1,
+                            name: (data.display_subject || data.subject_name) + ' — qayta o\'qish',
                             teacher_id: '',
                         };
                         this.applications = [];
                         this.teachers = [];
                         this.selected = [];
+                        this.teacherPhones = [''];
                         this.assessmentType = '';
                         this.oskeDate = '';
                         this.testDate = '';
                         this.windowDates = null;
                         this.showFormation = true;
 
-                        const url = `${this.lookupUrl}?subject_name=${encodeURIComponent(data.subject_name)}&semester_name=${encodeURIComponent(data.semester_name)}`;
+                        // Bulk (multi-subject) holatda — application_ids bo'yicha
+                        // aniq arizalarni olamiz. Aks holda — subject+semester bo'yicha.
+                        let url;
+                        if (preselectedIds && preselectedIds.length > 0 && (data.multi_subject_count || 1) > 1) {
+                            const params = new URLSearchParams();
+                            preselectedIds.forEach(id => params.append('application_ids[]', id));
+                            url = `${this.lookupUrl}?${params.toString()}`;
+                        } else {
+                            url = `${this.lookupUrl}?subject_name=${encodeURIComponent(data.subject_name)}&semester_name=${encodeURIComponent(data.semester_name)}`;
+                        }
                         const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
                         const json = await res.json();
                         this.applications = json.applications || [];

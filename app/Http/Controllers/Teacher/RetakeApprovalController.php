@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Teacher;
 
 use App\Enums\ProjectRole;
+use App\Exports\RetakeApplicationsExport;
 use App\Http\Controllers\Controller;
 use App\Models\RetakeApplication;
 use App\Models\RetakeApplicationGroup;
@@ -11,6 +12,7 @@ use App\Models\Teacher;
 use App\Services\Retake\RetakeAccess;
 use App\Services\Retake\RetakeApplicationService;
 use Illuminate\Http\Request;
+use Maatwebsite\Excel\Facades\Excel;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -58,6 +60,7 @@ class RetakeApprovalController extends Controller
         }
 
         // Ariza-guruhlari joiniga ariza-bog'liq filtr
+        $statusColumn = $role === 'dean' ? 'dean_status' : 'registrar_status';
         $query = RetakeApplicationGroup::query()
             ->with([
                 'student',
@@ -68,6 +71,13 @@ class RetakeApprovalController extends Controller
                 'applications.deanUser',
                 'applications.registrarUser',
             ])
+            // Birinchi navbatda kutilayotgan arizalar — undan keyin eng yangilari
+            ->orderByRaw(
+                "CASE WHEN EXISTS (SELECT 1 FROM retake_applications ra "
+                . "WHERE ra.group_id = retake_application_groups.id "
+                . "AND ra.{$statusColumn} = 'pending' "
+                . "AND ra.final_status = 'pending') THEN 0 ELSE 1 END ASC"
+            )
             ->orderByDesc('created_at');
 
         // Dekan — faqat o'z fakulteti talabalari
@@ -146,11 +156,17 @@ class RetakeApprovalController extends Controller
         $stats = $this->calculateStats($role, $user);
 
         // Registrator uchun: to'lov cheki tekshirilishi kutilayotganlar soni
+        // va tasdiqlangan to'lovlar soni
         $paymentToVerifyCount = 0;
+        $paymentApprovedCount = 0;
         if ($role === 'registrar') {
             $paymentToVerifyCount = RetakeApplicationGroup::query()
                 ->whereNotNull('payment_uploaded_at')
                 ->where('payment_verification_status', 'pending')
+                ->count();
+            $paymentApprovedCount = RetakeApplicationGroup::query()
+                ->whereNotNull('payment_uploaded_at')
+                ->where('payment_verification_status', 'approved')
                 ->count();
         }
 
@@ -167,10 +183,57 @@ class RetakeApprovalController extends Controller
             'dateTo' => $dateTo,
             'stats' => $stats,
             'paymentToVerifyCount' => $paymentToVerifyCount,
+            'paymentApprovedCount' => $paymentApprovedCount,
             'minReasonLength' => \App\Models\RetakeSetting::rejectReasonMinLength(),
             'educationTypes' => $educationTypes,
             'subjects' => $subjects,
         ]);
+    }
+
+    /**
+     * Arizalarni Excelga eksport qilish (joriy filtrlar bo'yicha).
+     * Dekan — faqat o'z fakulteti; Registrator — barchasi.
+     */
+    public function export(Request $request)
+    {
+        $user = RetakeAccess::currentStaff();
+        $role = $this->detectRole($user);
+
+        $filters = [
+            'filter' => $request->input('filter'),
+            'date_from' => $request->input('date_from'),
+            'date_to' => $request->input('date_to'),
+            'subject' => $request->input('subject'),
+            'semester_code' => $request->input('semester_code'),
+            'education_type' => $request->input('education_type'),
+            'department' => $request->input('department'),
+            'specialty' => $request->input('specialty'),
+            'level_code' => $request->input('level_code'),
+            'group' => $request->input('group'),
+            'search' => $request->input('search'),
+        ];
+
+        // 'filter' qiymatini Export uchun aniqlashtiramiz.
+        // To'lov holatlari alohida payment_status param sifatida uzatiladi.
+        $filterValue = $filters['filter'] ?? null;
+        if ($filterValue === 'payment_to_verify') {
+            $filters['payment_status'] = 'pending';
+            $filters['filter'] = null;
+        } elseif ($filterValue === 'payment_approved') {
+            $filters['payment_status'] = 'approved';
+            $filters['filter'] = null;
+        } elseif ($filterValue === 'pending_mine' || $filterValue === 'all') {
+            $filters['filter'] = null;
+        }
+
+        // Dekan — faqat o'z fakultetidagi talabalarning arizalarini eksport qilsin
+        if ($role === 'dean' && $user instanceof Teacher) {
+            $filters['dean_faculty_ids'] = array_map('intval', $user->deanFacultyIds);
+        }
+
+        $fileName = 'retake_arizalar_' . now()->format('Y_m_d_His') . '.xlsx';
+
+        return Excel::download(new RetakeApplicationsExport($filters), $fileName);
     }
 
     /**
@@ -564,6 +627,13 @@ class RetakeApprovalController extends Controller
         if ($filter === 'payment_to_verify' && $role === 'registrar') {
             $query->whereNotNull('payment_uploaded_at')
                   ->where('payment_verification_status', 'pending');
+            return;
+        }
+
+        // Registrator uchun: to'lov cheki tasdiqlangan guruhlar
+        if ($filter === 'payment_approved' && $role === 'registrar') {
+            $query->whereNotNull('payment_uploaded_at')
+                  ->where('payment_verification_status', 'approved');
             return;
         }
 

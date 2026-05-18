@@ -47,6 +47,7 @@ class RetakeWindowSessionController extends Controller
         return view('teacher.academic-dept.retake-sessions.index', [
             'sessions' => $sessions,
             'sessionsWithApps' => $sessionsWithApps,
+            'canOverride' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
         ]);
     }
 
@@ -95,6 +96,62 @@ class RetakeWindowSessionController extends Controller
 
         return redirect()->route('admin.retake-sessions.index')
             ->with('success', __('Sessiya yopildi'));
+    }
+
+    /**
+     * Sessiya ichidagi BARCHA oynalarning sanalarini bir marta o'zgartirish.
+     * O'quv bo'limi (canOverride) ruxsatga ega xodimlar uchun.
+     */
+    public function bulkOverrideDates(Request $request, int $sessionId): RedirectResponse
+    {
+        if (!\App\Services\Retake\RetakeAccess::canOverride(\App\Services\Retake\RetakeAccess::currentStaff())) {
+            abort(403, "Sizda sanalarni o'zgartirish ruxsati yo'q");
+        }
+
+        $data = $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $session = RetakeWindowSession::findOrFail($sessionId);
+        if ($session->is_closed) {
+            return redirect()->back()->withErrors([
+                'session' => 'Yopilgan sessiya oynalarini o\'zgartirib bo\'lmaydi',
+            ]);
+        }
+
+        $windowIds = \App\Models\RetakeApplicationWindow::query()
+            ->where('session_id', $session->id)
+            ->pluck('id');
+
+        $count = \App\Models\RetakeApplicationWindow::query()
+            ->whereIn('id', $windowIds)
+            ->update([
+                'start_date' => $data['start_date'],
+                'end_date' => $data['end_date'],
+            ]);
+
+        // Telegram xabar JAVOBDAN KEYIN — sahifa muzlamasligi uchun.
+        if ($windowIds->isNotEmpty()) {
+            $idsArr = $windowIds->all();
+            dispatch(function () use ($idsArr) {
+                $notifier = app(\App\Services\Retake\RetakeNotificationService::class);
+                foreach (\App\Models\RetakeApplicationWindow::whereIn('id', $idsArr)->get() as $w) {
+                    try {
+                        $notifier->notifyWindowDatesUpdated($w);
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning('[Retake] notifyWindowDatesUpdated: ' . $e->getMessage());
+                    }
+                }
+            })->afterResponse();
+        }
+
+        $msg = "{$count} ta oyna sanalari yangilandi: {$data['start_date']} → {$data['end_date']}";
+        if ($windowIds->isNotEmpty()) {
+            $msg .= " · talabalarga Telegram xabar fonida yuborilmoqda";
+        }
+
+        return redirect()->back()->with('success', $msg);
     }
 
     /**
@@ -435,7 +492,10 @@ class RetakeWindowSessionController extends Controller
 
     private function authorizeAccess(): void
     {
-        if (!RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff())) {
+        // AKTIV rolni tekshiramiz — foydalanuvchi bir nechta rolga ega bo'lsa
+        // (masalan, registrator + o'quv bo'limi), faqat o'quv bo'limi rolida
+        // ishlayotgan bo'lsagina sessiyalarni boshqara oladi.
+        if (!RetakeAccess::activeRoleCanManageRetake()) {
             abort(403, 'Sizda qayta o\'qish sessiyalarini boshqarish ruxsati yo\'q');
         }
     }

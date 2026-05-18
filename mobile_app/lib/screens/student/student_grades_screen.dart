@@ -13,6 +13,7 @@ import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/scale_tap.dart';
+import '../../widgets/settings_sheet.dart';
 import 'student_home_screen.dart';
 
 class StudentGradesScreen extends StatefulWidget {
@@ -26,12 +27,53 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   int _selectedFilter = 0;
   bool _isUploading = false;
   int _uploadingSubjectId = -1;
+  // GlobalKey per subject card so we can scroll to it when the dashboard
+  // asks us to via StudentHomeScreen.pendingSubjectScroll.
+  final Map<int, GlobalKey> _subjectKeys = {};
+  int? _highlightedSubjectId;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<StudentProvider>().loadSubjects();
+    });
+    StudentHomeScreen.pendingSubjectScroll.addListener(_onScrollRequest);
+  }
+
+  @override
+  void dispose() {
+    StudentHomeScreen.pendingSubjectScroll.removeListener(_onScrollRequest);
+    super.dispose();
+  }
+
+  void _onScrollRequest() {
+    final id = StudentHomeScreen.pendingSubjectScroll.value;
+    if (id == null) return;
+    // Reset early so repeated taps on the same subject still trigger.
+    StudentHomeScreen.pendingSubjectScroll.value = null;
+    // Force the filter to "All" so the target card is in the list.
+    if (_selectedFilter != 0) {
+      setState(() => _selectedFilter = 0);
+    }
+    if (mounted) setState(() => _highlightedSubjectId = id);
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      final key = _subjectKeys[id];
+      final ctx = key?.currentContext;
+      if (ctx != null) {
+        await Scrollable.ensureVisible(
+          ctx,
+          duration: const Duration(milliseconds: 450),
+          curve: Curves.easeOutCubic,
+          alignment: 0.1,
+        );
+      }
+      // Clear the highlight after a moment so it doesn't linger forever.
+      Future.delayed(const Duration(milliseconds: 1600), () {
+        if (mounted && _highlightedSubjectId == id) {
+          setState(() => _highlightedSubjectId = null);
+        }
+      });
     });
   }
 
@@ -76,47 +118,28 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return grades['oski'] != null || grades['test'] != null;
   }
 
+  /// Total grade for averaging purposes — reads only what the LMS API
+  /// supplies, never computes locally. Returns 0 when no YN is set yet.
   double _getSubjectTotal(Map<String, dynamic> subject) {
-    final grades = subject['grades'] as Map<String, dynamic>? ?? {};
-    final vals = <num>[];
-    for (final k in ['jn', 'mt', 'on', 'oski', 'test']) {
-      final v = grades[k];
-      if (v != null && v is num) vals.add(v);
-    }
-    return vals.isNotEmpty ? vals.reduce((a, b) => a + b) / vals.length : 0;
+    final v = _getYn(subject);
+    return v ?? 0;
   }
 
-  static const Map<String, num> _defaultWeights = {
-    'jn': 50, 'mt': 20, 'on': 0, 'oski': 15, 'test': 15,
-  };
-
-  Map<String, num> _getWeights(Map<String, dynamic> subject) {
-    final raw = subject['weights'] ?? subject['coefficients'] ?? subject['koef'];
-    if (raw is Map) {
-      final result = <String, num>{};
-      for (final k in ['jn', 'mt', 'on', 'oski', 'test']) {
-        final w = raw[k];
-        if (w is num) result[k] = w;
-      }
-      if (result.isNotEmpty) return result;
-    }
-    return _defaultWeights;
-  }
-
-  double? _computeYn(Map<String, dynamic> subject) {
+  /// Final (YN) grade for a subject — comes from the LMS journal via the
+  /// API. The app never computes YN locally; until the journal sets a YN
+  /// for the subject, this returns null and the UI shows an empty cell.
+  double? _getYn(Map<String, dynamic> subject) {
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
-    final weights = _getWeights(subject);
-    double sum = 0;
-    bool hasAny = false;
-    for (final k in ['jn', 'mt', 'on', 'oski', 'test']) {
-      final v = grades[k];
-      final w = weights[k] ?? 0;
-      if (v is num) {
-        sum += v * (w / 100);
-        hasAny = true;
-      }
+    final raw = grades['yn'];
+    if (raw is num) {
+      final d = raw.toDouble();
+      return d > 0 ? d : null;
     }
-    return hasAny ? sum : null;
+    if (raw is String) {
+      final parsed = double.tryParse(raw);
+      if (parsed != null && parsed > 0) return parsed;
+    }
+    return null;
   }
 
   double _calculateSemesterAvg(List subjects) {
@@ -135,7 +158,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     double bestGrade = 0;
     for (final s in subjects) {
       if (s is! Map<String, dynamic>) continue;
-      final yn = _computeYn(s);
+      final yn = _getYn(s);
       if (yn != null && yn > bestGrade) { bestGrade = yn; best = s; }
     }
     return best;
@@ -149,9 +172,8 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   }
 
   Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
-    final cc = cardColor ?? const Color(0xFF0A1A3A);
+    final cc = cardColor ?? const Color(0xFF1E3A8A);
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
@@ -159,7 +181,6 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
         child: Container(
           decoration: BoxDecoration(
             color: surface,
-            border: Border.all(color: border),
             borderRadius: BorderRadius.circular(borderRadius),
             boxShadow: [
               BoxShadow(
@@ -234,6 +255,21 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             final waiting = subjects.length - completed;
             final bestSubject = _getBestSubject(subjects);
             final filtered = _filterSubjects(subjects);
+            // If the dashboard asked us to focus a specific subject, move it
+            // to the top of the list so it's the first card the user sees.
+            if (_highlightedSubjectId != null) {
+              final idx = filtered.indexWhere((s) {
+                final raw = s['subject_id'];
+                final id = raw is int
+                    ? raw
+                    : (raw == null ? null : int.tryParse(raw.toString()));
+                return id == _highlightedSubjectId;
+              });
+              if (idx > 0) {
+                final pinned = filtered.removeAt(idx);
+                filtered.insert(0, pinned);
+              }
+            }
             final semesterName = provider.profile?['semester_name']?.toString() ?? '';
 
             return RefreshIndicator(
@@ -246,8 +282,8 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                     Container(
                       padding: EdgeInsets.only(top: statusBarH, left: 16, right: 4),
                       height: statusBarH + 64,
-                      decoration: const BoxDecoration(
-                        color: Color(0xFF0A1A3A),
+                      decoration: BoxDecoration(
+                        color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
                         borderRadius: BorderRadius.only(
                           bottomLeft: Radius.circular(18),
                           bottomRight: Radius.circular(18),
@@ -268,7 +304,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                           ),
                           IconButton(
                             icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
-                            onPressed: () {},
+                            onPressed: () => showSettingsSheet(context),
                           ),
                         ],
                       ),
@@ -284,10 +320,40 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                     _buildFilterTabs(isDark, completed, waiting, subjects.length),
                     const SizedBox(height: 12),
                     // Subject cards
-                    ...filtered.asMap().entries.map((e) => Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-                      child: _buildSubjectCard(context, e.value, e.key, isDark, l),
-                    )),
+                    ...filtered.asMap().entries.map((e) {
+                      final subj = e.value;
+                      final rawId = subj['subject_id'];
+                      final sid = rawId is int
+                          ? rawId
+                          : (rawId == null ? null : int.tryParse(rawId.toString()));
+                      final key = sid != null
+                          ? _subjectKeys.putIfAbsent(sid, () => GlobalKey())
+                          : null;
+                      final highlighted =
+                          sid != null && sid == _highlightedSubjectId;
+                      return Padding(
+                        key: key,
+                        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 300),
+                          decoration: highlighted
+                              ? BoxDecoration(
+                                  borderRadius: BorderRadius.circular(20),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: AppTheme.primaryColor
+                                          .withOpacity(0.45),
+                                      blurRadius: 20,
+                                      spreadRadius: 2,
+                                    ),
+                                  ],
+                                )
+                              : null,
+                          child: _buildSubjectCard(
+                              context, subj, e.key, isDark, l),
+                        ),
+                      );
+                    }),
                     const SizedBox(height: 100),
                   ],
                 ),
@@ -371,7 +437,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
   Widget _buildBestSubjectCard(Map<String, dynamic> subject, bool isDark) {
     final name = subject['subject_name']?.toString() ?? '';
-    final grade = _computeYn(subject)?.round() ?? 0;
+    final grade = _getYn(subject)?.round() ?? 0;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16),
       child: _buildGlassCard(
@@ -455,7 +521,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   Widget _buildSubjectCard(BuildContext context, Map<String, dynamic> subject, int index, bool isDark, AppLocalizations l) {
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
     final name = subject['subject_name']?.toString() ?? '';
-    final computedYn = _computeYn(subject);
+    final computedYn = _getYn(subject);
     final total = computedYn?.round() ?? 0;
     final isCompleted = _isSubjectCompleted(subject);
     final attendance = _getAttendancePercent(subject);
@@ -482,7 +548,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 const SizedBox(width: 12),
                 Column(
                   children: [
-                    Text('$total', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
+                    Text(total > 0 ? '$total' : '—', style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900,
                       color: total >= 70 ? const Color(0xFF43A047) : total > 0 ? const Color(0xFFFF9800) : (isDark ? Colors.white38 : Colors.black26))),
                     Text('JAMI', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600,
                       color: isDark ? Colors.white38 : Colors.black38)),
@@ -1173,8 +1239,8 @@ class _JnGradesPageState extends State<_JnGradesPage> {
           Container(
             padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
             height: statusBarH + 64,
-            decoration: const BoxDecoration(
-              color: Color(0xFF0A1A3A),
+            decoration: BoxDecoration(
+              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
               borderRadius: BorderRadius.only(
                 bottomLeft: Radius.circular(18),
                 bottomRight: Radius.circular(18),
@@ -1236,7 +1302,6 @@ class _JnGradesPageState extends State<_JnGradesPage> {
 
   Widget _glassCard({required Widget child, required bool isDark, Color hueColor = const Color(0xFF1565C0)}) {
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
     return ClipRRect(
       borderRadius: BorderRadius.circular(20),
       child: BackdropFilter(
@@ -1244,7 +1309,6 @@ class _JnGradesPageState extends State<_JnGradesPage> {
         child: Container(
           decoration: BoxDecoration(
             color: surface,
-            border: Border.all(color: border),
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(

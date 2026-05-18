@@ -400,26 +400,35 @@
 
         {{-- Override modal --}}
         @if($canOverride)
-            <div x-show="overrideId !== null" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="overrideId = null">
-                <div class="flex items-center justify-center min-h-screen p-4">
-                    <div class="fixed inset-0 bg-black bg-opacity-50" @click="overrideId = null"></div>
+            <div x-show="overrideId !== null" x-cloak
+                 class="fixed inset-0 z-50 overflow-y-auto"
+                 @keydown.escape.window="overrideId = null">
+                <div class="fixed inset-0 bg-black bg-opacity-50" @click="overrideId = null"></div>
+                <div class="relative min-h-full flex items-center justify-center p-4">
                     <div class="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 z-10">
-                        <h3 class="text-base font-bold text-gray-900 mb-1">{{ __("Sanalarni override qilish") }}</h3>
+                        <h3 class="text-base font-bold text-gray-900 mb-1">{{ __("Sanalarni o'zgartirish") }}</h3>
                         <p class="text-xs text-red-600 mb-4">⚠️ {{ __("Faqat istisno holatlarda ishlating") }}</p>
                         <form :action="`{{ url('/admin/retake-windows') }}/${overrideId}/override-dates`" method="POST" class="space-y-3">
                             @csrf
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Boshlanish") }}</label>
-                                <input type="date" name="start_date" x-model="overrideStart" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                <input type="date" name="start_date" x-model="overrideStart" required
+                                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                             </div>
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("Tugash") }}</label>
-                                <input type="date" name="end_date" x-model="overrideEnd" required class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                                <input type="date" name="end_date" x-model="overrideEnd" required
+                                       class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
                             </div>
                             <div class="flex gap-2 pt-2">
                                 <button type="button" @click="overrideId = null"
-                                        class="flex-1 px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">{{ __("Bekor qilish") }}</button>
-                                <button type="submit" class="flex-1 px-3 py-2 text-sm bg-orange-600 text-white rounded-lg hover:bg-orange-700">{{ __("Override") }}</button>
+                                        class="flex-1 px-3 py-2.5 text-sm font-medium bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                                    {{ __("Bekor qilish") }}
+                                </button>
+                                <button type="submit"
+                                        class="flex-1 px-3 py-2.5 text-sm font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700 active:bg-blue-800">
+                                    {{ __("Saqlash") }}
+                                </button>
                             </div>
                         </form>
                     </div>

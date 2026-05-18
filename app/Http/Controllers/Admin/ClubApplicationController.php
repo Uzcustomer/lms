@@ -56,6 +56,45 @@ class ClubApplicationController extends Controller
         return back()->with('success', '\'' . $application->club_name . '\' arizasi rad etildi.');
     }
 
+    public function bulkApprove(Request $request)
+    {
+        $ids = $this->validateBulkIds($request);
+        $applications = ClubMembership::whereIn('id', $ids)->where('status', 'pending')->get();
+        $count = 0;
+        foreach ($applications as $application) {
+            $this->checkAccess($application);
+            $application->update(['status' => 'approved', 'reject_reason' => null]);
+            $count++;
+        }
+        return back()->with('success', $count . ' ta ariza tasdiqlandi.');
+    }
+
+    public function bulkReject(Request $request)
+    {
+        $request->validate([
+            'reject_reason' => 'nullable|string|max:500',
+        ]);
+        $ids = $this->validateBulkIds($request);
+        $reason = $request->input('reject_reason');
+        $applications = ClubMembership::whereIn('id', $ids)->where('status', 'pending')->get();
+        $count = 0;
+        foreach ($applications as $application) {
+            $this->checkAccess($application);
+            $application->update(['status' => 'rejected', 'reject_reason' => $reason]);
+            $count++;
+        }
+        return back()->with('success', $count . ' ta ariza rad etildi.');
+    }
+
+    private function validateBulkIds(Request $request): array
+    {
+        $request->validate([
+            'ids'   => 'required|array|min:1',
+            'ids.*' => 'integer',
+        ]);
+        return $request->input('ids');
+    }
+
     public function destroy(ClubMembership $application)
     {
         $activeRole = session('active_role', '');

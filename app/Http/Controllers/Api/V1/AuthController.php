@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api\V1;
 use App\Http\Controllers\Controller;
 use App\Models\Setting;
 use App\Models\Student;
+use App\Models\StudentPhoto;
 use App\Models\Teacher;
 use App\Services\ActivityLogService;
 use App\Services\TelegramService;
@@ -12,6 +13,8 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class AuthController extends Controller
 {
@@ -292,6 +295,97 @@ class AuthController extends Controller
             'guard' => $guard,
             'roles' => $user->getRoleNames(),
         ]);
+    }
+
+    /**
+     * Face ID login — compares uploaded photo with student's reference photo
+     * (HEMIS profile image or latest approved StudentPhoto) using the local
+     * face-compare microservice (DeepFace + ArcFace, port 5005).
+     */
+    public function studentFaceLogin(Request $request): JsonResponse
+    {
+        $request->validate([
+            'login' => ['required', 'string'],
+            'photo' => ['required', 'file', 'image', 'max:5120'],
+        ]);
+
+        $student = Student::where('student_id_number', $request->login)->first();
+        if (!$student) {
+            return response()->json(['message' => 'Talaba topilmadi.'], 404);
+        }
+
+        // Reference image — prefer approved StudentPhoto, fallback to HEMIS profile
+        $referenceUrl = null;
+
+        $approvedPhoto = StudentPhoto::where('student_id_number', $student->student_id_number)
+            ->where('status', StudentPhoto::STATUS_APPROVED)
+            ->latest('reviewed_at')
+            ->first();
+
+        if ($approvedPhoto && $approvedPhoto->photo_path) {
+            $referenceUrl = asset($approvedPhoto->photo_path);
+        } elseif (!empty($student->image)) {
+            $referenceUrl = $student->image;
+        }
+
+        if (!$referenceUrl) {
+            return response()->json([
+                'message' => "Talabaning tasdiqlangan rasmi topilmadi. Avval parol bilan kiring.",
+            ], 422);
+        }
+
+        // Save uploaded photo temporarily
+        $tmpPath = $request->file('photo')->store('face-login-tmp', 'public');
+        $tmpUrl = asset('storage/' . $tmpPath);
+
+        $serviceUrl = rtrim(config('services.face_compare.url', 'http://127.0.0.1:5005'), '/');
+        $timeout = config('services.face_compare.timeout', 60);
+
+        try {
+            $response = Http::timeout($timeout)
+                ->acceptJson()
+                ->post($serviceUrl . '/compare', [
+                    'image1' => $referenceUrl,
+                    'image2' => $tmpUrl,
+                ]);
+        } catch (\Throwable $e) {
+            Storage::disk('public')->delete($tmpPath);
+            Log::error('Face login: compare service unreachable', [
+                'student' => $student->student_id_number,
+                'error' => $e->getMessage(),
+            ]);
+            return response()->json([
+                'message' => 'Yuz tanish servisiga ulanib bo\'lmadi.',
+            ], 503);
+        }
+
+        // Cleanup temporary upload
+        Storage::disk('public')->delete($tmpPath);
+
+        if (!$response->successful()) {
+            return response()->json([
+                'message' => 'Yuz tanish xatoligi: ' . ($response->json('detail') ?? $response->body()),
+            ], 502);
+        }
+
+        $data = $response->json();
+        $percent = (float) ($data['similarity_percent'] ?? 0);
+        $match = (bool) ($data['match'] ?? false);
+
+        Log::info('Face login attempt', [
+            'student' => $student->student_id_number,
+            'similarity' => $percent,
+            'match' => $match,
+        ]);
+
+        if (!$match) {
+            return response()->json([
+                'message' => 'Yuz mos kelmadi. Iltimos, parol bilan kiring.',
+                'similarity_percent' => $percent,
+            ], 401);
+        }
+
+        return $this->issueStudentToken($student);
     }
 
     // --- Private Helpers ---

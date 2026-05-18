@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Teacher\AcademicDept;
 
+use App\Exports\RetakeApplicationsExport;
 use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\RetakeApplication;
@@ -14,6 +15,7 @@ use App\Services\Retake\RetakeFilterCache;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * O'quv bo'limi uchun "QO': Arizalar" sahifasi.
@@ -136,6 +138,36 @@ class RetakeAcademicApplicationController extends Controller
             'counters' => $counters,
             'perPage' => $perPage,
         ]);
+    }
+
+    /**
+     * Joriy filtrlar bo'yicha arizalarni Excel'ga eksport qilish.
+     */
+    public function export(Request $request)
+    {
+        $this->authorizeAccess();
+
+        $filters = [
+            'stage' => $request->input('stage'),
+            'department' => $request->input('department'),
+            'specialty' => $request->input('specialty'),
+            'level_code' => $request->input('level_code'),
+            'semester_code' => $request->input('semester_code'),
+            'education_type' => $request->input('education_type'),
+            'group' => $request->input('group'),
+            'subject' => $request->input('subject'),
+            'search' => $request->input('search'),
+            'date_from' => $request->input('date_from'),
+            'date_to' => $request->input('date_to'),
+        ];
+
+        if (($filters['stage'] ?? 'all') === 'all') {
+            $filters['stage'] = null;
+        }
+
+        $fileName = 'retake_arizalar_oquv_bolimi_' . now()->format('Y_m_d_His') . '.xlsx';
+
+        return Excel::download(new RetakeApplicationsExport($filters), $fileName);
     }
 
     private function countersBaseQuery()

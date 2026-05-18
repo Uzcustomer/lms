@@ -7,6 +7,7 @@ import '../../l10n/app_localizations.dart';
 import '../../providers/settings_provider.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/scale_tap.dart';
+import '../../widgets/settings_sheet.dart';
 import 'student_services_screen.dart';
 import 'student_exam_schedule_screen.dart';
 import 'attendance_stats_screen.dart';
@@ -92,8 +93,8 @@ class StudentUsefulScreen extends StatelessWidget {
                 Container(
                   padding: EdgeInsets.only(top: statusBarH, left: 16, right: 4),
                   height: statusBarH + 64,
-                  decoration: const BoxDecoration(
-                    color: Color(0xFF0A1A3A),
+                  decoration: BoxDecoration(
+                    color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
                     borderRadius: BorderRadius.only(
                       bottomLeft: Radius.circular(18),
                       bottomRight: Radius.circular(18),
@@ -111,6 +112,10 @@ class StudentUsefulScreen extends StatelessWidget {
                       IconButton(
                         icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
                         onPressed: () {},
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
+                        onPressed: () => showSettingsSheet(context),
                       ),
                     ],
                   ),
@@ -137,6 +142,7 @@ class StudentUsefulScreen extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(horizontal: 16),
                   child: GridView.builder(
                     shrinkWrap: true,
+                    padding: EdgeInsets.zero,
                     physics: const NeverScrollableScrollPhysics(),
                     itemCount: services.length,
                     gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
@@ -250,7 +256,6 @@ class _GlassTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
 
     return ScaleTap(
       onTap: () => Navigator.push(
@@ -264,7 +269,6 @@ class _GlassTile extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               color: surface,
-              border: Border.all(color: border),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(

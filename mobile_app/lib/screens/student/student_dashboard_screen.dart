@@ -14,6 +14,7 @@ import '../../providers/settings_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/scale_tap.dart';
+import '../../widgets/settings_sheet.dart';
 import 'student_home_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
@@ -275,9 +276,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
-    final cc = cardColor ?? const Color(0xFF0A1A3A);
+    final cc = cardColor ?? const Color(0xFF1E3A8A);
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
@@ -285,7 +285,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         child: Container(
           decoration: BoxDecoration(
             color: surface,
-            border: Border.all(color: border),
             borderRadius: BorderRadius.circular(borderRadius),
             boxShadow: [
               BoxShadow(
@@ -369,8 +368,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         Container(
           padding: EdgeInsets.only(top: statusBarHeight, left: 16, right: 4),
           height: statusBarHeight + 64,
-          decoration: const BoxDecoration(
-            color: Color(0xFF0A1A3A),
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
             borderRadius: BorderRadius.only(
               bottomLeft: Radius.circular(18),
               bottomRight: Radius.circular(18),
@@ -388,7 +387,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               ),
               IconButton(
                 icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
-                onPressed: () => _showSettingsSheet(context),
+                onPressed: () => showSettingsSheet(context),
               ),
             ],
           ),
@@ -654,192 +653,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  void _showSettingsSheet(BuildContext context) {
-    final l = AppLocalizations.of(context);
-    final settings = context.read<SettingsProvider>();
-
-    showModalBottomSheet(
-      context: context,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            final isDark = settings.isDark;
-            return Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Handle bar
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[400],
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Text(
-                    l.settings,
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Theme toggle
-                  Text(
-                    l.theme,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _buildThemeOption(
-                        ctx,
-                        icon: Icons.light_mode,
-                        label: l.lightMode,
-                        isSelected: !isDark,
-                        onTap: () {
-                          settings.setThemeMode(ThemeMode.light);
-                          setSheetState(() {});
-                        },
-                      ),
-                      const SizedBox(width: 12),
-                      _buildThemeOption(
-                        ctx,
-                        icon: Icons.dark_mode,
-                        label: l.darkMode,
-                        isSelected: isDark,
-                        onTap: () {
-                          settings.setThemeMode(ThemeMode.dark);
-                          setSheetState(() {});
-                        },
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Language selection
-                  Text(
-                    l.language,
-                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      _buildLangOption(ctx, 'UZ', l.uzbek, 'uz', settings),
-                      const SizedBox(width: 8),
-                      _buildLangOption(ctx, 'RU', l.russian, 'ru', settings),
-                      const SizedBox(width: 8),
-                      _buildLangOption(ctx, 'EN', l.english, 'en', settings),
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildThemeOption(
-    BuildContext context, {
-    required IconData icon,
-    required String label,
-    required bool isSelected,
-    required VoidCallback onTap,
-  }) {
-    final isDk = Theme.of(context).brightness == Brightness.dark;
-    final unselectedBg = isDk ? AppTheme.darkSurface : Colors.grey[200];
-    final unselectedFg = isDk ? AppTheme.darkTextSecondary : Colors.grey[600];
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 14),
-          decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primaryColor : unselectedBg,
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: isSelected ? Colors.white : unselectedFg, size: 28),
-              const SizedBox(height: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: isSelected ? Colors.white : unselectedFg,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildLangOption(
-    BuildContext context,
-    String code,
-    String label,
-    String langCode,
-    SettingsProvider settings,
-  ) {
-    final isSelected = settings.languageCode == langCode;
-    final isDk = Theme.of(context).brightness == Brightness.dark;
-    final unselectedBg = isDk ? AppTheme.darkSurface : Colors.grey[200];
-    final unselectedBorder = isDk ? AppTheme.darkDivider : Colors.grey[300]!;
-    final unselectedCodeColor = isDk ? AppTheme.darkTextPrimary : Colors.grey[700];
-    final unselectedLabelColor = isDk ? AppTheme.darkTextSecondary : Colors.grey[500];
-
-    return Expanded(
-      child: GestureDetector(
-        onTap: () {
-          settings.setLocale(Locale(langCode));
-          Navigator.pop(context);
-        },
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 12),
-          decoration: BoxDecoration(
-            color: isSelected ? AppTheme.primaryColor : unselectedBg,
-            borderRadius: BorderRadius.circular(14),
-            border: isSelected ? null : Border.all(color: unselectedBorder),
-          ),
-          child: Column(
-            children: [
-              Text(
-                code,
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: isSelected ? Colors.white : unselectedCodeColor,
-                ),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: isSelected ? Colors.white70 : unselectedLabelColor,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildMiniStat(String label, String value, Color labelColor, Color valueColor) {
     return Expanded(
       child: Column(
@@ -929,6 +742,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           ? ((totalHours - absentHours) / totalHours * 100).clamp(0.0, 100.0)
           : 100.0;
       items.add({
+        'subject_id': s['subject_id'],
         'name': s['subject_name']?.toString() ?? '',
         'jn': jnVal,
         'attendance': attendance,
@@ -972,10 +786,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           }
 
           const subjectColors = [Color(0xFF43A047), Color(0xFF7C4DFF), Color(0xFFE65100), Color(0xFF0097A7), Color(0xFFE91E63), Color(0xFF1565C0)];
+          final rawId = item['subject_id'];
+          final subjectId = rawId is int
+              ? rawId
+              : (rawId == null ? null : int.tryParse(rawId.toString()));
           return Padding(
             padding: const EdgeInsets.only(bottom: 8),
             child: ScaleTap(
-              onTap: () => StudentHomeScreen.switchToGrades(context),
+              onTap: () => subjectId != null
+                  ? StudentHomeScreen.openSubject(context, subjectId)
+                  : StudentHomeScreen.switchToGrades(context),
               child: _buildGlassCard(
               isDark: isDark,
               cardColor: subjectColors[index % subjectColors.length],
@@ -1035,6 +855,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         ],
                       ),
                     ),
+                    const SizedBox(width: 8),
+                    _TapHintChevron(color: subTextColor),
                   ],
                 ),
               ),
@@ -1791,6 +1613,71 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           ],
         ),
       ),
+      ),
+    );
+  }
+}
+
+/// Right-side "tap me" affordance for tappable dashboard subject cards.
+/// A pointing-hand icon sitting on top of a pulsing colored halo, so the
+/// affordance is unambiguous and catches the eye.
+class _TapHintChevron extends StatefulWidget {
+  final Color? color;
+  const _TapHintChevron({this.color});
+
+  @override
+  State<_TapHintChevron> createState() => _TapHintChevronState();
+}
+
+class _TapHintChevronState extends State<_TapHintChevron>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
+
+  late final Animation<double> _opacity = Tween<double>(begin: 0.15, end: 0.85)
+      .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const haloColor = Color(0xFFFFA726); // bright amber — eye-catching
+    return AnimatedBuilder(
+      animation: _opacity,
+      builder: (_, __) => SizedBox(
+        width: 36,
+        height: 36,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: haloColor.withOpacity(_opacity.value * 0.35),
+                boxShadow: [
+                  BoxShadow(
+                    color: haloColor.withOpacity(_opacity.value * 0.6),
+                    blurRadius: 14,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+            ),
+            const Icon(
+              Icons.touch_app_rounded,
+              size: 20,
+              color: haloColor,
+            ),
+          ],
+        ),
       ),
     );
   }

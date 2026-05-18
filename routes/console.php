@@ -100,6 +100,12 @@ Schedule::command('chat:purge --days=14')->dailyAt('04:00');
 // (otrabotka baholari + o'zgartirilgan baholar jadvali; oxirgi 24 soat)
 Schedule::command('grades:send-daily-changes-digest')->dailyAt('08:00');
 
+// Kunlik Moodle ↔ LMS sync ↔ Mark reconciliation — har kuni 08:00 da
+// test_markazi rolidagi foydalanuvchilarga (User va Teacher) shaxsiy
+// Telegram chatiga kechagi kun bo'yicha xabar yuboriladi. Farq 0 bo'lsa
+// xabar yuborilmaydi (--force bayrog'i bilan zo'rlash mumkin).
+Schedule::command('kunlik-monitoring:send-report')->dailyAt('08:00')->withoutOverlapping(30);
+
 // ─── Qayta o'qish arizalari (retake) ─────────────────────────────────
 // Guruh holat o'tishlari: scheduled→in_progress, in_progress→completed.
 // Har kuni 00:05 da ishga tushadi.

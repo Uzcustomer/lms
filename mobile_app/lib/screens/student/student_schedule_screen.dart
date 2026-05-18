@@ -7,6 +7,7 @@ import '../../providers/settings_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
+import '../../widgets/settings_sheet.dart';
 import 'student_home_screen.dart';
 
 class StudentScheduleScreen extends StatefulWidget {
@@ -135,9 +136,8 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
   }
 
   Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
-    final cc = cardColor ?? const Color(0xFF0A1A3A);
+    final cc = cardColor ?? const Color(0xFF1E3A8A);
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
     return ClipRRect(
       borderRadius: BorderRadius.circular(borderRadius),
       child: BackdropFilter(
@@ -145,7 +145,6 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
         child: Container(
           decoration: BoxDecoration(
             color: surface,
-            border: Border.all(color: border),
             borderRadius: BorderRadius.circular(borderRadius),
             boxShadow: [
               BoxShadow(
@@ -219,7 +218,8 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
               );
             }
 
-            final days = schedule['days'] as Map<String, dynamic>? ?? {};
+            final daysRaw = schedule['days'];
+            final days = daysRaw is Map<String, dynamic> ? daysRaw : <String, dynamic>{};
             final dateSchedule = schedule['schedule'] as List<dynamic>? ?? [];
             final weeks = schedule['weeks'] as List<dynamic>? ?? [];
             final selectedWeekId = schedule['selected_week_id'];
@@ -239,8 +239,8 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                   Container(
                     padding: EdgeInsets.only(top: statusBarH, left: 16, right: 4),
                     height: statusBarH + 64,
-                    decoration: const BoxDecoration(
-                      color: Color(0xFF0A1A3A),
+                    decoration: BoxDecoration(
+                      color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
                       borderRadius: BorderRadius.only(
                         bottomLeft: Radius.circular(18),
                         bottomRight: Radius.circular(18),
@@ -261,7 +261,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                         ),
                         IconButton(
                           icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
-                          onPressed: () {},
+                          onPressed: () => showSettingsSheet(context),
                         ),
                       ],
                     ),

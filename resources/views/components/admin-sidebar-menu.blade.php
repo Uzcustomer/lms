@@ -201,6 +201,14 @@
             </svg>
             Talabalar reytingi
         </a>
+        <a href="{{ route('admin.registrator.face-check.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.registrator.face-check.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
+            </svg>
+            Face ID tekshiruv
+        </a>
         @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'dekan']))
@@ -223,13 +231,25 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'tyutor', 'dekan', 'registrator_ofisi']))
+        {{-- Dekan/registrator bularni o'z "Qo'shimcha" bo'limidan oladi
+             (pastdagi @elseif blokda). Bu yerda — qolgan rollarga. --}}
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'tyutor']))
         <a href="{{ route('admin.group-test-schedule.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.group-test-schedule*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
             </svg>
             Guruh test jadvali
+        </a>
+        @endif
+
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
+        <a href="{{ route('admin.dean-exam-reschedule.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.dean-exam-reschedule*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Kech qolgan talabani ko'chirish
         </a>
         @endif
 
@@ -320,6 +340,14 @@
             Yuklanmagan natijalar
         </a>
 
+        <a href="{{ $r('admin.kunlik-monitoring.index', 'teacher.kunlik-monitoring.index') }}"
+           class="sidebar-link {{ $isActive('admin.kunlik-monitoring.*', 'teacher.kunlik-monitoring.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            Kunlik monitoring
+        </a>
+
         <a href="{{ $r('admin.yn-qaytnoma.index', 'teacher.yn-qaytnoma.index') }}"
            class="sidebar-link {{ $isActive('admin.yn-qaytnoma.*', 'teacher.yn-qaytnoma.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -377,6 +405,33 @@
         @elseif($hasActiveRole(['registrator_ofisi', 'dekan']))
         {{-- Registrator ofisi / Dekan: YN jadvali (faqat ko'rish) + YN kunini belgilash (sozlamalardan ruxsat berilgan bo'lsa) --}}
         <div class="sidebar-section">Qo'shimcha</div>
+
+        <a href="{{ route('admin.group-test-schedule.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.group-test-schedule*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            Guruh test jadvali
+        </a>
+
+        @if($hasActiveRole('dekan'))
+        <a href="{{ route('admin.dean-exam-reschedule.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.dean-exam-reschedule*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+            </svg>
+            Kech qolgan talabani ko'chirish
+        </a>
+        @endif
+
+        <a href="{{ $r('admin.academic-schedule.bandlik-kursatkichi', 'teacher.academic-schedule.bandlik-kursatkichi') }}"
+           class="sidebar-link {{ $isActive('admin.academic-schedule.bandlik-kursatkichi', 'teacher.academic-schedule.bandlik-kursatkichi') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            Bandlik ko'rsatkichi
+        </a>
+
         <a href="{{ $r('admin.academic-schedule.test-center', 'teacher.academic-schedule.test-center') }}"
            class="sidebar-link {{ $isActive('admin.academic-schedule.test-center', 'teacher.academic-schedule.test-center') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -400,14 +455,6 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
             </svg>
             Vedomost tekshirish
-        </a>
-        <a href="{{ route('admin.registrator.face-check.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.registrator.face-check.*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"></path>
-            </svg>
-            Face ID tekshiruv
         </a>
         @endif
         @elseif($hasActiveRole('nazoratchi'))
@@ -526,6 +573,24 @@
             YN kunini belgilash
         </a>
         @endif
+
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
+        <a href="{{ $r('admin.academic-schedule.test-center', 'teacher.academic-schedule.test-center') }}"
+           class="sidebar-link {{ $isActive('admin.academic-schedule.test-center', 'teacher.academic-schedule.test-center') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+            </svg>
+            YN jadvali
+        </a>
+
+        <a href="{{ $r('admin.academic-schedule.bandlik-kursatkichi', 'teacher.academic-schedule.bandlik-kursatkichi') }}"
+           class="sidebar-link {{ $isActive('admin.academic-schedule.bandlik-kursatkichi', 'teacher.academic-schedule.bandlik-kursatkichi') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            Bandlik ko'rsatkichi
+        </a>
+        @endif
         @endif
 
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'oquv_prorektori']))
@@ -561,6 +626,14 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>
             Yuklanmagan natijalar
+        </a>
+
+        <a href="{{ $r('admin.kunlik-monitoring.index', 'teacher.kunlik-monitoring.index') }}"
+           class="sidebar-link {{ $isActive('admin.kunlik-monitoring.*', 'teacher.kunlik-monitoring.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            Kunlik monitoring
         </a>
         @endif
         @endif
@@ -884,6 +957,10 @@
             </svg>
             QO': Sessiyalar
         </a>
+        @endif
+
+        {{-- QO': Qabul oynalari — O'quv bo'limi boshqaradi, Registrator ofisi faqat ko'radi --}}
+        @if($hasActiveRole(['superadmin', 'admin', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'registrator_ofisi']))
         <a href="{{ route('admin.retake-windows.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.retake-windows.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -891,6 +968,10 @@
             </svg>
             QO': Qabul oynalari
         </a>
+        @endif
+
+        {{-- O'quv bo'limi: qolgan QO' bo'limlari --}}
+        @if($hasActiveRole(['superadmin', 'admin', 'oquv_bolimi', 'oquv_bolimi_boshligi']))
         <a href="{{ route('admin.retake-applications.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.retake-applications.*') ? 'sidebar-active' : '' }}" style="position: relative;">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

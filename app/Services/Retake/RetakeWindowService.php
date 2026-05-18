@@ -22,7 +22,7 @@ class RetakeWindowService
         }
 
         return RetakeApplicationWindow::query()
-            ->forStudent((int) $student->specialty_id, $student->level_code, (string) ($student->department_id ?? ''))
+            ->forStudent((int) $student->specialty_id, $student->level_code, (string) ($student->department_id ?? ''), (string) ($student->specialty_name ?? ''))
             ->active()
             ->whereHas('session', fn ($q) => $q->where('is_closed', false))
             ->orderByDesc('end_date')
@@ -41,7 +41,7 @@ class RetakeWindowService
         }
 
         return RetakeApplicationWindow::query()
-            ->forStudent((int) $student->specialty_id, $student->level_code, (string) ($student->department_id ?? ''))
+            ->forStudent((int) $student->specialty_id, $student->level_code, (string) ($student->department_id ?? ''), (string) ($student->specialty_name ?? ''))
             ->orderByDesc('start_date')
             ->get();
     }

@@ -44,7 +44,12 @@
 
             @php $editable = $group->isEditable() || $canOverride; @endphp
 
-            <form method="POST" action="{{ route('admin.retake-groups.update', $group->id) }}" class="mt-4 space-y-3">
+            <form method="POST" action="{{ route('admin.retake-groups.update', $group->id) }}" class="mt-4 space-y-3"
+                  x-data="{
+                      phones: @js(!empty($group->teacher_phones) ? $group->teacher_phones : ['']),
+                      add() { if (this.phones.length < 5) this.phones.push(''); },
+                      remove(i) { if (this.phones.length > 1) this.phones.splice(i, 1); }
+                  }">
                 @csrf @method('PUT')
 
                 <div>
@@ -64,6 +69,32 @@
                             </option>
                         @endforeach
                     </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-medium text-gray-700 mb-1">
+                        {{ __("O'qituvchi telefon raqami") }} <span class="text-red-500">*</span>
+                        <span class="text-[10px] font-normal text-gray-500">({{ __("bir nechta qo'shish mumkin") }})</span>
+                    </label>
+                    <div class="space-y-1.5">
+                        <template x-for="(phone, idx) in phones" :key="idx">
+                            <div class="flex gap-1.5">
+                                <input type="tel" name="teacher_phones[]" required
+                                       x-model="phones[idx]"
+                                       placeholder="+998 90 123 45 67"
+                                       {{ $editable ? '' : 'disabled' }}
+                                       class="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
+                                <button type="button" @click="remove(idx)" x-show="phones.length > 1 && {{ $editable ? 'true' : 'false' }}"
+                                        class="px-2.5 py-1 text-xs bg-red-50 text-red-700 rounded-lg hover:bg-red-100">✕</button>
+                            </div>
+                        </template>
+                        @if($editable)
+                            <button type="button" @click="add()" x-show="phones.length < 5"
+                                    class="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg">
+                                + {{ __("Yana raqam qo'shish") }}
+                            </button>
+                        @endif
+                    </div>
                 </div>
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -122,10 +153,86 @@
         </div>
 
         {{-- Talabalar ro'yxati --}}
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            <div class="px-5 py-4 border-b border-gray-100">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
+             x-data="addStudentsModal({
+                eligibleUrl: '{{ route('admin.retake-groups.eligible-applications', $group->id) }}',
+                addUrl: '{{ route('admin.retake-groups.add-students', $group->id) }}',
+                csrf: '{{ csrf_token() }}',
+             })">
+            <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
                 <h3 class="text-sm font-semibold text-gray-900">{{ __("Talabalar") }} ({{ $group->applications->count() }})</h3>
+                @if($group->status !== 'completed')
+                    <button type="button" @click="openModal()"
+                            class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        {{ __("Talaba qo'shish") }}
+                    </button>
+                @endif
             </div>
+            {{-- Talaba qo'shish modali --}}
+            <div x-show="showModal" x-cloak class="fixed inset-0 z-50 overflow-y-auto" @keydown.escape.window="closeModal()">
+                <div class="flex items-start justify-center min-h-screen p-4">
+                    <div class="fixed inset-0 bg-black bg-opacity-50" @click="closeModal()"></div>
+                    <div class="relative bg-white rounded-2xl shadow-xl max-w-3xl w-full p-6 z-10 my-8">
+                        <h3 class="text-base font-bold text-gray-900 mb-2">{{ __("Guruhga talaba qo'shish") }}</h3>
+                        <p class="text-xs text-gray-500 mb-3">
+                            {{ __("Hali guruhlanmagan tasdiqlangan arizalardan tanlang") }}
+                            <span class="text-gray-400">·</span>
+                            {{ __("Tanlangan") }}: <span class="font-bold text-blue-700" x-text="selected.length"></span>
+                        </p>
+
+                        <div class="mb-3">
+                            <input type="text" x-model="search" placeholder="{{ __('F.I.Sh, HEMIS ID, fan yoki yo\'nalish bo\'yicha qidirish') }}"
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg">
+                        </div>
+
+                        <div class="border border-gray-200 rounded-lg max-h-96 overflow-y-auto">
+                            <template x-if="loading">
+                                <div class="p-6 text-center text-sm text-gray-500">{{ __("Yuklanmoqda...") }}</div>
+                            </template>
+                            <template x-if="!loading && filteredApps.length === 0">
+                                <div class="p-6 text-center text-sm text-gray-500">{{ __("Mos ariza topilmadi") }}</div>
+                            </template>
+                            <template x-for="app in filteredApps" :key="app.id">
+                                <label class="flex items-start px-3 py-2 hover:bg-gray-50 border-b border-gray-100 cursor-pointer">
+                                    <input type="checkbox" :value="app.id" x-model="selected" class="mt-0.5 rounded text-blue-600">
+                                    <span class="ml-2 flex-1 text-xs">
+                                        <span class="font-medium text-gray-900" x-text="app.student_name"></span>
+                                        <span class="text-gray-500" x-text="' · ' + app.student_hemis_id"></span>
+                                        <span class="ml-2 inline-block px-1.5 py-0.5 rounded bg-purple-50 text-purple-700 text-[10px] font-medium"
+                                              x-text="app.subject_name"></span>
+                                        <span class="ml-1 inline-block px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 text-[10px]"
+                                              x-text="app.semester_name"></span>
+                                        <span class="block text-[11px] text-gray-500 mt-0.5"
+                                              x-text="(app.department_name || '') + ' · ' + (app.specialty_name || '') + ' · ' + (app.level_name || '') + ' · ' + (app.group_name || '')"></span>
+                                    </span>
+                                    <span class="text-xs text-gray-500 mr-2 whitespace-nowrap" x-text="app.credit + ' kr'"></span>
+                                </label>
+                            </template>
+                        </div>
+
+                        <form method="POST" :action="addUrl" class="flex gap-2 pt-4">
+                            <input type="hidden" name="_token" :value="csrf">
+                            <template x-for="id in selected" :key="id">
+                                <input type="hidden" name="application_ids[]" :value="id">
+                            </template>
+                            <button type="button" @click="closeModal()"
+                                    class="flex-1 px-3 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200">
+                                {{ __("Bekor qilish") }}
+                            </button>
+                            <button type="submit"
+                                    :disabled="selected.length === 0"
+                                    :class="selected.length === 0 ? 'bg-gray-300 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
+                                    class="flex-1 px-3 py-2 text-sm text-white rounded-lg">
+                                {{ __("Guruhga qo'shish") }} (<span x-text="selected.length"></span>)
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
             <div class="overflow-x-auto">
                 <table class="min-w-full divide-y divide-gray-100">
                     <thead class="bg-gray-50">
@@ -164,4 +271,47 @@
             </div>
         </div>
     </div>
+
+    @push('scripts')
+    <script>
+        function addStudentsModal({ eligibleUrl, addUrl, csrf }) {
+            return {
+                eligibleUrl, addUrl, csrf,
+                showModal: false,
+                loading: false,
+                apps: [],
+                selected: [],
+                search: '',
+                async openModal() {
+                    this.showModal = true;
+                    this.selected = [];
+                    this.search = '';
+                    this.loading = true;
+                    try {
+                        const res = await fetch(this.eligibleUrl, { headers: { 'Accept': 'application/json' } });
+                        const json = await res.json();
+                        this.apps = json.applications || [];
+                    } catch (e) {
+                        this.apps = [];
+                    } finally {
+                        this.loading = false;
+                    }
+                },
+                closeModal() { this.showModal = false; },
+                get filteredApps() {
+                    const q = this.search.trim().toLowerCase();
+                    if (!q) return this.apps;
+                    return this.apps.filter(a =>
+                        (a.student_name || '').toLowerCase().includes(q)
+                        || String(a.student_hemis_id || '').includes(q)
+                        || (a.subject_name || '').toLowerCase().includes(q)
+                        || (a.specialty_name || '').toLowerCase().includes(q)
+                        || (a.department_name || '').toLowerCase().includes(q)
+                        || (a.group_name || '').toLowerCase().includes(q)
+                    );
+                },
+            };
+        }
+    </script>
+    @endpush
 </x-teacher-app-layout>

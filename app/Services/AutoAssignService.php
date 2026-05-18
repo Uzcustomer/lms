@@ -34,7 +34,13 @@ class AutoAssignService
      * @param string $startTime "HH:mm" — earliest slot start for this group
      * @return array{ok:bool, count?:int, slots?:array<int,array{time:string,students:int}>, skipped?:bool, reason?:string}
      */
-    public function distribute(ExamSchedule $schedule, string $ynType, string $startTime): array
+    /**
+     * @param array<int,array{start_min:int,count:int}> $extraOccupancy
+     *        Slot-bo'yicha qo'shimcha bandlik (resit time'lar uchun, ular
+     *        ComputerAssignment'da yo'q). autoTimeAll bulk rejimida slot
+     *        ust-ust tushishini oldini olish uchun ishlatiladi.
+     */
+    public function distribute(ExamSchedule $schedule, string $ynType, string $startTime, array $extraOccupancy = []): array
     {
         $ynType = strtolower($ynType);
         if (!in_array($ynType, ['oski', 'test'], true)) {
@@ -83,7 +89,17 @@ class AutoAssignService
             return ['ok' => false, 'skipped' => true, 'reason' => 'no students in group'];
         }
 
+        // Slot sig'imi = primaryComputerCount (reserve pool ayrilgan), lekin
+        // sozlamalardagi computer_count'dan oshmaydi. Reserve pool — failover
+        // uchun ajratilgan kompyuterlar (asosiy ishlamay qolsa zaxira); ularni
+        // slot rejalashtirishda band qilib ketmaslik kerak. Admin reserve
+        // sonini Computer.is_reserve_pool yoki services.moodle.reserve_computers_count
+        // orqali boshqaradi.
         $slotCapacity = $this->primaryComputerCount();
+        $configCap = (int) ($capacity['computer_count'] ?? 0);
+        if ($configCap > 0) {
+            $slotCapacity = min($slotCapacity, $configCap);
+        }
         if ($slotCapacity < 1) {
             return ['ok' => false, 'skipped' => true, 'reason' => 'no primary computers configured'];
         }
@@ -93,32 +109,29 @@ class AutoAssignService
             $slotStart = $workStart->copy();
         }
 
-        $remaining = $students->all();
+        $needed = $students->count();
         $createdRows = [];
         $slotReport = [];
         $now = now();
 
+        // BEST-FIT slot tanlash — barcha mos slotlar tekshiriladi, eng kam
+        // bo'sh joy qoldiradigan slot tanlanadi. Avval first-fit ishlatardi
+        // (eng ertasi) — endi to'ldirish maqsadida tightest-fit.
+        $bestSlotStart = null;
+        $bestLeftover = null;
+        $cursor = $slotStart->copy();
         $guard = 0;
-        while (!empty($remaining) && $guard++ < 100) {
-            $slotEnd = $slotStart->copy()->addMinutes($slotLength);
+        while ($guard++ < 200) {
+            $slotEnd = $cursor->copy()->addMinutes($slotLength);
+            if ($slotEnd->gt($workEnd)) break;
 
-            if ($slotEnd->gt($workEnd)) {
-                return [
-                    'ok' => false,
-                    'skipped' => true,
-                    'reason' => "no slot available in working hours; " . count($remaining) . ' students unplaced',
-                ];
-            }
-
-            // Skip lunch
-            if ($lunchStart && $lunchEnd && $slotStart->lt($lunchEnd) && $slotEnd->gt($lunchStart)) {
-                $slotStart = $lunchEnd->copy();
+            if ($lunchStart && $lunchEnd && $cursor->lt($lunchEnd) && $slotEnd->gt($lunchStart)) {
+                $cursor = $lunchEnd->copy();
                 continue;
             }
 
-            // How many other students from OTHER schedules already share this slot?
             $alreadyBookedHere = ComputerAssignment::query()
-                ->where('planned_end', '>', $slotStart)
+                ->where('planned_end', '>', $cursor)
                 ->where('planned_start', '<', $slotEnd)
                 ->where(function ($q) use ($schedule, $ynType) {
                     $q->where('exam_schedule_id', '!=', $schedule->id)
@@ -130,41 +143,65 @@ class AutoAssignService
                 ])
                 ->count();
 
-            $room = max(0, $slotCapacity - $alreadyBookedHere);
-            if ($room < 1) {
-                $slotStart = $slotEnd->copy();
-                continue;
+            if (!empty($extraOccupancy)) {
+                $candStartMin = (int) ($cursor->hour * 60 + $cursor->minute);
+                $candEndMin = $candStartMin + $slotLength;
+                foreach ($extraOccupancy as $entry) {
+                    $eStart = (int) $entry['start_min'];
+                    $eEnd = $eStart + $slotLength;
+                    if ($eStart < $candEndMin && $eEnd > $candStartMin) {
+                        $alreadyBookedHere += (int) $entry['count'];
+                    }
+                }
             }
 
-            $take = array_splice($remaining, 0, $room);
-            foreach ($take as $student) {
-                $createdRows[] = [
-                    'exam_schedule_id' => $schedule->id,
-                    'student_id_number' => (string) $student->student_id_number,
-                    'student_hemis_id' => (string) $student->hemis_id,
-                    'yn_type' => $ynType,
-                    'computer_number' => null,
-                    'planned_start' => $slotStart->copy(),
-                    'planned_end' => $slotEnd->copy(),
-                    'reveal_at' => null,
-                    'reveal_notified' => false,
-                    'approach_notified' => false,
-                    'ready_notified' => false,
-                    'is_reserve' => false,
-                    'is_pinned' => false,
-                    'status' => ComputerAssignment::STATUS_SCHEDULED,
-                    'created_at' => $now,
-                    'updated_at' => $now,
-                ];
+            $leftover = $slotCapacity - $alreadyBookedHere - $needed;
+            if ($leftover >= 0) {
+                if ($bestLeftover === null || $leftover < $bestLeftover) {
+                    $bestLeftover = $leftover;
+                    $bestSlotStart = $cursor->copy();
+                    if ($leftover === 0) break; // perfect fit
+                }
             }
 
-            $slotReport[] = [
-                'time' => $slotStart->format('H:i'),
-                'students' => count($take),
-            ];
-
-            $slotStart = $slotEnd->copy();
+            $cursor = $slotEnd->copy();
         }
+
+        if ($bestSlotStart === null) {
+            return [
+                'ok' => false,
+                'skipped' => true,
+                'reason' => "no slot available in working hours; {$needed} students unplaced",
+            ];
+        }
+
+        $bestSlotEnd = $bestSlotStart->copy()->addMinutes($slotLength);
+        foreach ($students as $student) {
+            $createdRows[] = [
+                'exam_schedule_id' => $schedule->id,
+                'student_id_number' => (string) $student->student_id_number,
+                'student_hemis_id' => (string) $student->hemis_id,
+                'yn_type' => $ynType,
+                'computer_number' => null,
+                'planned_start' => $bestSlotStart->copy(),
+                'planned_end' => $bestSlotEnd->copy(),
+                'reveal_at' => null,
+                'reveal_notified' => false,
+                'approach_notified' => false,
+                'ready_notified' => false,
+                'is_reserve' => false,
+                'is_pinned' => false,
+                'status' => ComputerAssignment::STATUS_SCHEDULED,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+        $slotReport[] = [
+            'time' => $bestSlotStart->format('H:i'),
+            'students' => $needed,
+        ];
+        $remaining = []; // hammasi joylandi
+        $slotStart = $bestSlotStart;
 
         if (!empty($remaining)) {
             return [
@@ -366,5 +403,24 @@ class AutoAssignService
     private function primaryComputerCount(): int
     {
         return count($this->primaryPoolNumbers());
+    }
+
+    /**
+     * Controller-lar uchun yagona "effective slot capacity" helper.
+     * Sozlamalardagi computer_count va aktiv primary (reserve ayrilgan)
+     * kompyuterlarning eng kichigini qaytaradi. Reserve pool — failover,
+     * shu sabab slot rejalashtirishda hisobga olinmaydi.
+     */
+    public static function effectiveSlotCapacity(array $settings): int
+    {
+        $config = (int) ($settings['computer_count'] ?? 0);
+        $service = app(self::class);
+        $primary = $service->primaryComputerCount();
+        if ($primary < 1 && $config < 1) {
+            return 0;
+        }
+        if ($primary < 1) return $config;
+        if ($config < 1) return $primary;
+        return min($primary, $config);
     }
 }

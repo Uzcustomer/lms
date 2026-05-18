@@ -693,6 +693,22 @@ class HemisService
         $page = 1;
         $hasMore = true;
         $totalImported = 0;
+        $totalSkipped = 0;
+
+        // DB dagi mavjud yozuvlarni xaritaga yuklaymiz: hemis_id => hemis_updated_at.
+        // HEMIS dan kelgan yozuvning hemis_updated_at qiymati bir xil bo'lsa,
+        // hech narsa o'zgarmagan deb hisoblaymiz va upsert qilmaymiz - bu DB
+        // yozuvini keskin kamaytiradi (~359k yozuv ko'pincha o'zgarmagan).
+        // Chunk bilan yuklaymiz - bir martada barchasini xotiraga olmaslik uchun.
+        $existing = [];
+        AcademicRecord::query()
+            ->select('hemis_id', 'hemis_updated_at')
+            ->orderBy('hemis_id')
+            ->chunk(10000, function ($chunk) use (&$existing) {
+                foreach ($chunk as $r) {
+                    $existing[(int) $r->hemis_id] = $r->hemis_updated_at?->format('Y-m-d H:i:s');
+                }
+            });
 
         while ($hasMore) {
             $response = $this->fetchAcademicRecords($page);
@@ -703,28 +719,46 @@ class HemisService
 
                 $records = array_map([$this, 'transformAcademicRecord'], $items);
 
-                AcademicRecord::upsert($records, ['hemis_id'], [
-                    'curriculum_id',
-                    'education_year',
-                    'semester_id',
-                    'student_id',
-                    'subject_id',
-                    'employee_id',
-                    'employee_name',
-                    'semester_name',
-                    'student_name',
-                    'subject_name',
-                    'total_acload',
-                    'credit',
-                    'total_point',
-                    'grade',
-                    'finish_credit_status',
-                    'retraining_status',
-                    'hemis_created_at',
-                    'hemis_updated_at',
-                ]);
+                // Faqat yangi yoki o'zgargan yozuvlarni filterlab olamiz.
+                $changedRecords = [];
+                foreach ($records as $r) {
+                    $hemisId = (int) $r['hemis_id'];
+                    if (!array_key_exists($hemisId, $existing) || $existing[$hemisId] !== $r['hemis_updated_at']) {
+                        $changedRecords[] = $r;
+                    }
+                }
 
-                $totalImported += count($items);
+                if (!empty($changedRecords)) {
+                    AcademicRecord::upsert($changedRecords, ['hemis_id'], [
+                        'curriculum_id',
+                        'education_year',
+                        'semester_id',
+                        'student_id',
+                        'subject_id',
+                        'employee_id',
+                        'employee_name',
+                        'semester_name',
+                        'student_name',
+                        'subject_name',
+                        'total_acload',
+                        'credit',
+                        'total_point',
+                        'grade',
+                        'finish_credit_status',
+                        'retraining_status',
+                        'hemis_created_at',
+                        'hemis_updated_at',
+                    ]);
+
+                    // Xaritani yangilaymiz - keyingi sahifada bir xil ID qayta
+                    // uchrasa noto'g'ri "o'zgargan" deb belgilanmasligi uchun.
+                    foreach ($changedRecords as $r) {
+                        $existing[(int) $r['hemis_id']] = $r['hemis_updated_at'];
+                    }
+                }
+
+                $totalImported += count($changedRecords);
+                $totalSkipped += count($records) - count($changedRecords);
                 $hasMore = $pagination['page'] < $pagination['pageCount'];
 
                 if ($onProgress) {
@@ -737,6 +771,11 @@ class HemisService
                 break;
             }
         }
+
+        Log::info('importAcademicRecords tugadi', [
+            'imported_or_updated' => $totalImported,
+            'skipped_unchanged' => $totalSkipped,
+        ]);
 
         return $totalImported;
     }

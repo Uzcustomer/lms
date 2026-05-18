@@ -25,6 +25,13 @@
                     </div>
                 @endif
 
+                @if(session('warning'))
+                    <div class="px-5 py-3 text-amber-800 bg-amber-50 border-b border-amber-200" role="alert">
+                        <strong class="font-bold">Diqqat!</strong>
+                        <span style="white-space:pre-line;">{{ session('warning') }}</span>
+                    </div>
+                @endif
+
                 @if(session('status'))
                     <div class="px-5 py-3 text-yellow-700 bg-yellow-50 border-b border-yellow-200" role="alert">
                         <span>{{ session('status') }}</span>
@@ -387,10 +394,30 @@
                                                     {{ $itemUrinish }}-urinish
                                                 </span>
                                             </td>
-                                            @php $stuCnt = (int) ($item['student_count'] ?? 0); @endphp
+                                            @php
+                                                $stuCnt = (int) ($item['student_count'] ?? 0);
+                                                $stuTooltipList = $item['tooltip_students'] ?? [];
+                                                $stuFailedCnt = (int) ($item['failed_count'] ?? 0);
+                                                $stuPassedCnt = (int) ($item['passed_count'] ?? $stuCnt);
+                                                // 1-urinish va yiqilganlar bor bo'lsa "passed/total" formatda ko'rsatamiz
+                                                // (masalan "7/10"). Aks holda oddiy son.
+                                                if (($item['urinish'] ?? 1) === 1 && $stuFailedCnt > 0) {
+                                                    $stuBadgeText = $stuPassedCnt . '/' . $stuCnt;
+                                                    $stuBadgeTitle = $stuFailedCnt . ' ta yiqilgan, ' . $stuPassedCnt . ' ta o\'tgan, jami ' . $stuCnt;
+                                                } else {
+                                                    $stuBadgeText = (string) $stuCnt;
+                                                    $stuBadgeTitle = 'Ushbu urinishda imtihon topshiradigan talabalar soni';
+                                                }
+                                                if (!empty($stuTooltipList)) {
+                                                    // Native title HTML atribut satrlarini \n bilan kechiradi
+                                                    $stuTooltipTitle = $stuBadgeTitle . "\n\n" . implode("\n", $stuTooltipList);
+                                                } else {
+                                                    $stuTooltipTitle = $stuBadgeTitle;
+                                                }
+                                            @endphp
                                             <td data-sort-value="{{ $stuCnt }}" style="text-align:center;padding:4px 8px;">
                                                 @if($stuCnt > 0)
-                                                    <span style="display:inline-block;min-width:28px;padding:2px 8px;border-radius:8px;font-size:12px;font-weight:600;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;" title="Ushbu urinishda imtihon topshiradigan talabalar soni">{{ $stuCnt }}</span>
+                                                    <span style="display:inline-block;min-width:28px;padding:2px 8px;border-radius:8px;font-size:12px;font-weight:600;background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;cursor:help;" title="{{ $stuTooltipTitle }}">{{ $stuBadgeText }}</span>
                                                 @else
                                                     <span style="color:#cbd5e1;font-size:12px;">—</span>
                                                 @endif
@@ -542,23 +569,49 @@
                                                 @endif
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][subject_id]" value="{{ $item['subject']->subject_id }}">
-                                                <input type="hidden" name="schedules[{{ $rowIndex }}][subject_name]" value="{{ $item['subject']->subject_name }}">
-                                                <input type="hidden" name="schedules[{{ $rowIndex }}][department_hemis_id]" value="{{ $item['group']->department_hemis_id }}">
-                                                <input type="hidden" name="schedules[{{ $rowIndex }}][specialty_hemis_id]" value="{{ $item['group']->specialty_hemis_id }}">
-                                                <input type="hidden" name="schedules[{{ $rowIndex }}][curriculum_hemis_id]" value="{{ $item['group']->curriculum_hemis_id }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][semester_code]" value="{{ $item['subject']->semester_code }}">
                                                 <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
-                                                <input type="hidden" name="schedules[{{ $rowIndex }}][closing_form]" value="{{ $cf }}">
+                                                {{-- subject_name, department/specialty/curriculum_hemis_id, closing_form
+                                                     formda yuborilmaydi — store() ularni group_hemis_id va subject_id
+                                                     orqali serverdan qidirib oladi. Bu max_input_vars limitiga
+                                                     yetib bormaslik uchun (har row 13 dan 4 maydonga tushdi). --}}
                                             </td>
                                         </tr>
 
                                         {{-- Per-student qatorlar — har urinish (1/2/3) ostida.
-                                             1-urinish: barcha talabalar (har biriga individual sana mumkin)
-                                             2-urinish: faqat 1-urinishdan o'tmaganlar (V<60). Pullik bo'lsa sana yopiq.
-                                             3-urinish: faqat 12a dan o'tmaganlar. Pullik bo'lsa sana yopiq. --}}
+                                             1-urinish: barcha talabalar (har biri o'z haqiqiy urinishi badge bilan;
+                                                        failed_attempt1 → 2-urinish, failed_attempt2 → 3-urinish).
+                                                        Sana inputi mos ustunga (test_date / test_resit_date / test_resit2_date)
+                                                        yoziladi — yiqilgan talabaga aynan shu yerda 2-urinish sana qo'yiladi.
+                                                        Urinish filteri shu yerda talabalar darajasida qo'llanadi.
+                                             2/3-urinish: faqat guruh sathida resit sanasi saqlangan bo'lsa qator chiqadi. --}}
                                         @php
                                             $studentsForRow = $item['students'] ?? [];
-                                            if ($itemUrinish === 2) {
+                                            $effUrinishOf = function ($s) {
+                                                if (!empty($s['failed_attempt2'])) return 3;
+                                                if (!empty($s['failed_attempt1'])) return 2;
+                                                return 1;
+                                            };
+                                            if ($itemUrinish === 1) {
+                                                // Agar guruh sathida 2-urinish resit sanasi saqlangan bo'lsa,
+                                                // yiqilgan talabalar alohida 2-urinish qatorida ko'rinadi —
+                                                // shu yerda ularni chiqarmaymiz, dublikat bo'lmasin uchun.
+                                                $hasGroupResit = !empty($item['has_group_resit']);
+                                                $hasGroupResit2 = !empty($item['has_group_resit2']);
+                                                $studentsForRow = array_values(array_filter($studentsForRow, function ($s) use ($hasGroupResit, $hasGroupResit2, $effUrinishOf) {
+                                                    $eu = $effUrinishOf($s);
+                                                    if ($eu === 2 && $hasGroupResit) return false;
+                                                    if ($eu === 3 && $hasGroupResit2) return false;
+                                                    return true;
+                                                }));
+                                                if ($urinishFilter === '2') {
+                                                    $studentsForRow = array_values(array_filter($studentsForRow, fn($s) => $effUrinishOf($s) === 2));
+                                                } elseif ($urinishFilter === '3') {
+                                                    $studentsForRow = array_values(array_filter($studentsForRow, fn($s) => $effUrinishOf($s) === 3));
+                                                } elseif ($urinishFilter === '1') {
+                                                    $studentsForRow = array_values(array_filter($studentsForRow, fn($s) => $effUrinishOf($s) === 1));
+                                                }
+                                            } elseif ($itemUrinish === 2) {
                                                 $studentsForRow = array_values(array_filter($studentsForRow, fn($s) => !empty($s['failed_attempt1'])));
                                             } elseif ($itemUrinish === 3) {
                                                 $studentsForRow = array_values(array_filter($studentsForRow, fn($s) => !empty($s['failed_attempt2'])));
@@ -568,16 +621,30 @@
                                             @foreach($studentsForRow as $stuRow)
                                                 @php
                                                     $rowIndex++;
-                                                    if ($itemUrinish === 1) {
+                                                    // Talabaning haqiqiy urinishi:
+                                                    //  - 2/3-urinish guruh qatori ostida bo'lsa, qatorning urinishini olamiz
+                                                    //  - 1-urinish guruh qatori ostida bo'lsa, talabaning failed_attempt'iga qarab
+                                                    //    individual badge va sana ustunini tanlaymiz
+                                                    $stuUrinish = $itemUrinish === 1 ? $effUrinishOf($stuRow) : $itemUrinish;
+                                                    if ($stuUrinish === 1) {
                                                         $stuValueOski = $stuRow['oski_date'] ?? '';
                                                         $stuValueTest = $stuRow['test_date'] ?? '';
-                                                    } elseif ($itemUrinish === 2) {
+                                                        $stuValueOskiTime = $stuRow['oski_time'] ?? '';
+                                                        $stuValueTestTime = $stuRow['test_time'] ?? '';
+                                                    } elseif ($stuUrinish === 2) {
                                                         $stuValueOski = $stuRow['oski_resit_date'] ?? '';
                                                         $stuValueTest = $stuRow['test_resit_date'] ?? '';
+                                                        $stuValueOskiTime = $stuRow['oski_resit_time'] ?? '';
+                                                        $stuValueTestTime = $stuRow['test_resit_time'] ?? '';
                                                     } else {
                                                         $stuValueOski = $stuRow['oski_resit2_date'] ?? '';
                                                         $stuValueTest = $stuRow['test_resit2_date'] ?? '';
+                                                        $stuValueOskiTime = $stuRow['oski_resit2_time'] ?? '';
+                                                        $stuValueTestTime = $stuRow['test_resit2_time'] ?? '';
                                                     }
+                                                    // H:i:s formatdan H:i ga qisqartirish (DB time column odatda H:i:s saqlaydi)
+                                                    if ($stuValueOskiTime) $stuValueOskiTime = substr($stuValueOskiTime, 0, 5);
+                                                    if ($stuValueTestTime) $stuValueTestTime = substr($stuValueTestTime, 0, 5);
                                                     // Qarz fanlari: o'tgan semestrlardagi (academic_records'da yo'q)
                                                     // + joriy semestrdagi BARCHA failed fanlar (controller pre-pass'dan)
                                                     $stuPastDebts = $stuRow['past_debts'] ?? [];
@@ -595,11 +662,11 @@
                                                         $stuDebtTooltip = implode("\n", $tooltipLines);
                                                     }
                                                     // Pullik (jn/mt past yoki davomat ≥25%) → 2/3-urinishda sana qo'yib bo'lmaydi
-                                                    $pullikBlocked = ($itemUrinish > 1) && !empty($stuRow['is_pullik']);
+                                                    $pullikBlocked = ($stuUrinish > 1) && !empty($stuRow['is_pullik']);
                                                     // 4+ ta fandan qarz → kursdan qoldiriladi, qayta topshira olmaydi
                                                     // (eski is_held_back yoki yangi total qarz soni >= 4 — qaysi biri bo'lsa)
                                                     $isHeldBack = !empty($stuRow['is_held_back']) || $stuDebtCount >= 4;
-                                                    $heldBackBlocked = ($itemUrinish > 1) && $isHeldBack;
+                                                    $heldBackBlocked = ($stuUrinish > 1) && $isHeldBack;
                                                     $isBlocked = $pullikBlocked || $heldBackBlocked;
                                                     $blockedTitle = $heldBackBlocked
                                                         ? '4 tadan ortiq fandan qarz — kursdan qoldiriladi, qayta topshira olmaydi'
@@ -621,11 +688,11 @@
                                                     </td>
                                                     <td style="text-align:center;font-size:9px;color:#64748b;">
                                                         @php
-                                                            $stuBadgeBg = $itemUrinish === 1 ? '#dcfce7' : ($itemUrinish === 3 ? '#ffedd5' : '#fef3c7');
-                                                            $stuBadgeFg = $itemUrinish === 1 ? '#16a34a' : ($itemUrinish === 3 ? '#ea580c' : '#d97706');
-                                                            $stuBorderColor = $itemUrinish === 1 ? '#86efac' : ($itemUrinish === 3 ? '#fdba74' : '#fcd34d');
+                                                            $stuBadgeBg = $stuUrinish === 1 ? '#dcfce7' : ($stuUrinish === 3 ? '#ffedd5' : '#fef3c7');
+                                                            $stuBadgeFg = $stuUrinish === 1 ? '#16a34a' : ($stuUrinish === 3 ? '#ea580c' : '#d97706');
+                                                            $stuBorderColor = $stuUrinish === 1 ? '#86efac' : ($stuUrinish === 3 ? '#fdba74' : '#fcd34d');
                                                         @endphp
-                                                        <span style="display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:{{ $stuBadgeBg }};color:{{ $stuBadgeFg }};">{{ $itemUrinish }}-urinish</span>
+                                                        <span style="display:inline-block;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:{{ $stuBadgeBg }};color:{{ $stuBadgeFg }};">{{ $stuUrinish }}-urinish</span>
                                                     </td>
                                                     <td></td>
                                                     <td style="text-align:center;padding:4px 8px;">
@@ -637,12 +704,24 @@
                                                                    title="{{ $blockedTitle }}"
                                                                    style="font-size:10px; padding:2px 4px; border:1px solid #fca5a5; border-radius:4px; max-width:135px; background:#fee2e2;color:#991b1b;cursor:not-allowed;" />
                                                         @else
-                                                            <input type="text" id="stu_oski_{{ $rowIndex }}"
-                                                                   name="schedules[{{ $rowIndex }}][oski_date]"
-                                                                   class="exam-sc-date" autocomplete="off"
-                                                                   data-initial-value="{{ $stuValueOski }}"
-                                                                   title="{{ $itemUrinish }}-urinish OSKI sanasi"
-                                                                   style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
+                                                            <div style="display:flex; flex-direction:column; gap:3px; align-items:center;">
+                                                                <input type="text" id="stu_oski_{{ $rowIndex }}"
+                                                                       name="schedules[{{ $rowIndex }}][oski_date]"
+                                                                       class="exam-sc-date" autocomplete="off"
+                                                                       data-initial-value="{{ $stuValueOski }}"
+                                                                       title="{{ $stuUrinish }}-urinish OSKI sanasi"
+                                                                       style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
+                                                                @if($stuUrinish > 1)
+                                                                <input type="text" name="schedules[{{ $rowIndex }}][oski_time]"
+                                                                       value="{{ $stuValueOskiTime }}"
+                                                                       placeholder="HH:MM" maxlength="5"
+                                                                       class="stu-time-input"
+                                                                       autocomplete="off"
+                                                                       oninput="formatStuTime(this)"
+                                                                       title="Individual OSKI vaqti (HH:MM). Bo'sh bo'lsa Test markazi belgilaydi."
+                                                                       style="font-size:10px; padding:1px 4px; border:1px dashed {{ $stuBorderColor }}; border-radius:4px; max-width:65px; text-align:center; color:#475569;" />
+                                                                @endif
+                                                            </div>
                                                         @endif
                                                     </td>
                                                     <td style="text-align:center;padding:4px 8px;">
@@ -654,14 +733,26 @@
                                                                    title="{{ $blockedTitle }}"
                                                                    style="font-size:10px; padding:2px 4px; border:1px solid #fca5a5; border-radius:4px; max-width:135px; background:#fee2e2;color:#991b1b;cursor:not-allowed;" />
                                                         @else
-                                                            <input type="text" id="stu_test_{{ $rowIndex }}"
-                                                                   name="schedules[{{ $rowIndex }}][test_date]"
-                                                                   class="exam-sc-date" autocomplete="off"
-                                                                   data-initial-value="{{ $stuValueTest }}"
-                                                                   title="{{ $itemUrinish }}-urinish Test sanasi"
-                                                                   style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
+                                                            <div style="display:flex; flex-direction:column; gap:3px; align-items:center;">
+                                                                <input type="text" id="stu_test_{{ $rowIndex }}"
+                                                                       name="schedules[{{ $rowIndex }}][test_date]"
+                                                                       class="exam-sc-date" autocomplete="off"
+                                                                       data-initial-value="{{ $stuValueTest }}"
+                                                                       title="{{ $stuUrinish }}-urinish Test sanasi"
+                                                                       style="font-size:10px; padding:2px 4px; border:1px solid {{ $stuBorderColor }}; border-radius:4px; max-width:135px;" />
+                                                                @if($stuUrinish > 1)
+                                                                <input type="text" name="schedules[{{ $rowIndex }}][test_time]"
+                                                                       value="{{ $stuValueTestTime }}"
+                                                                       placeholder="HH:MM" maxlength="5"
+                                                                       class="stu-time-input"
+                                                                       autocomplete="off"
+                                                                       oninput="formatStuTime(this)"
+                                                                       title="Individual Test vaqti (HH:MM). Bo'sh bo'lsa Test markazi belgilaydi."
+                                                                       style="font-size:10px; padding:1px 4px; border:1px dashed {{ $stuBorderColor }}; border-radius:4px; max-width:65px; text-align:center; color:#475569;" />
+                                                                @endif
+                                                            </div>
                                                         @endif
-                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $itemUrinish }}">
+                                                        <input type="hidden" name="schedules[{{ $rowIndex }}][urinish]" value="{{ $stuUrinish }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][closing_form]" value="{{ $cf }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][group_hemis_id]" value="{{ $item['group']->group_hemis_id }}">
                                                         <input type="hidden" name="schedules[{{ $rowIndex }}][student_hemis_id]" value="{{ $stuRow['hemis_id'] }}">
@@ -831,13 +922,37 @@
             }
             if (year < 2020 || year > 2040) err = 'Yil 2020-2040 orasida bo\'lishi kerak';
             if (!err) {
-                // Cheklov 2: imtihon sanasi kamida ertadan bo'lishi kerak
+                // Cheklov 2: imtihon sanasi kamida ertadan bo'lishi kerak.
+                // Agar sozlamalarda "Eski sanalarni qo'yishga ruxsat" yoqilgan bo'lsa — tekshiruv chetlab o'tiladi.
+                @if(!($allowPastExamDates ?? false))
                 var today = new Date();
                 today.setHours(0, 0, 0, 0);
                 var inputDate = new Date(year, month - 1, day);
+                @if(($isAdmin ?? false) || ($allowTodayExamDates ?? false))
+                // Admin yoki "Bugunni qo'yish" toggle yoqilgan — bugun ham mumkin,
+                // faqat o'tib ketgan kunlar bloklanadi.
+                if (inputDate < today) {
+                    err = 'Imtihon sanasi o\'tgan kunni qo\'yib bo\'lmaydi';
+                }
+                @else
                 if (inputDate <= today) {
                     err = 'Imtihon sanasi kamida ertadan bo\'lishi kerak (bugun qo\'yib bo\'lmaydi)';
                 }
+                // Cheklov 3: ertangi kunga sana belgilash uchun bugungi soat cutoff
+                // (default 18:00). Shu tariqa Test markaziga vaqtlarni belgilashga
+                // muddat qoladi. "Bugunni qo'yish" yoqilgan bo'lsa, cutoff ham o'chiriladi.
+                if (!err) {
+                    var cutoffHour = {{ (int) ($examDateSubmissionCutoffHour ?? 18) }};
+                    var tomorrow = new Date();
+                    tomorrow.setHours(0, 0, 0, 0);
+                    tomorrow.setDate(tomorrow.getDate() + 1);
+                    if (inputDate.getTime() === tomorrow.getTime() && new Date().getHours() >= cutoffHour) {
+                        var hh = cutoffHour < 10 ? '0' + cutoffHour : '' + cutoffHour;
+                        err = 'Ertangi kunga sana belgilash uchun soat ' + hh + ':00 o\'tib ketgan. Iltimos, kelgusi kunlardan birini tanlang.';
+                    }
+                }
+                @endif
+                @endif
             }
             if (err) {
                 inp.classList.add('date-error');
@@ -849,6 +964,21 @@
             inp.title = '';
             syncHidden(inp);
             return true;
+        }
+
+        // Individual talaba vaqt inputi: HH:MM formatga avto formatlash.
+        // Foydalanuvchi raqam kiritganda ":" avto qo'shadi.
+        function formatStuTime(inp) {
+            var v = (inp.value || '').replace(/[^0-9:]/g, '');
+            if (v.length === 2 && inp.value.length < 3 && !v.includes(':')) {
+                v = v + ':';
+            }
+            if (v.length > 5) v = v.substring(0, 5);
+            inp.value = v;
+            // Validatsiya: H:MM yoki HH:MM bo'lishi va vaqt diapazonda
+            var m = v.match(/^(\d{1,2}):(\d{2})$/);
+            var valid = !v || (m && parseInt(m[1], 10) <= 23 && parseInt(m[2], 10) <= 59);
+            inp.style.borderColor = valid ? '' : '#ef4444';
         }
 
         function syncHidden(inp) {
@@ -1113,7 +1243,20 @@
                 if (hasError) {
                     e.preventDefault();
                     alert('Sana xatosi: format noto\'g\'ri yoki imtihon sanasi bugun/o\'tgan kun qo\'yilgan.\nImtihon sanasi kamida ertadan bo\'lishi kerak (kk.oo.yyyy).');
+                    return;
                 }
+                // Server max_input_vars limitidan oshganda kesilganni
+                // aniqlay olishi uchun jadvaldagi haqiqiy row sonini yuboramiz.
+                var form = this;
+                var rowCount = document.querySelectorAll('tr.data-row').length;
+                var hidden = form.querySelector('input[name="_form_total_rows"]');
+                if (!hidden) {
+                    hidden = document.createElement('input');
+                    hidden.type = 'hidden';
+                    hidden.name = '_form_total_rows';
+                    form.appendChild(hidden);
+                }
+                hidden.value = rowCount;
             });
         });
     </script>

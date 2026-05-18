@@ -442,7 +442,7 @@ class StudentController extends Controller
             ->where('semester_code', $semesterCode)
             ->whereIn('subject_id', $subjectIds)
             ->whereIn('training_type_code', [100, 101, 102, 103])
-            ->select('subject_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'education_year_code', 'lesson_date')
+            ->select('subject_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'education_year_code', 'lesson_date', 'attempt')
             ->get()
             ->groupBy('subject_id');
 
@@ -762,12 +762,25 @@ class StudentController extends Controller
                             $typeCode = 102;
                         }
                     }
-                    $otherByType[$typeCode][] = $effectiveGrade;
+                    $attempt = (int) ($g->attempt ?? 1);
+                    $otherByType[$typeCode][$attempt][] = $effectiveGrade;
                 }
             }
-            if (!empty($otherByType[100])) $otherGrades['on'] = round(array_sum($otherByType[100]) / count($otherByType[100]), 0, PHP_ROUND_HALF_UP);
-            if (!empty($otherByType[101])) $otherGrades['oski'] = round(array_sum($otherByType[101]) / count($otherByType[101]), 0, PHP_ROUND_HALF_UP);
-            if (!empty($otherByType[102])) $otherGrades['test'] = round(array_sum($otherByType[102]) / count($otherByType[102]), 0, PHP_ROUND_HALF_UP);
+            // 2-urinish 1-urinishni almashtiradi (o'rtachalanmaydi).
+            $pickLatestAttempt = function (?array $byAttempt): ?float {
+                if (empty($byAttempt)) {
+                    return null;
+                }
+                $latest = max(array_keys($byAttempt));
+                $grades = $byAttempt[$latest];
+                if (empty($grades)) {
+                    return null;
+                }
+                return round(array_sum($grades) / count($grades), 0, PHP_ROUND_HALF_UP);
+            };
+            $otherGrades['on'] = $pickLatestAttempt($otherByType[100] ?? null);
+            $otherGrades['oski'] = $pickLatestAttempt($otherByType[101] ?? null);
+            $otherGrades['test'] = $pickLatestAttempt($otherByType[102] ?? null);
 
             // ---- Davomat (in-memory filter) ----
             $excludedAttendanceCodes = [99, 100, 101, 102];

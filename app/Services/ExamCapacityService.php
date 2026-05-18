@@ -25,6 +25,7 @@ class ExamCapacityService
     {
         return [
             'computer_count' => 60,
+            'reserve_count' => 5,
             'test_duration_minutes' => 15,
             'work_hours_start' => '09:00',
             'work_hours_end' => '17:00',
@@ -97,12 +98,17 @@ class ExamCapacityService
         $defaults = self::defaults();
         $clean = [
             'computer_count' => max(1, (int) ($data['computer_count'] ?? $defaults['computer_count'])),
+            'reserve_count' => max(0, (int) ($data['reserve_count'] ?? $defaults['reserve_count'])),
             'test_duration_minutes' => max(1, (int) ($data['test_duration_minutes'] ?? $defaults['test_duration_minutes'])),
             'work_hours_start' => self::normalizeTime($data['work_hours_start'] ?? $defaults['work_hours_start']),
             'work_hours_end' => self::normalizeTime($data['work_hours_end'] ?? $defaults['work_hours_end']),
             'lunch_start' => self::normalizeTimeOrNull($data['lunch_start'] ?? null),
             'lunch_end' => self::normalizeTimeOrNull($data['lunch_end'] ?? null),
         ];
+        // reserve_count computer_count'dan oshmasin
+        if ($clean['reserve_count'] >= $clean['computer_count']) {
+            $clean['reserve_count'] = max(0, $clean['computer_count'] - 1);
+        }
         // Tushlik vaqti faqat ikkalasi to'g'ri bo'lsa va end > start bo'lsa hisobga olinadi
         if ($clean['lunch_start'] && $clean['lunch_end']) {
             $ls = Carbon::createFromFormat('H:i', $clean['lunch_start']);
@@ -150,7 +156,7 @@ class ExamCapacityService
         }
         $ls = Carbon::createFromFormat('H:i', $s['lunch_start']);
         $le = Carbon::createFromFormat('H:i', $s['lunch_end']);
-        return max(0, $le->diffInMinutes($ls, false));
+        return max(0, $ls->diffInMinutes($le, false));
     }
 
     /**
@@ -162,7 +168,7 @@ class ExamCapacityService
         $s = $settings ?? self::getSettings();
         $start = Carbon::createFromFormat('H:i', $s['work_hours_start']);
         $end = Carbon::createFromFormat('H:i', $s['work_hours_end']);
-        $minutes = max(0, $end->diffInMinutes($start, false));
+        $minutes = max(0, $start->diffInMinutes($end, false));
         $minutes -= self::lunchMinutes($s);
         if ($minutes <= 0) {
             return 0;

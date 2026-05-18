@@ -39,6 +39,13 @@ class SettingsController extends Controller
         $data['examDateRoleMapping'] = ExamDateRoleService::getMapping();
         $data['examDateConfigurableRoles'] = ExamDateRoleService::configurableRoles();
 
+        // YN sanasi: o'tib ketgan (past) sanani qo'yishga ruxsat toggle'i
+        $data['allowPastExamDates'] = ExamDateRoleService::allowPastExamDates();
+        // YN sanasi: bugungi sanani non-admin uchun qo'yishga ruxsat toggle'i
+        $data['allowTodayExamDates'] = ExamDateRoleService::allowTodayExamDates();
+        // Ertangi kunga sana belgilash uchun bugungi cutoff soat (default 18)
+        $data['examDateSubmissionCutoffHour'] = ExamDateRoleService::examDateSubmissionCutoffHour();
+
         // Test markazi sig'imi sozlamalari
         $data['examCapacity'] = ExamCapacityService::getSettings();
         $data['examDailyCapacity'] = ExamCapacityService::dailyCapacity();
@@ -202,6 +209,7 @@ class SettingsController extends Controller
     {
         $request->validate([
             'computer_count' => 'required|integer|min:1|max:10000',
+            'reserve_count' => 'nullable|integer|min:0|lt:computer_count',
             'test_duration_minutes' => 'required|integer|min:1|max:480',
             'work_hours_start' => 'required|date_format:H:i',
             'work_hours_end' => 'required|date_format:H:i|after:work_hours_start',
@@ -211,6 +219,7 @@ class SettingsController extends Controller
 
         ExamCapacityService::setSettings($request->only([
             'computer_count',
+            'reserve_count',
             'test_duration_minutes',
             'work_hours_start',
             'work_hours_end',
@@ -235,6 +244,34 @@ class SettingsController extends Controller
 
         return redirect()->route('admin.settings', ['tab' => 'exam-date-roles'])
             ->with('success', "YN sanasini belgilash huquqlari muvaffaqiyatli yangilandi.");
+    }
+
+    public function updateTestCenterPermissions(Request $request)
+    {
+        $request->validate([
+            'tc_edit_today' => 'nullable|in:0,1',
+        ]);
+        ExamDateRoleService::setTestCenterCanEditToday((bool) $request->input('tc_edit_today', 0));
+
+        return redirect()->route('admin.settings', ['tab' => 'test-center-permissions'])
+            ->with('success', 'Test markazi huquqlari yangilandi.');
+    }
+
+    public function updateExamDatePolicy(Request $request)
+    {
+        $request->validate([
+            'allow_past_dates' => 'nullable|in:0,1',
+            'allow_today_dates' => 'nullable|in:0,1',
+            'submission_cutoff_hour' => 'nullable|integer|min:0|max:23',
+        ]);
+        ExamDateRoleService::setAllowPastExamDates((bool) $request->input('allow_past_dates', 0));
+        ExamDateRoleService::setAllowTodayExamDates((bool) $request->input('allow_today_dates', 0));
+        if ($request->filled('submission_cutoff_hour')) {
+            ExamDateRoleService::setExamDateSubmissionCutoffHour((int) $request->input('submission_cutoff_hour'));
+        }
+
+        return redirect()->route('admin.settings', ['tab' => 'exam-date-policy'])
+            ->with('success', 'YN sanasi siyosati yangilandi.');
     }
 
     public function updateContractCutoffs(Request $request)

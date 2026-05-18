@@ -97,7 +97,7 @@
                         </div>
                         <div class="filter-item" style="min-width: 120px;">
                             <label class="filter-label">&nbsp;</label>
-                            <div style="display:flex;gap:6px;align-items:center;">
+                            <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
                                 <button type="button" class="btn-refresh" id="btn-refresh-quiz" onclick="refreshQuizCounts()">
                                     <svg class="refresh-icon" style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
                                     <span id="refresh-label">Yangilash</span>
@@ -111,6 +111,14 @@
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
                                     </svg>
                                     YN oldi word
+                                </button>
+                                <button type="button" id="btn-bulk-moodle" onclick="tcBulkRecheckMoodle()" disabled
+                                        style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#0e9f6e,#10b981);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;height:36px;"
+                                        title="Tanlangan qatorlarni Moodle bilan tekshirish (navbatga qo'shadi)">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                                    </svg>
+                                    Tanlanganlarni Moodle'ga
                                 </button>
                                 <button type="button" class="btn-export-excel" onclick="tcExportExcel()">
                                     <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -129,6 +137,14 @@
                     $tcUser = auth()->user() ?? auth('teacher')->user();
                     $tcActiveRole = $tcUser ? session('active_role', $tcUser->getRoleNames()->first()) : null;
                     $tcIsTestMarkazi = $tcActiveRole === \App\Enums\ProjectRole::TEST_CENTER->value;
+                    $tcIsAdmin = in_array($tcActiveRole, \App\Services\ExamDateRoleService::adminRoles(), true);
+                    // Bulk vaqt sozlamalari (Vaqtlarni tozalash / Auto vaqt belgilash) —
+                    // Test markazi xodimi va adminlar uchun ochiq.
+                    $tcCanBulkTimes = $tcIsTestMarkazi || $tcIsAdmin;
+                    // Admin sozlamalaridagi "Test markazi → Bugungi imtihonni o'zgartirish"
+                    // toggle'i yoqilgan bo'lsa, test markazi bugungi sanaga ham vaqtni
+                    // o'zgartira oladi (o'tgan sanalar baribir bloklangan).
+                    $tcCanEditToday = $tcIsTestMarkazi && \App\Services\ExamDateRoleService::testCenterCanEditToday();
                     // Joriy ekrandagi sanalar oralig'idagi yozuvlar:
                     //   missing  = sana bor, vaqt yo'q (avto-vaqt uchun)
                     //   withTime = sana bor, vaqt bor (tozalash uchun)
@@ -175,7 +191,30 @@
                     </div>
                 @endif
 
-                @if($tcIsTestMarkazi && ($tcMissingTimeCount > 0 || $tcWithTimeCount > 0))
+                @php
+                    $tcReserve = (int) ($tcDefaults['reserve_count'] ?? 0);
+                    $tcCompCount = (int) ($tcDefaults['computer_count'] ?? 0);
+                    $tcEffectiveCap = \App\Services\AutoAssignService::effectiveSlotCapacity($tcDefaults);
+                @endphp
+                <div style="margin:0 16px 8px;padding:10px 14px;background:linear-gradient(135deg,#eef2ff,#e0e7ff);border:1px solid #c7d2fe;border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;gap:14px;font-size:12px;color:#3730a3;">
+                    <span style="display:inline-flex;align-items:center;gap:6px;">
+                        <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                        Jami kompyuterlar: <strong>{{ $tcCompCount }}</strong>
+                    </span>
+                    <span style="display:inline-flex;align-items:center;gap:6px;color:#991b1b;">
+                        🔒 Reserve (failover): <strong>{{ $tcReserve }}</strong>
+                    </span>
+                    <span style="display:inline-flex;align-items:center;gap:6px;color:#065f46;">
+                        ✓ Slot uchun aktiv: <strong>{{ $tcEffectiveCap }}</strong>
+                    </span>
+                    @if(request()->routeIs('admin.*'))
+                        <span style="margin-left:auto;font-size:11px;color:#6366f1;">
+                            <a href="{{ route('admin.settings') }}?tab=exam-capacity" style="color:#3730a3;font-weight:600;text-decoration:underline;">Sozlamalar →</a>
+                        </span>
+                    @endif
+                </div>
+
+                @if($tcCanBulkTimes && ($tcMissingTimeCount > 0 || $tcWithTimeCount > 0))
                     <div style="margin:0 16px 12px;padding:12px 14px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;display:flex;flex-wrap:wrap;align-items:center;gap:10px;">
                         <svg style="width:18px;height:18px;color:#d97706;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -215,6 +254,21 @@
                                     <button type="submit"
                                             style="height:34px;background:#d97706;color:#fff;border:0;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;">
                                         Hammasiga avto-vaqt belgilash
+                                    </button>
+                                </form>
+                            @endif
+                            @if($tcWithTimeCount > 0)
+                                <form method="POST" action="{{ route($routePrefix . '.academic-schedule.test-center.notify-all') }}"
+                                      style="display:inline;"
+                                      onsubmit="return confirm('Joriy oraliqdagi vaqt belgilangan {{ $tcWithTimeCount }} ta yozuv bo\'yicha talabalarga Telegram + LMS xabarnoma yuborilsinmi? Xabarlar fonda yuboriladi.');">
+                                    @csrf
+                                    <input type="hidden" name="date_from" value="{{ $dateFrom ?? '' }}" />
+                                    <input type="hidden" name="date_to"   value="{{ $dateTo ?? '' }}" />
+                                    <button type="submit"
+                                            style="height:34px;background:#0d9488;color:#fff;border:0;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;"
+                                            title="Vaqt belgilangan yozuvlar bo'yicha talabalarga xabarnoma yuborish">
+                                        <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/></svg>
+                                        Xabarnoma yuborish
                                     </button>
                                 </form>
                             @endif
@@ -305,6 +359,7 @@
                                     <th class="sortable" data-col="11" style="width:100px;text-align:center;">Topshirgan <span class="sort-icon"></span></th>
                                     <th class="sortable" data-col="12" style="width:120px;text-align:center;">YN yuborilgan <span class="sort-icon"></span></th>
                                     <th style="width:160px;text-align:center;">Test vaqti</th>
+                                    <th style="width:150px;text-align:center;">Moodle holati</th>
                                 </tr>
                                 <tr class="filter-header-row">
                                     <th></th>
@@ -333,7 +388,15 @@
                                             <option value="red" data-color="#dc2626">Yuborilmagan</option>
                                         </select>
                                     </th>
-                                    <th></th>
+                                    <th><select class="col-filter" data-col="13"><option value="">Barchasi</option></select></th>
+                                    <th>
+                                        <select class="col-filter color-filter" data-col="14" data-filter-type="color">
+                                            <option value="">Barchasi</option>
+                                            <option value="green" data-color="#16a34a">Topildi</option>
+                                            <option value="red" data-color="#dc2626">Topilmadi</option>
+                                            <option value="yellow" data-color="#d97706">Xato</option>
+                                        </select>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody id="schedule-tbody">
@@ -344,7 +407,7 @@
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     @foreach($items as $item)
                                         @php $attempt = (int) ($item['attempt'] ?? 1); @endphp
-                                        <tr class="data-row" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-attempt="{{ $attempt }}">
+                                        <tr class="data-row" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-attempt="{{ $attempt }}" data-schedule-id="{{ $item['schedule_id'] ?? '' }}">
                                             <td style="text-align:center;">
                                                 <input type="checkbox" class="tc-row-checkbox" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" onchange="tcUpdateSelection()" style="accent-color:#2b5ea7;width:16px;height:16px;cursor:pointer;">
                                             </td>
@@ -400,10 +463,20 @@
                                                     <span class="yn-submitted-no">Yuborilmagan</span>
                                                 @endif
                                             </td>
-                                            <td style="text-align:center;padding:4px 6px;">
+                                            <td style="text-align:center;padding:4px 6px;" data-sort-value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : 'Belgilanmagan' }}">
+                                                @php
+                                                    // Test markazi roli: faqat kelajakdagi (>= ertaga) sanalarda vaqtni o'zgartirish mumkin.
+                                                    $tcRowDateStr = ($item['yn_date_carbon'] ?? null)?->format('Y-m-d');
+                                                    // Past dates always locked for test markazi; today only when toggle is off.
+                                                    $tcRowTooSoon = $tcIsTestMarkazi && $tcRowDateStr && (
+                                                        $tcRowDateStr < $today
+                                                        || ($tcRowDateStr === $today && !$tcCanEditToday)
+                                                    );
+                                                    $tcRowLocked = $tcReadOnly || $tcRowTooSoon;
+                                                @endphp
                                                     <div style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">
-                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-attempt="{{ $attempt }}" data-yn-submitted="{{ ($item['yn_submitted'] ?? false) ? '1' : '0' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:{{ $tcReadOnly ? 'default' : 'pointer' }};{{ $tcReadOnly ? 'background:#f1f5f9;color:#475569;' : '' }}" {{ $tcReadOnly ? 'readonly' : '' }} @if(!$tcReadOnly) oninput="formatTimeInput(this)" onblur="validateTimeInput(this)" @endif>
-                                                        @if(!$tcReadOnly)
+                                                        <input type="text" class="test-time-input" value="{{ $item['test_time'] ? \Carbon\Carbon::parse($item['test_time'])->format('H:i') : '' }}" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-name="{{ $item['subject']->subject_name ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-attempt="{{ $attempt }}" data-yn-submitted="{{ ($item['yn_submitted'] ?? false) ? '1' : '0' }}" placeholder="HH:MM" maxlength="5" style="width:90px;padding:3px 6px;border:1px solid #d1d5db;border-radius:6px;font-size:12px;text-align:center;cursor:{{ $tcRowLocked ? 'not-allowed' : 'pointer' }};{{ $tcRowLocked ? 'background:#f1f5f9;color:#475569;' : '' }}" {{ $tcRowLocked ? 'readonly' : '' }} @if(!$tcRowLocked) oninput="formatTimeInput(this)" onblur="validateTimeInput(this)" @endif title="{{ $tcRowTooSoon ? 'Test markazi rolida vaqtni faqat kamida bir kun oldin belgilash mumkin. Bugungi va o\'tgan sanalar uchun o\'zgartirishga ruxsat yo\'q.' : '' }}">
+                                                        @if(!$tcRowLocked)
                                                         <button type="button" class="save-test-time-btn" onclick="saveTestTime(this)" style="padding:3px 8px;background:#3b82f6;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Saqlash">
                                                             <svg style="width:14px;height:14px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                         </button>
@@ -413,6 +486,10 @@
                                                         <button type="button" class="manual-assign-btn" onclick="openManualAssignModal(this)" style="padding:3px 8px;background:#0ea5e9;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer;white-space:nowrap;" title="Qo'lda biriktirish — har talabaga vaqt va kompyuterni alohida tanlang">
                                                             🔧
                                                         </button>
+                                                        @elseif($tcRowTooSoon)
+                                                        <span style="display:inline-flex;align-items:center;padding:2px 6px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:6px;font-size:10px;" title="Test markazi rolida vaqtni faqat kamida bir kun oldin belgilash mumkin.">
+                                                            🔒 Bugun o'zgartirib bo'lmaydi
+                                                        </span>
                                                         @endif
                                                         @if(!($item['yn_submitted'] ?? false) && $item['test_time'])
                                                             <div class="yn-time-note" style="width:100%;text-align:center;margin-top:2px;">
@@ -420,6 +497,32 @@
                                                             </div>
                                                         @endif
                                                     </div>
+                                            </td>
+                                            <td style="text-align:center;padding:4px 6px;" data-color="{{ ['ok'=>'green','notfound'=>'red','error'=>'yellow'][$item['moodle_status'] ?? ''] ?? '' }}">
+                                                @php $ms = $item['moodle_status'] ?? 'na'; @endphp
+                                                @if($ms === 'na')
+                                                    <span style="color:#cbd5e1;">—</span>
+                                                @else
+                                                    @php
+                                                        $msMap = [
+                                                            'ok'       => ['Topildi', '#dcfce7', '#16a34a'],
+                                                            'notfound' => ['Topilmadi', '#fee2e2', '#991b1b'],
+                                                            'error'    => ['Xato', '#fef3c7', '#92400e'],
+                                                            'pending'  => ['Yuborilmagan', '#f1f5f9', '#64748b'],
+                                                        ];
+                                                        $msInfo = $msMap[$ms] ?? $msMap['pending'];
+                                                    @endphp
+                                                    <span style="display:inline-block;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600;background:{{ $msInfo[1] }};color:{{ $msInfo[2] }};" title="{{ $ms === 'notfound' ? 'Moodle\'da bu nomli quiz topilmadi' : ($ms === 'pending' ? 'Hali Moodle\'ga yuborilmagan (sana qo\'yilmagan)' : '') }}">{{ $msInfo[0] }}</span>
+                                                    @if(!$tcReadOnly && ($item['schedule_id'] ?? null))
+                                                        <form method="POST" action="{{ route($routePrefix . '.academic-schedule.test-center.recheck-moodle') }}" style="display:inline;">
+                                                            @csrf
+                                                            <input type="hidden" name="schedule_id" value="{{ $item['schedule_id'] }}">
+                                                            <input type="hidden" name="yn_type" value="{{ $item['yn_type'] ?? '' }}">
+                                                            <input type="hidden" name="attempt" value="{{ $item['attempt'] ?? 1 }}">
+                                                            <button type="submit" title="Moodle bilan qayta tekshirish" style="margin-left:4px;padding:1px 6px;background:#e2e8f0;border:none;border-radius:5px;font-size:12px;cursor:pointer;">↻</button>
+                                                        </form>
+                                                    @endif
+                                                @endif
                                             </td>
                                         </tr>
                                         @if(($showStudents ?? false) && !empty($item['students']))
@@ -429,7 +532,13 @@
                                                     $stuBadgeFg = $attempt === 1 ? '#16a34a' : ($attempt === 3 ? '#ea580c' : '#d97706');
                                                     $stuPullik = !empty($stuRow['is_pullik']);
                                                     $stuHeldBack = !empty($stuRow['is_held_back']);
-                                                    $stuBlocked = ($attempt > 1) && ($stuPullik || $stuHeldBack);
+                                                    // YN ga ruxsat (YnAdmissionService — YN oldi qaydnoma bilan bir xil mantiq)
+                                                    $stuAdmission = $stuRow['admission_status'] ?? null;
+                                                    $stuAdmReasons = $stuRow['admission_reasons'] ?? [];
+                                                    $stuDeniedYn = $stuAdmission === 'X';
+                                                    // X (YN ga ruxsat yo'q) — vaqt/kompyuter qo'yishni bloklaymiz,
+                                                    // huddi pullik/held_back kabi. Ruxsat va Shartli — vaqt qo'yishga ruxsat beriladi.
+                                                    $stuBlocked = (($attempt > 1) && ($stuPullik || $stuHeldBack)) || $stuDeniedYn;
                                                     $stuPersonalDate = null;
                                                     if ($attempt === 2) {
                                                         $stuPersonalDate = ($item['yn_type'] === 'OSKI') ? ($stuRow['oski_resit_date'] ?? null) : ($stuRow['test_resit_date'] ?? null);
@@ -447,6 +556,22 @@
                                                             <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="4 tadan ortiq fandan qarz — kursdan qoldiriladi">4 tadan ortiq qarz</span>
                                                         @elseif($stuPullik && $attempt > 1)
                                                             <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="JN/MT past yoki davomat ≥25% — qayta topshira olmaydi">Pullik</span>
+                                                        @endif
+                                                        {{-- YN ga ruxsat badge'i (YN oldi qaydnoma bilan bir xil mantiq) --}}
+                                                        @if($stuAdmission === 'X')
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:700;background:#fee2e2;color:#991b1b;border:1px solid #f87171;"
+                                                                  title="YN ga ruxsat yo'q{{ !empty($stuAdmReasons) ? ': ' . implode('; ', $stuAdmReasons) : '' }}">
+                                                                ✕ YN ruxsat yo'q
+                                                            </span>
+                                                        @elseif($stuAdmission === 'Shartli')
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fff7ed;color:#9a3412;border:1px solid #fdba74;"
+                                                                  title="Kontrakt qarzdorlik bor — shartli ruxsat{{ !empty($stuAdmReasons) ? ': ' . implode('; ', $stuAdmReasons) : '' }}">
+                                                                ⚠ Shartli
+                                                            </span>
+                                                        @elseif($stuAdmission === 'Ruxsat')
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#dcfce7;color:#166534;border:1px solid #86efac;" title="YN ga ruxsat bor">
+                                                                ✓ Ruxsat
+                                                            </span>
                                                         @endif
                                                     </td>
                                                     <td style="text-align:center;font-size:9px;color:#64748b;">
@@ -472,6 +597,19 @@
                                                             }
                                                         @endphp
                                                         @if($attempt > 1 && !$stuBlocked)
+                                                            @php
+                                                                // Talabaning shaxsiy sanasi — agar mavjud bo'lsa o'shani, aks holda guruh sanasini olamiz.
+                                                                $stuEffectiveDate = $stuPersonalDate ?? ($item['yn_date_carbon'] ?? null);
+                                                                if ($stuEffectiveDate && !($stuEffectiveDate instanceof \Carbon\Carbon)) {
+                                                                    try { $stuEffectiveDate = \Carbon\Carbon::parse($stuEffectiveDate); } catch (\Throwable $e) { $stuEffectiveDate = null; }
+                                                                }
+                                                                $stuDateStr = $stuEffectiveDate?->format('Y-m-d');
+                                                                $stuTooSoon = $tcIsTestMarkazi && $stuDateStr && (
+                                                                    $stuDateStr < $today
+                                                                    || ($stuDateStr === $today && !$tcCanEditToday)
+                                                                );
+                                                                $stuLocked = $tcReadOnly || $stuTooSoon;
+                                                            @endphp
                                                             <div style="display:flex;align-items:center;justify-content:center;gap:4px;">
                                                                 <input type="text" class="student-time-input"
                                                                        value="{{ $stuPersonalTime ? \Carbon\Carbon::parse($stuPersonalTime)->format('H:i') : '' }}"
@@ -483,14 +621,17 @@
                                                                        data-yn-type="{{ $item['yn_type'] ?? '' }}"
                                                                        data-attempt="{{ $attempt }}"
                                                                        placeholder="HH:MM" maxlength="5"
-                                                                       style="width:80px;padding:2px 4px;border:1px solid #d1d5db;border-radius:5px;font-size:11px;text-align:center;cursor:{{ $tcReadOnly ? 'default' : 'pointer' }};{{ $tcReadOnly ? 'background:#f1f5f9;color:#475569;' : '' }}"
-                                                                       {{ $tcReadOnly ? 'readonly' : '' }}
-                                                                       @if(!$tcReadOnly) oninput="formatTimeInput(this)" onblur="validateTimeInput(this)" @endif>
-                                                                @if(!$tcReadOnly)
+                                                                       style="width:80px;padding:2px 4px;border:1px solid #d1d5db;border-radius:5px;font-size:11px;text-align:center;cursor:{{ $stuLocked ? 'not-allowed' : 'pointer' }};{{ $stuLocked ? 'background:#f1f5f9;color:#475569;' : '' }}"
+                                                                       {{ $stuLocked ? 'readonly' : '' }}
+                                                                       title="{{ $stuTooSoon ? 'Test markazi rolida vaqtni faqat kamida bir kun oldin belgilash mumkin.' : '' }}"
+                                                                       @if(!$stuLocked) oninput="formatTimeInput(this)" onblur="validateTimeInput(this)" @endif>
+                                                                @if(!$stuLocked)
                                                                 <button type="button" class="save-student-time-btn" onclick="saveStudentTime(this)"
                                                                         style="padding:2px 6px;background:#3b82f6;color:#fff;border:none;border-radius:5px;font-size:10px;cursor:pointer;white-space:nowrap;" title="Talaba vaqtini saqlash">
                                                                     <svg style="width:12px;height:12px;display:inline-block;vertical-align:middle;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
                                                                 </button>
+                                                                @elseif($stuTooSoon)
+                                                                <span style="font-size:10px;color:#92400e;" title="Test markazi rolida bugun yoki o'tgan kunlardagi vaqtni o'zgartirib bo'lmaydi.">🔒</span>
                                                                 @endif
                                                             </div>
                                                         @endif
@@ -511,6 +652,7 @@
                                                             </div>
                                                         @endif
                                                     </td>
+                                                    <td></td>
                                                 </tr>
                                             @endforeach
                                         @endif
@@ -1021,17 +1163,18 @@
             icon.classList.add('spinning');
             label.textContent = 'Yangilanmoqda...';
 
-            // Collect unique group+subject+yn_type combinations
+            // Collect unique group+subject+yn_type+attempt combinations
             var seen = {};
             var items = [];
             rows.forEach(function(row) {
                 var gid = row.getAttribute('data-group-id');
                 var sid = row.getAttribute('data-subject-id');
                 var yn = row.getAttribute('data-yn-type');
-                var key = gid + '|' + sid + '|' + yn;
+                var att = parseInt(row.getAttribute('data-attempt') || '1', 10);
+                var key = gid + '|' + sid + '|' + yn + '|' + att;
                 if (!seen[key]) {
                     seen[key] = true;
-                    items.push({ group_id: gid, subject_id: sid, yn_type: yn });
+                    items.push({ group_id: gid, subject_id: sid, yn_type: yn, attempt: att });
                 }
             });
 
@@ -1045,12 +1188,13 @@
                     // Build lookup
                     var lookup = {};
                     (data.counts || []).forEach(function(c) {
-                        lookup[c.group_id + '|' + c.subject_id + '|' + c.yn_type] = c;
+                        lookup[c.group_id + '|' + c.subject_id + '|' + c.yn_type + '|' + c.attempt] = c;
                     });
 
                     // Update each row
                     rows.forEach(function(row) {
-                        var key = row.getAttribute('data-group-id') + '|' + row.getAttribute('data-subject-id') + '|' + row.getAttribute('data-yn-type');
+                        var att = parseInt(row.getAttribute('data-attempt') || '1', 10);
+                        var key = row.getAttribute('data-group-id') + '|' + row.getAttribute('data-subject-id') + '|' + row.getAttribute('data-yn-type') + '|' + att;
                         var info = lookup[key];
                         if (!info) return;
 
@@ -1454,8 +1598,59 @@
             var checkedCount = visible.filter(function(cb) { return cb.checked; }).length;
             var btn = document.getElementById('btn-yn-oldi-word');
             if (btn) btn.disabled = checkedCount === 0;
+            var bulkBtn = document.getElementById('btn-bulk-moodle');
+            if (bulkBtn) bulkBtn.disabled = checkedCount === 0;
             var headerCb = document.getElementById('tc-select-all-header');
             if (headerCb) headerCb.checked = checkedCount > 0 && checkedCount === visible.length;
+        }
+
+        var bulkMoodleUrl = '{{ route($routePrefix . ".academic-schedule.test-center.bulk-recheck-moodle") }}';
+
+        // Bulk "recheck on Moodle": collect every selected row's
+        // (schedule, yn_type, attempt) and queue a BookMoodleGroupExam job
+        // for each. The proctor refreshes once the queue has drained.
+        function tcBulkRecheckMoodle() {
+            var items = [];
+            document.querySelectorAll('.tc-row-checkbox:checked').forEach(function(cb) {
+                var tr = cb.closest('tr.data-row');
+                if (!tr) return;
+                var sid = tr.getAttribute('data-schedule-id');
+                if (!sid) return;
+                items.push({
+                    schedule_id: sid,
+                    yn_type: tr.getAttribute('data-yn-type') || '',
+                    attempt: tr.getAttribute('data-attempt') || '1'
+                });
+            });
+            if (items.length === 0) {
+                alert('Kamida bitta qatorni tanlang');
+                return;
+            }
+            var btn = document.getElementById('btn-bulk-moodle');
+            var originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.textContent = 'Yuborilmoqda...';
+            fetch(bulkMoodleUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+                body: JSON.stringify({ items: items })
+            })
+            .then(function(r) {
+                return r.json().then(function(j) { return { ok: r.ok, body: j }; });
+            })
+            .then(function(res) {
+                alert(res.ok ? (res.body.message || 'Navbatga qo\'shildi') : (res.body.error || 'Xatolik yuz berdi'));
+            })
+            .catch(function(e) { alert('Xatolik: ' + e.message); })
+            .finally(function() {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+            });
         }
 
         var ynOldiWordUrl = '{{ route($routePrefix . ".academic-schedule.test-center.generate-yn-oldi-word") }}';
@@ -1551,7 +1746,7 @@
 
     <style>
         .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; overflow: visible; position: relative; z-index: 20; }
-        .filter-row { display: flex; gap: 10px; flex-wrap: nowrap; margin-bottom: 10px; align-items: flex-end; overflow: visible; }
+        .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end; overflow: visible; }
         .filter-row:last-child { margin-bottom: 0; }
         .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
         .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }

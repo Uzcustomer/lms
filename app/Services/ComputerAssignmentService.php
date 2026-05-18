@@ -54,8 +54,14 @@ class ComputerAssignmentService
             return ['ok' => false, 'skipped' => true, 'reason' => 'cannot parse date/time'];
         }
 
-        $duration = max(1, (int) config('services.moodle.quiz_duration_minutes', 25));
-        $buffer = max(0, (int) config('services.moodle.computer_buffer_minutes', 5));
+        // Slot duration comes from the per-date ExamCapacityService settings
+        // (what the admin sees as "Davomiyligi" in the UI). This used to read
+        // from a parallel services.moodle.* env block that drifted out of
+        // sync with the UI, so a 15-min setting in the admin panel produced
+        // 30-min cells on the proctor dashboard.
+        $capacity = ExamCapacityService::getSettingsForDate($startsAt->toDateString());
+        $duration = max(1, (int) ($capacity['test_duration_minutes'] ?? 15));
+        $buffer = max(0, (int) config('services.moodle.computer_buffer_minutes', 0));
         // planned_end represents "computer becomes free for the next student"
         // i.e. attempt-end + buffer.
         $plannedEnd = $startsAt->copy()->addMinutes($duration + $buffer);
@@ -191,8 +197,10 @@ class ComputerAssignmentService
             return ['ok' => false, 'errors' => ['Hech qaysi talaba uchun biriktiruv yuborilmagan.']];
         }
 
-        $duration = max(1, (int) config('services.moodle.quiz_duration_minutes', 25));
-        $buffer   = max(0, (int) config('services.moodle.computer_buffer_minutes', 5));
+        // Same single source of truth as distribute() above.
+        $capacity = ExamCapacityService::getSettingsForDate($dateStr);
+        $duration = max(1, (int) ($capacity['test_duration_minutes'] ?? 15));
+        $buffer   = max(0, (int) config('services.moodle.computer_buffer_minutes', 0));
         $slotLen  = $duration + $buffer;
 
         // Build & validate every row.

@@ -24,7 +24,7 @@ class RetakeWindowController extends Controller
 
     public function index(Request $request)
     {
-        $this->authorizeAccess();
+        $this->authorizeView();
 
         $statusFilter = $request->input('status', 'all');
         $departmentId = $request->input('department');
@@ -144,6 +144,7 @@ class RetakeWindowController extends Controller
             'departmentIdFilter' => $departmentId,
             'levelCodeFilter' => $levelCode,
             'canOverride' => $this->canOverride(),
+            'canManage' => $this->canManage(),
             'educationTypes' => $educationTypes,
         ]);
     }
@@ -260,11 +261,12 @@ class RetakeWindowController extends Controller
         $created = 0;
         $skipped = 0;
         $firstError = null;
+        $createdWindowIds = [];
 
         // Bulk operatsiya uchun bitta umumiy batch ID
         $batchId = (string) \Illuminate\Support\Str::uuid();
 
-        DB::transaction(function () use ($data, $triplets, $specialties, $levelMap, $departments, $semesterMap, $user, &$created, &$skipped, &$firstError, $batchId) {
+        DB::transaction(function () use ($data, $triplets, $specialties, $levelMap, $departments, $semesterMap, $user, &$created, &$skipped, &$firstError, &$createdWindowIds, $batchId) {
             foreach ($triplets as $t) {
                 $sp = $specialties->get($t['specialty_pk']);
                 if (!$sp) {
@@ -282,14 +284,10 @@ class RetakeWindowController extends Controller
 
                 foreach ($combos as $sem) {
                     try {
-                        $this->windowService->createWindow([
+                        $newWindow = $this->windowService->createWindow([
                             'session_id' => $data['session_id'],
                             'specialty_id' => (int) $sp->specialty_hemis_id,
                             'specialty_name' => $sp->name,
-                            // BUG FIX: foydalanuvchi tanlagan fakultet (user-selected fid)
-                            // ishlatiladi. Avval $sp->department_hemis_id ishlatilardi,
-                            // bir xil yo'nalish bir nechta fakultetda bo'lsa unique
-                            // check'da to'qnashib, faqat birinchi oyna yaratilardi.
                             'department_hemis_id' => (string) $t['fid'],
                             'level_code' => $t['level_code'],
                             'level_name' => $levelMap->get($t['level_code']) ?? $t['level_code'],
@@ -300,6 +298,7 @@ class RetakeWindowController extends Controller
                             'creation_batch_id' => $batchId,
                         ], $user);
                         $created++;
+                        $createdWindowIds[] = $newWindow->id;
                     } catch (ValidationException $e) {
                         $skipped++;
                         $firstError = $firstError ?? collect($e->errors())->flatten()->first();
@@ -308,7 +307,24 @@ class RetakeWindowController extends Controller
             }
         });
 
+        // Telegram xabar JAVOBDAN KEYIN — sahifa muzlamasligi uchun.
+        if (!empty($createdWindowIds)) {
+            dispatch(function () use ($createdWindowIds) {
+                $notifier = app(\App\Services\Retake\RetakeNotificationService::class);
+                foreach (RetakeApplicationWindow::whereIn('id', $createdWindowIds)->get() as $win) {
+                    try {
+                        $notifier->notifyWindowOpened($win);
+                    } catch (\Throwable $e) {
+                        \Illuminate\Support\Facades\Log::warning('[Retake] notifyWindowOpened: ' . $e->getMessage());
+                    }
+                }
+            })->afterResponse();
+        }
+
         $msg = "{$created} ta qabul oynasi yaratildi";
+        if (!empty($createdWindowIds)) {
+            $msg .= " · talabalarga Telegram xabar fonida yuborilmoqda";
+        }
         if ($skipped > 0) {
             $msg .= ", {$skipped} ta o'tkazib yuborildi (allaqachon mavjud)";
         }
@@ -339,7 +355,22 @@ class RetakeWindowController extends Controller
             return redirect()->back()->withErrors($e->errors());
         }
 
-        return redirect()->back()->with('success', __('Sanalar override qilindi'));
+        // Telegram xabarni JAVOBDAN KEYIN yuboramiz — sahifa muzlamasligi uchun.
+        // afterResponse() — HTTP javob brauzerga yuborilgandan so'ng ishga tushadi.
+        $windowId = $window->id;
+        dispatch(function () use ($windowId) {
+            $w = RetakeApplicationWindow::find($windowId);
+            if ($w) {
+                try {
+                    app(\App\Services\Retake\RetakeNotificationService::class)
+                        ->notifyWindowDatesUpdated($w);
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('[Retake] notifyWindowDatesUpdated: ' . $e->getMessage());
+                }
+            }
+        })->afterResponse();
+
+        return redirect()->back()->with('success', __("Sanalar yangilandi. Talabalarga Telegram xabar fonida yuborilmoqda."));
     }
 
     public function destroy(Request $request, int $windowId): RedirectResponse
@@ -384,7 +415,7 @@ class RetakeWindowController extends Controller
      */
     public function show(int $windowId)
     {
-        $this->authorizeAccess();
+        $this->authorizeView();
 
         $window = RetakeApplicationWindow::with('session')->findOrFail($windowId);
 
@@ -448,6 +479,7 @@ class RetakeWindowController extends Controller
             'approvedNoGroup' => $approvedNoGroup,
             'rejected' => $rejected,
             'pending' => $pending,
+            'canManage' => $this->canManage(),
         ]);
     }
 
@@ -455,15 +487,42 @@ class RetakeWindowController extends Controller
 
     private function authorizeAccess(): void
     {
-        $user = RetakeAccess::currentStaff();
-        if (!RetakeAccess::canManageAcademicDept($user)) {
+        if (!$this->activeRoleCanManage()) {
             abort(403, 'Sizda qayta o\'qish oynalarini boshqarish ruxsati yo\'q');
         }
     }
 
+    /**
+     * Faqat ko'rish ruxsati — O'quv bo'limi yoki Registrator ofisi.
+     */
+    private function authorizeView(): void
+    {
+        $user = RetakeAccess::currentStaff();
+        if (!RetakeAccess::canViewWindows($user)) {
+            abort(403, 'Sizda qayta o\'qish oynalarini ko\'rish ruxsati yo\'q');
+        }
+    }
+
+    /**
+     * Joriy foydalanuvchi oynalarni boshqara oladimi (yozish amallari)?
+     * AKTIV rolni tekshiradi — RetakeAccess::activeRoleCanManageRetake() ga
+     * qarang (registrator rolida bo'lsa o'quv bo'limi roli bo'lsa-da false).
+     */
+    private function activeRoleCanManage(): bool
+    {
+        return RetakeAccess::activeRoleCanManageRetake();
+    }
+
+    private function canManage(): bool
+    {
+        return $this->activeRoleCanManage();
+    }
+
     private function canOverride(): bool
     {
-        return RetakeAccess::canOverride(RetakeAccess::currentStaff());
+        // Override faqat boshqaruv ruxsati bor (aktiv rol) xodimlarga
+        return $this->activeRoleCanManage()
+            && RetakeAccess::canOverride(RetakeAccess::currentStaff());
     }
 
     /**

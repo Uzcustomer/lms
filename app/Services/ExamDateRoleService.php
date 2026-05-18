@@ -26,6 +26,110 @@ class ExamDateRoleService
 {
     public const SETTING_KEY = 'exam_date_role_settings';
 
+    /** Toggle: when true, the test-centre role may edit/save exam times for
+     *  today as well. Default false — test-centre may only touch future-dated
+     *  exams; today and earlier are admin-only. Stored as a separate Setting
+     *  so admins can flip it on for unusual circumstances (last-minute
+     *  schedule changes, etc.). */
+    public const SETTING_TC_EDIT_TODAY = 'test_center_can_edit_today';
+
+    /** Toggle: when true, YN sanasi sifatida o'tib ketgan (past) sanani ham
+     *  qo'yish mumkin. Sukut bo'yicha o'chirilgan — odatda imtihon kelajakda
+     *  bo'ladi. Sozlama yoqilgan bo'lsa, sana bo'yicha tekshiruv (1-urinish
+     *  uchun "kamida ertadan", admin uchun "bugundan boshlab") chetlab
+     *  o'tiladi. Tizimni semester o'rtasida ishga tushirish kabi hollarda
+     *  o'tib ketgan urinish sanasini ro'yxatga olish uchun ishlatiladi. */
+    public const SETTING_ALLOW_PAST_DATES = 'allow_past_exam_dates';
+
+    /** Setting kaliti: ertangi kunga imtihon belgilash uchun bugungi soat
+     *  cutoff. Default 18:00. Dekanat / Registrator / O'quv bo'limi rollari
+     *  ushbu soatdan keyin ertangi kunga sana qo'ya olmaydi — Test markaziga
+     *  vaqtlarni belgilash uchun yetarli vaqt qoldirish maqsadida. Admin
+     *  rollar bu cheklovga ega emas. */
+    public const SETTING_DATE_SUBMISSION_CUTOFF_HOUR = 'exam_date_submission_cutoff_hour';
+
+    /** Setting kaliti: dekanat / registrator / o'quv bo'limi rollari uchun
+     *  bugungi kunni YN sanasi sifatida qo'yishga ruxsat berish. Default
+     *  o'chirilgan — bu rollar faqat ertangi va undan keyingi sanalarni
+     *  belgilay oladi (Test markaziga vaqt belgilashga muddat qoldirish
+     *  uchun). Toggle yoqilsa, shoshilinch hollarda (masalan, oqim
+     *  buzilganda) bugungi kunni ham qo'yish mumkin bo'ladi. Ish tugagach
+     *  o'chirib qo'yish tavsiya etiladi. */
+    public const SETTING_ALLOW_TODAY_DATES = 'allow_today_exam_dates';
+
+    /**
+     * Whether the test-centre role may currently edit today's exam times.
+     */
+    public static function testCenterCanEditToday(): bool
+    {
+        return (bool) \App\Models\Setting::get(self::SETTING_TC_EDIT_TODAY, false);
+    }
+
+    /**
+     * Persist the test-centre "edit today" toggle. Admin-only caller.
+     */
+    public static function setTestCenterCanEditToday(bool $value): void
+    {
+        \App\Models\Setting::set(self::SETTING_TC_EDIT_TODAY, $value ? '1' : '0');
+    }
+
+    /**
+     * YN sanasi sifatida o'tib ketgan (past) sanani qo'yishga ruxsat berilganmi.
+     */
+    public static function allowPastExamDates(): bool
+    {
+        return (bool) \App\Models\Setting::get(self::SETTING_ALLOW_PAST_DATES, false);
+    }
+
+    /**
+     * Persist the "allow past exam dates" toggle. Admin-only caller.
+     */
+    public static function setAllowPastExamDates(bool $value): void
+    {
+        \App\Models\Setting::set(self::SETTING_ALLOW_PAST_DATES, $value ? '1' : '0');
+    }
+
+    /**
+     * Ertangi kunga imtihon sanasi belgilanishi mumkin bo'lgan oxirgi soat
+     * (0–23). Default 18 (ya'ni soat 18:00 dan keyin ertangi kunga sana
+     * belgilab bo'lmaydi). Faqat non-admin (dekanat, registrator ofisi,
+     * o'quv bo'limi) rollariga taalluqli.
+     */
+    public static function examDateSubmissionCutoffHour(): int
+    {
+        $raw = \App\Models\Setting::get(self::SETTING_DATE_SUBMISSION_CUTOFF_HOUR, 18);
+        $hour = (int) $raw;
+        if ($hour < 0 || $hour > 23) {
+            return 18;
+        }
+        return $hour;
+    }
+
+    /**
+     * Persist the submission cutoff hour. Admin-only caller.
+     */
+    public static function setExamDateSubmissionCutoffHour(int $hour): void
+    {
+        $hour = max(0, min(23, $hour));
+        \App\Models\Setting::set(self::SETTING_DATE_SUBMISSION_CUTOFF_HOUR, (string) $hour);
+    }
+
+    /**
+     * Non-admin rollari uchun bugungi YN sanasi qo'yishga ruxsat etilganmi.
+     */
+    public static function allowTodayExamDates(): bool
+    {
+        return (bool) \App\Models\Setting::get(self::SETTING_ALLOW_TODAY_DATES, false);
+    }
+
+    /**
+     * Persist the "allow today exam dates" toggle. Admin-only caller.
+     */
+    public static function setAllowTodayExamDates(bool $value): void
+    {
+        \App\Models\Setting::set(self::SETTING_ALLOW_TODAY_DATES, $value ? '1' : '0');
+    }
+
     /**
      * Sahifaga kirish va tahrirlash uchun sozlanishi mumkin bo'lgan rollar.
      *

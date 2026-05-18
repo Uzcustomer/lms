@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Api\ExamAccessCheckController;
 use App\Http\Controllers\Api\ExamLoginCheckController;
+use App\Http\Controllers\Api\ProctorActionController;
 use App\Http\Controllers\Api\ExamLayoutController;
 use App\Http\Controllers\Api\ExamQuizTargetController;
 use App\Http\Controllers\Api\MoodleDescriptorCallbackController;
@@ -57,6 +58,12 @@ Route::post('/exam-login-check', [ExamLoginCheckController::class, 'check'])
     ->middleware('throttle:240,1')
     ->name('api.moodle.exam-login-check');
 
+// Moodle proctor dashboard → proctor-initiated student moves between PCs
+// (drag-and-drop on the layout grid). Same X-SYNC-SECRET auth.
+Route::post('/proctor/move-student', [ProctorActionController::class, 'move'])
+    ->middleware('throttle:60,1')
+    ->name('api.moodle.proctor.move-student');
+
 // Moodle proctor dashboard (auth_faceid plugin) → today's full computer
 // grid with current/next student per cell. Same X-SYNC-SECRET auth.
 Route::post('/exam-layout-today', [ExamLayoutController::class, 'today'])
@@ -80,6 +87,7 @@ Route::prefix('v1')->group(function () {
 
     // ── Public (no auth) ──────────────────────────────────
     Route::post('/student/login', [AuthController::class, 'studentLogin']);
+    Route::post('/student/face-login', [AuthController::class, 'studentFaceLogin']);
     Route::post('/student/verify-2fa', [AuthController::class, 'studentVerify2fa']);
     Route::post('/student/resend-2fa', [AuthController::class, 'studentResend2fa']);
 

@@ -9,7 +9,55 @@ class PhotoQualityGate
 {
     public const MIN_FACE_HEIGHT_RATIO = 0.35;
 
+    /**
+     * Read a local image file and return it as a `data:image/...;base64,...`
+     * URI suitable for inline POST to the face-compare service. Lets the
+     * AI service load the image directly from the request body instead of
+     * fetching it back via HTTP (which stalls when the service runs outside
+     * the Laravel container and the public APP_URL is unreachable from there).
+     */
+    public static function fileToDataUri(string $absolutePath): ?string
+    {
+        if (!is_file($absolutePath) || !is_readable($absolutePath)) {
+            return null;
+        }
+        $bytes = @file_get_contents($absolutePath);
+        if ($bytes === false || $bytes === '') {
+            return null;
+        }
+        $mime = 'image/jpeg';
+        if (function_exists('finfo_open')) {
+            $f = finfo_open(FILEINFO_MIME_TYPE);
+            if ($f) {
+                $detected = finfo_file($f, $absolutePath);
+                finfo_close($f);
+                if (is_string($detected) && str_starts_with($detected, 'image/')) {
+                    $mime = $detected;
+                }
+            }
+        }
+        return 'data:' . $mime . ';base64,' . base64_encode($bytes);
+    }
+
+    public static function checkPath(string $absolutePath): array
+    {
+        $dataUri = self::fileToDataUri($absolutePath);
+        if ($dataUri === null) {
+            return [
+                'reachable' => true,
+                'passed' => false,
+                'reason' => 'Rasm faylini o\'qib bo\'lmadi: ' . $absolutePath,
+            ];
+        }
+        return self::requestQualityCheck($dataUri, ['path' => $absolutePath]);
+    }
+
     public static function checkUrl(string $imageUrl): array
+    {
+        return self::requestQualityCheck($imageUrl, ['image_url' => $imageUrl]);
+    }
+
+    private static function requestQualityCheck(string $imageField, array $logContext): array
     {
         $serviceUrl = rtrim((string) config('services.face_compare.url'), '/');
         $timeout = (int) config('services.face_compare.timeout', 60);
@@ -17,10 +65,9 @@ class PhotoQualityGate
         try {
             $response = Http::timeout($timeout)
                 ->acceptJson()
-                ->post($serviceUrl . '/quality-check', ['image' => $imageUrl]);
+                ->post($serviceUrl . '/quality-check', ['image' => $imageField]);
         } catch (\Throwable $e) {
-            Log::error('PhotoQualityGate: service unreachable', [
-                'image_url' => $imageUrl,
+            Log::error('PhotoQualityGate: service unreachable', $logContext + [
                 'error' => $e->getMessage(),
             ]);
             return [

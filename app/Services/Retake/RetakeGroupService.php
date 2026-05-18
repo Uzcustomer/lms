@@ -128,13 +128,11 @@ class RetakeGroupService
             ]);
         }
 
-        // Tanlangan arizalarni yuklash va validatsiya — subject_name+semester_name match
-        $normSubject = mb_strtolower(trim((string) ($data['subject_name'] ?? '')));
-        $normSemester = mb_strtolower(trim((string) ($data['semester_name'] ?? '')));
-
+        // Tanlangan arizalarni yuklash va validatsiya.
+        // subject_name va semester_name tekshiruvi olib tashlangan — turli
+        // fan/semestrdagi arizalarni bitta guruhga birlashtirish uchun
+        // (turli curriculum talabalari bir xil mavzuni qayta o'qishi mumkin).
         $apps = RetakeApplication::whereIn('id', $applicationIds)
-            ->whereRaw('LOWER(TRIM(subject_name)) = ?', [$normSubject])
-            ->whereRaw('LOWER(TRIM(semester_name)) = ?', [$normSemester])
             ->where('dean_status', 'approved')
             ->where('registrar_status', 'approved')
             ->where('academic_dept_status', 'approved')
@@ -144,7 +142,7 @@ class RetakeGroupService
 
         if ($apps->count() !== count($applicationIds)) {
             throw ValidationException::withMessages([
-                'applications' => "Ba'zi arizalar guruhga qo'shilishga yaroqsiz holatda yoki fan/semestr nomi mos emas",
+                'applications' => "Ba'zi arizalar guruhga qo'shilishga yaroqsiz holatda",
             ]);
         }
 
@@ -174,6 +172,7 @@ class RetakeGroupService
                 'semester_name' => $data['semester_name'],
                 'teacher_id' => $teacher->id,
                 'teacher_name' => $teacher->full_name,
+                'teacher_phones' => $this->normalizePhones($data['teacher_phones'] ?? null),
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
                 'max_students' => $data['max_students'] ?? null,
@@ -208,6 +207,61 @@ class RetakeGroupService
 
             return $group->refresh();
         });
+    }
+
+    /**
+     * Mavjud guruhga qo'shimcha talaba (ariza)larni qo'shish.
+     *
+     * Guruh `forming` bo'lsa — arizalar oddiy attach (draft) qilinadi.
+     * Guruh `scheduled`/`in_progress` bo'lsa — academicApprove orqali
+     * to'liq tasdiqlanadi (final_status='approved').
+     *
+     * @return int Qo'shilgan arizalar soni
+     */
+    public function addApplicationsToGroup(RetakeGroup $group, array $applicationIds, Teacher $actor): int
+    {
+        if ($group->status === RetakeGroup::STATUS_COMPLETED) {
+            throw ValidationException::withMessages([
+                'group' => "Tugagan guruhga talaba qo'shib bo'lmaydi",
+            ]);
+        }
+
+        $apps = RetakeApplication::whereIn('id', $applicationIds)
+            ->where('dean_status', 'approved')
+            ->where('registrar_status', 'approved')
+            ->where('academic_dept_status', 'approved')
+            ->where('final_status', 'pending')
+            ->whereNull('retake_group_id')
+            ->get();
+
+        if ($apps->isEmpty()) {
+            throw ValidationException::withMessages([
+                'application_ids' => "Tanlangan arizalar yaroqsiz yoki allaqachon guruhga biriktirilgan",
+            ]);
+        }
+
+        $shouldApprove = $group->status !== RetakeGroup::STATUS_FORMING;
+
+        DB::transaction(function () use ($group, $apps, $actor, $shouldApprove) {
+            foreach ($apps as $app) {
+                if ($shouldApprove) {
+                    $this->applicationService->academicApprove($app, $actor, $group->id);
+                } else {
+                    $app->update(['retake_group_id' => $group->id]);
+                    RetakeApplicationLog::create([
+                        'application_id' => $app->id,
+                        'group_id' => $app->group_id,
+                        'user_id' => $actor->id,
+                        'user_type' => 'teacher',
+                        'user_name' => $actor->full_name,
+                        'action' => RetakeApplicationLog::ACTION_GROUP_ASSIGNED,
+                        'metadata' => ['retake_group_id' => $group->id, 'draft' => true, 'added_later' => true],
+                    ]);
+                }
+            }
+        });
+
+        return $apps->count();
     }
 
     /**
@@ -255,6 +309,10 @@ class RetakeGroupService
             if (array_key_exists($field, $data)) {
                 $update[$field] = $data[$field];
             }
+        }
+
+        if (array_key_exists('teacher_phones', $data)) {
+            $update['teacher_phones'] = $this->normalizePhones($data['teacher_phones']);
         }
 
         if (!empty($data['teacher_id']) && $data['teacher_id'] !== $group->teacher_id) {
@@ -320,6 +378,23 @@ class RetakeGroupService
             ->where('status', RetakeGroup::STATUS_SCHEDULED)
             ->whereDate('start_date', '<', today()->subDay())
             ->get();
+    }
+
+    /**
+     * Telefon raqamlar massivini tozalash (bo'sh elementlarni olib tashlash,
+     * trim qilish, dublikatlarni o'chirish).
+     */
+    private function normalizePhones(mixed $phones): ?array
+    {
+        if (!is_array($phones)) {
+            return null;
+        }
+        $clean = array_values(array_unique(array_filter(array_map(
+            fn ($p) => trim((string) $p),
+            $phones
+        ), fn ($p) => $p !== '')));
+
+        return empty($clean) ? null : $clean;
     }
 
     private function validateData(array $data, bool $partial = false): void

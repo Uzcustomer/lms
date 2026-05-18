@@ -73,8 +73,8 @@ class StudentServicesScreen extends StatelessWidget {
               Container(
                 padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
                 height: statusBarH + 64,
-                decoration: const BoxDecoration(
-                  color: Color(0xFF0A1A3A),
+                decoration: BoxDecoration(
+                  color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
                   borderRadius: BorderRadius.only(
                     bottomLeft: Radius.circular(18),
                     bottomRight: Radius.circular(18),
@@ -165,7 +165,6 @@ class _ServiceCard extends StatelessWidget {
     final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
     final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
     final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    final border = isDark ? Colors.white.withOpacity(0.12) : Colors.white.withOpacity(0.9);
 
     return ScaleTap(
       onTap: item.onTap,
@@ -176,7 +175,6 @@ class _ServiceCard extends StatelessWidget {
           child: Container(
             decoration: BoxDecoration(
               color: surface,
-              border: Border.all(color: border),
               borderRadius: BorderRadius.circular(20),
               boxShadow: [
                 BoxShadow(

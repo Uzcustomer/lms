@@ -679,6 +679,20 @@ Route::prefix('admin')->name('admin.')->group(function () {
                     ->name('group-test-schedule.export');
             });
 
+        // Dekanat — kech qolgan talabani SHU KUN ichida boshqa vaqtga
+        // o'tkazish (test markazi toggle holatidan qat'i nazar). Har talabaga
+        // bir kunda 1 marta. Yangi vaqt — bo'sh slotlardan, ish soatlari
+        // va kompyuter bandligi tekshirilgan holda.
+        Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|dekan'])
+            ->group(function () {
+                Route::get('/dean-exam-reschedule', [\App\Http\Controllers\Admin\DeanExamRescheduleController::class, 'index'])
+                    ->name('dean-exam-reschedule.index');
+                Route::get('/dean-exam-reschedule/slots', [\App\Http\Controllers\Admin\DeanExamRescheduleController::class, 'availableSlots'])
+                    ->name('dean-exam-reschedule.slots');
+                Route::post('/dean-exam-reschedule', [\App\Http\Controllers\Admin\DeanExamRescheduleController::class, 'store'])
+                    ->name('dean-exam-reschedule.store');
+            });
+
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 
         Route::get('/lessons/create', [LessonController::class, 'index'])->name('lessons.create');

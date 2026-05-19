@@ -3552,11 +3552,9 @@ class AcademicScheduleController extends Controller
         // va computeStudentAttemptStatuses bor, har item uchun alohida chaqirsak
         // ko'p marta bajariladi.
         $preCollected = []; // [groupHid|subjectId|sem => [group, subject, ...]]
-        $groupsCache = []; // groupHid => Group
         foreach ($items as $itemData) {
             $g = Group::where('group_hemis_id', $itemData['group_hemis_id'])->first();
             if (!$g) continue;
-            $groupsCache[$g->group_hemis_id] = $g;
             $subj = CurriculumSubject::where('curricula_hemis_id', $g->curriculum_hemis_id)
                 ->where('subject_id', $itemData['subject_id'])
                 ->where('semester_code', $itemData['semester_code'])
@@ -3583,65 +3581,6 @@ class AcademicScheduleController extends Controller
                 'lesson_end_date' => null,
             ];
         }
-
-        // Joriy o'quv yilidagi BARCHA aktiv curriculum_subjects ni
-        // mini scheduleData'ga qo'shamiz — attachStudentsToSchedule ichida
-        // current_semester_debts hisobi $scheduleData scope'iga bog'liq.
-        // Agar faqat user tanlangan 1-2 ta fan bo'lsa, currentDebtsByStudent
-        // 1-2 tani sanaydi va past_debts + current_semester_debts >= 4
-        // fallback tekshiruvi 4+ qarzdorni ushlay olmaydi. YN belgilash
-        // sahifasi butun sahifa scheduleData'sini yuklagani uchun bu
-        // muammoga uchramaydi — biz ham xuddi shunday kengaytiramiz.
-        // Sintetik triplelarning students rendering'da ishlatilmaydi
-        // (faqat enrichedStudentsByKey lookup'i orqali real itemlar
-        // qaytariladi), shuning uchun Word jadvalida ortiqcha qator paydo
-        // bo'lmaydi.
-        try {
-            $currentYear = DB::table('semesters')->where('current', true)->value('education_year');
-            if ($currentYear && !empty($groupsCache)) {
-                // DIQQAT: semesters jadvalida semester kod ustuni "code"
-                // (curriculum_subjects'da esa "semester_code"). Bu farq
-                // tufayli avval silently fail bo'lardi va held_back hech
-                // qachon to'g'ri hisoblanmasdi.
-                $yearSemCodes = DB::table('semesters')
-                    ->where('education_year', $currentYear)
-                    ->pluck('code')
-                    ->all();
-                if (!empty($yearSemCodes)) {
-                    $curriculumIds = collect($groupsCache)
-                        ->pluck('curriculum_hemis_id')->unique()->filter()->values()->all();
-                    if (!empty($curriculumIds)) {
-                        $yearSubjects = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumIds)
-                            ->where('is_active', true)
-                            ->whereIn('semester_code', $yearSemCodes)
-                            ->get();
-                        foreach ($groupsCache as $gHid => $gObj) {
-                            $groupYearSubjects = $yearSubjects->filter(
-                                fn($s) => (string) $s->curricula_hemis_id === (string) $gObj->curriculum_hemis_id
-                            );
-                            foreach ($groupYearSubjects as $ys) {
-                                $k = $gHid . '|' . $ys->subject_id . '|' . $ys->semester_code;
-                                if (isset($preCollected[$k])) continue;
-                                $preCollected[$k] = [
-                                    'group' => $gObj,
-                                    'subject' => $ys,
-                                    'oski_date' => null,
-                                    'test_date' => null,
-                                    'oski_resit_date' => null,
-                                    'test_resit_date' => null,
-                                    'oski_resit2_date' => null,
-                                    'test_resit2_date' => null,
-                                    'lesson_end_date' => null,
-                                ];
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            \Log::warning('generateYnOldiWord: year subjects extension failed: ' . $e->getMessage());
-        }
-
         $miniScheduleData = collect($preCollected)
             ->groupBy(fn($i) => $i['group']->group_hemis_id)
             ->map(fn($vals) => collect(array_values($vals->all())));

@@ -1716,6 +1716,22 @@ class JournalController extends Controller
                     $stageKey = $svc::STAGE_IN_PROGRESS;
                 }
 
+                // 2-urinishdan o'tmagan yoki 2-urinish topshirmagan talabalar
+                // (2-urinish OSKI/Test sanalari o'tib ketgan) 3-urinishga
+                // o'tkaziladi — jurnalda "3-urinish" badge ko'rinadi.
+                $oskiResitDone = $hasOskiForWeights
+                    ? ($examSchedule && $examSchedule->oski_resit_date && $examSchedule->oski_resit_date->format('Y-m-d') <= $today)
+                    : true;
+                $testResitDone = $hasTestForWeights
+                    ? ($examSchedule && $examSchedule->test_resit_date && $examSchedule->test_resit_date->format('Y-m-d') <= $today)
+                    : true;
+                $twoUrinishEnded = $oskiResitDone && $testResitDone;
+                if ($twoUrinishEnded && $stageKey === $svc::STAGE_IN_12A) {
+                    $stageKey = $svc::STAGE_IN_12B;
+                } elseif ($twoUrinishEnded && $stageKey === $svc::STAGE_IN_12A_PULLIK) {
+                    $stageKey = $svc::STAGE_IN_12B_PULLIK;
+                }
+
                 $studentStages[$h] = array_merge(
                     $svc::stageLabel($stageKey),
                     ['stage' => $stageKey, 'v' => $main['v']]

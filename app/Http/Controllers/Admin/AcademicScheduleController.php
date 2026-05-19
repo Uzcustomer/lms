@@ -1237,6 +1237,28 @@ class AcademicScheduleController extends Controller
             }
         } catch (\Throwable $e) {}
 
+        // Per-student exam_schedules — alohida belgilangan individual 2-urinish
+        // sanalari (admin SAIDMURODOVA kabi yolg'iz 2-urinishchiga sana
+        // qo'ygan holatlar). Group naMap'da bo'lmasa shu yerdan olamiz.
+        $perStudentResitMap = []; // hemis|subj|sem => ['oski_resit_date', 'test_resit_date']
+        try {
+            $rows = DB::table('exam_schedules')
+                ->whereNotNull('student_hemis_id')
+                ->whereIn('group_hemis_id', $allGroupHids)
+                ->whereIn('subject_id', $allSubjectIds)
+                ->whereIn('semester_code', $allSemCodes)
+                ->select('student_hemis_id', 'subject_id', 'semester_code',
+                    'oski_resit_date', 'test_resit_date')
+                ->get();
+            foreach ($rows as $r) {
+                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                $perStudentResitMap[$k] = [
+                    'oski_resit_date' => $r->oski_resit_date,
+                    'test_resit_date' => $r->test_resit_date,
+                ];
+            }
+        } catch (\Throwable $e) {}
+
         // 1) JN/MT olish — snapshot va tirik AVG ni birlashtirib ishlatamiz.
         $jnMtMap = []; // hemis_id|subj|sem => [jn, mt]
 
@@ -1389,6 +1411,10 @@ class AcademicScheduleController extends Controller
         // resit sanasi belgilanmagan, lekin baho yozilgan holatlar uchun fallback.
         // group|subj|sem|typeCode (101/102) => max(lesson_date) YYYY-MM-DD
         $groupAttempt2DateMap = [];
+        // Talaba bo'yicha 2-urinish lesson_date — yakka talaba 2-urinishga
+        // kirgan (boshqa hech kim 2-urinishda emas) holatlar uchun.
+        // hemis|subj|sem|typeCode => max(lesson_date)
+        $studentAttempt2DateMap = [];
         try {
             if ($hasAttemptCol) {
                 $rows = DB::table('student_grades')
@@ -1424,17 +1450,25 @@ class AcademicScheduleController extends Controller
                         }
                     }
 
-                    // Group-level attempt=2 sanasini yig'amiz (101/102 uchun)
+                    // Group/Student-level attempt=2 sanasini yig'amiz (101/102 uchun)
                     if (in_array($typeCode, [101, 102], true) && $r->lesson_date) {
+                        $dateStr = is_string($r->lesson_date)
+                            ? substr($r->lesson_date, 0, 10)
+                            : \Carbon\Carbon::parse($r->lesson_date)->format('Y-m-d');
+
                         $gHid = $studentGroup[$r->student_hemis_id] ?? null;
                         if ($gHid) {
-                            $dateStr = is_string($r->lesson_date)
-                                ? substr($r->lesson_date, 0, 10)
-                                : \Carbon\Carbon::parse($r->lesson_date)->format('Y-m-d');
                             $gKey = $gHid . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $typeCode;
                             if (!isset($groupAttempt2DateMap[$gKey]) || $dateStr > $groupAttempt2DateMap[$gKey]) {
                                 $groupAttempt2DateMap[$gKey] = $dateStr;
                             }
+                        }
+
+                        // Per-student fallback — yakka talaba 2-urinishga kirgan
+                        // bo'lsa, uning o'z lesson_date'i orqali sana topiladi.
+                        $sKey = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $typeCode;
+                        if (!isset($studentAttempt2DateMap[$sKey]) || $dateStr > $studentAttempt2DateMap[$sKey]) {
+                            $studentAttempt2DateMap[$sKey] = $dateStr;
                         }
                     }
 
@@ -1535,17 +1569,33 @@ class AcademicScheduleController extends Controller
                 // 1/2-urinish sanalari — muddati tugaganmi tekshirish uchun
                 $oskiDate = $naMap[$naKey]['oski_date'] ?? null;
                 $testDate = $naMap[$naKey]['test_date'] ?? null;
+                // 2-urinish sanasi manbalari (ustuvorlik tartibida):
+                //   1) Guruh sathidagi exam_schedules (admin guruhga sana qo'ygan)
+                //   2) Talabaning individual exam_schedules yozuvi (admin
+                //      yakka talabaga sana qo'ygan — SAIDMURODOVA kabi yolg'iz holat)
+                //   3) Guruhdagi bironta talabaning attempt=2 student_grades lesson_date
+                //   4) Talabaning o'z attempt=2 student_grades lesson_date
+                // Birinchi topilgani ishlatiladi.
                 $oskiResitDate = $naMap[$naKey]['oski_resit_date'] ?? null;
                 $testResitDate = $naMap[$naKey]['test_resit_date'] ?? null;
-                // Fallback: agar exam_schedules da resit sanasi belgilanmagan
-                // bo'lsa, guruh bo'yicha attempt=2 student_grades lesson_date dan
-                // olamiz — boshqa talabaga 2-urinish bahosi yozilgan bo'lsa,
-                // imtihon shu kuni o'tgan deb hisoblanadi.
+                $perStuKey = $hid . '|' . $s . '|' . $sem;
+                if ($oskiResitDate === null) {
+                    $oskiResitDate = $perStudentResitMap[$perStuKey]['oski_resit_date'] ?? null;
+                }
+                if ($testResitDate === null) {
+                    $testResitDate = $perStudentResitMap[$perStuKey]['test_resit_date'] ?? null;
+                }
                 if ($oskiResitDate === null) {
                     $oskiResitDate = $groupAttempt2DateMap[$g . '|' . $s . '|' . $sem . '|101'] ?? null;
                 }
                 if ($testResitDate === null) {
                     $testResitDate = $groupAttempt2DateMap[$g . '|' . $s . '|' . $sem . '|102'] ?? null;
+                }
+                if ($oskiResitDate === null) {
+                    $oskiResitDate = $studentAttempt2DateMap[$hid . '|' . $s . '|' . $sem . '|101'] ?? null;
+                }
+                if ($testResitDate === null) {
+                    $testResitDate = $studentAttempt2DateMap[$hid . '|' . $s . '|' . $sem . '|102'] ?? null;
                 }
                 $today = now()->format('Y-m-d');
 

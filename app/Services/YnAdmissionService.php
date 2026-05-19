@@ -9,6 +9,7 @@ use App\Models\MarkingSystemScore;
 use App\Models\Setting;
 use App\Models\Student;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * YN (Yakuniy Nazorat) ga ruxsat hisoblaydigan yagona service.
@@ -95,12 +96,49 @@ class YnAdmissionService
 
         $hemisIds = $students->pluck('hemis_id')->all();
 
-        // Davomat — bitta batch so'rov.
+        // Davomat — jurnal (JournalController) bilan AYNI mantiqda hisoblanadi:
+        // education_year_code bo'yicha filterlanadi (joriy o'quv yili) va group_id
+        // qo'shimcha filtersiz - faqat (subject, sem, education_year). education_year_code
+        // schedules jadvalidan oxirgi lesson_date asosida aniqlanadi (curriculum
+        // education_year_code fallback bilan). Bu jurnaldagi davomat % bilan
+        // aynan teng natija beradi.
+        $educationYearCode = null;
+        try {
+            $scheduleEducationYear = DB::table('schedules')
+                ->where('group_id', $groupHemisId)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->whereNull('deleted_at')
+                ->whereNotNull('lesson_date')
+                ->whereNotNull('education_year_code')
+                ->orderBy('lesson_date', 'desc')
+                ->value('education_year_code');
+            if ($scheduleEducationYear) {
+                $educationYearCode = $scheduleEducationYear;
+            } else {
+                $curriculum = DB::table('groups as g')
+                    ->join('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
+                    ->where('g.group_hemis_id', $groupHemisId)
+                    ->value('c.education_year_code');
+                $hasScheduleRows = DB::table('schedules')
+                    ->where('group_id', $groupHemisId)
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->whereNull('deleted_at')
+                    ->whereNotNull('lesson_date')
+                    ->exists();
+                // Jadval qatorlari mavjud, lekin education_year_code NULL bo'lsa,
+                // jadval ma'lumotlarini filterlamaslik uchun curriculum yil'ini ham
+                // ishlatmaymiz (jurnal bilan AYNI mantiq).
+                $educationYearCode = $hasScheduleRows ? null : $curriculum;
+            }
+        } catch (\Throwable $e) {}
+
         $absentMap = Attendance::query()
-            ->where('group_id', $groupHemisId)
             ->where('subject_id', $subjectId)
             ->where('semester_code', $semesterCode)
             ->whereIn('student_hemis_id', $hemisIds)
+            ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->whereNotIn('training_type_code', [99, 100, 101, 102])
             ->selectRaw('student_hemis_id, SUM(absent_off) as total_off')
             ->groupBy('student_hemis_id')

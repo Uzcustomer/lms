@@ -3365,6 +3365,11 @@ class AcademicScheduleController extends Controller
             // bitta talabaning hemis_id'si yuboriladi.
             'items.*.attempt' => 'nullable|integer|min:1|max:3',
             'items.*.student_hemis_id' => 'nullable|string',
+            // Komp № DB'ga saqlash uchun yn_type va schedule_id ham kerak —
+            // bandlik view'i ularni yuboradi. Test-center bulk export'da
+            // ular bo'lmaydi → faqat Word generatsiyasi (DB'ga yozish yo'q).
+            'items.*.schedule_id' => 'nullable|integer',
+            'items.*.yn_type' => 'nullable|in:oski,test,OSKI,Test',
             // Per-item exam_time bo'lsa "multi-slot" rejim — bir nechta vaqt
             // slotlarini tanlab bitta Word hujjatda vaqt tartibida ketma-ket
             // chiqarish (bandlik ko'rsatkichida checkbox + "Tanlanganlarni Word'ga"
@@ -3581,6 +3586,10 @@ class AcademicScheduleController extends Controller
                 'department' => $department,
                 'students' => $students,
                 'subject' => $subject,
+                // DB persistence uchun (bandlik path'idan keladi).
+                'yn_type' => isset($itemData['yn_type']) ? strtolower((string) $itemData['yn_type']) : null,
+                'attempt' => $itemAttempt,
+                'schedule_id' => !empty($itemData['schedule_id']) ? (int) $itemData['schedule_id'] : null,
             ];
         }
 
@@ -3620,6 +3629,74 @@ class AcademicScheduleController extends Controller
                     $computerNumberMap[$key] = $slotCounters[$slot];
                     $slotCounters[$slot]++;
                 }
+            }
+        }
+
+        // DB persistence: bandlik path'ida (examDate + entries yn_type + schedule_id
+        // bilan kelganda) komp raqamlarini ComputerAssignment'ga is_pinned=true
+        // bilan yozamiz. Shunda student portali, JIT/notification — hammasi shu
+        // raqamni ko'radi va JIT tick job qayta belgilashga urinmaydi.
+        //  - 1-urinish: mavjud "scheduled" qator UPDATE qilinadi.
+        //  - 2-/3-urinish: yangi qator INSERT qilinadi (attempt ustuni mavjud).
+        //  - status != scheduled bo'lganlar (in_progress/finished) tegmaydi.
+        if ($examDate && !empty($computerNumberMap)) {
+            try {
+                $durationMin = (int) (ExamCapacityService::getSettingsForDate($examDate)['test_duration_minutes'] ?? 15);
+                foreach ($subjectGroups as $sg) {
+                    $slot = $multiSlotMode ? ($sg['slot_time'] ?? '') : ($examTime ?? '');
+                    if (empty($slot)) continue;
+                    foreach ($sg['entries'] as $entry) {
+                        $scheduleId = $entry['schedule_id'] ?? null;
+                        $ynType = $entry['yn_type'] ?? null;
+                        $attempt = (int) ($entry['attempt'] ?? 1);
+                        if (!$scheduleId || !$ynType) continue;
+
+                        $plannedStart = \Carbon\Carbon::parse($examDate . ' ' . $slot);
+                        $plannedEnd = $plannedStart->copy()->addMinutes($durationMin);
+
+                        foreach ($entry['students'] as $st) {
+                            $compNum = $computerNumberMap[$slot . '|' . $st->hemis_id] ?? null;
+                            if ($compNum === null) continue;
+                            $studentIdNumber = (string) ($st->student_id ?? '');
+                            $hemis = (string) $st->hemis_id;
+
+                            $existing = \App\Models\ComputerAssignment::where('exam_schedule_id', $scheduleId)
+                                ->where('yn_type', $ynType)
+                                ->where('attempt', $attempt)
+                                ->where('student_hemis_id', $hemis)
+                                ->first();
+
+                            if ($existing) {
+                                if ($existing->status !== \App\Models\ComputerAssignment::STATUS_SCHEDULED) {
+                                    continue;
+                                }
+                                $existing->computer_number = $compNum;
+                                $existing->is_pinned = true;
+                                if (empty($existing->planned_start)) $existing->planned_start = $plannedStart;
+                                if (empty($existing->planned_end))   $existing->planned_end = $plannedEnd;
+                                $existing->save();
+                            } else {
+                                \App\Models\ComputerAssignment::create([
+                                    'exam_schedule_id' => $scheduleId,
+                                    'student_id_number' => $studentIdNumber,
+                                    'student_hemis_id' => $hemis,
+                                    'yn_type' => $ynType,
+                                    'attempt' => $attempt,
+                                    'computer_number' => $compNum,
+                                    'planned_start' => $plannedStart,
+                                    'planned_end' => $plannedEnd,
+                                    'is_pinned' => true,
+                                    'is_reserve' => false,
+                                    'status' => \App\Models\ComputerAssignment::STATUS_SCHEDULED,
+                                ]);
+                            }
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('generateYnOldiWord: komp raqamini DB ga saqlashda xatolik', [
+                    'error' => $e->getMessage(),
+                ]);
             }
         }
 

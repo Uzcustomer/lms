@@ -2,6 +2,7 @@
 
 namespace App\Jobs;
 
+use App\Models\ComputerAssignment;
 use App\Models\ExamSchedule;
 use App\Models\Student;
 use App\Models\StudentNotification;
@@ -76,8 +77,20 @@ class NotifyExamTimesJob implements ShouldQueue
                 $dateFmt = Carbon::parse($dateStr)->format('d.m.Y');
                 $timeHM = substr((string) $timeVal, 0, 5);
 
+                // Har talabaning komp raqami (agar ComputerAssignment'da bo'lsa).
+                // Bandlik Word'i is_pinned=true bilan oldindan yozadi, JIT esa
+                // imtihondan oldin tayinlaydi — har ikkala manba ham shu yerda
+                // ushlanadi. Yo'q bo'lsa xabarda komp № qatori chiqmaydi.
+                $compNumberMap = ComputerAssignment::where('exam_schedule_id', $schedule->id)
+                    ->where('yn_type', strtolower($s['yn']))
+                    ->where('attempt', $s['attempt'])
+                    ->whereIn('student_hemis_id', $students->pluck('hemis_id')->all())
+                    ->whereNotNull('computer_number')
+                    ->pluck('computer_number', 'student_hemis_id')
+                    ->all();
+
                 $totalNotified += $this->sendBatch(
-                    $telegram, $students, $subjectName, $ynLabel, $dateFmt, $timeHM
+                    $telegram, $students, $subjectName, $ynLabel, $dateFmt, $timeHM, $compNumberMap
                 );
             }
         }
@@ -123,21 +136,29 @@ class NotifyExamTimesJob implements ShouldQueue
         string $subjectName,
         string $ynLabel,
         string $dateFmt,
-        string $timeHM
+        string $timeHM,
+        array $compNumberMap = []
     ): int {
-        $message = "📋 <b>{$ynLabel} vaqti belgilandi!</b>\n\n"
+        $baseMessage = "📋 <b>{$ynLabel} vaqti belgilandi!</b>\n\n"
             . "📌 Fan: <b>{$subjectName}</b>\n"
             . "📅 Sana: <b>{$dateFmt}</b>\n"
             . "⏰ Vaqt: <b>{$timeHM}</b>";
         $notifTitle = "{$ynLabel} vaqti belgilandi: {$subjectName}";
-        $notifMessage = "Fan: {$subjectName}, Sana: {$dateFmt}, Vaqt: {$timeHM}.";
 
         $notificationRecords = [];
         $sent = 0;
         foreach ($students as $student) {
+            $compNum = $compNumberMap[$student->hemis_id] ?? null;
+            $personalMessage = $baseMessage;
+            $personalNotif = "Fan: {$subjectName}, Sana: {$dateFmt}, Vaqt: {$timeHM}.";
+            if ($compNum !== null) {
+                $personalMessage .= "\n🖥 Kompyuter: <b>{$compNum}</b>";
+                $personalNotif .= " Kompyuter: {$compNum}.";
+            }
+
             try {
                 if (!empty($student->telegram_chat_id)) {
-                    $telegram->sendToUser($student->telegram_chat_id, $message);
+                    $telegram->sendToUser($student->telegram_chat_id, $personalMessage);
                 }
             } catch (\Throwable $e) {
                 Log::warning('NotifyExamTimesJob: telegram failed', [
@@ -149,13 +170,14 @@ class NotifyExamTimesJob implements ShouldQueue
                 'student_id' => $student->id,
                 'type' => 'exam_reminder',
                 'title' => $notifTitle,
-                'message' => $notifMessage,
+                'message' => $personalNotif,
                 'link' => '/student/exam-schedule',
                 'data' => json_encode([
                     'subject' => $subjectName,
                     'yn_label' => $ynLabel,
                     'test_time' => $timeHM,
                     'test_date' => $dateFmt,
+                    'computer_number' => $compNum,
                 ]),
                 'read_at' => null,
                 'created_at' => now(),

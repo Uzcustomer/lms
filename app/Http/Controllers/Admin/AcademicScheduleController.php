@@ -3372,10 +3372,12 @@ class AcademicScheduleController extends Controller
             'items.*.group_hemis_id' => 'required|string',
             'items.*.semester_code' => 'required|string',
             'items.*.subject_id' => 'required|string',
-            // 2-/3-urinish (resit) bo'lsa butun guruh emas, faqat yiqilganlar
-            // chiqishi uchun urinish raqami va (per-student qator bo'lsa)
-            // bitta talabaning hemis_id'si yuboriladi.
+            // Urinish raqami — 2/3 bo'lsa: faqat shu urinishga kirishi mumkin
+            // talabalarni qaydnomaga kiritamiz (4+ qarzdor va pullik talabalar
+            // tushib qoladi - aks holda Bandlik Word ro'yxati bilan YN belgilash
+            // ro'yxati o'rtasida nomuvofiqlik yuzaga keladi).
             'items.*.attempt' => 'nullable|integer|min:1|max:3',
+            // Per-student qator bo'lsa — bitta talabaning hemis_id'si.
             'items.*.student_hemis_id' => 'nullable|string',
             // Komp № DB'ga saqlash uchun yn_type va schedule_id ham kerak —
             // bandlik view'i ularni yuboradi. Test-center bulk export'da
@@ -3418,6 +3420,38 @@ class AcademicScheduleController extends Controller
 
         if (!file_exists($tempDir)) {
             mkdir($tempDir, 0755, true);
+        }
+
+        // 2/3-urinish uchun talabalar statusini oldindan hisoblaymiz —
+        // bunda 4+ qarzdor (held_back) va pullik talabalar ro'yxatdan
+        // chiqarib tashlanadi. computeStudentAttemptStatuses scheduleData
+        // collection'ni guruh_hemis_id bo'yicha groupBy qilingan ko'rinishda
+        // kutadi va har item ichida 'group' (Group obyekt) hamda 'subject'
+        // (subject_id, semester_code'ga ega obyekt) bo'lishi kerak.
+        $resitItems = collect($items)->filter(fn($it) => (int) ($it['attempt'] ?? 1) >= 2);
+        $attemptStatuses = [];
+        if ($resitItems->isNotEmpty()) {
+            $resitGroupHids = $resitItems->pluck('group_hemis_id')->unique();
+            $resitGroups = Group::whereIn('group_hemis_id', $resitGroupHids)->get()->keyBy('group_hemis_id');
+            $statusScheduleData = collect();
+            foreach ($resitItems as $rIt) {
+                $g = $resitGroups->get($rIt['group_hemis_id']);
+                if (!$g) continue;
+                $statusScheduleData->push([
+                    'group' => $g,
+                    'subject' => (object) [
+                        'subject_id' => $rIt['subject_id'],
+                        'semester_code' => $rIt['semester_code'],
+                    ],
+                ]);
+            }
+            $statusScheduleData = $statusScheduleData->groupBy(fn($i) => $i['group']->group_hemis_id);
+            try {
+                $attemptStatuses = $this->computeStudentAttemptStatuses($statusScheduleData);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('generateYnOldiWord: status hisoblash xatosi: ' . $e->getMessage());
+                $attemptStatuses = [];
+            }
         }
 
         // Step 1: Collect all data and group by subject_id
@@ -3536,6 +3570,29 @@ class AcademicScheduleController extends Controller
             }
 
             $students = $studentsQuery->groupBy('id')->get();
+
+            // 2/3-urinish bo'lsa - faqat shu urinishga haqiqatdan kirishi mumkin
+            // talabalarni qoldiramiz. Aks holda Bandlik Word ro'yxati YN belgilash
+            // jadvalida ko'rinmaydigan (4+ qarzdor, pullik) talabalarni ham
+            // kiritib yuboradi va xatolik bo'ladi.
+            $itemAttempt = (int) ($itemData['attempt'] ?? 1);
+            if ($itemAttempt >= 2) {
+                $statusKey = $group->group_hemis_id . '|' . $subject->subject_id . '|' . $semesterCode;
+                $statusesForKey = $attemptStatuses[$statusKey] ?? [];
+                $failedFlag = $itemAttempt === 2 ? 'failed1' : 'failed2';
+                $students = $students->filter(function ($st) use ($statusesForKey, $failedFlag) {
+                    $stat = $statusesForKey[$st->hemis_id] ?? null;
+                    if ($stat === null) return false;
+                    // 4+ qarzdorlar (held_back) va pullik talabalar kirmaydi
+                    if (!empty($stat['held_back']) || !empty($stat['pullik'])) return false;
+                    // Faqat ushbu urinishga haqiqatdan yiqilgan (yoki qatnashmagan) talabalar
+                    return !empty($stat[$failedFlag]);
+                })->values();
+
+                // Filterdan keyin biror talaba qolmasa — bu guruh-fan kombinatsiyasini
+                // umuman Word'ga qo'shmaymiz (bo'sh jadval chiqarmaslik uchun).
+                if ($students->isEmpty()) continue;
+            }
 
             // JN/MT ni jurnal "ixcham" tabi bilan bir xil mantiqda jonli hisoblash
             // (snapshot ishlatilmaydi; retake-priority qoidasi va NB=0 mantiqi qo'llaniladi).

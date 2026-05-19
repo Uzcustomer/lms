@@ -3584,6 +3584,45 @@ class AcademicScheduleController extends Controller
             ];
         }
 
+        // Kompyuter raqamlari xaritasi: har slot vaqti (sana shu Word'da
+        // yagona — bandlikdan kelgani uchun) bo'yicha barcha sahifalardagi
+        // talabalar ism bo'yicha saralanib 1, 2, 3, ... tartibida raqam oladi.
+        // Buzilganlar (per-day override) chetlab o'tiladi. Reserve pool
+        // hisobga olinmaydi — bu faqat ko'rsatma uchun on-the-fly preview,
+        // DB'dagi ComputerAssignment.computer_number'larga tegmaydi.
+        $brokenSet = [];
+        $configuredCompCount = 60;
+        if ($examDate) {
+            $capSettings = ExamCapacityService::getSettingsForDate($examDate);
+            $brokenSet = (array) ($capSettings['broken_computers'] ?? []);
+            $configuredCompCount = (int) ($capSettings['computer_count'] ?? 60);
+        }
+        $brokenLookup = array_flip(array_map('intval', $brokenSet));
+
+        // Raqamlar Word'dagi qator tartibida beriladi — proktor qog'ozda
+        // 1, 2, 3, ... ketma-ket o'qiy oladi. Slot ichida tartib: sahifa
+        // tartibi (subjectGroups iteratsiyasi) → entry tartibi → entry ichida
+        // talaba (Student::orderBy('full_name')) — har joyda turg'un.
+        $computerNumberMap = []; // "slot|hemis_id" => int
+        $slotCounters = [];      // slot => keyingi sinab ko'riladigan raqam
+        foreach ($subjectGroups as $sg) {
+            $slot = $multiSlotMode ? ($sg['slot_time'] ?? '') : ($examTime ?? '');
+            if (!isset($slotCounters[$slot])) $slotCounters[$slot] = 1;
+            foreach ($sg['entries'] as $entry) {
+                foreach ($entry['students'] as $st) {
+                    $hemis = (string) $st->hemis_id;
+                    $key = $slot . '|' . $hemis;
+                    if (isset($computerNumberMap[$key])) continue;
+                    while ($slotCounters[$slot] <= $configuredCompCount && isset($brokenLookup[$slotCounters[$slot]])) {
+                        $slotCounters[$slot]++;
+                    }
+                    if ($slotCounters[$slot] > $configuredCompCount) break 2;
+                    $computerNumberMap[$key] = $slotCounters[$slot];
+                    $slotCounters[$slot]++;
+                }
+            }
+        }
+
         // Multi-slot rejimda: slot vaqti bo'yicha o'sish tartibida, ichida fan
         // bo'yicha — shunda 9:15 → 9:30 → 9:45 ketma-ketligida sahifalar
         // chiqadi. Yagona-slot/legacy rejimda tartib o'zgarmaydi.
@@ -3722,20 +3761,24 @@ class AcademicScheduleController extends Controller
             $cellFont = ['size' => 10];
             $cellFontRed = ['size' => 10, 'color' => 'FF0000'];
             $headerBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
-            $groupSeparatorBg = ['bgColor' => 'E2EFDA', 'valign' => 'center', 'gridSpan' => 8];
+            // gridSpan 10 — yangi "Komp №" va "Belgi" ustunlari uchun.
+            $groupSeparatorBg = ['bgColor' => 'E2EFDA', 'valign' => 'center', 'gridSpan' => 10];
             $cellCenter = ['alignment' => Jc::CENTER];
             $cellLeft = ['alignment' => Jc::START];
             $cellFontOrange = ['size' => 10, 'color' => 'FF8C00'];
+            $cellFontComp = ['size' => 11, 'bold' => true, 'color' => '1E40AF'];
 
             $headerRow = $table->addRow(400);
-            $headerRow->addCell(600, $headerBg)->addText('№', $headerFont, $cellCenter);
-            $headerRow->addCell(4000, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
-            $headerRow->addCell(1800, $headerBg)->addText('Talaba ID', $headerFont, $cellCenter);
-            $headerRow->addCell(1000, $headerBg)->addText('JN', $headerFont, $cellCenter);
-            $headerRow->addCell(1000, $headerBg)->addText('MT', $headerFont, $cellCenter);
-            $headerRow->addCell(1300, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
-            $headerRow->addCell(1300, $headerBg)->addText('Kontrakt', $headerFont, $cellCenter);
-            $headerRow->addCell(1800, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
+            $headerRow->addCell(500, $headerBg)->addText('№', $headerFont, $cellCenter);
+            $headerRow->addCell(3500, $headerBg)->addText('Talaba F.I.O', $headerFont, $cellCenter);
+            $headerRow->addCell(1500, $headerBg)->addText('Talaba ID', $headerFont, $cellCenter);
+            $headerRow->addCell(800, $headerBg)->addText('JN', $headerFont, $cellCenter);
+            $headerRow->addCell(800, $headerBg)->addText('MT', $headerFont, $cellCenter);
+            $headerRow->addCell(1100, $headerBg)->addText('Davomat %', $headerFont, $cellCenter);
+            $headerRow->addCell(1200, $headerBg)->addText('Kontrakt', $headerFont, $cellCenter);
+            $headerRow->addCell(1400, $headerBg)->addText('YN ga ruxsat', $headerFont, $cellCenter);
+            $headerRow->addCell(900, $headerBg)->addText('Komp №', $headerFont, $cellCenter);
+            $headerRow->addCell(700, $headerBg)->addText('Belgi', $headerFont, $cellCenter);
 
             // Talabalar ro'yxati - barcha guruhlar uchun davom etadi
             $rowNum = 1;
@@ -3839,36 +3882,51 @@ class AcademicScheduleController extends Controller
                     }
 
                     $dataRow = $table->addRow();
-                    $dataRow->addCell(600)->addText($rowNum, $cellFont, $cellCenter);
-                    $dataRow->addCell(4000)->addText($student->student_name, $cellFont, $cellLeft);
-                    $dataRow->addCell(1800)->addText($student->student_id, $cellFont, $cellCenter);
+                    $dataRow->addCell(500)->addText($rowNum, $cellFont, $cellCenter);
+                    $dataRow->addCell(3500)->addText($student->student_name, $cellFont, $cellLeft);
+                    $dataRow->addCell(1500)->addText($student->student_id, $cellFont, $cellCenter);
 
-                    $jnCell = $dataRow->addCell(1000);
+                    $jnCell = $dataRow->addCell(800);
                     $jnCell->addText($student->jn ?? '0', $jnFailed ? $cellFontRed : $cellFont, $cellCenter);
 
-                    $mtCell = $dataRow->addCell(1000);
+                    $mtCell = $dataRow->addCell(800);
                     $mtCell->addText($student->mt ?? '0', $mtFailed ? $cellFontRed : $cellFont, $cellCenter);
 
-                    $davomatCell = $dataRow->addCell(1300);
+                    $davomatCell = $dataRow->addCell(1100);
                     $davomatCell->addText(
                         ($qoldiq != 0 ? $qoldiq . '%' : '0%'),
                         $davomatFailed ? $cellFontRed : $cellFont,
                         $cellCenter
                     );
 
-                    $kontraktCell = $dataRow->addCell(1300);
+                    $kontraktCell = $dataRow->addCell(1200);
                     $kontraktCell->addText(
                         $contractText,
                         $contractFailed ? $cellFontOrange : $cellFont,
                         $cellCenter
                     );
 
-                    $holatCell = $dataRow->addCell(1800);
+                    $holatCell = $dataRow->addCell(1400);
                     if ($holat === 'Shartli') {
                         $holatCell->addText($holat, $cellFontOrange, $cellCenter);
                     } else {
                         $holatCell->addText($holat, $holat === 'X' ? $cellFontRed : $cellFont, $cellCenter);
                     }
+
+                    // Komp № — shu slot bo'yicha tartibli raqam (buzilganlar
+                    // chetlab o'tilgan). Map yuqorida slot bo'yicha hisoblangan.
+                    $compNum = $computerNumberMap[$sectionExamTime . '|' . $student->hemis_id] ?? null;
+                    $compCell = $dataRow->addCell(900);
+                    $compCell->addText(
+                        $compNum !== null ? (string) $compNum : '—',
+                        $compNum !== null ? $cellFontComp : $cellFont,
+                        $cellCenter
+                    );
+
+                    // Belgi — proktor chop etilgan ro'yxatda qo'lda belgilash
+                    // uchun bo'sh kvadrat (U+2610 BALLOT BOX).
+                    $belgiCell = $dataRow->addCell(700);
+                    $belgiCell->addText('☐', ['size' => 16], $cellCenter);
 
                     $rowNum++;
                 }
@@ -4071,6 +4129,7 @@ class AcademicScheduleController extends Controller
                 'lunch_end' => $override->lunch_end ? substr($override->lunch_end, 0, 5) : null,
                 'computer_count' => $override->computer_count,
                 'test_duration_minutes' => $override->test_duration_minutes,
+                'broken_computers' => is_array($override->broken_computers) ? $override->broken_computers : [],
                 'note' => $override->note,
             ] : null,
             'daily_capacity' => ExamCapacityService::dailyCapacityForDate($date),
@@ -4100,6 +4159,8 @@ class AcademicScheduleController extends Controller
             'lunch_end' => 'nullable|date_format:H:i',
             'computer_count' => 'nullable|integer|min:1|max:100000',
             'test_duration_minutes' => 'nullable|integer|min:1|max:1440',
+            // CSV ("5, 12, 38") yoki array — controller ichida normalize qilamiz.
+            'broken_computers' => 'nullable',
             'note' => 'nullable|string|max:255',
             'clear' => 'nullable|boolean',
         ]);
@@ -4134,12 +4195,36 @@ class AcademicScheduleController extends Controller
             }
         }
 
+        // Buzilgan komp raqamlarini normalize qilish: CSV/string/array — barchasi
+        // saralangan unique tamsayilar massiviga aylantiriladi. Bo'sh stringni
+        // "ko'rsatilmagan" (null) deb qabul qilamiz.
+        $brokenRaw = $request->input('broken_computers');
+        $brokenList = null;
+        if ($brokenRaw !== null) {
+            $items = is_array($brokenRaw)
+                ? $brokenRaw
+                : preg_split('/[\s,;]+/', (string) $brokenRaw, -1, PREG_SPLIT_NO_EMPTY);
+            $clean = [];
+            foreach ((array) $items as $n) {
+                $n = (int) trim((string) $n);
+                if ($n > 0) $clean[$n] = true;
+            }
+            if (!empty($clean)) {
+                $brokenList = array_keys($clean);
+                sort($brokenList);
+            } elseif ($brokenRaw !== '' && $brokenRaw !== null && $brokenRaw !== []) {
+                // Aniq bo'sh ro'yxat berilgan (foydalanuvchi tozaladi)
+                $brokenList = [];
+            }
+        }
+
         $hasAny = $request->filled('work_hours_start')
             || $request->filled('work_hours_end')
             || $request->filled('lunch_start')
             || $request->filled('lunch_end')
             || $request->filled('computer_count')
             || $request->filled('test_duration_minutes')
+            || $brokenList !== null
             || $request->filled('note');
 
         $savedCount = 0;
@@ -4161,6 +4246,7 @@ class AcademicScheduleController extends Controller
                     'lunch_end' => $request->input('lunch_end') ?: null,
                     'computer_count' => $request->filled('computer_count') ? (int) $request->input('computer_count') : null,
                     'test_duration_minutes' => $request->filled('test_duration_minutes') ? (int) $request->input('test_duration_minutes') : null,
+                    'broken_computers' => $brokenList,
                     'note' => $request->input('note'),
                     'updated_by' => $userId,
                 ]);

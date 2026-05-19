@@ -93,14 +93,13 @@ class AutoAssignService
             return ['ok' => false, 'skipped' => true, 'reason' => 'no students in group'];
         }
 
-        // Slot sig'imi = primaryComputerCount (reserve pool ayrilgan), lekin
-        // sozlamalardagi computer_count'dan oshmaydi. Reserve pool — failover
-        // uchun ajratilgan kompyuterlar (asosiy ishlamay qolsa zaxira); ularni
-        // slot rejalashtirishda band qilib ketmaslik kerak. Admin reserve
-        // sonini Computer.is_reserve_pool yoki services.moodle.reserve_computers_count
-        // orqali boshqaradi.
-        $slotCapacity = $this->primaryComputerCount();
-        $configCap = (int) ($capacity['computer_count'] ?? 0);
+        // Slot sig'imi = primaryComputerCount (reserve pool ayrilgan + shu kun
+        // uchun buzilganlar ayrilgan), lekin sozlamalardagi computer_count'dan
+        // oshmaydi. Reserve pool — failover uchun ajratilgan kompyuterlar;
+        // buzilganlar — admin per-day override'da belgilagan ishlamaydiganlar.
+        $brokenForDay = (array) ($capacity['broken_computers'] ?? []);
+        $slotCapacity = $this->primaryComputerCount($brokenForDay);
+        $configCap = max(0, (int) ($capacity['computer_count'] ?? 0) - count($brokenForDay));
         if ($configCap > 0) {
             $slotCapacity = min($slotCapacity, $configCap);
         }
@@ -266,7 +265,11 @@ class AutoAssignService
             excludeAssignmentId: $assignment->id,
         );
 
-        $pool = $this->primaryPoolNumbers();
+        $dateStr = $assignment->planned_start instanceof Carbon
+            ? $assignment->planned_start->format('Y-m-d')
+            : Carbon::parse((string) $assignment->planned_start)->format('Y-m-d');
+        $brokenForDay = (array) (ExamCapacityService::getSettingsForDate($dateStr)['broken_computers'] ?? []);
+        $pool = $this->primaryPoolNumbers($brokenForDay);
         $available = array_values(array_diff($pool, $occupied));
         if (empty($available)) {
             return null;
@@ -292,6 +295,15 @@ class AutoAssignService
         $computer = Computer::where('number', $computerNumber)->where('active', true)->first();
         if (!$computer) {
             return ['ok' => false, 'reason' => "Kompyuter #{$computerNumber} mavjud emas yoki faol emas."];
+        }
+
+        // Shu kun uchun buzilgan deb belgilangan komp pin qilinmasin.
+        $dateStr = $assignment->planned_start instanceof Carbon
+            ? $assignment->planned_start->format('Y-m-d')
+            : Carbon::parse((string) $assignment->planned_start)->format('Y-m-d');
+        $brokenForDay = (array) (ExamCapacityService::getSettingsForDate($dateStr)['broken_computers'] ?? []);
+        if (in_array($computerNumber, $brokenForDay, true)) {
+            return ['ok' => false, 'reason' => "Kompyuter #{$computerNumber} bu kun uchun buzilgan deb belgilangan."];
         }
 
         $occupied = $this->occupiedComputerNumbers(
@@ -396,9 +408,11 @@ class AutoAssignService
     }
 
     /**
+     * @param  int[]  $brokenNumbers  Shu kun uchun ishlamaydigan komp raqamlari
+     *                                (per-date override'dan).
      * @return int[]
      */
-    private function primaryPoolNumbers(): array
+    public function primaryPoolNumbers(array $brokenNumbers = []): array
     {
         $reserve = Computer::reservePoolNumbers();
         $totalConfig = (int) config('services.moodle.total_computers', 60);
@@ -406,25 +420,29 @@ class AutoAssignService
         if (empty($allActive)) {
             $allActive = range(1, $totalConfig);
         }
-        return array_values(array_diff($allActive, $reserve));
+        $pool = array_values(array_diff($allActive, $reserve, $brokenNumbers));
+        sort($pool);
+        return $pool;
     }
 
-    private function primaryComputerCount(): int
+    private function primaryComputerCount(array $brokenNumbers = []): int
     {
-        return count($this->primaryPoolNumbers());
+        return count($this->primaryPoolNumbers($brokenNumbers));
     }
 
     /**
      * Controller-lar uchun yagona "effective slot capacity" helper.
-     * Sozlamalardagi computer_count va aktiv primary (reserve ayrilgan)
-     * kompyuterlarning eng kichigini qaytaradi. Reserve pool — failover,
-     * shu sabab slot rejalashtirishda hisobga olinmaydi.
+     * Sozlamalardagi computer_count va aktiv primary (reserve va shu kun
+     * uchun buzilganlar ayrilgan) kompyuterlarning eng kichigini qaytaradi.
+     * Reserve pool — failover, slot rejalashtirishda hisobga olinmaydi.
      */
     public static function effectiveSlotCapacity(array $settings): int
     {
-        $config = (int) ($settings['computer_count'] ?? 0);
+        $broken = (array) ($settings['broken_computers'] ?? []);
+        $brokenCount = count($broken);
+        $config = max(0, (int) ($settings['computer_count'] ?? 0) - $brokenCount);
         $service = app(self::class);
-        $primary = $service->primaryComputerCount();
+        $primary = $service->primaryComputerCount($broken);
         if ($primary < 1 && $config < 1) {
             return 0;
         }

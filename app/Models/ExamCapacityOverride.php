@@ -14,6 +14,7 @@ class ExamCapacityOverride extends Model
         'lunch_end',
         'computer_count',
         'test_duration_minutes',
+        'broken_computers',
         'note',
         'created_by',
         'updated_by',
@@ -23,5 +24,6 @@ class ExamCapacityOverride extends Model
         'date' => 'date',
         'computer_count' => 'integer',
         'test_duration_minutes' => 'integer',
+        'broken_computers' => 'array',
     ];
 }

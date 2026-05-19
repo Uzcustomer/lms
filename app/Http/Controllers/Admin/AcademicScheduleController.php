@@ -3487,11 +3487,9 @@ class AcademicScheduleController extends Controller
         // va computeStudentAttemptStatuses bor, har item uchun alohida chaqirsak
         // ko'p marta bajariladi.
         $preCollected = []; // [groupHid|subjectId|sem => [group, subject, ...]]
-        $groupsCache = []; // groupHid => Group
         foreach ($items as $itemData) {
             $g = Group::where('group_hemis_id', $itemData['group_hemis_id'])->first();
             if (!$g) continue;
-            $groupsCache[$g->group_hemis_id] = $g;
             $subj = CurriculumSubject::where('curricula_hemis_id', $g->curriculum_hemis_id)
                 ->where('subject_id', $itemData['subject_id'])
                 ->where('semester_code', $itemData['semester_code'])
@@ -3518,65 +3516,6 @@ class AcademicScheduleController extends Controller
                 'lesson_end_date' => null,
             ];
         }
-
-        // Joriy o'quv yilidagi BARCHA aktiv curriculum_subjects ni
-        // mini scheduleData'ga qo'shamiz — attachStudentsToSchedule ichida
-        // current_semester_debts hisobi $scheduleData scope'iga bog'liq.
-        // Agar faqat user tanlangan 1-2 ta fan bo'lsa, currentDebtsByStudent
-        // 1-2 tani sanaydi va past_debts + current_semester_debts >= 4
-        // fallback tekshiruvi 4+ qarzdorni ushlay olmaydi. YN belgilash
-        // sahifasi butun sahifa scheduleData'sini yuklagani uchun bu
-        // muammoga uchramaydi — biz ham xuddi shunday kengaytiramiz.
-        // Sintetik triplelarning students rendering'da ishlatilmaydi
-        // (faqat enrichedStudentsByKey lookup'i orqali real itemlar
-        // qaytariladi), shuning uchun Word jadvalida ortiqcha qator paydo
-        // bo'lmaydi.
-        try {
-            $currentYear = DB::table('semesters')->where('current', true)->value('education_year');
-            if ($currentYear && !empty($groupsCache)) {
-                // DIQQAT: semesters jadvalida semester kod ustuni "code"
-                // (curriculum_subjects'da esa "semester_code"). Bu farq
-                // tufayli avval silently fail bo'lardi va held_back hech
-                // qachon to'g'ri hisoblanmasdi.
-                $yearSemCodes = DB::table('semesters')
-                    ->where('education_year', $currentYear)
-                    ->pluck('code')
-                    ->all();
-                if (!empty($yearSemCodes)) {
-                    $curriculumIds = collect($groupsCache)
-                        ->pluck('curriculum_hemis_id')->unique()->filter()->values()->all();
-                    if (!empty($curriculumIds)) {
-                        $yearSubjects = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumIds)
-                            ->where('is_active', true)
-                            ->whereIn('semester_code', $yearSemCodes)
-                            ->get();
-                        foreach ($groupsCache as $gHid => $gObj) {
-                            $groupYearSubjects = $yearSubjects->filter(
-                                fn($s) => (string) $s->curricula_hemis_id === (string) $gObj->curriculum_hemis_id
-                            );
-                            foreach ($groupYearSubjects as $ys) {
-                                $k = $gHid . '|' . $ys->subject_id . '|' . $ys->semester_code;
-                                if (isset($preCollected[$k])) continue;
-                                $preCollected[$k] = [
-                                    'group' => $gObj,
-                                    'subject' => $ys,
-                                    'oski_date' => null,
-                                    'test_date' => null,
-                                    'oski_resit_date' => null,
-                                    'test_resit_date' => null,
-                                    'oski_resit2_date' => null,
-                                    'test_resit2_date' => null,
-                                    'lesson_end_date' => null,
-                                ];
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (\Throwable $e) {
-            \Log::warning('generateYnOldiWord: year subjects extension failed: ' . $e->getMessage());
-        }
-
         $miniScheduleData = collect($preCollected)
             ->groupBy(fn($i) => $i['group']->group_hemis_id)
             ->map(fn($vals) => collect(array_values($vals->all())));
@@ -3585,13 +3524,62 @@ class AcademicScheduleController extends Controller
             : collect();
         // Lookup: (groupHid|subjectId|sem) → enriched students array.
         $enrichedStudentsByKey = [];
+        $allEnrichedHemisIds = [];
         foreach ($enrichedScheduleData as $groupItems) {
             foreach ($groupItems as $eItem) {
                 $k = $eItem['group']->group_hemis_id . '|'
                     . ($eItem['subject']->subject_id ?? '') . '|'
                     . ($eItem['subject']->semester_code ?? '');
                 $enrichedStudentsByKey[$k] = $eItem['students'] ?? [];
+                foreach ($eItem['students'] ?? [] as $s) {
+                    if (!empty($s['hemis_id'])) {
+                        $allEnrichedHemisIds[(string) $s['hemis_id']] = true;
+                    }
+                }
             }
+        }
+        $allEnrichedHemisIds = array_keys($allEnrichedHemisIds);
+
+        // Joriy o'quv yili bo'yi 1-urinishdan o'tmagan (V<60) fanlar soni —
+        // is_held_back uchun fallback. attachStudentsToSchedule ichida
+        // current_year_debt_count $scheduleData scope'iga bog'liq edi va
+        // bandlik Word'da faqat 1-2 ta fan yuborilganda 4+ ni topa olmasdi.
+        // Bu yerda butun yil semestrlari uchun SQL bilan to'g'ridan-to'g'ri
+        // sanab olamiz — YN belgilash sahifasidagi qarz hisobi bilan AYNI.
+        // DIQQAT: semesters jadvalida semester kod ustuni "code" deb
+        // nomlangan (curriculum_subjects'da esa "semester_code").
+        $yearDebtCount = [];
+        try {
+            $currentYear = DB::table('semesters')->where('current', true)->value('education_year');
+            if ($currentYear && !empty($allEnrichedHemisIds)) {
+                $yearSemCodes = DB::table('semesters')
+                    ->where('education_year', $currentYear)
+                    ->pluck('code')
+                    ->all();
+                if (!empty($yearSemCodes)) {
+                    $hasAttemptColYr = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+                    $debtQ = DB::table('student_grades as sg')
+                        ->whereIn('sg.student_hemis_id', $allEnrichedHemisIds)
+                        ->whereIn('sg.semester_code', $yearSemCodes)
+                        ->whereIn('sg.training_type_code', [101, 102])
+                        ->whereNull('sg.deleted_at')
+                        ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                    if ($hasAttemptColYr) {
+                        $debtQ->where(function ($x) {
+                            $x->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                        });
+                    }
+                    $debtRows = $debtQ
+                        ->selectRaw('sg.student_hemis_id, COUNT(DISTINCT CONCAT(sg.subject_id, "-", sg.semester_code)) as cnt')
+                        ->groupBy('sg.student_hemis_id')
+                        ->get();
+                    foreach ($debtRows as $r) {
+                        $yearDebtCount[(string) $r->student_hemis_id] = (int) $r->cnt;
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('generateYnOldiWord: year debt count failed: ' . $e->getMessage());
         }
 
         foreach ($items as $itemData) {
@@ -3684,23 +3672,24 @@ class AcademicScheduleController extends Controller
             // Enriched arraylarni eski kod kutgan stdClass shaklga o'tkazamiz
             // — Word jadvalini quruvchi kod $student->jn / $student->mt /
             // $student->student_name kabi property'larga tayanadi.
-            // 4+ qarz tekshiruvi test-center.blade.php bilan AYNI: yoki
-            // is_held_back bayrog'i bor (computeStudentAttemptStatuses ichida
-            // o'rnatilgan), yoki past_debts + current_semester_debts soni
-            // ≥ 4. Ikkalasi ham bo'lishi mumkin — fallback uchun ikkalasini
-            // tekshiramiz.
-            $students = collect($enrichedStudents)->map(function ($row) use ($liveGrades) {
+            // 4+ qarz tekshiruvi 3 manbadan: is_held_back bayrog'i (agar
+            // attachStudentsToSchedule to'g'ri hisoblay olsa), past_debts +
+            // current_semester_debts (test-center.blade.php fallback'i), va
+            // yearDebtCount (yuqorida SQL bilan butun yil bo'yi sanagan).
+            // Yetarli — qaysi biri 4+ ni topsa, talaba "X" ga o'tadi.
+            $students = collect($enrichedStudents)->map(function ($row) use ($liveGrades, $yearDebtCount) {
                 $hemisId = (string) ($row['hemis_id'] ?? '');
                 $pastDebts = $row['past_debts'] ?? [];
                 $currentDebts = $row['current_semester_debts'] ?? [];
                 $debtCount = count($pastDebts) + count($currentDebts);
+                $yearCnt = $yearDebtCount[$hemisId] ?? 0;
                 $obj = new \stdClass();
                 $obj->hemis_id = $row['hemis_id'] ?? null;
                 $obj->student_name = $row['full_name'] ?? '';
                 $obj->student_id = $row['student_id_number'] ?? '';
                 $obj->jn = $liveGrades[$hemisId]['jn'] ?? 0;
                 $obj->mt = $liveGrades[$hemisId]['mt'] ?? 0;
-                $obj->is_held_back = !empty($row['is_held_back']) || $debtCount >= 4;
+                $obj->is_held_back = !empty($row['is_held_back']) || $debtCount >= 4 || $yearCnt >= 4;
                 $obj->admission_status = $row['admission_status'] ?? null;
                 return $obj;
             })->sortBy('student_name')->values();

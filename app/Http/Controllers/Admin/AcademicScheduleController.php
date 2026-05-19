@@ -3613,34 +3613,53 @@ class AcademicScheduleController extends Controller
         // sanab olamiz — YN belgilash sahifasidagi qarz hisobi bilan AYNI.
         // DIQQAT: semesters jadvalida semester kod ustuni "code" deb
         // nomlangan (curriculum_subjects'da esa "semester_code").
+        // Joriy o'quv yili bo'yi 1-urinishdan o'tmagan (V<60) fanlar soni —
+        // is_held_back uchun fallback. DIQQAT: semester_code qiymatlari
+        // turli curriculum'larda ham bir xil bo'lishi mumkin (masalan,
+        // kod=18 bir curriculum'da 4-kurs, boshqasida 3-kurs). Shu sababli
+        // semesters jadvaliga curriculum_id orqali JOIN qilamiz — faqat
+        // talabaning AYNAN o'ziniki curriculum'idagi va joriy yildagi
+        // failed grade'lar sanaladi. Bundan tashqari, retake'da o'tib
+        // ketgan fanlarni NOT EXISTS bilan chiqarib tashlaymiz (attempt=1
+        // ning grade<60 yozuvi qolsa ham, agar shu (fan, semestr) uchun
+        // boshqa yozuv >=60 olib o'tilgan bo'lsa, qarz hisoblanmaydi).
         $yearDebtCount = [];
         try {
             $currentYear = DB::table('semesters')->where('current', true)->value('education_year');
             if ($currentYear && !empty($allEnrichedHemisIds)) {
-                $yearSemCodes = DB::table('semesters')
-                    ->where('education_year', $currentYear)
-                    ->pluck('code')
-                    ->all();
-                if (!empty($yearSemCodes)) {
-                    $hasAttemptColYr = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
-                    $debtQ = DB::table('student_grades as sg')
-                        ->whereIn('sg.student_hemis_id', $allEnrichedHemisIds)
-                        ->whereIn('sg.semester_code', $yearSemCodes)
-                        ->whereIn('sg.training_type_code', [101, 102])
-                        ->whereNull('sg.deleted_at')
-                        ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
-                    if ($hasAttemptColYr) {
-                        $debtQ->where(function ($x) {
-                            $x->where('sg.attempt', 1)->orWhereNull('sg.attempt');
-                        });
-                    }
-                    $debtRows = $debtQ
-                        ->selectRaw('sg.student_hemis_id, COUNT(DISTINCT CONCAT(sg.subject_id, "-", sg.semester_code)) as cnt')
-                        ->groupBy('sg.student_hemis_id')
-                        ->get();
-                    foreach ($debtRows as $r) {
-                        $yearDebtCount[(string) $r->student_hemis_id] = (int) $r->cnt;
-                    }
+                $hasAttemptColYr = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+                $debtQ = DB::table('student_grades as sg')
+                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                    ->join('semesters as sm', function ($j) {
+                        $j->on('sm.curriculum_hemis_id', '=', 'st.curriculum_id')
+                          ->on('sm.code', '=', 'sg.semester_code');
+                    })
+                    ->whereIn('sg.student_hemis_id', $allEnrichedHemisIds)
+                    ->where('sm.education_year', $currentYear)
+                    ->whereIn('sg.training_type_code', [101, 102])
+                    ->whereNull('sg.deleted_at')
+                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60')
+                    ->whereNotExists(function ($q) {
+                        $q->select(DB::raw(1))
+                          ->from('student_grades as sg2')
+                          ->whereColumn('sg2.student_hemis_id', 'sg.student_hemis_id')
+                          ->whereColumn('sg2.subject_id', 'sg.subject_id')
+                          ->whereColumn('sg2.semester_code', 'sg.semester_code')
+                          ->whereIn('sg2.training_type_code', [101, 102])
+                          ->whereNull('sg2.deleted_at')
+                          ->whereRaw('COALESCE(sg2.retake_grade, sg2.grade) >= 60');
+                    });
+                if ($hasAttemptColYr) {
+                    $debtQ->where(function ($x) {
+                        $x->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                    });
+                }
+                $debtRows = $debtQ
+                    ->selectRaw('sg.student_hemis_id, COUNT(DISTINCT CONCAT(sg.subject_id, "-", sg.semester_code)) as cnt')
+                    ->groupBy('sg.student_hemis_id')
+                    ->get();
+                foreach ($debtRows as $r) {
+                    $yearDebtCount[(string) $r->student_hemis_id] = (int) $r->cnt;
                 }
             }
         } catch (\Throwable $e) {

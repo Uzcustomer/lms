@@ -4832,6 +4832,7 @@ class AcademicScheduleController extends Controller
         $examSchedule = ExamSchedule::where('group_hemis_id', $request->group_hemis_id)
             ->where('subject_id', $request->subject_id)
             ->where('semester_code', $request->semester_code)
+            ->whereNull('student_hemis_id')
             ->first();
 
         if (!$examSchedule) {

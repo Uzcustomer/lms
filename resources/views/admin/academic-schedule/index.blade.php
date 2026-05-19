@@ -649,17 +649,22 @@
                                                     // + joriy semestrdagi BARCHA failed fanlar (controller pre-pass'dan)
                                                     $stuPastDebts = $stuRow['past_debts'] ?? [];
                                                     $stuCurrentDebts = $stuRow['current_semester_debts'] ?? [];
-                                                    $stuDebtCount = count($stuPastDebts) + count($stuCurrentDebts);
-                                                    $stuDebtTooltip = '';
-                                                    if ($stuDebtCount > 0) {
-                                                        $tooltipLines = [];
-                                                        foreach ($stuPastDebts as $d) {
-                                                            $tooltipLines[] = '• ' . ($d['subject_name'] ?? '') . ' (' . ($d['semester_name'] ?? '') . ')';
-                                                        }
-                                                        foreach ($stuCurrentDebts as $d) {
-                                                            $tooltipLines[] = '• ' . ($d['subject_name'] ?? '') . ' (' . ($d['semester_name'] ?? '') . ') — joriy';
-                                                        }
-                                                        $stuDebtTooltip = implode("\n", $tooltipLines);
+                                                    $stuPastDebtCount = count($stuPastDebts);
+                                                    $stuCurrentDebtCount = count($stuCurrentDebts);
+                                                    $stuDebtCount = $stuPastDebtCount + $stuCurrentDebtCount;
+                                                    $stuPastDebtTooltip = '';
+                                                    if ($stuPastDebtCount > 0) {
+                                                        $stuPastDebtTooltip = implode("\n", array_map(
+                                                            fn ($d) => '• ' . ($d['subject_name'] ?? '') . ' (' . ($d['semester_name'] ?? '') . ')',
+                                                            $stuPastDebts
+                                                        ));
+                                                    }
+                                                    $stuCurrentDebtTooltip = '';
+                                                    if ($stuCurrentDebtCount > 0) {
+                                                        $stuCurrentDebtTooltip = implode("\n", array_map(
+                                                            fn ($d) => '• ' . ($d['subject_name'] ?? '') . ' (' . ($d['semester_name'] ?? '') . ') — joriy semestr',
+                                                            $stuCurrentDebts
+                                                        ));
                                                     }
                                                     // Pullik (jn/mt past yoki davomat ≥25%) → 2/3-urinishda sana qo'yib bo'lmaydi
                                                     $pullikBlocked = ($stuUrinish > 1) && !empty($stuRow['is_pullik']);
@@ -677,8 +682,11 @@
                                                     <td colspan="6" style="padding:4px 8px 4px 40px;font-size:11px;color:{{ $isBlocked ? '#991b1b' : '#475569' }};">
                                                         <span style="display:inline-block;padding:0 4px;border-left:3px solid {{ $isBlocked ? '#fca5a5' : '#93c5fd' }};margin-right:6px;">↳</span>
                                                         {{ $stuRow['full_name'] }}
-                                                        @if($stuDebtCount > 0)
-                                                            <span class="debt-badge" title="{{ $stuDebtTooltip }}">{{ $stuDebtCount }} qarz</span>
+                                                        @if($stuPastDebtCount > 0)
+                                                            <span class="debt-badge" title="{{ $stuPastDebtTooltip }}">{{ $stuPastDebtCount }} qarz</span>
+                                                        @endif
+                                                        @if($stuCurrentDebtCount > 0)
+                                                            <span class="debt-badge debt-badge-current" title="{{ $stuCurrentDebtTooltip }}">{{ $stuCurrentDebtCount }} joriy</span>
                                                         @endif
                                                         @if($heldBackBlocked)
                                                             <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="4 tadan ortiq fandan qarz — kursdan qoldiriladi">4 tadan ortiq qarz</span>
@@ -1333,6 +1341,8 @@
 
         .debt-badge { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 10px; font-size: 9px; font-weight: 700; background: #fef3c7; color: #92400e; border: 1px solid #fcd34d; cursor: help; white-space: pre-line; }
         .debt-badge:hover { background: #fde68a; border-color: #f59e0b; }
+        .debt-badge.debt-badge-current { background: #e0f2fe; color: #075985; border-color: #7dd3fc; }
+        .debt-badge.debt-badge-current:hover { background: #bae6fd; border-color: #0284c7; }
 
         .schedule-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .schedule-table thead { position: sticky; top: 0; z-index: 10; }

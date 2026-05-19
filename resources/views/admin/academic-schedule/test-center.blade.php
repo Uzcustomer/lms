@@ -538,12 +538,10 @@
                                                     // 4+ qarz aniqlash: is_held_back attachStudentsToSchedule scope'da
                                                     // har doim ham to'g'ri hisoblanmaydi (computeStudentAttemptStatuses
                                                     // faqat yuklangan triple'lardagi qarzlarni sanaydi). Shu sababli
-                                                    // past_debts + current_semester_debts dan to'g'ridan-to'g'ri
-                                                    // sanaymiz. YN belgilash (index.blade.php) bilan bir xil mantiq.
-                                                    $stuPastDebts = $stuRow['past_debts'] ?? [];
-                                                    $stuCurrentDebts = $stuRow['current_semester_debts'] ?? [];
-                                                    $stuDebtCount = count($stuPastDebts) + count($stuCurrentDebts);
-                                                    $stuHeldBack = !empty($stuRow['is_held_back']) || $stuDebtCount >= 4;
+                                                    // current_year_debt_count maydonini ishlatamiz - bu SQL bilan
+                                                    // to'g'ridan-to'g'ri joriy o'quv yili bo'yicha hisoblangan.
+                                                    $stuYearDebt = (int) ($stuRow['current_year_debt_count'] ?? 0);
+                                                    $stuHeldBack = !empty($stuRow['is_held_back']) || $stuYearDebt >= 4;
                                                     // YN ga ruxsat (YnAdmissionService — YN oldi qaydnoma bilan bir xil mantiq)
                                                     $stuAdmission = $stuRow['admission_status'] ?? null;
                                                     $stuAdmReasons = $stuRow['admission_reasons'] ?? [];

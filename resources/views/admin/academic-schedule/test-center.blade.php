@@ -321,6 +321,10 @@
                             <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Davomiyligi</label>
                             <input type="number" id="do-duration" min="1" style="padding:6px 8px;border:1px solid #5eead4;border-radius:6px;font-size:13px;width:100%;background:#fff;">
                         </div>
+                        <div style="min-width:170px;">
+                            <label style="display:block;font-size:11px;font-weight:600;color:#991b1b;margin-bottom:4px;" title="Shu kun(lar)da ishlamaydigan kompyuter raqamlari. Slot sig'imi va kompyuter raqami berishda chetlab o'tiladi.">Buzilgan komp №</label>
+                            <input type="text" id="do-broken" maxlength="500" placeholder="masalan: 5, 12, 38" style="padding:6px 10px;border:1px solid #fca5a5;border-radius:6px;font-size:13px;width:100%;background:#fef2f2;">
+                        </div>
                         <div style="flex:1;min-width:160px;">
                             <label style="display:block;font-size:11px;font-weight:600;color:#0f766e;margin-bottom:4px;">Izoh</label>
                             <input type="text" id="do-note" maxlength="255" placeholder="ixtiyoriy" style="padding:6px 10px;border:1px solid #5eead4;border-radius:6px;font-size:13px;width:100%;background:#fff;">
@@ -1268,6 +1272,8 @@
             document.getElementById('do-lunch-end').value = DO_DEFAULTS.lunch_end || '';
             document.getElementById('do-computers').value = DO_DEFAULTS.computer_count || '';
             document.getElementById('do-duration').value = DO_DEFAULTS.test_duration_minutes || '';
+            var brokenEl = document.getElementById('do-broken');
+            if (brokenEl) brokenEl.value = (DO_DEFAULTS.broken_computers && DO_DEFAULTS.broken_computers.length) ? DO_DEFAULTS.broken_computers.join(', ') : '';
             document.getElementById('do-note').value = '';
         }
 
@@ -1320,6 +1326,9 @@
                 payload.lunch_end = document.getElementById('do-lunch-end').value || null;
                 payload.computer_count = document.getElementById('do-computers').value || null;
                 payload.test_duration_minutes = document.getElementById('do-duration').value || null;
+                // Buzilgan komp: foydalanuvchi inputi (CSV) — server parse qiladi.
+                var brokenEl = document.getElementById('do-broken');
+                payload.broken_computers = brokenEl ? (brokenEl.value || '') : null;
                 payload.note = document.getElementById('do-note').value || null;
             }
             status.textContent = 'Saqlanmoqda...';

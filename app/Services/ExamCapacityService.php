@@ -31,6 +31,9 @@ class ExamCapacityService
             'work_hours_end' => '17:00',
             'lunch_start' => '13:00',
             'lunch_end' => '14:00',
+            // Per-day buzilgan komp raqamlari (override orqali). Global emas —
+            // hozircha har kun uchun alohida belgilanadi.
+            'broken_computers' => [],
         ];
     }
 
@@ -82,6 +85,19 @@ class ExamCapacityService
             if ($value !== null && $value !== '') {
                 $settings[$key] = $value;
             }
+        }
+
+        // Buzilgan komp ro'yxati: faqat array bo'lib o'rnatilgan bo'lsa
+        // hisobga olinadi (bo'sh massiv ham aniq belgilangan "buzuq yo'q"
+        // ma'nosini beradi va default'ni override qiladi).
+        if (is_array($override->broken_computers)) {
+            $clean = [];
+            foreach ($override->broken_computers as $n) {
+                $n = (int) $n;
+                if ($n > 0) $clean[$n] = true;
+            }
+            $settings['broken_computers'] = array_values(array_keys($clean));
+            sort($settings['broken_computers']);
         }
 
         // Agar tushlik faqat bittasi to'ldirilsa — tushlik o'chiriladi
@@ -174,7 +190,10 @@ class ExamCapacityService
             return 0;
         }
         $slots = (int) floor($minutes / max(1, $s['test_duration_minutes']));
-        return $slots * (int) $s['computer_count'];
+        // Per-slot komp soni — config'dan buzilganlar ayriladi (ular butun
+        // kun davomida ishlamaydi).
+        $effectiveComputers = max(0, (int) $s['computer_count'] - count((array) ($s['broken_computers'] ?? [])));
+        return $slots * $effectiveComputers;
     }
 
     public static function dailyCapacityForDate(?string $date): int

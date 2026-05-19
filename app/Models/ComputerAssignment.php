@@ -12,6 +12,7 @@ class ComputerAssignment extends Model
         'student_id_number',
         'student_hemis_id',
         'yn_type',
+        'attempt',
         'computer_number',
         'planned_start',
         'planned_end',
@@ -43,6 +44,7 @@ class ComputerAssignment extends Model
         'actual_start' => 'datetime',
         'actual_end' => 'datetime',
         'computer_number' => 'integer',
+        'attempt' => 'integer',
         'history' => 'array',
     ];
 

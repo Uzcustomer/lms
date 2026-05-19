@@ -4415,7 +4415,7 @@ class AcademicScheduleController extends Controller
         // toza tushadi.
         $sortedByAttempt = [];
         foreach ([1, 2, 3] as $att) {
-            $sortedByAttempt[$att] = $candidates->sort(function ($a, $b) use ($att, $groupCountMap, $attemptNeedsMap) {
+            $sortedByAttempt[$att] = $candidates->sort(function ($a, $b) {
                 $cmp = strcmp((string) $a->department_hemis_id, (string) $b->department_hemis_id);
                 if ($cmp !== 0) return $cmp;
                 $cmp = strcmp((string) $a->specialty_hemis_id, (string) $b->specialty_hemis_id);
@@ -4424,9 +4424,12 @@ class AcademicScheduleController extends Controller
                 if ($cmp !== 0) return $cmp;
                 $cmp = strcmp((string) $a->subject_id, (string) $b->subject_id);
                 if ($cmp !== 0) return $cmp;
-                $cntA = $this->resolveAttemptStudentCount($a, $att, $groupCountMap, $attemptNeedsMap);
-                $cntB = $this->resolveAttemptStudentCount($b, $att, $groupCountMap, $attemptNeedsMap);
-                return $cntB <=> $cntA;
+                // Klaster ichida — guruh nomi bo'yicha (d1/d25-01a, d1/d25-01b,
+                // d1/d25-02a, ...). natcmp raqamli qismni to'g'ri tartiblaydi.
+                return strnatcmp(
+                    (string) (optional($a->group)->name ?? $a->group_hemis_id),
+                    (string) (optional($b->group)->name ?? $b->group_hemis_id)
+                );
             })->values();
         }
 
@@ -4584,9 +4587,9 @@ class AcademicScheduleController extends Controller
 
                 // Avval klaster (fakultet → yo'nalish → kurs/semestr → fan)
                 // bo'yicha ketma-ket — bir xil yo'nalish/kursning resit'lari
-                // qator vaqtlarda joylashadi. Klaster ichida katta bucket'lar
-                // avval (FFD), shunda kichiklari qolgan kichik bo'shliqlarga
-                // toza tushadi va best-fit slot tanlash samarali ishlaydi.
+                // qator vaqtlarda joylashadi. Klaster ichida guruh nomi
+                // bo'yicha (d1/d25-01a, d1/d25-01b, d1/d25-02a, ...) — natural
+                // sort raqamli qismni to'g'ri tartiblaydi.
                 usort($buckets, function ($a, $b) {
                     $sa = $a['schedules'][0] ?? null;
                     $sb = $b['schedules'][0] ?? null;
@@ -4604,7 +4607,10 @@ class AcademicScheduleController extends Controller
                     if ($cmp !== 0) return $cmp;
                     $cmp = strcmp((string) $a['subject_id'], (string) $b['subject_id']);
                     if ($cmp !== 0) return $cmp;
-                    return $b['count'] <=> $a['count'];
+                    return strnatcmp(
+                        (string) (optional($sa?->group)->name ?? $a['group_hemis_id']),
+                        (string) (optional($sb?->group)->name ?? $b['group_hemis_id'])
+                    );
                 });
 
                 foreach ($buckets as $b) {

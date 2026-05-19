@@ -3360,6 +3360,11 @@ class AcademicScheduleController extends Controller
             'items.*.group_hemis_id' => 'required|string',
             'items.*.semester_code' => 'required|string',
             'items.*.subject_id' => 'required|string',
+            // 2-/3-urinish (resit) bo'lsa butun guruh emas, faqat yiqilganlar
+            // chiqishi uchun urinish raqami va (per-student qator bo'lsa)
+            // bitta talabaning hemis_id'si yuboriladi.
+            'items.*.attempt' => 'nullable|integer|min:1|max:3',
+            'items.*.student_hemis_id' => 'nullable|string',
             // Bandlik ko'rsatkichidan chaqirilganda: imzo bloki va QR'siz "ish ro'yxati"
             // varianti + slotning kirish sana/vaqti yuqorida ko'rsatiladi.
             'compact' => 'nullable|boolean',
@@ -3407,12 +3412,61 @@ class AcademicScheduleController extends Controller
 
             if (!$subject) continue;
 
-            // Talabalarni olish
-            $students = Student::select('id', 'full_name as student_name', 'student_id_number as student_id', 'hemis_id')
+            $itemAttempt = (int) ($itemData['attempt'] ?? 1);
+            $itemStudentHemisId = !empty($itemData['student_hemis_id'])
+                ? (string) $itemData['student_hemis_id']
+                : null;
+
+            // Talabalarni olish:
+            //  - Per-student qator (student_hemis_id berilgan) — faqat shu 1 talaba.
+            //  - 2-/3-urinish va per-student emas — faqat yiqilgan/qayta topshirish
+            //    huquqi bor talabalar (student_grades'dan). bandlikKursatkichiShow
+            //    ichidagi $resitEligibleMap mantiqi bilan bir xil.
+            //  - 1-urinish va per-student emas — butun guruh (eski xulq).
+            $studentsQuery = Student::select(
+                'id',
+                'full_name as student_name',
+                'student_id_number as student_id',
+                'hemis_id'
+            )
                 ->where('group_id', $group->group_hemis_id)
-                ->groupBy('id')
-                ->orderBy('full_name')
-                ->get();
+                ->orderBy('full_name');
+
+            if ($itemStudentHemisId !== null) {
+                $studentsQuery->where('hemis_id', $itemStudentHemisId);
+            } elseif ($itemAttempt >= 2) {
+                $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+                $eligibleHemisIds = DB::table('student_grades as sg')
+                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                    ->where('st.group_id', $group->group_hemis_id)
+                    ->where('st.student_status_code', 11)
+                    ->where('sg.subject_id', $subject->subject_id)
+                    ->where('sg.semester_code', $semesterCode)
+                    ->whereIn('sg.training_type_code', [101, 102])
+                    ->whereNull('sg.deleted_at')
+                    ->when($hasAttemptCol, function ($q) {
+                        $q->where(function ($w) {
+                            $w->where('sg.attempt', '>=', 2)
+                              ->orWhere(function ($x) {
+                                  $x->where(function ($y) {
+                                      $y->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                                  })->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                              });
+                        });
+                    }, function ($q) {
+                        $q->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                    })
+                    ->distinct()
+                    ->pluck('sg.student_hemis_id')
+                    ->all();
+
+                if (empty($eligibleHemisIds)) {
+                    continue;
+                }
+                $studentsQuery->whereIn('hemis_id', $eligibleHemisIds);
+            }
+
+            $students = $studentsQuery->groupBy('id')->get();
 
             // JN/MT ni jurnal "ixcham" tabi bilan bir xil mantiqda jonli hisoblash
             // (snapshot ishlatilmaydi; retake-priority qoidasi va NB=0 mantiqi qo'llaniladi).

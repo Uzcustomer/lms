@@ -4987,29 +4987,32 @@ class AcademicScheduleController extends Controller
             [$timeColumn => $request->test_time]
         );
 
-        // Both date and time are now set → assign computers + book on Moodle.
-        // Hozircha kompyuter va Moodle bron qilish faqat 1-urinish uchun ishlaydi;
-        // 2-/3-urinishlar (resit) sanalari Test markazi tomonidan vaqt belgilanadi, biroq
-        // bron qilish bosqichi alohida ko'rib chiqiladi.
+        // Sana va vaqt belgilangach → kompyuter biriktirish + Moodle bron qilish.
+        // Endi har bir urinish (1, 2, 3) uchun alohida ishlatiladi — computer_assignments
+        // jadvalida attempt ustuni bor, va BookMoodleGroupExam ham attempt'ni qabul qiladi.
         $ynKey = $ynType === 'OSKI' ? 'oski' : 'test';
-        $naFlag = $ynKey === 'oski' ? $examSchedule->oski_na : $examSchedule->test_na;
+        // N/A bayrog'i faqat 1-urinish ustunida bor — resit'larda yo'q.
+        $naFlag = $attempt === 1 && ($ynKey === 'oski' ? $examSchedule->oski_na : $examSchedule->test_na);
         $autoRandom = $request->boolean('auto_random');
-        if ($attempt === 1 && $relatedDate && !$naFlag) {
+        if ($relatedDate && !$naFlag) {
             if ($autoRandom) {
                 $auto = app(\App\Services\AutoAssignService::class)
-                    ->distribute($examSchedule, $ynKey, $request->test_time);
+                    ->distribute($examSchedule, $ynKey, $request->test_time, [], $attempt);
                 if (empty($auto['ok'])) {
                     return response()->json([
                         'success' => false,
                         'message' => 'Avtomatik taqsimlashda xato: ' . ($auto['reason'] ?? 'noma\'lum'),
                     ], 422);
                 }
-                BookMoodleGroupExam::dispatch($examSchedule->id, $ynKey);
+                BookMoodleGroupExam::dispatch($examSchedule->id, $ynKey, false, $attempt);
             } else {
-                $modeField = $ynKey . '_assignment_mode';
-                $examSchedule->update([$modeField => 'manual']);
-                AssignComputersJob::dispatch($examSchedule->id, $ynKey);
-                BookMoodleGroupExam::dispatch($examSchedule->id, $ynKey);
+                // *_assignment_mode atributi faqat 1-urinish uchun mavjud.
+                if ($attempt === 1) {
+                    $modeField = $ynKey . '_assignment_mode';
+                    $examSchedule->update([$modeField => 'manual']);
+                }
+                AssignComputersJob::dispatch($examSchedule->id, $ynKey, $attempt);
+                BookMoodleGroupExam::dispatch($examSchedule->id, $ynKey, false, $attempt);
             }
         }
 
@@ -6024,11 +6027,11 @@ class AcademicScheduleController extends Controller
                         \App\Models\ComputerAssignment::STATUS_FINISHED,
                         \App\Models\ComputerAssignment::STATUS_ABANDONED,
                     ])
-                    ->groupBy('exam_schedule_id', 'yn_type')
-                    ->select('exam_schedule_id', 'yn_type', DB::raw('COUNT(*) as cnt'))
+                    ->groupBy('exam_schedule_id', 'yn_type', 'attempt')
+                    ->select('exam_schedule_id', 'yn_type', 'attempt', DB::raw('COUNT(*) as cnt'))
                     ->get();
                 foreach ($finishedRows as $fr) {
-                    $key = $fr->exam_schedule_id . '|' . strtolower((string) $fr->yn_type);
+                    $key = $fr->exam_schedule_id . '|' . strtolower((string) $fr->yn_type) . '|' . (int) $fr->attempt;
                     $finishedMap[$key] = (int) $fr->cnt;
                 }
             } catch (\Throwable $e) {
@@ -6047,7 +6050,7 @@ class AcademicScheduleController extends Controller
                 $cnt = $eligibleCount($grp, $totalGroup);
                 $grp['student_count'] = $cnt;
                 $ynLower = strtolower($grp['yn_type'] ?? '');
-                $qKey = ($grp['schedule_id'] ?? '') . '|' . $ynLower;
+                $qKey = ($grp['schedule_id'] ?? '') . '|' . $ynLower . '|' . (int) ($grp['attempt'] ?? 1);
                 $qCnt = (int) ($finishedMap[$qKey] ?? 0);
                 if ($qCnt > $cnt) {
                     $qCnt = $cnt;

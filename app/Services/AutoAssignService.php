@@ -40,17 +40,21 @@ class AutoAssignService
      *        ComputerAssignment'da yo'q). autoTimeAll bulk rejimida slot
      *        ust-ust tushishini oldini olish uchun ishlatiladi.
      */
-    public function distribute(ExamSchedule $schedule, string $ynType, string $startTime, array $extraOccupancy = []): array
+    public function distribute(ExamSchedule $schedule, string $ynType, string $startTime, array $extraOccupancy = [], int $attempt = 1): array
     {
         $ynType = strtolower($ynType);
         if (!in_array($ynType, ['oski', 'test'], true)) {
             return ['ok' => false, 'skipped' => true, 'reason' => 'invalid yn_type'];
         }
+        if (!in_array($attempt, [1, 2, 3], true)) {
+            return ['ok' => false, 'skipped' => true, 'reason' => 'invalid attempt'];
+        }
 
-        $dateField = $ynType . '_date';
-        $naField = $ynType . '_na';
+        $fields = \App\Services\ComputerAssignmentService::attemptFields($ynType, $attempt);
+        $dateField = $fields['date'];
+        $naField = $fields['na'];
 
-        if ($schedule->{$naField}) {
+        if ($naField !== null && $schedule->{$naField}) {
             return ['ok' => false, 'skipped' => true, 'reason' => 'yn marked N/A'];
         }
         $date = $schedule->{$dateField};
@@ -182,6 +186,7 @@ class AutoAssignService
                 'student_id_number' => (string) $student->student_id_number,
                 'student_hemis_id' => (string) $student->hemis_id,
                 'yn_type' => $ynType,
+                'attempt' => $attempt,
                 'computer_number' => null,
                 'planned_start' => $bestSlotStart->copy(),
                 'planned_end' => $bestSlotEnd->copy(),
@@ -211,21 +216,25 @@ class AutoAssignService
             ];
         }
 
-        DB::transaction(function () use ($schedule, $ynType, $createdRows) {
-            // Wipe scheduled-only rows for this (schedule, yn_type) — preserve real history
+        DB::transaction(function () use ($schedule, $ynType, $attempt, $createdRows) {
+            // Wipe scheduled-only rows for this (schedule, yn_type, attempt) — preserve real history
             ComputerAssignment::where('exam_schedule_id', $schedule->id)
                 ->where('yn_type', $ynType)
+                ->where('attempt', $attempt)
                 ->where('status', ComputerAssignment::STATUS_SCHEDULED)
                 ->delete();
             ComputerAssignment::insert($createdRows);
         });
 
-        // Persist the earliest slot start as the canonical group "exam time"
+        // Persist the earliest slot start as the canonical "exam time" for
+        // this attempt. 2/3-urinish da *_assignment_mode atributi yo'q.
         $earliest = collect($slotReport)->pluck('time')->sort()->first();
-        $timeField = $ynType . '_time';
-        $modeField = $ynType . '_assignment_mode';
+        $timeField = \App\Services\ComputerAssignmentService::attemptFields($ynType, $attempt)['time'];
         $schedule->{$timeField} = $earliest;
-        $schedule->{$modeField} = 'auto_jit';
+        if ($attempt === 1) {
+            $modeField = $ynType . '_assignment_mode';
+            $schedule->{$modeField} = 'auto_jit';
+        }
         $schedule->save();
 
         return [

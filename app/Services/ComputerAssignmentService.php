@@ -24,25 +24,30 @@ class ComputerAssignmentService
     public function __construct() {}
 
     /**
-     * Assign computers for one (schedule, yn_type). Idempotent — re-running
+     * Assign computers for one (schedule, yn_type, attempt). Idempotent — re-running
      * deletes any previous assignments for the same key and recomputes.
      *
      * @param string $ynType "oski" or "test"
+     * @param int    $attempt 1 = main, 2 = resit, 3 = resit2
      * @return array{ok:bool, count?:int, skipped?:bool, reason?:string}
      */
-    public function assign(ExamSchedule $schedule, string $ynType): array
+    public function assign(ExamSchedule $schedule, string $ynType, int $attempt = 1): array
     {
         $ynType = strtolower($ynType);
         if (!in_array($ynType, ['oski', 'test'], true)) {
             return ['ok' => false, 'skipped' => true, 'reason' => 'invalid yn_type'];
         }
+        if (!in_array($attempt, [1, 2, 3], true)) {
+            return ['ok' => false, 'skipped' => true, 'reason' => 'invalid attempt'];
+        }
 
-        $dateField = $ynType . '_date';
-        $timeField = $ynType . '_time';
-        $naField = $ynType . '_na';
+        $fields = self::attemptFields($ynType, $attempt);
+        $dateField = $fields['date'];
+        $timeField = $fields['time'];
+        $naField = $fields['na']; // null for resit attempts
 
-        if ($schedule->{$naField}) {
-            $this->clearAssignmentsFor($schedule->id, $ynType);
+        if ($naField !== null && $schedule->{$naField}) {
+            $this->clearAssignmentsFor($schedule->id, $ynType, $attempt);
             return ['ok' => true, 'skipped' => true, 'reason' => 'yn marked N/A'];
         }
         if (empty($schedule->{$dateField}) || empty($schedule->{$timeField})) {
@@ -94,9 +99,10 @@ class ComputerAssignmentService
 
         $picked = $available->shuffle()->take($students->count())->values();
 
-        DB::transaction(function () use ($schedule, $ynType, $students, $picked, $startsAt, $plannedEnd) {
+        DB::transaction(function () use ($schedule, $ynType, $attempt, $students, $picked, $startsAt, $plannedEnd) {
             ComputerAssignment::where('exam_schedule_id', $schedule->id)
                 ->where('yn_type', $ynType)
+                ->where('attempt', $attempt)
                 ->delete();
 
             $rows = [];
@@ -107,6 +113,7 @@ class ComputerAssignmentService
                     'student_id_number' => (string) $student->student_id_number,
                     'student_hemis_id' => (string) $student->hemis_id,
                     'yn_type' => $ynType,
+                    'attempt' => $attempt,
                     'computer_number' => (int) $picked[$i],
                     'planned_start' => $startsAt,
                     'planned_end' => $plannedEnd,
@@ -119,6 +126,29 @@ class ComputerAssignmentService
         });
 
         return ['ok' => true, 'count' => $students->count()];
+    }
+
+    /**
+     * (yn_type, attempt) uchun ExamSchedule ustun nomlarini qaytaradi.
+     *
+     * @return array{date:string, time:string, na:?string}
+     */
+    public static function attemptFields(string $ynType, int $attempt): array
+    {
+        $ynType = strtolower($ynType);
+        $map = [
+            'oski' => [
+                1 => ['date' => 'oski_date',         'time' => 'oski_time',         'na' => 'oski_na'],
+                2 => ['date' => 'oski_resit_date',   'time' => 'oski_resit_time',   'na' => null],
+                3 => ['date' => 'oski_resit2_date',  'time' => 'oski_resit2_time',  'na' => null],
+            ],
+            'test' => [
+                1 => ['date' => 'test_date',         'time' => 'test_time',         'na' => 'test_na'],
+                2 => ['date' => 'test_resit_date',   'time' => 'test_resit_time',   'na' => null],
+                3 => ['date' => 'test_resit2_date',  'time' => 'test_resit2_time',  'na' => null],
+            ],
+        ];
+        return $map[$ynType][$attempt] ?? $map['test'][1];
     }
 
     /**
@@ -147,15 +177,18 @@ class ComputerAssignmentService
             ->all();
     }
 
-    private function clearAssignmentsFor(int $scheduleId, string $ynType): void
+    private function clearAssignmentsFor(int $scheduleId, string $ynType, ?int $attempt = null): void
     {
-        ComputerAssignment::where('exam_schedule_id', $scheduleId)
+        $query = ComputerAssignment::where('exam_schedule_id', $scheduleId)
             ->where('yn_type', $ynType)
             ->whereIn('status', [
                 ComputerAssignment::STATUS_SCHEDULED,
                 // do NOT delete in_progress / finished — those are real history
-            ])
-            ->delete();
+            ]);
+        if ($attempt !== null) {
+            $query->where('attempt', $attempt);
+        }
+        $query->delete();
     }
 
     /**
@@ -174,16 +207,20 @@ class ComputerAssignmentService
      *
      * @return array{ok:bool, count?:int, errors?:array<int, string>, earliest_time?:string}
      */
-    public function manualAssign(ExamSchedule $schedule, string $ynType, array $perStudent): array
+    public function manualAssign(ExamSchedule $schedule, string $ynType, array $perStudent, int $attempt = 1): array
     {
         $ynType = strtolower($ynType);
         if (!in_array($ynType, ['oski', 'test'], true)) {
             return ['ok' => false, 'errors' => ['Noto\'g\'ri yn turi.']];
         }
-        $dateField = $ynType . '_date';
-        $naField   = $ynType . '_na';
+        if (!in_array($attempt, [1, 2, 3], true)) {
+            return ['ok' => false, 'errors' => ['Noto\'g\'ri urinish raqami.']];
+        }
+        $fields = self::attemptFields($ynType, $attempt);
+        $dateField = $fields['date'];
+        $naField   = $fields['na'];
 
-        if ($schedule->{$naField}) {
+        if ($naField !== null && $schedule->{$naField}) {
             return ['ok' => false, 'errors' => ['Bu yn N/A deb belgilangan.']];
         }
         if (empty($schedule->{$dateField})) {
@@ -295,9 +332,10 @@ class ComputerAssignmentService
         $now = now();
         $earliest = collect($rows)->pluck('planned_start')->sort()->first();
 
-        DB::transaction(function () use ($schedule, $ynType, $rows, $now, $earliest) {
+        DB::transaction(function () use ($schedule, $ynType, $attempt, $rows, $now, $earliest) {
             ComputerAssignment::where('exam_schedule_id', $schedule->id)
                 ->where('yn_type', $ynType)
+                ->where('attempt', $attempt)
                 ->where('status', ComputerAssignment::STATUS_SCHEDULED)
                 ->delete();
 
@@ -308,6 +346,7 @@ class ComputerAssignmentService
                     'student_id_number' => (string) $r['student']->student_id_number,
                     'student_hemis_id'  => (string) $r['student']->hemis_id,
                     'yn_type'           => $ynType,
+                    'attempt'           => $attempt,
                     'computer_number'   => $r['computer_number'],
                     'planned_start'     => $r['planned_start'],
                     'planned_end'       => $r['planned_end'],
@@ -324,13 +363,22 @@ class ComputerAssignmentService
             }
             ComputerAssignment::insert($insert);
 
-            $modeField = $ynType . '_assignment_mode';
-            $timeField = $ynType . '_time';
-            $schedule->{$modeField} = 'manual_explicit';
-            if ($earliest) {
+            // 2/3-urinish (resit) uchun *_assignment_mode atributi yo'q —
+            // ular Test markazi tomonidan qo'lda boshqariladi; faqat 1-urinish
+            // uchun mode/time'ni guruh sathida saqlaymiz.
+            if ($attempt === 1) {
+                $modeField = $ynType . '_assignment_mode';
+                $timeField = $ynType . '_time';
+                $schedule->{$modeField} = 'manual_explicit';
+                if ($earliest) {
+                    $schedule->{$timeField} = $earliest->format('H:i');
+                }
+                $schedule->save();
+            } elseif ($earliest) {
+                $timeField = self::attemptFields($ynType, $attempt)['time'];
                 $schedule->{$timeField} = $earliest->format('H:i');
+                $schedule->save();
             }
-            $schedule->save();
         });
 
         return [

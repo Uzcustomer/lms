@@ -221,14 +221,14 @@
             const cards = Array.from(source.children);
             if (cards.length === 0) return;
 
-            const PAGE_INTERVAL_MS = 10000;
-            const REFRESH_AFTER_MS = 30000;
+            const PAGE_INTERVAL_MS = 10000;   // har 10 sekundda keyingi sahifa
+            const REFRESH_AFTER_MS = 60000;   // 60 sekunddan keyin (oxirgi sahifada bo'lganda) qayta yuklash
             const CARD_MIN_WIDTH = 340 + 12;
-            const CARD_HEIGHT = 150 + 12;
-            const SECTION_HEADER_HEIGHT = 56 + 16; // header + pastki margin
-            const SECTION_GAP = 24;                // ikki seksiya orasidagi bo'shliq
+            const CARD_HEIGHT = 162;          // tv-card max-height (150) + gap
+            const SECTION_HEADER_HEIGHT = 80; // gradient pill + pastki margin (mb-3)
+            const SECTION_GAP = 24;
             const PADDING_X = 48;
-            const PADDING_Y = 24;
+            const PADDING_Y = 40;
 
             let pagesData = [];
             let activeIndex = 0;
@@ -252,11 +252,6 @@
                     groups[seen.get(t)].cards.push(c);
                 });
                 return groups;
-            }
-
-            function sectionHeight(numCards, cols) {
-                const rows = Math.ceil(numCards / cols);
-                return SECTION_HEADER_HEIGHT + rows * CARD_HEIGHT;
             }
 
             function makeTimeHeader(time, count, continued) {
@@ -293,78 +288,54 @@
                 const maxHeight = main.clientHeight - PADDING_Y;
                 const groups = groupByTime(cards);
 
-                // Greedy packing: ketma-ket seksiyalarni shu sahifaga
-                // sig'guncha qo'shamiz. Sig'masa yangi sahifa boshlanadi.
-                // Bitta vaqt juda katta bo'lsa header takrorlanib bir nechta
-                // sahifaga bo'linadi.
-                let currentPageItems = []; // [{time, cards, total, continued}]
+                // Soda algoritm: har vaqt seksiyasini ketma-ket joriy sahifaga
+                // qo'shamiz. Sig'masa qancha qator sig'sa shuncha kartochkani
+                // joylashtirib, joriy sahifani yopamiz va yangi sahifa
+                // boshlaymiz. Bir vaqtning kartochkalari sahifaga sig'masa
+                // bir nechta sahifaga davomi sifatida bo'linadi.
+                let currentPage = null;
                 let currentHeight = 0;
 
-                const flushPage = () => {
-                    if (currentPageItems.length === 0) return;
-                    const pageEl = document.createElement('div');
-                    pageEl.className = 'tv-page flex flex-col';
-                    currentPageItems.forEach(it => {
-                        pageEl.appendChild(makeSection(it.time, it.cards, it.total, it.continued));
-                    });
-                    host.appendChild(pageEl);
-                    pagesData.push(pageEl);
-                    currentPageItems = [];
+                const startNewPage = () => {
+                    currentPage = document.createElement('div');
+                    currentPage.className = 'tv-page flex flex-col';
+                    host.appendChild(currentPage);
+                    pagesData.push(currentPage);
                     currentHeight = 0;
                 };
 
                 for (const g of groups) {
-                    let remaining = g.cards;
-                    let first = true;
+                    let remaining = g.cards.slice();
+                    let firstChunk = true;
                     while (remaining.length > 0) {
-                        const fullSecH = sectionHeight(remaining.length, cols);
-                        // Ushbu seksiyaning to'liq qismi shu sahifaga sig'sa
-                        if (currentHeight + fullSecH <= maxHeight) {
-                            currentPageItems.push({
-                                time: g.time,
-                                cards: remaining,
-                                total: g.cards.length,
-                                continued: !first,
-                            });
-                            currentHeight += fullSecH + SECTION_GAP;
-                            remaining = [];
-                        } else {
-                            // Joy yetarli bo'lsa qismini joylashtiramiz
-                            const availH = maxHeight - currentHeight - SECTION_HEADER_HEIGHT;
-                            const rowsCanFit = Math.max(0, Math.floor(availH / CARD_HEIGHT));
-                            const cardsCanFit = rowsCanFit * cols;
-                            if (cardsCanFit > 0 && currentPageItems.length === 0 + (currentPageItems.length > 0 ? 0 : 0)) {
-                                // Boshlanmagan sahifa OR umuman bo'sh sahifa — qism qo'shamiz
-                                const chunk = remaining.slice(0, cardsCanFit);
-                                currentPageItems.push({
-                                    time: g.time,
-                                    cards: chunk,
-                                    total: g.cards.length,
-                                    continued: !first,
-                                });
-                                remaining = remaining.slice(cardsCanFit);
-                                first = false;
-                                flushPage();
-                            } else if (cardsCanFit > 0) {
-                                // Sahifada joy bor — qism qo'shib, keyin flush
-                                const chunk = remaining.slice(0, cardsCanFit);
-                                currentPageItems.push({
-                                    time: g.time,
-                                    cards: chunk,
-                                    total: g.cards.length,
-                                    continued: !first,
-                                });
-                                remaining = remaining.slice(cardsCanFit);
-                                first = false;
-                                flushPage();
-                            } else {
-                                // Sahifada hech qancha joy yo'q — flush va keyin yangi sahifada urinish
-                                flushPage();
-                            }
+                        if (!currentPage) startNewPage();
+                        const availH = maxHeight - currentHeight - SECTION_HEADER_HEIGHT;
+                        const rowsCanFit = Math.max(0, Math.floor(availH / CARD_HEIGHT));
+                        if (rowsCanFit === 0) {
+                            // Sahifada joy yo'q — yangisi boshlaymiz
+                            currentPage = null;
+                            currentHeight = 0;
+                            continue;
+                        }
+                        const cardsCanFit = rowsCanFit * cols;
+                        const chunk = remaining.slice(0, cardsCanFit);
+                        const chunkRows = Math.ceil(chunk.length / cols);
+                        const chunkH = SECTION_HEADER_HEIGHT + chunkRows * CARD_HEIGHT + SECTION_GAP;
+
+                        const sec = makeSection(g.time, chunk, g.cards.length, !firstChunk);
+                        currentPage.appendChild(sec);
+                        currentHeight += chunkH;
+                        remaining = remaining.slice(chunk.length);
+                        firstChunk = false;
+                        // Davomi bor bo'lsa hozirgi sahifani yopamiz —
+                        // davomi yangi sahifada to'liq vaqt header bilan
+                        // boshlanadi.
+                        if (remaining.length > 0) {
+                            currentPage = null;
+                            currentHeight = 0;
                         }
                     }
                 }
-                flushPage();
 
                 pageTotalEl.textContent = pagesData.length;
                 paginationEl.classList.toggle('hidden', pagesData.length <= 1);

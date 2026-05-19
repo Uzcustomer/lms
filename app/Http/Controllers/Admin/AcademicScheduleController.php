@@ -4186,6 +4186,18 @@ class AcademicScheduleController extends Controller
                     $subj = $subjectData['subject'];
                     $displayName = $subjectData['display_name'] ?? ($subj->subject_name ?? '');
 
+                    $attemptsInSubject = [];
+                    foreach ($subjectData['entries'] as $_e) {
+                        $_a = (int) ($_e['attempt'] ?? 1);
+                        if ($_a > 0 && !in_array($_a, $attemptsInSubject, true)) {
+                            $attemptsInSubject[] = $_a;
+                        }
+                    }
+                    sort($attemptsInSubject);
+                    if (!empty($attemptsInSubject)) {
+                        $displayName .= ' (' . implode('/', $attemptsInSubject) . '-urinish)';
+                    }
+
                     $section->addText(
                         $displayName,
                         ['bold' => true, 'size' => 11],

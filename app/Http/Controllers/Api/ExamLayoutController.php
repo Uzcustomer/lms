@@ -42,14 +42,30 @@ class ExamLayoutController extends Controller
             ->orderBy('planned_start')
             ->get();
 
-        // Bucket assignments per computer for O(1) lookup. Rows with a
-        // NULL computer_number are slot reservations created by AutoAssign
-        // that have not yet been JIT-bound to a specific PC — they'd
-        // otherwise fall into bucket 0 and disappear from the grid, so
-        // surface them separately as $unassigned (see below).
+        // Bucket assignments per *assigned* computer for O(1) lookup. Rows
+        // with a NULL computer_number are slot reservations created by
+        // AutoAssign that have not yet been JIT-bound to a specific PC —
+        // they'd otherwise fall into bucket 0 and disappear from the grid,
+        // so surface them separately as $unassigned (see below). Also
+        // build an actual-occupant index keyed by actual_computer_number
+        // so each grid cell can find who is *physically* sitting there
+        // right now, regardless of where they were scheduled.
         $byComputer = [];
+        $actualByComputer = [];
         $unassignedRows = [];
         foreach ($assignments as $a) {
+            if ($a->status === ComputerAssignment::STATUS_IN_PROGRESS
+                && $a->actual_computer_number !== null) {
+                // Last writer wins for a given PC. Two in-progress rows on
+                // the same PC shouldn't happen, but if it does the most
+                // recently started attempt is the physically-present one.
+                $existing = $actualByComputer[(int) $a->actual_computer_number] ?? null;
+                if (!$existing
+                    || ($a->actual_start && $existing->actual_start
+                        && $a->actual_start->gt($existing->actual_start))) {
+                    $actualByComputer[(int) $a->actual_computer_number] = $a;
+                }
+            }
             if ($a->computer_number === null) {
                 $unassignedRows[] = $a;
                 continue;
@@ -61,35 +77,42 @@ class ExamLayoutController extends Controller
         foreach ($computers as $c) {
             $todays = $byComputer[(int) $c->number] ?? [];
 
-            $current = null;
-            $next = null;
-
+            // Who is *supposed to be* sitting here at this moment, by
+            // schedule. First assignment whose planned window (± slack)
+            // brackets $now and which is still active.
+            $assigned = null;
             foreach ($todays as $a) {
                 $start = $a->planned_start;
                 $end   = $a->planned_end;
                 if (!$start || !$end) {
                     continue;
                 }
-
                 $inWindow = $now->between(
                     $start->copy()->subMinutes($window),
                     $end->copy()->addMinutes($window)
                 );
-
-                if ($current === null && $inWindow
-                    && in_array($a->status, [
-                        ComputerAssignment::STATUS_SCHEDULED,
-                        ComputerAssignment::STATUS_IN_PROGRESS,
-                    ], true)) {
-                    $current = $this->serializeAssignment($a);
-                    continue;
+                if ($inWindow && in_array($a->status, [
+                    ComputerAssignment::STATUS_SCHEDULED,
+                    ComputerAssignment::STATUS_IN_PROGRESS,
+                ], true)) {
+                    $assigned = $a;
+                    break;
                 }
+            }
 
-                if ($next === null
-                    && $start->gt($now)
-                    && $a->status === ComputerAssignment::STATUS_SCHEDULED) {
-                    $next = $this->serializeAssignment($a);
-                }
+            // Who is *physically* sitting here right now, by client IP
+            // captured at attempt_started time. May or may not be the
+            // same row as $assigned.
+            $actual = $actualByComputer[(int) $c->number] ?? null;
+
+            // Match logic:
+            //   null  = nobody is physically here (no in-progress attempt)
+            //   true  = the in-progress student matches the schedule
+            //   false = a different student is sitting at this PC than
+            //           the one the room layout assigned to it
+            $match = null;
+            if ($actual !== null) {
+                $match = ($assigned !== null && (int) $assigned->id === (int) $actual->id);
             }
 
             $payload[] = [
@@ -99,8 +122,9 @@ class ExamLayoutController extends Controller
                 'grid_row'    => $c->grid_row !== null ? (int) $c->grid_row : null,
                 'is_reserve'  => (bool) $c->is_reserve_pool,
                 'label'       => $c->label,
-                'current'     => $current,
-                'next'        => $next,
+                'assigned'    => $assigned ? $this->serializeAssignment($assigned) : null,
+                'actual'      => $actual ? $this->serializeAssignment($actual) : null,
+                'match'       => $match,
                 'today_total' => count($todays),
             ];
         }
@@ -163,15 +187,19 @@ class ExamLayoutController extends Controller
         $student = $a->student;
 
         return [
-            'username'        => $student?->student_id_number,
-            'full_name'       => $student?->full_name,
-            'short_name'      => self::shortName($student),
-            'planned_start'   => $a->planned_start?->toIso8601String(),
-            'planned_end'     => $a->planned_end?->toIso8601String(),
-            'planned_start_h' => $a->planned_start?->format('H:i'),
-            'planned_end_h'   => $a->planned_end?->format('H:i'),
-            'status'          => $a->status,
-            'is_reserve'      => (bool) $a->is_reserve,
+            'username'                => $student?->student_id_number,
+            'full_name'               => $student?->full_name,
+            'short_name'              => self::shortName($student),
+            'planned_start'           => $a->planned_start?->toIso8601String(),
+            'planned_end'             => $a->planned_end?->toIso8601String(),
+            'planned_start_h'         => $a->planned_start?->format('H:i'),
+            'planned_end_h'           => $a->planned_end?->format('H:i'),
+            'status'                  => $a->status,
+            'is_reserve'              => (bool) $a->is_reserve,
+            'assigned_pc'             => $a->computer_number !== null ? (int) $a->computer_number : null,
+            'actual_pc'               => $a->actual_computer_number !== null ? (int) $a->actual_computer_number : null,
+            'actual_start'            => $a->actual_start?->toIso8601String(),
+            'actual_end'              => $a->actual_end?->toIso8601String(),
         ];
     }
 

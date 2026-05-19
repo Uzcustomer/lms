@@ -28,6 +28,7 @@ class ComputerAssignment extends Model
         'actual_end',
         'status',
         'moodle_attempt_id',
+        'actual_computer_number',
         'history',
     ];
 
@@ -44,6 +45,7 @@ class ComputerAssignment extends Model
         'actual_start' => 'datetime',
         'actual_end' => 'datetime',
         'computer_number' => 'integer',
+        'actual_computer_number' => 'integer',
         'attempt' => 'integer',
         'history' => 'array',
     ];

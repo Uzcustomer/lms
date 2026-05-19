@@ -3642,6 +3642,10 @@ class AcademicScheduleController extends Controller
         if ($examDate && !empty($computerNumberMap)) {
             try {
                 $durationMin = (int) (ExamCapacityService::getSettingsForDate($examDate)['test_duration_minutes'] ?? 15);
+                // JIT tick job processReveal'i reveal_at <= now bo'lganda
+                // Telegram yuboradi. Pinned qator shu loop'ga tushishi uchun
+                // reveal_at'ni planned_start dan jit_minutes oldin o'rnatamiz.
+                $jitMinutesBefore = max(1, (int) config('services.moodle.jit_assign_minutes_before', 5));
                 foreach ($subjectGroups as $sg) {
                     $slot = $multiSlotMode ? ($sg['slot_time'] ?? '') : ($examTime ?? '');
                     if (empty($slot)) continue;
@@ -3666,6 +3670,11 @@ class AcademicScheduleController extends Controller
                                 ->where('student_hemis_id', $hemis)
                                 ->first();
 
+                            // reveal_at: JIT tick processReveal shu vaqtdan
+                            // keyin Telegram yuboradi. Allaqachon notify qilingan
+                            // bo'lsa qayta yubormaydi (reveal_notified bayrog'i).
+                            $revealAt = $plannedStart->copy()->subMinutes($jitMinutesBefore);
+
                             if ($existing) {
                                 if ($existing->status !== \App\Models\ComputerAssignment::STATUS_SCHEDULED) {
                                     continue;
@@ -3674,6 +3683,9 @@ class AcademicScheduleController extends Controller
                                 $existing->is_pinned = true;
                                 if (empty($existing->planned_start)) $existing->planned_start = $plannedStart;
                                 if (empty($existing->planned_end))   $existing->planned_end = $plannedEnd;
+                                // reveal_at yo'q bo'lsa o'rnatamiz; allaqachon
+                                // bo'lsa tegmaymiz — admin/JIT'ga begona aralashmaslik.
+                                if (empty($existing->reveal_at)) $existing->reveal_at = $revealAt;
                                 $existing->save();
                             } else {
                                 \App\Models\ComputerAssignment::create([
@@ -3685,6 +3697,7 @@ class AcademicScheduleController extends Controller
                                     'computer_number' => $compNum,
                                     'planned_start' => $plannedStart,
                                     'planned_end' => $plannedEnd,
+                                    'reveal_at' => $revealAt,
                                     'is_pinned' => true,
                                     'is_reserve' => false,
                                     'status' => \App\Models\ComputerAssignment::STATUS_SCHEDULED,
@@ -6513,6 +6526,123 @@ class AcademicScheduleController extends Controller
                 'testDurationMinutes' => $testDurationMinutes,
             ])
             ->header('Cache-Control', 'no-store, max-age=0');
+    }
+
+    /**
+     * Test markazi peshtaxtasi yonida turgan TV uchun komp № displeyi.
+     * Hozir test topshirayotgan (status=in_progress) va kelgusi ~15 daqiqada
+     * boshlanadigan (status=scheduled) talabalarning komp raqami va qisqacha
+     * ismi (Tursunov S.A.) chiqadi. Login talab qilmaydi — istalgan brauzer
+     * to'g'ridan-to'g'ri ocha oladi.
+     */
+    public function tvComputerBoard(Request $request)
+    {
+        $now = now();
+        $dateParam = $request->query('date');
+        try {
+            $carbonDate = $dateParam
+                ? \Carbon\Carbon::createFromFormat('Y-m-d', $dateParam)
+                : $now->copy()->startOfDay();
+        } catch (\Throwable $e) {
+            $carbonDate = $now->copy()->startOfDay();
+        }
+        $date = $carbonDate->format('Y-m-d');
+        $upcomingWindowMin = 15;
+        $windowEnd = $now->copy()->addMinutes($upcomingWindowMin);
+
+        // Komp raqami bor (Word'da pin qilingan yoki JIT tomonidan
+        // tayinlangan) va shu kunda planned_start'i bo'lgan barcha aktiv
+        // qatorlar. Tugagan (finished/abandoned/moved) qatorlar ekrandan
+        // chiqib ketadi — TV bandlik faqat "joriy + yaqin" ko'rsatadi.
+        $rows = DB::table('computer_assignments as ca')
+            ->leftJoin('students as st', 'st.hemis_id', '=', 'ca.student_hemis_id')
+            ->leftJoin('exam_schedules as es', 'es.id', '=', 'ca.exam_schedule_id')
+            ->whereDate('ca.planned_start', $date)
+            ->whereNotNull('ca.computer_number')
+            ->where(function ($q) use ($windowEnd) {
+                $q->where('ca.status', \App\Models\ComputerAssignment::STATUS_IN_PROGRESS)
+                    ->orWhere(function ($q2) use ($windowEnd) {
+                        $q2->where('ca.status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+                            ->where('ca.planned_start', '<=', $windowEnd);
+                    });
+            })
+            ->orderBy('ca.computer_number')
+            ->select(
+                'ca.id', 'ca.computer_number', 'ca.status', 'ca.planned_start',
+                'ca.actual_start', 'ca.yn_type', 'ca.attempt',
+                'st.full_name', 'st.student_id_number',
+                'es.subject_name'
+            )
+            ->get();
+
+        $items = [];
+        foreach ($rows as $r) {
+            $plannedStart = $r->planned_start ? \Carbon\Carbon::parse($r->planned_start) : null;
+            $isInProgress = $r->status === \App\Models\ComputerAssignment::STATUS_IN_PROGRESS;
+            $isImminent = !$isInProgress && $plannedStart && $plannedStart->lte($now);
+            $minutesUntil = !$isInProgress && $plannedStart ? max(0, (int) ceil($now->diffInSeconds($plannedStart, false) / 60)) : 0;
+
+            $items[] = [
+                'computer_number' => (int) $r->computer_number,
+                'short_name' => self::formatTvShortName((string) ($r->full_name ?? '')),
+                'subject_name' => (string) ($r->subject_name ?? ''),
+                'yn_type' => strtoupper((string) ($r->yn_type ?? '')),
+                'attempt' => (int) ($r->attempt ?? 1),
+                'planned_time' => $plannedStart ? $plannedStart->format('H:i') : '',
+                'status' => $isInProgress ? 'in_progress' : ($isImminent ? 'imminent' : 'waiting'),
+                'minutes_until' => $minutesUntil,
+            ];
+        }
+
+        // Tartib: avval test topshirayotganlar, keyin yaqinlashganlar
+        // (planned_start <= now), keyin kelgusi slot'lar minutes_until kamayishi
+        // bo'yicha. Bir guruh ichida komp № bo'yicha o'sib.
+        usort($items, function ($a, $b) {
+            $rank = ['in_progress' => 0, 'imminent' => 1, 'waiting' => 2];
+            $ra = $rank[$a['status']] ?? 9;
+            $rb = $rank[$b['status']] ?? 9;
+            if ($ra !== $rb) return $ra <=> $rb;
+            if ($a['status'] === 'waiting' && $a['minutes_until'] !== $b['minutes_until']) {
+                return $a['minutes_until'] <=> $b['minutes_until'];
+            }
+            return $a['computer_number'] <=> $b['computer_number'];
+        });
+
+        return response()
+            ->view('admin.academic-schedule.tv-computer-board', [
+                'date' => $carbonDate,
+                'items' => $items,
+                'now' => $now,
+                'windowMin' => $upcomingWindowMin,
+            ])
+            ->header('Cache-Control', 'no-store, max-age=0');
+    }
+
+    /**
+     * "Tursunov Sardor Akmal o'g'li" → "Tursunov S.A.". Familiya to'liq,
+     * ism va ota ismi bosh harf bilan. Suffixlar (o'g'li/qizi) chiqarib
+     * tashlanadi. UTF-8 xavfsiz.
+     */
+    private static function formatTvShortName(string $fullName): string
+    {
+        $parts = preg_split('/\s+/u', trim($fullName)) ?: [];
+        $parts = array_values(array_filter($parts, fn($p) => $p !== ''));
+        if (empty($parts)) return '—';
+        $surname = $parts[0];
+        $initials = '';
+        $taken = 0;
+        for ($i = 1; $i < count($parts) && $taken < 2; $i++) {
+            $p = $parts[$i];
+            // Suffixlarni tashlab ketamiz (turli yozilishlari bilan).
+            if (preg_match('/^(o\'g\'li|o\x{2018}g\x{2018}li|o\x{2019}g\x{2019}li|ugli|o‘g‘li|o’g’li|qizi|qizi\.|qizi,|qizining)$/iu', $p)) {
+                continue;
+            }
+            $first = mb_substr($p, 0, 1, 'UTF-8');
+            if ($first === '') continue;
+            $initials .= mb_strtoupper($first, 'UTF-8') . '.';
+            $taken++;
+        }
+        return $initials !== '' ? ($surname . ' ' . $initials) : $surname;
     }
 
     /**

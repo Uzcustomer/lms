@@ -1391,6 +1391,10 @@ class AcademicScheduleController extends Controller
         $examMap2 = [];
         $examLists2 = [];
         $enrolledAttempt2Map = []; // hemis|subj|sem => true
+        // Guruh sathida 2-urinish (attempt=2) imtihon sanasi — exam_schedules da
+        // resit sanasi belgilanmagan, lekin baho yozilgan holatlar uchun fallback.
+        // group|subj|sem|typeCode (101/102) => max(lesson_date) YYYY-MM-DD
+        $groupAttempt2DateMap = [];
         try {
             if ($hasAttemptCol) {
                 $rows = DB::table('student_grades')
@@ -1400,7 +1404,7 @@ class AcademicScheduleController extends Controller
                     ->whereIn('semester_code', $allSemCodes)
                     ->whereIn('training_type_code', [101, 102, 103])
                     ->where('attempt', 2)
-                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade', 'quiz_result_id')
+                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade', 'quiz_result_id', 'lesson_date')
                     ->get();
 
                 $quizIds2 = $rows->where('training_type_code', 103)->pluck('quiz_result_id')->filter()->unique()->values()->all();
@@ -1425,6 +1429,21 @@ class AcademicScheduleController extends Controller
                             continue;
                         }
                     }
+
+                    // Group-level attempt=2 sanasini yig'amiz (101/102 uchun)
+                    if (in_array($typeCode, [101, 102], true) && $r->lesson_date) {
+                        $gHid = $studentGroup[$r->student_hemis_id] ?? null;
+                        if ($gHid) {
+                            $dateStr = is_string($r->lesson_date)
+                                ? substr($r->lesson_date, 0, 10)
+                                : \Carbon\Carbon::parse($r->lesson_date)->format('Y-m-d');
+                            $gKey = $gHid . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $typeCode;
+                            if (!isset($groupAttempt2DateMap[$gKey]) || $dateStr > $groupAttempt2DateMap[$gKey]) {
+                                $groupAttempt2DateMap[$gKey] = $dateStr;
+                            }
+                        }
+                    }
+
                     $effective = $r->retake_grade ?? $r->grade;
                     if ($effective === null) continue;
                     $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $typeCode;
@@ -1524,6 +1543,16 @@ class AcademicScheduleController extends Controller
                 $testDate = $naMap[$naKey]['test_date'] ?? null;
                 $oskiResitDate = $naMap[$naKey]['oski_resit_date'] ?? null;
                 $testResitDate = $naMap[$naKey]['test_resit_date'] ?? null;
+                // Fallback: agar exam_schedules da resit sanasi belgilanmagan
+                // bo'lsa, guruh bo'yicha attempt=2 student_grades lesson_date dan
+                // olamiz — boshqa talabaga 2-urinish bahosi yozilgan bo'lsa,
+                // imtihon shu kuni o'tgan deb hisoblanadi.
+                if ($oskiResitDate === null) {
+                    $oskiResitDate = $groupAttempt2DateMap[$g . '|' . $s . '|' . $sem . '|101'] ?? null;
+                }
+                if ($testResitDate === null) {
+                    $testResitDate = $groupAttempt2DateMap[$g . '|' . $s . '|' . $sem . '|102'] ?? null;
+                }
                 $today = now()->format('Y-m-d');
 
                 // Pullik faqat haqiqatda past bo'lsa: null/yo'q ma'lumotni "past" deb sanamaymiz

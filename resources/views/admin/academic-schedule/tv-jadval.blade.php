@@ -35,8 +35,8 @@
             align-content: start;
         }
         /* Pagination: faqat aktiv sahifani ko'rsatamiz */
-        .tv-page { display: none; }
-        .tv-page.active { display: grid; }
+        .tv-page { display: none; height: 100%; }
+        .tv-page.active { display: flex; }
 
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(8px); }
@@ -133,7 +133,8 @@
                                 ? 'bg-purple-500/30 text-purple-100 border-purple-400/40'
                                 : 'bg-cyan-500/30 text-cyan-100 border-cyan-400/40';
                         @endphp
-                        <div class="tv-card rounded-2xl border-2 {{ $statusClass }} p-3 flex flex-col gap-2 transition">
+                        <div class="tv-card rounded-2xl border-2 {{ $statusClass }} p-3 flex flex-col gap-2 transition"
+                             data-time="{{ $it['planned_time'] }}">
                             <div class="flex items-center gap-3">
                                 {{-- Komp № katta blok --}}
                                 <div class="w-24 h-24 flex-shrink-0 rounded-2xl {{ $compBg }} flex items-center justify-center shadow-lg">
@@ -167,14 +168,11 @@
                                     </div>
                                 </div>
                             </div>
-                            {{-- Pastki info satri --}}
+                            {{-- Pastki info satri — vaqt sahifa sarlavhasida, shu yerda fan --}}
                             <div class="flex items-center justify-between text-sm">
                                 <div class="flex items-center gap-2 text-slate-300 min-w-0 flex-1">
-                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                                    <span class="font-bold tabular-nums">{{ $it['planned_time'] }}</span>
                                     @if($it['subject_name'])
-                                        <span class="mx-1 text-slate-600">·</span>
-                                        <span class="text-slate-400 truncate" title="{{ $it['subject_name'] }}">{{ $it['subject_name'] }}</span>
+                                        <span class="text-slate-300 truncate font-medium" title="{{ $it['subject_name'] }}">{{ $it['subject_name'] }}</span>
                                     @endif
                                 </div>
                                 <span class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wider whitespace-nowrap ml-2 {{ $badgeClass }}">
@@ -207,7 +205,9 @@
             setInterval(tick, 1000);
         })();
 
-        // Pagination
+        // Pagination — har vaqt alohida sahifa(lar)ga ajraladi. Bir vaqt
+        // ichida ko'p kartochka bo'lsa, bir nechta sahifa bir xil vaqt
+        // sarlavhasi bilan ko'rinadi.
         (function() {
             const host = document.getElementById('tv-pages-host');
             const source = document.getElementById('tv-all-cards');
@@ -222,11 +222,12 @@
 
             const PAGE_INTERVAL_MS = 10000;   // har 10 sekundda keyingi sahifa
             const REFRESH_AFTER_MS = 30000;   // 30 sekunddan keyin sahifani qayta yuklash
-            // Kartochka taxminiy o'lchamlari (CSS bilan mos) — perPage hisoblash uchun.
-            const CARD_MIN_WIDTH = 340 + 12;  // minmax(340px) + gap
+            // Kartochka taxminiy o'lchamlari — perPage hisoblash uchun.
+            const CARD_MIN_WIDTH = 340 + 12;
             const CARD_HEIGHT = 150 + 12;
+            const HEADER_HEIGHT = 56;         // vaqt sarlavhasi balandligi
             const PADDING_X = 48;
-            const PADDING_Y = 40;
+            const PADDING_Y = 24;             // grid pastida nafas oluvchi joy
 
             let pagesData = [];
             let activeIndex = 0;
@@ -235,23 +236,64 @@
 
             function calcPerPage() {
                 const w = main.clientWidth - PADDING_X;
-                const h = main.clientHeight - PADDING_Y;
+                const h = main.clientHeight - HEADER_HEIGHT - PADDING_Y;
                 const cols = Math.max(1, Math.floor(w / CARD_MIN_WIDTH));
                 const rows = Math.max(1, Math.floor(h / CARD_HEIGHT));
                 return cols * rows;
+            }
+
+            // Kartochkalarni vaqt bo'yicha guruhlash (server allaqachon
+            // saralangan, lekin Object.entries tartibi DOM tartibini ishlatadi)
+            function groupByTime(allCards) {
+                const groups = [];
+                const seen = new Map();
+                allCards.forEach(c => {
+                    const t = c.getAttribute('data-time') || '—';
+                    if (!seen.has(t)) {
+                        seen.set(t, groups.length);
+                        groups.push({ time: t, cards: [] });
+                    }
+                    groups[seen.get(t)].cards.push(c);
+                });
+                return groups;
+            }
+
+            function makeTimeHeader(time, count, pageInGroup, totalInGroup) {
+                const wrap = document.createElement('div');
+                wrap.className = 'tv-time-header flex items-center justify-between px-1 mb-3';
+                const left = document.createElement('div');
+                left.className = 'flex items-center gap-3';
+                left.innerHTML = `
+                    <div class="flex items-center gap-2 px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 shadow-lg">
+                        <svg class="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span class="text-4xl font-black text-white tabular-nums tracking-wide">${time}</span>
+                    </div>
+                    <span class="text-base text-slate-300 font-bold">${count} talaba${totalInGroup > 1 ? ` · qism ${pageInGroup}/${totalInGroup}` : ''}</span>
+                `;
+                wrap.appendChild(left);
+                return wrap;
             }
 
             function buildPages() {
                 host.innerHTML = '';
                 const perPage = calcPerPage();
                 pagesData = [];
-                for (let i = 0; i < cards.length; i += perPage) {
-                    const pageEl = document.createElement('div');
-                    pageEl.className = 'tv-page tv-grid';
-                    cards.slice(i, i + perPage).forEach(c => pageEl.appendChild(c.cloneNode(true)));
-                    host.appendChild(pageEl);
-                    pagesData.push(pageEl);
-                }
+                const groups = groupByTime(cards);
+                groups.forEach(g => {
+                    const totalInGroup = Math.ceil(g.cards.length / perPage);
+                    for (let i = 0; i < g.cards.length; i += perPage) {
+                        const chunk = g.cards.slice(i, i + perPage);
+                        const pageEl = document.createElement('div');
+                        pageEl.className = 'tv-page flex flex-col';
+                        pageEl.appendChild(makeTimeHeader(g.time, g.cards.length, Math.floor(i / perPage) + 1, totalInGroup));
+                        const grid = document.createElement('div');
+                        grid.className = 'tv-grid flex-1';
+                        chunk.forEach(c => grid.appendChild(c.cloneNode(true)));
+                        pageEl.appendChild(grid);
+                        host.appendChild(pageEl);
+                        pagesData.push(pageEl);
+                    }
+                });
                 pageTotalEl.textContent = pagesData.length;
                 paginationEl.classList.toggle('hidden', pagesData.length <= 1);
                 showPage(0);

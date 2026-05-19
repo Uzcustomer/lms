@@ -3688,15 +3688,23 @@ class AcademicScheduleController extends Controller
             // Enriched arraylarni eski kod kutgan stdClass shaklga o'tkazamiz
             // — Word jadvalini quruvchi kod $student->jn / $student->mt /
             // $student->student_name kabi property'larga tayanadi.
+            // 4+ qarz tekshiruvi test-center.blade.php bilan AYNI: yoki
+            // is_held_back bayrog'i bor (computeStudentAttemptStatuses ichida
+            // o'rnatilgan), yoki past_debts + current_semester_debts soni
+            // ≥ 4. Ikkalasi ham bo'lishi mumkin — fallback uchun ikkalasini
+            // tekshiramiz.
             $students = collect($enrichedStudents)->map(function ($row) use ($liveGrades) {
                 $hemisId = (string) ($row['hemis_id'] ?? '');
+                $pastDebts = $row['past_debts'] ?? [];
+                $currentDebts = $row['current_semester_debts'] ?? [];
+                $debtCount = count($pastDebts) + count($currentDebts);
                 $obj = new \stdClass();
                 $obj->hemis_id = $row['hemis_id'] ?? null;
                 $obj->student_name = $row['full_name'] ?? '';
                 $obj->student_id = $row['student_id_number'] ?? '';
                 $obj->jn = $liveGrades[$hemisId]['jn'] ?? 0;
                 $obj->mt = $liveGrades[$hemisId]['mt'] ?? 0;
-                $obj->is_held_back = !empty($row['is_held_back']);
+                $obj->is_held_back = !empty($row['is_held_back']) || $debtCount >= 4;
                 $obj->admission_status = $row['admission_status'] ?? null;
                 return $obj;
             })->sortBy('student_name')->values();

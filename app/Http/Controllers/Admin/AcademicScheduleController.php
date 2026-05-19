@@ -4002,6 +4002,12 @@ class AcademicScheduleController extends Controller
             $phpWord = new PhpWord();
             $phpWord->setDefaultFontName('Times New Roman');
             $phpWord->setDefaultFontSize(10);
+            // Default paragraph style — interval 0/0, single line spacing.
+            $phpWord->setDefaultParagraphStyle([
+                'spaceBefore' => 0,
+                'spaceAfter' => 0,
+                'lineHeight' => 1.0,
+            ]);
 
             $tStyle = ['borderSize' => 6, 'borderColor' => '000000', 'cellMargin' => 30, 'alignment' => 'center'];
             $phpWord->addTableStyle('BkSlotTable', $tStyle);
@@ -4010,12 +4016,30 @@ class AcademicScheduleController extends Controller
             $cF = ['size' => 10];
             $cFOr = ['size' => 10, 'color' => 'FF8C00'];
             $cFCmp = ['size' => 11, 'bold' => true, 'color' => '1E40AF'];
+            $cFGroup = ['bold' => true, 'size' => 10, 'color' => '1F4E20'];
             $hBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
-            $cCtr = ['alignment' => Jc::CENTER];
-            $cLeft = ['alignment' => Jc::START];
+            $groupBg = ['bgColor' => 'E2EFDA', 'valign' => 'center'];
+            // Ko'rinmas separator katakcha — chap va o'ng yarmini ajratish uchun.
+            $invisCell = [
+                'borderTopSize' => 0, 'borderBottomSize' => 0,
+                'borderLeftSize' => 0, 'borderRightSize' => 0,
+                'borderTopColor' => 'FFFFFF', 'borderBottomColor' => 'FFFFFF',
+                'borderLeftColor' => 'FFFFFF', 'borderRightColor' => 'FFFFFF',
+            ];
+            $cCtr = ['alignment' => Jc::CENTER, 'spaceBefore' => 0, 'spaceAfter' => 0, 'lineHeight' => 1.0];
+            $cLeft = ['alignment' => Jc::START, 'spaceBefore' => 0, 'spaceAfter' => 0, 'lineHeight' => 1.0];
+
+            // Sahifa kengligiga moslangan ustun kengliklari.
+            // Landscape A4 ≈ 16838 twips. Margin chap+o'ng = 700+500=1200.
+            // Foydalanishga 15638 twips qoladi. Marginni qisqartirib kengroq
+            // foydalanamiz: chap=400, o'ng=400 → 16038 twips foydalaniladi.
+            // 2-up uchun bir tomon: №=420, FIO=5000, Holat=1100, Komp=700,
+            // Belgi=500 = 7720. Ko'rinmas separator = 350. Jami: 7720*2+350 =
+            // 15790 (16038'dan past — sig'adi).
+            $cw2 = [420, 5000, 1100, 700, 500]; // 2-up per side
+            $cwSep = 350;
 
             foreach ($slotGroups as $slotTime => $slotSubjects) {
-                // Slot ichidagi jami talabalar — 2-ustun rejimini tanlash uchun
                 $slotTotal = 0;
                 foreach ($slotSubjects as $sd) {
                     foreach ($sd['entries'] as $e) {
@@ -4026,16 +4050,15 @@ class AcademicScheduleController extends Controller
 
                 $section = $phpWord->addSection([
                     'orientation' => 'landscape',
-                    'marginTop' => 500, 'marginBottom' => 500,
-                    'marginLeft' => 700, 'marginRight' => 500,
+                    'marginTop' => 400, 'marginBottom' => 400,
+                    'marginLeft' => 400, 'marginRight' => 400,
                 ]);
 
-                // Tepa header — faqat sana + vaqt
                 $headLine = 'Test markaziga kirish: ' . ($examDateFmt ?? '') . ($slotTime ? ' ' . $slotTime : '');
                 $section->addText(
                     trim($headLine),
                     ['bold' => true, 'size' => 13],
-                    ['alignment' => Jc::CENTER, 'spaceAfter' => 120]
+                    ['alignment' => Jc::CENTER, 'spaceBefore' => 0, 'spaceAfter' => 60, 'lineHeight' => 1.0]
                 );
 
                 $subjIdx = 0;
@@ -4043,56 +4066,61 @@ class AcademicScheduleController extends Controller
                     $subjIdx++;
                     $subj = $subjectData['subject'];
 
-                    // Har fan nomi — jadval tepasida sub-header
                     $section->addText(
                         $subj->subject_name ?? '',
                         ['bold' => true, 'size' => 11],
-                        ['alignment' => Jc::CENTER, 'spaceBefore' => $subjIdx > 1 ? 150 : 30, 'spaceAfter' => 60]
+                        ['alignment' => Jc::CENTER, 'spaceBefore' => $subjIdx > 1 ? 120 : 30, 'spaceAfter' => 30, 'lineHeight' => 1.0]
                     );
 
                     $table = $section->addTable('BkSlotTable');
 
                     if ($twoUp) {
-                        // 2-ustun (ikkita talaba bir qator): №, FIO, ID, Holat, Komp, Belgi × 2
+                        // Header (ID olib tashlandi)
                         $hr = $table->addRow(280);
-                        $cw = [380, 2400, 1200, 1200, 700, 500]; // bir tomonning ustun kengligi
-                        for ($side = 0; $side < 2; $side++) {
-                            $hr->addCell($cw[0], $hBg)->addText('№', $hF, $cCtr);
-                            $hr->addCell($cw[1], $hBg)->addText('Talaba F.I.O', $hF, $cCtr);
-                            $hr->addCell($cw[2], $hBg)->addText('Talaba ID', $hF, $cCtr);
-                            $hr->addCell($cw[3], $hBg)->addText('YN ga ruxsat', $hF, $cCtr);
-                            $hr->addCell($cw[4], $hBg)->addText('Komp №', $hF, $cCtr);
-                            $hr->addCell($cw[5], $hBg)->addText('Belgi', $hF, $cCtr);
-                        }
+                        // Chap yarim
+                        $hr->addCell($cw2[0], $hBg)->addText('№', $hF, $cCtr);
+                        $hr->addCell($cw2[1], $hBg)->addText('Talaba F.I.O', $hF, $cCtr);
+                        $hr->addCell($cw2[2], $hBg)->addText('YN ga ruxsat', $hF, $cCtr);
+                        $hr->addCell($cw2[3], $hBg)->addText('Komp №', $hF, $cCtr);
+                        $hr->addCell($cw2[4], $hBg)->addText('Belgi', $hF, $cCtr);
+                        // Ko'rinmas separator
+                        $hr->addCell($cwSep, $invisCell)->addText('', $cF, $cCtr);
+                        // O'ng yarim
+                        $hr->addCell($cw2[0], $hBg)->addText('№', $hF, $cCtr);
+                        $hr->addCell($cw2[1], $hBg)->addText('Talaba F.I.O', $hF, $cCtr);
+                        $hr->addCell($cw2[2], $hBg)->addText('YN ga ruxsat', $hF, $cCtr);
+                        $hr->addCell($cw2[3], $hBg)->addText('Komp №', $hF, $cCtr);
+                        $hr->addCell($cw2[4], $hBg)->addText('Belgi', $hF, $cCtr);
                     } else {
-                        // To'liq jadval (1 ustun): font 10, FIO kengaytirilgan
+                        // 1-up (ID olib tashlandi, FIO kengroq)
                         $hr = $table->addRow(320);
                         $hr->addCell(500, $hBg)->addText('№', $hF, $cCtr);
-                        $hr->addCell(4500, $hBg)->addText('Talaba F.I.O', $hF, $cCtr);
-                        $hr->addCell(1500, $hBg)->addText('Talaba ID', $hF, $cCtr);
-                        $hr->addCell(700, $hBg)->addText('JN', $hF, $cCtr);
-                        $hr->addCell(700, $hBg)->addText('MT', $hF, $cCtr);
-                        $hr->addCell(1000, $hBg)->addText('Davomat %', $hF, $cCtr);
-                        $hr->addCell(1100, $hBg)->addText('Kontrakt', $hF, $cCtr);
-                        $hr->addCell(1300, $hBg)->addText('YN ga ruxsat', $hF, $cCtr);
+                        $hr->addCell(7000, $hBg)->addText('Talaba F.I.O', $hF, $cCtr);
+                        $hr->addCell(800, $hBg)->addText('JN', $hF, $cCtr);
+                        $hr->addCell(800, $hBg)->addText('MT', $hF, $cCtr);
+                        $hr->addCell(1200, $hBg)->addText('Davomat %', $hF, $cCtr);
+                        $hr->addCell(1300, $hBg)->addText('Kontrakt', $hF, $cCtr);
+                        $hr->addCell(1500, $hBg)->addText('YN ga ruxsat', $hF, $cCtr);
                         $hr->addCell(900, $hBg)->addText('Komp №', $hF, $cCtr);
                         $hr->addCell(700, $hBg)->addText('Belgi', $hF, $cCtr);
                     }
 
-                    // Talabalar (barcha entries → bitta ro'yxat, ism tartibida)
-                    $allStudents = [];
+                    // Talabalarni guruh bo'yicha guruhlash, har guruh ichida ism tartibida
+                    $byGroup = []; // group_name => [['student'=>..., 'entry'=>...], ...]
                     foreach ($subjectData['entries'] as $entry) {
+                        $gName = (string) ($entry['group']->name ?? '-');
                         foreach ($entry['students'] as $st) {
-                            $allStudents[] = ['student' => $st, 'entry' => $entry];
+                            $byGroup[$gName][] = ['student' => $st, 'entry' => $entry];
                         }
                     }
-                    usort($allStudents, fn($a, $b) => strcmp((string) $a['student']->student_name, (string) $b['student']->student_name));
+                    foreach ($byGroup as $gName => &$lst) {
+                        usort($lst, fn($a, $b) => strcmp((string) $a['student']->student_name, (string) $b['student']->student_name));
+                    }
+                    unset($lst);
+                    ksort($byGroup);
 
                     $sectionExamTime = $slotTime ?: $examTime;
-                    $rowNum = 1;
 
-                    // Kontrakt cutoff (faqat 1-ustun rejimida ko'rsatiladi, lekin
-                    // hisoblanadi)
                     $defaultCutoffs = json_encode([
                         ['deadline' => '2025-10-01', 'percent' => 25],
                         ['deadline' => '2026-01-01', 'percent' => 50],
@@ -4108,15 +4136,13 @@ class AcademicScheduleController extends Controller
                         }
                     }
 
-                    $renderStudentSide = function ($dataRow, array $widths, $student, $entry, $rowNum) use (
-                        $cF, $cFOr, $cFCmp, $cCtr, $cLeft, $sectionExamTime, $computerNumberMap, $contractThreshold
+                    $renderStudentInfo = function ($student, $entry) use (
+                        $sectionExamTime, $computerNumberMap, $contractThreshold
                     ) {
                         $entryGroup = $entry['group'];
                         $entrySubject = $entry['subject'];
                         $entrySemesterCode = $entry['semester']->code ?? null;
 
-                        $markingScore = MarkingSystemScore::getByStudentHemisId($student->hemis_id);
-                        // Audit soatlari
                         $nonAud = ['17']; $aud = 0;
                         if (is_array($entrySubject->subject_details)) {
                             foreach ($entrySubject->subject_details as $d) {
@@ -4136,7 +4162,7 @@ class AcademicScheduleController extends Controller
 
                         $contract = ContractList::where('student_hemis_id', $student->hemis_id)
                             ->where('year', '2025')->where('edu_year', 'like', '2025-2026%')->first();
-                        $contractPct = 100; $contractText = '-'; $contractFailed = false;
+                        $contractText = '-'; $contractFailed = false;
                         if ($contract && $contract->edu_contract_sum > 0) {
                             $contractPct = round(($contract->paid_credit_amount / $contract->edu_contract_sum) * 100);
                             $contractText = $contractPct . '%';
@@ -4145,8 +4171,6 @@ class AcademicScheduleController extends Controller
                         $holat = $student->admission_status ?? 'Ruxsat';
                         if (!in_array($holat, ['Ruxsat', 'Shartli', 'X'])) $holat = 'Ruxsat';
 
-                        $compNum = $computerNumberMap[$sectionExamTime . '|' . $student->hemis_id] ?? null;
-
                         return [
                             'jn' => $student->jn ?? 0,
                             'mt' => $student->mt ?? 0,
@@ -4154,57 +4178,108 @@ class AcademicScheduleController extends Controller
                             'contractText' => $contractText,
                             'contractFailed' => $contractFailed,
                             'holat' => $holat,
-                            'compNum' => $compNum,
+                            'compNum' => $computerNumberMap[$sectionExamTime . '|' . $student->hemis_id] ?? null,
                         ];
                     };
 
                     if ($twoUp) {
-                        // 2-up: har Word qatorida 2 talaba — chap va o'ng
-                        $cw = [380, 2400, 1200, 1200, 700, 500];
-                        $pairCount = (int) ceil(count($allStudents) / 2);
-                        for ($i = 0; $i < $pairCount; $i++) {
-                            $dr = $table->addRow();
-                            foreach ([$i, $i + $pairCount] as $sideIdx => $idx) {
-                                $row = $allStudents[$idx] ?? null;
-                                if (!$row) {
-                                    // Bo'sh kataklar
-                                    for ($c = 0; $c < 6; $c++) $dr->addCell($cw[$c])->addText('', $cF, $cCtr);
-                                    continue;
+                        // 2-up rejimi — har guruh alohida segmentda: oldida
+                        // guruh nomi separator qatori, keyin guruh ichidagi
+                        // talabalar 2 ustunga taqsimlanadi. Raqamlar HAR
+                        // USTUN ICHIDA KETMA-KET: chap = 1,2,3,4; o'ng =
+                        // 5,6,7. Bu o'qish uchun qulayroq (chap ustun to'liq
+                        // tugagandan keyin o'ng o'qiladi).
+                        $globalBase = 1; // joriy fan/guruhdagi boshlang'ich raqam
+                        $totalCells = 11; // 5 + 1 sep + 5
+                        foreach ($byGroup as $gName => $list) {
+                            // Guruh separator qatori — barcha katakchalarni qamrab oladi
+                            $gr = $table->addRow(260);
+                            $gr->addCell(
+                                $cw2[0] + $cw2[1] + $cw2[2] + $cw2[3] + $cw2[4] + $cwSep + $cw2[0] + $cw2[1] + $cw2[2] + $cw2[3] + $cw2[4],
+                                array_merge($groupBg, ['gridSpan' => $totalCells])
+                            )->addText('Guruh: ' . $gName, $cFGroup, $cCtr);
+
+                            $cnt = count($list);
+                            $half = (int) ceil($cnt / 2);
+                            for ($i = 0; $i < $half; $i++) {
+                                $dr = $table->addRow();
+
+                                // CHAP yarim — i-chi talaba, raqami $globalBase + $i
+                                $leftRow = $list[$i] ?? null;
+                                if ($leftRow) {
+                                    $stu = $leftRow['student']; $ent = $leftRow['entry'];
+                                    $info = $renderStudentInfo($stu, $ent);
+                                    $dr->addCell($cw2[0])->addText((string) ($globalBase + $i), $cF, $cCtr);
+                                    $dr->addCell($cw2[1])->addText((string) $stu->student_name, $cF, $cLeft);
+                                    $hCell = $dr->addCell($cw2[2]);
+                                    $hCell->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
+                                    $dr->addCell($cw2[3])->addText(
+                                        $info['compNum'] !== null ? (string) $info['compNum'] : '—',
+                                        $info['compNum'] !== null ? $cFCmp : $cF, $cCtr
+                                    );
+                                    $dr->addCell($cw2[4])->addText('☐', ['size' => 14], $cCtr);
+                                } else {
+                                    $dr->addCell($cw2[0])->addText('', $cF, $cCtr);
+                                    $dr->addCell($cw2[1])->addText('', $cF, $cCtr);
+                                    $dr->addCell($cw2[2])->addText('', $cF, $cCtr);
+                                    $dr->addCell($cw2[3])->addText('', $cF, $cCtr);
+                                    $dr->addCell($cw2[4])->addText('', $cF, $cCtr);
                                 }
+
+                                // Chap-o'ng o'rtasidagi ko'rinmas separator
+                                $dr->addCell($cwSep, $invisCell)->addText('', $cF, $cCtr);
+
+                                // O'NG yarim — ($i + $half)-chi talaba, raqami $globalBase + $half + $i
+                                $rightRow = $list[$i + $half] ?? null;
+                                if ($rightRow) {
+                                    $stu = $rightRow['student']; $ent = $rightRow['entry'];
+                                    $info = $renderStudentInfo($stu, $ent);
+                                    $dr->addCell($cw2[0])->addText((string) ($globalBase + $half + $i), $cF, $cCtr);
+                                    $dr->addCell($cw2[1])->addText((string) $stu->student_name, $cF, $cLeft);
+                                    $hCell = $dr->addCell($cw2[2]);
+                                    $hCell->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
+                                    $dr->addCell($cw2[3])->addText(
+                                        $info['compNum'] !== null ? (string) $info['compNum'] : '—',
+                                        $info['compNum'] !== null ? $cFCmp : $cF, $cCtr
+                                    );
+                                    $dr->addCell($cw2[4])->addText('☐', ['size' => 14], $cCtr);
+                                } else {
+                                    $dr->addCell($cw2[0])->addText('', $cF, $cCtr);
+                                    $dr->addCell($cw2[1])->addText('', $cF, $cCtr);
+                                    $dr->addCell($cw2[2])->addText('', $cF, $cCtr);
+                                    $dr->addCell($cw2[3])->addText('', $cF, $cCtr);
+                                    $dr->addCell($cw2[4])->addText('', $cF, $cCtr);
+                                }
+                            }
+                            $globalBase += $cnt;
+                        }
+                    } else {
+                        // 1-ustun, guruh separator qatorlari bilan
+                        $globalIdx = 1;
+                        $totalCells = 9; // №, FIO, JN, MT, Dav, Kontr, Holat, Komp, Belgi
+                        foreach ($byGroup as $gName => $list) {
+                            $gr = $table->addRow(260);
+                            $gr->addCell(15000, array_merge($groupBg, ['gridSpan' => $totalCells]))
+                                ->addText('Guruh: ' . $gName, $cFGroup, $cCtr);
+                            foreach ($list as $row) {
                                 $stu = $row['student']; $ent = $row['entry'];
-                                $info = $renderStudentSide($dr, $cw, $stu, $ent, $idx + 1);
-                                $dr->addCell($cw[0])->addText((string) ($idx + 1), $cF, $cCtr);
-                                $dr->addCell($cw[1])->addText((string) $stu->student_name, $cF, $cLeft);
-                                $dr->addCell($cw[2])->addText((string) $stu->student_id, $cF, $cCtr);
-                                $hCell = $dr->addCell($cw[3]);
+                                $info = $renderStudentInfo($stu, $ent);
+                                $dr = $table->addRow();
+                                $dr->addCell(500)->addText((string) $globalIdx, $cF, $cCtr);
+                                $dr->addCell(7000)->addText((string) $stu->student_name, $cF, $cLeft);
+                                $dr->addCell(800)->addText((string) ($info['jn'] ?? '0'), $cF, $cCtr);
+                                $dr->addCell(800)->addText((string) ($info['mt'] ?? '0'), $cF, $cCtr);
+                                $dr->addCell(1200)->addText(($info['qoldiq'] != 0 ? $info['qoldiq'] . '%' : '0%'), $cF, $cCtr);
+                                $dr->addCell(1300)->addText($info['contractText'], $info['contractFailed'] ? $cFOr : $cF, $cCtr);
+                                $hCell = $dr->addCell(1500);
                                 $hCell->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
-                                $dr->addCell($cw[4])->addText(
+                                $dr->addCell(900)->addText(
                                     $info['compNum'] !== null ? (string) $info['compNum'] : '—',
                                     $info['compNum'] !== null ? $cFCmp : $cF, $cCtr
                                 );
-                                $dr->addCell($cw[5])->addText('☐', ['size' => 14], $cCtr);
+                                $dr->addCell(700)->addText('☐', ['size' => 14], $cCtr);
+                                $globalIdx++;
                             }
-                        }
-                    } else {
-                        // 1-ustun to'liq jadval
-                        foreach ($allStudents as $i => $row) {
-                            $stu = $row['student']; $ent = $row['entry'];
-                            $info = $renderStudentSide(null, [], $stu, $ent, $i + 1);
-                            $dr = $table->addRow();
-                            $dr->addCell(500)->addText((string) ($i + 1), $cF, $cCtr);
-                            $dr->addCell(4500)->addText((string) $stu->student_name, $cF, $cLeft);
-                            $dr->addCell(1500)->addText((string) $stu->student_id, $cF, $cCtr);
-                            $dr->addCell(700)->addText((string) ($info['jn'] ?? '0'), $cF, $cCtr);
-                            $dr->addCell(700)->addText((string) ($info['mt'] ?? '0'), $cF, $cCtr);
-                            $dr->addCell(1000)->addText(($info['qoldiq'] != 0 ? $info['qoldiq'] . '%' : '0%'), $cF, $cCtr);
-                            $dr->addCell(1100)->addText($info['contractText'], $info['contractFailed'] ? $cFOr : $cF, $cCtr);
-                            $hCell = $dr->addCell(1300);
-                            $hCell->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
-                            $dr->addCell(900)->addText(
-                                $info['compNum'] !== null ? (string) $info['compNum'] : '—',
-                                $info['compNum'] !== null ? $cFCmp : $cF, $cCtr
-                            );
-                            $dr->addCell(700)->addText('☐', ['size' => 14], $cCtr);
                         }
                     }
                 }

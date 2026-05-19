@@ -1105,12 +1105,29 @@
                     data: JSON.stringify({ ids: okIds }),
                     success: function(data) {
                         var html = '';
+                        // Sababli ariza yo'q xatolarini ALOHIDA (tepada qizil)
+                        // ajratib ko'rsatamiz - qolgan xatolar pastdagi oddiy
+                        // ro'yxatga tushadi.
+                        var excuseErrors = (data.errors || []).filter(function(e) { return e.error_reason === 'no_excuse_makeup'; });
+                        var otherErrors  = (data.errors || []).filter(function(e) { return e.error_reason !== 'no_excuse_makeup'; });
+
+                        if (excuseErrors.length > 0) {
+                            html += '<div class="diag-msg diag-error" style="background:#fef2f2;border:1px solid #f87171;color:#7f1d1d;">';
+                            html += '<strong style="color:#991b1b;">⚠ Sababli arizalarda ushbu fan keltirilmagan — ' + excuseErrors.length + ' ta natija yuklanmadi:</strong>';
+                            html += '<ul style="margin-top:6px;padding-left:20px;">';
+                            excuseErrors.forEach(function(err) {
+                                html += '<li>' + esc(err.student_name) + ' — ' + esc(err.fan_name) + '</li>';
+                            });
+                            html += '</ul>';
+                            html += '<div style="margin-top:6px;font-size:12px;color:#7f1d1d;">Eslatma: qo\'shimcha/farmoyish bo\'yicha topshirilgan natijalar uchun, sababli arizada shu fan (OSKI/Test) ko\'rsatilgan bo\'lishi shart.</div>';
+                            html += '</div>';
+                        }
                         if (data.success_count > 0) {
                             html += '<div class="diag-msg diag-success"><strong>Muvaffaqiyatli!</strong> ' + data.success_count + ' ta natija sistemaga yuklandi.</div>';
                         }
-                        if (data.error_count > 0) {
-                            html += '<div class="diag-msg diag-error"><strong>' + data.error_count + ' ta xato:</strong><ul style="margin-top:4px;padding-left:20px;">';
-                            data.errors.forEach(function(err) { html += '<li>' + esc(err.student_name) + ' — ' + esc(err.fan_name) + ': ' + esc(err.error) + '</li>'; });
+                        if (otherErrors.length > 0) {
+                            html += '<div class="diag-msg diag-error"><strong>' + otherErrors.length + ' ta xato:</strong><ul style="margin-top:4px;padding-left:20px;">';
+                            otherErrors.forEach(function(err) { html += '<li>' + esc(err.student_name) + ' — ' + esc(err.fan_name) + ': ' + esc(err.error) + '</li>'; });
                             html += '</ul></div>';
                         }
                         $('#upload-result').html(html).show();
@@ -1304,12 +1321,27 @@
                         success: function(data) {
                             closeReuploadModal();
                             var html = '';
+                            // Sababli ariza yo'q xatolarini tepada qizil alohida ko'rsatish.
+                            var excuseErrors = (data.errors || []).filter(function(e) { return e.error_reason === 'no_excuse_makeup'; });
+                            var otherErrors  = (data.errors || []).filter(function(e) { return e.error_reason !== 'no_excuse_makeup'; });
+
+                            if (excuseErrors.length > 0) {
+                                html += '<div class="diag-msg diag-error" style="background:#fef2f2;border:1px solid #f87171;color:#7f1d1d;">';
+                                html += '<strong style="color:#991b1b;">⚠ Sababli arizalarda ushbu fan keltirilmagan — ' + excuseErrors.length + ' ta natija yuklanmadi:</strong>';
+                                html += '<ul style="margin-top:6px;padding-left:20px;">';
+                                excuseErrors.forEach(function(err) {
+                                    html += '<li>' + esc(err.student_name) + ' — ' + esc(err.fan_name) + '</li>';
+                                });
+                                html += '</ul>';
+                                html += '<div style="margin-top:6px;font-size:12px;color:#7f1d1d;">Eslatma: qo\'shimcha/farmoyish bo\'yicha topshirilgan natijalar uchun, sababli arizada shu fan (OSKI/Test) ko\'rsatilgan bo\'lishi shart.</div>';
+                                html += '</div>';
+                            }
                             if (data.success_count > 0) {
                                 html += '<div class="diag-msg diag-success"><strong>Muvaffaqiyatli!</strong> ' + data.success_count + ' ta natija qayta yuklandi.</div>';
                             }
-                            if (data.error_count > 0) {
-                                html += '<div class="diag-msg diag-error"><strong>' + data.error_count + ' ta xato:</strong><ul style="margin-top:4px;padding-left:20px;">';
-                                data.errors.forEach(function(err) { html += '<li>' + esc(err.student_name) + ' — ' + esc(err.fan_name) + ': ' + esc(err.error) + '</li>'; });
+                            if (otherErrors.length > 0) {
+                                html += '<div class="diag-msg diag-error"><strong>' + otherErrors.length + ' ta xato:</strong><ul style="margin-top:4px;padding-left:20px;">';
+                                otherErrors.forEach(function(err) { html += '<li>' + esc(err.student_name) + ' — ' + esc(err.fan_name) + ': ' + esc(err.error) + '</li>'; });
                                 html += '</ul></div>';
                             }
                             $('#upload-result').html(html).show();

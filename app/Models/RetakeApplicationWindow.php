@@ -92,9 +92,11 @@ class RetakeApplicationWindow extends Model
      * Mos kelish uchun: specialty_id YOKI specialty_name (case-insensitive)
      * mos kelsa kifoya. Bu HEMIS variant farqlari uchun ham mos tushadi.
      *
-     * `$studentDepartmentHemisId` parametri orqaga moslik uchun saqlanadi,
-     * ammo filtr sifatida ishlatilmaydi (talabaning haqiqiy fakulteti
-     * Student.department_id da saqlangan).
+     * **Fakultet cheklovi**: agar window'da `department_hemis_id` to'ldirilgan
+     * bo'lsa, u talabaning `department_id`siga teng bo'lishi shart — aks
+     * holda specialty_name fallback turli fakultetlardagi bir xil nomli
+     * yo'nalishlarni aralashtirib yuboradi (masalan "Davolash ishi"
+     * 1-son davolash va Xalqaro ta'lim fakultetlarida ham mavjud).
      */
     public function scopeForStudent($query, int $specialtyId, string $levelCode, ?string $studentDepartmentHemisId = null, ?string $specialtyName = null)
     {
@@ -108,6 +110,15 @@ class RetakeApplicationWindow extends Model
                 $q->orWhereRaw('LOWER(TRIM(specialty_name)) = ?', [mb_strtolower($name)]);
             }
         });
+
+        // Fakultet konstrainti — window'da to'ldirilgan bo'lsa, mos kelishi shart.
+        $studentDept = $studentDepartmentHemisId !== null ? trim($studentDepartmentHemisId) : '';
+        if ($studentDept !== '') {
+            $query->where(function ($q) use ($studentDept) {
+                $q->whereNull('department_hemis_id')
+                  ->orWhere('department_hemis_id', $studentDept);
+            });
+        }
 
         return $query;
     }

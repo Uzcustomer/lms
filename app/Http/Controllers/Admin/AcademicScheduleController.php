@@ -3372,12 +3372,10 @@ class AcademicScheduleController extends Controller
             'items.*.group_hemis_id' => 'required|string',
             'items.*.semester_code' => 'required|string',
             'items.*.subject_id' => 'required|string',
-            // Urinish raqami — 2/3 bo'lsa: faqat shu urinishga kirishi mumkin
-            // talabalarni qaydnomaga kiritamiz (4+ qarzdor va pullik talabalar
-            // tushib qoladi - aks holda Bandlik Word ro'yxati bilan YN belgilash
-            // ro'yxati o'rtasida nomuvofiqlik yuzaga keladi).
+            // 2-/3-urinish (resit) bo'lsa butun guruh emas, faqat yiqilganlar
+            // chiqishi uchun urinish raqami va (per-student qator bo'lsa)
+            // bitta talabaning hemis_id'si yuboriladi.
             'items.*.attempt' => 'nullable|integer|min:1|max:3',
-            // Per-student qator bo'lsa — bitta talabaning hemis_id'si.
             'items.*.student_hemis_id' => 'nullable|string',
             // Komp № DB'ga saqlash uchun yn_type va schedule_id ham kerak —
             // bandlik view'i ularni yuboradi. Test-center bulk export'da
@@ -3420,76 +3418,6 @@ class AcademicScheduleController extends Controller
 
         if (!file_exists($tempDir)) {
             mkdir($tempDir, 0755, true);
-        }
-
-        // 2/3-urinish uchun talabalar ro'yxatini YN jadvali bilan bir xil
-        // manbadan olamiz - attachStudentsToSchedule test-center'da ham, YN
-        // belgilashda ham ishlatiladigan funksiya. U har talaba uchun
-        // failed_attempt1/failed_attempt2 va is_held_back/is_pullik bayroqlarini
-        // qaytaradi. Shunda Word ro'yxati YN jadvalida ko'rinadigan
-        // talabalar bilan AYNI ekvivalent bo'ladi.
-        //
-        // MUHIM: computeStudentAttemptStatuses (attachStudentsToSchedule ichida
-        // chaqiriladi) `held_back` bayrog'ini faqat unga uzatilgan triple'lar
-        // bo'yicha hisoblaydi. Faqat 1 ta fan triple'i yuborilsa, 4+ qarz
-        // qoidasi noto'g'ri ishlaydi (talabaning butun yildagi qarzi 1 ta
-        // deb sanaladi). Shu sababli har guruh uchun joriy o'quv yili BARCHA
-        // fanlarini scheduleData'ga qo'shamiz - shunda debt count to'g'ri
-        // chiqadi va RASHIDOV kabi 4+ qarzdor talabalar held_back=true bo'ladi.
-        $resitItems = collect($items)->filter(fn($it) => (int) ($it['attempt'] ?? 1) >= 2);
-        $studentsByItemKey = [];
-        if ($resitItems->isNotEmpty()) {
-            $resitGroupHids = $resitItems->pluck('group_hemis_id')->unique()->all();
-            $resitGroups = Group::whereIn('group_hemis_id', $resitGroupHids)->get()->keyBy('group_hemis_id');
-
-            // Joriy o'quv yilidagi BARCHA semestr kodlarini topish
-            $currentSems = Semester::where('current', true)->get();
-            $currentYear = $currentSems->first()?->education_year;
-            $yearSemCodes = [];
-            if ($currentYear) {
-                $yearSemCodes = Semester::where('education_year', $currentYear)->pluck('code')->unique()->all();
-            }
-
-            // Har guruh uchun shu yildagi barcha aktiv fanlar (curriculum_subjects)
-            $curriculumIds = $resitGroups->pluck('curriculum_hemis_id')->unique()->all();
-            $allYearSubjects = !empty($curriculumIds) && !empty($yearSemCodes)
-                ? CurriculumSubject::whereIn('curricula_hemis_id', $curriculumIds)
-                    ->where('is_active', true)
-                    ->whereIn('semester_code', $yearSemCodes)
-                    ->get()
-                : collect();
-
-            $statusScheduleData = collect();
-            foreach ($resitGroups as $g) {
-                $groupSubjects = $allYearSubjects->filter(fn($s) => (string) $s->curricula_hemis_id === (string) $g->curriculum_hemis_id);
-                foreach ($groupSubjects as $subj) {
-                    $statusScheduleData->push([
-                        'group' => $g,
-                        'subject' => $subj,
-                        'closing_form' => $subj->closing_form ?? null,
-                        'oski_date' => null, 'oski_na' => false, 'oski_time' => null,
-                        'test_date' => null, 'test_na' => false, 'test_time' => null,
-                        'oski_resit_date' => null, 'oski_resit_time' => null,
-                        'oski_resit2_date' => null, 'oski_resit2_time' => null,
-                        'test_resit_date' => null, 'test_resit_time' => null,
-                        'test_resit2_date' => null, 'test_resit2_time' => null,
-                    ]);
-                }
-            }
-            $statusScheduleData = $statusScheduleData->groupBy(fn($i) => $i['group']->group_hemis_id);
-            try {
-                $statusScheduleData = $this->attachStudentsToSchedule($statusScheduleData);
-                // Har (group, subject, sem) uchun students ro'yxatini key bo'yicha xaritalash
-                foreach ($statusScheduleData as $items2) {
-                    foreach ($items2 as $sItem) {
-                        $key = $sItem['group']->group_hemis_id . '|' . $sItem['subject']->subject_id . '|' . $sItem['subject']->semester_code;
-                        $studentsByItemKey[$key] = $sItem['students'] ?? [];
-                    }
-                }
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('generateYnOldiWord: talabalar yuklash xatosi: ' . $e->getMessage());
-                $studentsByItemKey = [];
-            }
         }
 
         // Step 1: Collect all data and group by subject_id
@@ -3608,37 +3536,6 @@ class AcademicScheduleController extends Controller
             }
 
             $students = $studentsQuery->groupBy('id')->get();
-
-            // 2/3-urinish bo'lsa - faqat shu urinishga haqiqatdan kirishi mumkin
-            // talabalarni qoldiramiz. Aks holda Bandlik Word ro'yxati YN belgilash
-            // jadvalida ko'rinmaydigan (4+ qarzdor, pullik) talabalarni ham
-            // kiritib yuboradi va xatolik bo'ladi.
-            $itemAttempt = (int) ($itemData['attempt'] ?? 1);
-            if ($itemAttempt >= 2) {
-                // Test-center YN jadvali bilan bir xil manba: attachStudentsToSchedule
-                // har talaba uchun failed_attempt1/failed_attempt2/is_held_back/
-                // is_pullik bayroqlarini hisoblaydi. Faqat shu kategoriyaga mos
-                // kelganlarini va qarz/pullik bo'lmaganlarini Word'ga qo'yamiz.
-                $statusKey = $group->group_hemis_id . '|' . $subject->subject_id . '|' . $semesterCode;
-                $studentsList = $studentsByItemKey[$statusKey] ?? [];
-                $failedFlag = $itemAttempt === 2 ? 'failed_attempt1' : 'failed_attempt2';
-
-                // attachStudentsToSchedule qaytargan ro'yxatdan eligible hemis_id'larni yig'amiz
-                $eligibleHemisIds = [];
-                foreach ($studentsList as $s) {
-                    if (!empty($s['is_held_back'])) continue;       // 4+ qarzdor
-                    if (!empty($s['is_pullik'])) continue;           // pullik
-                    if (empty($s[$failedFlag])) continue;            // shu urinishga yiqilmagan
-                    $eligibleHemisIds[(string) $s['hemis_id']] = true;
-                }
-
-                // Yuqoridagi $students kollektsiyasidan faqat eligible'larni qoldiramiz
-                $students = $students->filter(fn($st) => isset($eligibleHemisIds[(string) $st->hemis_id]))->values();
-
-                // Filterdan keyin biror talaba qolmasa — bu guruh-fan kombinatsiyasini
-                // umuman Word'ga qo'shmaymiz (bo'sh jadval chiqarmaslik uchun).
-                if ($students->isEmpty()) continue;
-            }
 
             // JN/MT ni jurnal "ixcham" tabi bilan bir xil mantiqda jonli hisoblash
             // (snapshot ishlatilmaydi; retake-priority qoidasi va NB=0 mantiqi qo'llaniladi).

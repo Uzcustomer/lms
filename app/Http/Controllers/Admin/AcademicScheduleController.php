@@ -688,14 +688,6 @@ class AcademicScheduleController extends Controller
         $allHemisIds = $studentsByGroup->flatten()->pluck('hemis_id')->unique()->values()->toArray();
         $pastDebtsMap = $this->computeStudentPastSemesterDebts($allHemisIds);
 
-        // Joriy o'quv yili bo'yi 1-urinishdan o'tmagan fanlar soni —
-        // computeStudentAttemptStatuses faqat $scheduleData scope'iga
-        // qaraydi, sahifada ko'rinmaydigan semestrlardagi qarzlar bilan
-        // bilmasdan qoladi. Bu helper esa butun yilni qamrab oladi va
-        // is_held_back qarorida fallback sifatida ishlatiladi. Bandlik
-        // ko'rsatkichi va Word generatori endi bir xil ro'yxatni ko'rsatadi.
-        $yearDebtCount = $this->computeYearDebtCount($allHemisIds);
-
         // Aniq signal: qaysi talabaga student_grades'da attempt=2 yoki attempt=3 yozuvi bor.
         // Bu jurnaldan qo'lda 12a/12b shakliga o'tkazilgan, lekin bahosi hali NULL bo'lgan
         // talabalarni topish uchun. failed_attempt1 V<60 ga asoslangan, lekin OSKI/Test
@@ -849,8 +841,8 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $yearDebtCount, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache, $subgroupMembers) {
-            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $yearDebtCount, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache, $subgroupMembers) {
+        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache, $subgroupMembers) {
+            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache, $subgroupMembers) {
                 $gHid = $item['group']->group_hemis_id;
                 $subjectId = $item['subject']->subject_id ?? null;
                 $semCode = $item['subject']->semester_code ?? null;
@@ -937,10 +929,6 @@ class AcademicScheduleController extends Controller
                     $currentDebts = array_values($currentDebtsByStudent[$stu->hemis_id] ?? []);
                     usort($currentDebts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
                     $admission = $admissionByStudent[$stu->hemis_id] ?? null;
-                    // is_held_back = scheduleData scope'idagi held_back YOKI joriy
-                    // o'quv yili bo'yi 4+ fandan qarz (Word filteri bilan bir xil).
-                    $yearDebt = $yearDebtCount[(string) $stu->hemis_id] ?? 0;
-                    $isHeldBack = !empty($stat['held_back']) || $yearDebt >= 4;
                     $rows[] = [
                         'hemis_id' => $stu->hemis_id,
                         'student_id_number' => $stu->student_id_number ?? null,
@@ -963,8 +951,7 @@ class AcademicScheduleController extends Controller
                         'has_attempt2_grade' => $hasAttempt2,
                         'has_attempt3_grade' => $hasAttempt3,
                         'is_pullik' => $stat['pullik'],
-                        'is_held_back' => $isHeldBack,
-                        'year_debt_count' => $yearDebt,
+                        'is_held_back' => $stat['held_back'] ?? false,
                         'past_debts' => $pastDebts,
                         'current_semester_debts' => $currentDebts,
                         // YN ga ruxsat (YN oldi qaydnoma bilan bir xil mantiq)
@@ -1138,63 +1125,6 @@ class AcademicScheduleController extends Controller
             }
             return true;
         })->values();
-    }
-
-    /**
-     * Joriy o'quv yilida 1-urinishdan o'tmagan (COALESCE(retake_grade, grade) < 60)
-     * fanlar sonini har talaba uchun qaytaradi. computeStudentAttemptStatuses
-     * faqat $scheduleData scope'idagi triples bo'yicha sanaydi (sahifada
-     * ko'rinmaydigan semestrlardagi qarzlar bilmasdan qoladi); bu helper esa
-     * butun joriy yil semestrlarini hisobga oladi va is_held_back qarorida
-     * fallback sifatida ishlatiladi (4+ qarz → ro'yxatda chiqmaydi).
-     *
-     * @param  string[]  $hemisIds
-     * @return array<string, int>  hemis_id => debt count
-     */
-    private function computeYearDebtCount(array $hemisIds): array
-    {
-        $yearDebtCount = [];
-        if (empty($hemisIds)) {
-            return $yearDebtCount;
-        }
-        try {
-            $currentYear = DB::table('semesters')->where('current', true)->value('education_year');
-            if (!$currentYear) {
-                return $yearDebtCount;
-            }
-            $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
-            // semester_code qiymatlari turli curriculum'larda bir xil bo'lishi
-            // mumkin (kod=18 bir curriculum'da 4-kurs, boshqasida 3-kurs).
-            // Shuning uchun semesters jadvaliga curriculum_id orqali JOIN —
-            // faqat talabaning AYNAN o'z curriculum'idagi va joriy yildagi
-            // failed grade'lar sanaladi.
-            $debtQ = DB::table('student_grades as sg')
-                ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                ->join('semesters as sm', function ($j) {
-                    $j->on('sm.curriculum_hemis_id', '=', 'st.curriculum_id')
-                      ->on('sm.code', '=', 'sg.semester_code');
-                })
-                ->whereIn('sg.student_hemis_id', $hemisIds)
-                ->where('sm.education_year', $currentYear)
-                ->whereIn('sg.training_type_code', [101, 102])
-                ->whereNull('sg.deleted_at')
-                ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
-            if ($hasAttemptCol) {
-                $debtQ->where(function ($x) {
-                    $x->where('sg.attempt', 1)->orWhereNull('sg.attempt');
-                });
-            }
-            $debtRows = $debtQ
-                ->selectRaw('sg.student_hemis_id, COUNT(DISTINCT CONCAT(sg.subject_id, "-", sg.semester_code)) as cnt')
-                ->groupBy('sg.student_hemis_id')
-                ->get();
-            foreach ($debtRows as $r) {
-                $yearDebtCount[(string) $r->student_hemis_id] = (int) $r->cnt;
-            }
-        } catch (\Throwable $e) {
-            \Log::warning('computeYearDebtCount failed: ' . $e->getMessage());
-        }
-        return $yearDebtCount;
     }
 
     /**
@@ -3613,10 +3543,55 @@ class AcademicScheduleController extends Controller
         }
         $allEnrichedHemisIds = array_keys($allEnrichedHemisIds);
 
-        // attachStudentsToSchedule endi yillik 4+ qarz hisobini is_held_back
-        // ga ko'chirib qo'ydi (bandlik view'da ham badge ko'rinadi). Bu yerda
-        // qo'shimcha hisob shart emas — quyidagi filter is_held_back orqali
-        // o'sha qatorlarni tashlab ketadi.
+        // Joriy o'quv yili bo'yi 1-urinishdan o'tmagan (V<60) fanlar soni —
+        // is_held_back uchun fallback. attachStudentsToSchedule ichida
+        // current_year_debt_count $scheduleData scope'iga bog'liq edi va
+        // bandlik Word'da faqat 1-2 ta fan yuborilganda 4+ ni topa olmasdi.
+        // Bu yerda butun yil semestrlari uchun SQL bilan to'g'ridan-to'g'ri
+        // sanab olamiz — YN belgilash sahifasidagi qarz hisobi bilan AYNI.
+        // DIQQAT: semesters jadvalida semester kod ustuni "code" deb
+        // nomlangan (curriculum_subjects'da esa "semester_code").
+        // Joriy o'quv yili bo'yi 1-urinishdan o'tmagan (V<60) fanlar soni —
+        // is_held_back uchun fallback. DIQQAT: semester_code qiymatlari
+        // turli curriculum'larda ham bir xil bo'lishi mumkin (masalan,
+        // kod=18 bir curriculum'da 4-kurs, boshqasida 3-kurs). Shu sababli
+        // semesters jadvaliga curriculum_id orqali JOIN qilamiz — faqat
+        // talabaning AYNAN o'ziniki curriculum'idagi va joriy yildagi
+        // failed grade'lar sanaladi. Test natijalari (Rashidov=5,
+        // Mamarasulov=0) YN belgilash sahifasidagi qarz badge'lari bilan
+        // amaliy ravishda mos keladi.
+        $yearDebtCount = [];
+        try {
+            $currentYear = DB::table('semesters')->where('current', true)->value('education_year');
+            if ($currentYear && !empty($allEnrichedHemisIds)) {
+                $hasAttemptColYr = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+                $debtQ = DB::table('student_grades as sg')
+                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                    ->join('semesters as sm', function ($j) {
+                        $j->on('sm.curriculum_hemis_id', '=', 'st.curriculum_id')
+                          ->on('sm.code', '=', 'sg.semester_code');
+                    })
+                    ->whereIn('sg.student_hemis_id', $allEnrichedHemisIds)
+                    ->where('sm.education_year', $currentYear)
+                    ->whereIn('sg.training_type_code', [101, 102])
+                    ->whereNull('sg.deleted_at')
+                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                if ($hasAttemptColYr) {
+                    $debtQ->where(function ($x) {
+                        $x->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                    });
+                }
+                $debtRows = $debtQ
+                    ->selectRaw('sg.student_hemis_id, COUNT(DISTINCT CONCAT(sg.subject_id, "-", sg.semester_code)) as cnt')
+                    ->groupBy('sg.student_hemis_id')
+                    ->get();
+                foreach ($debtRows as $r) {
+                    $yearDebtCount[(string) $r->student_hemis_id] = (int) $r->cnt;
+                }
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('generateYnOldiWord: year debt count failed: ' . $e->getMessage());
+        }
 
         foreach ($items as $itemData) {
             $group = Group::where('group_hemis_id', $itemData['group_hemis_id'])->first();
@@ -3687,12 +3662,11 @@ class AcademicScheduleController extends Controller
             // 4+ qarz uchun 3 manbadan tekshiriladi (yuqaridagi
             // students mapping bilan bir xil), JN/MT/davomat sabab "X"
             // bo'lganlar admission_status orqali aniqlanadi.
-            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) {
+            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($yearDebtCount) {
+                $hemisId = (string) ($row['hemis_id'] ?? '');
                 $debtCount = count($row['past_debts'] ?? []) + count($row['current_semester_debts'] ?? []);
-                // is_held_back attachStudentsToSchedule ichida yil bo'yi 4+ qarzni
-                // ham hisobga oladi; bu yerda past+current debtlar bo'yicha
-                // qo'shimcha tekshiruv saqlanadi (xavfsizlik chegarasi).
-                $isHeldBack = !empty($row['is_held_back']) || $debtCount >= 4;
+                $yearCnt = $yearDebtCount[$hemisId] ?? 0;
+                $isHeldBack = !empty($row['is_held_back']) || $debtCount >= 4 || $yearCnt >= 4;
                 if ($isHeldBack) return false;
                 // admission_status === 'X' (JN/MT/davomat past) — YN'ga
                 // ruxsat yo'q, ro'yxatga kiritmaymiz.

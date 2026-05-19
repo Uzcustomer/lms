@@ -5050,6 +5050,17 @@ class AcademicScheduleController extends Controller
                                         'approach_notified' => false,
                                         'ready_notified' => false,
                                     ]);
+                                // Resit stale cleanup: oldingi noto'g'ri Word'dan
+                                // qolgan butun guruh ro'yxati yangi vaqtga ko'chib
+                                // qolmasin. Eligibility + override mantiq Word'dagi
+                                // bilan bir xil.
+                                $bktEligible = $this->resolveResitEligibleHemisIds($s);
+                                \App\Models\ComputerAssignment::where('exam_schedule_id', $s->id)
+                                    ->where('yn_type', strtolower($ynType))
+                                    ->where('attempt', $passAttempt)
+                                    ->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+                                    ->when(!empty($bktEligible), fn($q) => $q->whereNotIn('student_hemis_id', $bktEligible))
+                                    ->delete();
                             }
                         } catch (\Throwable $e) {
                             \Illuminate\Support\Facades\Log::warning('autoTimeAll: ComputerAssignment sync xato', [
@@ -5455,6 +5466,20 @@ class AcademicScheduleController extends Controller
                     'approach_notified' => false,
                     'ready_notified' => false,
                 ]);
+
+            // Resit (2-/3-urinish) uchun stale qatorlarni tozalash: oldingi
+            // noto'g'ri Word'dan qolgan butun guruh ro'yxati yangi vaqtga
+            // ko'chib qolmasin. generateYnOldiWord ichidagi eligibility +
+            // override mantiq'i bilan bir xil. status != scheduled tegmaydi.
+            if ($attempt >= 2) {
+                $eligibleHemisIds = $this->resolveResitEligibleHemisIds($examSchedule);
+                \App\Models\ComputerAssignment::where('exam_schedule_id', $examSchedule->id)
+                    ->where('yn_type', strtolower($ynType))
+                    ->where('attempt', $attempt)
+                    ->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+                    ->when(!empty($eligibleHemisIds), fn($q) => $q->whereNotIn('student_hemis_id', $eligibleHemisIds))
+                    ->delete();
+            }
         }
 
         // Audit: vaqt o'zgartirishlarini alohida log qilamiz — "vaqt qaerga ketdi"
@@ -5740,6 +5765,16 @@ class AcademicScheduleController extends Controller
                 'approach_notified' => false,
                 'ready_notified' => false,
             ]);
+
+        // Resit stale cleanup (per-student qator uchun — bu schedule_id'da
+        // faqat shu talabaning komp qatori bo'lishi kerak).
+        $eligibleStHemisIds = $this->resolveResitEligibleHemisIds($perStudent);
+        \App\Models\ComputerAssignment::where('exam_schedule_id', $perStudent->id)
+            ->where('yn_type', strtolower($request->yn_type))
+            ->where('attempt', (int) $request->attempt)
+            ->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+            ->when(!empty($eligibleStHemisIds), fn($q) => $q->whereNotIn('student_hemis_id', $eligibleStHemisIds))
+            ->delete();
 
         // Faqat shu talabaga notification (individual grafik — guruh xabari emas).
         $ynLabel = $request->yn_type === 'OSKI' ? 'OSKI' : 'Test';
@@ -6792,6 +6827,59 @@ class AcademicScheduleController extends Controller
                 'revealMin' => $revealWindowMin,
             ])
             ->header('Cache-Control', 'no-store, max-age=0');
+    }
+
+    /**
+     * Resit (2-/3-urinish) bo'yicha ExamSchedule qatori uchun haqiqatdan
+     * imtihon topshirishga kerak bo'lgan talabalarning hemis_id ro'yxati.
+     * generateYnOldiWord ichidagi mantiq bilan bir xil:
+     *  - Per-student qator (student_hemis_id bor) → faqat shu talaba
+     *    (eligibility check yo'q — admin ataylab belgilagan)
+     *  - Guruh-level qator → student_grades'da yiqilganlar (yoki attempt >= 2)
+     *    MINUS per-student override qatorlari bor talabalar
+     */
+    private function resolveResitEligibleHemisIds(ExamSchedule $schedule): array
+    {
+        if (!empty($schedule->student_hemis_id)) {
+            return [(string) $schedule->student_hemis_id];
+        }
+
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+        $eligible = DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+            ->where('st.group_id', $schedule->group_hemis_id)
+            ->where('st.student_status_code', 11)
+            ->where('sg.subject_id', $schedule->subject_id)
+            ->where('sg.semester_code', $schedule->semester_code)
+            ->whereIn('sg.training_type_code', [101, 102])
+            ->whereNull('sg.deleted_at')
+            ->when($hasAttemptCol, function ($q) {
+                $q->where(function ($w) {
+                    $w->where('sg.attempt', '>=', 2)
+                        ->orWhere(function ($x) {
+                            $x->where(function ($y) {
+                                $y->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                            })->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                        });
+                });
+            }, function ($q) {
+                $q->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+            })
+            ->distinct()
+            ->pluck('sg.student_hemis_id')
+            ->map(fn($v) => (string) $v)
+            ->all();
+
+        $overridden = DB::table('exam_schedules')
+            ->where('group_hemis_id', $schedule->group_hemis_id)
+            ->where('subject_id', $schedule->subject_id)
+            ->where('semester_code', $schedule->semester_code)
+            ->whereNotNull('student_hemis_id')
+            ->pluck('student_hemis_id')
+            ->map(fn($v) => (string) $v)
+            ->all();
+
+        return array_values(array_diff($eligible, $overridden));
     }
 
     /**

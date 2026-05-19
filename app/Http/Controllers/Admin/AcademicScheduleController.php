@@ -6525,112 +6525,6 @@ class AcademicScheduleController extends Controller
      */
     public function tvJadval(Request $request)
     {
-        $dateParam = $request->query('date');
-        try {
-            $carbonDate = $dateParam
-                ? \Carbon\Carbon::createFromFormat('Y-m-d', $dateParam)
-                : now()->startOfDay();
-        } catch (\Throwable $e) {
-            $carbonDate = now()->startOfDay();
-        }
-        $date = $carbonDate->format('Y-m-d');
-
-        $settings = ExamCapacityService::getSettingsForDate($date);
-        $testDurationMinutes = (int) ($settings['test_duration_minutes'] ?? 15);
-
-        $schedules = ExamSchedule::with(['group'])
-            ->where(function ($q) use ($date) {
-                $q->where(function ($q2) use ($date) {
-                    $q2->where('oski_na', false)->whereDate('oski_date', $date);
-                })->orWhere(function ($q2) use ($date) {
-                    $q2->where('test_na', false)->whereDate('test_date', $date);
-                })->orWhere(function ($q2) use ($date) {
-                    $q2->whereDate('oski_resit_date', $date);
-                })->orWhere(function ($q2) use ($date) {
-                    $q2->whereDate('test_resit_date', $date);
-                })->orWhere(function ($q2) use ($date) {
-                    $q2->whereDate('oski_resit2_date', $date);
-                })->orWhere(function ($q2) use ($date) {
-                    $q2->whereDate('test_resit2_date', $date);
-                });
-            })
-            ->get();
-
-        $attemptDefs = [
-            ['OSKI', 1, 'oski_date', 'oski_time', 'oski_na'],
-            ['Test', 1, 'test_date', 'test_time', 'test_na'],
-            ['OSKI', 2, 'oski_resit_date', 'oski_resit_time', null],
-            ['Test', 2, 'test_resit_date', 'test_resit_time', null],
-            ['OSKI', 3, 'oski_resit2_date', 'oski_resit2_time', null],
-            ['Test', 3, 'test_resit2_date', 'test_resit2_time', null],
-        ];
-
-        // Per-student qatorlarni o'tkazib yuboramiz — TV uchun guruh-darajadagi
-        // qator yetarli (bir nechta retaker bir xil guruh+vaqtda bo'lsa,
-        // bir martagina ko'rinadi).
-        $items = [];
-        $seen = [];
-        foreach ($schedules as $schedule) {
-            if (!empty($schedule->student_hemis_id)) {
-                continue;
-            }
-            foreach ($attemptDefs as [$ynType, $attempt, $dateField, $timeField, $naField]) {
-                $dStr = $schedule->{$dateField}?->format('Y-m-d');
-                if ($dStr !== $date) continue;
-                if ($naField !== null && $schedule->{$naField}) continue;
-
-                $timeRaw = $schedule->{$timeField} ?? null;
-                if (!$timeRaw) continue;
-                $timeStr = \Carbon\Carbon::parse($timeRaw)->format('H:i');
-
-                $groupName = $schedule->group?->name ?? $schedule->group_hemis_id;
-                $subjectName = $schedule->subject_name ?? '';
-
-                $key = $timeStr . '|' . $groupName . '|' . $subjectName . '|' . $ynType . '|' . $attempt;
-                if (isset($seen[$key])) continue;
-                $seen[$key] = true;
-
-                $items[] = [
-                    'time' => $timeStr,
-                    'group_name' => $groupName,
-                    'subject_name' => $subjectName,
-                    'yn_type' => $ynType,
-                    'attempt' => $attempt,
-                ];
-            }
-        }
-
-        usort($items, function ($a, $b) {
-            return [$a['time'], $a['group_name']] <=> [$b['time'], $b['group_name']];
-        });
-
-        if ($request->wantsJson() || $request->query('format') === 'json') {
-            return response()->json([
-                'date' => $date,
-                'duration_minutes' => $testDurationMinutes,
-                'items' => $items,
-                'generated_at' => now()->toIso8601String(),
-            ])->header('Cache-Control', 'no-store, max-age=0');
-        }
-
-        return response()
-            ->view('admin.academic-schedule.tv-jadval', [
-                'date' => $carbonDate,
-                'items' => $items,
-                'testDurationMinutes' => $testDurationMinutes,
-            ])
-            ->header('Cache-Control', 'no-store, max-age=0');
-    }
-
-    /**
-     * Test markazi peshtaxtasi yonida turgan TV uchun komp № displeyi.
-     * Hozir test topshirayotgan (status=in_progress) va kelgusi ~15 daqiqada
-     * boshlanadigan (status=scheduled) talabalarning komp raqami va qisqacha
-     * ismi (Tursunov S.A.) chiqadi. Login talab qilmaydi — istalgan brauzer
-     * to'g'ridan-to'g'ri ocha oladi.
-     */
-    public function tvComputerBoard(Request $request)
-    {
         $now = now();
         $dateParam = $request->query('date');
         try {
@@ -6641,18 +6535,20 @@ class AcademicScheduleController extends Controller
             $carbonDate = $now->copy()->startOfDay();
         }
         $date = $carbonDate->format('Y-m-d');
-        $upcomingWindowMin = 15;
+        // Ekranda kim kirishi ko'rinishi uchun keng oyna (60 daq). Komp №
+        // esa faqat reveal vaqti yetganda (jit_assign_minutes_before, default 10)
+        // ko'rsatiladi — talaba erta bilib qo'yib boshqa kompga o'tirmasin.
+        $upcomingWindowMin = 60;
+        $revealWindowMin = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
         $windowEnd = $now->copy()->addMinutes($upcomingWindowMin);
 
-        // Komp raqami bor (Word'da pin qilingan yoki JIT tomonidan
-        // tayinlangan) va shu kunda planned_start'i bo'lgan barcha aktiv
-        // qatorlar. Tugagan (finished/abandoned/moved) qatorlar ekrandan
-        // chiqib ketadi — TV bandlik faqat "joriy + yaqin" ko'rsatadi.
+        // Shu kunda planned_start'i bo'lgan barcha aktiv qatorlar (in_progress
+        // yoki kelgusi 60 daqiqada boshlanadigan). computer_number NULL bo'lsa
+        // ham olamiz — view'da "tez orada" deb chiqaramiz.
         $rows = DB::table('computer_assignments as ca')
             ->leftJoin('students as st', 'st.hemis_id', '=', 'ca.student_hemis_id')
             ->leftJoin('exam_schedules as es', 'es.id', '=', 'ca.exam_schedule_id')
             ->whereDate('ca.planned_start', $date)
-            ->whereNotNull('ca.computer_number')
             ->where(function ($q) use ($windowEnd) {
                 $q->where('ca.status', \App\Models\ComputerAssignment::STATUS_IN_PROGRESS)
                     ->orWhere(function ($q2) use ($windowEnd) {
@@ -6660,6 +6556,7 @@ class AcademicScheduleController extends Controller
                             ->where('ca.planned_start', '<=', $windowEnd);
                     });
             })
+            ->orderBy('ca.planned_start')
             ->orderBy('ca.computer_number')
             ->select(
                 'ca.id', 'ca.computer_number', 'ca.status', 'ca.planned_start',
@@ -6673,41 +6570,65 @@ class AcademicScheduleController extends Controller
         foreach ($rows as $r) {
             $plannedStart = $r->planned_start ? \Carbon\Carbon::parse($r->planned_start) : null;
             $isInProgress = $r->status === \App\Models\ComputerAssignment::STATUS_IN_PROGRESS;
+            $minutesUntil = !$isInProgress && $plannedStart
+                ? max(0, (int) ceil($now->diffInSeconds($plannedStart, false) / 60))
+                : 0;
+            // Komp № "ochilgan" deb hisoblanadi: imtihon boshlangan bo'lsa
+            // YOKI reveal vaqti (planned_start − reveal_window) yetib kelgan
+            // bo'lsa. Aks holda raqamni yashirib turamiz — talaba uzoq oldin
+            // ko'rib qolmasin.
+            $compNum = $r->computer_number !== null ? (int) $r->computer_number : null;
+            $isRevealed = $isInProgress || ($plannedStart && $now->gte($plannedStart->copy()->subMinutes($revealWindowMin)));
             $isImminent = !$isInProgress && $plannedStart && $plannedStart->lte($now);
-            $minutesUntil = !$isInProgress && $plannedStart ? max(0, (int) ceil($now->diffInSeconds($plannedStart, false) / 60)) : 0;
+
+            if ($isInProgress) {
+                $status = 'in_progress';
+            } elseif ($isImminent) {
+                $status = 'imminent';
+            } elseif ($isRevealed) {
+                $status = 'near';
+            } else {
+                $status = 'waiting';
+            }
 
             $items[] = [
-                'computer_number' => (int) $r->computer_number,
+                'computer_number' => $compNum,
+                'show_computer' => $isRevealed && $compNum !== null,
                 'short_name' => self::formatTvShortName((string) ($r->full_name ?? '')),
                 'subject_name' => (string) ($r->subject_name ?? ''),
                 'yn_type' => strtoupper((string) ($r->yn_type ?? '')),
                 'attempt' => (int) ($r->attempt ?? 1),
                 'planned_time' => $plannedStart ? $plannedStart->format('H:i') : '',
-                'status' => $isInProgress ? 'in_progress' : ($isImminent ? 'imminent' : 'waiting'),
+                'status' => $status,
                 'minutes_until' => $minutesUntil,
             ];
         }
 
-        // Tartib: avval test topshirayotganlar, keyin yaqinlashganlar
-        // (planned_start <= now), keyin kelgusi slot'lar minutes_until kamayishi
-        // bo'yicha. Bir guruh ichida komp № bo'yicha o'sib.
+        // Tartib: avval test topshirayotganlar, keyin "Kiring" (vaqti yetdi),
+        // keyin "ochilgan" (komp № ko'rindi, kutyapti), oxirida "kutmoqda"
+        // (komp № hali yashirin). Har guruh ichida planned_time bo'yicha
+        // o'sib, oxiri komp № yoki ism bo'yicha barqaror tartib.
         usort($items, function ($a, $b) {
-            $rank = ['in_progress' => 0, 'imminent' => 1, 'waiting' => 2];
+            $rank = ['in_progress' => 0, 'imminent' => 1, 'near' => 2, 'waiting' => 3];
             $ra = $rank[$a['status']] ?? 9;
             $rb = $rank[$b['status']] ?? 9;
             if ($ra !== $rb) return $ra <=> $rb;
-            if ($a['status'] === 'waiting' && $a['minutes_until'] !== $b['minutes_until']) {
-                return $a['minutes_until'] <=> $b['minutes_until'];
+            if ($a['planned_time'] !== $b['planned_time']) {
+                return strcmp($a['planned_time'], $b['planned_time']);
             }
-            return $a['computer_number'] <=> $b['computer_number'];
+            if ($a['computer_number'] !== null && $b['computer_number'] !== null) {
+                return $a['computer_number'] <=> $b['computer_number'];
+            }
+            return strcmp($a['short_name'], $b['short_name']);
         });
 
         return response()
-            ->view('admin.academic-schedule.tv-computer-board', [
+            ->view('admin.academic-schedule.tv-jadval', [
                 'date' => $carbonDate,
                 'items' => $items,
                 'now' => $now,
                 'windowMin' => $upcomingWindowMin,
+                'revealMin' => $revealWindowMin,
             ])
             ->header('Cache-Control', 'no-store, max-age=0');
     }

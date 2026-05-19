@@ -2061,28 +2061,6 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            // SABABLI ARIZA TEKSHIRUVI - shakl "qo'shimcha" yoki "farmoyish" so'zi
-            // bilan kelgan bo'lsa (sababli farmoyish orqali topshirilgan urinish),
-            // shu (talaba, fan, OSKI/Test) uchun absence_excuse_makeups jadvalida
-            // tasdiqlangan ariza mavjudligini tekshiramiz. Mos yozuv bo'lmasa -
-            // yuklash bloklanadi va frontend tepada qizil ogohlantirish chiqaradi.
-            $isQoshimcha = (preg_match('/\(.*qo\'?shimcha.*\)/iu', $shaklRaw) || mb_stripos($shaklRaw, 'farmoyish') !== false);
-            if ($isQoshimcha) {
-                $makeupExists = DB::table('absence_excuse_makeups as m')
-                    ->join('absence_excuses as e', 'e.id', '=', 'm.absence_excuse_id')
-                    ->where('e.student_hemis_id', $student->hemis_id)
-                    ->where('e.status', 'approved')
-                    ->where('m.subject_id', $subject->subject_id)
-                    ->where('m.assessment_type_code', $trainingTypeCode)
-                    ->exists();
-                if (!$makeupExists) {
-                    $rowInfo['error'] = "Sababli arizalarda ushbu fan keltirilmagan";
-                    $rowInfo['error_reason'] = 'no_excuse_makeup';
-                    $errors[] = $rowInfo;
-                    continue;
-                }
-            }
-
             try {
                 $created = StudentGrade::create([
                     'student_id' => $student->id,

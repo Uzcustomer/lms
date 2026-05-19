@@ -3365,6 +3365,11 @@ class AcademicScheduleController extends Controller
             // bitta talabaning hemis_id'si yuboriladi.
             'items.*.attempt' => 'nullable|integer|min:1|max:3',
             'items.*.student_hemis_id' => 'nullable|string',
+            // Per-item exam_time bo'lsa "multi-slot" rejim — bir nechta vaqt
+            // slotlarini tanlab bitta Word hujjatda vaqt tartibida ketma-ket
+            // chiqarish (bandlik ko'rsatkichida checkbox + "Tanlanganlarni Word'ga"
+            // tugmasi orqali). Top-level exam_time esa eski yagona slot rejimi.
+            'items.*.exam_time' => 'nullable|date_format:H:i',
             // Bandlik ko'rsatkichidan chaqirilganda: imzo bloki va QR'siz "ish ro'yxati"
             // varianti + slotning kirish sana/vaqti yuqorida ko'rsatiladi.
             'compact' => 'nullable|boolean',
@@ -3378,6 +3383,12 @@ class AcademicScheduleController extends Controller
         $compact = (bool) $request->boolean('compact');
         $examDate = $request->input('exam_date');
         $examTime = $request->input('exam_time');
+        // Multi-slot rejim: hech bo'lmasa bitta item per-item exam_time bilan
+        // kelgan bo'lsa, slotlarni vaqt tartibida bitta Word'ga yig'amiz.
+        $multiSlotMode = false;
+        foreach ($items as $_it) {
+            if (!empty($_it['exam_time'])) { $multiSlotMode = true; break; }
+        }
         $files = [];
         $tempDir = storage_path('app/public/yn_oldi_qaydnoma');
 
@@ -3524,13 +3535,20 @@ class AcademicScheduleController extends Controller
                 }
             }
 
-            $subjectKey = $subject->subject_id;
+            // Multi-slot rejimda kalit time'ni ham o'z ichiga oladi — har
+            // (slot vaqti, fan) birikma alohida bo'lim sifatida chiqadi va
+            // pastda time tartibida saralanadi.
+            $itemExamTime = $multiSlotMode ? (string) ($itemData['exam_time'] ?? '') : '';
+            $subjectKey = $multiSlotMode
+                ? ($itemExamTime . '|' . $subject->subject_id)
+                : (string) $subject->subject_id;
             if (!isset($subjectGroups[$subjectKey])) {
                 $subjectGroups[$subjectKey] = [
                     'subject' => $subject,
                     'semester' => $semester,
                     'department' => $department,
                     'specialty' => $specialty,
+                    'slot_time' => $itemExamTime,
                     'groupNames' => [],
                     'allMaruzaTeachers' => [],
                     'allOtherTeachers' => [],
@@ -3566,6 +3584,30 @@ class AcademicScheduleController extends Controller
             ];
         }
 
+        // Multi-slot rejimda: slot vaqti bo'yicha o'sish tartibida, ichida fan
+        // bo'yicha — shunda 9:15 → 9:30 → 9:45 ketma-ketligida sahifalar
+        // chiqadi. Yagona-slot/legacy rejimda tartib o'zgarmaydi.
+        if ($multiSlotMode) {
+            uksort($subjectGroups, function ($ka, $kb) use ($subjectGroups) {
+                $ta = (string) ($subjectGroups[$ka]['slot_time'] ?? '');
+                $tb = (string) ($subjectGroups[$kb]['slot_time'] ?? '');
+                $cmp = strcmp($ta, $tb);
+                if ($cmp !== 0) return $cmp;
+                return strcmp((string) $ka, (string) $kb);
+            });
+            // Multi-slot — imzo va QR har sahifaga takror chiqib o'rin egallamasin.
+            $compact = true;
+        }
+
+        // Multi-slot uchun bitta umumiy PhpWord; har section'i alohida sahifaga
+        // page-break bilan chiqadi. Legacy rejimda har fan o'ziniki yaratiladi.
+        $combinedPhpWord = null;
+        if ($multiSlotMode) {
+            $combinedPhpWord = new PhpWord();
+            $combinedPhpWord->setDefaultFontName('Times New Roman');
+            $combinedPhpWord->setDefaultFontSize(12);
+        }
+
         // Step 2: Har bir fan uchun bitta Word hujjat yaratish
         foreach ($subjectGroups as $subjectKey => $subjectData) {
             $subject = $subjectData['subject'];
@@ -3574,11 +3616,21 @@ class AcademicScheduleController extends Controller
             $groupNames = $subjectData['groupNames'];
             $allMaruzaText = implode(', ', $subjectData['allMaruzaTeachers']) ?: '-';
             $allOtherText = implode(', ', $subjectData['allOtherTeachers']) ?: '-';
+            // Multi-slot rejimda har bo'lim o'z slot vaqtini ko'rsatadi
+            // (top-level $examTime o'rniga).
+            $sectionExamTime = $multiSlotMode
+                ? ($subjectData['slot_time'] ?: $examTime)
+                : $examTime;
 
-            // Word hujjat yaratish
-            $phpWord = new PhpWord();
-            $phpWord->setDefaultFontName('Times New Roman');
-            $phpWord->setDefaultFontSize(12);
+            // Word hujjat yaratish — multi-slot bo'lsa umumiy hujjatdan section,
+            // aks holda har fan uchun yangi PhpWord.
+            if ($multiSlotMode) {
+                $phpWord = $combinedPhpWord;
+            } else {
+                $phpWord = new PhpWord();
+                $phpWord->setDefaultFontName('Times New Roman');
+                $phpWord->setDefaultFontSize(12);
+            }
 
             $section = $phpWord->addSection([
                 'orientation' => 'landscape',
@@ -3640,13 +3692,14 @@ class AcademicScheduleController extends Controller
 
             // Test markazida slotga kirish sanasi va vaqti (faqat bandlikdan
             // chaqirilganda — bandlik view'i exam_date/exam_time yuboradi).
+            // Multi-slot rejimda har bo'lim o'z slot vaqtini chiqaradi.
             if ($examDate) {
                 try {
                     $examDateFmt = \Carbon\Carbon::createFromFormat('Y-m-d', $examDate)->format('d.m.Y');
                 } catch (\Throwable $e) {
                     $examDateFmt = $examDate;
                 }
-                $examLine = 'Test markaziga kirish: ' . $examDateFmt . ($examTime ? ' ' . $examTime : '');
+                $examLine = 'Test markaziga kirish: ' . $examDateFmt . ($sectionExamTime ? ' ' . $sectionExamTime : '');
                 $section->addText(
                     $examLine,
                     ['bold' => true, 'size' => 12],
@@ -3888,6 +3941,13 @@ class AcademicScheduleController extends Controller
                 }
             }
 
+            // Multi-slot rejimda har section umumiy hujjatga yoziladi — fayl
+            // saqlash pastda bir martagina amalga oshiriladi. QR/PDF ham
+            // shunga mos ravishda tashlab yuboriladi (compact=true majburiy).
+            if ($multiSlotMode) {
+                continue;
+            }
+
             $groupNamesStr = str_replace(['/', '\\', ' '], '_', implode('_', $groupNames));
             $subjectNameStr = str_replace(['/', '\\', ' '], '_', $subject->subject_name);
             $fileName = 'YN_oldi_qaydnoma_' . $groupNamesStr . '_' . $subjectNameStr . '.docx';
@@ -3935,6 +3995,23 @@ class AcademicScheduleController extends Controller
                 'path' => $tempPath,
                 'name' => $fileName,
             ];
+        }
+
+        // Multi-slot rejimda barcha bo'limlar bitta umumiy hujjatga yig'ilgan —
+        // shu yerda bir martagina yoziladi va birdaniga qaytariladi.
+        if ($multiSlotMode && $combinedPhpWord !== null) {
+            $timeParts = [];
+            foreach ($subjectGroups as $sg) {
+                $t = $sg['slot_time'] ?? '';
+                if ($t !== '') $timeParts[$t] = true;
+            }
+            $timeParts = array_keys($timeParts);
+            sort($timeParts);
+            $timesSlug = $timeParts ? implode('-', array_map(fn($t) => str_replace(':', '', $t), $timeParts)) : 'slotlar';
+            $combinedName = 'YN_oldi_qaydnoma_' . $timesSlug . '.docx';
+            $combinedPath = $tempDir . '/' . time() . '_' . mt_rand(1000, 9999) . '_' . $combinedName;
+            IOFactory::createWriter($combinedPhpWord, 'Word2007')->save($combinedPath);
+            return response()->download($combinedPath, $combinedName)->deleteFileAfterSend(true);
         }
 
         if (count($files) === 0) {

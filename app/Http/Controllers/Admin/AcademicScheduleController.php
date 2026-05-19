@@ -6178,6 +6178,18 @@ class AcademicScheduleController extends Controller
         }
 
         foreach ($rows as &$row) {
+            // Bitta slot ichidagi guruhlar guruh nomi bo'yicha o'sish tartibida
+            // (d1/d25-01a → d1/d25-01b → d1/d25-02a, ...). natcmp raqamli qismni
+            // to'g'ri tartiblaydi; teng nomlar uchun fan va urinish — barqaror
+            // ikkilamchi mezon.
+            usort($row['groups'], function ($a, $b) {
+                $cmp = strnatcmp((string) ($a['group_name'] ?? ''), (string) ($b['group_name'] ?? ''));
+                if ($cmp !== 0) return $cmp;
+                $cmp = strnatcmp((string) ($a['subject_name'] ?? ''), (string) ($b['subject_name'] ?? ''));
+                if ($cmp !== 0) return $cmp;
+                return ((int) ($a['attempt'] ?? 1)) <=> ((int) ($b['attempt'] ?? 1));
+            });
+
             $occupied = 0;
             $submitted = 0;
             $remaining = 0;

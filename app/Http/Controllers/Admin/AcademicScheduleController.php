@@ -4108,7 +4108,34 @@ class AcademicScheduleController extends Controller
             $cw2 = [420, 5000, 1100, 700, 500]; // 2-up per side
             $cwSep = 350;
 
-            foreach ($slotGroups as $slotTime => $slotSubjects) {
+            // Fan variantlarini (a)/(b)/(c) suffiks bo'yicha BIRLASHTIRISH
+            // uchun helper. Misol: "Ichki kasalliklar propedevtikasi (a)" va
+            // "...(b)" bir fanga (kategoriya nomi) yig'iladi.
+            $normalizeSubjectName = function (string $name): string {
+                $n = preg_replace('/\s*\([a-zA-Zа-яА-Я]\)\s*$/u', '', (string) $name);
+                return trim((string) $n);
+            };
+
+            foreach ($slotGroups as $slotTime => $slotSubjectsRaw) {
+                // Slot ichida fanlarni normalize qilingan nom bo'yicha
+                // birlashtirish (a/b/c variantlari bir fanga jamlanadi,
+                // entries to'plami umumlashtiriladi).
+                $slotSubjects = [];
+                foreach ($slotSubjectsRaw as $sk => $sd) {
+                    $rawName = $sd['subject']->subject_name ?? '';
+                    $normName = $normalizeSubjectName($rawName) ?: $rawName;
+                    if (!isset($slotSubjects[$normName])) {
+                        $sd['display_name'] = $normName;
+                        $slotSubjects[$normName] = $sd;
+                    } else {
+                        $slotSubjects[$normName]['entries'] = array_merge(
+                            $slotSubjects[$normName]['entries'],
+                            $sd['entries']
+                        );
+                    }
+                }
+                ksort($slotSubjects);
+
                 $slotTotal = 0;
                 foreach ($slotSubjects as $sd) {
                     foreach ($sd['entries'] as $e) {
@@ -4134,9 +4161,10 @@ class AcademicScheduleController extends Controller
                 foreach ($slotSubjects as $sk => $subjectData) {
                     $subjIdx++;
                     $subj = $subjectData['subject'];
+                    $displayName = $subjectData['display_name'] ?? ($subj->subject_name ?? '');
 
                     $section->addText(
-                        $subj->subject_name ?? '',
+                        $displayName,
                         ['bold' => true, 'size' => 11],
                         ['alignment' => Jc::CENTER, 'spaceBefore' => $subjIdx > 1 ? 120 : 30, 'spaceAfter' => 30, 'spacing' => 280, 'spacingLineRule' => 'exact']
                     );
@@ -4186,7 +4214,10 @@ class AcademicScheduleController extends Controller
                         usort($lst, fn($a, $b) => strcmp((string) $a['student']->student_name, (string) $b['student']->student_name));
                     }
                     unset($lst);
-                    ksort($byGroup);
+                    // Guruhlarni tabiiy (natural) tartibda saralash —
+                    // d1/22-01a → 01b → 02a → 10a (sof alfabetda 10a 1a'dan
+                    // oldin chiqib qolardi).
+                    uksort($byGroup, 'strnatcmp');
 
                     $sectionExamTime = $slotTime ?: $examTime;
 

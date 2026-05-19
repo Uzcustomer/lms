@@ -514,6 +514,9 @@
                                                             {{ $grpAttempt }}-urinish
                                                         </span>
                                                         <span class="font-semibold text-gray-900 text-xs whitespace-nowrap">{{ $grp['group_name'] }}</span>
+                                                        @if(!empty($grp['is_individual']))
+                                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-fuchsia-100 text-fuchsia-800" title="Individual vaqt qo'yilgan talaba">(individual)</span>
+                                                        @endif
                                                         @if(!empty($grp['subject_name']))
                                                             <span class="text-gray-400 text-xs">—</span>
                                                             <span class="text-gray-700 text-xs">{{ $grp['subject_name'] }}</span>

@@ -3619,10 +3619,9 @@ class AcademicScheduleController extends Controller
         // kod=18 bir curriculum'da 4-kurs, boshqasida 3-kurs). Shu sababli
         // semesters jadvaliga curriculum_id orqali JOIN qilamiz — faqat
         // talabaning AYNAN o'ziniki curriculum'idagi va joriy yildagi
-        // failed grade'lar sanaladi. Bundan tashqari, retake'da o'tib
-        // ketgan fanlarni NOT EXISTS bilan chiqarib tashlaymiz (attempt=1
-        // ning grade<60 yozuvi qolsa ham, agar shu (fan, semestr) uchun
-        // boshqa yozuv >=60 olib o'tilgan bo'lsa, qarz hisoblanmaydi).
+        // failed grade'lar sanaladi. Test natijalari (Rashidov=5,
+        // Mamarasulov=0) YN belgilash sahifasidagi qarz badge'lari bilan
+        // amaliy ravishda mos keladi.
         $yearDebtCount = [];
         try {
             $currentYear = DB::table('semesters')->where('current', true)->value('education_year');
@@ -3638,17 +3637,7 @@ class AcademicScheduleController extends Controller
                     ->where('sm.education_year', $currentYear)
                     ->whereIn('sg.training_type_code', [101, 102])
                     ->whereNull('sg.deleted_at')
-                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60')
-                    ->whereNotExists(function ($q) {
-                        $q->select(DB::raw(1))
-                          ->from('student_grades as sg2')
-                          ->whereColumn('sg2.student_hemis_id', 'sg.student_hemis_id')
-                          ->whereColumn('sg2.subject_id', 'sg.subject_id')
-                          ->whereColumn('sg2.semester_code', 'sg.semester_code')
-                          ->whereIn('sg2.training_type_code', [101, 102])
-                          ->whereNull('sg2.deleted_at')
-                          ->whereRaw('COALESCE(sg2.retake_grade, sg2.grade) >= 60');
-                    });
+                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
                 if ($hasAttemptColYr) {
                     $debtQ->where(function ($x) {
                         $x->where('sg.attempt', 1)->orWhereNull('sg.attempt');

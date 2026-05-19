@@ -4002,11 +4002,13 @@ class AcademicScheduleController extends Controller
             $phpWord = new PhpWord();
             $phpWord->setDefaultFontName('Times New Roman');
             $phpWord->setDefaultFontSize(10);
-            // Default paragraph style — interval 0/0, single line spacing.
+            // Default paragraph style: interval do/posle = 0,
+            // mezhdustrochnyy = Tochno 14 pt (spacing=14pt*20twips=280).
             $phpWord->setDefaultParagraphStyle([
                 'spaceBefore' => 0,
                 'spaceAfter' => 0,
-                'lineHeight' => 1.0,
+                'spacing' => 280,
+                'spacingLineRule' => 'exact',
             ]);
 
             $tStyle = ['borderSize' => 6, 'borderColor' => '000000', 'cellMargin' => 30, 'alignment' => 'center'];
@@ -4026,8 +4028,10 @@ class AcademicScheduleController extends Controller
                 'borderTopColor' => 'FFFFFF', 'borderBottomColor' => 'FFFFFF',
                 'borderLeftColor' => 'FFFFFF', 'borderRightColor' => 'FFFFFF',
             ];
-            $cCtr = ['alignment' => Jc::CENTER, 'spaceBefore' => 0, 'spaceAfter' => 0, 'lineHeight' => 1.0];
-            $cLeft = ['alignment' => Jc::START, 'spaceBefore' => 0, 'spaceAfter' => 0, 'lineHeight' => 1.0];
+            // Jadval ichidagi paragraf — interval 0/0, Tochno 14pt.
+            $pPara = ['spaceBefore' => 0, 'spaceAfter' => 0, 'spacing' => 280, 'spacingLineRule' => 'exact'];
+            $cCtr = array_merge(['alignment' => Jc::CENTER], $pPara);
+            $cLeft = array_merge(['alignment' => Jc::START], $pPara);
 
             // Sahifa kengligiga moslangan ustun kengliklari.
             // Landscape A4 ≈ 16838 twips. Margin chap+o'ng = 700+500=1200.
@@ -4058,7 +4062,7 @@ class AcademicScheduleController extends Controller
                 $section->addText(
                     trim($headLine),
                     ['bold' => true, 'size' => 13],
-                    ['alignment' => Jc::CENTER, 'spaceBefore' => 0, 'spaceAfter' => 60, 'lineHeight' => 1.0]
+                    ['alignment' => Jc::CENTER, 'spaceBefore' => 0, 'spaceAfter' => 60, 'spacing' => 280, 'spacingLineRule' => 'exact']
                 );
 
                 $subjIdx = 0;
@@ -4069,7 +4073,7 @@ class AcademicScheduleController extends Controller
                     $section->addText(
                         $subj->subject_name ?? '',
                         ['bold' => true, 'size' => 11],
-                        ['alignment' => Jc::CENTER, 'spaceBefore' => $subjIdx > 1 ? 120 : 30, 'spaceAfter' => 30, 'lineHeight' => 1.0]
+                        ['alignment' => Jc::CENTER, 'spaceBefore' => $subjIdx > 1 ? 120 : 30, 'spaceAfter' => 30, 'spacing' => 280, 'spacingLineRule' => 'exact']
                     );
 
                     $table = $section->addTable('BkSlotTable');

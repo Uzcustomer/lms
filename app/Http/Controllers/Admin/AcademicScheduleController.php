@@ -6800,22 +6800,25 @@ class AcademicScheduleController extends Controller
             ];
         }
 
-        // Tartib: avval test topshirayotganlar, keyin "Kiring" (vaqti yetdi),
-        // keyin "ochilgan" (komp № ko'rindi, kutyapti), oxirida "kutmoqda"
-        // (komp № hali yashirin). Har guruh ichida planned_time bo'yicha
-        // o'sib, oxiri komp № yoki ism bo'yicha barqaror tartib.
+        // Tartib bandlik ko'rsatkichi bilan bir xil:
+        //   1. planned_time (vaqt) — bandlik slotlar bilan bir xil
+        //   2. group_name natural (d1/22-01a → 01b → 02a, ...)
+        //   3. subject_name (bir guruh bir necha fanli bo'lsa)
+        //   4. attempt (1-, 2-, 3-urinish tartibida)
+        //   5. talaba ismi (har guruh ichida alphabetical)
+        // Status (in_progress/imminent/near/waiting) endi tartibga emas, faqat
+        // ko'rsatuvga ta'sir qiladi (kartochka pulse + badge).
         usort($items, function ($a, $b) {
-            $rank = ['in_progress' => 0, 'imminent' => 1, 'near' => 2, 'waiting' => 3];
-            $ra = $rank[$a['status']] ?? 9;
-            $rb = $rank[$b['status']] ?? 9;
-            if ($ra !== $rb) return $ra <=> $rb;
             if ($a['planned_time'] !== $b['planned_time']) {
                 return strcmp($a['planned_time'], $b['planned_time']);
             }
-            if ($a['computer_number'] !== null && $b['computer_number'] !== null) {
-                return $a['computer_number'] <=> $b['computer_number'];
-            }
-            return strcmp($a['short_name'], $b['short_name']);
+            $cmp = strnatcmp((string) ($a['group_name'] ?? ''), (string) ($b['group_name'] ?? ''));
+            if ($cmp !== 0) return $cmp;
+            $cmp = strnatcmp((string) ($a['subject_name'] ?? ''), (string) ($b['subject_name'] ?? ''));
+            if ($cmp !== 0) return $cmp;
+            $cmp = ((int) ($a['attempt'] ?? 1)) <=> ((int) ($b['attempt'] ?? 1));
+            if ($cmp !== 0) return $cmp;
+            return strcmp((string) ($a['short_name'] ?? ''), (string) ($b['short_name'] ?? ''));
         });
 
         return response()

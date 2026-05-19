@@ -3699,31 +3699,39 @@ class AcademicScheduleController extends Controller
                     fn($s) => (string) ($s['hemis_id'] ?? '') === $itemStudentHemisId
                 ));
             } elseif ($itemAttempt >= 2) {
+                // 2/3-urinish uchun faqat haqiqatdan qayta topshirishga
+                // muhtoj (failed_attempt[N]) talabalarni qoldiramiz —
+                // YN belgilash sahifasidagi sub-row mantig'i bilan bir xil.
+                // Per-student override (ekam_schedules.student_hemis_id) li
+                // talabalarni guruh-level ro'yxatdan chiqarib tashlamaymiz —
+                // foydalanuvchi xohlovi: "kiradiganlar ro'yxati bo'lsin",
+                // hatto talabaga individual sana qo'yilgan bo'lsa ham u
+                // guruh slotidagi Word'da chiqishi kerak.
                 $enrichedStudents = $this->filterStudentsForAttempt($enrichedStudents, $itemAttempt);
+            }
 
-                // Per-student override'lar: bu (guruh+fan+semestr) uchun
-                // alohida ExamSchedule qatori bor talabalar — guruh-level
-                // ro'yxatdan chiqariladi (ular alohida chiqadi yoki vaqtsiz
-                // qolgan). Bandlik $eligibleCount mantig'i bilan bir xil.
-                $overriddenHemisIds = DB::table('exam_schedules')
-                    ->where('group_hemis_id', $group->group_hemis_id)
-                    ->where('subject_id', $subject->subject_id)
-                    ->where('semester_code', $semesterCode)
-                    ->whereNotNull('student_hemis_id')
-                    ->pluck('student_hemis_id')
-                    ->map(fn($v) => (string) $v)
-                    ->all();
-                if (!empty($overriddenHemisIds)) {
-                    $ovSet = array_flip($overriddenHemisIds);
-                    $enrichedStudents = array_values(array_filter(
-                        $enrichedStudents,
-                        fn($s) => !isset($ovSet[(string) ($s['hemis_id'] ?? '')])
-                    ));
+            // Kursdan qoldirilgan (4+ qarz) yoki YN ga ruxsat yo'q (X)
+            // talabalarni ro'yxatdan chiqarib tashlaymiz — Word faqat
+            // "kiradiganlar"ni ko'rsatadi (Ruxsat yoki Shartli).
+            // 4+ qarz uchun 3 manbadan tekshiriladi (yuqaridagi
+            // students mapping bilan bir xil), JN/MT/davomat sabab "X"
+            // bo'lganlar admission_status orqali aniqlanadi.
+            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($yearDebtCount) {
+                $hemisId = (string) ($row['hemis_id'] ?? '');
+                $debtCount = count($row['past_debts'] ?? []) + count($row['current_semester_debts'] ?? []);
+                $yearCnt = $yearDebtCount[$hemisId] ?? 0;
+                $isHeldBack = !empty($row['is_held_back']) || $debtCount >= 4 || $yearCnt >= 4;
+                if ($isHeldBack) return false;
+                // admission_status === 'X' (JN/MT/davomat past) — YN'ga
+                // ruxsat yo'q, ro'yxatga kiritmaymiz.
+                if (($row['admission_status'] ?? null) === \App\Services\YnAdmissionService::STATUS_X) {
+                    return false;
                 }
+                return true;
+            }));
 
-                if (empty($enrichedStudents)) {
-                    continue;
-                }
+            if (empty($enrichedStudents)) {
+                continue;
             }
 
             // JN/MT ni jurnal "ixcham" tabi bilan bir xil mantiqda jonli hisoblash
@@ -3736,25 +3744,17 @@ class AcademicScheduleController extends Controller
 
             // Enriched arraylarni eski kod kutgan stdClass shaklga o'tkazamiz
             // — Word jadvalini quruvchi kod $student->jn / $student->mt /
-            // $student->student_name kabi property'larga tayanadi.
-            // 4+ qarz tekshiruvi 3 manbadan: is_held_back bayrog'i (agar
-            // attachStudentsToSchedule to'g'ri hisoblay olsa), past_debts +
-            // current_semester_debts (test-center.blade.php fallback'i), va
-            // yearDebtCount (yuqorida SQL bilan butun yil bo'yi sanagan).
-            // Yetarli — qaysi biri 4+ ni topsa, talaba "X" ga o'tadi.
-            $students = collect($enrichedStudents)->map(function ($row) use ($liveGrades, $yearDebtCount) {
+            // $student->student_name kabi property'larga tayanadi. "Kirmaydigan"
+            // talabalar (held_back/X) yuqorida allaqachon filterlangan,
+            // shuning uchun bu yerda admission_status faqat Ruxsat/Shartli.
+            $students = collect($enrichedStudents)->map(function ($row) use ($liveGrades) {
                 $hemisId = (string) ($row['hemis_id'] ?? '');
-                $pastDebts = $row['past_debts'] ?? [];
-                $currentDebts = $row['current_semester_debts'] ?? [];
-                $debtCount = count($pastDebts) + count($currentDebts);
-                $yearCnt = $yearDebtCount[$hemisId] ?? 0;
                 $obj = new \stdClass();
                 $obj->hemis_id = $row['hemis_id'] ?? null;
                 $obj->student_name = $row['full_name'] ?? '';
                 $obj->student_id = $row['student_id_number'] ?? '';
                 $obj->jn = $liveGrades[$hemisId]['jn'] ?? 0;
                 $obj->mt = $liveGrades[$hemisId]['mt'] ?? 0;
-                $obj->is_held_back = !empty($row['is_held_back']) || $debtCount >= 4 || $yearCnt >= 4;
                 $obj->admission_status = $row['admission_status'] ?? null;
                 return $obj;
             })->sortBy('student_name')->values();
@@ -4263,13 +4263,10 @@ class AcademicScheduleController extends Controller
                     if ($contractFailed && $holat === 'Ruxsat') {
                         $holat = 'Shartli';
                     }
-                    // 4+ fandan qarz → kursdan qoldirilgan, YN ga ruxsat yo'q.
-                    // Test-center "talabalarni ko'rsatish" sahifasidagi 4 tadan
-                    // ortiq qarz bayrog'i bilan bir xil mantiq — bu bayroq boshqa
-                    // shartlardan ustun va Shartli/Ruxsat ni X ga aylantiradi.
-                    if (!empty($student->is_held_back)) {
-                        $holat = 'X';
-                    }
+                    // Eslatma: 4+ qarzdor va admission_status=X talabalar
+                    // ro'yxatga olishdan oldin yuqorida filterlangan, shuning
+                    // uchun bu yerda "X" override'i kerak emas — Word faqat
+                    // Ruxsat / Shartli statusli talabalarni ko'rsatadi.
 
                     $dataRow = $table->addRow();
                     $dataRow->addCell(500)->addText($rowNum, $cellFont, $cellCenter);

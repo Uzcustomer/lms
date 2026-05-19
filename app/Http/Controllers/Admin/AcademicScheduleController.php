@@ -3645,7 +3645,7 @@ class AcademicScheduleController extends Controller
                 // JIT tick job processReveal'i reveal_at <= now bo'lganda
                 // Telegram yuboradi. Pinned qator shu loop'ga tushishi uchun
                 // reveal_at'ni planned_start dan jit_minutes oldin o'rnatamiz.
-                $jitMinutesBefore = max(1, (int) config('services.moodle.jit_assign_minutes_before', 5));
+                $jitMinutesBefore = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
                 foreach ($subjectGroups as $sg) {
                     $slot = $multiSlotMode ? ($sg['slot_time'] ?? '') : ($examTime ?? '');
                     if (empty($slot)) continue;

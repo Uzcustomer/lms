@@ -56,7 +56,7 @@ class ExamScheduleTickJob implements ShouldQueue
 
     private function processJitAssignment(Carbon $now, AutoAssignService $autoAssign, ExamNotificationService $notifier): void
     {
-        $jitMinutes = max(1, (int) config('services.moodle.jit_assign_minutes_before', 5));
+        $jitMinutes = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
 
         $pending = ComputerAssignment::query()
             ->whereNull('computer_number')

@@ -4918,7 +4918,9 @@ class AcademicScheduleController extends Controller
             ];
 
             $concurrent = ExamCapacityService::concurrentStudentsForSlot($relatedDateStr, $newTime, $exclude);
-            $thisGroupCount = ExamCapacityService::groupStudentCount($request->group_hemis_id);
+            // Joriy yozuv uchun real talabalar soni — 2/3-urinish bo'lsa faqat
+            // yiqilganlar (butun guruh emas), per-student override bo'lsa 1.
+            $thisGroupCount = ExamCapacityService::effectiveStudentCountForSchedule($examSchedule, $attempt);
             $totalAtSlot = $concurrent + $thisGroupCount;
 
             if ($totalAtSlot > $computerCount) {

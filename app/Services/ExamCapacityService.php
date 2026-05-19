@@ -7,6 +7,9 @@ use App\Models\ExamSchedule;
 use App\Models\Setting;
 use App\Models\Student;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Test markazi sig'imi va vaqt-ust-ust tushish (overlap) tekshirish.
@@ -254,6 +257,10 @@ class ExamCapacityService
     /**
      * Vaqt-ust-ust tushish: ($date, $time) da $duration daqiqa davomida boshqa
      * belgilangan YN lar bilan bir vaqtda ishlaydigan talabalar yig'indisi.
+     *
+     * 2/3-urinish (resit) qatorlari uchun butun guruh emas, faqat haqiqatda
+     * imtihon topshiradigan talabalar (yiqilganlar) hisoblanadi —
+     * bandlikKursatkichi dashboard'idagi mantiq bilan bir xil.
      */
     public static function concurrentStudentsForSlot(string $date, string $time, ?array $exclude = null): int
     {
@@ -261,15 +268,7 @@ class ExamCapacityService
         $start = Carbon::parse($date . ' ' . substr($time, 0, 5));
         $end = $start->copy()->addMinutes($duration);
 
-        // Har bir YN turi va urinish bo'yicha tegishli sana/vaqt ustunlari
-        $slots = [
-            ['yn' => 'oski', 'attempt' => 1, 'date_col' => 'oski_date',         'time_col' => 'oski_time',         'check_na' => true],
-            ['yn' => 'oski', 'attempt' => 2, 'date_col' => 'oski_resit_date',   'time_col' => 'oski_resit_time',   'check_na' => false],
-            ['yn' => 'oski', 'attempt' => 3, 'date_col' => 'oski_resit2_date',  'time_col' => 'oski_resit2_time',  'check_na' => false],
-            ['yn' => 'test', 'attempt' => 1, 'date_col' => 'test_date',         'time_col' => 'test_time',         'check_na' => true],
-            ['yn' => 'test', 'attempt' => 2, 'date_col' => 'test_resit_date',   'time_col' => 'test_resit_time',   'check_na' => false],
-            ['yn' => 'test', 'attempt' => 3, 'date_col' => 'test_resit2_date',  'time_col' => 'test_resit2_time',  'check_na' => false],
-        ];
+        $slots = self::attemptSlots();
 
         $rows = ExamSchedule::query()
             ->where(function ($q) use ($date, $slots) {
@@ -285,9 +284,11 @@ class ExamCapacityService
             })
             ->get();
 
-        $groupCounts = self::collectGroupCounts($rows->pluck('group_hemis_id')->unique()->all());
-
-        $total = 0;
+        // Shu sanada uchraydigan (row, slot) juftliklarini yig'amiz — per-student
+        // offset hisobi butun kun bo'yicha qilinadi, vaqtdan qat'iy nazar.
+        $entriesOnDate = [];
+        $groupIds = [];
+        $resitTriples = [];
         foreach ($rows as $row) {
             foreach ($slots as $slot) {
                 $rowDate = $row->{$slot['date_col']};
@@ -298,18 +299,181 @@ class ExamCapacityService
                 if ($slot['check_na'] && $row->{$slot['yn'] . '_na'}) {
                     continue;
                 }
-                if (self::isExcluded($row, $slot['yn'], $exclude, $slot['attempt'])) {
-                    continue;
-                }
-                $rowStart = Carbon::parse($date . ' ' . substr((string) $rowTime, 0, 5));
-                $rowEnd = $rowStart->copy()->addMinutes($duration);
-                if ($rowStart->lt($end) && $rowEnd->gt($start)) {
-                    $total += $groupCounts[$row->group_hemis_id] ?? 0;
+                $entriesOnDate[] = ['row' => $row, 'slot' => $slot];
+                $groupIds[$row->group_hemis_id] = true;
+                if ($slot['attempt'] >= 2 && empty($row->student_hemis_id)
+                    && $row->subject_id && $row->semester_code) {
+                    $k = $row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code;
+                    $resitTriples[$k] = [
+                        'group_hemis_id' => $row->group_hemis_id,
+                        'subject_id' => $row->subject_id,
+                        'semester_code' => $row->semester_code,
+                    ];
                 }
             }
         }
 
+        $groupCounts = self::collectGroupCounts(array_keys($groupIds));
+        $resitMap = self::resitEligibleCounts(array_values($resitTriples));
+
+        // Per-(group, subject, sem, attempt) bo'yicha shu sana ichidagi per-student
+        // qatorlar soni — group-level qator hisobida ikki marta sanab ketmaslik
+        // uchun (xuddi bandlikKursatkichiShow'dagi kabi).
+        $perStudentOffsets = [];
+        foreach ($entriesOnDate as $entry) {
+            $r = $entry['row'];
+            if (!empty($r->student_hemis_id)) {
+                $k = $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code
+                    . '|' . $entry['slot']['attempt'];
+                $perStudentOffsets[$k] = ($perStudentOffsets[$k] ?? 0) + 1;
+            }
+        }
+
+        $total = 0;
+        foreach ($entriesOnDate as $entry) {
+            $row = $entry['row'];
+            $slot = $entry['slot'];
+            if (self::isExcluded($row, $slot['yn'], $exclude, $slot['attempt'])) {
+                continue;
+            }
+            $rowTime = $row->{$slot['time_col']};
+            $rowStart = Carbon::parse($date . ' ' . substr((string) $rowTime, 0, 5));
+            $rowEnd = $rowStart->copy()->addMinutes($duration);
+            if (!($rowStart->lt($end) && $rowEnd->gt($start))) {
+                continue;
+            }
+            $total += self::effectiveCountForRow(
+                $row, $slot['attempt'], $groupCounts, $resitMap, $perStudentOffsets
+            );
+        }
+
         return $total;
+    }
+
+    /**
+     * Bitta ExamSchedule qatori uchun joriy vaqtda haqiqiy talabalar soni.
+     * Per-student override → 1, 1-urinish → butun guruh, 2/3-urinish → faqat
+     * yiqilganlar (per-student override'larsiz).
+     */
+    public static function effectiveStudentCountForSchedule(ExamSchedule $schedule, int $attempt): int
+    {
+        if (!empty($schedule->student_hemis_id)) {
+            return 1;
+        }
+        if ($attempt <= 1) {
+            return self::groupStudentCount($schedule->group_hemis_id);
+        }
+        if (!$schedule->subject_id || !$schedule->semester_code) {
+            return 0;
+        }
+        $map = self::resitEligibleCounts([[
+            'group_hemis_id' => $schedule->group_hemis_id,
+            'subject_id' => $schedule->subject_id,
+            'semester_code' => $schedule->semester_code,
+        ]]);
+        $key = $schedule->group_hemis_id . '|' . $schedule->subject_id . '|' . $schedule->semester_code;
+        return (int) ($map[$key] ?? 0);
+    }
+
+    /**
+     * Berilgan (group, subject, semester) triples bo'yicha 2/3-urinishga
+     * loyiq talabalar (yiqilganlar) sonini batch DB so'rovi bilan hisoblaydi.
+     *
+     * @param  array<int,array{group_hemis_id:string, subject_id:int|string, semester_code:int|string}>  $triples
+     * @return array<string,int>  Kalit: "{group_hemis_id}|{subject_id}|{semester_code}"
+     */
+    public static function resitEligibleCounts(array $triples): array
+    {
+        if (empty($triples)) {
+            return [];
+        }
+        $groupIds = array_values(array_unique(array_column($triples, 'group_hemis_id')));
+        $subjectIds = array_values(array_unique(array_column($triples, 'subject_id')));
+        $semCodes = array_values(array_unique(array_column($triples, 'semester_code')));
+        if (!$groupIds || !$subjectIds || !$semCodes) {
+            return [];
+        }
+
+        $allowed = [];
+        foreach ($triples as $t) {
+            $allowed[$t['group_hemis_id'] . '|' . $t['subject_id'] . '|' . $t['semester_code']] = true;
+        }
+
+        try {
+            $hasAttemptCol = Schema::hasColumn('student_grades', 'attempt');
+            $query = DB::table('student_grades as sg')
+                ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                ->whereIn('st.group_id', $groupIds)
+                ->where('st.student_status_code', 11)
+                ->whereIn('sg.subject_id', $subjectIds)
+                ->whereIn('sg.semester_code', $semCodes)
+                ->whereIn('sg.training_type_code', [101, 102])
+                ->whereNull('sg.deleted_at');
+            if ($hasAttemptCol) {
+                $query->where(function ($w) {
+                    $w->where('sg.attempt', '>=', 2)
+                      ->orWhere(function ($x) {
+                          $x->where(function ($y) { $y->where('sg.attempt', 1)->orWhereNull('sg.attempt'); })
+                            ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                      });
+                });
+            } else {
+                $query->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+            }
+            $rows = $query
+                ->select('st.group_id', 'sg.subject_id', 'sg.semester_code',
+                    DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
+                ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
+                ->get();
+
+            $map = [];
+            foreach ($rows as $r) {
+                $k = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                if (isset($allowed[$k])) {
+                    $map[$k] = (int) $r->cnt;
+                }
+            }
+            return $map;
+        } catch (\Throwable $e) {
+            Log::warning('ExamCapacityService::resitEligibleCounts failed: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Har bir YN turi va urinish bo'yicha tegishli sana/vaqt ustunlari.
+     *
+     * @return array<int,array{yn:string, attempt:int, date_col:string, time_col:string, check_na:bool}>
+     */
+    private static function attemptSlots(): array
+    {
+        return [
+            ['yn' => 'oski', 'attempt' => 1, 'date_col' => 'oski_date',         'time_col' => 'oski_time',         'check_na' => true],
+            ['yn' => 'oski', 'attempt' => 2, 'date_col' => 'oski_resit_date',   'time_col' => 'oski_resit_time',   'check_na' => false],
+            ['yn' => 'oski', 'attempt' => 3, 'date_col' => 'oski_resit2_date',  'time_col' => 'oski_resit2_time',  'check_na' => false],
+            ['yn' => 'test', 'attempt' => 1, 'date_col' => 'test_date',         'time_col' => 'test_time',         'check_na' => true],
+            ['yn' => 'test', 'attempt' => 2, 'date_col' => 'test_resit_date',   'time_col' => 'test_resit_time',   'check_na' => false],
+            ['yn' => 'test', 'attempt' => 3, 'date_col' => 'test_resit2_date',  'time_col' => 'test_resit2_time',  'check_na' => false],
+        ];
+    }
+
+    private static function effectiveCountForRow(
+        ExamSchedule $row,
+        int $attempt,
+        array $groupCounts,
+        array $resitMap,
+        array $perStudentOffsets
+    ): int {
+        if (!empty($row->student_hemis_id)) {
+            return 1;
+        }
+        if ($attempt <= 1) {
+            return (int) ($groupCounts[$row->group_hemis_id] ?? 0);
+        }
+        $key = $row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code;
+        $totalRetakers = (int) ($resitMap[$key] ?? 0);
+        $offset = (int) ($perStudentOffsets[$key . '|' . $attempt] ?? 0);
+        return max(0, $totalRetakers - $offset);
     }
 
     private static function collectGroupCounts(array $groupIds): array

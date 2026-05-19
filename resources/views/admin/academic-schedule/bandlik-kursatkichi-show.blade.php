@@ -462,6 +462,8 @@
                                                             'group_hemis_id' => (string) $_grp['group_hemis_id'],
                                                             'subject_id'     => (string) $_grp['subject_id'],
                                                             'semester_code'  => (string) $_grp['semester_code'],
+                                                            'attempt'        => (int) ($_grp['attempt'] ?? 1),
+                                                            'student_hemis_id' => !empty($_grp['student_hemis_id']) ? (string) $_grp['student_hemis_id'] : null,
                                                         ];
                                                     }
                                                 @endphp

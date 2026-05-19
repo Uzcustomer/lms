@@ -3360,6 +3360,11 @@ class AcademicScheduleController extends Controller
             'items.*.group_hemis_id' => 'required|string',
             'items.*.semester_code' => 'required|string',
             'items.*.subject_id' => 'required|string',
+            // 2-/3-urinish (resit) bo'lsa butun guruh emas, faqat yiqilganlar
+            // chiqishi uchun urinish raqami va (per-student qator bo'lsa)
+            // bitta talabaning hemis_id'si yuboriladi.
+            'items.*.attempt' => 'nullable|integer|min:1|max:3',
+            'items.*.student_hemis_id' => 'nullable|string',
             // Bandlik ko'rsatkichidan chaqirilganda: imzo bloki va QR'siz "ish ro'yxati"
             // varianti + slotning kirish sana/vaqti yuqorida ko'rsatiladi.
             'compact' => 'nullable|boolean',
@@ -3407,12 +3412,61 @@ class AcademicScheduleController extends Controller
 
             if (!$subject) continue;
 
-            // Talabalarni olish
-            $students = Student::select('id', 'full_name as student_name', 'student_id_number as student_id', 'hemis_id')
+            $itemAttempt = (int) ($itemData['attempt'] ?? 1);
+            $itemStudentHemisId = !empty($itemData['student_hemis_id'])
+                ? (string) $itemData['student_hemis_id']
+                : null;
+
+            // Talabalarni olish:
+            //  - Per-student qator (student_hemis_id berilgan) — faqat shu 1 talaba.
+            //  - 2-/3-urinish va per-student emas — faqat yiqilgan/qayta topshirish
+            //    huquqi bor talabalar (student_grades'dan). bandlikKursatkichiShow
+            //    ichidagi $resitEligibleMap mantiqi bilan bir xil.
+            //  - 1-urinish va per-student emas — butun guruh (eski xulq).
+            $studentsQuery = Student::select(
+                'id',
+                'full_name as student_name',
+                'student_id_number as student_id',
+                'hemis_id'
+            )
                 ->where('group_id', $group->group_hemis_id)
-                ->groupBy('id')
-                ->orderBy('full_name')
-                ->get();
+                ->orderBy('full_name');
+
+            if ($itemStudentHemisId !== null) {
+                $studentsQuery->where('hemis_id', $itemStudentHemisId);
+            } elseif ($itemAttempt >= 2) {
+                $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+                $eligibleHemisIds = DB::table('student_grades as sg')
+                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                    ->where('st.group_id', $group->group_hemis_id)
+                    ->where('st.student_status_code', 11)
+                    ->where('sg.subject_id', $subject->subject_id)
+                    ->where('sg.semester_code', $semesterCode)
+                    ->whereIn('sg.training_type_code', [101, 102])
+                    ->whereNull('sg.deleted_at')
+                    ->when($hasAttemptCol, function ($q) {
+                        $q->where(function ($w) {
+                            $w->where('sg.attempt', '>=', 2)
+                              ->orWhere(function ($x) {
+                                  $x->where(function ($y) {
+                                      $y->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                                  })->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                              });
+                        });
+                    }, function ($q) {
+                        $q->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                    })
+                    ->distinct()
+                    ->pluck('sg.student_hemis_id')
+                    ->all();
+
+                if (empty($eligibleHemisIds)) {
+                    continue;
+                }
+                $studentsQuery->whereIn('hemis_id', $eligibleHemisIds);
+            }
+
+            $students = $studentsQuery->groupBy('id')->get();
 
             // JN/MT ni jurnal "ixcham" tabi bilan bir xil mantiqda jonli hisoblash
             // (snapshot ishlatilmaydi; retake-priority qoidasi va NB=0 mantiqi qo'llaniladi).
@@ -4405,20 +4459,31 @@ class AcademicScheduleController extends Controller
         // sig'adi), so'ng 3-urinish. Aks holda kichik guruhlar bo'sh slotlarni
         // band qiladi va katta resit'larga joy qolmaydi.
         //
-        // Resit pass'larida candidate'larni kattalikka qarab kamayish tartibida
-        // saralaymiz — first-fit ham FFD (first-fit decreasing) ga aylanadi,
-        // bu klassik bin-packing approximation.
-        // FFD (First-Fit Decreasing) — har attempt uchun candidate'lar haqiqiy
-        // talaba soni bo'yicha kamayish tartibida saralanadi. 1-urinishda
-        // guruh ATOMIK joylashtirilgani uchun (bo'linmaydi), katta guruhlar
-        // avval ketishi bilan slotlar tahlikali fragmentlangan bo'shliqlar
-        // qoldirmaydi. 2-/3-urinishda esa katta resit'lar avval, kichik
-        // resit'lar oxirida — natijada kichiklari qolgan kichik bo'shliqlarga
-        // ehtiyot qilib joylashadi.
+        // Candidate tartibi: avval klaster (fakultet → yo'nalish → kurs/semestr
+        // → fan) bo'yicha ketma-ket — bir xil fakultet/yo'nalish/kurs/fan'dagi
+        // yozuvlar qator slotlarga tushadi, shunda bir kafedraning shu kursga
+        // mo'ljallangan barcha imtihonlari yaqin vaqtlarda bo'ladi. Slot tanlash
+        // bosqichida esa best-fit ishlatiladi (findSlotForCount / distribute).
+        // Klaster ichida talaba soni bo'yicha kamayish tartibi (FFD) saqlanadi:
+        // katta guruhlar avval ketsa, kichiklari qolgan kichik bo'shliqlarga
+        // toza tushadi.
         $sortedByAttempt = [];
         foreach ([1, 2, 3] as $att) {
-            $sortedByAttempt[$att] = $candidates->sortByDesc(function ($s) use ($att, $groupCountMap, $attemptNeedsMap) {
-                return $this->resolveAttemptStudentCount($s, $att, $groupCountMap, $attemptNeedsMap);
+            $sortedByAttempt[$att] = $candidates->sort(function ($a, $b) {
+                $cmp = strcmp((string) $a->department_hemis_id, (string) $b->department_hemis_id);
+                if ($cmp !== 0) return $cmp;
+                $cmp = strcmp((string) $a->specialty_hemis_id, (string) $b->specialty_hemis_id);
+                if ($cmp !== 0) return $cmp;
+                $cmp = strcmp((string) $a->semester_code, (string) $b->semester_code);
+                if ($cmp !== 0) return $cmp;
+                $cmp = strcmp((string) $a->subject_id, (string) $b->subject_id);
+                if ($cmp !== 0) return $cmp;
+                // Klaster ichida — guruh nomi bo'yicha (d1/d25-01a, d1/d25-01b,
+                // d1/d25-02a, ...). natcmp raqamli qismni to'g'ri tartiblaydi.
+                return strnatcmp(
+                    (string) (optional($a->group)->name ?? $a->group_hemis_id),
+                    (string) (optional($b->group)->name ?? $b->group_hemis_id)
+                );
             })->values();
         }
 
@@ -4574,9 +4639,33 @@ class AcademicScheduleController extends Controller
                 }
                 unset($b);
 
-                // FFD: katta bucket'lar avval (kichik bucket'lar oxirgi
-                // qolgan kichik bo'shliqlarga ehtiyot bilan tushishadi).
-                usort($buckets, fn($a, $b) => $b['count'] <=> $a['count']);
+                // Avval klaster (fakultet → yo'nalish → kurs/semestr → fan)
+                // bo'yicha ketma-ket — bir xil yo'nalish/kursning resit'lari
+                // qator vaqtlarda joylashadi. Klaster ichida guruh nomi
+                // bo'yicha (d1/d25-01a, d1/d25-01b, d1/d25-02a, ...) — natural
+                // sort raqamli qismni to'g'ri tartiblaydi.
+                usort($buckets, function ($a, $b) {
+                    $sa = $a['schedules'][0] ?? null;
+                    $sb = $b['schedules'][0] ?? null;
+                    $cmp = strcmp(
+                        (string) ($sa->department_hemis_id ?? ''),
+                        (string) ($sb->department_hemis_id ?? '')
+                    );
+                    if ($cmp !== 0) return $cmp;
+                    $cmp = strcmp(
+                        (string) ($sa->specialty_hemis_id ?? ''),
+                        (string) ($sb->specialty_hemis_id ?? '')
+                    );
+                    if ($cmp !== 0) return $cmp;
+                    $cmp = strcmp((string) $a['semester_code'], (string) $b['semester_code']);
+                    if ($cmp !== 0) return $cmp;
+                    $cmp = strcmp((string) $a['subject_id'], (string) $b['subject_id']);
+                    if ($cmp !== 0) return $cmp;
+                    return strnatcmp(
+                        (string) (optional($sa?->group)->name ?? $a['group_hemis_id']),
+                        (string) (optional($sb?->group)->name ?? $b['group_hemis_id'])
+                    );
+                });
 
                 foreach ($buckets as $b) {
                     try {

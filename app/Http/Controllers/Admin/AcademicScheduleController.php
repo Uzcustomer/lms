@@ -4603,7 +4603,14 @@ class AcademicScheduleController extends Controller
 
                     // Komp № — shu slot bo'yicha tartibli raqam (buzilganlar
                     // chetlab o'tilgan). Map yuqorida slot bo'yicha hisoblangan.
-                    $compNum = $computerNumberMap[$sectionExamTime . '|' . $student->hemis_id] ?? null;
+                    // MUHIM: Bandlik ko'rsatkichidan chaqirilganda (compact=true)
+                    // talabaga oldindan komp raqami ko'rsatilmaydi - imtihondan
+                    // 10 daqiqa oldin JIT bot Telegram orqali xabar yuboradi.
+                    // computer_assignments jadvali baribir to'ldiriladi (DB
+                    // persistence yuqorida ishlaydi), faqat Word'da chiqarmaymiz.
+                    $compNum = $compact
+                        ? null
+                        : ($computerNumberMap[$sectionExamTime . '|' . $student->hemis_id] ?? null);
                     $compCell = $dataRow->addCell(900);
                     $compCell->addText(
                         $compNum !== null ? (string) $compNum : '—',

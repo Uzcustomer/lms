@@ -3483,6 +3483,26 @@ class AcademicScheduleController extends Controller
                     ->pluck('sg.student_hemis_id')
                     ->all();
 
+                // Per-student override'lar: bu (guruh+fan+semestr) uchun
+                // alohida ExamSchedule qatori bor talabalar — guruh-level
+                // qatordan chiqarib tashlanadi (ular o'z vaqtida alohida
+                // chiqishadi yoki hali vaqtsiz qolgan bo'ladi). Bandlik
+                // ko'rsatkichidagi $eligibleCount logikasi bilan bir xil.
+                $overriddenHemisIds = DB::table('exam_schedules')
+                    ->where('group_hemis_id', $group->group_hemis_id)
+                    ->where('subject_id', $subject->subject_id)
+                    ->where('semester_code', $semesterCode)
+                    ->whereNotNull('student_hemis_id')
+                    ->pluck('student_hemis_id')
+                    ->map(fn($v) => (string) $v)
+                    ->all();
+                if (!empty($overriddenHemisIds)) {
+                    $eligibleHemisIds = array_values(array_diff(
+                        array_map('strval', $eligibleHemisIds),
+                        $overriddenHemisIds
+                    ));
+                }
+
                 if (empty($eligibleHemisIds)) {
                     continue;
                 }
@@ -3653,6 +3673,12 @@ class AcademicScheduleController extends Controller
                 // Telegram yuboradi. Pinned qator shu loop'ga tushishi uchun
                 // reveal_at'ni planned_start dan jit_minutes oldin o'rnatamiz.
                 $jitMinutesBefore = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+                // Stale cleanup uchun: har (schedule_id, yn_type, attempt) bo'yicha
+                // bu chaqiriqda kim'lar pin qilinayotganini yig'amiz. Word so'ngida
+                // shu kombinatsiyadagi boshqa "scheduled" qatorlar (avvalgi noto'g'ri
+                // generatsiyadan qolganlar) o'chiriladi.
+                $persistedKeys = []; // "schedule_id|yn_type|attempt" => [hemis_id, ...]
+
                 foreach ($subjectGroups as $sg) {
                     $slot = $multiSlotMode ? ($sg['slot_time'] ?? '') : ($examTime ?? '');
                     if (empty($slot)) continue;
@@ -3661,6 +3687,8 @@ class AcademicScheduleController extends Controller
                         $ynType = $entry['yn_type'] ?? null;
                         $attempt = (int) ($entry['attempt'] ?? 1);
                         if (!$scheduleId || !$ynType) continue;
+                        $bucketKey = $scheduleId . '|' . $ynType . '|' . $attempt;
+                        if (!isset($persistedKeys[$bucketKey])) $persistedKeys[$bucketKey] = [];
 
                         $plannedStart = \Carbon\Carbon::parse($examDate . ' ' . $slot);
                         $plannedEnd = $plannedStart->copy()->addMinutes($durationMin);
@@ -3670,6 +3698,7 @@ class AcademicScheduleController extends Controller
                             if ($compNum === null) continue;
                             $studentIdNumber = (string) ($st->student_id ?? '');
                             $hemis = (string) $st->hemis_id;
+                            $persistedKeys[$bucketKey][] = $hemis;
 
                             $existing = \App\Models\ComputerAssignment::where('exam_schedule_id', $scheduleId)
                                 ->where('yn_type', $ynType)
@@ -3712,6 +3741,20 @@ class AcademicScheduleController extends Controller
                             }
                         }
                     }
+                }
+                // Stale qatorlarni tozalash: shu Word generatsiyasida ko'rilgan
+                // har (schedule_id, yn_type, attempt) bo'yicha scheduled bo'lgan
+                // boshqa qatorlar (avvalgi noto'g'ri persistence'dan qolganlar,
+                // masalan per-student override hisobga olinmagan paytda yozilgan)
+                // o'chiriladi. in_progress/finished'larga tegmaymiz.
+                foreach ($persistedKeys as $bucketKey => $keptHemisIds) {
+                    [$scheduleId, $ynType, $attempt] = explode('|', $bucketKey);
+                    \App\Models\ComputerAssignment::where('exam_schedule_id', (int) $scheduleId)
+                        ->where('yn_type', $ynType)
+                        ->where('attempt', (int) $attempt)
+                        ->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+                        ->when(!empty($keptHemisIds), fn($q) => $q->whereNotIn('student_hemis_id', $keptHemisIds))
+                        ->delete();
                 }
             } catch (\Throwable $e) {
                 \Illuminate\Support\Facades\Log::warning('generateYnOldiWord: komp raqamini DB ga saqlashda xatolik', [
@@ -6548,6 +6591,7 @@ class AcademicScheduleController extends Controller
         $rows = DB::table('computer_assignments as ca')
             ->leftJoin('students as st', 'st.hemis_id', '=', 'ca.student_hemis_id')
             ->leftJoin('exam_schedules as es', 'es.id', '=', 'ca.exam_schedule_id')
+            ->leftJoin('groups as g', 'g.group_hemis_id', '=', 'es.group_hemis_id')
             ->whereDate('ca.planned_start', $date)
             ->where(function ($q) use ($windowEnd) {
                 $q->where('ca.status', \App\Models\ComputerAssignment::STATUS_IN_PROGRESS)
@@ -6562,7 +6606,8 @@ class AcademicScheduleController extends Controller
                 'ca.id', 'ca.computer_number', 'ca.status', 'ca.planned_start',
                 'ca.actual_start', 'ca.yn_type', 'ca.attempt',
                 'st.full_name', 'st.student_id_number',
-                'es.subject_name'
+                'es.subject_name', 'es.group_hemis_id',
+                'g.name as group_name'
             )
             ->get();
 
@@ -6595,6 +6640,7 @@ class AcademicScheduleController extends Controller
                 'computer_number' => $compNum,
                 'show_computer' => $isRevealed && $compNum !== null,
                 'short_name' => self::formatTvShortName((string) ($r->full_name ?? '')),
+                'group_name' => (string) ($r->group_name ?? $r->group_hemis_id ?? ''),
                 'subject_name' => (string) ($r->subject_name ?? ''),
                 'yn_type' => strtoupper((string) ($r->yn_type ?? '')),
                 'attempt' => (int) ($r->attempt ?? 1),

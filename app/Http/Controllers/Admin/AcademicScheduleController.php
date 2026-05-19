@@ -3478,6 +3478,61 @@ class AcademicScheduleController extends Controller
         // qoladi va TV/proctor sahifasi noto'g'ri ko'rsatadi.
         $itemBucketsSeen = []; // "schedule_id|yn_type|attempt" => true
 
+        // Talabalar ro'yxati va eligibility uchun test-center "talabalarni
+        // ko'rsatish" pipeline'i bilan bir xil mantiq: attachStudentsToSchedule
+        // joriy yilning BARCHA fanlari bo'yicha 4+ qarz (is_held_back) ni va
+        // YnAdmissionService natijasini (Ruxsat/Shartli/X) hisoblaydi.
+        // Bir martagina, BARCHA itemlar uchun batch tarzda chaqiramiz —
+        // attachStudentsToSchedule ichida og'ir extendScheduleDataWithYearSubjects
+        // va computeStudentAttemptStatuses bor, har item uchun alohida chaqirsak
+        // ko'p marta bajariladi.
+        $preCollected = []; // [groupHid|subjectId|sem => [group, subject, ...]]
+        foreach ($items as $itemData) {
+            $g = Group::where('group_hemis_id', $itemData['group_hemis_id'])->first();
+            if (!$g) continue;
+            $subj = CurriculumSubject::where('curricula_hemis_id', $g->curriculum_hemis_id)
+                ->where('subject_id', $itemData['subject_id'])
+                ->where('semester_code', $itemData['semester_code'])
+                ->first();
+            if (!$subj) continue;
+            $k = $g->group_hemis_id . '|' . $itemData['subject_id'] . '|' . $itemData['semester_code'];
+            if (isset($preCollected[$k])) continue;
+            // Exam_schedules'dan guruh-level sanalarni olish — attachStudentsToSchedule
+            // ichidagi "kelmadi=yiqilgan" mantig'i shu sanalarga tayanadi.
+            $existingForEnrich = ExamSchedule::where('group_hemis_id', $g->group_hemis_id)
+                ->where('subject_id', $itemData['subject_id'])
+                ->where('semester_code', $itemData['semester_code'])
+                ->whereNull('student_hemis_id')
+                ->first();
+            $preCollected[$k] = [
+                'group' => $g,
+                'subject' => $subj,
+                'oski_date' => $existingForEnrich?->oski_date?->format('Y-m-d'),
+                'test_date' => $existingForEnrich?->test_date?->format('Y-m-d'),
+                'oski_resit_date' => $existingForEnrich?->oski_resit_date?->format('Y-m-d'),
+                'test_resit_date' => $existingForEnrich?->test_resit_date?->format('Y-m-d'),
+                'oski_resit2_date' => $existingForEnrich?->oski_resit2_date?->format('Y-m-d'),
+                'test_resit2_date' => $existingForEnrich?->test_resit2_date?->format('Y-m-d'),
+                'lesson_end_date' => null,
+            ];
+        }
+        $miniScheduleData = collect($preCollected)
+            ->groupBy(fn($i) => $i['group']->group_hemis_id)
+            ->map(fn($vals) => collect(array_values($vals->all())));
+        $enrichedScheduleData = $miniScheduleData->isNotEmpty()
+            ? $this->attachStudentsToSchedule($miniScheduleData)
+            : collect();
+        // Lookup: (groupHid|subjectId|sem) → enriched students array.
+        $enrichedStudentsByKey = [];
+        foreach ($enrichedScheduleData as $groupItems) {
+            foreach ($groupItems as $eItem) {
+                $k = $eItem['group']->group_hemis_id . '|'
+                    . ($eItem['subject']->subject_id ?? '') . '|'
+                    . ($eItem['subject']->semester_code ?? '');
+                $enrichedStudentsByKey[$k] = $eItem['students'] ?? [];
+            }
+        }
+
         foreach ($items as $itemData) {
             $group = Group::where('group_hemis_id', $itemData['group_hemis_id'])->first();
             if (!$group) continue;
@@ -3515,54 +3570,27 @@ class AcademicScheduleController extends Controller
                 $itemBucketsSeen[$itemScheduleId . '|' . $itemYnType . '|' . $itemAttempt] = true;
             }
 
-            // Talabalarni olish:
-            //  - Per-student qator (student_hemis_id berilgan) — faqat shu 1 talaba.
-            //  - 2-/3-urinish va per-student emas — faqat yiqilgan/qayta topshirish
-            //    huquqi bor talabalar (student_grades'dan). bandlikKursatkichiShow
-            //    ichidagi $resitEligibleMap mantiqi bilan bir xil.
-            //  - 1-urinish va per-student emas — butun guruh (eski xulq).
-            $studentsQuery = Student::select(
-                'id',
-                'full_name as student_name',
-                'student_id_number as student_id',
-                'hemis_id'
-            )
-                ->where('group_id', $group->group_hemis_id)
-                ->orderBy('full_name');
+            // Talabalar ro'yxati va eligibility — yuqorida batch tarzda
+            // hisoblangan enrichedStudentsByKey'dan olinadi (test-center
+            // "talabalarni ko'rsatish" bilan bir xil mantiq: 4+ qarz
+            // is_held_back va YnAdmissionService bo'yicha Ruxsat/Shartli/X).
+            $lookupKey = $group->group_hemis_id . '|' . $subjectId . '|' . $semesterCode;
+            $enrichedStudents = $enrichedStudentsByKey[$lookupKey] ?? [];
 
+            // Urinishga mos talabalarni saralash — test-center bilan bir xil
+            // ($itemStudentHemisId per-student override'i ustuvor).
             if ($itemStudentHemisId !== null) {
-                $studentsQuery->where('hemis_id', $itemStudentHemisId);
+                $enrichedStudents = array_values(array_filter(
+                    $enrichedStudents,
+                    fn($s) => (string) ($s['hemis_id'] ?? '') === $itemStudentHemisId
+                ));
             } elseif ($itemAttempt >= 2) {
-                $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
-                $eligibleHemisIds = DB::table('student_grades as sg')
-                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                    ->where('st.group_id', $group->group_hemis_id)
-                    ->where('st.student_status_code', 11)
-                    ->where('sg.subject_id', $subject->subject_id)
-                    ->where('sg.semester_code', $semesterCode)
-                    ->whereIn('sg.training_type_code', [101, 102])
-                    ->whereNull('sg.deleted_at')
-                    ->when($hasAttemptCol, function ($q) {
-                        $q->where(function ($w) {
-                            $w->where('sg.attempt', '>=', 2)
-                              ->orWhere(function ($x) {
-                                  $x->where(function ($y) {
-                                      $y->where('sg.attempt', 1)->orWhereNull('sg.attempt');
-                                  })->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
-                              });
-                        });
-                    }, function ($q) {
-                        $q->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
-                    })
-                    ->distinct()
-                    ->pluck('sg.student_hemis_id')
-                    ->all();
+                $enrichedStudents = $this->filterStudentsForAttempt($enrichedStudents, $itemAttempt);
 
                 // Per-student override'lar: bu (guruh+fan+semestr) uchun
                 // alohida ExamSchedule qatori bor talabalar — guruh-level
-                // qatordan chiqarib tashlanadi (ular o'z vaqtida alohida
-                // chiqishadi yoki hali vaqtsiz qolgan bo'ladi). Bandlik
-                // ko'rsatkichidagi $eligibleCount logikasi bilan bir xil.
+                // ro'yxatdan chiqariladi (ular alohida chiqadi yoki vaqtsiz
+                // qolgan). Bandlik $eligibleCount mantig'i bilan bir xil.
                 $overriddenHemisIds = DB::table('exam_schedules')
                     ->where('group_hemis_id', $group->group_hemis_id)
                     ->where('subject_id', $subject->subject_id)
@@ -3572,19 +3600,17 @@ class AcademicScheduleController extends Controller
                     ->map(fn($v) => (string) $v)
                     ->all();
                 if (!empty($overriddenHemisIds)) {
-                    $eligibleHemisIds = array_values(array_diff(
-                        array_map('strval', $eligibleHemisIds),
-                        $overriddenHemisIds
+                    $ovSet = array_flip($overriddenHemisIds);
+                    $enrichedStudents = array_values(array_filter(
+                        $enrichedStudents,
+                        fn($s) => !isset($ovSet[(string) ($s['hemis_id'] ?? '')])
                     ));
                 }
 
-                if (empty($eligibleHemisIds)) {
+                if (empty($enrichedStudents)) {
                     continue;
                 }
-                $studentsQuery->whereIn('hemis_id', $eligibleHemisIds);
             }
-
-            $students = $studentsQuery->groupBy('id')->get();
 
             // JN/MT ni jurnal "ixcham" tabi bilan bir xil mantiqda jonli hisoblash
             // (snapshot ishlatilmaydi; retake-priority qoidasi va NB=0 mantiqi qo'llaniladi).
@@ -3594,9 +3620,24 @@ class AcademicScheduleController extends Controller
                 $semesterCode
             );
 
-            foreach ($students as $student) {
-                $student->jn = $liveGrades[$student->hemis_id]['jn'] ?? 0;
-                $student->mt = $liveGrades[$student->hemis_id]['mt'] ?? 0;
+            // Enriched arraylarni eski kod kutgan stdClass shaklga o'tkazamiz
+            // — Word jadvalini quruvchi kod $student->jn / $student->mt /
+            // $student->student_name kabi property'larga tayanadi.
+            $students = collect($enrichedStudents)->map(function ($row) use ($liveGrades) {
+                $hemisId = (string) ($row['hemis_id'] ?? '');
+                $obj = new \stdClass();
+                $obj->hemis_id = $row['hemis_id'] ?? null;
+                $obj->student_name = $row['full_name'] ?? '';
+                $obj->student_id = $row['student_id_number'] ?? '';
+                $obj->jn = $liveGrades[$hemisId]['jn'] ?? 0;
+                $obj->mt = $liveGrades[$hemisId]['mt'] ?? 0;
+                $obj->is_held_back = !empty($row['is_held_back']);
+                $obj->admission_status = $row['admission_status'] ?? null;
+                return $obj;
+            })->sortBy('student_name')->values();
+
+            if ($students->isEmpty()) {
+                continue;
             }
 
             // O'qituvchilarni olish
@@ -4098,6 +4139,13 @@ class AcademicScheduleController extends Controller
                     // Kontrakt: "X" emas, "Shartli" holat beradi
                     if ($contractFailed && $holat === 'Ruxsat') {
                         $holat = 'Shartli';
+                    }
+                    // 4+ fandan qarz → kursdan qoldirilgan, YN ga ruxsat yo'q.
+                    // Test-center "talabalarni ko'rsatish" sahifasidagi 4 tadan
+                    // ortiq qarz bayrog'i bilan bir xil mantiq — bu bayroq boshqa
+                    // shartlardan ustun va Shartli/Ruxsat ni X ga aylantiradi.
+                    if (!empty($student->is_held_back)) {
+                        $holat = 'X';
                     }
 
                     $dataRow = $table->addRow();

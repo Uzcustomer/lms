@@ -231,6 +231,69 @@ class ExamCapacityService
     }
 
     /**
+     * Berilgan (guruh, fan) juftligi uchun aniq talaba soni — tanlov
+     * fanlari (variant a/b/c) uchun student_subjects'dan, mandatory
+     * fanlar uchun butun guruh sonidan. Variant fanlar bo'lsa har
+     * talaba faqat bittasini tanlaydi va sig'im hisobida butun guruh
+     * sonini ishlatish noto'g'ri ko'rsatkich beradi.
+     */
+    public static function subjectStudentCount(string $groupHemisId, $subjectId): int
+    {
+        if (!$subjectId) {
+            return self::groupStudentCount($groupHemisId);
+        }
+        try {
+            $cnt = (int) DB::table('student_subjects as ss')
+                ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+                ->where('st.group_id', $groupHemisId)
+                ->where('ss.subject_id', $subjectId)
+                ->where('st.student_status_code', 11)
+                ->distinct()
+                ->count('ss.student_hemis_id');
+            if ($cnt > 0) {
+                return $cnt;
+            }
+        } catch (\Throwable $e) {
+            // jadval yo'q bo'lsa fallback
+        }
+        return self::groupStudentCount($groupHemisId);
+    }
+
+    /**
+     * Batch versiyasi — bir nechta (group, subject) juftligi uchun.
+     * @param  array<int, array{group_hemis_id: string, subject_id: mixed}> $pairs
+     * @return array<string, int>  "group_hemis_id|subject_id" => count
+     */
+    public static function collectSubjectCounts(array $pairs): array
+    {
+        if (empty($pairs)) return [];
+        $groupIds = [];
+        $subjectIds = [];
+        foreach ($pairs as $p) {
+            if (!empty($p['group_hemis_id'])) $groupIds[(string) $p['group_hemis_id']] = true;
+            if (!empty($p['subject_id'])) $subjectIds[(string) $p['subject_id']] = true;
+        }
+        if (empty($groupIds) || empty($subjectIds)) return [];
+        try {
+            $rows = DB::table('student_subjects as ss')
+                ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+                ->whereIn('st.group_id', array_keys($groupIds))
+                ->whereIn('ss.subject_id', array_keys($subjectIds))
+                ->where('st.student_status_code', 11)
+                ->selectRaw('st.group_id, ss.subject_id, COUNT(DISTINCT ss.student_hemis_id) as cnt')
+                ->groupBy('st.group_id', 'ss.subject_id')
+                ->get();
+            $out = [];
+            foreach ($rows as $r) {
+                $out[$r->group_id . '|' . $r->subject_id] = (int) $r->cnt;
+            }
+            return $out;
+        } catch (\Throwable $e) {
+            return [];
+        }
+    }
+
+    /**
      * Berilgan kun uchun belgilangan barcha YN (OSKI/Test) lar bo'yicha guruhlardagi
      * talabalar yig'indisini hisoblash. $exclude — joriy yozuvni hisobdan chiqarib tashlash uchun
      * (group_hemis_id, subject_id, semester_code, yn_type) kombinatsiyasi.
@@ -252,6 +315,23 @@ class ExamCapacityService
             ->get();
 
         $groupCounts = self::collectGroupCounts($query->pluck('group_hemis_id')->unique()->all());
+        // Tanlov fanlari uchun aniq son.
+        $subjectPairs = [];
+        foreach ($query as $row) {
+            if ($row->subject_id) {
+                $subjectPairs[$row->group_hemis_id . '|' . $row->subject_id] = [
+                    'group_hemis_id' => (string) $row->group_hemis_id,
+                    'subject_id' => (string) $row->subject_id,
+                ];
+            }
+        }
+        $subjectCounts = self::collectSubjectCounts(array_values($subjectPairs));
+        $countFor = function ($row) use ($subjectCounts, $groupCounts) {
+            $sk = $row->group_hemis_id . '|' . $row->subject_id;
+            return isset($subjectCounts[$sk])
+                ? (int) $subjectCounts[$sk]
+                : (int) ($groupCounts[$row->group_hemis_id] ?? 0);
+        };
 
         $total = 0;
         foreach ($query as $row) {
@@ -260,12 +340,12 @@ class ExamCapacityService
 
             if ($oskiDateMatch) {
                 if (!self::isExcluded($row, 'oski', $exclude)) {
-                    $total += $groupCounts[$row->group_hemis_id] ?? 0;
+                    $total += $countFor($row);
                 }
             }
             if ($testDateMatch) {
                 if (!self::isExcluded($row, 'test', $exclude)) {
-                    $total += $groupCounts[$row->group_hemis_id] ?? 0;
+                    $total += $countFor($row);
                 }
             }
         }
@@ -335,6 +415,20 @@ class ExamCapacityService
         $groupCounts = self::collectGroupCounts(array_keys($groupIds));
         $resitMap = self::resitEligibleCounts(array_values($resitTriples));
 
+        // Tanlov fanlari (variant a/b/c) uchun aniq talaba sonini batch
+        // tarzda olamiz — har talaba bitta variantni tanlaydi.
+        $subjectPairs = [];
+        foreach ($entriesOnDate as $entry) {
+            $r = $entry['row'];
+            if (empty($r->student_hemis_id) && $r->subject_id) {
+                $subjectPairs[$r->group_hemis_id . '|' . $r->subject_id] = [
+                    'group_hemis_id' => (string) $r->group_hemis_id,
+                    'subject_id' => (string) $r->subject_id,
+                ];
+            }
+        }
+        $subjectCounts = self::collectSubjectCounts(array_values($subjectPairs));
+
         // Individual (per-student) vaqti belgilangan qatorlar soni —
         // sanadan qat'iy nazar, butun (group, subject, sem, yn, attempt)
         // kombinatsiyasi bo'yicha. Per-student qatorda vaqt yo'q bo'lsa,
@@ -367,7 +461,7 @@ class ExamCapacityService
                 continue;
             }
             $total += self::effectiveCountForRow(
-                $row, $slot['yn'], $slot['attempt'], $groupCounts, $resitMap, $perStudentOffsets
+                $row, $slot['yn'], $slot['attempt'], $groupCounts, $resitMap, $perStudentOffsets, $subjectCounts
             );
         }
 
@@ -385,8 +479,10 @@ class ExamCapacityService
         if (!empty($schedule->student_hemis_id)) {
             return 1;
         }
+        // 1-urinish uchun: tanlov fani (variant a/b/c) bo'lsa
+        // student_subjects'dan aniq son, aks holda butun guruh.
         $base = $attempt <= 1
-            ? self::groupStudentCount($schedule->group_hemis_id)
+            ? self::subjectStudentCount($schedule->group_hemis_id, $schedule->subject_id)
             : 0;
         if ($attempt > 1) {
             if (!$schedule->subject_id || !$schedule->semester_code) {
@@ -602,14 +698,22 @@ class ExamCapacityService
         int $attempt,
         array $groupCounts,
         array $resitMap,
-        array $perStudentOffsets
+        array $perStudentOffsets,
+        array $subjectCounts = []
     ): int {
         if (!empty($row->student_hemis_id)) {
             return 1;
         }
-        $base = $attempt <= 1
-            ? (int) ($groupCounts[$row->group_hemis_id] ?? 0)
-            : (int) ($resitMap[$row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code] ?? 0);
+        if ($attempt <= 1) {
+            // Tanlov fanlari (variant a/b/c) bo'lsa student_subjects'dan
+            // aniq son; mandatory fanlar uchun butun guruh.
+            $subjKey = $row->group_hemis_id . '|' . $row->subject_id;
+            $base = isset($subjectCounts[$subjKey])
+                ? (int) $subjectCounts[$subjKey]
+                : (int) ($groupCounts[$row->group_hemis_id] ?? 0);
+        } else {
+            $base = (int) ($resitMap[$row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code] ?? 0);
+        }
         if ($base <= 0) {
             return 0;
         }

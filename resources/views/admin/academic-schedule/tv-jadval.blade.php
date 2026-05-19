@@ -116,11 +116,28 @@
                                     @endif
                                 </div>
                                 <div class="flex-1 min-w-0">
-                                    <div class="text-xl font-bold text-white truncate" title="{{ $it['short_name'] }}">
+                                    <div class="text-lg font-bold text-white truncate" title="{{ $it['short_name'] }}">
                                         {{ $it['short_name'] }}
                                     </div>
+                                    <div class="flex items-center gap-1 mt-1 flex-wrap">
+                                        @if($it['group_name'])
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-indigo-500/20 text-indigo-200 border border-indigo-400/30">
+                                                {{ $it['group_name'] }}
+                                            </span>
+                                        @endif
+                                        @if($it['yn_type'])
+                                            @php
+                                                $ynBg = $it['yn_type'] === 'OSKI'
+                                                    ? 'bg-purple-500/20 text-purple-200 border-purple-400/30'
+                                                    : 'bg-cyan-500/20 text-cyan-200 border-cyan-400/30';
+                                            @endphp
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold border {{ $ynBg }}">
+                                                {{ $it['yn_type'] }}@if($it['attempt'] > 1) · {{ $it['attempt'] }}-u @endif
+                                            </span>
+                                        @endif
+                                    </div>
                                     @if($it['subject_name'])
-                                        <div class="text-xs text-slate-400 truncate mt-0.5" title="{{ $it['subject_name'] }}">
+                                        <div class="text-[11px] text-slate-400 truncate mt-1" title="{{ $it['subject_name'] }}">
                                             {{ $it['subject_name'] }}
                                         </div>
                                     @endif
@@ -131,10 +148,6 @@
                                 <div class="flex items-center gap-1.5 text-slate-400">
                                     <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                                     <span class="font-semibold tabular-nums">{{ $it['planned_time'] }}</span>
-                                    @if($it['yn_type'])
-                                        <span class="mx-1 text-slate-600">·</span>
-                                        <span>{{ $it['yn_type'] }}{{ $it['attempt'] > 1 ? ' '.$it['attempt'].'-u' : '' }}</span>
-                                    @endif
                                 </div>
                                 <span class="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider {{ $badgeClass }}">
                                     {{ $badgeText }}

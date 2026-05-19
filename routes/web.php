@@ -81,10 +81,6 @@ Route::get('/refresh-csrf', function () {
 // Public — login talab qilinmaydi, ichki tarmoq darajasida cheklash veb-server
 // konfiguratsiyasi (nginx allow/deny) orqali qilinadi.
 Route::get('/tv/jadval', [AcademicScheduleController::class, 'tvJadval'])->name('tv.jadval');
-// TV displeyi: peshtaxta yonida — hozir va kelgusi 15 daqiqada kompga
-// o'tirayotgan/o'tiradigan talabalarning komp raqami va qisqa ismi
-// (Tursunov S.A.). Auto-refresh 15 sek.
-Route::get('/tv/kompyuter', [AcademicScheduleController::class, 'tvComputerBoard'])->name('tv.kompyuter');
 
 // Sababli ariza tekshirish (QR kod orqali, public)
 Route::get('/absence-excuse/verify/{token}', [\App\Http\Controllers\AbsenceExcuseVerificationController::class, 'verify'])->name('absence-excuse.verify');

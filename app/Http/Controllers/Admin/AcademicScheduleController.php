@@ -3651,6 +3651,51 @@ class AcademicScheduleController extends Controller
 
             $students = $studentsQuery->groupBy('id')->get();
 
+            // 2-/3-urinish bo'lsa, YN jadvalida ko'rinmaydigan talabalarni
+            // (4+ qarz yoki pullik) Word ro'yxatidan ham chiqarib tashlaymiz.
+            // attachStudentsToSchedule extendScheduleDataWithYearSubjects orqali
+            // joriy yildagi BARCHA fanlarni hisobga oladi, shuning uchun natija
+            // YN belgilash sahifasidagi filter bilan AYNI ekvivalent bo'ladi.
+            if ($itemAttempt >= 2 && $students->isNotEmpty()) {
+                $singleSchedule = collect([
+                    (string) $group->group_hemis_id => collect([[
+                        'group' => $group,
+                        'subject' => $subject,
+                        'closing_form' => $subject->closing_form ?? null,
+                        'oski_date' => null, 'oski_na' => false, 'oski_time' => null,
+                        'test_date' => null, 'test_na' => false, 'test_time' => null,
+                        'oski_resit_date' => null, 'oski_resit_time' => null,
+                        'oski_resit2_date' => null, 'oski_resit2_time' => null,
+                        'test_resit_date' => null, 'test_resit_time' => null,
+                        'test_resit2_date' => null, 'test_resit2_time' => null,
+                        'lesson_end_date' => null,
+                    ]]),
+                ]);
+                try {
+                    $singleSchedule = $this->attachStudentsToSchedule($singleSchedule);
+                    $studentInfoMap = [];
+                    foreach ($singleSchedule as $itemsBatch) {
+                        foreach ($itemsBatch as $sItem) {
+                            foreach ($sItem['students'] ?? [] as $s) {
+                                $studentInfoMap[(string) $s['hemis_id']] = $s;
+                            }
+                        }
+                    }
+                    $students = $students->filter(function ($st) use ($studentInfoMap) {
+                        $info = $studentInfoMap[(string) $st->hemis_id] ?? null;
+                        if (!$info) return true; // ma'lumot topilmasa - chiqarib tashlamaymiz
+                        $debtTotal = count($info['past_debts'] ?? []) + count($info['current_semester_debts'] ?? []);
+                        $isHeldBack = !empty($info['is_held_back']) || $debtTotal >= 4;
+                        if ($isHeldBack) return false;
+                        if (!empty($info['is_pullik'])) return false;
+                        return true;
+                    })->values();
+                } catch (\Throwable $e) {
+                    \Log::warning('generateYnOldiWord: held_back filter failed: ' . $e->getMessage());
+                }
+                if ($students->isEmpty()) continue;
+            }
+
             // JN/MT ni jurnal "ixcham" tabi bilan bir xil mantiqda jonli hisoblash
             // (snapshot ishlatilmaydi; retake-priority qoidasi va NB=0 mantiqi qo'llaniladi).
             $liveGrades = app(JnMtCalculator::class)->computeForGroup(

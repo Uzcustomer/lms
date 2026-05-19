@@ -654,13 +654,11 @@ class AcademicScheduleController extends Controller
             if ($groups->isEmpty()) return $scheduleData;
 
             // Joriy o'quv yili va unga tegishli semestrlar
-            // (semesters jadvalida semester kod ustuni "code" deb nomlangan;
-            // curriculum_subjects'da esa "semester_code".)
             $currentYear = DB::table('semesters')->where('current', true)->value('education_year');
             if (!$currentYear) return $scheduleData;
             $yearSemCodes = DB::table('semesters')
                 ->where('education_year', $currentYear)
-                ->pluck('code')
+                ->pluck('semester_code')
                 ->all();
             if (empty($yearSemCodes)) return $scheduleData;
 
@@ -1218,18 +1216,14 @@ class AcademicScheduleController extends Controller
         // (4+ qarz qoidasi uchun, butun o'quv yili bo'yicha sanash kerak).
         $visibleTriples = $triples;
 
-        // semester_code → education_year xaritasi.
-        // DIQQAT: semesters jadvalida semester kod ustuni "code" deb nomlangan
-        // (curriculum_subjects'da esa "semester_code"). Avvalgi versiyada bu
-        // bilmasdan "semester_code" so'ralib silently fail bo'lib kelardi va
-        // held_back har doim false bo'lib qoldi.
+        // semester_code → education_year xaritasi
         $semYearMap = [];
         try {
             $rows = DB::table('semesters')
-                ->whereIn('code', $allSemCodes)
-                ->select('code', 'education_year')
+                ->whereIn('semester_code', $allSemCodes)
+                ->select('semester_code', 'education_year')
                 ->get();
-            foreach ($rows as $r) $semYearMap[$r->code] = $r->education_year;
+            foreach ($rows as $r) $semYearMap[$r->semester_code] = $r->education_year;
         } catch (\Throwable $e) {}
         $relevantYears = array_values(array_unique(array_filter($semYearMap)));
 
@@ -1240,7 +1234,7 @@ class AcademicScheduleController extends Controller
             try {
                 $extraSems = DB::table('semesters')
                     ->whereIn('education_year', $relevantYears)
-                    ->pluck('code')
+                    ->pluck('semester_code')
                     ->toArray();
                 foreach ($extraSems as $code) {
                     if (!isset($semYearMap[$code])) {
@@ -1251,10 +1245,10 @@ class AcademicScheduleController extends Controller
                 $yearSemCodes = array_values(array_unique(array_merge($yearSemCodes, $extraSems)));
                 // Aniq xaritalash uchun yana bir marta o'qiymiz
                 $rows = DB::table('semesters')
-                    ->whereIn('code', $yearSemCodes)
-                    ->select('code', 'education_year')
+                    ->whereIn('semester_code', $yearSemCodes)
+                    ->select('semester_code', 'education_year')
                     ->get();
-                foreach ($rows as $r) $semYearMap[$r->code] = $r->education_year;
+                foreach ($rows as $r) $semYearMap[$r->semester_code] = $r->education_year;
             } catch (\Throwable $e) {}
         }
 

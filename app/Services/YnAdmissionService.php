@@ -65,9 +65,25 @@ class YnAdmissionService
             return [];
         }
 
-        $subject = CurriculumSubject::where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->first();
+        // Subject - guruh curriculum'i bo'yicha aniqlash. Bir xil subject_id va
+        // semester_code bilan turli curricula'larda har xil academic_load bo'lishi
+        // mumkin - shuning uchun guruh curriculum_hemis_id'iga moslab olamiz.
+        // Jurnal ham shu tarzda ishlaydi.
+        $curriculumHemisId = DB::table('groups')
+            ->where('group_hemis_id', $groupHemisId)
+            ->value('curriculum_hemis_id');
+        $subjectQuery = CurriculumSubject::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode);
+        if ($curriculumHemisId) {
+            $subjectQuery->where('curricula_hemis_id', $curriculumHemisId);
+        }
+        $subject = $subjectQuery->first();
+        if (!$subject && $curriculumHemisId) {
+            // Fallback: agar shu curriculum'da subject topilmasa, eski xulq
+            $subject = CurriculumSubject::where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->first();
+        }
 
         // Auditoriya soatlari — davomat foizini hisoblash uchun maxraj.
         // 17 = nazariy bo'lmagan (mustaqil ish) — hisobga olinmaydi.

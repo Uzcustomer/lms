@@ -774,6 +774,12 @@ class AcademicScheduleController extends Controller
                 $itEffTest = $itTestDate ?: $itLessonEnd;
                 $itOskiPassed = $itEffOski && $itEffOski < $today && !empty($itOskiMap);
                 $itTestPassed = $itEffTest && $itEffTest < $today && !empty($itTestMap);
+                // Joriy semestrdagi fan "qarz" deb hisoblanadi faqat 1-urinish YN kuni
+                // tugagandan keyin. Aks holda talaba hali birinchi urinishini topshirmagan
+                // (yoki topshirayotgan) — pullik/yiqilgan deb erta belgilash noto'g'ri.
+                // YN sanasi belgilanmagan bo'lsa, YN hali bo'lib o'tmagan deb qaraladi.
+                $itYnDayDone = ($itOskiDate && $itOskiDate < $today)
+                    || ($itTestDate && $itTestDate < $today);
                 $itStuList = $studentsByGroup->get($itGHid, collect());
                 foreach ($itStuList as $st) {
                     $stat = $itStatusByStudent[$st->hemis_id] ?? ['failed1' => false];
@@ -782,7 +788,7 @@ class AcademicScheduleController extends Controller
                     $explicitK = $st->hemis_id . '|' . $itSubj . '|' . $itSem;
                     $hasA2 = !empty($explicitAttemptByStudent[$explicitK]['attempt2']);
                     $eff1 = $stat['failed1'] || $missedO || $missedT || $hasA2;
-                    if ($eff1) {
+                    if ($eff1 && $itYnDayDone) {
                         $debtKey = $itSubj . '|' . $itSem;
                         if (!isset($currentDebtsByStudent[$st->hemis_id][$debtKey])) {
                             $currentDebtsByStudent[$st->hemis_id][$debtKey] = [

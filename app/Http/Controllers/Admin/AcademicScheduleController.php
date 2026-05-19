@@ -3598,65 +3598,36 @@ class AcademicScheduleController extends Controller
             if ($itemStudentHemisId !== null) {
                 $studentsQuery->where('hemis_id', $itemStudentHemisId);
             } elseif ($itemAttempt >= 2) {
-                // YN jadvalidagi kabi: attachStudentsToSchedule chaqirib har
-                // talabaning failed_attempt[1|2], is_held_back, is_pullik
-                // bayroqlarini olamiz. Bu (a) student_grades yozuvi bo'lmasa
-                // ham missed-exam mantig'i bilan failed1 deb belgilanadi va
-                // (b) held_back/pullik talabalar bir joydan filterlanadi.
-                $singleSchedule = collect([
-                    (string) $group->group_hemis_id => collect([[
-                        'group' => $group,
-                        'subject' => $subject,
-                        'closing_form' => $subject->closing_form ?? null,
-                        'oski_date' => null, 'oski_na' => false, 'oski_time' => null,
-                        'test_date' => null, 'test_na' => false, 'test_time' => null,
-                        'oski_resit_date' => null, 'oski_resit_time' => null,
-                        'oski_resit2_date' => null, 'oski_resit2_time' => null,
-                        'test_resit_date' => null, 'test_resit_time' => null,
-                        'test_resit2_date' => null, 'test_resit2_time' => null,
-                        'lesson_end_date' => null,
-                    ]]),
-                ]);
-                $eligibleHemisIds = [];
-                try {
-                    $singleSchedule = $this->attachStudentsToSchedule($singleSchedule);
-                    $failedFlag = $itemAttempt === 2 ? 'failed_attempt1' : 'failed_attempt2';
-                    foreach ($singleSchedule as $itemsBatch) {
-                        foreach ($itemsBatch as $sItem) {
-                            foreach ($sItem['students'] ?? [] as $s) {
-                                // Bu urinishga yiqilmagan bo'lsa - skip
-                                if (empty($s[$failedFlag])) continue;
-                                // 4+ qarz yoki pullik - skip (YN jadvalida bloklanadi)
-                                $debtTotal = count($s['past_debts'] ?? []) + count($s['current_semester_debts'] ?? []);
-                                if (!empty($s['is_held_back']) || $debtTotal >= 4) continue;
-                                if (!empty($s['is_pullik'])) continue;
-                                $eligibleHemisIds[] = (string) $s['hemis_id'];
-                            }
-                        }
-                    }
-                } catch (\Throwable $e) {
-                    \Log::warning('generateYnOldiWord: eligibility check failed: ' . $e->getMessage());
-                    // Fallback - eski student_grades asoslangan mantiq
-                    $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
-                    $eligibleHemisIds = DB::table('student_grades as sg')
-                        ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                        ->where('st.group_id', $group->group_hemis_id)
-                        ->where('st.student_status_code', 11)
-                        ->where('sg.subject_id', $subject->subject_id)
-                        ->where('sg.semester_code', $semesterCode)
-                        ->whereIn('sg.training_type_code', [101, 102])
-                        ->whereNull('sg.deleted_at')
-                        ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60')
-                        ->distinct()
-                        ->pluck('sg.student_hemis_id')
-                        ->map(fn($v) => (string) $v)
-                        ->all();
-                }
+                $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+                $eligibleHemisIds = DB::table('student_grades as sg')
+                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                    ->where('st.group_id', $group->group_hemis_id)
+                    ->where('st.student_status_code', 11)
+                    ->where('sg.subject_id', $subject->subject_id)
+                    ->where('sg.semester_code', $semesterCode)
+                    ->whereIn('sg.training_type_code', [101, 102])
+                    ->whereNull('sg.deleted_at')
+                    ->when($hasAttemptCol, function ($q) {
+                        $q->where(function ($w) {
+                            $w->where('sg.attempt', '>=', 2)
+                              ->orWhere(function ($x) {
+                                  $x->where(function ($y) {
+                                      $y->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                                  })->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                              });
+                        });
+                    }, function ($q) {
+                        $q->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                    })
+                    ->distinct()
+                    ->pluck('sg.student_hemis_id')
+                    ->all();
 
                 // Per-student override'lar: bu (guruh+fan+semestr) uchun
                 // alohida ExamSchedule qatori bor talabalar — guruh-level
                 // qatordan chiqarib tashlanadi (ular o'z vaqtida alohida
-                // chiqishadi yoki hali vaqtsiz qolgan bo'ladi).
+                // chiqishadi yoki hali vaqtsiz qolgan bo'ladi). Bandlik
+                // ko'rsatkichidagi $eligibleCount logikasi bilan bir xil.
                 $overriddenHemisIds = DB::table('exam_schedules')
                     ->where('group_hemis_id', $group->group_hemis_id)
                     ->where('subject_id', $subject->subject_id)
@@ -3679,6 +3650,51 @@ class AcademicScheduleController extends Controller
             }
 
             $students = $studentsQuery->groupBy('id')->get();
+
+            // 2-/3-urinish bo'lsa, YN jadvalida ko'rinmaydigan talabalarni
+            // (4+ qarz yoki pullik) Word ro'yxatidan ham chiqarib tashlaymiz.
+            // attachStudentsToSchedule extendScheduleDataWithYearSubjects orqali
+            // joriy yildagi BARCHA fanlarni hisobga oladi, shuning uchun natija
+            // YN belgilash sahifasidagi filter bilan AYNI ekvivalent bo'ladi.
+            if ($itemAttempt >= 2 && $students->isNotEmpty()) {
+                $singleSchedule = collect([
+                    (string) $group->group_hemis_id => collect([[
+                        'group' => $group,
+                        'subject' => $subject,
+                        'closing_form' => $subject->closing_form ?? null,
+                        'oski_date' => null, 'oski_na' => false, 'oski_time' => null,
+                        'test_date' => null, 'test_na' => false, 'test_time' => null,
+                        'oski_resit_date' => null, 'oski_resit_time' => null,
+                        'oski_resit2_date' => null, 'oski_resit2_time' => null,
+                        'test_resit_date' => null, 'test_resit_time' => null,
+                        'test_resit2_date' => null, 'test_resit2_time' => null,
+                        'lesson_end_date' => null,
+                    ]]),
+                ]);
+                try {
+                    $singleSchedule = $this->attachStudentsToSchedule($singleSchedule);
+                    $studentInfoMap = [];
+                    foreach ($singleSchedule as $itemsBatch) {
+                        foreach ($itemsBatch as $sItem) {
+                            foreach ($sItem['students'] ?? [] as $s) {
+                                $studentInfoMap[(string) $s['hemis_id']] = $s;
+                            }
+                        }
+                    }
+                    $students = $students->filter(function ($st) use ($studentInfoMap) {
+                        $info = $studentInfoMap[(string) $st->hemis_id] ?? null;
+                        if (!$info) return true; // ma'lumot topilmasa - chiqarib tashlamaymiz
+                        $debtTotal = count($info['past_debts'] ?? []) + count($info['current_semester_debts'] ?? []);
+                        $isHeldBack = !empty($info['is_held_back']) || $debtTotal >= 4;
+                        if ($isHeldBack) return false;
+                        if (!empty($info['is_pullik'])) return false;
+                        return true;
+                    })->values();
+                } catch (\Throwable $e) {
+                    \Log::warning('generateYnOldiWord: held_back filter failed: ' . $e->getMessage());
+                }
+                if ($students->isEmpty()) continue;
+            }
 
             // JN/MT ni jurnal "ixcham" tabi bilan bir xil mantiqda jonli hisoblash
             // (snapshot ishlatilmaydi; retake-priority qoidasi va NB=0 mantiqi qo'llaniladi).

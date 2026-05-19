@@ -629,98 +629,6 @@ class AcademicScheduleController extends Controller
     }
 
     /**
-     * $scheduleData ni loaded guruhlarning joriy o'quv yilidagi barcha aktiv
-     * curriculum_subjects bilan kengaytirib qaytaradi. computeStudentAttempt-
-     * Statuses ga to'liq triple'lar to'plamini berib, 4+ qarz qoidasini
-     * ($scheduleData ga yuklangan triple'lar sonidan qat'i nazar) to'g'ri
-     * hisoblash uchun ishlatiladi.
-     *
-     * Qaytariladigan collection $scheduleData kabi guruh_hemis_id bo'yicha
-     * groupBy qilingan. Asl item'lar saqlanadi, ular ustiga sintetik (sana/
-     * vaqt'siz, lekin to'g'ri group/subject malumotli) item'lar qo'shiladi.
-     */
-    private function extendScheduleDataWithYearSubjects($scheduleData)
-    {
-        try {
-            // Loaded guruhlar va ularning curriculumi
-            $groups = collect();
-            foreach ($scheduleData as $items) {
-                foreach ($items as $it) {
-                    if (!empty($it['group'])) {
-                        $groups->put((string) $it['group']->group_hemis_id, $it['group']);
-                    }
-                }
-            }
-            if ($groups->isEmpty()) return $scheduleData;
-
-            // Joriy o'quv yili va unga tegishli semestrlar
-            $currentYear = DB::table('semesters')->where('current', true)->value('education_year');
-            if (!$currentYear) return $scheduleData;
-            $yearSemCodes = DB::table('semesters')
-                ->where('education_year', $currentYear)
-                ->pluck('semester_code')
-                ->all();
-            if (empty($yearSemCodes)) return $scheduleData;
-
-            $curriculumIds = $groups->pluck('curriculum_hemis_id')->unique()->filter()->values()->all();
-            if (empty($curriculumIds)) return $scheduleData;
-
-            $allYearSubjects = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumIds)
-                ->where('is_active', true)
-                ->whereIn('semester_code', $yearSemCodes)
-                ->get();
-            if ($allYearSubjects->isEmpty()) return $scheduleData;
-
-            // Asl scheduleData'dagi (group, subject, sem) kombinatsiyalarini
-            // qayd qilamiz — sintetiklarni qaytarib qo'shmaslik uchun.
-            $existing = [];
-            foreach ($scheduleData as $items) {
-                foreach ($items as $it) {
-                    $g = $it['group']->group_hemis_id ?? null;
-                    $s = $it['subject']->subject_id ?? null;
-                    $sm = $it['subject']->semester_code ?? null;
-                    if ($g && $s && $sm) $existing[$g . '|' . $s . '|' . $sm] = true;
-                }
-            }
-
-            // Mavjud scheduleData'ni mutable arrayga aylantiramiz
-            $extended = $scheduleData->map(fn($items) => collect($items));
-            foreach ($groups as $gHid => $group) {
-                $groupSubjects = $allYearSubjects->filter(
-                    fn($s) => (string) $s->curricula_hemis_id === (string) $group->curriculum_hemis_id
-                );
-                foreach ($groupSubjects as $subj) {
-                    $k = $gHid . '|' . $subj->subject_id . '|' . $subj->semester_code;
-                    if (isset($existing[$k])) continue;
-                    // Sintetik item — sana/vaqtlarsiz. computeStudentAttemptStatuses
-                    // faqat group+subject+sem va student_grades bo'yicha hisoblaydi,
-                    // shuning uchun bularsiz ham failed1 ni to'g'ri aniqlay oladi.
-                    $syntheticItem = [
-                        'group' => $group,
-                        'subject' => $subj,
-                        'closing_form' => $subj->closing_form ?? null,
-                        'oski_date' => null, 'oski_na' => false, 'oski_time' => null,
-                        'test_date' => null, 'test_na' => false, 'test_time' => null,
-                        'oski_resit_date' => null, 'oski_resit_time' => null,
-                        'oski_resit2_date' => null, 'oski_resit2_time' => null,
-                        'test_resit_date' => null, 'test_resit_time' => null,
-                        'test_resit2_date' => null, 'test_resit2_time' => null,
-                        'lesson_end_date' => null,
-                    ];
-                    if (!$extended->has($gHid)) {
-                        $extended->put($gHid, collect());
-                    }
-                    $extended->get($gHid)->push($syntheticItem);
-                }
-            }
-            return $extended;
-        } catch (\Throwable $e) {
-            \Log::warning('extendScheduleDataWithYearSubjects failed: ' . $e->getMessage());
-            return $scheduleData;
-        }
-    }
-
-    /**
      * Har guruh+fan uchun talabalar ro'yxatini va ularning shaxsiy
      * resit/resit2 sanalarini olib biriktirish.
      */
@@ -773,25 +681,56 @@ class AcademicScheduleController extends Controller
 
         // Per-student urinish-status: jn/mt/oski/test/davomat asosida — 2/3-urinish ro'yxatda
         // kim "yiqilgan" va kim "pullik" ekanligini bilish uchun.
-        //
-        // MUHIM: held_back (4+ qarz) qoidasi $scheduleData ichidagi triple'lar
-        // bo'yicha sanab chiqiladi. Sahifa filterlangan bo'lib bir nechta fan
-        // triple'i bilan kelganda (masalan, test-center sahifasida bitta guruh
-        // tanlangan bo'lsa va bu guruhda hozircha 1 ta exam_schedule yozuvi
-        // bor), debt count chegaraga yetmasdan qoladi va RASHIDOV kabi 4+
-        // qarzdor talabalar held_back=false bo'lib qoldi. YN belgilash
-        // sahifasi bu muammoga duchor emas, chunki u barcha triplelarni
-        // yuklaydi. Test-center va Bandlik ham xuddi shunday hisoblanishi
-        // uchun, computeStudentAttemptStatuses ga loaded group'larning
-        // JORIY o'quv yilidagi BARCHA aktiv curriculum_subjects'i bilan
-        // kengaytirilgan scheduleData uzatamiz.
-        $extendedScheduleData = $this->extendScheduleDataWithYearSubjects($scheduleData);
-        $studentStatus = $this->computeStudentAttemptStatuses($extendedScheduleData);
+        $studentStatus = $this->computeStudentAttemptStatuses($scheduleData);
 
         // O'tgan semestrlardagi qarz fanlari ro'yxatini hisoblash
         // (>4 qarzdorlar menyusidagi logika asosida — academic_records'da yo'q fanlar)
         $allHemisIds = $studentsByGroup->flatten()->pluck('hemis_id')->unique()->values()->toArray();
         $pastDebtsMap = $this->computeStudentPastSemesterDebts($allHemisIds);
+
+        // Joriy o'quv yilidagi BARCHA fanlardan qarz sonini har talaba uchun
+        // to'g'ridan-to'g'ri SQL bilan sanab olamiz. Bu held_back qoidasi
+        // (>=4 qarz → kursdan qoldiriladi) uchun ishlatiladi va $scheduleData
+        // ga yuklangan fanlar soni bilan bog'liq EMAS — talaba qaysi fanda
+        // exam_schedule yozuvi bo'lmasa ham, agar 1-urinishda V<60 bo'lsa qarz
+        // hisoblanadi. Bu test-center kabi sahifalarda (faqat bir nechta
+        // schedule yuklanadi) held_back to'g'ri ko'rinishi uchun zarur.
+        $currentYearDebtCount = [];
+        if (!empty($allHemisIds)) {
+            try {
+                $currentYear = DB::table('semesters')->where('current', true)->value('education_year');
+                if ($currentYear) {
+                    $yearSemCodes = DB::table('semesters')
+                        ->where('education_year', $currentYear)
+                        ->pluck('semester_code')
+                        ->all();
+                    if (!empty($yearSemCodes)) {
+                        $hasAttemptCol2 = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+                        $debtQ = DB::table('student_grades as sg')
+                            ->whereIn('sg.student_hemis_id', $allHemisIds)
+                            ->whereIn('sg.semester_code', $yearSemCodes)
+                            ->whereIn('sg.training_type_code', [101, 102])
+                            ->whereNull('sg.deleted_at')
+                            ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                        if ($hasAttemptCol2) {
+                            $debtQ->where(function ($x) {
+                                $x->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                            });
+                        }
+                        $debtRows = $debtQ
+                            ->select('sg.student_hemis_id', 'sg.subject_id', 'sg.semester_code')
+                            ->distinct()
+                            ->get();
+                        foreach ($debtRows as $r) {
+                            $hid = (string) $r->student_hemis_id;
+                            $currentYearDebtCount[$hid] = ($currentYearDebtCount[$hid] ?? 0) + 1;
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('attachStudentsToSchedule: current year debt count failed: ' . $e->getMessage());
+            }
+        }
 
         // Aniq signal: qaysi talabaga student_grades'da attempt=2 yoki attempt=3 yozuvi bor.
         // Bu jurnaldan qo'lda 12a/12b shakliga o'tkazilgan, lekin bahosi hali NULL bo'lgan
@@ -860,11 +799,8 @@ class AcademicScheduleController extends Controller
         // butun scheduleData bo'ylab yig'amiz. Aks holda har row faqat o'z fanini
         // hisoblaydi va talabaning bir nechta fandan qarzdorligi to'g'ri ko'rsatilmaydi.
         // currentDebtsByStudent[hemis_id] = [subject_id|semester_code => ['subject_name', 'semester_name']]
-        // Joriy semestr qarzlarini ham extended scheduleData (yil bo'yi barcha
-        // curriculum fanlari) ustida hisoblaymiz - shunda YN belgilash bilan
-        // bir xil natija olinadi va 4+ qarz qoidasi to'g'ri ishlaydi.
         $currentDebtsByStudent = [];
-        foreach ($extendedScheduleData as $itemsBatch) {
+        foreach ($scheduleData as $itemsBatch) {
             foreach ($itemsBatch as $itm) {
                 $itGHid = $itm['group']->group_hemis_id ?? null;
                 $itSubj = $itm['subject']->subject_id ?? null;
@@ -911,8 +847,8 @@ class AcademicScheduleController extends Controller
         $admissionService = app(\App\Services\YnAdmissionService::class);
         $admissionCache = [];
 
-        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache) {
-            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache) {
+        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache, $currentYearDebtCount) {
+            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache, $currentYearDebtCount) {
                 $gHid = $item['group']->group_hemis_id;
                 $subjectId = $item['subject']->subject_id ?? null;
                 $semCode = $item['subject']->semester_code ?? null;
@@ -1010,6 +946,11 @@ class AcademicScheduleController extends Controller
                         'is_held_back' => $stat['held_back'] ?? false,
                         'past_debts' => $pastDebts,
                         'current_semester_debts' => $currentDebts,
+                        // Joriy o'quv yili bo'yicha umumiy qarz soni (SQL bilan
+                        // to'g'ridan-to'g'ri sanab olingan). is_held_back scope'ga
+                        // bog'liq bo'lganligi sababli, view'larda 4+ qarz
+                        // tekshiruvi shu maydonga tayanishi kerak.
+                        'current_year_debt_count' => $currentYearDebtCount[(string) $stu->hemis_id] ?? 0,
                         // YN ga ruxsat (YN oldi qaydnoma bilan bir xil mantiq)
                         'admission_status' => $admission['status'] ?? null,
                         'admission_reasons' => $admission['reasons'] ?? [],

@@ -1579,14 +1579,18 @@ class JournalController extends Controller
             $bv1 = $fetchAttemptOskiTest(3, true);  // 12b sababsiz
             $bv2 = $fetchAttemptOskiTest(3, false); // 12b sababli bilan
 
-            // Guruhda 2-urinish (attempt=2) imtihoni bo'lib o'tganmi? — agar bironta
-            // talabaning attempt=2 student_grades yozuvi mavjud bo'lsa, eng so'nggi
-            // lesson_date 2-urinish sanasi sifatida ishlatiladi. Bu admin
-            // exam_schedules.oski_resit_date/test_resit_date ni belgilamagan
+            // 2-urinish (attempt=2) sanalarini ikki darajada yig'amiz:
+            //  - guruh bo'yicha: bironta talabada attempt=2 baho yozilgan eng so'nggi
+            //    lesson_date — bu guruh sathidagi 2-urinish sanasi sifatida ishlatiladi.
+            //  - har talaba bo'yicha alohida: talabaning o'z attempt=2 yozuvidagi
+            //    eng so'nggi lesson_date — guruhda yakka 2-urinishchi (boshqalar
+            //    1-urinishda o'tib ketgan) holatlar uchun.
+            // Admin exam_schedules.oski_resit_date/test_resit_date ni belgilamagan
             // bo'lsa ham 3-urinishga promotion qilish imkonini beradi.
             $groupAttempt2LastDate = null;
+            $studentAttempt2LastDate = []; // hemis_id => YYYY-MM-DD
             if ($hasAttemptColForStage && !empty($studentHemisIds)) {
-                $groupAttempt2LastDate = DB::table('student_grades')
+                $a2Rows = DB::table('student_grades')
                     ->whereNull('deleted_at')
                     ->whereIn('student_hemis_id', $studentHemisIds)
                     ->where('subject_id', $subjectId)
@@ -1604,7 +1608,42 @@ class JournalController extends Controller
                             });
                     }))
                     ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-                    ->max('lesson_date');
+                    ->select('student_hemis_id', 'lesson_date')
+                    ->get();
+                foreach ($a2Rows as $r) {
+                    if (!$r->lesson_date) continue;
+                    $dateStr = is_string($r->lesson_date)
+                        ? substr($r->lesson_date, 0, 10)
+                        : \Carbon\Carbon::parse($r->lesson_date)->format('Y-m-d');
+                    if ($groupAttempt2LastDate === null || $dateStr > $groupAttempt2LastDate) {
+                        $groupAttempt2LastDate = $dateStr;
+                    }
+                    if (!isset($studentAttempt2LastDate[$r->student_hemis_id])
+                        || $dateStr > $studentAttempt2LastDate[$r->student_hemis_id]) {
+                        $studentAttempt2LastDate[$r->student_hemis_id] = $dateStr;
+                    }
+                }
+            }
+
+            // Yakka talabalar uchun individual exam_schedules yozuvi (admin
+            // yakka SAIDMURODOVA kabi talabaga 2-urinish sana qo'ygan holat).
+            $perStudentResitDates = []; // hemis_id => ['oski', 'test'] (YYYY-MM-DD|null)
+            try {
+                $perStuRows = DB::table('exam_schedules')
+                    ->whereNotNull('student_hemis_id')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->select('student_hemis_id', 'oski_resit_date', 'test_resit_date')
+                    ->get();
+                foreach ($perStuRows as $r) {
+                    $perStudentResitDates[$r->student_hemis_id] = [
+                        'oski' => $r->oski_resit_date ? (is_string($r->oski_resit_date) ? substr($r->oski_resit_date, 0, 10) : \Carbon\Carbon::parse($r->oski_resit_date)->format('Y-m-d')) : null,
+                        'test' => $r->test_resit_date ? (is_string($r->test_resit_date) ? substr($r->test_resit_date, 0, 10) : \Carbon\Carbon::parse($r->test_resit_date)->format('Y-m-d')) : null,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                Log::warning('per-student exam_schedules load failed: ' . $e->getMessage());
             }
 
             // Qo'shimcha (sababli farmoyish) baholar — alohida ustunlar
@@ -1748,31 +1787,52 @@ class JournalController extends Controller
                 // ammo 2-urinish sanasi o'tib ketgan talabalar 3-urinishga
                 // o'tkaziladi — jurnalda "3-urinish" badge ko'rinadi.
                 //
-                // 2-urinish sanasi manbalari (har qanday birovi yetarli):
-                //  (1) exam_schedules.oski_resit_date / test_resit_date — admin
-                //      jadvalda belgilagan rasmiy sana.
-                //  (2) student_grades.lesson_date — guruhdagi bironta talabaning
-                //      attempt=2 baho yozuvidagi sana. Bu admin sanani jadvalga
-                //      kiritmagan bo'lsa ham (lekin baho qo'yilgan) ishga tushadi.
+                // 2-urinish sanasi manbalari (ustuvorlik bo'yicha):
+                //  (1) Guruh sathidagi exam_schedules.oski_resit_date / test_resit_date
+                //  (2) Individual exam_schedules (yakka talabaga sana qo'yilgan)
+                //  (3) Guruhdagi bironta talabaning attempt=2 student_grades lesson_date
+                //  (4) Talabaning o'z attempt=2 student_grades lesson_date — yakka
+                //      2-urinishchi (guruhda boshqa hech kim 2-urinishda emas) holati
                 //
                 // Promotion sharti (HAR QANDAY birovi):
                 //  (a) shu talabaning attempt=2 bahosi mavjud (V<60) — o'zi
                 //      2-urinishni topshirgan.
-                //  (b) yuqoridagi manbalardan birortasi bugundan keyin emas —
-                //      2-urinish guruh bo'yicha o'tib ketgan.
+                //  (b) yuqoridagi manbalardan biri bugundan keyin emas —
+                //      2-urinish o'tib ketgan.
+                $oskiResitDateStr = ($examSchedule && $examSchedule->oski_resit_date)
+                    ? $examSchedule->oski_resit_date->format('Y-m-d') : null;
+                $testResitDateStr = ($examSchedule && $examSchedule->test_resit_date)
+                    ? $examSchedule->test_resit_date->format('Y-m-d') : null;
+                // Per-student schedule fallback
+                if ($oskiResitDateStr === null) {
+                    $oskiResitDateStr = $perStudentResitDates[$h]['oski'] ?? null;
+                }
+                if ($testResitDateStr === null) {
+                    $testResitDateStr = $perStudentResitDates[$h]['test'] ?? null;
+                }
+                // Guruh attempt=2 lesson_date fallback (har ikkisi uchun bir xil)
+                if ($oskiResitDateStr === null) {
+                    $oskiResitDateStr = $groupAttempt2LastDate;
+                }
+                if ($testResitDateStr === null) {
+                    $testResitDateStr = $groupAttempt2LastDate;
+                }
+                // Shu talabaning o'z attempt=2 lesson_date fallback
+                $stuOwnA2 = $studentAttempt2LastDate[$h] ?? null;
+                if ($oskiResitDateStr === null) {
+                    $oskiResitDateStr = $stuOwnA2;
+                }
+                if ($testResitDateStr === null) {
+                    $testResitDateStr = $stuOwnA2;
+                }
+
                 $oskiResitDone = $hasOskiForWeights
-                    ? ($examSchedule && $examSchedule->oski_resit_date && $examSchedule->oski_resit_date->format('Y-m-d') <= $today)
+                    ? ($oskiResitDateStr !== null && $oskiResitDateStr <= $today)
                     : true;
                 $testResitDone = $hasTestForWeights
-                    ? ($examSchedule && $examSchedule->test_resit_date && $examSchedule->test_resit_date->format('Y-m-d') <= $today)
+                    ? ($testResitDateStr !== null && $testResitDateStr <= $today)
                     : true;
                 $twoUrinishEnded = $oskiResitDone && $testResitDone;
-                if (!$twoUrinishEnded && $groupAttempt2LastDate !== null) {
-                    $lastDateStr = \Carbon\Carbon::parse($groupAttempt2LastDate)->format('Y-m-d');
-                    if ($lastDateStr <= $today) {
-                        $twoUrinishEnded = true;
-                    }
-                }
                 $hasAttempt2 = ($a !== null) || ($aQoshimcha !== null);
                 $shouldPromoteTo12b = $hasAttempt2 || $twoUrinishEnded;
                 if ($shouldPromoteTo12b && $stageKey === $svc::STAGE_IN_12A) {

@@ -535,13 +535,7 @@
                                                     $stuBadgeBg = $attempt === 1 ? '#dcfce7' : ($attempt === 3 ? '#ffedd5' : '#fef3c7');
                                                     $stuBadgeFg = $attempt === 1 ? '#16a34a' : ($attempt === 3 ? '#ea580c' : '#d97706');
                                                     $stuPullik = !empty($stuRow['is_pullik']);
-                                                    // 4+ qarz aniqlash: is_held_back attachStudentsToSchedule scope'da
-                                                    // har doim ham to'g'ri hisoblanmaydi (computeStudentAttemptStatuses
-                                                    // faqat yuklangan triple'lardagi qarzlarni sanaydi). Shu sababli
-                                                    // current_year_debt_count maydonini ishlatamiz - bu SQL bilan
-                                                    // to'g'ridan-to'g'ri joriy o'quv yili bo'yicha hisoblangan.
-                                                    $stuYearDebt = (int) ($stuRow['current_year_debt_count'] ?? 0);
-                                                    $stuHeldBack = !empty($stuRow['is_held_back']) || $stuYearDebt >= 4;
+                                                    $stuHeldBack = !empty($stuRow['is_held_back']);
                                                     // YN ga ruxsat (YnAdmissionService — YN oldi qaydnoma bilan bir xil mantiq)
                                                     $stuAdmission = $stuRow['admission_status'] ?? null;
                                                     $stuAdmReasons = $stuRow['admission_reasons'] ?? [];

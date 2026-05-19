@@ -3422,6 +3422,12 @@ class AcademicScheduleController extends Controller
 
         // Step 1: Collect all data and group by subject_id
         $subjectGroups = [];
+        // Cleanup uchun: items'da kelgan har (schedule_id, yn_type, attempt)
+        // bucket'ni qayd qilamiz — eligible students 0 bo'lib `continue` ga
+        // tushgan bo'lsa ham, shu bucket'dagi stale qatorlarni keyin
+        // tozalashimiz uchun. Bo'lmasa "0 eligible" buckets'lar tozalanmasdan
+        // qoladi va TV/proctor sahifasi noto'g'ri ko'rsatadi.
+        $itemBucketsSeen = []; // "schedule_id|yn_type|attempt" => true
 
         foreach ($items as $itemData) {
             $group = Group::where('group_hemis_id', $itemData['group_hemis_id'])->first();
@@ -3451,6 +3457,14 @@ class AcademicScheduleController extends Controller
             $itemStudentHemisId = !empty($itemData['student_hemis_id'])
                 ? (string) $itemData['student_hemis_id']
                 : null;
+
+            // Bu item'ning bucket'ini cleanup ro'yxatiga qo'shamiz — eligible
+            // 0 bo'lsa ham keyin tozalanadi.
+            $itemScheduleId = !empty($itemData['schedule_id']) ? (int) $itemData['schedule_id'] : null;
+            $itemYnType = isset($itemData['yn_type']) ? strtolower((string) $itemData['yn_type']) : null;
+            if ($itemScheduleId && $itemYnType) {
+                $itemBucketsSeen[$itemScheduleId . '|' . $itemYnType . '|' . $itemAttempt] = true;
+            }
 
             // Talabalarni olish:
             //  - Per-student qator (student_hemis_id berilgan) — faqat shu 1 talaba.
@@ -3754,13 +3768,17 @@ class AcademicScheduleController extends Controller
                         }
                     }
                 }
-                // Stale qatorlarni tozalash: shu Word generatsiyasida ko'rilgan
-                // har (schedule_id, yn_type, attempt) bo'yicha scheduled bo'lgan
-                // boshqa qatorlar (avvalgi noto'g'ri persistence'dan qolganlar,
-                // masalan per-student override hisobga olinmagan paytda yozilgan)
+                // Stale qatorlarni tozalash: items'da kelgan har bucket bo'yicha
+                // (eligible students 0 bo'lsa ham) shu (schedule_id, yn_type,
+                // attempt) bo'yicha scheduled qatorlar — kept'larsiz hammasi —
                 // o'chiriladi. in_progress/finished'larga tegmaymiz.
-                foreach ($persistedKeys as $bucketKey => $keptHemisIds) {
+                $allBucketsToClean = array_unique(array_merge(
+                    array_keys($persistedKeys),
+                    array_keys($itemBucketsSeen)
+                ));
+                foreach ($allBucketsToClean as $bucketKey) {
                     [$scheduleId, $ynType, $attempt] = explode('|', $bucketKey);
+                    $keptHemisIds = $persistedKeys[$bucketKey] ?? [];
                     \App\Models\ComputerAssignment::where('exam_schedule_id', (int) $scheduleId)
                         ->where('yn_type', $ynType)
                         ->where('attempt', (int) $attempt)

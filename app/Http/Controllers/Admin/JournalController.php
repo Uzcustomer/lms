@@ -1579,6 +1579,34 @@ class JournalController extends Controller
             $bv1 = $fetchAttemptOskiTest(3, true);  // 12b sababsiz
             $bv2 = $fetchAttemptOskiTest(3, false); // 12b sababli bilan
 
+            // Guruhda 2-urinish (attempt=2) imtihoni bo'lib o'tganmi? — agar bironta
+            // talabaning attempt=2 student_grades yozuvi mavjud bo'lsa, eng so'nggi
+            // lesson_date 2-urinish sanasi sifatida ishlatiladi. Bu admin
+            // exam_schedules.oski_resit_date/test_resit_date ni belgilamagan
+            // bo'lsa ham 3-urinishga promotion qilish imkonini beradi.
+            $groupAttempt2LastDate = null;
+            if ($hasAttemptColForStage && !empty($studentHemisIds)) {
+                $groupAttempt2LastDate = DB::table('student_grades')
+                    ->whereNull('deleted_at')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subjectId)
+                    ->where(function ($q) use ($semesterCode) {
+                        $q->where('semester_code', $semesterCode)
+                            ->orWhereIn('training_type_code', [101, 102]);
+                    })
+                    ->whereIn('training_type_code', [101, 102])
+                    ->where('attempt', 2)
+                    ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
+                        $q2->where('education_year_code', $educationYearCode)
+                            ->orWhere(function ($q3) use ($minScheduleDate) {
+                                $q3->whereNull('education_year_code')
+                                    ->when($minScheduleDate !== null, fn($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                            });
+                    }))
+                    ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
+                    ->max('lesson_date');
+            }
+
             // Qo'shimcha (sababli farmoyish) baholar — alohida ustunlar
             $aq = $fetchAttemptOskiTest(1, false, true);   // 1-urinish qo'shimcha
             $aq2 = $fetchAttemptOskiTest(2, false, true);  // 2-urinish qo'shimcha
@@ -1717,15 +1745,21 @@ class JournalController extends Controller
                 }
 
                 // 2-urinishdan o'tolmagan (V<60) yoki 2-urinishni topshirmagan,
-                // ammo 2-urinish OSKI/Test sanalari o'tib ketgan talabalar
-                // 3-urinishga o'tkaziladi — jurnalda "3-urinish" badge ko'rinadi.
+                // ammo 2-urinish sanasi o'tib ketgan talabalar 3-urinishga
+                // o'tkaziladi — jurnalda "3-urinish" badge ko'rinadi.
+                //
+                // 2-urinish sanasi manbalari (har qanday birovi yetarli):
+                //  (1) exam_schedules.oski_resit_date / test_resit_date — admin
+                //      jadvalda belgilagan rasmiy sana.
+                //  (2) student_grades.lesson_date — guruhdagi bironta talabaning
+                //      attempt=2 baho yozuvidagi sana. Bu admin sanani jadvalga
+                //      kiritmagan bo'lsa ham (lekin baho qo'yilgan) ishga tushadi.
                 //
                 // Promotion sharti (HAR QANDAY birovi):
-                //  (a) attempt=2 (12a yoki 12a-qo'shimcha) bahosi mavjud — ya'ni
-                //      talaba 2-urinishni topshirgan, lekin stageKey IN_12A bo'lib
-                //      qolgan demak V<60.
-                //  (b) attempt=2 bahosi yo'q, lekin 2-urinish OSKI/Test sanalari
-                //      bugundan oldin — talaba 2-urinishni o'tkazib yuborgan.
+                //  (a) shu talabaning attempt=2 bahosi mavjud (V<60) — o'zi
+                //      2-urinishni topshirgan.
+                //  (b) yuqoridagi manbalardan birortasi bugundan keyin emas —
+                //      2-urinish guruh bo'yicha o'tib ketgan.
                 $oskiResitDone = $hasOskiForWeights
                     ? ($examSchedule && $examSchedule->oski_resit_date && $examSchedule->oski_resit_date->format('Y-m-d') <= $today)
                     : true;
@@ -1733,6 +1767,12 @@ class JournalController extends Controller
                     ? ($examSchedule && $examSchedule->test_resit_date && $examSchedule->test_resit_date->format('Y-m-d') <= $today)
                     : true;
                 $twoUrinishEnded = $oskiResitDone && $testResitDone;
+                if (!$twoUrinishEnded && $groupAttempt2LastDate !== null) {
+                    $lastDateStr = \Carbon\Carbon::parse($groupAttempt2LastDate)->format('Y-m-d');
+                    if ($lastDateStr <= $today) {
+                        $twoUrinishEnded = true;
+                    }
+                }
                 $hasAttempt2 = ($a !== null) || ($aQoshimcha !== null);
                 $shouldPromoteTo12b = $hasAttempt2 || $twoUrinishEnded;
                 if ($shouldPromoteTo12b && $stageKey === $svc::STAGE_IN_12A) {

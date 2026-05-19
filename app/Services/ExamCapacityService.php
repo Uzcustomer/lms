@@ -414,6 +414,46 @@ class ExamCapacityService
     }
 
     /**
+     * Berilgan (group, subject, semester) bo'yicha 2/3-urinishga loyiq
+     * (yiqilgan) talabalarning hemis_id ro'yxatini qaytaradi —
+     * resitEligibleCounts bilan bir xil mantiq, faqat ID'lar.
+     *
+     * @return array<int,string>  student_hemis_id ro'yxati
+     */
+    public static function resitEligibleStudentIds(string $groupHemisId, $subjectId, $semesterCode): array
+    {
+        if (!$groupHemisId || !$subjectId || !$semesterCode) {
+            return [];
+        }
+        try {
+            $hasAttemptCol = Schema::hasColumn('student_grades', 'attempt');
+            $query = DB::table('student_grades as sg')
+                ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                ->where('st.group_id', $groupHemisId)
+                ->where('st.student_status_code', 11)
+                ->where('sg.subject_id', $subjectId)
+                ->where('sg.semester_code', $semesterCode)
+                ->whereIn('sg.training_type_code', [101, 102])
+                ->whereNull('sg.deleted_at');
+            if ($hasAttemptCol) {
+                $query->where(function ($w) {
+                    $w->where('sg.attempt', '>=', 2)
+                      ->orWhere(function ($x) {
+                          $x->where(function ($y) { $y->where('sg.attempt', 1)->orWhereNull('sg.attempt'); })
+                            ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+                      });
+                });
+            } else {
+                $query->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+            }
+            return $query->distinct()->pluck('sg.student_hemis_id')->map(fn($v) => (string) $v)->all();
+        } catch (\Throwable $e) {
+            Log::warning('ExamCapacityService::resitEligibleStudentIds failed: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
      * Berilgan (group, subject, semester) triples bo'yicha 2/3-urinishga
      * loyiq talabalar (yiqilganlar) sonini batch DB so'rovi bilan hisoblaydi.
      *

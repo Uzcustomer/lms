@@ -240,7 +240,8 @@ class AcademicScheduleController extends Controller
         string $groupHemisId,
         string $subjectId,
         string $semesterCode,
-        string $dateColumn
+        string $dateColumn,
+        int $attempt = 1
     ): \Illuminate\Database\Eloquent\Collection {
         $excluded = ExamSchedule::where('group_hemis_id', $groupHemisId)
             ->where('subject_id', $subjectId)
@@ -255,6 +256,17 @@ class AcademicScheduleController extends Controller
             ->whereNotNull('telegram_verified_at');
         if (!empty($excluded)) {
             $query->whereNotIn('hemis_id', $excluded);
+        }
+        // 2/3-urinish: faqat yiqilgan (retaker) talabalarga jo'natamiz —
+        // 1-urinishni o'tganlarga ortiqcha xabar bormasin.
+        if ($attempt >= 2) {
+            $retakers = \App\Services\ExamCapacityService::resitEligibleStudentIds(
+                $groupHemisId, $subjectId, $semesterCode
+            );
+            if (empty($retakers)) {
+                return new \Illuminate\Database\Eloquent\Collection();
+            }
+            $query->whereIn('hemis_id', $retakers);
         }
         return $query->get();
     }
@@ -5476,7 +5488,8 @@ class AcademicScheduleController extends Controller
             (string) $request->group_hemis_id,
             (string) $request->subject_id,
             (string) $request->semester_code,
-            $dateColumn
+            $dateColumn,
+            $attempt
         );
         $sentCount = $this->notifyStudentsExamTime(
             $students,

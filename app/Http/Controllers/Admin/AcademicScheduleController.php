@@ -803,14 +803,66 @@ class AcademicScheduleController extends Controller
         $admissionService = app(\App\Services\YnAdmissionService::class);
         $admissionCache = [];
 
-        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache) {
-            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache) {
+        // SUBGROUP membership: (a)/(b)/(c) varianti bo'lgan fanlar uchun
+        // curriculum_subjects.in_group bo'sh emas. Bunday fanlarda guruh
+        // talabalari subgroup'larga bo'lingan — har bir talaba faqat bitta
+        // variantni oladi. student_subjects jadvali shu bog'lanishni saqlaydi.
+        // Bu yerda barcha kerakli curriculum_subject_hemis_id'lar uchun
+        // student_subjects'ni batch yuklab, har variant uchun "ruxsat etilgan"
+        // hemis_id'lar to'plamini quramiz. Quyida iterate qilinganda guruhdagi
+        // boshqa subgrouplardagi talabalar ro'yxatdan chiqarib tashlanadi.
+        $subjectIdsWithVariant = [];
+        $scheduleData->each(function ($items) use (&$subjectIdsWithVariant) {
+            foreach ($items as $it) {
+                $subj = $it['subject'] ?? null;
+                if (!$subj) continue;
+                $inGroup = trim((string) ($subj->in_group ?? ''));
+                if ($inGroup === '') continue;
+                $csHid = $subj->curriculum_subject_hemis_id ?? null;
+                if ($csHid !== null) $subjectIdsWithVariant[(string) $csHid] = true;
+            }
+        });
+        // subgroupMembers[(string) curriculum_subject_hemis_id] => [hemis_id => true]
+        $subgroupMembers = [];
+        if (!empty($subjectIdsWithVariant)) {
+            try {
+                $rows = DB::table('student_subjects')
+                    ->whereIn('curriculum_subject_hemis_id', array_keys($subjectIdsWithVariant))
+                    ->select('student_hemis_id', 'curriculum_subject_hemis_id')
+                    ->get();
+                foreach ($rows as $r) {
+                    $cs = (string) $r->curriculum_subject_hemis_id;
+                    $hid = (string) $r->student_hemis_id;
+                    if (!isset($subgroupMembers[$cs])) $subgroupMembers[$cs] = [];
+                    $subgroupMembers[$cs][$hid] = true;
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('attachStudentsToSchedule: subgroup load failed: ' . $e->getMessage());
+            }
+        }
+
+        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache, $subgroupMembers) {
+            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache, $subgroupMembers) {
                 $gHid = $item['group']->group_hemis_id;
                 $subjectId = $item['subject']->subject_id ?? null;
                 $semCode = $item['subject']->semester_code ?? null;
                 $statusKey = $gHid . '|' . $subjectId . '|' . $semCode;
                 $statusByStudent = $studentStatus[$statusKey] ?? [];
                 $studentList = $studentsByGroup->get($gHid, collect());
+
+                // SUBGROUP filter: agar fan (a)/(b)/(c) varianti bo'lsa
+                // (in_group bo'sh emas), faqat shu variantga yozilgan
+                // talabalarni qoldiramiz. Boshqa subgroup talabalari
+                // umuman ro'yxatda chiqmaydi (ularda JN/MT yo'q, "ruxsat yo'q"
+                // chiqishi noto'g'ri ko'rinishni keltirib chiqarardi).
+                $itemInGroup = trim((string) ($item['subject']->in_group ?? ''));
+                $itemCsHid = $item['subject']->curriculum_subject_hemis_id ?? null;
+                if ($itemInGroup !== '' && $itemCsHid !== null) {
+                    $allowed = $subgroupMembers[(string) $itemCsHid] ?? [];
+                    if (!empty($allowed)) {
+                        $studentList = $studentList->filter(fn($s) => isset($allowed[(string) $s->hemis_id]))->values();
+                    }
+                }
 
                 // Admission map (Ruxsat / Shartli / X) — bitta marta hisoblanadi.
                 $admissionKey = $gHid . '|' . $subjectId . '|' . $semCode;

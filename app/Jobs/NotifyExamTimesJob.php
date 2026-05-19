@@ -65,7 +65,7 @@ class NotifyExamTimesJob implements ShouldQueue
                 $dateStr = $dateVal instanceof Carbon ? $dateVal->format('Y-m-d') : (string) $dateVal;
                 if ($dateStr < $this->dateFrom || $dateStr > $this->dateTo) continue;
 
-                $students = $this->collectRecipients($schedule, $s['date']);
+                $students = $this->collectRecipients($schedule, $s['date'], (int) $s['attempt']);
                 if ($students->isEmpty()) continue;
 
                 $ynLabel = $s['yn'];
@@ -76,6 +76,12 @@ class NotifyExamTimesJob implements ShouldQueue
                 $dateFmt = Carbon::parse($dateStr)->format('d.m.Y');
                 $timeHM = substr((string) $timeVal, 0, 5);
 
+                // Bulk xabar — faqat fan/sana/vaqt. Komp raqamini
+                // ExamScheduleTickJob imtihondan ~5 daqiqa oldin avtomatik
+                // yuboradi (notifyReveal), ekranda esa /tv/kompyuter displeyi
+                // ko'rsatadi. Bulk xabarda komp № yuborilsa, talaba uzoq
+                // muddat oldin ko'rib qoladi va boshqa kompga o'tirib qo'yishi
+                // mumkin — shu sabab ataylab kiritilmaydi.
                 $totalNotified += $this->sendBatch(
                     $telegram, $students, $subjectName, $ynLabel, $dateFmt, $timeHM
                 );
@@ -93,9 +99,10 @@ class NotifyExamTimesJob implements ShouldQueue
     /**
      * Schedule uchun xabar yuboriladigan talabalarni qaytaradi.
      * Per-student row (individual grafik) bo'lsa — faqat shu talabaga.
-     * Aks holda guruh talabalari (individual grafikdagilar chiqib ketadi).
+     * Guruh sathidagi 1-urinishda butun guruh; 2/3-urinishda esa
+     * faqat yiqilgan (retaker) talabalar (individual grafikdagilar chiqarib).
      */
-    private function collectRecipients(ExamSchedule $schedule, string $dateColumn): \Illuminate\Support\Collection
+    private function collectRecipients(ExamSchedule $schedule, string $dateColumn, int $attempt = 1): \Illuminate\Support\Collection
     {
         if (!empty($schedule->student_hemis_id)) {
             return Student::where('hemis_id', $schedule->student_hemis_id)
@@ -111,10 +118,23 @@ class NotifyExamTimesJob implements ShouldQueue
             ->pluck('student_hemis_id')
             ->all();
 
-        return Student::where('group_id', $schedule->group_hemis_id)
+        $query = Student::where('group_id', $schedule->group_hemis_id)
             ->where('student_status_code', 11)
-            ->when(!empty($individualIds), fn($q) => $q->whereNotIn('hemis_id', $individualIds))
-            ->get();
+            ->when(!empty($individualIds), fn($q) => $q->whereNotIn('hemis_id', $individualIds));
+
+        // 2/3-urinish — faqat yiqilganlar (1-urinishni o'tganlarga xabar ortiqcha)
+        if ($attempt >= 2) {
+            $retakers = \App\Services\ExamCapacityService::resitEligibleStudentIds(
+                (string) $schedule->group_hemis_id,
+                $schedule->subject_id,
+                $schedule->semester_code
+            );
+            if (empty($retakers)) {
+                return collect();
+            }
+            $query->whereIn('hemis_id', $retakers);
+        }
+        return $query->get();
     }
 
     private function sendBatch(

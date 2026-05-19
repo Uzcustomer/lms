@@ -77,6 +77,11 @@ Route::get('/refresh-csrf', function () {
     return response()->json(['token' => csrf_token()]);
 });
 
+// TV displeyi: test markazi tashqarisidagi ekranda guruhlar kirish jadvali.
+// Public — login talab qilinmaydi, ichki tarmoq darajasida cheklash veb-server
+// konfiguratsiyasi (nginx allow/deny) orqali qilinadi.
+Route::get('/tv/jadval', [AcademicScheduleController::class, 'tvJadval'])->name('tv.jadval');
+
 // Sababli ariza tekshirish (QR kod orqali, public)
 Route::get('/absence-excuse/verify/{token}', [\App\Http\Controllers\AbsenceExcuseVerificationController::class, 'verify'])->name('absence-excuse.verify');
 Route::get('/absence-excuse/verify/{token}/pdf', [\App\Http\Controllers\AbsenceExcuseVerificationController::class, 'viewPdf'])->name('absence-excuse.verify.pdf');
@@ -679,6 +684,20 @@ Route::prefix('admin')->name('admin.')->group(function () {
                     ->name('group-test-schedule.export');
             });
 
+        // Dekanat — kech qolgan talabani SHU KUN ichida boshqa vaqtga
+        // o'tkazish (test markazi toggle holatidan qat'i nazar). Har talabaga
+        // bir kunda 1 marta. Yangi vaqt — bo'sh slotlardan, ish soatlari
+        // va kompyuter bandligi tekshirilgan holda.
+        Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|dekan'])
+            ->group(function () {
+                Route::get('/dean-exam-reschedule', [\App\Http\Controllers\Admin\DeanExamRescheduleController::class, 'index'])
+                    ->name('dean-exam-reschedule.index');
+                Route::get('/dean-exam-reschedule/slots', [\App\Http\Controllers\Admin\DeanExamRescheduleController::class, 'availableSlots'])
+                    ->name('dean-exam-reschedule.slots');
+                Route::post('/dean-exam-reschedule', [\App\Http\Controllers\Admin\DeanExamRescheduleController::class, 'store'])
+                    ->name('dean-exam-reschedule.store');
+            });
+
         Route::get('/lesson-histories', [LessonController::class, 'historyIndex'])->name('lesson.histories-index');
 
         Route::get('/lessons/create', [LessonController::class, 'index'])->name('lessons.create');
@@ -761,6 +780,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/delete-student-grade', [QuizResultController::class, 'deleteStudentGrade'])->name('delete-student-grade');
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::post('/update-grade', [QuizResultController::class, 'updateGrade'])->name('update-grade');
+            Route::post('/update-fan-id', [QuizResultController::class, 'updateFanId'])->name('update-fan-id');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 
@@ -1360,6 +1380,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/delete-student-grade', [QuizResultController::class, 'deleteStudentGrade'])->name('delete-student-grade');
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::post('/update-grade', [QuizResultController::class, 'updateGrade'])->name('update-grade');
+            Route::post('/update-fan-id', [QuizResultController::class, 'updateFanId'])->name('update-fan-id');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 

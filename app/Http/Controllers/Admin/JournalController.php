@@ -919,6 +919,9 @@ class JournalController extends Controller
         // Get other averages (ON, OSKI, Test, Quiz) with status-based grade calculation
         // Filter by education_year_code to exclude old education year data
         // OSKI/Test (101,102) uchun semester_code filtrini yumshatish — diagnostika boshqa semester bilan saqlagan bo'lishi mumkin
+        // is_qoshimcha=1 qatorlar bu yerda chiqarib tashlanadi — ular alohida
+        // 'qo'shimcha farmoyish' ustunlarida ko'rinadi (oskiQosh1Map/testQosh1Map).
+        $hasQoshimchaColMain = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'is_qoshimcha');
         $otherGradesRaw = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
@@ -928,6 +931,7 @@ class JournalController extends Controller
                     ->orWhereIn('training_type_code', [101, 102]);
             })
             ->whereIn('training_type_code', [100, 101, 102, 103])
+            ->when($hasQoshimchaColMain, fn($q) => $q->where('is_qoshimcha', 0))
             ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
                 $q2->where('education_year_code', $educationYearCode)
                     ->orWhere(function ($q3) use ($minScheduleDate) {
@@ -1518,10 +1522,11 @@ class JournalController extends Controller
             $stageLevelCode = (string) ($semester?->level_code ?? '');
             $hasAttemptColForStage = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
 
+            $hasQoshimchaCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'is_qoshimcha');
+
             // 12a (attempt=2) va 12b (attempt=3) OSKI/Test baholari (sababsiz va sababli alohida)
-            // Asosiy otherGradesRaw kabi semester_code shartini yumshatamiz — diagnostika
-            // boshqa semestr bilan saqlangan yozuvlarni ham qamrab oladi.
-            $fetchAttemptOskiTest = function (int $attempt, bool $excludeSababli) use ($studentHemisIds, $subjectId, $semesterCode, $hasAttemptColForStage, $educationYearCode, $minScheduleDate) {
+            // $qoshimcha: null = e'tibor berma; true = faqat qo'shimcha; false = faqat asosiy
+            $fetchAttemptOskiTest = function (int $attempt, bool $excludeSababli, ?bool $qoshimcha = null) use ($studentHemisIds, $subjectId, $semesterCode, $hasAttemptColForStage, $hasQoshimchaCol, $educationYearCode, $minScheduleDate) {
                 if (!$hasAttemptColForStage) return [101 => [], 102 => []];
                 $rows = DB::table('student_grades')
                     ->whereNull('deleted_at')
@@ -1533,6 +1538,7 @@ class JournalController extends Controller
                     })
                     ->whereIn('training_type_code', [101, 102])
                     ->where('attempt', $attempt)
+                    ->when($hasQoshimchaCol && $qoshimcha !== null, fn($q) => $q->where('is_qoshimcha', $qoshimcha ? 1 : 0))
                     // Joriy o'quv yili filtri: talaba ilgari boshqa guruhda
                     // (chetlashtirilgan/qaytarilgan) bo'lib, o'sha vaqtdagi OSKI/Test
                     // urinishlari hozirgi jurnalga oqib o'tmasligi uchun.
@@ -1568,16 +1574,26 @@ class JournalController extends Controller
                 return $avg;
             };
 
-            $av1 = $fetchAttemptOskiTest(2, true);  // 12a sababsiz
-            $av2 = $fetchAttemptOskiTest(2, false); // 12a sababli bilan
+            $av1 = $fetchAttemptOskiTest(2, true, false);  // 12a sababsiz, asosiy
+            $av2 = $fetchAttemptOskiTest(2, false, false); // 12a sababli bilan, asosiy
             $bv1 = $fetchAttemptOskiTest(3, true);  // 12b sababsiz
             $bv2 = $fetchAttemptOskiTest(3, false); // 12b sababli bilan
+
+            // Qo'shimcha (sababli farmoyish) baholar — alohida ustunlar
+            $aq = $fetchAttemptOskiTest(1, false, true);   // 1-urinish qo'shimcha
+            $aq2 = $fetchAttemptOskiTest(2, false, true);  // 2-urinish qo'shimcha
 
             // Bladega ham uzatamiz: 2-urinish va 3-urinish OSKI/Test ustunlari uchun
             $oskiAttempt2Map = $av2[101] ?? [];
             $testAttempt2Map = $av2[102] ?? [];
             $oskiAttempt3Map = $bv2[101] ?? [];
             $testAttempt3Map = $bv2[102] ?? [];
+
+            // Qo'shimcha xaritalar
+            $oskiQosh1Map = $aq[101] ?? [];
+            $testQosh1Map = $aq[102] ?? [];
+            $oskiQosh2Map = $aq2[101] ?? [];
+            $testQosh2Map = $aq2[102] ?? [];
 
             foreach ($students as $stu) {
                 $h = $stu->hemis_id;
@@ -1626,10 +1642,29 @@ class JournalController extends Controller
                 if (!$hasSababli) foreach (($mtGrades[$h] ?? []) as $dg) foreach ($dg as $g) if (!empty($g['retake_was_sababli'])) { $hasSababli = true; break 2; }
                 if (!$hasSababli && (!empty($other['on_sababli']) || !empty($other['oski_sababli']) || !empty($other['test_sababli']))) $hasSababli = true;
 
+                // Qo'shimcha farmoyish baholar (is_qoshimcha=1, attempt=1): asosiy bahosi
+                // bo'lmagan talabaga V1 sifatida ishlatiladi va shu orqali asosiy bosqichni
+                // o'tgan deb hisoblanadi.
+                $oskiQ1Val = $oskiQosh1Map[$h] ?? null;
+                $testQ1Val = $testQosh1Map[$h] ?? null;
+                $hasQosh1 = $oskiQ1Val !== null || $testQ1Val !== null;
+
                 // Asosiy va qo'shimcha — agar sababli bo'lmasa qo'shimcha = main, aks holda asosiy ham main (chunki bizda V1 alohida ajratilmagan).
                 // Asosiy logika: stage detection mainni qo'shimcha holatida ko'radi. Sababli flag bo'lsa
                 // determineStage qo'shimcha_passed deb qaytaradi.
                 $qoshimcha = $hasSababli ? $main : null;
+
+                // Qo'shimcha farmoyish bahosi mavjud bo'lsa, uni asosiy o'rnida ishlatib
+                // qo'shimcha stsenariyni quramiz (asosiy bahosi yo'q kataklar uchun fallback).
+                if ($hasQosh1) {
+                    $qoshimcha = $svc::buildScenario(
+                        $jn, $mt, $other['on'] ?? null,
+                        $other['oski'] ?? $oskiQ1Val,
+                        $other['test'] ?? $testQ1Val,
+                        $davomatPct,
+                        $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode
+                    );
+                }
 
                 // 12a stsenariy — JN/MT bir xil, OSKI/Test attempt=2 dan
                 $a = null;
@@ -1780,6 +1815,10 @@ class JournalController extends Controller
             'testAttempt2Map',
             'oskiAttempt3Map',
             'testAttempt3Map',
+            'oskiQosh1Map',
+            'testQosh1Map',
+            'oskiQosh2Map',
+            'testQosh2Map',
             'oskiAttempt1DateMap',
             'testAttempt1DateMap',
             'oskiAttempt2DateMap',

@@ -260,11 +260,32 @@
                         $sortedStatuses = array_keys($uniqueStatuses); sort($sortedStatuses);
                     @endphp
 
+                    {{-- Ko'p slotni tanlab Word'ga chiqarish toolbar'i. Har bir slot
+                         qatorida checkbox bor; bu yerda tanlangan slotlar
+                         vaqt tartibida bitta .docx'ga birlashtirib yuklab olinadi. --}}
+                    <div class="flex flex-wrap items-center gap-2 mb-3 p-2.5 bg-slate-50 border border-slate-200 rounded-lg">
+                        <label class="inline-flex items-center gap-1.5 text-xs font-medium text-slate-700 cursor-pointer select-none">
+                            <input type="checkbox" id="bk-select-all" class="w-3.5 h-3.5 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500">
+                            Hammasini tanlash
+                        </label>
+                        <span class="text-xs text-slate-500">Tanlangan: <span id="bk-selected-count" class="font-semibold text-indigo-700">0</span></span>
+                        <button type="button" id="bk-bulk-word"
+                                class="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white disabled:bg-slate-300 disabled:cursor-not-allowed transition"
+                                disabled
+                                title="Tanlangan slotlarni vaqt tartibida bitta Word hujjatga chiqarish">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                            </svg>
+                            Tanlanganlarni Word'ga chiqarish
+                        </button>
+                    </div>
+
                     {{-- Jadval --}}
                     <div class="overflow-x-auto border border-gray-200 rounded-lg">
                         <table id="bk-table" class="min-w-full divide-y divide-gray-200 text-sm">
                             <thead class="bg-gray-50">
                                 <tr>
+                                    <th class="px-2 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider w-8"></th>
                                     <th class="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">#</th>
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Vaqt</th>
                                     <th class="px-3 py-2.5 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Guruhlar</th>
@@ -276,6 +297,7 @@
                                     <th class="px-3 py-2.5 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Holat</th>
                                 </tr>
                                 <tr class="bg-gray-50 border-t border-gray-200">
+                                    <th class="px-2 py-1.5"></th>
                                     <th class="px-2 py-1.5">
                                         <button type="button" id="bk-filter-reset" class="w-full text-[10px] font-semibold text-slate-500 hover:text-indigo-700 hover:bg-indigo-50 rounded px-1 py-0.5 transition" title="Filtrlarni tozalash">↺</button>
                                     </th>
@@ -442,6 +464,30 @@
                                         data-free="{{ $isNoTime ? '' : (int) $slot['free'] }}"
                                         data-usage="{{ $isNoTime ? '' : (float) $slot['usage_percent'] }}"
                                         data-status="{{ $statusLabel }}">
+                                        <td class="px-2 py-2 text-center">
+                                            @php
+                                                $rowExportItems = [];
+                                                foreach ($slot['groups'] as $_grp) {
+                                                    if (empty($_grp['group_hemis_id']) || empty($_grp['subject_id']) || empty($_grp['semester_code'])) continue;
+                                                    $rowExportItems[] = [
+                                                        'group_hemis_id' => (string) $_grp['group_hemis_id'],
+                                                        'subject_id'     => (string) $_grp['subject_id'],
+                                                        'semester_code'  => (string) $_grp['semester_code'],
+                                                        'attempt'        => (int) ($_grp['attempt'] ?? 1),
+                                                        'student_hemis_id' => !empty($_grp['student_hemis_id']) ? (string) $_grp['student_hemis_id'] : null,
+                                                        'schedule_id'    => (int) ($_grp['schedule_id'] ?? 0),
+                                                        'yn_type'        => isset($_grp['yn_type']) ? strtolower((string) $_grp['yn_type']) : null,
+                                                    ];
+                                                }
+                                            @endphp
+                                            @if(!empty($rowExportItems) && !$isNoTime)
+                                                <input type="checkbox"
+                                                       class="bk-row-select w-4 h-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                                       data-items='@json($rowExportItems)'
+                                                       data-exam-time="{{ $slot['time'] }}"
+                                                       title="Bu slotni Word eksportiga qo'shish">
+                                            @endif
+                                        </td>
                                         <td class="px-3 py-2 text-gray-500">{{ $i + 1 }}</td>
                                         <td class="px-3 py-2 text-center">
                                             <div class="flex flex-col items-center gap-1">
@@ -455,9 +501,17 @@
                                                     </span>
                                                 @endif
                                                 @php
+                                                    // Bitta slotda guruh + per-student qatorlar bir xil (group,
+                                                    // subject, sem) uchun bir necha marta uchrashi mumkin —
+                                                    // Word'ga faqat unique kombinatsiyani yuboramiz, aks holda
+                                                    // bir talaba ro'yxatda bir necha marta chiqadi.
                                                     $exportItems = [];
+                                                    $seen = [];
                                                     foreach ($slot['groups'] as $_grp) {
                                                         if (empty($_grp['group_hemis_id']) || empty($_grp['subject_id']) || empty($_grp['semester_code'])) continue;
+                                                        $k = $_grp['group_hemis_id'] . '|' . $_grp['subject_id'] . '|' . $_grp['semester_code'];
+                                                        if (isset($seen[$k])) continue;
+                                                        $seen[$k] = true;
                                                         $exportItems[] = [
                                                             'group_hemis_id' => (string) $_grp['group_hemis_id'],
                                                             'subject_id'     => (string) $_grp['subject_id'],
@@ -465,6 +519,9 @@
                                                             // 2/3-urinish bo'lsa - server tomonida talabalarni filterlash uchun
                                                             // (4+ qarzdorlarni va pullik talabalarni Word ro'yxatdan chiqarish).
                                                             'attempt'        => (int) ($_grp['attempt'] ?? 1),
+                                                            'student_hemis_id' => !empty($_grp['student_hemis_id']) ? (string) $_grp['student_hemis_id'] : null,
+                                                            'schedule_id'    => (int) ($_grp['schedule_id'] ?? 0),
+                                                            'yn_type'        => isset($_grp['yn_type']) ? strtolower((string) $_grp['yn_type']) : null,
                                                         ];
                                                     }
                                                 @endphp
@@ -517,6 +574,9 @@
                                                             {{ $grpAttempt }}-urinish
                                                         </span>
                                                         <span class="font-semibold text-gray-900 text-xs whitespace-nowrap">{{ $grp['group_name'] }}</span>
+                                                        @if(!empty($grp['is_individual']))
+                                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-fuchsia-100 text-fuchsia-800" title="Individual vaqt qo'yilgan talaba">(individual)</span>
+                                                        @endif
                                                         @if(!empty($grp['subject_name']))
                                                             <span class="text-gray-400 text-xs">—</span>
                                                             <span class="text-gray-700 text-xs">{{ $grp['subject_name'] }}</span>
@@ -589,7 +649,7 @@
                                     </tr>
                                 @endforeach
                                 <tr id="bk-empty-row" class="hidden">
-                                    <td colspan="9" class="px-3 py-6 text-center text-sm text-slate-500">
+                                    <td colspan="10" class="px-3 py-6 text-center text-sm text-slate-500">
                                         Filtr bo'yicha mos qator topilmadi.
                                     </td>
                                 </tr>
@@ -729,6 +789,133 @@
                                     });
                                 });
                             });
+                        })();
+
+                        // Bulk: bir nechta slotni tanlab vaqt tartibida bitta Word.
+                        // Har checked qator data-items va data-exam-time atributlaridan
+                        // o'qiladi; har item'ga exam_time qo'shilib serverga yuboriladi —
+                        // controller per-item exam_time bo'lsa vaqt tartibida bitta
+                        // hujjat yasaydi.
+                        (function() {
+                            const bulkBtn = document.getElementById('bk-bulk-word');
+                            const selectAll = document.getElementById('bk-select-all');
+                            const countEl = document.getElementById('bk-selected-count');
+                            const url = @json(route($ynOldiWordRoute));
+                            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+
+                            function getRowCheckboxes() {
+                                return Array.from(document.querySelectorAll('.bk-row-select'));
+                            }
+                            function getVisibleCheckboxes() {
+                                return getRowCheckboxes().filter(cb => !cb.closest('tr')?.classList.contains('hidden'));
+                            }
+                            function refreshState() {
+                                const checked = getRowCheckboxes().filter(cb => cb.checked);
+                                if (countEl) countEl.textContent = String(checked.length);
+                                if (bulkBtn) bulkBtn.disabled = checked.length === 0;
+                                if (selectAll) {
+                                    const visible = getVisibleCheckboxes();
+                                    const visibleChecked = visible.filter(cb => cb.checked);
+                                    selectAll.checked = visible.length > 0 && visibleChecked.length === visible.length;
+                                    selectAll.indeterminate = visibleChecked.length > 0 && visibleChecked.length < visible.length;
+                                }
+                            }
+
+                            getRowCheckboxes().forEach(cb => cb.addEventListener('change', refreshState));
+                            if (selectAll) {
+                                selectAll.addEventListener('change', function() {
+                                    getVisibleCheckboxes().forEach(cb => { cb.checked = selectAll.checked; });
+                                    refreshState();
+                                });
+                            }
+                            // Filtr qo'llanilganda select-all holatini yangilash.
+                            document.querySelectorAll('.bk-filter').forEach(f => f.addEventListener('change', refreshState));
+                            const resetBtn = document.getElementById('bk-filter-reset');
+                            if (resetBtn) resetBtn.addEventListener('click', refreshState);
+
+                            if (bulkBtn) {
+                                bulkBtn.addEventListener('click', function() {
+                                    const checked = getRowCheckboxes().filter(cb => cb.checked);
+                                    if (checked.length === 0) return;
+
+                                    const items = [];
+                                    checked.forEach(function(cb) {
+                                        let rowItems;
+                                        try { rowItems = JSON.parse(cb.getAttribute('data-items') || '[]'); }
+                                        catch (_) { rowItems = []; }
+                                        const examTime = cb.getAttribute('data-exam-time') || '';
+                                        rowItems.forEach(function(it) {
+                                            if (examTime) it.exam_time = examTime;
+                                            items.push(it);
+                                        });
+                                    });
+                                    if (items.length === 0) {
+                                        alert('Tanlangan slotlarda guruh topilmadi.');
+                                        return;
+                                    }
+
+                                    const originalHTML = bulkBtn.innerHTML;
+                                    bulkBtn.disabled = true;
+                                    bulkBtn.innerHTML = '<svg class="animate-spin w-3.5 h-3.5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle style="opacity:0.25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path style="opacity:0.75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path></svg> Yuklanmoqda...';
+
+                                    fetch(url, {
+                                        method: 'POST',
+                                        headers: {
+                                            'Content-Type': 'application/json',
+                                            'Accept': 'application/json',
+                                            'X-Requested-With': 'XMLHttpRequest',
+                                            'X-CSRF-TOKEN': csrfToken,
+                                        },
+                                        body: JSON.stringify({
+                                            items: items,
+                                            compact: true,
+                                            exam_date: @json($date->format('Y-m-d')),
+                                        }),
+                                    })
+                                    .then(function(response) {
+                                        if (!response.ok) {
+                                            return response.text().then(function(text) {
+                                                let msg = 'Xatolik: ' + response.status;
+                                                try { const j = JSON.parse(text); msg = j.error || j.message || msg; } catch (_) {}
+                                                throw new Error(msg);
+                                            });
+                                        }
+                                        const contentType = response.headers.get('content-type') || '';
+                                        if (contentType.indexOf('application/json') !== -1) {
+                                            return response.json().then(function(j) {
+                                                throw new Error(j.error || j.message || 'Kutilmagan javob');
+                                            });
+                                        }
+                                        let filename = 'yn_oldi_qaydnoma_slotlar.docx';
+                                        const disposition = response.headers.get('Content-Disposition');
+                                        if (disposition) {
+                                            const match = disposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
+                                            if (match && match[1]) filename = match[1].replace(/['"]/g, '');
+                                        }
+                                        return response.blob().then(function(blob) { return { blob: blob, filename: filename }; });
+                                    })
+                                    .then(function(data) {
+                                        if (!data || !data.blob) return;
+                                        const objectUrl = window.URL.createObjectURL(data.blob);
+                                        const a = document.createElement('a');
+                                        a.href = objectUrl;
+                                        a.download = data.filename;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        window.URL.revokeObjectURL(objectUrl);
+                                        a.remove();
+                                    })
+                                    .catch(function(err) {
+                                        alert(err.message || 'Yuklab olishda xatolik');
+                                    })
+                                    .finally(function() {
+                                        bulkBtn.innerHTML = originalHTML;
+                                        refreshState();
+                                    });
+                                });
+                            }
+
+                            refreshState();
                         })();
                     </script>
                 @endif

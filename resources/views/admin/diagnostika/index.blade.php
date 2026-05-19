@@ -228,6 +228,16 @@
                                 </button>
                             </div>
                         </div>
+                        <div class="filter-item" style="max-width:280px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Shakl bo'yicha qidiruv (barcha sanalar)</label>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <input type="text" id="search_shakl" class="date-input" placeholder="masalan: qo'shimcha" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();searchByShakl();}" style="flex:1;" />
+                                <button type="button" class="btn-tartibga" onclick="searchByShakl()" style="background:#0ea5e9;border-color:#0284c7;white-space:nowrap;">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    Qidirish
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -336,7 +346,7 @@
                                         <th><select class="col-filter" data-col="fan_name"><option value="">Barchasi</option></select></th>
                                         <th><input type="text" class="col-filter-input" data-col="fan_id" placeholder="Fan ID..."></th>
                                         <th><select class="col-filter" data-col="yn_turi"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="shakl"><option value="">Barchasi</option></select></th>
+                                        <th><input type="text" class="col-filter-input" data-col="shakl" placeholder="Shakl..."></th>
                                         <th>
                                             <div class="adv-filter-wrap">
                                                 <button type="button" class="adv-filter-btn" onclick="toggleAdvFilter('baho')">
@@ -490,12 +500,25 @@
             loadTartibgaSol();
         }
 
+        function searchByShakl() {
+            var shaklQ = ($('#search_shakl').val() || '').trim();
+            if (!shaklQ) {
+                alert("Iltimos, qidirish uchun shakl matnini kiriting.");
+                $('#search_shakl').focus();
+                return;
+            }
+            loadTartibgaSol();
+        }
+
         function loadTartibgaSol() {
             var nameQ = ($('#search_student_name').val() || '').trim();
+            var shaklQ = ($('#search_shakl').val() || '').trim();
+            var hasGlobalSearch = nameQ || shaklQ;
             var params = {
-                date_from: nameQ ? '' : ($('#date_from').val() || ''),
-                date_to:   nameQ ? '' : ($('#date_to').val()   || ''),
+                date_from: hasGlobalSearch ? '' : ($('#date_from').val() || ''),
+                date_to:   hasGlobalSearch ? '' : ($('#date_to').val()   || ''),
                 student_name: nameQ,
+                shakl_search: shaklQ,
             };
 
             $('#empty-state').hide(); $('#table-area').hide(); $('#loading-state').show();
@@ -742,7 +765,7 @@
                 html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.semester) + '</span></td>';
                 html += '<td><span class="badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;">' + esc(r.group) + '</span></td>';
                 html += '<td>' + fanCell + '</td>';
-                html += '<td><span class="badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;">' + esc(r.fan_id || '-') + '</span></td>';
+                html += '<td><span class="badge editable-fan-id" data-id="' + r.id + '" onclick="editFanId(this,' + r.id + ')" title="Fan ID ni tahrirlash uchun bosing" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;cursor:pointer;">' + esc(r.fan_id || '-') + '</span></td>';
                 html += '<td style="text-align:center;">' + ynBadge + '</td>';
                 html += '<td><span class="text-cell">' + esc(r.shakl) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade editable-grade" data-id="' + r.id + '" onclick="editGrade(this,' + r.id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + esc(r.grade) + '</span></td>';
@@ -979,6 +1002,66 @@
                     if (e.key === 'Escape') {
                         td.innerHTML = '<span class="badge badge-grade editable-grade" data-id="' + id + '" onclick="editGrade(this,' + id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + currentGrade + '</span>';
                     }
+                });
+            };
+
+            window.editFanId = function(el, id) {
+                var currentFanId = el.textContent.trim();
+                if (currentFanId === '-') currentFanId = '';
+                var td = el.parentNode;
+                var input = document.createElement('input');
+                input.type = 'number';
+                input.min = '1';
+                input.value = currentFanId;
+                input.style.cssText = 'width:90px;padding:4px 6px;font-size:12px;font-weight:600;text-align:center;border:2px solid #3b82f6;border-radius:6px;outline:none;';
+                td.innerHTML = '';
+                td.appendChild(input);
+                input.focus();
+                input.select();
+
+                function restore(val) {
+                    td.innerHTML = '<span class="badge editable-fan-id" data-id="' + id + '" onclick="editFanId(this,' + id + ')" title="Fan ID ni tahrirlash uchun bosing" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;cursor:pointer;">' + (val || '-') + '</span>';
+                }
+
+                function saveFanId() {
+                    var newFanId = parseInt(input.value);
+                    if (isNaN(newFanId) || newFanId < 1) {
+                        alert('Fan ID raqam bo\'lishi kerak!');
+                        input.focus();
+                        return;
+                    }
+                    if (String(newFanId) === String(currentFanId)) {
+                        restore(currentFanId);
+                        return;
+                    }
+                    $.ajax({
+                        url: '{{ route($routePrefix . ".quiz-results.update-fan-id") }}',
+                        type: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrfToken },
+                        data: { id: id, fan_id: newFanId },
+                        success: function(data) {
+                            if (!data.success) {
+                                alert(data.message || 'Xatolik');
+                                restore(currentFanId);
+                                return;
+                            }
+                            var row = allData.find(function(r) { return r.id === id; });
+                            if (row) { row.fan_id = data.fan_id; row.fan_name = data.fan_name; }
+                            restore(newFanId);
+                            // Xulosa va boshqa derived qiymatlar yangilanishi uchun qayta sinxronlash
+                            loadTartibgaSol();
+                        },
+                        error: function(xhr) {
+                            alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                            restore(currentFanId);
+                        }
+                    });
+                }
+
+                input.addEventListener('blur', saveFanId);
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); saveFanId(); }
+                    if (e.key === 'Escape') { restore(currentFanId); }
                 });
             };
 
@@ -1579,8 +1662,12 @@
                 if (comparisons.length === 0) {
                     html += '<div class="compare-empty">Tanlangan natijalar uchun sistemada mavjud OSKI/Test bahosi topilmadi.</div>';
                 } else {
+                    html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">';
+                    html += '<button onclick="bulkDeleteCompareGrades()" id="cmp-bulk-delete" class="btn-delete-grades" style="height:32px;font-size:12px;padding:6px 14px;">Tanlanganlarni o\'chirish (<span id="cmp-sel-count">0</span>)</button>';
+                    html += '</div>';
                     html += '<table class="compare-table">';
                     html += '<thead><tr>';
+                    html += '<th style="width:30px;"><input type="checkbox" id="cmp-select-all" onclick="toggleAllCompare(this)"></th>';
                     html += '<th>Talaba</th><th>Fan</th><th>Turi</th>';
                     html += '<th style="color:#059669;">Moodle baho</th>';
                     html += '<th style="color:#dc2626;">Sistemadagi baho</th>';
@@ -1590,9 +1677,11 @@
                     for (var i = 0; i < comparisons.length; i++) {
                         var c = comparisons[i];
                         var reasonLabel = c.existing_reason === 'quiz_result' ? 'Moodle' : (c.existing_reason || 'Noma\'lum');
-                        html += '<tr id="cmp-row-' + c.student_grade_id + '">';
+                        var rowBg = c.is_deleted ? 'background:#fef9c3;' : '';
+                        html += '<tr id="cmp-row-' + c.student_grade_id + '" style="' + rowBg + '">';
+                        html += '<td style="text-align:center;"><input type="checkbox" class="cmp-row-cb" value="' + c.student_grade_id + '" onclick="updateCmpSelCount()"></td>';
                         html += '<td style="font-weight:600;">' + esc(c.student_name) + '<br><span style="font-size:10px;color:#94a3b8;">' + esc(c.student_id) + '</span></td>';
-                        html += '<td>' + esc(c.fan_name) + '<br><span style="font-size:10px;color:#94a3b8;">ID: ' + esc(c.fan_id) + '</span></td>';
+                        html += '<td>' + esc(c.fan_name) + '<br><span style="font-size:10px;color:#94a3b8;">ID: ' + esc(c.fan_id) + '</span>' + (c.is_deleted ? '<br><span style="font-size:10px;color:#b45309;font-weight:600;">⚠ Soft-deleted (orphan)</span>' : '') + '</td>';
                         html += '<td><span class="badge ' + (c.type === 'Test' ? 'badge-grade' : 'badge-oski') + '">' + esc(c.type) + '</span></td>';
                         html += '<td style="font-weight:700;color:#059669;font-size:14px;">' + esc(c.moodle_grade) + '</td>';
                         html += '<td style="font-weight:700;color:#dc2626;font-size:14px;">' + esc(c.existing_grade) + '</td>';
@@ -1610,6 +1699,50 @@
 
             window.closeCompareModal = function() {
                 $('#compare-overlay').remove();
+            };
+
+            window.updateCmpSelCount = function() {
+                $('#cmp-sel-count').text($('.cmp-row-cb:checked').length);
+            };
+
+            window.toggleAllCompare = function(el) {
+                $('.cmp-row-cb').prop('checked', el.checked);
+                updateCmpSelCount();
+            };
+
+            window.bulkDeleteCompareGrades = function() {
+                var ids = $('.cmp-row-cb:checked').map(function() { return parseInt(this.value); }).get();
+                if (ids.length === 0) { alert('Hech narsa tanlanmagan'); return; }
+                if (!confirm(ids.length + ' ta bahoni sistemadan o\'chirishni tasdiqlaysizmi?')) return;
+
+                var btn = $('#cmp-bulk-delete');
+                btn.prop('disabled', true).html('O\'chirilmoqda...');
+
+                $.ajax({
+                    url: deleteStudentGradeUrl, type: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ student_grade_ids: ids }),
+                    success: function(data) {
+                        if (data.success) {
+                            ids.forEach(function(id) {
+                                $('#cmp-row-' + id).css({ background: '#fef2f2', opacity: 0.5 });
+                                $('#cmp-row-' + id + ' button').text('O\'chirildi').css({ background: '#9ca3af', cursor: 'default' }).prop('disabled', true);
+                                $('#cmp-row-' + id + ' .cmp-row-cb').prop('checked', false).prop('disabled', true);
+                            });
+                            updateCmpSelCount();
+                            btn.html('Tanlanganlarni o\'chirish (<span id="cmp-sel-count">0</span>)').prop('disabled', false);
+                            loadTartibgaSol();
+                        } else {
+                            alert(data.message || 'Xatolik');
+                            btn.prop('disabled', false).html('Tanlanganlarni o\'chirish (<span id="cmp-sel-count">' + ids.length + '</span>)');
+                        }
+                    },
+                    error: function(xhr) {
+                        alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                        btn.prop('disabled', false).html('Tanlanganlarni o\'chirish (<span id="cmp-sel-count">' + ids.length + '</span>)');
+                    }
+                });
             };
 
             window.deleteCompareGrade = function(gradeId) {

@@ -651,6 +651,9 @@ class QuizResultController extends Controller
         if ($request->filled('student_name')) {
             $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
         }
+        if ($request->filled('shakl_search')) {
+            $query->where('shakl', 'LIKE', '%' . $request->shakl_search . '%');
+        }
         if ($request->filled('student_id')) {
             $query->where('student_id', $request->student_id);
         }
@@ -739,11 +742,17 @@ class QuizResultController extends Controller
                 if ($dateTo)   $sub->whereDate('h2.date_finish', '<=', $dateTo);
             });
 
-            // Ism bo'yicha qidiruv: kiritilgan bo'lsa, barcha sanalarda qidiriladi
-            // (date_from/date_to e'tiborga olinmaydi).
-            if ($request->filled('student_name')) {
+            // Ism yoki shakl bo'yicha qidiruv: kiritilgan bo'lsa, barcha sanalarda
+            // qidiriladi (date_from/date_to e'tiborga olinmaydi).
+            $hasNameSearch = $request->filled('student_name');
+            $hasShaklSearch = $request->filled('shakl_search');
+            if ($hasNameSearch) {
                 $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
-            } else {
+            }
+            if ($hasShaklSearch) {
+                $query->where('shakl', 'LIKE', '%' . $request->shakl_search . '%');
+            }
+            if (!$hasNameSearch && !$hasShaklSearch) {
                 if ($request->filled('date_from')) {
                     $query->whereDate('date_finish', '>=', $request->date_from);
                 }
@@ -1373,9 +1382,14 @@ class QuizResultController extends Controller
             return ['code' => 'bad_grade', 'text' => 'Baho noto\'g\'ri', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
-        // 5) 1-urinish emas
-        if ($result->shakl && $result->shakl !== '1-urinish') {
-            return ['code' => 'not_first', 'text' => '1-urinish emas', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+        // 5) Yuklash uchun yaroqsiz urinish — faqat 1-urinish va 2-urinish (qo'shimcha
+        //    matn bilan ham) yuklanadi. 3+ urinish "yaroqsiz" deb belgilanadi.
+        $attemptNumXulosa = 1;
+        if (preg_match('/^\s*(\d+)-urinish/iu', (string) $result->shakl, $um)) {
+            $attemptNumXulosa = (int) $um[1];
+        }
+        if ($result->shakl && !in_array($attemptNumXulosa, [1, 2], true)) {
+            return ['code' => 'not_first', 'text' => '1/2-urinish emas', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
         }
 
         // 6) Dublikat tekshiruvi (2O / 2T)
@@ -1677,6 +1691,10 @@ class QuizResultController extends Controller
             $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
         }
 
+        if ($request->filled('shakl_search')) {
+            $query->where('shakl', 'LIKE', '%' . $request->shakl_search . '%');
+        }
+
         if ($request->filled('student_id')) {
             $query->where('student_id', $request->student_id);
         }
@@ -1922,9 +1940,15 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            // Faqat 1-urinish yuklanadi (OSKI/YN test) — qayta yuklashda bu filtr o'tkazib yuboriladi
-            if (!$request->input('skip_shakl_filter') && $result->shakl !== '1-urinish') {
-                $rowInfo['error'] = "Faqat 1-urinish yuklanadi (hozirgi: {$result->shakl})";
+            // 1-urinish va 2-urinish (qo'shimcha bilan ham) yuklanadi. Shakl boshidagi
+            // "N-urinish" raqamiga qarab attempt aniqlanadi.
+            $shaklRaw = (string) ($result->shakl ?? '');
+            $attemptNum = 1;
+            if (preg_match('/^\s*(\d+)-urinish/iu', $shaklRaw, $um)) {
+                $attemptNum = (int) $um[1];
+            }
+            if (!$request->input('skip_shakl_filter') && !in_array($attemptNum, [1, 2], true)) {
+                $rowInfo['error'] = "Faqat 1-urinish va 2-urinish yuklanadi (hozirgi: {$shaklRaw})";
                 $errors[] = $rowInfo;
                 continue;
             }
@@ -2001,10 +2025,17 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            // Dublikat tekshirish
-            $key = $result->student_id . '_' . $result->fan_id;
+            // Dublikat tekshirish (training_type ham hisobga olinadi — bir talaba
+            // bir fandan OSKI va Test ikkalasini ham topshirgan bo'lishi mumkin)
+            $dedupTypeHint = '';
+            if (in_array($result->quiz_type, ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'])) {
+                $dedupTypeHint = 'oski';
+            } elseif (in_array($result->quiz_type, ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'])) {
+                $dedupTypeHint = 'test';
+            }
+            $key = $result->student_id . '_' . $result->fan_id . '_' . $dedupTypeHint;
             if (isset($duplicateTracker[$key])) {
-                $rowInfo['error'] = "Dublikat: bu talaba+fan juftligi takrorlangan";
+                $rowInfo['error'] = "Dublikat: bu talaba+fan+tur juftligi takrorlangan";
                 $errors[] = $rowInfo;
                 continue;
             }
@@ -2058,7 +2089,35 @@ class QuizResultController extends Controller
                     'quiz_result_id' => $result->id,
                     'attempt' => self::parseAttemptFromShakl($result->shakl, $result->attempt_number),
                     'is_final' => true,
+                    'attempt' => $attemptNum,
+                    'is_qoshimcha' => $hasQoshimchaPre = (preg_match('/\(.*qo\'?shimcha.*\)/iu', $shaklRaw) || mb_stripos($shaklRaw, 'farmoyish') !== false),
                 ]);
+
+                // Qo'shimcha yuklanganda — bu talaba qo'shimcha farmoyish orqali
+                // topshirdi. Shu attempt'dagi asosiy (is_qoshimcha=0) qatorni hamda
+                // attempt=1 qo'shimcha bo'lsa, ortiqcha auto attempt=2 ni o'chiramiz.
+                if ($hasQoshimchaPre) {
+                    DB::table('student_grades')
+                        ->where('student_hemis_id', $student->hemis_id)
+                        ->where('subject_id', $subject->subject_id)
+                        ->where('training_type_code', $trainingTypeCode)
+                        ->where('semester_code', $semester->code ?? $student->semester_code)
+                        ->where('attempt', $attemptNum)
+                        ->where('is_qoshimcha', 0)
+                        ->where('id', '!=', $created->id ?? 0)
+                        ->delete();
+
+                    if ($attemptNum === 1) {
+                        DB::table('student_grades')
+                            ->where('student_hemis_id', $student->hemis_id)
+                            ->where('subject_id', $subject->subject_id)
+                            ->where('training_type_code', $trainingTypeCode)
+                            ->where('semester_code', $semester->code ?? $student->semester_code)
+                            ->where('attempt', 2)
+                            ->where('is_qoshimcha', 0)
+                            ->delete();
+                    }
+                }
 
                 if (!$created || !$created->exists || !$created->id) {
                     throw new \RuntimeException('StudentGrade saqlanmadi');
@@ -2559,6 +2618,39 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Quiz natijasining fan_id va fan_name ni yangilash (inline edit).
+     */
+    public function updateFanId(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer|exists:hemis_quiz_results,id',
+            'fan_id' => 'required|integer',
+        ]);
+
+        $subject = CurriculumSubject::where('subject_id', $request->fan_id)->first();
+        if (!$subject) {
+            return response()->json([
+                'success' => false,
+                'message' => "Fan topilmadi (ID: {$request->fan_id})",
+            ], 404);
+        }
+
+        DB::table('hemis_quiz_results')
+            ->where('id', $request->id)
+            ->update([
+                'fan_id' => $request->fan_id,
+                'fan_name' => $subject->subject_name,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'fan_id' => $request->fan_id,
+            'fan_name' => $subject->subject_name,
+        ]);
+    }
+
+    /**
      * Moodle quiz results cron ni qo'lda ishga tushirish.
      */
     public function triggerCron()
@@ -2800,8 +2892,9 @@ class QuizResultController extends Controller
                 }
             }
 
-            // Mavjud baholarni topish (semestr ham filterda)
-            $existingGrades = StudentGrade::where('student_hemis_id', $student->hemis_id)
+            // Mavjud baholarni topish (soft-deleted ham — orphan tozalash uchun)
+            $existingGrades = StudentGrade::withTrashed()
+                ->where('student_hemis_id', $student->hemis_id)
                 ->where('subject_id', $targetSubjectId)
                 ->where('training_type_code', $trainingTypeCode)
                 ->where('semester_code', $student->semester_code)
@@ -2823,6 +2916,7 @@ class QuizResultController extends Controller
                     'existing_reason' => $eg->reason,
                     'existing_date' => $eg->lesson_date ? \Carbon\Carbon::parse($eg->lesson_date)->format('d.m.Y') : '',
                     'quiz_result_id_ref' => $eg->quiz_result_id,
+                    'is_deleted' => !is_null($eg->deleted_at),
                 ];
             }
         }
@@ -2839,15 +2933,48 @@ class QuizResultController extends Controller
     public function deleteStudentGrade(Request $request)
     {
         $request->validate([
-            'student_grade_id' => 'required|integer',
+            'student_grade_id' => 'nullable|integer',
+            'student_grade_ids' => 'nullable|array',
+            'student_grade_ids.*' => 'integer',
         ]);
 
-        $grade = StudentGrade::find($request->student_grade_id);
+        if ($request->filled('student_grade_ids')) {
+            // Har bir qatorni alohida o'chirish — LogsActivity (deleted hook)
+            // audit log yozishi uchun. Mass delete model eventlarini chetlab o'tadi.
+            // Soft-deleted qatorlar uchun forceDelete (DB dan butunlay olib tashlash).
+            $grades = StudentGrade::withTrashed()
+                ->whereIn('id', $request->student_grade_ids)
+                ->get();
+            $deleted = 0;
+            foreach ($grades as $grade) {
+                if ($grade->trashed()) {
+                    $grade->forceDelete();
+                } else {
+                    $grade->delete();
+                }
+                $deleted++;
+            }
+            return response()->json([
+                'success' => true,
+                'deleted_count' => $deleted,
+                'message' => $deleted . ' ta baho o\'chirildi',
+            ]);
+        }
+
+        if (!$request->filled('student_grade_id')) {
+            return response()->json(['success' => false, 'message' => 'ID kerak'], 400);
+        }
+
+        $grade = StudentGrade::withTrashed()->find($request->student_grade_id);
         if (!$grade) {
             return response()->json(['success' => false, 'message' => 'Baho topilmadi'], 404);
         }
 
-        $grade->delete();
+        if ($grade->trashed()) {
+            $grade->forceDelete();
+        } else {
+            $grade->delete();
+        }
 
         return response()->json(['success' => true, 'message' => 'Baho o\'chirildi']);
     }

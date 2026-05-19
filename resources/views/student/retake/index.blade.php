@@ -360,6 +360,16 @@
                                             {{ __("O'qituvchi") }}: {{ $a->retakeGroup->teacher_name ?? '—' }} ·
                                             {{ $a->retakeGroup->start_date?->format('Y-m-d') }} → {{ $a->retakeGroup->end_date?->format('Y-m-d') }}
                                         </div>
+                                        @if(!empty($a->retakeGroup->teacher_phones))
+                                            <div class="text-[11px] text-gray-600 ml-2 flex items-center flex-wrap gap-1 mt-0.5">
+                                                <span>📞 {{ __("Telefon") }}:</span>
+                                                @foreach($a->retakeGroup->teacher_phones as $phone)
+                                                    <a href="tel:{{ preg_replace('/[^+\d]/', '', $phone) }}"
+                                                       class="text-blue-600 hover:underline font-medium">{{ $phone }}</a>
+                                                    @if(!$loop->last)<span class="text-gray-400">·</span>@endif
+                                                @endforeach
+                                            </div>
+                                        @endif
                                     @endif
                                     @if($a->final_status === 'rejected' && $a->rejectionReason())
                                         <div class="text-[11px] text-red-600 ml-2">

@@ -22,6 +22,7 @@ class AssignComputersJob implements ShouldQueue
     public function __construct(
         public int $examScheduleId,
         public string $ynType,
+        public int $attempt = 1,
     ) {}
 
     public function handle(ComputerAssignmentService $service, ExamNotificationService $notifier): void
@@ -31,13 +32,14 @@ class AssignComputersJob implements ShouldQueue
             return;
         }
 
-        $result = $service->assign($schedule, $this->ynType);
+        $result = $service->assign($schedule, $this->ynType, $this->attempt);
 
         if (empty($result['ok'])) {
             $reason = $result['reason'] ?? 'unknown';
             Log::warning('AssignComputersJob: not assigned', [
                 'schedule_id' => $this->examScheduleId,
                 'yn' => $this->ynType,
+                'attempt' => $this->attempt,
                 'reason' => $reason,
             ]);
             $notifier->notifyComputerShortage($schedule, $this->ynType, $reason);

@@ -242,7 +242,6 @@ class RetakeGroupController extends Controller
         $teachers = Teacher::query()
             ->where('status', true)
             ->orderBy('full_name')
-            ->limit(500)
             ->get(['id', 'full_name', 'department']);
 
         return response()->json([
@@ -385,7 +384,6 @@ class RetakeGroupController extends Controller
         $teachers = Teacher::query()
             ->where('status', true)
             ->orderBy('full_name')
-            ->limit(500)
             ->get(['id', 'full_name', 'department']);
 
         return view('teacher.academic-dept.retake-groups.edit', [

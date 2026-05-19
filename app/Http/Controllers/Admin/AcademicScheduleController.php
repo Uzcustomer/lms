@@ -3369,7 +3369,14 @@ class AcademicScheduleController extends Controller
 
         try {
 
-        $items = $request->items;
+        // Bir xil (group, subject, semester) kombinatsiyasi bir necha marta
+        // kelishi mumkin (masalan, slotda guruh + individual entry'lar bo'lsa).
+        // Word generator'da bu talabani ro'yxatga ikki marta tushiradi —
+        // shuning uchun unique'laymiz.
+        $items = collect($request->items)
+            ->unique(fn($it) => ($it['group_hemis_id'] ?? '') . '|' . ($it['subject_id'] ?? '') . '|' . ($it['semester_code'] ?? ''))
+            ->values()
+            ->all();
         $compact = (bool) $request->boolean('compact');
         $examDate = $request->input('exam_date');
         $examTime = $request->input('exam_time');

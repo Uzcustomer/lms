@@ -455,9 +455,17 @@
                                                     </span>
                                                 @endif
                                                 @php
+                                                    // Bitta slotda guruh + per-student qatorlar bir xil (group,
+                                                    // subject, sem) uchun bir necha marta uchrashi mumkin —
+                                                    // Word'ga faqat unique kombinatsiyani yuboramiz, aks holda
+                                                    // bir talaba ro'yxatda bir necha marta chiqadi.
                                                     $exportItems = [];
+                                                    $seen = [];
                                                     foreach ($slot['groups'] as $_grp) {
                                                         if (empty($_grp['group_hemis_id']) || empty($_grp['subject_id']) || empty($_grp['semester_code'])) continue;
+                                                        $k = $_grp['group_hemis_id'] . '|' . $_grp['subject_id'] . '|' . $_grp['semester_code'];
+                                                        if (isset($seen[$k])) continue;
+                                                        $seen[$k] = true;
                                                         $exportItems[] = [
                                                             'group_hemis_id' => (string) $_grp['group_hemis_id'],
                                                             'subject_id'     => (string) $_grp['subject_id'],

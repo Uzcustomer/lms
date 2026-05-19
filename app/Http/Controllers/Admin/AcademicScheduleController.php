@@ -4997,6 +4997,36 @@ class AcademicScheduleController extends Controller
                             $s->save();
                             $okCount++;
                         }
+                        // Mavjud ComputerAssignment qatorlarini ham yangi vaqtga
+                        // sinxronlash (TV / proctor displeyi planned_start oynasi
+                        // bo'yicha ko'rsatadi). saveTestTime'dagi mantiq bilan
+                        // bir xil — faqat scheduled qatorlar.
+                        try {
+                            $bktDur = (int) (ExamCapacityService::getSettingsForDate($b['date'])['test_duration_minutes'] ?? 15);
+                            $bktStart = \Carbon\Carbon::parse($b['date'] . ' ' . $assignedTime);
+                            $bktEnd = $bktStart->copy()->addMinutes($bktDur);
+                            $bktJit = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+                            $bktReveal = $bktStart->copy()->subMinutes($bktJit);
+                            foreach ($b['schedules'] as $s) {
+                                \App\Models\ComputerAssignment::where('exam_schedule_id', $s->id)
+                                    ->where('yn_type', strtolower($ynType))
+                                    ->where('attempt', $passAttempt)
+                                    ->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+                                    ->update([
+                                        'planned_start' => $bktStart,
+                                        'planned_end' => $bktEnd,
+                                        'reveal_at' => $bktReveal,
+                                        'reveal_notified' => false,
+                                        'approach_notified' => false,
+                                        'ready_notified' => false,
+                                    ]);
+                            }
+                        } catch (\Throwable $e) {
+                            \Illuminate\Support\Facades\Log::warning('autoTimeAll: ComputerAssignment sync xato', [
+                                'bucket' => $b['group_hemis_id'] . '|' . $b['subject_id'],
+                                'error' => $e->getMessage(),
+                            ]);
+                        }
                         // resitSlotMap'ga ham qo'shamiz (keyingi distribute uchun,
                         // boshqa sanada bo'lsa ham foyda bersin)
                         if ($b['count'] > 0) {
@@ -5367,6 +5397,36 @@ class AcademicScheduleController extends Controller
 
         $examSchedule->update([$timeColumn => $request->test_time]);
 
+        // Mavjud ComputerAssignment qatorlarining planned_start/end/reveal_at'ini
+        // yangi vaqtga sinxronlash. Bo'lmasa TV displey (planned_start oynasi
+        // bo'yicha) va proctor sahifasi eski vaqtdagi qatorlarni topa olmaydi.
+        // Faqat status=scheduled qatorlarga tegamiz (in_progress/finished tarix
+        // sifatida saqlanadi). reveal_notified=false — yangi vaqt uchun JIT
+        // tick processReveal qaytadan Telegram yuboradi.
+        if ($relatedDate && $request->test_time) {
+            $relatedDateStr2 = $relatedDate instanceof \Carbon\Carbon
+                ? $relatedDate->format('Y-m-d')
+                : \Carbon\Carbon::parse($relatedDate)->format('Y-m-d');
+            $duration2 = (int) (ExamCapacityService::getSettingsForDate($relatedDateStr2)['test_duration_minutes'] ?? 15);
+            $newPlannedStart = \Carbon\Carbon::parse($relatedDateStr2 . ' ' . substr($request->test_time, 0, 5));
+            $newPlannedEnd = $newPlannedStart->copy()->addMinutes($duration2);
+            $jitMin = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+            $newRevealAt = $newPlannedStart->copy()->subMinutes($jitMin);
+
+            \App\Models\ComputerAssignment::where('exam_schedule_id', $examSchedule->id)
+                ->where('yn_type', strtolower($ynType))
+                ->where('attempt', $attempt)
+                ->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+                ->update([
+                    'planned_start' => $newPlannedStart,
+                    'planned_end' => $newPlannedEnd,
+                    'reveal_at' => $newRevealAt,
+                    'reveal_notified' => false,
+                    'approach_notified' => false,
+                    'ready_notified' => false,
+                ]);
+        }
+
         // Audit: vaqt o'zgartirishlarini alohida log qilamiz — "vaqt qaerga ketdi"
         // tahqiqotida bu eng tez topiladigan ma'lumot.
         ActivityLogService::log(
@@ -5625,6 +5685,30 @@ class AcademicScheduleController extends Controller
             $payload['updated_by'] = auth()->id();
             $perStudent->update($payload);
         }
+
+        // ComputerAssignment.planned_start sinxronlash — per-student qator
+        // o'z schedule_id'siga ega, shu sabab faqat shu talaba qatorlariga
+        // tegamiz. saveTestTime'dagi mantiq bilan bir xil.
+        $resolvedDateStr = $resolvedDate instanceof \Carbon\Carbon
+            ? $resolvedDate->format('Y-m-d')
+            : \Carbon\Carbon::parse($resolvedDate)->format('Y-m-d');
+        $durSt = (int) (ExamCapacityService::getSettingsForDate($resolvedDateStr)['test_duration_minutes'] ?? 15);
+        $stPlannedStart = \Carbon\Carbon::parse($resolvedDateStr . ' ' . substr($request->test_time, 0, 5));
+        $stPlannedEnd = $stPlannedStart->copy()->addMinutes($durSt);
+        $jitMinSt = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+
+        \App\Models\ComputerAssignment::where('exam_schedule_id', $perStudent->id)
+            ->where('yn_type', strtolower($request->yn_type))
+            ->where('attempt', (int) $request->attempt)
+            ->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+            ->update([
+                'planned_start' => $stPlannedStart,
+                'planned_end' => $stPlannedEnd,
+                'reveal_at' => $stPlannedStart->copy()->subMinutes($jitMinSt),
+                'reveal_notified' => false,
+                'approach_notified' => false,
+                'ready_notified' => false,
+            ]);
 
         // Faqat shu talabaga notification (individual grafik — guruh xabari emas).
         $ynLabel = $request->yn_type === 'OSKI' ? 'OSKI' : 'Test';

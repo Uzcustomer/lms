@@ -3379,7 +3379,14 @@ class AcademicScheduleController extends Controller
 
         try {
 
-        $items = $request->items;
+        // Bir xil (group, subject, semester) kombinatsiyasi bir necha marta
+        // kelishi mumkin (masalan, slotda guruh + individual entry'lar bo'lsa).
+        // Word generator'da bu talabani ro'yxatga ikki marta tushiradi —
+        // shuning uchun unique'laymiz.
+        $items = collect($request->items)
+            ->unique(fn($it) => ($it['group_hemis_id'] ?? '') . '|' . ($it['subject_id'] ?? '') . '|' . ($it['semester_code'] ?? ''))
+            ->values()
+            ->all();
         $compact = (bool) $request->boolean('compact');
         $examDate = $request->input('exam_date');
         $examTime = $request->input('exam_time');
@@ -6115,6 +6122,32 @@ class AcademicScheduleController extends Controller
             ['OSKI', 3, 'oski_resit2_date', 'oski_resit2_time', null],
             ['Test', 3, 'test_resit2_date', 'test_resit2_time', null],
         ];
+
+        // Guruh sathidagi (group-level) qatorlarning shu sanadagi vaqti —
+        // per-student qator vaqti guruh vaqti bilan teng bo'lsa, alohida
+        // "individual" sifatida ko'rsatilmay guruh ichida birlashtiriladi.
+        $groupTimeByCombo = [];
+        foreach ($schedules as $schedule) {
+            if (!empty($schedule->student_hemis_id)) continue;
+            foreach ($attemptDefs as [$ynType, $attempt, $dateField, $timeField, $naField]) {
+                $rawDate = $schedule->{$dateField} ?? null;
+                $rawTime = $schedule->{$timeField} ?? null;
+                if (!$rawDate || !$rawTime) continue;
+                if ($rawDate->format('Y-m-d') !== $date) continue;
+                if ($naField !== null && $schedule->{$naField}) continue;
+                $k = $schedule->group_hemis_id . '|' . ($schedule->subject_id ?? '') . '|' . ($schedule->semester_code ?? '')
+                    . '|' . strtolower($ynType) . '|' . $attempt;
+                $groupTimeByCombo[$k] = \Carbon\Carbon::parse($rawTime)->format('H:i');
+            }
+        }
+
+        // Guruh bilan birlashtirilgan (merged) per-student qatorlarni hisobga olamiz:
+        //   - alohida ko'rsatilmaydi
+        //   - guruh hisobidan ayrilmaydi (perStudentTimeMap'dan chiqarib tashlanadi)
+        //   - lekin ularning quiz_count'i guruh quiz_count'iga qo'shiladi
+        $mergedByCombo = [];        // combo key -> int (count)
+        $mergedQuizByCombo = [];    // combo key -> [['schedule_id'=>int,'yn'=>str,'attempt'=>int], ...]
+
         foreach ($schedules as $schedule) {
             foreach ($attemptDefs as [$ynType, $attempt, $dateField, $timeField, $naField]) {
                 $dStr = $schedule->{$dateField}?->format('Y-m-d');
@@ -6131,6 +6164,22 @@ class AcademicScheduleController extends Controller
                 // ko'rsatilmaydi. U guruh hisobiga avtomatik kiradi.
                 $isPerStudent = !empty($schedule->student_hemis_id);
                 if ($isPerStudent && $timeStr === null) {
+                    continue;
+                }
+
+                // Per-student vaqti guruh vaqti bilan teng → guruh ichida
+                // birlashtiriladi, alohida ko'rsatilmaydi.
+                $comboKey = $schedule->group_hemis_id . '|' . ($schedule->subject_id ?? '') . '|' . ($schedule->semester_code ?? '')
+                    . '|' . strtolower($ynType) . '|' . $attempt;
+                if ($isPerStudent && $timeStr !== null
+                    && isset($groupTimeByCombo[$comboKey])
+                    && $groupTimeByCombo[$comboKey] === $timeStr) {
+                    $mergedByCombo[$comboKey] = ($mergedByCombo[$comboKey] ?? 0) + 1;
+                    $mergedQuizByCombo[$comboKey][] = [
+                        'schedule_id' => $schedule->id,
+                        'yn' => strtolower($ynType),
+                        'attempt' => $attempt,
+                    ];
                     continue;
                 }
 
@@ -6244,8 +6293,10 @@ class AcademicScheduleController extends Controller
         // Per-group helper: berilgan urinish uchun haqiqiy talabalar soni.
         // 1-urinish → butun guruh, 2/3 → retakerlar; ikkalasidan ham
         // individual vaqti qo'yilgan talabalar ayriladi (vaqtsiz per-student
-        // qatorlar guruh ichida qoladi).
-        $eligibleCount = function (array $grp, int $totalGroupCount) use ($resitEligibleMap, $perStudentTimeMap): int {
+        // qatorlar guruh ichida qoladi). Per-student vaqti guruh vaqti bilan
+        // teng bo'lsa ($mergedByCombo'da hisoblangan), guruhdan ayrilmaydi —
+        // ular guruh slotida birlashtirib ko'rsatiladi.
+        $eligibleCount = function (array $grp, int $totalGroupCount) use ($resitEligibleMap, $perStudentTimeMap, $mergedByCombo): int {
             $attemptN = (int) ($grp['attempt'] ?? 1);
             if (!empty($grp['student_hemis_id'])) {
                 return 1;
@@ -6260,7 +6311,9 @@ class AcademicScheduleController extends Controller
             $offsetKey = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code']
                 . '|' . $ynLower . '|' . $attemptN;
             $perStudent = (int) ($perStudentTimeMap[$offsetKey] ?? 0);
-            return max(0, $base - $perStudent);
+            $merged = (int) ($mergedByCombo[$offsetKey] ?? 0);
+            $individual = max(0, $perStudent - $merged);
+            return max(0, $base - $individual);
         };
 
         // Quiz topshirganlar: computer_assignments jadvalidan real-time
@@ -6315,8 +6368,20 @@ class AcademicScheduleController extends Controller
                 $cnt = $eligibleCount($grp, $totalGroup);
                 $grp['student_count'] = $cnt;
                 $ynLower = strtolower($grp['yn_type'] ?? '');
-                $qKey = ($grp['schedule_id'] ?? '') . '|' . $ynLower . '|' . (int) ($grp['attempt'] ?? 1);
+                $attemptN = (int) ($grp['attempt'] ?? 1);
+                $qKey = ($grp['schedule_id'] ?? '') . '|' . $ynLower . '|' . $attemptN;
                 $qCnt = (int) ($finishedMap[$qKey] ?? 0);
+                // Guruh ichiga birlashtirilgan per-student qatorlarning
+                // (vaqti guruh vaqti bilan teng) topshirish soni guruh hisobiga
+                // qo'shiladi — alohida ko'rinmaydi-yu, jami slot statistikasiga
+                // hissasi bo'lishi kerak.
+                if (empty($grp['student_hemis_id'])) {
+                    $comboKey = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code']
+                        . '|' . $ynLower . '|' . $attemptN;
+                    foreach ($mergedQuizByCombo[$comboKey] ?? [] as $mergedRef) {
+                        $qCnt += (int) ($finishedMap[$mergedRef['schedule_id'] . '|' . $mergedRef['yn'] . '|' . $mergedRef['attempt']] ?? 0);
+                    }
+                }
                 if ($qCnt > $cnt) {
                     $qCnt = $cnt;
                 }

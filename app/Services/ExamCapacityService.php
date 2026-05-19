@@ -316,18 +316,23 @@ class ExamCapacityService
         $groupCounts = self::collectGroupCounts(array_keys($groupIds));
         $resitMap = self::resitEligibleCounts(array_values($resitTriples));
 
-        // Per-(group, subject, sem, attempt) bo'yicha shu sana ichidagi per-student
-        // qatorlar soni — group-level qator hisobida ikki marta sanab ketmaslik
-        // uchun (xuddi bandlikKursatkichiShow'dagi kabi).
-        $perStudentOffsets = [];
+        // Individual (per-student) vaqti belgilangan qatorlar soni —
+        // sanadan qat'iy nazar, butun (group, subject, sem, yn, attempt)
+        // kombinatsiyasi bo'yicha. Per-student qatorda vaqt yo'q bo'lsa,
+        // talaba guruh vaqtiga bo'ysunadi va guruh hisobidan ayrilmaydi.
+        $combinedTriples = $resitTriples;
         foreach ($entriesOnDate as $entry) {
             $r = $entry['row'];
-            if (!empty($r->student_hemis_id)) {
-                $k = $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code
-                    . '|' . $entry['slot']['attempt'];
-                $perStudentOffsets[$k] = ($perStudentOffsets[$k] ?? 0) + 1;
+            if (empty($r->student_hemis_id) && $r->subject_id && $r->semester_code) {
+                $k = $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                $combinedTriples[$k] = [
+                    'group_hemis_id' => $r->group_hemis_id,
+                    'subject_id' => $r->subject_id,
+                    'semester_code' => $r->semester_code,
+                ];
             }
         }
+        $perStudentOffsets = self::perStudentWithTimeCounts(array_values($combinedTriples));
 
         $total = 0;
         foreach ($entriesOnDate as $entry) {
@@ -343,7 +348,7 @@ class ExamCapacityService
                 continue;
             }
             $total += self::effectiveCountForRow(
-                $row, $slot['attempt'], $groupCounts, $resitMap, $perStudentOffsets
+                $row, $slot['yn'], $slot['attempt'], $groupCounts, $resitMap, $perStudentOffsets
             );
         }
 
@@ -352,27 +357,41 @@ class ExamCapacityService
 
     /**
      * Bitta ExamSchedule qatori uchun joriy vaqtda haqiqiy talabalar soni.
-     * Per-student override → 1, 1-urinish → butun guruh, 2/3-urinish → faqat
-     * yiqilganlar (per-student override'larsiz).
+     * Per-student override → 1, guruh qatori → guruh sig'imi MINUS individual
+     * vaqti belgilangan per-student qatorlar (vaqtsiz per-student qatorlar
+     * guruh ichida qoladi).
      */
-    public static function effectiveStudentCountForSchedule(ExamSchedule $schedule, int $attempt): int
+    public static function effectiveStudentCountForSchedule(ExamSchedule $schedule, int $attempt, string $ynType = 'test'): int
     {
         if (!empty($schedule->student_hemis_id)) {
             return 1;
         }
-        if ($attempt <= 1) {
-            return self::groupStudentCount($schedule->group_hemis_id);
+        $base = $attempt <= 1
+            ? self::groupStudentCount($schedule->group_hemis_id)
+            : 0;
+        if ($attempt > 1) {
+            if (!$schedule->subject_id || !$schedule->semester_code) {
+                return 0;
+            }
+            $map = self::resitEligibleCounts([[
+                'group_hemis_id' => $schedule->group_hemis_id,
+                'subject_id' => $schedule->subject_id,
+                'semester_code' => $schedule->semester_code,
+            ]]);
+            $key = $schedule->group_hemis_id . '|' . $schedule->subject_id . '|' . $schedule->semester_code;
+            $base = (int) ($map[$key] ?? 0);
         }
-        if (!$schedule->subject_id || !$schedule->semester_code) {
-            return 0;
+        if ($base <= 0 || !$schedule->subject_id || !$schedule->semester_code) {
+            return max(0, $base);
         }
-        $map = self::resitEligibleCounts([[
+        $offsetMap = self::perStudentWithTimeCounts([[
             'group_hemis_id' => $schedule->group_hemis_id,
             'subject_id' => $schedule->subject_id,
             'semester_code' => $schedule->semester_code,
         ]]);
-        $key = $schedule->group_hemis_id . '|' . $schedule->subject_id . '|' . $schedule->semester_code;
-        return (int) ($map[$key] ?? 0);
+        $offsetKey = $schedule->group_hemis_id . '|' . $schedule->subject_id . '|' . $schedule->semester_code
+            . '|' . strtolower($ynType) . '|' . $attempt;
+        return max(0, $base - (int) ($offsetMap[$offsetKey] ?? 0));
     }
 
     /**
@@ -441,6 +460,67 @@ class ExamCapacityService
     }
 
     /**
+     * Berilgan (group, subject, semester) triples bo'yicha har bir (yn, attempt)
+     * uchun individual vaqti belgilangan per-student exam_schedule qatorlar sonini
+     * qaytaradi (sanadan qat'iy nazar). Per-student qatorda vaqt yo'q bo'lsa, u
+     * guruh vaqtiga bo'ysunadi va guruh hisobidan ayrilmaydi.
+     *
+     * @param  array<int,array{group_hemis_id:string, subject_id:int|string, semester_code:int|string}>  $triples
+     * @return array<string,int>  Kalit: "{group}|{subject}|{sem}|{yn}|{attempt}"
+     */
+    public static function perStudentWithTimeCounts(array $triples): array
+    {
+        if (empty($triples)) {
+            return [];
+        }
+        $groupIds = array_values(array_unique(array_column($triples, 'group_hemis_id')));
+        $subjectIds = array_values(array_unique(array_column($triples, 'subject_id')));
+        $semCodes = array_values(array_unique(array_column($triples, 'semester_code')));
+        if (!$groupIds || !$subjectIds || !$semCodes) {
+            return [];
+        }
+
+        $allowed = [];
+        foreach ($triples as $t) {
+            $allowed[$t['group_hemis_id'] . '|' . $t['subject_id'] . '|' . $t['semester_code']] = true;
+        }
+
+        try {
+            $rows = ExamSchedule::whereNotNull('student_hemis_id')
+                ->whereIn('group_hemis_id', $groupIds)
+                ->whereIn('subject_id', $subjectIds)
+                ->whereIn('semester_code', $semCodes)
+                ->selectRaw('group_hemis_id, subject_id, semester_code,
+                    SUM(CASE WHEN oski_time IS NOT NULL THEN 1 ELSE 0 END) as oski_a1,
+                    SUM(CASE WHEN oski_resit_time IS NOT NULL THEN 1 ELSE 0 END) as oski_a2,
+                    SUM(CASE WHEN oski_resit2_time IS NOT NULL THEN 1 ELSE 0 END) as oski_a3,
+                    SUM(CASE WHEN test_time IS NOT NULL THEN 1 ELSE 0 END) as test_a1,
+                    SUM(CASE WHEN test_resit_time IS NOT NULL THEN 1 ELSE 0 END) as test_a2,
+                    SUM(CASE WHEN test_resit2_time IS NOT NULL THEN 1 ELSE 0 END) as test_a3')
+                ->groupBy('group_hemis_id', 'subject_id', 'semester_code')
+                ->get();
+
+            $map = [];
+            foreach ($rows as $r) {
+                $base = $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                if (!isset($allowed[$base])) {
+                    continue;
+                }
+                $map[$base . '|oski|1'] = (int) $r->oski_a1;
+                $map[$base . '|oski|2'] = (int) $r->oski_a2;
+                $map[$base . '|oski|3'] = (int) $r->oski_a3;
+                $map[$base . '|test|1'] = (int) $r->test_a1;
+                $map[$base . '|test|2'] = (int) $r->test_a2;
+                $map[$base . '|test|3'] = (int) $r->test_a3;
+            }
+            return $map;
+        } catch (\Throwable $e) {
+            Log::warning('ExamCapacityService::perStudentWithTimeCounts failed: ' . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
      * Har bir YN turi va urinish bo'yicha tegishli sana/vaqt ustunlari.
      *
      * @return array<int,array{yn:string, attempt:int, date_col:string, time_col:string, check_na:bool}>
@@ -459,6 +539,7 @@ class ExamCapacityService
 
     private static function effectiveCountForRow(
         ExamSchedule $row,
+        string $ynType,
         int $attempt,
         array $groupCounts,
         array $resitMap,
@@ -467,13 +548,15 @@ class ExamCapacityService
         if (!empty($row->student_hemis_id)) {
             return 1;
         }
-        if ($attempt <= 1) {
-            return (int) ($groupCounts[$row->group_hemis_id] ?? 0);
+        $base = $attempt <= 1
+            ? (int) ($groupCounts[$row->group_hemis_id] ?? 0)
+            : (int) ($resitMap[$row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code] ?? 0);
+        if ($base <= 0) {
+            return 0;
         }
-        $key = $row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code;
-        $totalRetakers = (int) ($resitMap[$key] ?? 0);
-        $offset = (int) ($perStudentOffsets[$key . '|' . $attempt] ?? 0);
-        return max(0, $totalRetakers - $offset);
+        $offsetKey = $row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code
+            . '|' . strtolower($ynType) . '|' . $attempt;
+        return max(0, $base - (int) ($perStudentOffsets[$offsetKey] ?? 0));
     }
 
     private static function collectGroupCounts(array $groupIds): array

@@ -5008,8 +5008,9 @@ class AcademicScheduleController extends Controller
 
             $concurrent = ExamCapacityService::concurrentStudentsForSlot($relatedDateStr, $newTime, $exclude);
             // Joriy yozuv uchun real talabalar soni — 2/3-urinish bo'lsa faqat
-            // yiqilganlar (butun guruh emas), per-student override bo'lsa 1.
-            $thisGroupCount = ExamCapacityService::effectiveStudentCountForSchedule($examSchedule, $attempt);
+            // yiqilganlar, per-student override bo'lsa 1, va individual vaqt
+            // qo'yilgan talabalar guruh hisobidan ayriladi.
+            $thisGroupCount = ExamCapacityService::effectiveStudentCountForSchedule($examSchedule, $attempt, $ynType);
             $totalAtSlot = $concurrent + $thisGroupCount;
 
             if ($totalAtSlot > $computerCount) {
@@ -5953,6 +5954,15 @@ class AcademicScheduleController extends Controller
                 $timeStr = $timeRaw
                     ? \Carbon\Carbon::parse($timeRaw)->format('H:i')
                     : null;
+
+                // Per-student qatorda vaqt yo'q bo'lsa — talaba guruh vaqtiga
+                // bo'ysunadi va alohida "Vaqti qo'yilmagan" qatori sifatida
+                // ko'rsatilmaydi. U guruh hisobiga avtomatik kiradi.
+                $isPerStudent = !empty($schedule->student_hemis_id);
+                if ($isPerStudent && $timeStr === null) {
+                    continue;
+                }
+
                 $key = $timeStr ?? '__no_time__';
                 if (!isset($rows[$key])) {
                     $rows[$key] = [
@@ -5970,6 +5980,7 @@ class AcademicScheduleController extends Controller
                     'subject_name' => $schedule->subject_name ?? '',
                     'yn_type' => $ynType,
                     'attempt' => $attempt,
+                    'is_individual' => $isPerStudent,
                 ];
             }
         }
@@ -6039,38 +6050,46 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        // Per-(group, subject, sem, attempt) bo'yicha shu sana ichidagi
-        // per-student qatorlar soni — group-level qator hisobida ikki marta
-        // sanab ketmaslik uchun. p22-07a misol: 5 per-student + 1 group-level
-        // bir slotda bo'lsa, group-level 5 retakerni qaytarsa, per-student'lar
-        // ham 5 ta sanaladi → jami 10. Endi group-level 5−5=0 ni qaytaradi.
-        $perStudentCountByCombo = [];
-        foreach ($allGroups as $grp) {
-            if (!empty($grp['student_hemis_id'])) {
-                $k = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code'] . '|' . $grp['attempt'];
-                $perStudentCountByCombo[$k] = ($perStudentCountByCombo[$k] ?? 0) + 1;
-            }
+        // Per-(group, subject, sem, yn, attempt) bo'yicha INDIVIDUAL vaqti
+        // belgilangan per-student qatorlar soni — sanadan qat'iy nazar.
+        // Vaqtsiz per-student qatorlar guruh vaqtiga bo'ysunadi va ayrilmaydi.
+        // Misol: guruhda 6 retaker, 1 talaba individual 11:00 ga qo'yilgan
+        // (boshqa kun bo'lsa ham) → guruh slot'i 5 ta talaba ko'rsatadi.
+        $perStudentTimeMap = [];
+        if ($allGroups->isNotEmpty()) {
+            $triples = $allGroups
+                ->filter(fn($g) => !empty($g['subject_id']) && !empty($g['semester_code']))
+                ->unique(fn($g) => $g['group_hemis_id'] . '|' . $g['subject_id'] . '|' . $g['semester_code'])
+                ->map(fn($g) => [
+                    'group_hemis_id' => $g['group_hemis_id'],
+                    'subject_id' => $g['subject_id'],
+                    'semester_code' => $g['semester_code'],
+                ])
+                ->values()
+                ->all();
+            $perStudentTimeMap = ExamCapacityService::perStudentWithTimeCounts($triples);
         }
 
         // Per-group helper: berilgan urinish uchun haqiqiy talabalar soni.
-        // Main'dan $resitEligibleMap (batch DB so'rov bilan har group+subject+
-        // attempt uchun haqiqiy retakerlar soni). HEAD'dan $perStudentCountByCombo
-        // (group-level qator faqat "qolgan" retakerlarni ifoda etadi — per-student
-        // qatorlar bilan ikki marta sanab ketmaslik uchun ayriladi).
-        $eligibleCount = function (array $grp, int $totalGroupCount) use ($resitEligibleMap, $perStudentCountByCombo): int {
+        // 1-urinish → butun guruh, 2/3 → retakerlar; ikkalasidan ham
+        // individual vaqti qo'yilgan talabalar ayriladi (vaqtsiz per-student
+        // qatorlar guruh ichida qoladi).
+        $eligibleCount = function (array $grp, int $totalGroupCount) use ($resitEligibleMap, $perStudentTimeMap): int {
             $attemptN = (int) ($grp['attempt'] ?? 1);
             if (!empty($grp['student_hemis_id'])) {
                 return 1;
             }
             if ($attemptN <= 1) {
-                return $totalGroupCount;
+                $base = $totalGroupCount;
+            } else {
+                $resitKey = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code'] . '|' . $attemptN;
+                $base = (int) ($resitEligibleMap[$resitKey] ?? 0);
             }
-            $key = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code'] . '|' . $attemptN;
-            $totalRetakers = array_key_exists($key, $resitEligibleMap) ? $resitEligibleMap[$key] : 0;
-            // Per-student qatorlar ko'rsatadigan talabalar ayriladi — group-level
-            // qator faqat per-student override'siz qolgan retakerlarni ifoda etadi.
-            $perStudent = (int) ($perStudentCountByCombo[$key] ?? 0);
-            return max(0, $totalRetakers - $perStudent);
+            $ynLower = strtolower((string) ($grp['yn_type'] ?? 'test'));
+            $offsetKey = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code']
+                . '|' . $ynLower . '|' . $attemptN;
+            $perStudent = (int) ($perStudentTimeMap[$offsetKey] ?? 0);
+            return max(0, $base - $perStudent);
         };
 
         // Quiz topshirganlar: computer_assignments jadvalidan real-time

@@ -1736,27 +1736,36 @@ class JournalController extends Controller
                 // 12a stsenariy — JN/MT bir xil, OSKI/Test attempt=2 dan
                 $a = null;
                 if (!empty($av1[101]) && isset($av1[101][$h]) || !empty($av1[102]) && isset($av1[102][$h])) {
+                    // Fallback chain: 2-urinish yozuv yo'q bo'lsa 1-urinish ($other) qiymati
+                    // ishlatiladi. Aks holda 1-urinishda OSKI yoki Test'ni o'tgan, lekin
+                    // ikkinchisini qayta topshirgan talaba 12a da V=-1 chiqib 12b ga
+                    // noto'g'ri o'tib ketardi (export'dagi $mergeOskiTest bilan bir xil mantiq).
                     $a = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
-                        $av1[101][$h] ?? null, $av1[102][$h] ?? null, $davomatPct,
+                        $av1[101][$h] ?? $other['oski'] ?? null,
+                        $av1[102][$h] ?? $other['test'] ?? null, $davomatPct,
                         $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
                 }
                 $aQoshimcha = null;
                 if (isset($av2[101][$h]) || isset($av2[102][$h])) {
                     $aQoshimcha = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
-                        $av2[101][$h] ?? null, $av2[102][$h] ?? null, $davomatPct,
+                        $av2[101][$h] ?? $other['oski'] ?? null,
+                        $av2[102][$h] ?? $other['test'] ?? null, $davomatPct,
                         $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
                 }
 
                 $b = null;
                 if (isset($bv1[101][$h]) || isset($bv1[102][$h])) {
+                    // 3-urinish fallback chain: bv → av → other.
                     $b = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
-                        $bv1[101][$h] ?? null, $bv1[102][$h] ?? null, $davomatPct,
+                        $bv1[101][$h] ?? $av1[101][$h] ?? $other['oski'] ?? null,
+                        $bv1[102][$h] ?? $av1[102][$h] ?? $other['test'] ?? null, $davomatPct,
                         $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
                 }
                 $bQoshimcha = null;
                 if (isset($bv2[101][$h]) || isset($bv2[102][$h])) {
                     $bQoshimcha = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
-                        $bv2[101][$h] ?? null, $bv2[102][$h] ?? null, $davomatPct,
+                        $bv2[101][$h] ?? $av2[101][$h] ?? $other['oski'] ?? null,
+                        $bv2[102][$h] ?? $av2[102][$h] ?? $other['test'] ?? null, $davomatPct,
                         $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
                 }
 

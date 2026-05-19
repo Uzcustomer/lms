@@ -3680,25 +3680,6 @@ class AcademicScheduleController extends Controller
                 continue;
             }
 
-            // SUBGROUP filter: agar fan (a)/(b)/(c) varianti bo'lsa
-            // (curriculum_subjects.in_group bo'sh emas), faqat shu variantga
-            // yozilgan talabalar Word'ga kiritiladi. Boshqa subgroupdagi
-            // talabalar - YN jadvalida ko'rinmaydi, Word'da ham ko'rinmasin.
-            $inGroup = trim((string) ($subject->in_group ?? ''));
-            $csHid = $subject->curriculum_subject_hemis_id ?? null;
-            if ($inGroup !== '' && $csHid !== null) {
-                $allowedHemisIds = DB::table('student_subjects')
-                    ->where('curriculum_subject_hemis_id', $csHid)
-                    ->pluck('student_hemis_id')
-                    ->map(fn($v) => (string) $v)
-                    ->all();
-                if (!empty($allowedHemisIds)) {
-                    $allowedSet = array_flip($allowedHemisIds);
-                    $students = $students->filter(fn($s) => isset($allowedSet[(string) $s->hemis_id]))->values();
-                }
-                if ($students->isEmpty()) continue;
-            }
-
             // JN/MT ni jurnal "ixcham" tabi bilan bir xil mantiqda jonli hisoblash
             // (snapshot ishlatilmaydi; retake-priority qoidasi va NB=0 mantiqi qo'llaniladi).
             $liveGrades = app(JnMtCalculator::class)->computeForGroup(

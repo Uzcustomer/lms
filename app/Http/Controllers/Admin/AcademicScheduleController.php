@@ -6130,33 +6130,18 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        // Notification yuborish — individual grafikka ega talabalarni
-        // chiqarib tashlaymiz (ular guruh vaqtidan emas, o'z vaqtidan
-        // foydalanadi va alohida xabar oladi).
-        $students = $this->groupStudentsForExamNotify(
-            (string) $request->group_hemis_id,
-            (string) $request->subject_id,
-            (string) $request->semester_code,
-            $dateColumn,
-            $attempt
-        );
-        $sentCount = $this->notifyStudentsExamTime(
-            $students,
-            $examSchedule->subject_name ?? 'Fan',
-            $ynType,
-            $ynLabel,
-            $relatedDate ? \Carbon\Carbon::parse($relatedDate)->format('d.m.Y') : null,
-            $request->test_time,
-            $oldTime,
-            $ynSubmitted
-        );
+        // Guruh saqlashida talabalarga avtomatik Telegram/LMS xabarnoma yuborilmaydi.
+        // Xabar faqat "Xabarnoma yuborish" tugmasi orqali yuboriladi
+        // (test-center.notify-all route — notifyAllExamTimes()).
+        // Individual grafikga ega talabalar — saveStudentTime() va store() audit
+        // orqali saqlanganda o'zlari avtomatik xabar oladi.
 
         $statusMsg = $timeChanged ? ($ynLabel . ' vaqti o\'zgartirildi') : ($ynLabel . ' vaqti saqlandi');
 
         return response()->json([
             'success' => true,
             'time_changed' => $timeChanged,
-            'message' => $statusMsg . ($sentCount > 0 ? " va {$sentCount} ta talabaga xabar yuborildi" : ''),
+            'message' => $statusMsg,
         ]);
     }
 

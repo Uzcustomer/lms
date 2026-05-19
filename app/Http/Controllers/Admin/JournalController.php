@@ -1642,10 +1642,29 @@ class JournalController extends Controller
                 if (!$hasSababli) foreach (($mtGrades[$h] ?? []) as $dg) foreach ($dg as $g) if (!empty($g['retake_was_sababli'])) { $hasSababli = true; break 2; }
                 if (!$hasSababli && (!empty($other['on_sababli']) || !empty($other['oski_sababli']) || !empty($other['test_sababli']))) $hasSababli = true;
 
+                // Qo'shimcha farmoyish baholar (is_qoshimcha=1, attempt=1): asosiy bahosi
+                // bo'lmagan talabaga V1 sifatida ishlatiladi va shu orqali asosiy bosqichni
+                // o'tgan deb hisoblanadi.
+                $oskiQ1Val = $oskiQosh1Map[$h] ?? null;
+                $testQ1Val = $testQosh1Map[$h] ?? null;
+                $hasQosh1 = $oskiQ1Val !== null || $testQ1Val !== null;
+
                 // Asosiy va qo'shimcha — agar sababli bo'lmasa qo'shimcha = main, aks holda asosiy ham main (chunki bizda V1 alohida ajratilmagan).
                 // Asosiy logika: stage detection mainni qo'shimcha holatida ko'radi. Sababli flag bo'lsa
                 // determineStage qo'shimcha_passed deb qaytaradi.
                 $qoshimcha = $hasSababli ? $main : null;
+
+                // Qo'shimcha farmoyish bahosi mavjud bo'lsa, uni asosiy o'rnida ishlatib
+                // qo'shimcha stsenariyni quramiz (asosiy bahosi yo'q kataklar uchun fallback).
+                if ($hasQosh1) {
+                    $qoshimcha = $svc::buildScenario(
+                        $jn, $mt, $other['on'] ?? null,
+                        $other['oski'] ?? $oskiQ1Val,
+                        $other['test'] ?? $testQ1Val,
+                        $davomatPct,
+                        $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode
+                    );
+                }
 
                 // 12a stsenariy — JN/MT bir xil, OSKI/Test attempt=2 dan
                 $a = null;

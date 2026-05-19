@@ -3428,45 +3428,58 @@ class AcademicScheduleController extends Controller
         // failed_attempt1/failed_attempt2 va is_held_back/is_pullik bayroqlarini
         // qaytaradi. Shunda Word ro'yxati YN jadvalida ko'rinadigan
         // talabalar bilan AYNI ekvivalent bo'ladi.
+        //
+        // MUHIM: computeStudentAttemptStatuses (attachStudentsToSchedule ichida
+        // chaqiriladi) `held_back` bayrog'ini faqat unga uzatilgan triple'lar
+        // bo'yicha hisoblaydi. Faqat 1 ta fan triple'i yuborilsa, 4+ qarz
+        // qoidasi noto'g'ri ishlaydi (talabaning butun yildagi qarzi 1 ta
+        // deb sanaladi). Shu sababli har guruh uchun joriy o'quv yili BARCHA
+        // fanlarini scheduleData'ga qo'shamiz - shunda debt count to'g'ri
+        // chiqadi va RASHIDOV kabi 4+ qarzdor talabalar held_back=true bo'ladi.
         $resitItems = collect($items)->filter(fn($it) => (int) ($it['attempt'] ?? 1) >= 2);
         $studentsByItemKey = [];
         if ($resitItems->isNotEmpty()) {
-            $resitGroupHids = $resitItems->pluck('group_hemis_id')->unique();
+            $resitGroupHids = $resitItems->pluck('group_hemis_id')->unique()->all();
             $resitGroups = Group::whereIn('group_hemis_id', $resitGroupHids)->get()->keyBy('group_hemis_id');
-            $resitSubjects = CurriculumSubject::query();
-            $resitSubjects->where(function ($q) use ($resitItems) {
-                foreach ($resitItems as $rIt) {
-                    $q->orWhere(function ($sub) use ($rIt) {
-                        $sub->where('subject_id', $rIt['subject_id'])
-                            ->where('semester_code', $rIt['semester_code']);
-                    });
-                }
-            });
-            $resitSubjects = $resitSubjects->get();
+
+            // Joriy o'quv yilidagi BARCHA semestr kodlarini topish
+            $currentSems = Semester::where('current', true)->get();
+            $currentYear = $currentSems->first()?->education_year;
+            $yearSemCodes = [];
+            if ($currentYear) {
+                $yearSemCodes = Semester::where('education_year', $currentYear)->pluck('code')->unique()->all();
+            }
+
+            // Har guruh uchun shu yildagi barcha aktiv fanlar (curriculum_subjects)
+            $curriculumIds = $resitGroups->pluck('curriculum_hemis_id')->unique()->all();
+            $allYearSubjects = !empty($curriculumIds) && !empty($yearSemCodes)
+                ? CurriculumSubject::whereIn('curricula_hemis_id', $curriculumIds)
+                    ->where('is_active', true)
+                    ->whereIn('semester_code', $yearSemCodes)
+                    ->get()
+                : collect();
+
             $statusScheduleData = collect();
-            foreach ($resitItems as $rIt) {
-                $g = $resitGroups->get($rIt['group_hemis_id']);
-                if (!$g) continue;
-                $subj = $resitSubjects->first(fn($s) => (string) $s->subject_id === (string) $rIt['subject_id']
-                    && (string) $s->semester_code === (string) $rIt['semester_code']
-                    && (string) $s->curricula_hemis_id === (string) $g->curriculum_hemis_id);
-                if (!$subj) continue;
-                $statusScheduleData->push([
-                    'group' => $g,
-                    'subject' => $subj,
-                    'closing_form' => $subj->closing_form ?? null,
-                    'oski_date' => null, 'oski_na' => false, 'oski_time' => null,
-                    'test_date' => null, 'test_na' => false, 'test_time' => null,
-                    'oski_resit_date' => null, 'oski_resit_time' => null,
-                    'oski_resit2_date' => null, 'oski_resit2_time' => null,
-                    'test_resit_date' => null, 'test_resit_time' => null,
-                    'test_resit2_date' => null, 'test_resit2_time' => null,
-                ]);
+            foreach ($resitGroups as $g) {
+                $groupSubjects = $allYearSubjects->filter(fn($s) => (string) $s->curricula_hemis_id === (string) $g->curriculum_hemis_id);
+                foreach ($groupSubjects as $subj) {
+                    $statusScheduleData->push([
+                        'group' => $g,
+                        'subject' => $subj,
+                        'closing_form' => $subj->closing_form ?? null,
+                        'oski_date' => null, 'oski_na' => false, 'oski_time' => null,
+                        'test_date' => null, 'test_na' => false, 'test_time' => null,
+                        'oski_resit_date' => null, 'oski_resit_time' => null,
+                        'oski_resit2_date' => null, 'oski_resit2_time' => null,
+                        'test_resit_date' => null, 'test_resit_time' => null,
+                        'test_resit2_date' => null, 'test_resit2_time' => null,
+                    ]);
+                }
             }
             $statusScheduleData = $statusScheduleData->groupBy(fn($i) => $i['group']->group_hemis_id);
             try {
                 $statusScheduleData = $this->attachStudentsToSchedule($statusScheduleData);
-                // Har item uchun students ro'yxatini key bo'yicha xaritalash
+                // Har (group, subject, sem) uchun students ro'yxatini key bo'yicha xaritalash
                 foreach ($statusScheduleData as $items2) {
                     foreach ($items2 as $sItem) {
                         $key = $sItem['group']->group_hemis_id . '|' . $sItem['subject']->subject_id . '|' . $sItem['subject']->semester_code;

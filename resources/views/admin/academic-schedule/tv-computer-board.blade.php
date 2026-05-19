@@ -41,7 +41,7 @@
                         <span class="mx-2">·</span>
                         <span class="capitalize">{{ $date->isoFormat('dddd') }}</span>
                         <span class="mx-2">·</span>
-                        <span>Keyingi {{ $windowMin }} daq. kutilayotganlar</span>
+                        <span>Keyingi {{ $windowMin }} daq. (komp № — {{ $revealMin }} daq. qolganda ochiladi)</span>
                     </div>
                 </div>
             </div>
@@ -50,7 +50,8 @@
                 <div class="flex items-center gap-3 text-[11px] uppercase tracking-wider text-slate-400">
                     <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-emerald-400 ring-2 ring-emerald-400/30"></span>Topshirayapti</span>
                     <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-400/30"></span>Hozir kiring</span>
-                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-sky-400 ring-2 ring-sky-400/30"></span>Kutilmoqda</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-sky-400 ring-2 ring-sky-400/30"></span>Komp № ochildi</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-slate-500 ring-2 ring-slate-500/30"></span>Kutmoqda</span>
                 </div>
                 <div class="text-right">
                     <div id="tv-clock" class="text-3xl font-bold text-white tabular-nums leading-none">{{ $now->format('H:i') }}</div>
@@ -76,32 +77,43 @@
                             $statusClass = match($it['status']) {
                                 'in_progress' => 'bg-emerald-500/10 border-emerald-400/40 pulse-now',
                                 'imminent'    => 'bg-amber-500/10 border-amber-400/40 pulse-imminent',
-                                default       => 'bg-slate-800/60 border-slate-700',
+                                'near'        => 'bg-sky-500/10 border-sky-400/40',
+                                default       => 'bg-slate-800/40 border-slate-700/60',
                             };
                             $compBg = match($it['status']) {
                                 'in_progress' => 'bg-gradient-to-br from-emerald-500 to-emerald-700',
                                 'imminent'    => 'bg-gradient-to-br from-amber-500 to-orange-600',
-                                default       => 'bg-gradient-to-br from-sky-600 to-indigo-700',
+                                'near'        => 'bg-gradient-to-br from-sky-600 to-indigo-700',
+                                default       => 'bg-slate-800/80 border border-slate-700',
                             };
                             $badgeClass = match($it['status']) {
                                 'in_progress' => 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30',
                                 'imminent'    => 'bg-amber-500/20 text-amber-200 border border-amber-400/30',
-                                default       => 'bg-sky-500/20 text-sky-200 border border-sky-400/30',
+                                'near'        => 'bg-sky-500/20 text-sky-200 border border-sky-400/30',
+                                default       => 'bg-slate-700/40 text-slate-300 border border-slate-600/40',
                             };
                             $badgeText = match($it['status']) {
                                 'in_progress' => 'TOPSHIRAYAPTI',
                                 'imminent'    => 'KIRING',
+                                'near'        => 'KUTING',
                                 default       => $it['minutes_until'] . ' daq.',
                             };
                         @endphp
                         <div class="rounded-2xl border-2 {{ $statusClass }} p-4 flex flex-col gap-3 transition">
-                            {{-- Komp № katta blok --}}
+                            {{-- Komp № katta blok (faqat ochilgan bo'lsa raqam ko'rinadi) --}}
                             <div class="flex items-center gap-3">
                                 <div class="w-20 h-20 flex-shrink-0 rounded-2xl {{ $compBg }} flex items-center justify-center shadow-lg">
-                                    <div class="text-center">
-                                        <div class="text-[10px] uppercase tracking-wider text-white/80 leading-none">Komp</div>
-                                        <div class="text-4xl font-black text-white tabular-nums leading-tight">{{ $it['computer_number'] }}</div>
-                                    </div>
+                                    @if($it['show_computer'])
+                                        <div class="text-center">
+                                            <div class="text-[10px] uppercase tracking-wider text-white/80 leading-none">Komp</div>
+                                            <div class="text-4xl font-black text-white tabular-nums leading-tight">{{ $it['computer_number'] }}</div>
+                                        </div>
+                                    @else
+                                        <div class="text-center">
+                                            <div class="text-[10px] uppercase tracking-wider text-slate-400 leading-none">Komp</div>
+                                            <div class="text-3xl font-black text-slate-500 leading-tight">?</div>
+                                        </div>
+                                    @endif
                                 </div>
                                 <div class="flex-1 min-w-0">
                                     <div class="text-xl font-bold text-white truncate" title="{{ $it['short_name'] }}">

@@ -462,6 +462,9 @@
                                                             'group_hemis_id' => (string) $_grp['group_hemis_id'],
                                                             'subject_id'     => (string) $_grp['subject_id'],
                                                             'semester_code'  => (string) $_grp['semester_code'],
+                                                            // 2/3-urinish bo'lsa - server tomonida talabalarni filterlash uchun
+                                                            // (4+ qarzdorlarni va pullik talabalarni Word ro'yxatdan chiqarish).
+                                                            'attempt'        => (int) ($_grp['attempt'] ?? 1),
                                                         ];
                                                     }
                                                 @endphp

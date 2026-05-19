@@ -475,6 +475,8 @@
                                                         'semester_code'  => (string) $_grp['semester_code'],
                                                         'attempt'        => (int) ($_grp['attempt'] ?? 1),
                                                         'student_hemis_id' => !empty($_grp['student_hemis_id']) ? (string) $_grp['student_hemis_id'] : null,
+                                                        'schedule_id'    => (int) ($_grp['schedule_id'] ?? 0),
+                                                        'yn_type'        => isset($_grp['yn_type']) ? strtolower((string) $_grp['yn_type']) : null,
                                                     ];
                                                 }
                                             @endphp
@@ -516,6 +518,8 @@
                                                             'semester_code'  => (string) $_grp['semester_code'],
                                                             'attempt'        => (int) ($_grp['attempt'] ?? 1),
                                                             'student_hemis_id' => !empty($_grp['student_hemis_id']) ? (string) $_grp['student_hemis_id'] : null,
+                                                            'schedule_id'    => (int) ($_grp['schedule_id'] ?? 0),
+                                                            'yn_type'        => isset($_grp['yn_type']) ? strtolower((string) $_grp['yn_type']) : null,
                                                         ];
                                                     }
                                                 @endphp

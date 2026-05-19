@@ -96,7 +96,7 @@ return [
         // the system picks a real free computer for each pending student and
         // immediately notifies them. Smaller = harder for neighbors to
         // collude in advance; larger = more buffer for student to walk in.
-        'jit_assign_minutes_before' => (int) env('MOODLE_JIT_ASSIGN_MINUTES_BEFORE', 5),
+        'jit_assign_minutes_before' => (int) env('MOODLE_JIT_ASSIGN_MINUTES_BEFORE', 10),
         // Total questions in a typical YN quiz; used to estimate when the
         // previous student is "near the end" so the next student can be warned.
         'quiz_total_questions' => (int) env('MOODLE_QUIZ_TOTAL_QUESTIONS', 25),

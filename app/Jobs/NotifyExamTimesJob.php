@@ -76,6 +76,12 @@ class NotifyExamTimesJob implements ShouldQueue
                 $dateFmt = Carbon::parse($dateStr)->format('d.m.Y');
                 $timeHM = substr((string) $timeVal, 0, 5);
 
+                // Bulk xabar — faqat fan/sana/vaqt. Komp raqamini
+                // ExamScheduleTickJob imtihondan ~5 daqiqa oldin avtomatik
+                // yuboradi (notifyReveal), ekranda esa /tv/kompyuter displeyi
+                // ko'rsatadi. Bulk xabarda komp № yuborilsa, talaba uzoq
+                // muddat oldin ko'rib qoladi va boshqa kompga o'tirib qo'yishi
+                // mumkin — shu sabab ataylab kiritilmaydi.
                 $totalNotified += $this->sendBatch(
                     $telegram, $students, $subjectName, $ynLabel, $dateFmt, $timeHM
                 );

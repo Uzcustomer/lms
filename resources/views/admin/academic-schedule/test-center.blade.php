@@ -544,6 +544,18 @@
                                                     $stuPastDebts = $stuRow['past_debts'] ?? [];
                                                     $stuCurrentDebts = $stuRow['current_semester_debts'] ?? [];
                                                     $stuDebtCount = count($stuPastDebts) + count($stuCurrentDebts);
+                                                    // Qarz fanlari tooltip uchun ro'yxati
+                                                    $stuDebtTooltip = '';
+                                                    if ($stuDebtCount > 0) {
+                                                        $tooltipLines = [];
+                                                        foreach ($stuPastDebts as $d) {
+                                                            $tooltipLines[] = '• ' . ($d['subject_name'] ?? '') . ' (' . ($d['semester_name'] ?? '') . ')';
+                                                        }
+                                                        foreach ($stuCurrentDebts as $d) {
+                                                            $tooltipLines[] = '• ' . ($d['subject_name'] ?? '') . ' (' . ($d['semester_name'] ?? '') . ') — joriy';
+                                                        }
+                                                        $stuDebtTooltip = implode("\n", $tooltipLines);
+                                                    }
                                                     $stuHeldBack = !empty($stuRow['is_held_back']) || $stuDebtCount >= 4;
                                                     // YN ga ruxsat (YnAdmissionService — YN oldi qaydnoma bilan bir xil mantiq)
                                                     $stuAdmission = $stuRow['admission_status'] ?? null;
@@ -565,8 +577,11 @@
                                                     <td colspan="6" style="padding:4px 8px 4px 40px;font-size:11px;color:{{ $stuBlocked ? '#991b1b' : '#475569' }};">
                                                         <span style="display:inline-block;padding:0 4px;border-left:3px solid {{ $stuBlocked ? '#fca5a5' : '#93c5fd' }};margin-right:6px;">↳</span>
                                                         {{ $stuRow['full_name'] ?? '' }}
+                                                        @if($stuDebtCount > 0)
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;cursor:help;white-space:pre-line;" title="{{ $stuDebtTooltip }}">{{ $stuDebtCount }} qarz</span>
+                                                        @endif
                                                         @if($stuHeldBack)
-                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="4 tadan ortiq fandan qarz — kursdan qoldiriladi">4 tadan ortiq qarz</span>
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;cursor:help;white-space:pre-line;" title="4 tadan ortiq fandan qarz — kursdan qoldiriladi&#10;{{ $stuDebtTooltip }}">4 tadan ortiq qarz</span>
                                                         @elseif($stuPullik && $attempt > 1)
                                                             <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="JN/MT past yoki davomat ≥25% — qayta topshira olmaydi">Pullik</span>
                                                         @endif

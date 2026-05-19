@@ -6792,6 +6792,31 @@ class AcademicScheduleController extends Controller
                 ->toArray();
         }
 
+        // Tanlov fanlari uchun aniq son — student_subjects'dan
+        // (har talaba bitta variant tanlaydi; butun guruh sonini
+        // ishlatish (a)+(b)+(c) variantlar bandlik sig'imini
+        // soxtalashtirardi).
+        $subjectCounts = []; // [group_hemis_id|subject_id => cnt]
+        $subjectIdsForCount = $allItems->pluck('subject_id')->filter()->unique()->toArray();
+        if (!empty($allGroupIds) && !empty($subjectIdsForCount)) {
+            try {
+                $rowsCnt = \Illuminate\Support\Facades\DB::table('student_subjects as ss')
+                    ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+                    ->whereIn('st.group_id', $allGroupIds)
+                    ->whereIn('ss.subject_id', $subjectIdsForCount)
+                    ->where('st.student_status_code', 11)
+                    ->select('st.group_id', 'ss.subject_id',
+                        \Illuminate\Support\Facades\DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+                    ->groupBy('st.group_id', 'ss.subject_id')
+                    ->get();
+                foreach ($rowsCnt as $r) {
+                    $subjectCounts[$r->group_id . '|' . $r->subject_id] = (int) $r->cnt;
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichi: student_subjects so\'rovi xatolik: ' . $e->getMessage());
+            }
+        }
+
         // 2/3-urinish (resit) uchun haqiqiy talabalar sonini hisoblash —
         // butun guruh emas, faqat yiqilganlar. computeStudentAttemptStatuses
         // qoidalari bilan to'liq mos kelmasligi mumkin (V<60 ning aniq
@@ -6850,14 +6875,19 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        $eligibleCountForItem = function (array $item) use ($studentCounts, $resitEligibleMap): int {
+        $eligibleCountForItem = function (array $item) use ($studentCounts, $resitEligibleMap, $subjectCounts): int {
             $attemptN = (int) ($item['attempt'] ?? 1);
             if (!empty($item['student_hemis_id'])) {
                 return 1; // individual grafik — faqat shu talaba
             }
             $totalGroup = (int) ($studentCounts[$item['group_hemis_id']] ?? 0);
             if ($attemptN <= 1) {
-                return $totalGroup;
+                // Tanlov fanlari uchun student_subjects'dan aniq sonni olamiz;
+                // mandatory fanlar uchun butun guruh.
+                $subjKey = ($item['group_hemis_id'] ?? '') . '|' . ($item['subject_id'] ?? '');
+                return isset($subjectCounts[$subjKey])
+                    ? $subjectCounts[$subjKey]
+                    : $totalGroup;
             }
             $key = $item['group_hemis_id'] . '|' . ($item['subject_id'] ?? '') . '|' . ($item['semester_code'] ?? '') . '|' . $attemptN;
             if (array_key_exists($key, $resitEligibleMap)) {
@@ -7085,6 +7115,35 @@ class AcademicScheduleController extends Controller
                 ->toArray();
         }
 
+        // Tanlov fanlari (subject_type_code=12) — bir guruhda variant (a), (b),
+        // (c) bo'lishi mumkin va har talaba faqat BITTASIni tanlaydi. Butun
+        // guruh sonini olib ishlatish bandlik sig'imini noto'g'ri ko'rsatadi
+        // (15 talaba bo'lgan guruh variant (a)+(c) bo'lsa, 15+15=30 deb
+        // sanaladi). student_subjects jadvalida har talabaning aniq tanlagan
+        // variantining subject_id bor — shuni hisoblaymiz. Mandatory fanlar
+        // (subject_type != 12) uchun student_subjects yozuvi bo'lmasligi
+        // mumkin, ular uchun butun guruh soni fallback bo'ladi.
+        $subjectCounts = []; // [group_hemis_id|subject_id => cnt]
+        $subjectIdsForCount = $allGroups->pluck('subject_id')->filter()->unique()->toArray();
+        if (!empty($allGroupIds) && !empty($subjectIdsForCount)) {
+            try {
+                $rowsCnt = \Illuminate\Support\Facades\DB::table('student_subjects as ss')
+                    ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+                    ->whereIn('st.group_id', $allGroupIds)
+                    ->whereIn('ss.subject_id', $subjectIdsForCount)
+                    ->where('st.student_status_code', 11)
+                    ->select('st.group_id', 'ss.subject_id',
+                        \Illuminate\Support\Facades\DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+                    ->groupBy('st.group_id', 'ss.subject_id')
+                    ->get();
+                foreach ($rowsCnt as $r) {
+                    $subjectCounts[$r->group_id . '|' . $r->subject_id] = (int) $r->cnt;
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: student_subjects so\'rovi xatolik: ' . $e->getMessage());
+            }
+        }
+
         // 2/3-urinish (resit) uchun mos talabalar sonini hisoblash —
         // butun guruh emas, faqat yiqilganlar. Bitta batch DB so'rovi.
         $resitEligibleMap = [];
@@ -7162,13 +7221,20 @@ class AcademicScheduleController extends Controller
         // qatorlar guruh ichida qoladi). Per-student vaqti guruh vaqti bilan
         // teng bo'lsa ($mergedByCombo'da hisoblangan), guruhdan ayrilmaydi —
         // ular guruh slotida birlashtirib ko'rsatiladi.
-        $eligibleCount = function (array $grp, int $totalGroupCount) use ($resitEligibleMap, $perStudentTimeMap, $mergedByCombo): int {
+        $eligibleCount = function (array $grp, int $totalGroupCount) use ($resitEligibleMap, $perStudentTimeMap, $mergedByCombo, $subjectCounts): int {
             $attemptN = (int) ($grp['attempt'] ?? 1);
             if (!empty($grp['student_hemis_id'])) {
                 return 1;
             }
             if ($attemptN <= 1) {
-                $base = $totalGroupCount;
+                // Tanlov fanlari uchun student_subjects'dan aniq sonni olamiz
+                // (variant (a)/(b)/(c) lar uchun har talaba faqat birini
+                // tanlaydi, butun guruh soni emas). Yo'q bo'lsa — majburiy
+                // fan deb hisoblab butun guruh sonini ishlatamiz.
+                $subjKey = ($grp['group_hemis_id'] ?? '') . '|' . ($grp['subject_id'] ?? '');
+                $base = isset($subjectCounts[$subjKey])
+                    ? $subjectCounts[$subjKey]
+                    : $totalGroupCount;
             } else {
                 $resitKey = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code'] . '|' . $attemptN;
                 $base = (int) ($resitEligibleMap[$resitKey] ?? 0);

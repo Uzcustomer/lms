@@ -4405,20 +4405,28 @@ class AcademicScheduleController extends Controller
         // sig'adi), so'ng 3-urinish. Aks holda kichik guruhlar bo'sh slotlarni
         // band qiladi va katta resit'larga joy qolmaydi.
         //
-        // Resit pass'larida candidate'larni kattalikka qarab kamayish tartibida
-        // saralaymiz — first-fit ham FFD (first-fit decreasing) ga aylanadi,
-        // bu klassik bin-packing approximation.
-        // FFD (First-Fit Decreasing) — har attempt uchun candidate'lar haqiqiy
-        // talaba soni bo'yicha kamayish tartibida saralanadi. 1-urinishda
-        // guruh ATOMIK joylashtirilgani uchun (bo'linmaydi), katta guruhlar
-        // avval ketishi bilan slotlar tahlikali fragmentlangan bo'shliqlar
-        // qoldirmaydi. 2-/3-urinishda esa katta resit'lar avval, kichik
-        // resit'lar oxirida — natijada kichiklari qolgan kichik bo'shliqlarga
-        // ehtiyot qilib joylashadi.
+        // Candidate tartibi: avval klaster (fakultet → yo'nalish → kurs/semestr
+        // → fan) bo'yicha ketma-ket — bir xil fakultet/yo'nalish/kurs/fan'dagi
+        // yozuvlar qator slotlarga tushadi, shunda bir kafedraning shu kursga
+        // mo'ljallangan barcha imtihonlari yaqin vaqtlarda bo'ladi. Slot tanlash
+        // bosqichida esa best-fit ishlatiladi (findSlotForCount / distribute).
+        // Klaster ichida talaba soni bo'yicha kamayish tartibi (FFD) saqlanadi:
+        // katta guruhlar avval ketsa, kichiklari qolgan kichik bo'shliqlarga
+        // toza tushadi.
         $sortedByAttempt = [];
         foreach ([1, 2, 3] as $att) {
-            $sortedByAttempt[$att] = $candidates->sortByDesc(function ($s) use ($att, $groupCountMap, $attemptNeedsMap) {
-                return $this->resolveAttemptStudentCount($s, $att, $groupCountMap, $attemptNeedsMap);
+            $sortedByAttempt[$att] = $candidates->sort(function ($a, $b) use ($att, $groupCountMap, $attemptNeedsMap) {
+                $cmp = strcmp((string) $a->department_hemis_id, (string) $b->department_hemis_id);
+                if ($cmp !== 0) return $cmp;
+                $cmp = strcmp((string) $a->specialty_hemis_id, (string) $b->specialty_hemis_id);
+                if ($cmp !== 0) return $cmp;
+                $cmp = strcmp((string) $a->semester_code, (string) $b->semester_code);
+                if ($cmp !== 0) return $cmp;
+                $cmp = strcmp((string) $a->subject_id, (string) $b->subject_id);
+                if ($cmp !== 0) return $cmp;
+                $cntA = $this->resolveAttemptStudentCount($a, $att, $groupCountMap, $attemptNeedsMap);
+                $cntB = $this->resolveAttemptStudentCount($b, $att, $groupCountMap, $attemptNeedsMap);
+                return $cntB <=> $cntA;
             })->values();
         }
 
@@ -4574,9 +4582,30 @@ class AcademicScheduleController extends Controller
                 }
                 unset($b);
 
-                // FFD: katta bucket'lar avval (kichik bucket'lar oxirgi
-                // qolgan kichik bo'shliqlarga ehtiyot bilan tushishadi).
-                usort($buckets, fn($a, $b) => $b['count'] <=> $a['count']);
+                // Avval klaster (fakultet → yo'nalish → kurs/semestr → fan)
+                // bo'yicha ketma-ket — bir xil yo'nalish/kursning resit'lari
+                // qator vaqtlarda joylashadi. Klaster ichida katta bucket'lar
+                // avval (FFD), shunda kichiklari qolgan kichik bo'shliqlarga
+                // toza tushadi va best-fit slot tanlash samarali ishlaydi.
+                usort($buckets, function ($a, $b) {
+                    $sa = $a['schedules'][0] ?? null;
+                    $sb = $b['schedules'][0] ?? null;
+                    $cmp = strcmp(
+                        (string) ($sa->department_hemis_id ?? ''),
+                        (string) ($sb->department_hemis_id ?? '')
+                    );
+                    if ($cmp !== 0) return $cmp;
+                    $cmp = strcmp(
+                        (string) ($sa->specialty_hemis_id ?? ''),
+                        (string) ($sb->specialty_hemis_id ?? '')
+                    );
+                    if ($cmp !== 0) return $cmp;
+                    $cmp = strcmp((string) $a['semester_code'], (string) $b['semester_code']);
+                    if ($cmp !== 0) return $cmp;
+                    $cmp = strcmp((string) $a['subject_id'], (string) $b['subject_id']);
+                    if ($cmp !== 0) return $cmp;
+                    return $b['count'] <=> $a['count'];
+                });
 
                 foreach ($buckets as $b) {
                     try {

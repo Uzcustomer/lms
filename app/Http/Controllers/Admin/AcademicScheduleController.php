@@ -2788,19 +2788,34 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        // Kunlik sig'im validatsiyasi (har bir yangi/o'zgargan sana uchun)
-        // Eslatma: har bir sananing o'z sig'imi pastda alohida hisoblanadi
-        $defaultDailyCapacity = ExamCapacityService::dailyCapacity();
+        // Kunlik sig'im validatsiyasi (har bir yangi/o'zgargan sana uchun).
+        // Sig'im ham, talaba soni ham bandlik ko'rsatkichi dashboard'i bilan
+        // bir xil usulda hisoblanadi, aks holda ikki sahifa bir-biriga zid
+        // raqam ko'rsatadi:
+        //   - sig'im: reserve pool ayrilgan effective kunlik sig'im;
+        //   - talaba soni: tanlov fani (variant a/b/c), per-student grafik va
+        //     urinish bo'yicha aniq son — butun guruh emas.
+        $defaultDailyCapacity = ExamCapacityService::effectiveDailyCapacityForDate(null);
         if ($defaultDailyCapacity > 0) {
-            // Aggregat: $dateStudents[$date] = qancha qo'shilayotgan talaba (ushbu so'rov ichida)
+            // $pendingByDate[$date] = ushbu so'rovda shu kunga ko'chirilayotgan talabalar soni
             $pendingByDate = [];
-            $groupCountCache = [];
+            $subjectCountCache = [];
 
-            $countOf = function ($groupId) use (&$groupCountCache) {
-                if (!isset($groupCountCache[$groupId])) {
-                    $groupCountCache[$groupId] = ExamCapacityService::groupStudentCount($groupId);
+            $countOfSchedule = function (array $schedule) use (&$subjectCountCache) {
+                // Per-student grafik — faqat shu talaba.
+                if (!empty($schedule['student_hemis_id'])) {
+                    return 1;
                 }
-                return $groupCountCache[$groupId];
+                // Tanlov fani (variant a/b/c) bo'lsa student_subjects'dan aniq
+                // son; mandatory fan bo'lsa butun guruh.
+                $key = $schedule['group_hemis_id'] . '|' . ($schedule['subject_id'] ?? '');
+                if (!isset($subjectCountCache[$key])) {
+                    $subjectCountCache[$key] = ExamCapacityService::subjectStudentCount(
+                        $schedule['group_hemis_id'],
+                        $schedule['subject_id'] ?? null
+                    );
+                }
+                return $subjectCountCache[$key];
             };
 
             foreach ($validSchedules as $schedule) {
@@ -2816,74 +2831,33 @@ class AcademicScheduleController extends Controller
                 $oskiNa = !empty($schedule['oski_na']);
                 $testNa = !empty($schedule['test_na']);
 
-                // OSKI: agar yangi yoki o'zgargan sana bo'lsa
+                // OSKI: faqat yangi yoki o'zgargan sana hisobga olinadi
                 if (!empty($schedule['oski_date']) && !$oskiNa) {
                     $oldOski = $existingRec?->oski_date?->format('Y-m-d');
                     $newOski = $schedule['oski_date'];
                     if ($oldOski !== $newOski) {
-                        $pendingByDate[$newOski]['students'] = ($pendingByDate[$newOski]['students'] ?? 0) + $countOf($schedule['group_hemis_id']);
-                        $pendingByDate[$newOski]['exclude'][] = [
-                            'group_hemis_id' => $schedule['group_hemis_id'],
-                            'subject_id' => $schedule['subject_id'],
-                            'semester_code' => $schedule['semester_code'],
-                            'yn_type' => 'oski',
-                        ];
+                        $pendingByDate[$newOski] = ($pendingByDate[$newOski] ?? 0) + $countOfSchedule($schedule);
                     }
                 }
-                // Test: agar yangi yoki o'zgargan sana bo'lsa
+                // Test: faqat yangi yoki o'zgargan sana hisobga olinadi
                 if (!empty($schedule['test_date']) && !$testNa) {
                     $oldTest = $existingRec?->test_date?->format('Y-m-d');
                     $newTest = $schedule['test_date'];
                     if ($oldTest !== $newTest) {
-                        $pendingByDate[$newTest]['students'] = ($pendingByDate[$newTest]['students'] ?? 0) + $countOf($schedule['group_hemis_id']);
-                        $pendingByDate[$newTest]['exclude'][] = [
-                            'group_hemis_id' => $schedule['group_hemis_id'],
-                            'subject_id' => $schedule['subject_id'],
-                            'semester_code' => $schedule['semester_code'],
-                            'yn_type' => 'test',
-                        ];
+                        $pendingByDate[$newTest] = ($pendingByDate[$newTest] ?? 0) + $countOfSchedule($schedule);
                     }
                 }
             }
 
-            foreach ($pendingByDate as $date => $info) {
-                // Sanada allaqachon belgilangan boshqa yozuvlar (joriy o'zgartirilayotganlardan tashqari)
-                $existingTotal = 0;
-                $excludeList = $info['exclude'] ?? [];
-                $rowsOnDate = ExamSchedule::where(function ($q) use ($date) {
-                    $q->where(function ($q2) use ($date) {
-                        $q2->whereDate('oski_date', $date)->where('oski_na', false);
-                    })->orWhere(function ($q2) use ($date) {
-                        $q2->whereDate('test_date', $date)->where('test_na', false);
-                    });
-                })->get();
-
-                foreach ($rowsOnDate as $row) {
-                    $isExcluded = function (string $ynType) use ($row, $excludeList): bool {
-                        foreach ($excludeList as $ex) {
-                            if ($ex['group_hemis_id'] === $row->group_hemis_id
-                                && (string) $ex['subject_id'] === (string) $row->subject_id
-                                && (string) $ex['semester_code'] === (string) $row->semester_code
-                                && $ex['yn_type'] === $ynType) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    };
-
-                    $oskiMatch = $row->oski_date && $row->oski_date->format('Y-m-d') === $date && !$row->oski_na;
-                    $testMatch = $row->test_date && $row->test_date->format('Y-m-d') === $date && !$row->test_na;
-
-                    if ($oskiMatch && !$isExcluded('oski')) {
-                        $existingTotal += $countOf($row->group_hemis_id);
-                    }
-                    if ($testMatch && !$isExcluded('test')) {
-                        $existingTotal += $countOf($row->group_hemis_id);
-                    }
-                }
-
-                $combined = $existingTotal + ($info['students'] ?? 0);
-                $perDayCapacity = ExamCapacityService::dailyCapacityForDate($date);
+            foreach ($pendingByDate as $date => $pendingStudents) {
+                // Sanada DB'da allaqachon belgilangan yozuvlar bo'yicha aniq
+                // talaba soni (tanlov fani / per-student / urinish bilan).
+                // O'zgarayotgan qatorlarning eski sanasi DB'da hali boshqa
+                // kunda turgani uchun bu yerda qayta sanalmaydi — pending
+                // alohida qo'shiladi.
+                $existingTotal = ExamCapacityService::totalStudentsOnDate($date);
+                $combined = $existingTotal + $pendingStudents;
+                $perDayCapacity = ExamCapacityService::effectiveDailyCapacityForDate($date);
                 if ($perDayCapacity > 0 && $combined > $perDayCapacity) {
                     $dateFormatted = \Carbon\Carbon::parse($date)->format('d.m.Y');
                     return redirect()->back()->with('error',

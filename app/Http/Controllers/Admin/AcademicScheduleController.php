@@ -6076,35 +6076,17 @@ class AcademicScheduleController extends Controller
     private function readPersistedComputerNumbers(array $subjectGroups, bool $multiSlotMode, ?string $examTime): array
     {
         $map = [];
-        $scheduleIdCache = [];
+        $scheduleIdsCache = [];
         foreach ($subjectGroups as $sg) {
             $slot = $multiSlotMode ? (string) ($sg['slot_time'] ?? '') : (string) ($examTime ?? '');
             foreach ($sg['entries'] as $entry) {
-                $scheduleId = !empty($entry['schedule_id']) ? (int) $entry['schedule_id'] : null;
-                $ynType = !empty($entry['yn_type']) ? strtolower((string) $entry['yn_type']) : null;
-                $attempt = (int) ($entry['attempt'] ?? 1);
-
-                // Test markazi "YN oldi word" tugmasi schedule_id yubormaydi —
-                // guruh+fan+semestr bo'yicha guruh-level ExamSchedule topamiz.
-                if (!$scheduleId) {
-                    $group = $entry['group'] ?? null;
-                    $subject = $entry['subject'] ?? null;
-                    if (!$group || !$subject) {
-                        continue;
-                    }
-                    $cacheKey = $group->group_hemis_id . '|' . $subject->subject_id . '|' . $subject->semester_code;
-                    if (!array_key_exists($cacheKey, $scheduleIdCache)) {
-                        $scheduleIdCache[$cacheKey] = ExamSchedule::where('group_hemis_id', $group->group_hemis_id)
-                            ->where('subject_id', $subject->subject_id)
-                            ->where('semester_code', $subject->semester_code)
-                            ->whereNull('student_hemis_id')
-                            ->value('id');
-                    }
-                    $scheduleId = $scheduleIdCache[$cacheKey] ? (int) $scheduleIdCache[$cacheKey] : null;
-                }
-                if (!$scheduleId) {
+                $group = $entry['group'] ?? null;
+                $subject = $entry['subject'] ?? null;
+                if (!$group || !$subject) {
                     continue;
                 }
+                $ynType = !empty($entry['yn_type']) ? strtolower((string) $entry['yn_type']) : null;
+                $attempt = (int) ($entry['attempt'] ?? 1);
 
                 $hemisIds = [];
                 foreach ($entry['students'] as $st) {
@@ -6116,14 +6098,38 @@ class AcademicScheduleController extends Controller
                     continue;
                 }
 
-                $query = \App\Models\ComputerAssignment::where('exam_schedule_id', $scheduleId)
+                // Bu (guruh, fan, semestr) ga tegishli BARCHA exam_schedules
+                // id'lari — guruh-level qator va individual (per-student)
+                // qatorlar. Talabaning komp raqami qaysi jadval ostida
+                // saqlangan bo'lsa ham topiladi: bulk tugma guruh jadvali
+                // ostiga, individual vaqt esa per-student jadvali ostiga
+                // yozadi — faqat guruh id bo'yicha qidirsak individuallar
+                // tushib qolardi.
+                $cacheKey = $group->group_hemis_id . '|' . $subject->subject_id . '|' . $subject->semester_code;
+                if (!array_key_exists($cacheKey, $scheduleIdsCache)) {
+                    $scheduleIdsCache[$cacheKey] = ExamSchedule::where('group_hemis_id', $group->group_hemis_id)
+                        ->where('subject_id', $subject->subject_id)
+                        ->where('semester_code', $subject->semester_code)
+                        ->pluck('id')
+                        ->all();
+                }
+                $scheduleIds = $scheduleIdsCache[$cacheKey];
+                if (empty($scheduleIds)) {
+                    continue;
+                }
+
+                $query = \App\Models\ComputerAssignment::query()
+                    ->whereIn('exam_schedule_id', $scheduleIds)
                     ->where('attempt', $attempt)
                     ->whereIn('student_hemis_id', $hemisIds)
-                    ->whereNotNull('computer_number');
+                    ->whereNotNull('computer_number')
+                    ->orderBy('updated_at');
                 if ($ynType !== null) {
                     $query->where('yn_type', $ynType);
                 }
                 foreach ($query->get(['student_hemis_id', 'computer_number']) as $row) {
+                    // orderBy updated_at — talabada bir nechta qator bo'lsa
+                    // eng so'nggi yangilangani qoladi.
                     $map[$slot . '|' . (string) $row->student_hemis_id] = (int) $row->computer_number;
                 }
             }

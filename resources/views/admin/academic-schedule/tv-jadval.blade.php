@@ -322,7 +322,9 @@
 
                 const startNewPage = () => {
                     currentPage = document.createElement('div');
-                    currentPage.className = 'tv-page flex flex-col';
+                    // Faqat 'tv-page' — Tailwind .flex display:none ni bekor
+                    // qilib yuborardi; display/flex-direction'ni CSS boshqaradi.
+                    currentPage.className = 'tv-page';
                     host.appendChild(currentPage);
                     pagesData.push(currentPage);
                     currentHeight = 0;

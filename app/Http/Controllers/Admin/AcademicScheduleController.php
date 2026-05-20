@@ -6777,6 +6777,23 @@ class AcademicScheduleController extends Controller
             ->when(!empty($eligibleStHemisIds), fn($q) => $q->whereNotIn('student_hemis_id', $eligibleStHemisIds))
             ->delete();
 
+        // Individual vaqt qo'yilgan talabaga bo'sh kompyuter raqamini avtomatik
+        // biriktiramiz — guruh va boshqa individual talabalar band qilgan
+        // raqamlar chetlab o'tiladi (bitta kompyuter ikki kishiga tushmasin).
+        // Komp biriktirishdagi xato vaqt saqlashni bekor qilmaydi.
+        $compResult = ['ok' => false];
+        try {
+            $compResult = app(\App\Services\ComputerAssignmentService::class)->assignSingleStudent(
+                $perStudent,
+                (string) $request->yn_type,
+                (int) $request->attempt,
+                (string) $request->student_hemis_id,
+                $stPlannedStart
+            );
+        } catch (\Throwable $e) {
+            \Log::warning('saveStudentTime: komp avtomatik biriktirish xatosi: ' . $e->getMessage());
+        }
+
         // Faqat shu talabaga notification (individual grafik — guruh xabari emas).
         $ynLabel = $request->yn_type === 'OSKI' ? 'OSKI' : 'Test';
         $attemptInt = (int) $request->attempt;
@@ -6793,12 +6810,21 @@ class AcademicScheduleController extends Controller
             $oldStudentTime
         );
 
+        $compMsg = '';
+        if (!empty($compResult['ok']) && !empty($compResult['computer_number'])) {
+            $compMsg = ' Kompyuter №' . $compResult['computer_number'] . ' biriktirildi.';
+        } elseif (empty($compResult['ok'])) {
+            $compMsg = ' Diqqat: bu vaqt uchun bo\'sh kompyuter topilmadi — raqamni qo\'lda biriktiring.';
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Talaba uchun vaqt saqlandi.'
-                . ($sentCount > 0 ? ' Telegramda xabar yuborildi.' : ''),
+                . ($sentCount > 0 ? ' Telegramda xabar yuborildi.' : '')
+                . $compMsg,
             'time' => $request->test_time,
             'notified' => $sentCount,
+            'computer_number' => $compResult['computer_number'] ?? null,
         ]);
     }
 

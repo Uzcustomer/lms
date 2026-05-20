@@ -423,8 +423,8 @@
                     <div><strong>Token:</strong> ${body.has_token ? body.token_preview : '<em style="color:#b91c1c">not configured</em>'}</div>
                 </div>`;
 
-                html += renderResult('1) get_results — ids_grade rejimi', 'page=1, limit=1', body.old || {});
-                html += renderResult('2) get_results — full rejimi', 'page=1, limit=1', body.new || {});
+                html += renderResult('1) ESKI funksiya: local_quizexport_get_results', 'page=1, limit=1', body.old || {});
+                html += renderResult('2) YANGI funksiya: local_quizexport_get_daily_summary', 'kechagi va bugungi sana', body.new || {});
 
                 html += `<div class="km-section" style="margin-top:18px;padding:12px;background:#fffbeb;border:1px solid #fcd34d;border-radius:8px;">
                     <strong style="color:#92400e;">Talqin:</strong>

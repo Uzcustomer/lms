@@ -3846,16 +3846,72 @@ class AcademicScheduleController extends Controller
                 // guruh slotidagi Word'da chiqishi kerak.
                 $enrichedStudents = $this->filterStudentsForAttempt($enrichedStudents, $itemAttempt);
             }
+
+            // Per-student (individual) yozuv fallback: registrator aniq tanlagan
+            // talaba attachStudentsToSchedule pipeline'idan tushib qolgan bo'lsa
+            // (joriy guruhi exam_schedules.group_hemis_id'dan farqli, status != 11
+            // yoki subgroup/variant filtri) — uni to'g'ridan-to'g'ri students
+            // jadvalidan tiklaymiz. Aks holda individual imtihon Word'dan butunlay
+            // tushib qolardi — bitta slotda ikkita individual 2-urinish bo'lganda
+            // ikkinchisi chiqmay qolish muammosi.
+            if ($itemStudentHemisId !== null && empty($enrichedStudents)) {
+                $fallbackStudent = Student::where('hemis_id', $itemStudentHemisId)
+                    ->select('hemis_id', 'student_id_number', 'full_name')
+                    ->first();
+                if ($fallbackStudent) {
+                    $fbAdmission = null;
+                    try {
+                        $fbAdmission = app(\App\Services\YnAdmissionService::class)->statusForStudent(
+                            (string) $itemStudentHemisId,
+                            (string) $group->group_hemis_id,
+                            (string) $subjectId,
+                            (string) $semesterCode
+                        );
+                    } catch (\Throwable $e) {
+                        \Log::warning('processYnOldiWord: individual fallback admission failed: ' . $e->getMessage());
+                    }
+                    $fbRow = [
+                        'hemis_id' => $fallbackStudent->hemis_id,
+                        'student_id_number' => $fallbackStudent->student_id_number ?? null,
+                        'full_name' => $fallbackStudent->full_name,
+                        'admission_status' => $fbAdmission,
+                        'is_held_back' => false,
+                        'past_debts' => [],
+                        'current_semester_debts' => [],
+                    ];
+                    // Individual imtihon vaqti — per-student ExamSchedule yozuvidan.
+                    if ($itemScheduleId) {
+                        $fbSchedule = ExamSchedule::find($itemScheduleId);
+                        if ($fbSchedule) {
+                            foreach ([
+                                'oski_time', 'oski_resit_time', 'oski_resit2_time',
+                                'test_time', 'test_resit_time', 'test_resit2_time',
+                            ] as $tcol) {
+                                $fbRow[$tcol] = $fbSchedule->{$tcol} ?? null;
+                            }
+                        }
+                    }
+                    $enrichedStudents = [$fbRow];
+                }
+            }
             $dbgAfterAttemptCount = count($enrichedStudents);
 
             // Kursdan qoldirilgan (4+ qarz) yoki YN ga ruxsat yo'q (X)
             // talabalarni ro'yxatdan chiqarib tashlaymiz — Word faqat
-            // "kiradiganlar"ni ko'rsatadi (Ruxsat yoki Shartli).
-            // 4+ qarz uchun 3 manbadan tekshiriladi (yuqaridagi
-            // students mapping bilan bir xil), JN/MT/davomat sabab "X"
-            // bo'lganlar admission_status orqali aniqlanadi.
+            // "kiradiganlar"ni ko'rsatadi (Ruxsat yoki Shartli). 4+ qarz uchun
+            // 3 manbadan tekshiriladi, "X" admission_status orqali aniqlanadi.
+            // DIQQAT: bu filtr faqat GURUH-LEVEL yozuvlarga qo'llanadi. Per-student
+            // (individual) yozuvni registrator saveStudentTime orqali aniq tanlab
+            // imtihon vaqti qo'ygan (u yerda X holati allaqachon tekshirilgan) —
+            // shu sabab individual yozuv filtrdan o'tkazib yuboriladi, aks holda
+            // bir slotda ikkita individual 2-urinish bo'lsa biri Word'dan tushib
+            // qolardi.
             $dbgRemoved = [];
-            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($yearDebtCount, $debug, &$dbgRemoved) {
+            $skipEligibilityFilter = ($itemStudentHemisId !== null);
+            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($yearDebtCount, $debug, &$dbgRemoved, $skipEligibilityFilter) {
+                if ($skipEligibilityFilter) {
+                    return true;
+                }
                 $hemisId = (string) ($row['hemis_id'] ?? '');
                 $debtCount = count($row['past_debts'] ?? []) + count($row['current_semester_debts'] ?? []);
                 $yearCnt = $yearDebtCount[$hemisId] ?? 0;

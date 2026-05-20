@@ -258,6 +258,21 @@
                                 </form>
                             @endif
                             @if($tcWithTimeCount > 0)
+                                <form method="POST" action="{{ route($routePrefix . '.academic-schedule.test-center.assign-computers') }}"
+                                      style="display:inline;"
+                                      onsubmit="return confirm('Joriy oraliqdagi vaqt belgilangan {{ $tcWithTimeCount }} ta yozuv bo\'yicha talabalarga kompyuter raqamlari taqsimlansinmi? Bu mavjud taqsimotni qayta hisoblaydi.');">
+                                    @csrf
+                                    <input type="hidden" name="date_from" value="{{ $dateFrom ?? '' }}" />
+                                    <input type="hidden" name="date_to"   value="{{ $dateTo ?? '' }}" />
+                                    <button type="submit"
+                                            style="height:34px;background:#4f46e5;color:#fff;border:0;border-radius:8px;padding:0 14px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:6px;"
+                                            title="Vaqt belgilangan imtihonlar bo'yicha talabalarga kompyuter raqamlarini taqsimlash">
+                                        <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/></svg>
+                                        Kompyuter raqamlarini taqsimlash
+                                    </button>
+                                </form>
+                            @endif
+                            @if($tcWithTimeCount > 0)
                                 <form method="POST" action="{{ route($routePrefix . '.academic-schedule.test-center.notify-all') }}"
                                       style="display:inline;"
                                       onsubmit="return confirm('Joriy oraliqdagi vaqt belgilangan {{ $tcWithTimeCount }} ta yozuv bo\'yicha talabalarga Telegram + LMS xabarnoma yuborilsinmi? Xabarlar fonda yuboriladi.');">

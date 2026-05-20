@@ -1171,7 +1171,7 @@
                 html += '<div class="reupload-modal-body">';
                 html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Dropdown — talabaning <strong>joriy semestriga biriktirilgan fanlar</strong>. Default — Moodledan kelgan fan, lekin to\'g\'ri fanga o\'zgartirib yuklash mumkin.</p>';
                 html += '<table class="reupload-modal-table">';
-                html += '<thead><tr><th>#</th><th>Guruh</th><th>Semestr</th><th>Moodle fan</th><th>Baholar</th><th>YN turi</th><th>Yuklanadigan fan</th></tr></thead>';
+                html += '<thead><tr><th>#</th><th>Guruh</th><th>Semestr</th><th>Moodle fan</th><th>Baholar</th><th>Shakl</th><th>YN turi</th><th>Yuklanadigan fan</th></tr></thead>';
                 html += '<tbody>';
                 groups.forEach(function(g, i) {
                     html += '<tr>';
@@ -1180,6 +1180,18 @@
                     html += '<td style="font-size:12px;color:#475569;">' + esc(g.semester_name || g.semester_code || '-') + '</td>';
                     html += '<td><div style="font-weight:600;">' + esc(g.original_fan_name) + '</div><div style="font-size:11px;color:#94a3b8;">ID: ' + g.original_fan_id + '</div></td>';
                     html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
+                    // Shakl (urinish) tanlovi — 12 / 12a / 12b. Default qiymat
+                    // Moodle shaklidan aniqlangan urinish raqami bo'yicha.
+                    html += '<td>';
+                    var defaultAttempt = 1;
+                    var sm = String(g.shakl || '').match(/(\d+)\s*-\s*urinish/i);
+                    if (sm && sm[1]) { var pa = parseInt(sm[1]); if (pa >= 1 && pa <= 3) defaultAttempt = pa; }
+                    html += '<select class="reupload-shakl-select" data-key="' + esc(g.key) + '" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;min-width:155px;">';
+                    html += '<option value="1"' + (defaultAttempt === 1 ? ' selected' : '') + '>12-shakl (1-urinish)</option>';
+                    html += '<option value="2"' + (defaultAttempt === 2 ? ' selected' : '') + '>12a-shakl (2-urinish)</option>';
+                    html += '<option value="3"' + (defaultAttempt === 3 ? ' selected' : '') + '>12b-shakl (3-urinish)</option>';
+                    html += '</select>';
+                    html += '</td>';
                     html += '<td>';
                     // Har bir qator uchun YN turi tanlovi doim ochiq bo'ladi:
                     // OSKI/Test + mavzular (1..N). Default — qatordagi joriy qiymat.
@@ -1293,6 +1305,12 @@
                     });
                     if (ynMissing) { alert('YN turini tanlang (OSKI yoki Test)'); return; }
 
+                    // Shakl (urinish) tanlovi — har qatorda doim qiymatga ega
+                    var attemptOverrides = {};
+                    $('.reupload-shakl-select').each(function() {
+                        attemptOverrides[$(this).data('key')] = $(this).val();
+                    });
+
                     var btn = $(this);
                     btn.prop('disabled', true).html('<span class="spinner-sm"></span> Yuklanmoqda...');
 
@@ -1300,7 +1318,7 @@
                         url: reuploadUrl, type: 'POST',
                         headers: { 'X-CSRF-TOKEN': csrfToken },
                         contentType: 'application/json',
-                        data: JSON.stringify({ ids: ids, subject_overrides: overrides, yn_turi_overrides: ynTuriOverrides }),
+                        data: JSON.stringify({ ids: ids, subject_overrides: overrides, yn_turi_overrides: ynTuriOverrides, attempt_overrides: attemptOverrides }),
                         success: function(data) {
                             closeReuploadModal();
                             var html = '';

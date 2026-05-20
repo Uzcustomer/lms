@@ -980,7 +980,7 @@ class AcademicScheduleController extends Controller
      * @param array $studentHemisIds
      * @return array [hemis_id => [['subject_name' => ..., 'semester_name' => ..., 'semester_code' => ...], ...]]
      */
-    private function computeStudentPastSemesterDebts(array $studentHemisIds): array
+    public static function computeStudentPastSemesterDebts(array $studentHemisIds): array
     {
         if (empty($studentHemisIds)) return [];
 
@@ -1078,7 +1078,7 @@ class AcademicScheduleController extends Controller
                 if ($studentSemCode && (int) $semCode >= $studentSemCode) continue;
 
                 $subjectsForSem = $subjectsByPair->get($currId . '|' . $semCode, collect());
-                $subjectsForSem = $this->filterSubjectsByGroupSuffixSimple($subjectsForSem, $st->group_name ?? '');
+                $subjectsForSem = self::filterSubjectsByGroupSuffixSimple($subjectsForSem, $st->group_name ?? '');
 
                 foreach ($subjectsForSem as $sub) {
                     $effectiveSubjectId = $sub->subject_id;
@@ -1115,7 +1115,7 @@ class AcademicScheduleController extends Controller
     /**
      * Guruh suffiksiga qarab fan variantlarini filtrlash (ReportController logikasi nusxasi).
      */
-    private function filterSubjectsByGroupSuffixSimple($records, string $groupName)
+    public static function filterSubjectsByGroupSuffixSimple($records, string $groupName)
     {
         if (empty($groupName)) return $records;
         $groupSuffix = '';

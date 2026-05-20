@@ -1910,6 +1910,13 @@ class QuizResultController extends Controller
         $errors = [];
         $duplicateTracker = [];
 
+        // 4+ qarz (kursdan qoldirilgan) talabalarni aniqlab olamiz — bunday
+        // talabalarga OSKI/Test bahosi yuklanmaydi (YN kunini belgilash
+        // sahifasidagi qizil "4 tadan ortiq qarz" mantig'i bilan bir xil).
+        $heldBackMap = $this->computeHeldBackDebts(
+            $results->pluck('student_id')->filter()->unique()->values()->all()
+        );
+
         foreach ($results as $result) {
             $rowInfo = [
                 'id' => $result->id,
@@ -1965,6 +1972,18 @@ class QuizResultController extends Controller
                 ->first();
             if (!$student) {
                 $rowInfo['error'] = "Talaba topilmadi (student_id: {$result->student_id})";
+                $errors[] = $rowInfo;
+                continue;
+            }
+
+            // 4+ qarz (kursdan qoldirilgan) — OSKI/Test bahosi yuklanmaydi.
+            if (isset($heldBackMap[(string) $student->hemis_id])) {
+                $hb = $heldBackMap[(string) $student->hemis_id];
+                $shown = array_slice($hb['names'], 0, 6);
+                $more = count($hb['names']) - count($shown);
+                $rowInfo['error'] = 'Bu talabada ' . $hb['count'] . ' tadan ortiq fandan qarz bor ('
+                    . implode(', ', $shown) . ($more > 0 ? ' va yana ' . $more . ' ta' : '')
+                    . ') — baho yuklanmaydi';
                 $errors[] = $rowInfo;
                 continue;
             }
@@ -2158,6 +2177,82 @@ class QuizResultController extends Controller
             'error_count' => count($errors),
             'errors' => $errors,
         ]);
+    }
+
+    /**
+     * Berilgan talabalardan 4+ qarzga ega (kursdan qoldirilgan) bo'lganlarini
+     * aniqlaydi. Qarz = o'tgan semestrlardagi topshirilmagan fanlar +
+     * joriy semestrda OSKI/Test 1-urinishdan yiqilgan fanlar — YN kunini
+     * belgilash sahifasidagi "4 tadan ortiq qarz" mantig'i bilan bir xil.
+     *
+     * @param  array  $studentIdValues  hemis_id yoki student_id_number qiymatlari
+     * @return array<string,array{names:string[],count:int}>  hemis_id => qarz ma'lumoti
+     */
+    private function computeHeldBackDebts(array $studentIdValues): array
+    {
+        $studentIdValues = array_values(array_filter(array_unique($studentIdValues)));
+        if (empty($studentIdValues)) {
+            return [];
+        }
+
+        // student_id qiymati hemis_id yoki student_id_number bo'lishi mumkin.
+        $students = Student::where(function ($q) use ($studentIdValues) {
+            $q->whereIn('hemis_id', $studentIdValues)
+              ->orWhereIn('student_id_number', $studentIdValues);
+        })->get(['hemis_id', 'semester_code']);
+        if ($students->isEmpty()) {
+            return [];
+        }
+        $hemisIds = $students->pluck('hemis_id')->map(fn($v) => (string) $v)->unique()->values()->all();
+
+        // O'tgan semestrlardagi qarzlar — YN sahifasidagi AYNI metod.
+        $pastDebts = \App\Http\Controllers\Admin\AcademicScheduleController::computeStudentPastSemesterDebts($hemisIds);
+
+        // Joriy semestrdagi qarzlar — talabaning o'z semester_code'idagi
+        // OSKI/Test 1-urinishidan yiqilgan (COALESCE(retake_grade,grade) < 60) fanlar.
+        $currentDebts = []; // hemis_id => [subject_id => subject_name]
+        try {
+            $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+            $q = DB::table('student_grades as sg')
+                ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                ->whereIn('sg.student_hemis_id', $hemisIds)
+                ->whereColumn('sg.semester_code', 'st.semester_code')
+                ->whereIn('sg.training_type_code', [101, 102])
+                ->whereNull('sg.deleted_at')
+                ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+            if ($hasAttemptCol) {
+                $q->where(function ($x) {
+                    $x->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                });
+            }
+            foreach ($q->select('sg.student_hemis_id', 'sg.subject_id', 'sg.subject_name')->distinct()->get() as $r) {
+                $currentDebts[(string) $r->student_hemis_id][(string) $r->subject_id] = (string) $r->subject_name;
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('computeHeldBackDebts: joriy qarz so\'rovi xatolik: ' . $e->getMessage());
+        }
+
+        $result = [];
+        foreach ($hemisIds as $hid) {
+            $pastList = $pastDebts[$hid] ?? [];
+            $currentList = $currentDebts[$hid] ?? [];
+            $total = count($pastList) + count($currentList);
+            if ($total < 4) {
+                continue;
+            }
+            $names = [];
+            foreach ($pastList as $d) {
+                $names[] = (string) ($d['subject_name'] ?? '');
+            }
+            foreach ($currentList as $nm) {
+                $names[] = $nm;
+            }
+            $result[$hid] = [
+                'names' => array_values(array_filter(array_unique($names))),
+                'count' => $total,
+            ];
+        }
+        return $result;
     }
 
     /**

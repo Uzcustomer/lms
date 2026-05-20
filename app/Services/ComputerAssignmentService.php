@@ -460,7 +460,7 @@ class ComputerAssignmentService
             return ['ok' => false, 'reason' => 'no free computer at this slot'];
         }
 
-        $jitMinutes = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+        $jitMinutes = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
         $revealAt = $startsAt->copy()->subMinutes($jitMinutes);
 
         if ($existing) {

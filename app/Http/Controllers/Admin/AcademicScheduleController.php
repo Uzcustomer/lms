@@ -4114,7 +4114,7 @@ class AcademicScheduleController extends Controller
                 // JIT tick job processReveal'i reveal_at <= now bo'lganda
                 // Telegram yuboradi. Pinned qator shu loop'ga tushishi uchun
                 // reveal_at'ni planned_start dan jit_minutes oldin o'rnatamiz.
-                $jitMinutesBefore = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+                $jitMinutesBefore = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
                 // Stale cleanup uchun: har (schedule_id, yn_type, attempt) bo'yicha
                 // bu chaqiriqda kim'lar pin qilinayotganini yig'amiz. Word so'ngida
                 // shu kombinatsiyadagi boshqa "scheduled" qatorlar (avvalgi noto'g'ri
@@ -5839,7 +5839,7 @@ class AcademicScheduleController extends Controller
                             $bktDur = (int) (ExamCapacityService::getSettingsForDate($b['date'])['test_duration_minutes'] ?? 15);
                             $bktStart = \Carbon\Carbon::parse($b['date'] . ' ' . $assignedTime);
                             $bktEnd = $bktStart->copy()->addMinutes($bktDur);
-                            $bktJit = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+                            $bktJit = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
                             $bktReveal = $bktStart->copy()->subMinutes($bktJit);
                             foreach ($b['schedules'] as $s) {
                                 \App\Models\ComputerAssignment::where('exam_schedule_id', $s->id)
@@ -6467,7 +6467,7 @@ class AcademicScheduleController extends Controller
             $duration2 = (int) (ExamCapacityService::getSettingsForDate($relatedDateStr2)['test_duration_minutes'] ?? 15);
             $newPlannedStart = \Carbon\Carbon::parse($relatedDateStr2 . ' ' . substr($request->test_time, 0, 5));
             $newPlannedEnd = $newPlannedStart->copy()->addMinutes($duration2);
-            $jitMin = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+            $jitMin = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
             $newRevealAt = $newPlannedStart->copy()->subMinutes($jitMin);
 
             \App\Models\ComputerAssignment::where('exam_schedule_id', $examSchedule->id)
@@ -6752,7 +6752,7 @@ class AcademicScheduleController extends Controller
         $durSt = (int) (ExamCapacityService::getSettingsForDate($resolvedDateStr)['test_duration_minutes'] ?? 15);
         $stPlannedStart = \Carbon\Carbon::parse($resolvedDateStr . ' ' . substr($request->test_time, 0, 5));
         $stPlannedEnd = $stPlannedStart->copy()->addMinutes($durSt);
-        $jitMinSt = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+        $jitMinSt = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
 
         \App\Models\ComputerAssignment::where('exam_schedule_id', $perStudent->id)
             ->where('yn_type', strtolower($request->yn_type))
@@ -7822,10 +7822,10 @@ class AcademicScheduleController extends Controller
         }
         $date = $carbonDate->format('Y-m-d');
         // Ekranda kim kirishi ko'rinishi uchun keng oyna (60 daq). Komp №
-        // esa faqat reveal vaqti yetganda (jit_assign_minutes_before, default 10)
+        // esa faqat reveal vaqti yetganda (reveal_minutes_before, default 10)
         // ko'rsatiladi — talaba erta bilib qo'yib boshqa kompga o'tirmasin.
         $upcomingWindowMin = 60;
-        $revealWindowMin = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+        $revealWindowMin = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
         $windowEnd = $now->copy()->addMinutes($upcomingWindowMin);
 
         // Shu kunda planned_start'i bo'lgan barcha aktiv qatorlar (in_progress

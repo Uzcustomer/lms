@@ -6030,14 +6030,17 @@ class AcademicScheduleController extends Controller
     }
 
     /**
-     * Bulk: tanlangan sana oralig'idagi barcha vaqt belgilangan imtihonlar
-     * uchun talabalarga kompyuter raqamlarini taqsimlash.
+     * Test markazi jadvalida belgilangan (checkbox) guruhlar uchun
+     * talabalarga kompyuter raqamlarini taqsimlash.
      *
      * Avval bu ish "YN oldi word" yuklab olishning yon ta'siri sifatida
      * bajarilardi — har yuklab olishda raqamlar qayta hisoblanib, talabaning
      * kompyuteri o'zgarib ketardi. Endi taqsimlash faqat shu tugma orqali
-     * (assign_computers=true) bajariladi; Word esa faqat mavjud raqamlarni
-     * o'qib ko'rsatadi.
+     * bajariladi; Word esa faqat mavjud raqamlarni o'qib ko'rsatadi.
+     *
+     * Og'ir YN pipeline sekin — sinxron bajarilsa HTTP so'rov 504 timeout
+     * beradi. Shu sabab AssignComputersForRangeJob navbat job'ida fonda
+     * bajariladi.
      */
     public function assignComputersForRange(Request $request)
     {
@@ -6051,95 +6054,81 @@ class AcademicScheduleController extends Controller
             [\App\Enums\ProjectRole::TEST_CENTER->value]
         );
         if (!in_array($activeRole, $allowedBulkRoles, true)) {
-            return back()->with('error', "Bu amal faqat Test markazi va admin rollari uchun ochiq.");
+            return response()->json([
+                'success' => false,
+                'message' => "Bu amal faqat Test markazi va admin rollari uchun ochiq.",
+            ], 403);
         }
 
-        $today = now()->format('Y-m-d');
-        try {
-            $from = \Carbon\Carbon::parse($request->input('date_from', $today))->format('Y-m-d');
-            $to = \Carbon\Carbon::parse($request->input('date_to', $today))->format('Y-m-d');
-        } catch (\Throwable $e) {
-            return back()->with('error', "Sana noto'g'ri formatda.");
-        }
-        if ($to < $from) {
-            $to = $from;
+        $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.schedule_id' => 'required|integer',
+            'items.*.yn_type' => 'required|string|in:OSKI,Test,oski,test',
+            'items.*.attempt' => 'nullable|integer|min:1|max:3',
+        ]);
+
+        // Belgilangan qatorlardan takrorlanmas (schedule_id, yn_type, attempt)
+        // uchliklarini yig'amiz — job ularni sana bo'yicha guruhlab taqsimlaydi.
+        $items = [];
+        $seen = [];
+        foreach ((array) $request->input('items') as $it) {
+            $scheduleId = (int) ($it['schedule_id'] ?? 0);
+            $ynType = strtolower((string) ($it['yn_type'] ?? ''));
+            $attempt = (int) ($it['attempt'] ?? 1);
+            if ($scheduleId <= 0 || !in_array($ynType, ['oski', 'test'], true)) {
+                continue;
+            }
+            $key = $scheduleId . '|' . $ynType . '|' . $attempt;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $items[] = [
+                'schedule_id' => $scheduleId,
+                'yn_type' => $ynType,
+                'attempt' => $attempt,
+            ];
         }
 
-        // Og'ir YN pipeline har bir kun uchun sekin — sinxron bajarsak HTTP
-        // so'rov 504 timeout beradi. Shu sabab fonda navbat job'ida bajaramiz
-        // (notifyAllExamTimes bilan bir xil yondashuv).
-        \App\Jobs\AssignComputersForRangeJob::dispatch($from, $to);
+        if (empty($items)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Yaroqli guruh topilmadi.',
+            ], 422);
+        }
 
-        return back()->with('success', "Kompyuter raqamlarini taqsimlash navbatga qo'yildi ({$from} – {$to}). Bir necha daqiqada tayyor bo'ladi — biroz kutib, sahifani yangilang.");
+        // Holatni cache'da kuzatamiz — frontend token bilan polling qiladi
+        // va job tugaganda "tayyor" xabarini ko'rsatadi.
+        $token = (string) \Illuminate\Support\Str::uuid();
+        cache()->put('assign_computers:' . $token, [
+            'status' => 'queued',
+            'requested' => count($items),
+        ], 1800);
+
+        \App\Jobs\AssignComputersForRangeJob::dispatch($items, $token);
+
+        return response()->json([
+            'success' => true,
+            'token' => $token,
+            'message' => count($items) . ' ta guruh navbatga qo\'yildi.',
+        ]);
     }
 
     /**
-     * Berilgan sanada vaqti belgilangan guruh-level imtihonlar bo'yicha
-     * processYnOldiWord() kutadigan "items" ro'yxatini yig'adi.
-     * AssignComputersForRangeJob navbat job'i tomonidan ishlatiladi.
-     *
-     * @return array<int,array<string,mixed>>
+     * AssignComputersForRangeJob holatini qaytaradi — frontend polling uchun.
+     * Holat cache'da 'assign_computers:{token}' kalitida saqlanadi.
      */
-    public function collectScheduledItemsForDate(string $date): array
+    public function assignComputersStatus(Request $request)
     {
-        $attemptCols = [
-            'oski' => [
-                1 => ['date' => 'oski_date',        'time' => 'oski_time',        'na' => 'oski_na'],
-                2 => ['date' => 'oski_resit_date',  'time' => 'oski_resit_time',  'na' => null],
-                3 => ['date' => 'oski_resit2_date', 'time' => 'oski_resit2_time', 'na' => null],
-            ],
-            'test' => [
-                1 => ['date' => 'test_date',        'time' => 'test_time',        'na' => 'test_na'],
-                2 => ['date' => 'test_resit_date',  'time' => 'test_resit_time',  'na' => null],
-                3 => ['date' => 'test_resit2_date', 'time' => 'test_resit2_time', 'na' => null],
-            ],
-        ];
-
-        $schedules = ExamSchedule::whereNull('student_hemis_id')
-            ->where(function ($q) use ($date) {
-                foreach (['oski_date', 'test_date', 'oski_resit_date', 'test_resit_date', 'oski_resit2_date', 'test_resit2_date'] as $col) {
-                    $q->orWhereDate($col, $date);
-                }
-            })
-            ->get();
-
-        $items = [];
-        foreach ($schedules as $sch) {
-            if (empty($sch->group_hemis_id) || empty($sch->subject_id) || empty($sch->semester_code)) {
-                continue;
-            }
-            foreach ($attemptCols as $ynType => $attempts) {
-                foreach ($attempts as $attempt => $cols) {
-                    $dateVal = $sch->{$cols['date']};
-                    if (empty($dateVal)) {
-                        continue;
-                    }
-                    $dateValStr = $dateVal instanceof \Carbon\Carbon
-                        ? $dateVal->format('Y-m-d')
-                        : \Carbon\Carbon::parse((string) $dateVal)->format('Y-m-d');
-                    if ($dateValStr !== $date) {
-                        continue;
-                    }
-                    if ($cols['na'] !== null && !empty($sch->{$cols['na']})) {
-                        continue;
-                    }
-                    $timeStr = substr((string) ($sch->{$cols['time']} ?? ''), 0, 5);
-                    if (!preg_match('/^\d{2}:\d{2}$/', $timeStr)) {
-                        continue;
-                    }
-                    $items[] = [
-                        'group_hemis_id' => (string) $sch->group_hemis_id,
-                        'subject_id'     => (string) $sch->subject_id,
-                        'semester_code'  => (string) $sch->semester_code,
-                        'attempt'        => (int) $attempt,
-                        'yn_type'        => $ynType,
-                        'schedule_id'    => (int) $sch->id,
-                        'exam_time'      => $timeStr,
-                    ];
-                }
-            }
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
         }
-        return $items;
+        $token = trim((string) $request->query('token', ''));
+        $state = $token !== '' ? cache()->get('assign_computers:' . $token) : null;
+        if (!is_array($state)) {
+            return response()->json(['status' => 'unknown']);
+        }
+        return response()->json($state);
     }
 
     /**

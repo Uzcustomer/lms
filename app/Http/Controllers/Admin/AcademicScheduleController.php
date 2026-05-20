@@ -3533,6 +3533,10 @@ class AcademicScheduleController extends Controller
             // talabalar soni, qaysi filtrda nechta talaba tushib qoldi va sababi)
             // JSON qaytaradi. DB'ga hech narsa yozmaydi.
             'debug' => 'nullable|boolean',
+            // "Kompyuter raqamlarini taqsimlash" tugmasi: docx yaratmasdan
+            // komp raqamlarini ComputerAssignment'ga yozib JSON qaytaradi.
+            // Word yuklab olish (bu bayroqsiz) endi raqam taqsimlamaydi.
+            'assign_computers' => 'nullable|boolean',
         ]);
 
         try {
@@ -3568,6 +3572,7 @@ class AcademicScheduleController extends Controller
         }
         $compact = (bool) $request->boolean('compact');
         $debug = (bool) $request->boolean('debug');
+        $assignComputers = (bool) $request->boolean('assign_computers');
         $debugInfo = [];
         $examDate = $request->input('exam_date');
         $examTime = $request->input('exam_time');
@@ -4032,14 +4037,17 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        // DB persistence: bandlik path'ida (examDate + entries yn_type + schedule_id
-        // bilan kelganda) komp raqamlarini ComputerAssignment'ga is_pinned=true
-        // bilan yozamiz. Shunda student portali, JIT/notification — hammasi shu
-        // raqamni ko'radi va JIT tick job qayta belgilashga urinmaydi.
+        // DB persistence: faqat "Kompyuter raqamlarini taqsimlash" tugmasi
+        // (assign_computers=true) chaqirilganda komp raqamlarini
+        // ComputerAssignment'ga is_pinned=true bilan yozamiz. Word yuklab
+        // olish endi raqam taqsimlamaydi — bu yozuv o'sha tugmaga ko'chirildi.
+        // Shunda student portali, JIT/notification — hammasi shu raqamni
+        // ko'radi va JIT tick job qayta belgilashga urinmaydi.
         //  - 1-urinish: mavjud "scheduled" qator UPDATE qilinadi.
         //  - 2-/3-urinish: yangi qator INSERT qilinadi (attempt ustuni mavjud).
         //  - status != scheduled bo'lganlar (in_progress/finished) tegmaydi.
-        if ($examDate && !empty($computerNumberMap)) {
+        $persistedCount = 0;
+        if ($assignComputers && $examDate && !empty($computerNumberMap)) {
             try {
                 $durationMin = (int) (ExamCapacityService::getSettingsForDate($examDate)['test_duration_minutes'] ?? 15);
                 // JIT tick job processReveal'i reveal_at <= now bo'lganda
@@ -4115,6 +4123,8 @@ class AcademicScheduleController extends Controller
                         }
                     }
                 }
+                $persistedCount = array_sum(array_map('count', $persistedKeys));
+
                 // Stale qatorlarni tozalash: items'da kelgan har bucket bo'yicha
                 // (eligible students 0 bo'lsa ham) shu (schedule_id, yn_type,
                 // attempt) bo'yicha scheduled qatorlar — kept'larsiz hammasi —
@@ -4139,6 +4149,18 @@ class AcademicScheduleController extends Controller
                 ]);
             }
         }
+
+        // "Kompyuter raqamlarini taqsimlash" tugmasi: DB ga yozgandan keyin
+        // og'ir Word generatsiyasini o'tkazib yuborib, JSON natija qaytaramiz.
+        if ($assignComputers) {
+            return response()->json(['ok' => true, 'assigned' => $persistedCount]);
+        }
+
+        // Word yuklab olish kompyuter raqamlarini TAQSIMLAMAYDI — mavjud
+        // ComputerAssignment yozuvlaridan faqat o'qib, hujjatda ko'rsatadi.
+        // (Avval yuqorida on-the-fly hisoblangan $computerNumberMap shu yerda
+        // DB'dagi haqiqiy qiymatlar bilan almashtiriladi.)
+        $computerNumberMap = $this->readPersistedComputerNumbers($subjectGroups, $multiSlotMode, $examTime);
 
         // Multi-slot rejimda: slot vaqti bo'yicha o'sish tartibida, ichida fan
         // bo'yicha — shunda 9:15 → 9:30 → 9:45 ketma-ketligida sahifalar
@@ -5868,6 +5890,218 @@ class AcademicScheduleController extends Controller
         \App\Jobs\NotifyExamTimesJob::dispatch($from, $to);
 
         return back()->with('success', "Xabarnomalar yuborish navbatga qo'yildi ({$from} – {$to}). Telegram orqali tarqalishi bir necha daqiqa olishi mumkin.");
+    }
+
+    /**
+     * Bulk: tanlangan sana oralig'idagi barcha vaqt belgilangan imtihonlar
+     * uchun talabalarga kompyuter raqamlarini taqsimlash.
+     *
+     * Avval bu ish "YN oldi word" yuklab olishning yon ta'siri sifatida
+     * bajarilardi — har yuklab olishda raqamlar qayta hisoblanib, talabaning
+     * kompyuteri o'zgarib ketardi. Endi taqsimlash faqat shu tugma orqali
+     * (assign_computers=true) bajariladi; Word esa faqat mavjud raqamlarni
+     * o'qib ko'rsatadi.
+     */
+    public function assignComputersForRange(Request $request)
+    {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
+        $user = auth()->user() ?? auth('teacher')->user();
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        $allowedBulkRoles = array_merge(
+            ExamDateRoleService::adminRoles(),
+            [\App\Enums\ProjectRole::TEST_CENTER->value]
+        );
+        if (!in_array($activeRole, $allowedBulkRoles, true)) {
+            return back()->with('error', "Bu amal faqat Test markazi va admin rollari uchun ochiq.");
+        }
+
+        $today = now()->format('Y-m-d');
+        try {
+            $from = \Carbon\Carbon::parse($request->input('date_from', $today))->startOfDay();
+            $to = \Carbon\Carbon::parse($request->input('date_to', $today))->startOfDay();
+        } catch (\Throwable $e) {
+            return back()->with('error', "Sana noto'g'ri formatda.");
+        }
+        if ($to->lt($from)) {
+            $to = $from->copy();
+        }
+
+        @set_time_limit(0);
+
+        $totalAssigned = 0;
+        $daysProcessed = 0;
+        $errors = [];
+
+        for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
+            $dateStr = $d->format('Y-m-d');
+            $items = $this->collectScheduledItemsForDate($dateStr);
+            if (empty($items)) {
+                continue;
+            }
+            $daysProcessed++;
+            try {
+                $syntheticRequest = \Illuminate\Http\Request::create('', 'POST', [
+                    'items' => $items,
+                    'exam_date' => $dateStr,
+                    'assign_computers' => true,
+                ]);
+                $resp = $this->generateYnOldiWord($syntheticRequest);
+                $payload = json_decode($resp->getContent(), true);
+                if (is_array($payload) && !empty($payload['ok'])) {
+                    $totalAssigned += (int) ($payload['assigned'] ?? 0);
+                } elseif (is_array($payload) && !empty($payload['error'])) {
+                    $errors[] = $dateStr . ': ' . $payload['error'];
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('assignComputersForRange: ' . $dateStr . ' — ' . $e->getMessage());
+                $errors[] = $dateStr . ': ' . $e->getMessage();
+            }
+        }
+
+        if ($daysProcessed === 0) {
+            return back()->with('warning', "Tanlangan oraliqda vaqt belgilangan imtihon topilmadi.");
+        }
+
+        $msg = "Kompyuter raqamlari taqsimlandi: {$totalAssigned} ta talaba ({$daysProcessed} kun).";
+        if (!empty($errors)) {
+            return back()->with('warning', $msg . ' Ba\'zi xatoliklar: ' . implode('; ', array_slice($errors, 0, 3)));
+        }
+        return back()->with('success', $msg);
+    }
+
+    /**
+     * Berilgan sanada vaqti belgilangan guruh-level imtihonlar bo'yicha
+     * generateYnOldiWord() kutadigan "items" ro'yxatini yig'adi.
+     *
+     * @return array<int,array<string,mixed>>
+     */
+    private function collectScheduledItemsForDate(string $date): array
+    {
+        $attemptCols = [
+            'oski' => [
+                1 => ['date' => 'oski_date',        'time' => 'oski_time',        'na' => 'oski_na'],
+                2 => ['date' => 'oski_resit_date',  'time' => 'oski_resit_time',  'na' => null],
+                3 => ['date' => 'oski_resit2_date', 'time' => 'oski_resit2_time', 'na' => null],
+            ],
+            'test' => [
+                1 => ['date' => 'test_date',        'time' => 'test_time',        'na' => 'test_na'],
+                2 => ['date' => 'test_resit_date',  'time' => 'test_resit_time',  'na' => null],
+                3 => ['date' => 'test_resit2_date', 'time' => 'test_resit2_time', 'na' => null],
+            ],
+        ];
+
+        $schedules = ExamSchedule::whereNull('student_hemis_id')
+            ->where(function ($q) use ($date) {
+                foreach (['oski_date', 'test_date', 'oski_resit_date', 'test_resit_date', 'oski_resit2_date', 'test_resit2_date'] as $col) {
+                    $q->orWhereDate($col, $date);
+                }
+            })
+            ->get();
+
+        $items = [];
+        foreach ($schedules as $sch) {
+            if (empty($sch->group_hemis_id) || empty($sch->subject_id) || empty($sch->semester_code)) {
+                continue;
+            }
+            foreach ($attemptCols as $ynType => $attempts) {
+                foreach ($attempts as $attempt => $cols) {
+                    $dateVal = $sch->{$cols['date']};
+                    if (empty($dateVal)) {
+                        continue;
+                    }
+                    $dateValStr = $dateVal instanceof \Carbon\Carbon
+                        ? $dateVal->format('Y-m-d')
+                        : \Carbon\Carbon::parse((string) $dateVal)->format('Y-m-d');
+                    if ($dateValStr !== $date) {
+                        continue;
+                    }
+                    if ($cols['na'] !== null && !empty($sch->{$cols['na']})) {
+                        continue;
+                    }
+                    $timeStr = substr((string) ($sch->{$cols['time']} ?? ''), 0, 5);
+                    if (!preg_match('/^\d{2}:\d{2}$/', $timeStr)) {
+                        continue;
+                    }
+                    $items[] = [
+                        'group_hemis_id' => (string) $sch->group_hemis_id,
+                        'subject_id'     => (string) $sch->subject_id,
+                        'semester_code'  => (string) $sch->semester_code,
+                        'attempt'        => (int) $attempt,
+                        'yn_type'        => $ynType,
+                        'schedule_id'    => (int) $sch->id,
+                        'exam_time'      => $timeStr,
+                    ];
+                }
+            }
+        }
+        return $items;
+    }
+
+    /**
+     * Word yuklab olish uchun: $subjectGroups ichidagi har talabaning
+     * oldindan taqsimlangan kompyuter raqamini ComputerAssignment jadvalidan
+     * o'qiydi. Word endi raqam taqsimlamaydi — bu faqat ko'rsatish uchun.
+     *
+     * @return array<string,int> "slot|hemis_id" => computer_number
+     */
+    private function readPersistedComputerNumbers(array $subjectGroups, bool $multiSlotMode, ?string $examTime): array
+    {
+        $map = [];
+        $scheduleIdCache = [];
+        foreach ($subjectGroups as $sg) {
+            $slot = $multiSlotMode ? (string) ($sg['slot_time'] ?? '') : (string) ($examTime ?? '');
+            foreach ($sg['entries'] as $entry) {
+                $scheduleId = !empty($entry['schedule_id']) ? (int) $entry['schedule_id'] : null;
+                $ynType = !empty($entry['yn_type']) ? strtolower((string) $entry['yn_type']) : null;
+                $attempt = (int) ($entry['attempt'] ?? 1);
+
+                // Test markazi "YN oldi word" tugmasi schedule_id yubormaydi —
+                // guruh+fan+semestr bo'yicha guruh-level ExamSchedule topamiz.
+                if (!$scheduleId) {
+                    $group = $entry['group'] ?? null;
+                    $subject = $entry['subject'] ?? null;
+                    if (!$group || !$subject) {
+                        continue;
+                    }
+                    $cacheKey = $group->group_hemis_id . '|' . $subject->subject_id . '|' . $subject->semester_code;
+                    if (!array_key_exists($cacheKey, $scheduleIdCache)) {
+                        $scheduleIdCache[$cacheKey] = ExamSchedule::where('group_hemis_id', $group->group_hemis_id)
+                            ->where('subject_id', $subject->subject_id)
+                            ->where('semester_code', $subject->semester_code)
+                            ->whereNull('student_hemis_id')
+                            ->value('id');
+                    }
+                    $scheduleId = $scheduleIdCache[$cacheKey] ? (int) $scheduleIdCache[$cacheKey] : null;
+                }
+                if (!$scheduleId) {
+                    continue;
+                }
+
+                $hemisIds = [];
+                foreach ($entry['students'] as $st) {
+                    if (!empty($st->hemis_id)) {
+                        $hemisIds[] = (string) $st->hemis_id;
+                    }
+                }
+                if (empty($hemisIds)) {
+                    continue;
+                }
+
+                $query = \App\Models\ComputerAssignment::where('exam_schedule_id', $scheduleId)
+                    ->where('attempt', $attempt)
+                    ->whereIn('student_hemis_id', $hemisIds)
+                    ->whereNotNull('computer_number');
+                if ($ynType !== null) {
+                    $query->where('yn_type', $ynType);
+                }
+                foreach ($query->get(['student_hemis_id', 'computer_number']) as $row) {
+                    $map[$slot . '|' . (string) $row->student_hemis_id] = (int) $row->computer_number;
+                }
+            }
+        }
+        return $map;
     }
 
     public function clearTimes(Request $request)

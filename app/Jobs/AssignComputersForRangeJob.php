@@ -29,13 +29,17 @@ class AssignComputersForRangeJob implements ShouldQueue
     /**
      * @param array<int,array{schedule_id:int,yn_type:string,attempt:int}> $items
      *        Belgilangan qatorlar — har biri bitta (schedule, yn_type, attempt).
+     * @param string $token Cache holat kaliti — frontend polling uchun.
      */
     public function __construct(
         public array $items,
+        public string $token = '',
     ) {}
 
     public function handle(): void
     {
+        $this->setStatus('running');
+
         // Har bir belgilangan (schedule, yn_type, attempt) ni o'z sana+vaqtiga
         // ko'ra processYnOldiWord kutadigan item'ga aylantirib, sana bo'yicha
         // guruhlaymiz — processYnOldiWord bitta sana ustida ishlaydi.
@@ -89,6 +93,7 @@ class AssignComputersForRangeJob implements ShouldQueue
 
         if (empty($byDate)) {
             Log::warning('AssignComputersForRangeJob: yaroqli guruh topilmadi');
+            $this->setStatus('done', ['assigned' => 0, 'message' => 'Yaroqli guruh topilmadi.']);
             return;
         }
 
@@ -117,5 +122,33 @@ class AssignComputersForRangeJob implements ShouldQueue
             'dates' => count($byDate),
             'assigned' => $totalAssigned,
         ]);
+
+        $this->setStatus('done', [
+            'assigned' => $totalAssigned,
+            'dates' => count($byDate),
+        ]);
+    }
+
+    /**
+     * Job butunlay muvaffaqiyatsiz tugaganda chaqiriladi (tries=1).
+     */
+    public function failed(\Throwable $e): void
+    {
+        $this->setStatus('failed', ['message' => $e->getMessage()]);
+        Log::warning('AssignComputersForRangeJob failed: ' . $e->getMessage());
+    }
+
+    /**
+     * Job holatini cache'ga yozadi — frontend token bilan o'qiydi.
+     */
+    private function setStatus(string $status, array $extra = []): void
+    {
+        if ($this->token === '') {
+            return;
+        }
+        cache()->put('assign_computers:' . $this->token, array_merge([
+            'status' => $status,
+            'requested' => count($this->items),
+        ], $extra), 1800);
     }
 }

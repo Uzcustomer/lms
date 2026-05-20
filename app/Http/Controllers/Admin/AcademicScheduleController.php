@@ -6032,13 +6032,38 @@ class AcademicScheduleController extends Controller
             ], 422);
         }
 
-        \App\Jobs\AssignComputersForRangeJob::dispatch($items);
+        // Holatni cache'da kuzatamiz — frontend token bilan polling qiladi
+        // va job tugaganda "tayyor" xabarini ko'rsatadi.
+        $token = (string) \Illuminate\Support\Str::uuid();
+        cache()->put('assign_computers:' . $token, [
+            'status' => 'queued',
+            'requested' => count($items),
+        ], 1800);
+
+        \App\Jobs\AssignComputersForRangeJob::dispatch($items, $token);
 
         return response()->json([
             'success' => true,
-            'message' => count($items) . ' ta guruh uchun kompyuter raqamlarini taqsimlash navbatga qo\'yildi. '
-                . 'Bir necha daqiqada tayyor bo\'ladi — biroz kutib, natijani tekshiring.',
+            'token' => $token,
+            'message' => count($items) . ' ta guruh navbatga qo\'yildi.',
         ]);
+    }
+
+    /**
+     * AssignComputersForRangeJob holatini qaytaradi — frontend polling uchun.
+     * Holat cache'da 'assign_computers:{token}' kalitida saqlanadi.
+     */
+    public function assignComputersStatus(Request $request)
+    {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
+        $token = trim((string) $request->query('token', ''));
+        $state = $token !== '' ? cache()->get('assign_computers:' . $token) : null;
+        if (!is_array($state)) {
+            return response()->json(['status' => 'unknown']);
+        }
+        return response()->json($state);
     }
 
     /**

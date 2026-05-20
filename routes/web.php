@@ -856,6 +856,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/test-center/clear-times', [AcademicScheduleController::class, 'clearTimes'])->name('test-center.clear-times');
             Route::post('/test-center/notify-all', [AcademicScheduleController::class, 'notifyAllExamTimes'])->name('test-center.notify-all');
             Route::post('/test-center/assign-computers', [AcademicScheduleController::class, 'assignComputersForRange'])->name('test-center.assign-computers');
+            Route::get('/test-center/assign-computers/status', [AcademicScheduleController::class, 'assignComputersStatus'])->name('test-center.assign-computers.status');
             Route::post('/test-center/recheck-moodle', [AcademicScheduleController::class, 'recheckMoodle'])->name('test-center.recheck-moodle');
             Route::post('/test-center/bulk-recheck-moodle', [AcademicScheduleController::class, 'bulkRecheckMoodle'])->name('test-center.bulk-recheck-moodle');
             Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');
@@ -1456,6 +1457,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/test-center/clear-times', [AcademicScheduleController::class, 'clearTimes'])->name('test-center.clear-times');
             Route::post('/test-center/notify-all', [AcademicScheduleController::class, 'notifyAllExamTimes'])->name('test-center.notify-all');
             Route::post('/test-center/assign-computers', [AcademicScheduleController::class, 'assignComputersForRange'])->name('test-center.assign-computers');
+            Route::get('/test-center/assign-computers/status', [AcademicScheduleController::class, 'assignComputersStatus'])->name('test-center.assign-computers.status');
             Route::post('/test-center/recheck-moodle', [AcademicScheduleController::class, 'recheckMoodle'])->name('test-center.recheck-moodle');
             Route::post('/test-center/bulk-recheck-moodle', [AcademicScheduleController::class, 'bulkRecheckMoodle'])->name('test-center.bulk-recheck-moodle');
             Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');

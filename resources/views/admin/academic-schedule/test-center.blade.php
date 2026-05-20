@@ -1658,6 +1658,7 @@
         }
 
         var assignComputersUrl = '{{ route($routePrefix . ".academic-schedule.test-center.assign-computers") }}';
+        var assignComputersStatusUrl = '{{ route($routePrefix . ".academic-schedule.test-center.assign-computers.status") }}';
 
         // Belgilangan guruhlar talabalariga kompyuter raqamlarini taqsimlash.
         // Og'ir ish — server uni fonda navbat job'ida bajaradi.
@@ -1700,15 +1701,56 @@
                 return r.json().then(function(j) { return { ok: r.ok, body: j }; });
             })
             .then(function(res) {
-                alert(res.ok ? (res.body.message || 'Navbatga qo\'yildi')
-                             : (res.body.message || res.body.error || 'Xatolik yuz berdi'));
+                if (!res.ok || !res.body || !res.body.success) {
+                    alert((res.body && (res.body.message || res.body.error)) || 'Xatolik yuz berdi');
+                    btn.disabled = false; btn.innerHTML = originalHTML; tcUpdateSelection();
+                    return;
+                }
+                if (!res.body.token) {
+                    alert(res.body.message || 'Navbatga qo\'yildi');
+                    btn.disabled = false; btn.innerHTML = originalHTML; tcUpdateSelection();
+                    return;
+                }
+                // Job navbatga qo'yildi — holatini kuzatib boramiz.
+                btn.textContent = 'Taqsimlanmoqda…';
+                tcPollAssignStatus(res.body.token, btn, originalHTML, 0);
             })
-            .catch(function(e) { alert('Xatolik: ' + e.message); })
-            .finally(function() {
-                btn.disabled = false;
-                btn.innerHTML = originalHTML;
-                tcUpdateSelection();
+            .catch(function(e) {
+                alert('Xatolik: ' + e.message);
+                btn.disabled = false; btn.innerHTML = originalHTML; tcUpdateSelection();
             });
+        }
+
+        // Taqsimlash job'i tugaganini bilish uchun har 3 soniyada holatni
+        // so'rab turamiz. Job tugaganda aniq "tayyor" xabari ko'rsatiladi.
+        function tcPollAssignStatus(token, btn, originalHTML, attempts) {
+            if (attempts > 120) { // ~6 daqiqa
+                alert('Taqsimlash kutilganidan uzoq davom etmoqda. Keyinroq natijani tekshiring.');
+                btn.disabled = false; btn.innerHTML = originalHTML; tcUpdateSelection();
+                return;
+            }
+            setTimeout(function() {
+                fetch(assignComputersStatusUrl + '?token=' + encodeURIComponent(token), {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(st) {
+                    if (st && st.status === 'done') {
+                        alert('✅ Tayyor! ' + (st.assigned || 0) + ' ta talabaga kompyuter raqami taqsimlandi.'
+                              + (st.message ? ('\n' + st.message) : ''));
+                        btn.disabled = false; btn.innerHTML = originalHTML; tcUpdateSelection();
+                    } else if (st && st.status === 'failed') {
+                        alert('❌ Taqsimlashda xatolik yuz berdi. Qayta urinib ko\'ring.');
+                        btn.disabled = false; btn.innerHTML = originalHTML; tcUpdateSelection();
+                    } else {
+                        // queued / running / unknown — kutishda davom etamiz.
+                        tcPollAssignStatus(token, btn, originalHTML, attempts + 1);
+                    }
+                })
+                .catch(function() {
+                    tcPollAssignStatus(token, btn, originalHTML, attempts + 1);
+                });
+            }, 3000);
         }
 
         var ynOldiWordUrl = '{{ route($routePrefix . ".academic-schedule.test-center.generate-yn-oldi-word") }}';

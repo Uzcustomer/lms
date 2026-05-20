@@ -1237,6 +1237,26 @@ class AcademicScheduleController extends Controller
             }
         } catch (\Throwable $e) {}
 
+        // Per-student (individual grafik) 12a imtihon sanalari — talabaga guruh
+        // sanasidan farqli 2-urinish sanasi qo'yilgan bo'lsa, failed2 sana
+        // tekshiruvida o'sha sana ustuvor (jurnal bilan bir xil mantiq).
+        $perStudentResitMap = []; // hemis|subj|sem => ['oski_resit_date','test_resit_date']
+        try {
+            $psRows = DB::table('exam_schedules')
+                ->whereNotNull('student_hemis_id')
+                ->whereIn('student_hemis_id', $allStudentHids)
+                ->whereIn('subject_id', $allSubjectIds)
+                ->whereIn('semester_code', $allSemCodes)
+                ->select('student_hemis_id', 'subject_id', 'semester_code', 'oski_resit_date', 'test_resit_date')
+                ->get();
+            foreach ($psRows as $r) {
+                $perStudentResitMap[$r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code] = [
+                    'oski_resit_date' => $r->oski_resit_date,
+                    'test_resit_date' => $r->test_resit_date,
+                ];
+            }
+        } catch (\Throwable $e) {}
+
         // 1) JN/MT olish — snapshot va tirik AVG ni birlashtirib ishlatamiz.
         $jnMtMap = []; // hemis_id|subj|sem => [jn, mt]
 
@@ -1513,11 +1533,15 @@ class AcademicScheduleController extends Controller
                 $oskiRequired = !($naMap[$naKey]['oski_na'] ?? false);
                 $testRequired = !($naMap[$naKey]['test_na'] ?? false);
 
-                // 1/2-urinish sanalari — muddati tugaganmi tekshirish uchun
+                // 1/2-urinish sanalari — muddati tugaganmi tekshirish uchun.
+                // 2-urinish (resit) sanalarida per-student override ustuvor.
+                $psResitKey = $hid . '|' . $s . '|' . $sem;
                 $oskiDate = $naMap[$naKey]['oski_date'] ?? null;
                 $testDate = $naMap[$naKey]['test_date'] ?? null;
-                $oskiResitDate = $naMap[$naKey]['oski_resit_date'] ?? null;
-                $testResitDate = $naMap[$naKey]['test_resit_date'] ?? null;
+                $oskiResitDate = $perStudentResitMap[$psResitKey]['oski_resit_date']
+                    ?? $naMap[$naKey]['oski_resit_date'] ?? null;
+                $testResitDate = $perStudentResitMap[$psResitKey]['test_resit_date']
+                    ?? $naMap[$naKey]['test_resit_date'] ?? null;
                 $today = now()->format('Y-m-d');
 
                 // Pullik faqat haqiqatda past bo'lsa: null/yo'q ma'lumotni "past" deb sanamaymiz
@@ -1554,8 +1578,14 @@ class AcademicScheduleController extends Controller
                 $enrolledAttempt2 = $failed1
                     || !empty($enrolledAttempt2Map[$hid . '|' . $s . '|' . $sem]);
                 if ($enrolledAttempt2) {
-                    $oski2Num = $oski2 !== null ? (float) $oski2 : null;
-                    $test2Num = $test2 !== null ? (float) $test2 : null;
+                    // 12a baholaridan biri yo'q bo'lsa (talaba o'sha turdan
+                    // 1-urinishda o'tib, qayta topshirishi shart bo'lmagan) —
+                    // 1-urinish bahosini fallback qilamiz. Aks holda o'sha tur
+                    // "kelmadi=yiqilgan" deb noto'g'ri belgilanib, 12a dan
+                    // o'tgan talaba 3-urinishga tushib qolardi (jurnaldagi
+                    // determineStage fallback mantiqi bilan bir xil).
+                    $oski2Num = $oski2 !== null ? (float) $oski2 : $oskiNum;
+                    $test2Num = $test2 !== null ? (float) $test2 : $testNum;
                     $oskiFailed2 = $confirmFailed($oskiRequired, $oski2Num, $oskiResitDate);
                     $testFailed2 = $confirmFailed($testRequired, $test2Num, $testResitDate);
                     $failed2 = $isPullik || $oskiFailed2 || $testFailed2;

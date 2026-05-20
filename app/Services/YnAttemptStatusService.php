@@ -61,6 +61,10 @@ class YnAttemptStatusService
      * Har biri ['v' => int|string, 'jn' => int, 'mt' => int, 'oski' => int|null, 'test' => int|null]
      *
      * Qaytaradi: ['stage' => STAGE_*, 'reason' => string]
+     *
+     * @param bool $aWindowEnded  12a (2-urinish) imtihon muddati o'tib ketganmi.
+     *        True bo'lsa, 12a'dan o'tmagan talaba (baho <60 yoki imtihonga
+     *        kelmagan) 12b bosqichiga (3-urinish) o'tkaziladi.
      */
     public static function determineStage(
         array $main,
@@ -68,7 +72,8 @@ class YnAttemptStatusService
         ?array $a = null,
         ?array $aQoshimcha = null,
         ?array $b = null,
-        ?array $bQoshimcha = null
+        ?array $bQoshimcha = null,
+        bool $aWindowEnded = false
     ): array {
         $passes = fn(?array $row) => $row !== null && self::isPassing($row);
         $jnMtOk = fn(?array $row) => $row !== null
@@ -128,14 +133,21 @@ class YnAttemptStatusService
                 'reason' => $isPullikCondition ? $pullikReason : '12b ga tushgan',
             ];
         }
-        if ($a !== null || $aQoshimcha !== null) {
+        // 12a'dan o'tmadi. Quyidagi hollarda 3-urinishga (12b) tushadi:
+        //   - 12a baholari kelgan, lekin V<60 (yuqorida $passes($a) false bo'ldi)
+        //   - 12a imtihon muddati o'tib ketgan, lekin baho yo'q (imtihonga kelmagan)
+        if ($a !== null || $aQoshimcha !== null || $aWindowEnded) {
+            $kelmadi = $a === null && $aQoshimcha === null;
             return [
-                'stage' => $isPullikCondition ? self::STAGE_IN_12A_PULLIK : self::STAGE_IN_12A,
-                'reason' => $isPullikCondition ? $pullikReason : '12a ga tushgan',
+                'stage' => $isPullikCondition ? self::STAGE_IN_12B_PULLIK : self::STAGE_IN_12B,
+                'reason' => $isPullikCondition
+                    ? $pullikReason
+                    : ($kelmadi ? '12a imtihoniga kelmagan' : '12a da V<60'),
             ];
         }
 
-        // Hali hech qaysi keyingi urinishga o'tmagan — asosiy yiqilgan
+        // 12a imtihoni hali o'tmagan (yoki belgilanmagan) — asosiy yiqilgan,
+        // talaba 2-urinish (12a) kutilmoqda
         return [
             'stage' => $isPullikCondition ? self::STAGE_IN_12A_PULLIK : self::STAGE_IN_12A,
             'reason' => $isPullikCondition ? $pullikReason : 'Asosiy urinishda V<60',

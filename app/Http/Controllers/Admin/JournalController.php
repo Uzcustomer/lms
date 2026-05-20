@@ -1415,6 +1415,24 @@ class JournalController extends Controller
             ->whereNull('student_hemis_id')
             ->first();
 
+        // Per-student (individual grafik) 12a imtihon sanalari — agar talabaga
+        // guruh sanasidan farqli 2-urinish sanasi qo'yilgan bo'lsa, "3-urinish"
+        // badge'ini yoqishda o'sha sana ustuvor (guruh sanasi fallback).
+        $perStudentResitDates = [];
+        try {
+            $psResitRows = ExamSchedule::whereNotNull('student_hemis_id')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->get(['student_hemis_id', 'oski_resit_date', 'test_resit_date']);
+            foreach ($psResitRows as $psr) {
+                $perStudentResitDates[(string) $psr->student_hemis_id] = [
+                    'oski_resit_date' => $psr->oski_resit_date?->format('Y-m-d'),
+                    'test_resit_date' => $psr->test_resit_date?->format('Y-m-d'),
+                ];
+            }
+        } catch (\Throwable $e) {}
+
         // YN ga yuborish huquqi: faqat shu fan+guruh juftligiga biriktirilgan o'qituvchi
         $canSubmitYn = false;
         $isOqituvchi = is_active_oqituvchi();
@@ -1702,7 +1720,24 @@ class JournalController extends Controller
                         $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
                 }
 
-                $stageInfo = $svc::determineStage($main, $qoshimcha, $a, $aQoshimcha, $b, $bQoshimcha);
+                // 12a (2-urinish) imtihon muddati o'tib ketganmi — talaba
+                // shaxsiy sanasi bo'lsa o'sha, bo'lmasa guruh sanasi. Muddat
+                // o'tgan + 12a'dan o'tmagan bo'lsa, determineStage 3-urinish
+                // (12b) badge'ini yoqadi.
+                $todayYmd = now()->format('Y-m-d');
+                $effOskiResitDate = $perStudentResitDates[$h]['oski_resit_date']
+                    ?? $examSchedule?->oski_resit_date?->format('Y-m-d');
+                $effTestResitDate = $perStudentResitDates[$h]['test_resit_date']
+                    ?? $examSchedule?->test_resit_date?->format('Y-m-d');
+                $oskiResitEnded = $hasOskiForWeights
+                    ? ($effOskiResitDate !== null && $effOskiResitDate <= $todayYmd)
+                    : true;
+                $testResitEnded = $hasTestForWeights
+                    ? ($effTestResitDate !== null && $effTestResitDate <= $todayYmd)
+                    : true;
+                $aWindowEnded = $oskiResitEnded && $testResitEnded;
+
+                $stageInfo = $svc::determineStage($main, $qoshimcha, $a, $aQoshimcha, $b, $bQoshimcha, $aWindowEnded);
                 $stageKey = $stageInfo['stage'];
 
                 // 1-urinish OSKI/Test imtihonlari hali bo'lmaganida (sanalar

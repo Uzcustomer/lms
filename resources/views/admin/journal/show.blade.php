@@ -1329,16 +1329,18 @@
                                                 $isOskiSababli = in_array($student->hemis_id, $sababliOskiStudents ?? [], true);
                                                 $isTestSababli = in_array($student->hemis_id, $sababliTestStudents ?? [], true);
 
-                                                // 2-urinish va 3-urinish ustunlariga edit ruxsati
+                                                // 2-urinish va 3-urinish ustunlariga edit ruxsati.
+                                                // formsForStage bilan aniqlanadi — 12b ga tushgan
+                                                // talaba 12a dan o'tgani uchun 12a ustunlari ham
+                                                // ko'rinadi/tahrirlanadi (STAGE_IN_12B 12a sheetida ham bor).
                                                 $stageHere = ($studentStages[$student->hemis_id]['stage'] ?? null);
-                                                $eligible12a = !empty($ynSubmission12a) && in_array($stageHere, [
-                                                    \App\Services\YnAttemptStatusService::STAGE_IN_12A,
-                                                    \App\Services\YnAttemptStatusService::STAGE_12A_PASSED,
-                                                ], true);
-                                                $eligible12b = !empty($ynSubmission12b) && in_array($stageHere, [
-                                                    \App\Services\YnAttemptStatusService::STAGE_IN_12B,
-                                                    \App\Services\YnAttemptStatusService::STAGE_12B_PASSED,
-                                                ], true);
+                                                $stageFormsHere = $stageHere
+                                                    ? \App\Services\YnAttemptStatusService::formsForStage($stageHere)
+                                                    : [];
+                                                $eligible12a = !empty($ynSubmission12a) && in_array(
+                                                    \App\Services\YnAttemptStatusService::FORM_12A, $stageFormsHere, true);
+                                                $eligible12b = !empty($ynSubmission12b) && in_array(
+                                                    \App\Services\YnAttemptStatusService::FORM_12B, $stageFormsHere, true);
 
                                                 $oskiResitDate = !empty($examSchedule) ? ($examSchedule->oski_resit_date ?? null) : null;
                                                 $oski2ResitDate = !empty($examSchedule) ? ($examSchedule->oski_resit2_date ?? null) : null;
@@ -1991,16 +1993,18 @@
                                                 $isOskiSababli = in_array($student->hemis_id, $sababliOskiStudents ?? [], true);
                                                 $isTestSababli = in_array($student->hemis_id, $sababliTestStudents ?? [], true);
 
-                                                // 2-urinish va 3-urinish ustunlariga edit ruxsati
+                                                // 2-urinish va 3-urinish ustunlariga edit ruxsati.
+                                                // formsForStage bilan aniqlanadi — 12b ga tushgan
+                                                // talaba 12a dan o'tgani uchun 12a ustunlari ham
+                                                // ko'rinadi/tahrirlanadi (STAGE_IN_12B 12a sheetida ham bor).
                                                 $stageHere = ($studentStages[$student->hemis_id]['stage'] ?? null);
-                                                $eligible12a = !empty($ynSubmission12a) && in_array($stageHere, [
-                                                    \App\Services\YnAttemptStatusService::STAGE_IN_12A,
-                                                    \App\Services\YnAttemptStatusService::STAGE_12A_PASSED,
-                                                ], true);
-                                                $eligible12b = !empty($ynSubmission12b) && in_array($stageHere, [
-                                                    \App\Services\YnAttemptStatusService::STAGE_IN_12B,
-                                                    \App\Services\YnAttemptStatusService::STAGE_12B_PASSED,
-                                                ], true);
+                                                $stageFormsHere = $stageHere
+                                                    ? \App\Services\YnAttemptStatusService::formsForStage($stageHere)
+                                                    : [];
+                                                $eligible12a = !empty($ynSubmission12a) && in_array(
+                                                    \App\Services\YnAttemptStatusService::FORM_12A, $stageFormsHere, true);
+                                                $eligible12b = !empty($ynSubmission12b) && in_array(
+                                                    \App\Services\YnAttemptStatusService::FORM_12B, $stageFormsHere, true);
 
                                                 $oskiResitDate = !empty($examSchedule) ? ($examSchedule->oski_resit_date ?? null) : null;
                                                 $oski2ResitDate = !empty($examSchedule) ? ($examSchedule->oski_resit2_date ?? null) : null;

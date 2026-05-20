@@ -3537,14 +3537,35 @@ class AcademicScheduleController extends Controller
 
         try {
 
-        // Bir xil (group, subject, semester) kombinatsiyasi bir necha marta
-        // kelishi mumkin (masalan, slotda guruh + individual entry'lar bo'lsa).
-        // Word generator'da bu talabani ro'yxatga ikki marta tushiradi —
-        // shuning uchun unique'laymiz.
-        $items = collect($request->items)
-            ->unique(fn($it) => ($it['group_hemis_id'] ?? '') . '|' . ($it['subject_id'] ?? '') . '|' . ($it['semester_code'] ?? ''))
-            ->values()
-            ->all();
+        // Bir xil (group, subject, semester, yn_type, attempt, exam_time)
+        // kombinatsiyasi bir necha marta kelishi mumkin (slotda guruh-level +
+        // individual entry'lar bo'lsa). Har birikma uchun: guruh-level yozuv
+        // (student_hemis_id bo'sh) bo'lsa — faqat o'shani olamiz (butun guruh
+        // ro'yxati); aks holda barcha per-student yozuvlarni saqlaymiz.
+        // DIQQAT: yn_type va attempt kalitga kiritilishi shart — aks holda
+        // bitta guruhning OSKI va Test (yoki turli urinish) qatorlari
+        // ustma-ust tushib, Word'dan biri tushib qolardi.
+        $itemBuckets = [];
+        foreach ((array) $request->items as $it) {
+            $bk = ($it['group_hemis_id'] ?? '') . '|' . ($it['subject_id'] ?? '') . '|'
+                . ($it['semester_code'] ?? '') . '|'
+                . strtolower((string) ($it['yn_type'] ?? '')) . '|'
+                . (int) ($it['attempt'] ?? 1) . '|'
+                . (string) ($it['exam_time'] ?? '');
+            $itemBuckets[$bk][] = $it;
+        }
+        $items = [];
+        foreach ($itemBuckets as $bucket) {
+            $groupLevel = null;
+            foreach ($bucket as $it) {
+                if (empty($it['student_hemis_id'])) { $groupLevel = $it; break; }
+            }
+            if ($groupLevel !== null) {
+                $items[] = $groupLevel;
+            } else {
+                foreach ($bucket as $it) { $items[] = $it; }
+            }
+        }
         $compact = (bool) $request->boolean('compact');
         $debug = (bool) $request->boolean('debug');
         $debugInfo = [];

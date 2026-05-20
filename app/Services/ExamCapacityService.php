@@ -6,6 +6,7 @@ use App\Models\ExamCapacityOverride;
 use App\Models\ExamSchedule;
 use App\Models\Setting;
 use App\Models\Student;
+use App\Services\AutoAssignService;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -202,6 +203,26 @@ class ExamCapacityService
     public static function dailyCapacityForDate(?string $date): int
     {
         return self::dailyCapacity(self::getSettingsForDate($date));
+    }
+
+    /**
+     * Berilgan kun uchun real (reserve pool ayrilgan) kunlik sig'im.
+     *
+     * Bandlik ko'rsatkichi dashboard'i bilan bir xil mantiq: slotlarni
+     * rejalashtirishda reserve kompyuterlar ishlatilmaydi, shuning uchun
+     * sig'im validatsiyasi ham effective sig'imdan foydalanishi kerak.
+     * dailyCapacityForDate() esa xom computer_count'ni oladi va reserve
+     * pool tufayli haqiqatdan kattaroq sig'im qaytaradi.
+     */
+    public static function effectiveDailyCapacityForDate(?string $date): int
+    {
+        $settings = self::getSettingsForDate($date);
+        $effective = AutoAssignService::effectiveSlotCapacity($settings);
+        if ($effective < 1) {
+            $effective = (int) $settings['computer_count'];
+        }
+        $settings['computer_count'] = $effective;
+        return self::dailyCapacity($settings);
     }
 
     /**

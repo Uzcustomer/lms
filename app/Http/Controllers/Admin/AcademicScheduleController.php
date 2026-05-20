@@ -3541,6 +3541,17 @@ class AcademicScheduleController extends Controller
         if ($deny = $this->ensureTestCenterAccess()) {
             return $deny;
         }
+        return $this->processYnOldiWord($request);
+    }
+
+    /**
+     * generateYnOldiWord ning asosiy qismi — kirish huquqi tekshiruvisiz.
+     * HTTP endpoint (generateYnOldiWord) va AssignComputersForRangeJob navbat
+     * job'i shu metodni chaqiradi. Job kontekstida kirish huquqi tugma
+     * bosilganda (assignComputersForRange) allaqachon tekshirilgan bo'ladi.
+     */
+    public function processYnOldiWord(Request $request)
+    {
         $request->validate([
             'items' => 'required|array|min:1',
             'items.*.group_hemis_id' => 'required|string',
@@ -6045,65 +6056,31 @@ class AcademicScheduleController extends Controller
 
         $today = now()->format('Y-m-d');
         try {
-            $from = \Carbon\Carbon::parse($request->input('date_from', $today))->startOfDay();
-            $to = \Carbon\Carbon::parse($request->input('date_to', $today))->startOfDay();
+            $from = \Carbon\Carbon::parse($request->input('date_from', $today))->format('Y-m-d');
+            $to = \Carbon\Carbon::parse($request->input('date_to', $today))->format('Y-m-d');
         } catch (\Throwable $e) {
             return back()->with('error', "Sana noto'g'ri formatda.");
         }
-        if ($to->lt($from)) {
-            $to = $from->copy();
+        if ($to < $from) {
+            $to = $from;
         }
 
-        @set_time_limit(0);
+        // Og'ir YN pipeline har bir kun uchun sekin — sinxron bajarsak HTTP
+        // so'rov 504 timeout beradi. Shu sabab fonda navbat job'ida bajaramiz
+        // (notifyAllExamTimes bilan bir xil yondashuv).
+        \App\Jobs\AssignComputersForRangeJob::dispatch($from, $to);
 
-        $totalAssigned = 0;
-        $daysProcessed = 0;
-        $errors = [];
-
-        for ($d = $from->copy(); $d->lte($to); $d->addDay()) {
-            $dateStr = $d->format('Y-m-d');
-            $items = $this->collectScheduledItemsForDate($dateStr);
-            if (empty($items)) {
-                continue;
-            }
-            $daysProcessed++;
-            try {
-                $syntheticRequest = \Illuminate\Http\Request::create('', 'POST', [
-                    'items' => $items,
-                    'exam_date' => $dateStr,
-                    'assign_computers' => true,
-                ]);
-                $resp = $this->generateYnOldiWord($syntheticRequest);
-                $payload = json_decode($resp->getContent(), true);
-                if (is_array($payload) && !empty($payload['ok'])) {
-                    $totalAssigned += (int) ($payload['assigned'] ?? 0);
-                } elseif (is_array($payload) && !empty($payload['error'])) {
-                    $errors[] = $dateStr . ': ' . $payload['error'];
-                }
-            } catch (\Throwable $e) {
-                \Log::warning('assignComputersForRange: ' . $dateStr . ' — ' . $e->getMessage());
-                $errors[] = $dateStr . ': ' . $e->getMessage();
-            }
-        }
-
-        if ($daysProcessed === 0) {
-            return back()->with('warning', "Tanlangan oraliqda vaqt belgilangan imtihon topilmadi.");
-        }
-
-        $msg = "Kompyuter raqamlari taqsimlandi: {$totalAssigned} ta talaba ({$daysProcessed} kun).";
-        if (!empty($errors)) {
-            return back()->with('warning', $msg . ' Ba\'zi xatoliklar: ' . implode('; ', array_slice($errors, 0, 3)));
-        }
-        return back()->with('success', $msg);
+        return back()->with('success', "Kompyuter raqamlarini taqsimlash navbatga qo'yildi ({$from} – {$to}). Bir necha daqiqada tayyor bo'ladi — biroz kutib, sahifani yangilang.");
     }
 
     /**
      * Berilgan sanada vaqti belgilangan guruh-level imtihonlar bo'yicha
-     * generateYnOldiWord() kutadigan "items" ro'yxatini yig'adi.
+     * processYnOldiWord() kutadigan "items" ro'yxatini yig'adi.
+     * AssignComputersForRangeJob navbat job'i tomonidan ishlatiladi.
      *
      * @return array<int,array<string,mixed>>
      */
-    private function collectScheduledItemsForDate(string $date): array
+    public function collectScheduledItemsForDate(string $date): array
     {
         $attemptCols = [
             'oski' => [

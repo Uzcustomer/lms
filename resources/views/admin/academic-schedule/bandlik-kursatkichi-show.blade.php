@@ -501,26 +501,40 @@
                                                     </span>
                                                 @endif
                                                 @php
-                                                    // Bitta slotda guruh + per-student qatorlar bir xil (group,
-                                                    // subject, sem) uchun bir necha marta uchrashi mumkin —
-                                                    // Word'ga faqat unique kombinatsiyani yuboramiz, aks holda
-                                                    // bir talaba ro'yxatda bir necha marta chiqadi.
-                                                    $exportItems = [];
-                                                    $seen = [];
+                                                    // Bitta slotda guruh-level + per-student qatorlar bir xil
+                                                    // (group, subject, sem, yn_type, attempt) uchun bir necha marta
+                                                    // uchrashi mumkin. Har birikma uchun: guruh-level yozuv
+                                                    // (student_hemis_id bo'sh) bo'lsa — faqat o'shani; aks holda
+                                                    // barcha per-student yozuvlarni yuboramiz.
+                                                    // DIQQAT: yn_type va attempt kalitda — aks holda bir guruhning
+                                                    // OSKI va Test (yoki turli urinish) qatorlari ustma-ust tushib
+                                                    // Word'dan tushib qolardi.
+                                                    $exportBuckets = [];
                                                     foreach ($slot['groups'] as $_grp) {
                                                         if (empty($_grp['group_hemis_id']) || empty($_grp['subject_id']) || empty($_grp['semester_code'])) continue;
-                                                        $k = $_grp['group_hemis_id'] . '|' . $_grp['subject_id'] . '|' . $_grp['semester_code'];
-                                                        if (isset($seen[$k])) continue;
-                                                        $seen[$k] = true;
-                                                        $exportItems[] = [
-                                                            'group_hemis_id' => (string) $_grp['group_hemis_id'],
-                                                            'subject_id'     => (string) $_grp['subject_id'],
-                                                            'semester_code'  => (string) $_grp['semester_code'],
-                                                            'attempt'        => (int) ($_grp['attempt'] ?? 1),
-                                                            'student_hemis_id' => !empty($_grp['student_hemis_id']) ? (string) $_grp['student_hemis_id'] : null,
-                                                            'schedule_id'    => (int) ($_grp['schedule_id'] ?? 0),
-                                                            'yn_type'        => isset($_grp['yn_type']) ? strtolower((string) $_grp['yn_type']) : null,
-                                                        ];
+                                                        $k = $_grp['group_hemis_id'] . '|' . $_grp['subject_id'] . '|' . $_grp['semester_code']
+                                                            . '|' . strtolower((string) ($_grp['yn_type'] ?? ''))
+                                                            . '|' . (int) ($_grp['attempt'] ?? 1);
+                                                        $exportBuckets[$k][] = $_grp;
+                                                    }
+                                                    $exportItems = [];
+                                                    foreach ($exportBuckets as $_bucket) {
+                                                        $_groupLevel = null;
+                                                        foreach ($_bucket as $_it) {
+                                                            if (empty($_it['student_hemis_id'])) { $_groupLevel = $_it; break; }
+                                                        }
+                                                        $_chosen = $_groupLevel !== null ? [$_groupLevel] : $_bucket;
+                                                        foreach ($_chosen as $_it) {
+                                                            $exportItems[] = [
+                                                                'group_hemis_id' => (string) $_it['group_hemis_id'],
+                                                                'subject_id'     => (string) $_it['subject_id'],
+                                                                'semester_code'  => (string) $_it['semester_code'],
+                                                                'attempt'        => (int) ($_it['attempt'] ?? 1),
+                                                                'student_hemis_id' => !empty($_it['student_hemis_id']) ? (string) $_it['student_hemis_id'] : null,
+                                                                'schedule_id'    => (int) ($_it['schedule_id'] ?? 0),
+                                                                'yn_type'        => isset($_it['yn_type']) ? strtolower((string) $_it['yn_type']) : null,
+                                                            ];
+                                                        }
                                                     }
                                                 @endphp
                                                 @if(!empty($exportItems))

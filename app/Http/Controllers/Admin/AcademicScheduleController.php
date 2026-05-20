@@ -1572,7 +1572,9 @@ class AcademicScheduleController extends Controller
                 $oskiRequired = !($naMap[$naKey]['oski_na'] ?? false);
                 $testRequired = !($naMap[$naKey]['test_na'] ?? false);
 
-                // 1/2-urinish sanalari — muddati tugaganmi tekshirish uchun
+                // 1/2-urinish sanalari — muddati tugaganmi tekshirish uchun.
+                // 2-urinish (resit) sanalarida per-student override ustuvor.
+                $psResitKey = $hid . '|' . $s . '|' . $sem;
                 $oskiDate = $naMap[$naKey]['oski_date'] ?? null;
                 $testDate = $naMap[$naKey]['test_date'] ?? null;
                 // 2-urinish sanasi manbalari (ustuvorlik tartibida):
@@ -1639,8 +1641,14 @@ class AcademicScheduleController extends Controller
                 $enrolledAttempt2 = $failed1
                     || !empty($enrolledAttempt2Map[$hid . '|' . $s . '|' . $sem]);
                 if ($enrolledAttempt2) {
-                    $oski2Num = $oski2 !== null ? (float) $oski2 : null;
-                    $test2Num = $test2 !== null ? (float) $test2 : null;
+                    // 12a baholaridan biri yo'q bo'lsa (talaba o'sha turdan
+                    // 1-urinishda o'tib, qayta topshirishi shart bo'lmagan) —
+                    // 1-urinish bahosini fallback qilamiz. Aks holda o'sha tur
+                    // "kelmadi=yiqilgan" deb noto'g'ri belgilanib, 12a dan
+                    // o'tgan talaba 3-urinishga tushib qolardi (jurnaldagi
+                    // determineStage fallback mantiqi bilan bir xil).
+                    $oski2Num = $oski2 !== null ? (float) $oski2 : $oskiNum;
+                    $test2Num = $test2 !== null ? (float) $test2 : $testNum;
                     $oskiFailed2 = $confirmFailed($oskiRequired, $oski2Num, $oskiResitDate);
                     $testFailed2 = $confirmFailed($testRequired, $test2Num, $testResitDate);
                     $failed2 = $isPullik || $oskiFailed2 || $testFailed2;

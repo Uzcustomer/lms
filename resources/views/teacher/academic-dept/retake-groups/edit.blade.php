@@ -47,6 +47,7 @@
             <form method="POST" action="{{ route('admin.retake-groups.update', $group->id) }}" class="mt-4 space-y-3"
                   x-data="{
                       phones: @js(!empty($group->teacher_phones) ? $group->teacher_phones : ['']),
+                      assessmentType: @js($group->assessment_type ?? ''),
                       add() { if (this.phones.length < 5) this.phones.push(''); },
                       remove(i) { if (this.phones.length > 1) this.phones.splice(i, 1); }
                   }">
@@ -116,6 +117,53 @@
                                {{ $editable ? '' : 'disabled' }}
                                class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
                     </div>
+                </div>
+
+                {{-- Baholash turi (OSKE/TEST/...) + sanalar — tahrirlanadi --}}
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <label class="block text-xs font-medium text-amber-900 mb-2">
+                        {{ __("Fan yopilish turi") }} <span class="text-red-500">*</span>
+                    </label>
+                    <div class="grid grid-cols-2 gap-2">
+                        @php
+                            $atypes = [
+                                'oske' => 'OSKE',
+                                'test' => 'TEST',
+                                'oske_test' => 'OSKE + TEST',
+                                'sinov_fan' => __('Sinov fan'),
+                            ];
+                        @endphp
+                        @foreach($atypes as $val => $label)
+                            <label class="flex items-center gap-2 bg-white border border-gray-200 rounded px-2 py-1.5 cursor-pointer hover:bg-gray-50 text-xs">
+                                <input type="radio" name="assessment_type" value="{{ $val }}"
+                                       x-model="assessmentType"
+                                       {{ $editable ? '' : 'disabled' }}
+                                       class="text-amber-600">
+                                <span class="font-medium">{{ $label }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3 mt-3"
+                         x-show="assessmentType === 'oske' || assessmentType === 'test' || assessmentType === 'oske_test'">
+                        <div x-show="assessmentType === 'oske' || assessmentType === 'oske_test'">
+                            <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("OSKE sanasi") }}</label>
+                            <input type="date" name="oske_date"
+                                   value="{{ $group->oske_date?->format('Y-m-d') }}"
+                                   {{ $editable ? '' : 'disabled' }}
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
+                        </div>
+                        <div x-show="assessmentType === 'test' || assessmentType === 'oske_test'">
+                            <label class="block text-xs font-medium text-gray-700 mb-1">{{ __("TEST sanasi") }}</label>
+                            <input type="date" name="test_date"
+                                   value="{{ $group->test_date?->format('Y-m-d') }}"
+                                   {{ $editable ? '' : 'disabled' }}
+                                   class="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg disabled:bg-gray-50">
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-amber-800 mt-2" x-show="assessmentType === 'oske_test'" x-cloak>
+                        ⚠️ {{ __("OSKE+TEST holatida: TEST sanasi OSKE sanasidan oldin bo'lishi mumkin emas.") }}
+                    </p>
                 </div>
 
                 @if($editable)

@@ -1897,6 +1897,7 @@ class QuizResultController extends Controller
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:hemis_quiz_results,id',
             'subject_overrides' => 'nullable|array',
+            'attempt_overrides' => 'nullable|array',
         ]);
 
         $results = HemisQuizResult::whereIn('id', $request->ids)->get();
@@ -2049,6 +2050,17 @@ class QuizResultController extends Controller
             $ynOverrideKey = $result->fan_id . '_' . ($student->group_id ?? '');
             $manualYnTuri = $ynTuriOverrides[$ynOverrideKey] ?? null;
 
+            // Shakl (urinish) override — modaldan foydalanuvchi 12 / 12a / 12b
+            // ni qo'lda tanlagan bo'lsa, attempt shu tanlovga qarab yoziladi.
+            // Tanlanmagan bo'lsa Moodle shaklidan aniqlangan $attemptNum ishlatiladi.
+            $attemptOverrides = $request->input('attempt_overrides', []);
+            $attemptOverrideRaw = $attemptOverrides[$ynOverrideKey] ?? null;
+            $effectiveAttempt = $attemptNum;
+            if ($attemptOverrideRaw !== null && $attemptOverrideRaw !== ''
+                && in_array((int) $attemptOverrideRaw, [1, 2, 3], true)) {
+                $effectiveAttempt = (int) $attemptOverrideRaw;
+            }
+
             if ($manualYnTuri === 'oski' || in_array($result->quiz_type, $oskiTypes) || $shaklLower === 'oski' || stripos($result->quiz_type ?? '', 'OSKI') !== false) {
                 $trainingTypeCode = 101;
                 $trainingTypeName = 'Oski';
@@ -2087,9 +2099,8 @@ class QuizResultController extends Controller
                     'grade' => round($result->grade),
                     'deadline' => now(),
                     'quiz_result_id' => $result->id,
-                    'attempt' => self::parseAttemptFromShakl($result->shakl, $result->attempt_number),
                     'is_final' => true,
-                    'attempt' => $attemptNum,
+                    'attempt' => $effectiveAttempt,
                     'is_qoshimcha' => $hasQoshimchaPre = (preg_match('/\(.*qo\'?shimcha.*\)/iu', $shaklRaw) || mb_stripos($shaklRaw, 'farmoyish') !== false),
                 ]);
 
@@ -2102,12 +2113,12 @@ class QuizResultController extends Controller
                         ->where('subject_id', $subject->subject_id)
                         ->where('training_type_code', $trainingTypeCode)
                         ->where('semester_code', $semester->code ?? $student->semester_code)
-                        ->where('attempt', $attemptNum)
+                        ->where('attempt', $effectiveAttempt)
                         ->where('is_qoshimcha', 0)
                         ->where('id', '!=', $created->id ?? 0)
                         ->delete();
 
-                    if ($attemptNum === 1) {
+                    if ($effectiveAttempt === 1) {
                         DB::table('student_grades')
                             ->where('student_hemis_id', $student->hemis_id)
                             ->where('subject_id', $subject->subject_id)

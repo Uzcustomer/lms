@@ -1774,13 +1774,15 @@ class JournalController extends Controller
 
                 // 1-urinish OSKI/Test imtihonlari hali bo'lmaganida (sanalar
                 // o'tib ketmagan) talabani 2-urinish/Pullik deb belgilamaslik.
-                // Davomat ≥25% (V=-3) holati esa darhol ko'rsatiladi.
+                // Imtihon sanasi BUGUN bo'lsa ham hali "tugamagan" hisoblanadi —
+                // faqat sana o'tib ketgandagina (sana < bugun) 2-urinishga
+                // o'tkaziladi. Davomat ≥25% (V=-3) holati esa darhol ko'rsatiladi.
                 $today = now()->format('Y-m-d');
                 $oskiDone = $hasOskiForWeights
-                    ? ($examSchedule && $examSchedule->oski_date && $examSchedule->oski_date->format('Y-m-d') <= $today)
+                    ? ($examSchedule && $examSchedule->oski_date && $examSchedule->oski_date->format('Y-m-d') < $today)
                     : true;
                 $testDone = $hasTestForWeights
-                    ? ($examSchedule && $examSchedule->test_date && $examSchedule->test_date->format('Y-m-d') <= $today)
+                    ? ($examSchedule && $examSchedule->test_date && $examSchedule->test_date->format('Y-m-d') < $today)
                     : true;
                 $oneUrinishEnded = $oskiDone && $testDone;
                 $isDavomatFail = ($main['v'] ?? null) === -3;

@@ -2100,6 +2100,57 @@ class AcademicScheduleController extends Controller
         return !empty($filtered) ? $filtered : $students;
     }
 
+    /**
+     * Talaba(lar)ning joriy o'quv yilida 1-urinishdan o'tmagan (V<60) fan
+     * soni. 4+ bo'lsa talaba kursdan qoldirilgan hisoblanadi va YN ga (shu
+     * jumladan individual imtihon sana/vaqtiga) kiritilmaydi. processYnOldiWord
+     * ichidagi $yearDebtCount hisobi bilan bir xil mantiq.
+     *
+     * @param  array  $hemisIds  talaba hemis_id lari
+     * @return array  [hemis_id => qarz fanlar soni]
+     */
+    private function computeYearDebtCounts(array $hemisIds): array
+    {
+        $hemisIds = array_values(array_unique(array_filter(array_map('strval', $hemisIds))));
+        if (empty($hemisIds)) {
+            return [];
+        }
+        $result = [];
+        try {
+            $currentYear = DB::table('semesters')->where('current', true)->value('education_year');
+            if (!$currentYear) {
+                return [];
+            }
+            $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+            $debtQ = DB::table('student_grades as sg')
+                ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                ->join('semesters as sm', function ($j) {
+                    $j->on('sm.curriculum_hemis_id', '=', 'st.curriculum_id')
+                      ->on('sm.code', '=', 'sg.semester_code');
+                })
+                ->whereIn('sg.student_hemis_id', $hemisIds)
+                ->where('sm.education_year', $currentYear)
+                ->whereIn('sg.training_type_code', [101, 102])
+                ->whereNull('sg.deleted_at')
+                ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+            if ($hasAttemptCol) {
+                $debtQ->where(function ($x) {
+                    $x->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                });
+            }
+            $rows = $debtQ
+                ->selectRaw('sg.student_hemis_id, COUNT(DISTINCT CONCAT(sg.subject_id, "-", sg.semester_code)) as cnt')
+                ->groupBy('sg.student_hemis_id')
+                ->get();
+            foreach ($rows as $r) {
+                $result[(string) $r->student_hemis_id] = (int) $r->cnt;
+            }
+        } catch (\Throwable $e) {
+            \Log::warning('computeYearDebtCounts failed: ' . $e->getMessage());
+        }
+        return $result;
+    }
+
     public function testCenterView(Request $request)
     {
         if ($deny = $this->ensureTestCenterAccess()) {
@@ -3846,72 +3897,16 @@ class AcademicScheduleController extends Controller
                 // guruh slotidagi Word'da chiqishi kerak.
                 $enrichedStudents = $this->filterStudentsForAttempt($enrichedStudents, $itemAttempt);
             }
-
-            // Per-student (individual) yozuv fallback: registrator aniq tanlagan
-            // talaba attachStudentsToSchedule pipeline'idan tushib qolgan bo'lsa
-            // (joriy guruhi exam_schedules.group_hemis_id'dan farqli, status != 11
-            // yoki subgroup/variant filtri) — uni to'g'ridan-to'g'ri students
-            // jadvalidan tiklaymiz. Aks holda individual imtihon Word'dan butunlay
-            // tushib qolardi — bitta slotda ikkita individual 2-urinish bo'lganda
-            // ikkinchisi chiqmay qolish muammosi.
-            if ($itemStudentHemisId !== null && empty($enrichedStudents)) {
-                $fallbackStudent = Student::where('hemis_id', $itemStudentHemisId)
-                    ->select('hemis_id', 'student_id_number', 'full_name')
-                    ->first();
-                if ($fallbackStudent) {
-                    $fbAdmission = null;
-                    try {
-                        $fbAdmission = app(\App\Services\YnAdmissionService::class)->statusForStudent(
-                            (string) $itemStudentHemisId,
-                            (string) $group->group_hemis_id,
-                            (string) $subjectId,
-                            (string) $semesterCode
-                        );
-                    } catch (\Throwable $e) {
-                        \Log::warning('processYnOldiWord: individual fallback admission failed: ' . $e->getMessage());
-                    }
-                    $fbRow = [
-                        'hemis_id' => $fallbackStudent->hemis_id,
-                        'student_id_number' => $fallbackStudent->student_id_number ?? null,
-                        'full_name' => $fallbackStudent->full_name,
-                        'admission_status' => $fbAdmission,
-                        'is_held_back' => false,
-                        'past_debts' => [],
-                        'current_semester_debts' => [],
-                    ];
-                    // Individual imtihon vaqti — per-student ExamSchedule yozuvidan.
-                    if ($itemScheduleId) {
-                        $fbSchedule = ExamSchedule::find($itemScheduleId);
-                        if ($fbSchedule) {
-                            foreach ([
-                                'oski_time', 'oski_resit_time', 'oski_resit2_time',
-                                'test_time', 'test_resit_time', 'test_resit2_time',
-                            ] as $tcol) {
-                                $fbRow[$tcol] = $fbSchedule->{$tcol} ?? null;
-                            }
-                        }
-                    }
-                    $enrichedStudents = [$fbRow];
-                }
-            }
             $dbgAfterAttemptCount = count($enrichedStudents);
 
             // Kursdan qoldirilgan (4+ qarz) yoki YN ga ruxsat yo'q (X)
             // talabalarni ro'yxatdan chiqarib tashlaymiz — Word faqat
-            // "kiradiganlar"ni ko'rsatadi (Ruxsat yoki Shartli). 4+ qarz uchun
-            // 3 manbadan tekshiriladi, "X" admission_status orqali aniqlanadi.
-            // DIQQAT: bu filtr faqat GURUH-LEVEL yozuvlarga qo'llanadi. Per-student
-            // (individual) yozuvni registrator saveStudentTime orqali aniq tanlab
-            // imtihon vaqti qo'ygan (u yerda X holati allaqachon tekshirilgan) —
-            // shu sabab individual yozuv filtrdan o'tkazib yuboriladi, aks holda
-            // bir slotda ikkita individual 2-urinish bo'lsa biri Word'dan tushib
-            // qolardi.
+            // "kiradiganlar"ni ko'rsatadi (Ruxsat yoki Shartli).
+            // 4+ qarz uchun 3 manbadan tekshiriladi (yuqaridagi
+            // students mapping bilan bir xil), JN/MT/davomat sabab "X"
+            // bo'lganlar admission_status orqali aniqlanadi.
             $dbgRemoved = [];
-            $skipEligibilityFilter = ($itemStudentHemisId !== null);
-            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($yearDebtCount, $debug, &$dbgRemoved, $skipEligibilityFilter) {
-                if ($skipEligibilityFilter) {
-                    return true;
-                }
+            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($yearDebtCount, $debug, &$dbgRemoved) {
                 $hemisId = (string) ($row['hemis_id'] ?? '');
                 $debtCount = count($row['past_debts'] ?? []) + count($row['current_semester_debts'] ?? []);
                 $yearCnt = $yearDebtCount[$hemisId] ?? 0;
@@ -6761,6 +6756,22 @@ class AcademicScheduleController extends Controller
                 'success' => false,
                 'message' => 'Bu talabaga YN ga ruxsat yo\'q (X holati). YN oldi qaydnoma asosida JN/MT yoki davomat shartlari bajarilmagan — vaqt qo\'yib bo\'lmaydi.',
                 'admission_status' => $admission,
+            ], 422);
+        }
+
+        // Joriy o'quv yilida 4+ fandan qarzi bo'lgan (1-urinishdan o'tmagan)
+        // talaba kursdan qoldirilgan hisoblanadi — unga individual imtihon
+        // sana/vaqti qo'yib bo'lmaydi. Aks holda u bandlik ko'rsatkichiga
+        // individual yozuv sifatida tushib, YN oldi Word'da esa "kiradiganlar"
+        // filtridan chiqib ketardi (nomuvofiqlik).
+        $yearDebt = $this->computeYearDebtCounts([(string) $request->student_hemis_id]);
+        $studentDebtCount = (int) ($yearDebt[(string) $request->student_hemis_id] ?? 0);
+        if ($studentDebtCount >= 4) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bu talaba joriy o\'quv yilida ' . $studentDebtCount
+                    . ' ta fandan qarzdor (4+ qarz — kursdan qoldirilgan). '
+                    . 'Unga individual imtihon vaqti qo\'yib bo\'lmaydi.',
             ], 422);
         }
 

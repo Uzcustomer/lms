@@ -4013,6 +4013,65 @@ class AcademicScheduleController extends Controller
         }
         $brokenLookup = array_flip(array_map('intval', $brokenSet));
 
+        // Boshqa jadvallar band qilgan kompyuter raqamlari — har slot vaqti
+        // uchun alohida. Bularni hisobga olmasak, bu taqsimotga kirmaydigan
+        // (individual vaqt qo'yilgan talaba yoki ayni paytda imtihon
+        // topshirayotgan) talabaning kompyuteri qayta ishlatilib, bitta
+        // kompyuter ikki kishiga tushib qolardi. Buzilgan kompyuterlar kabi
+        // chetlab o'tiladi. Faqat taqsimlash rejimida (assign_computers) kerak.
+        $occupiedBySlot = [];
+        if ($assignComputers && $examDate) {
+            $batchScheduleIds = [];
+            foreach ($subjectGroups as $sgOcc) {
+                foreach ($sgOcc['entries'] as $entryOcc) {
+                    if (!empty($entryOcc['schedule_id'])) {
+                        $batchScheduleIds[(int) $entryOcc['schedule_id']] = true;
+                    }
+                }
+            }
+            $batchScheduleIds = array_keys($batchScheduleIds);
+            $durationForOcc = (int) (ExamCapacityService::getSettingsForDate($examDate)['test_duration_minutes'] ?? 15);
+            $slotTimesForOcc = [];
+            foreach ($subjectGroups as $sgOcc) {
+                $stOcc = $multiSlotMode ? (string) ($sgOcc['slot_time'] ?? '') : (string) ($examTime ?? '');
+                if ($stOcc !== '') {
+                    $slotTimesForOcc[$stOcc] = true;
+                }
+            }
+            foreach (array_keys($slotTimesForOcc) as $stOcc) {
+                try {
+                    $winStart = \Carbon\Carbon::parse($examDate . ' ' . $stOcc);
+                } catch (\Throwable $e) {
+                    continue;
+                }
+                $winEnd = $winStart->copy()->addMinutes($durationForOcc);
+                $occRows = \App\Models\ComputerAssignment::query()
+                    ->whereNotNull('computer_number')
+                    ->where('planned_start', '<', $winEnd)
+                    ->where('planned_end', '>', $winStart)
+                    ->where(function ($q) use ($batchScheduleIds) {
+                        // in_progress — har qanday jadvalniki (kompyuter fizik band);
+                        // scheduled — faqat bu taqsimotga kirmaydigan jadvallar
+                        // (masalan, individual vaqt qo'yilgan talabalar).
+                        $q->where('status', \App\Models\ComputerAssignment::STATUS_IN_PROGRESS);
+                        if (!empty($batchScheduleIds)) {
+                            $q->orWhere(function ($q2) use ($batchScheduleIds) {
+                                $q2->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+                                    ->whereNotIn('exam_schedule_id', $batchScheduleIds);
+                            });
+                        }
+                    })
+                    ->pluck('computer_number');
+                $set = [];
+                foreach ($occRows as $cn) {
+                    if ($cn !== null) {
+                        $set[(int) $cn] = true;
+                    }
+                }
+                $occupiedBySlot[$stOcc] = $set;
+            }
+        }
+
         // Raqamlar Word'dagi qator tartibida beriladi — proktor qog'ozda
         // 1, 2, 3, ... ketma-ket o'qiy oladi. Slot ichida tartib: sahifa
         // tartibi (subjectGroups iteratsiyasi) → entry tartibi → entry ichida
@@ -4022,12 +4081,14 @@ class AcademicScheduleController extends Controller
         foreach ($subjectGroups as $sg) {
             $slot = $multiSlotMode ? ($sg['slot_time'] ?? '') : ($examTime ?? '');
             if (!isset($slotCounters[$slot])) $slotCounters[$slot] = 1;
+            $occSlot = $occupiedBySlot[$slot] ?? [];
             foreach ($sg['entries'] as $entry) {
                 foreach ($entry['students'] as $st) {
                     $hemis = (string) $st->hemis_id;
                     $key = $slot . '|' . $hemis;
                     if (isset($computerNumberMap[$key])) continue;
-                    while ($slotCounters[$slot] <= $configuredCompCount && isset($brokenLookup[$slotCounters[$slot]])) {
+                    while ($slotCounters[$slot] <= $configuredCompCount
+                        && (isset($brokenLookup[$slotCounters[$slot]]) || isset($occSlot[$slotCounters[$slot]]))) {
                         $slotCounters[$slot]++;
                     }
                     if ($slotCounters[$slot] > $configuredCompCount) break 2;

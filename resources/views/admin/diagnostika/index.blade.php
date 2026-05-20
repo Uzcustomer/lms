@@ -754,7 +754,10 @@
                 var nameCell = '<span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span>';
                 var fanCell = '<span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span>';
 
-                html += '<tr class="' + rowClass + '" id="row-' + r.id + '">';
+                // Quiz semestri talabaning LMS semestriga mos kelmasa — qator qizil belgilanadi.
+                var semMismatch = !!r.semester_mismatch;
+                var rowStyle = semMismatch ? ' style="background:#fef2f2;"' : '';
+                html += '<tr class="' + rowClass + '" id="row-' + r.id + '"' + rowStyle + '>';
                 html += '<td style="padding-left:14px;"><input type="checkbox" class="row-checkbox cb-styled" value="' + r.id + '" data-xulosa="' + r.xulosa_code + '"></td>';
                 html += '<td class="td-num">' + (i + 1) + '</td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.student_id) + '</span></td>';
@@ -762,7 +765,11 @@
                 html += '<td><span class="text-cell text-emerald">' + esc(r.faculty) + '</span></td>';
                 html += '<td><span class="text-cell text-cyan">' + esc(r.direction) + '</span></td>';
                 html += '<td><span class="badge" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;">' + esc(r.kurs) + '</span></td>';
-                html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.semester) + '</span></td>';
+                if (semMismatch) {
+                    html += '<td><span class="badge" title="Quiz semestri talabaning LMS semestriga mos kelmaydi — talaba aslida ' + esc(r.student_semester || '-') + '" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;font-weight:700;">⚠ ' + esc(r.semester) + '</span></td>';
+                } else {
+                    html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.semester) + '</span></td>';
+                }
                 html += '<td><span class="badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;">' + esc(r.group) + '</span></td>';
                 html += '<td>' + fanCell + '</td>';
                 html += '<td><span class="badge editable-fan-id" data-id="' + r.id + '" onclick="editFanId(this,' + r.id + ')" title="Fan ID ni tahrirlash uchun bosing" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;cursor:pointer;">' + esc(r.fan_id || '-') + '</span></td>';

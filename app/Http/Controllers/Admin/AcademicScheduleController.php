@@ -3529,6 +3529,10 @@ class AcademicScheduleController extends Controller
             'compact' => 'nullable|boolean',
             'exam_date' => 'nullable|date_format:Y-m-d',
             'exam_time' => 'nullable|date_format:H:i',
+            // Diagnostika rejimi: docx o'rniga har item bo'yicha (guruh topildimi,
+            // talabalar soni, qaysi filtrda nechta talaba tushib qoldi va sababi)
+            // JSON qaytaradi. DB'ga hech narsa yozmaydi.
+            'debug' => 'nullable|boolean',
         ]);
 
         try {
@@ -3542,6 +3546,8 @@ class AcademicScheduleController extends Controller
             ->values()
             ->all();
         $compact = (bool) $request->boolean('compact');
+        $debug = (bool) $request->boolean('debug');
+        $debugInfo = [];
         $examDate = $request->input('exam_date');
         $examTime = $request->input('exam_time');
         // Multi-slot rejim: hech bo'lmasa bitta item per-item exam_time bilan
@@ -3680,7 +3686,18 @@ class AcademicScheduleController extends Controller
 
         foreach ($items as $itemData) {
             $group = Group::where('group_hemis_id', $itemData['group_hemis_id'])->first();
-            if (!$group) continue;
+            if (!$group) {
+                if ($debug) {
+                    $debugInfo[] = [
+                        'group_hemis_id' => $itemData['group_hemis_id'] ?? null,
+                        'subject_id' => $itemData['subject_id'] ?? null,
+                        'semester_code' => $itemData['semester_code'] ?? null,
+                        'attempt' => (int) ($itemData['attempt'] ?? 1),
+                        'skipped' => 'group_not_found',
+                    ];
+                }
+                continue;
+            }
 
             $semesterCode = $itemData['semester_code'];
             $subjectId = $itemData['subject_id'];
@@ -3700,7 +3717,20 @@ class AcademicScheduleController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->first();
 
-            if (!$subject) continue;
+            if (!$subject) {
+                if ($debug) {
+                    $debugInfo[] = [
+                        'group' => $group->name,
+                        'group_hemis_id' => $group->group_hemis_id,
+                        'subject_id' => $subjectId,
+                        'semester_code' => $semesterCode,
+                        'attempt' => (int) ($itemData['attempt'] ?? 1),
+                        'skipped' => 'curriculum_subject_not_found',
+                        'curriculum_hemis_id' => $group->curriculum_hemis_id,
+                    ];
+                }
+                continue;
+            }
 
             $itemAttempt = (int) ($itemData['attempt'] ?? 1);
             $itemStudentHemisId = !empty($itemData['student_hemis_id'])
@@ -3721,6 +3751,8 @@ class AcademicScheduleController extends Controller
             // is_held_back va YnAdmissionService bo'yicha Ruxsat/Shartli/X).
             $lookupKey = $group->group_hemis_id . '|' . $subjectId . '|' . $semesterCode;
             $enrichedStudents = $enrichedStudentsByKey[$lookupKey] ?? [];
+            $dbgRawCount = count($enrichedStudents);
+            $dbgKeyExists = array_key_exists($lookupKey, $enrichedStudentsByKey);
 
             // Urinishga mos talabalarni saralash — test-center bilan bir xil
             // ($itemStudentHemisId per-student override'i ustuvor).
@@ -3740,6 +3772,7 @@ class AcademicScheduleController extends Controller
                 // guruh slotidagi Word'da chiqishi kerak.
                 $enrichedStudents = $this->filterStudentsForAttempt($enrichedStudents, $itemAttempt);
             }
+            $dbgAfterAttemptCount = count($enrichedStudents);
 
             // Kursdan qoldirilgan (4+ qarz) yoki YN ga ruxsat yo'q (X)
             // talabalarni ro'yxatdan chiqarib tashlaymiz — Word faqat
@@ -3747,19 +3780,57 @@ class AcademicScheduleController extends Controller
             // 4+ qarz uchun 3 manbadan tekshiriladi (yuqaridagi
             // students mapping bilan bir xil), JN/MT/davomat sabab "X"
             // bo'lganlar admission_status orqali aniqlanadi.
-            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($yearDebtCount) {
+            $dbgRemoved = [];
+            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($yearDebtCount, $debug, &$dbgRemoved) {
                 $hemisId = (string) ($row['hemis_id'] ?? '');
                 $debtCount = count($row['past_debts'] ?? []) + count($row['current_semester_debts'] ?? []);
                 $yearCnt = $yearDebtCount[$hemisId] ?? 0;
                 $isHeldBack = !empty($row['is_held_back']) || $debtCount >= 4 || $yearCnt >= 4;
-                if ($isHeldBack) return false;
+                if ($isHeldBack) {
+                    if ($debug) {
+                        $dbgRemoved[] = [
+                            'name' => $row['full_name'] ?? $hemisId,
+                            'hemis_id' => $hemisId,
+                            'reason' => 'held_back',
+                            'is_held_back_flag' => !empty($row['is_held_back']),
+                            'debt_count' => $debtCount,
+                            'year_debt_count' => $yearCnt,
+                        ];
+                    }
+                    return false;
+                }
                 // admission_status === 'X' (JN/MT/davomat past) — YN'ga
                 // ruxsat yo'q, ro'yxatga kiritmaymiz.
                 if (($row['admission_status'] ?? null) === \App\Services\YnAdmissionService::STATUS_X) {
+                    if ($debug) {
+                        $dbgRemoved[] = [
+                            'name' => $row['full_name'] ?? $hemisId,
+                            'hemis_id' => $hemisId,
+                            'reason' => 'admission_status_X',
+                        ];
+                    }
                     return false;
                 }
                 return true;
             }));
+
+            if ($debug) {
+                $debugInfo[] = [
+                    'group' => $group->name,
+                    'group_hemis_id' => $group->group_hemis_id,
+                    'subject' => $subject->subject_name ?? null,
+                    'subject_id' => $subjectId,
+                    'semester_code' => $semesterCode,
+                    'attempt' => $itemAttempt,
+                    'student_hemis_id_filter' => $itemStudentHemisId,
+                    'enriched_key_exists' => $dbgKeyExists,
+                    'raw_enriched_count' => $dbgRawCount,
+                    'after_attempt_filter_count' => $dbgAfterAttemptCount,
+                    'after_heldback_x_filter_count' => count($enrichedStudents),
+                    'removed_by_heldback_x' => $dbgRemoved,
+                    'will_appear_in_word' => count($enrichedStudents) > 0,
+                ];
+            }
 
             if (empty($enrichedStudents)) {
                 continue;
@@ -3888,6 +3959,17 @@ class AcademicScheduleController extends Controller
                 'attempt' => $itemAttempt,
                 'schedule_id' => !empty($itemData['schedule_id']) ? (int) $itemData['schedule_id'] : null,
             ];
+        }
+
+        // Diagnostika rejimi: docx yaratmasdan va DB'ga hech narsa yozmasdan
+        // har item bo'yicha to'plangan ma'lumotni JSON qaytaramiz.
+        if ($debug) {
+            return response()->json([
+                'multi_slot_mode' => $multiSlotMode,
+                'requested_items' => count($items),
+                'subject_pages_built' => count($subjectGroups),
+                'diagnostics' => $debugInfo,
+            ], 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         }
 
         // Kompyuter raqamlari xaritasi: har slot vaqti (sana shu Word'da

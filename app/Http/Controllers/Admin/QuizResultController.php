@@ -1204,6 +1204,21 @@ class QuizResultController extends Controller
                 // Kursni semestr raqamidan hisoblash
                 $kurs = $semNum ? (int) ceil($semNum / 2) : null;
 
+                // Quiz semestri (Moodle quiz nomidan) talabaning LMS dagi
+                // haqiqiy semestriga mos kelmasligini aniqlash — bunday qatorlar
+                // jadvalda qizil belgilanadi (boshqa kurs/semestr natijasi).
+                $quizSemNum = null;
+                if (!empty($result->semester) && preg_match('/(\d+)/', (string) $result->semester, $qsm)) {
+                    $quizSemNum = (int) $qsm[1];
+                }
+                $studentSemNum = null;
+                if ($student && !empty($student->semester_name)
+                    && preg_match('/(\d+)/', (string) $student->semester_name, $ssm)) {
+                    $studentSemNum = (int) $ssm[1];
+                }
+                $semesterMismatch = ($quizSemNum !== null && $studentSemNum !== null
+                    && $quizSemNum !== $studentSemNum);
+
                 // YN turi aniqlash
                 $ynTuri = '-';
                 if (in_array($result->quiz_type, $testTypes)) {
@@ -1236,6 +1251,8 @@ class QuizResultController extends Controller
                     'direction' => $student ? $student->specialty_name : '-',
                     'kurs' => $kurs ? $kurs . '-kurs' : '-',
                     'semester' => $semNum ? $semNum . '-sem' : ($semLabel ?: '-'),
+                    'semester_mismatch' => $semesterMismatch,
+                    'student_semester' => $studentSemNum ? $studentSemNum . '-sem' : '-',
                     'group' => $student ? $student->group_name : '-',
                     'fan_name' => $result->fan_name,
                     'fan_id' => $result->fan_id,

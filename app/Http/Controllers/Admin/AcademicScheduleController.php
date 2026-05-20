@@ -2895,6 +2895,11 @@ class AcademicScheduleController extends Controller
         DB::beginTransaction();
         $bookingsToDispatch = [];
         $autoDistributeToDispatch = [];
+        // Vaqt yoki sana o'zgarganda ComputerAssignment'ni qayta hisoblash —
+        // TV displey planned_start'ni o'qiydi. Doim GURUH schedule id bo'yicha
+        // (per-student emas) — assign() ichidagi override pass shaxsiy
+        // vaqtlarni qo'llaydi. "groupId|yn" kalit bilan dedup qilinadi.
+        $assignReassign = [];
         try {
             foreach ($validSchedules as $schedule) {
                 $oskiNa = !empty($schedule['oski_na']);
@@ -3273,12 +3278,44 @@ class AcademicScheduleController extends Controller
                 if ($testDateChanged && $newTestDate && !$newTestNa && empty($record->test_time)) {
                     $autoDistributeToDispatch[] = [$record->id, 'test'];
                 }
+
+                // 1-urinish OSKI/Test vaqti yoki sanasi o'zgargan bo'lsa —
+                // ComputerAssignment'ni qayta hisoblaymiz (TV displey va JIT
+                // shu planned_start'ni o'qiydi). Sana-only o'zgarishni
+                // yuqoridagi $bookingsToDispatch allaqachon qamragan, bu yer
+                // esa VAQT-only o'zgarishni ham qo'shadi. Per-student qatorda
+                // guruh schedule id topiladi — assign() override pass shaxsiy
+                // vaqtni qo'llaydi.
+                $oskiTimeOrDate = array_key_exists('oski_time', $auditDirty) || array_key_exists('oski_date', $auditDirty);
+                $testTimeOrDate = array_key_exists('test_time', $auditDirty) || array_key_exists('test_date', $auditDirty);
+                if (($oskiTimeOrDate && !$newOskiNa && $newOskiDate && $record->oski_time)
+                    || ($testTimeOrDate && !$newTestNa && $newTestDate && $record->test_time)) {
+                    $reassignGroupId = $studentHemisIdForRow
+                        ? ExamSchedule::where('group_hemis_id', $record->group_hemis_id)
+                            ->where('subject_id', $record->subject_id)
+                            ->where('semester_code', $record->semester_code)
+                            ->whereNull('student_hemis_id')
+                            ->value('id')
+                        : $record->id;
+                    if ($reassignGroupId) {
+                        if ($oskiTimeOrDate && !$newOskiNa && $newOskiDate && $record->oski_time) {
+                            $assignReassign[$reassignGroupId . '|oski'] = [(int) $reassignGroupId, 'oski'];
+                        }
+                        if ($testTimeOrDate && !$newTestNa && $newTestDate && $record->test_time) {
+                            $assignReassign[$reassignGroupId . '|test'] = [(int) $reassignGroupId, 'test'];
+                        }
+                    }
+                }
             }
             DB::commit();
 
             foreach ($bookingsToDispatch as [$id, $yn]) {
-                AssignComputersJob::dispatch($id, $yn);
                 BookMoodleGroupExam::dispatch($id, $yn);
+            }
+            // AssignComputersJob — vaqt yoki sana o'zgarganda, doim guruh
+            // schedule id bo'yicha (assign() per-student override pass bilan).
+            foreach ($assignReassign as [$gid, $yn]) {
+                AssignComputersJob::dispatch($gid, $yn);
             }
             foreach ($autoDistributeToDispatch ?? [] as [$id, $yn]) {
                 \App\Jobs\AutoDistributeOnDateSetJob::dispatch($id, $yn);

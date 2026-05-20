@@ -396,7 +396,8 @@ class MoodleExamBookingService
      */
     private function stripGroupSuffix(string $name): string
     {
-        return trim(preg_replace('/\s*\([A-Za-z0-9]{1,4}\)\s*$/u', '', $name));
+        // Variant harfi lotin ham, kirill ham bo'lishi mumkin (a/b/c/s yoki а/б/в/с).
+        return trim(preg_replace('/\s*\([A-Za-zА-Яа-яёЁ0-9]{1,4}\)\s*$/u', '', $name));
     }
 
     /**

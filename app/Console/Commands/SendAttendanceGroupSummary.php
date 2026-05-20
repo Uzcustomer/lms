@@ -630,8 +630,9 @@ class SendAttendanceGroupSummary extends Command
      */
     private function normalizeSubjectName(string $name): string
     {
-        // Oxiridagi (a), (b), ... (z), (1), (2), ... kabi qo'shimchalarni olib tashlash
-        return trim(preg_replace('/\s*\([a-zA-Zа-яА-ЯёЁ0-9]\)\s*$/', '', $name));
+        // Oxiridagi (a), (b), ... (z), (1), (2), ... kabi qo'shimchalarni olib tashlash.
+        // u-bayroq — kirill harflari (а/б/в/с) ham to'g'ri o'qilishi uchun.
+        return trim(preg_replace('/\s*\([a-zA-Zа-яА-ЯёЁ0-9]\)\s*$/u', '', $name));
     }
 
     private function calculateAcademicHours(?string $startTime, ?string $endTime): int

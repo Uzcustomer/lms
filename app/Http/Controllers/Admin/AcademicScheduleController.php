@@ -2895,6 +2895,11 @@ class AcademicScheduleController extends Controller
         DB::beginTransaction();
         $bookingsToDispatch = [];
         $autoDistributeToDispatch = [];
+        // Vaqt yoki sana o'zgarganda ComputerAssignment'ni qayta hisoblash —
+        // TV displey planned_start'ni o'qiydi. Doim GURUH schedule id bo'yicha
+        // (per-student emas) — assign() ichidagi override pass shaxsiy
+        // vaqtlarni qo'llaydi. "groupId|yn" kalit bilan dedup qilinadi.
+        $assignReassign = [];
         try {
             foreach ($validSchedules as $schedule) {
                 $oskiNa = !empty($schedule['oski_na']);
@@ -3273,12 +3278,44 @@ class AcademicScheduleController extends Controller
                 if ($testDateChanged && $newTestDate && !$newTestNa && empty($record->test_time)) {
                     $autoDistributeToDispatch[] = [$record->id, 'test'];
                 }
+
+                // 1-urinish OSKI/Test vaqti yoki sanasi o'zgargan bo'lsa —
+                // ComputerAssignment'ni qayta hisoblaymiz (TV displey va JIT
+                // shu planned_start'ni o'qiydi). Sana-only o'zgarishni
+                // yuqoridagi $bookingsToDispatch allaqachon qamragan, bu yer
+                // esa VAQT-only o'zgarishni ham qo'shadi. Per-student qatorda
+                // guruh schedule id topiladi — assign() override pass shaxsiy
+                // vaqtni qo'llaydi.
+                $oskiTimeOrDate = array_key_exists('oski_time', $auditDirty) || array_key_exists('oski_date', $auditDirty);
+                $testTimeOrDate = array_key_exists('test_time', $auditDirty) || array_key_exists('test_date', $auditDirty);
+                if (($oskiTimeOrDate && !$newOskiNa && $newOskiDate && $record->oski_time)
+                    || ($testTimeOrDate && !$newTestNa && $newTestDate && $record->test_time)) {
+                    $reassignGroupId = $studentHemisIdForRow
+                        ? ExamSchedule::where('group_hemis_id', $record->group_hemis_id)
+                            ->where('subject_id', $record->subject_id)
+                            ->where('semester_code', $record->semester_code)
+                            ->whereNull('student_hemis_id')
+                            ->value('id')
+                        : $record->id;
+                    if ($reassignGroupId) {
+                        if ($oskiTimeOrDate && !$newOskiNa && $newOskiDate && $record->oski_time) {
+                            $assignReassign[$reassignGroupId . '|oski'] = [(int) $reassignGroupId, 'oski'];
+                        }
+                        if ($testTimeOrDate && !$newTestNa && $newTestDate && $record->test_time) {
+                            $assignReassign[$reassignGroupId . '|test'] = [(int) $reassignGroupId, 'test'];
+                        }
+                    }
+                }
             }
             DB::commit();
 
             foreach ($bookingsToDispatch as [$id, $yn]) {
-                AssignComputersJob::dispatch($id, $yn);
                 BookMoodleGroupExam::dispatch($id, $yn);
+            }
+            // AssignComputersJob — vaqt yoki sana o'zgarganda, doim guruh
+            // schedule id bo'yicha (assign() per-student override pass bilan).
+            foreach ($assignReassign as [$gid, $yn]) {
+                AssignComputersJob::dispatch($gid, $yn);
             }
             foreach ($autoDistributeToDispatch ?? [] as [$id, $yn]) {
                 \App\Jobs\AutoDistributeOnDateSetJob::dispatch($id, $yn);
@@ -3870,7 +3907,20 @@ class AcademicScheduleController extends Controller
             // $student->student_name kabi property'larga tayanadi. "Kirmaydigan"
             // talabalar (held_back/X) yuqorida allaqachon filterlangan,
             // shuning uchun bu yerda admission_status faqat Ruxsat/Shartli.
-            $students = collect($enrichedStudents)->map(function ($row) use ($liveGrades) {
+            // Per-student individual imtihon vaqti uchun maydon — yn_type va
+            // attempt bo'yicha tanlanadi. Talabaga guruh vaqtidan farqli vaqt
+            // qo'yilgan bo'lsa, Word jadvalida ism yonida ko'rsatiladi.
+            $indivTimeField = null;
+            if ($itemYnType === 'oski') {
+                $indivTimeField = match ($itemAttempt) {
+                    2 => 'oski_resit_time', 3 => 'oski_resit2_time', default => 'oski_time',
+                };
+            } elseif ($itemYnType === 'test') {
+                $indivTimeField = match ($itemAttempt) {
+                    2 => 'test_resit_time', 3 => 'test_resit2_time', default => 'test_time',
+                };
+            }
+            $students = collect($enrichedStudents)->map(function ($row) use ($liveGrades, $indivTimeField) {
                 $hemisId = (string) ($row['hemis_id'] ?? '');
                 $obj = new \stdClass();
                 $obj->hemis_id = $row['hemis_id'] ?? null;
@@ -3879,6 +3929,9 @@ class AcademicScheduleController extends Controller
                 $obj->jn = $liveGrades[$hemisId]['jn'] ?? 0;
                 $obj->mt = $liveGrades[$hemisId]['mt'] ?? 0;
                 $obj->admission_status = $row['admission_status'] ?? null;
+                // Individual (per-student exam_schedules) vaqti — HH:MM ko'rinishida.
+                $rawIndivTime = $indivTimeField ? ($row[$indivTimeField] ?? null) : null;
+                $obj->individual_time = !empty($rawIndivTime) ? substr((string) $rawIndivTime, 0, 5) : null;
                 return $obj;
             })->sortBy('student_name')->values();
 
@@ -4359,6 +4412,18 @@ class AcademicScheduleController extends Controller
 
                     $sectionExamTime = $slotTime ?: $examTime;
 
+                    // Talaba ismiga individual imtihon vaqtini qo'shadi — agar
+                    // talabaga guruh slot vaqtidan FARQLI shaxsiy vaqt qo'yilgan
+                    // bo'lsa, Word jadvalida "F.I.O (HH:MM)" ko'rinishida chiqadi.
+                    $studentNameWithTime = function ($stu) use ($sectionExamTime) {
+                        $name = (string) ($stu->student_name ?? '');
+                        $t = $stu->individual_time ?? null;
+                        if (!empty($t) && $t !== $sectionExamTime) {
+                            $name .= ' (' . $t . ')';
+                        }
+                        return $name;
+                    };
+
                     $defaultCutoffs = json_encode([
                         ['deadline' => '2025-10-01', 'percent' => 25],
                         ['deadline' => '2026-01-01', 'percent' => 50],
@@ -4448,7 +4513,7 @@ class AcademicScheduleController extends Controller
                                     $stu = $leftRow['student']; $ent = $leftRow['entry'];
                                     $info = $renderStudentInfo($stu, $ent);
                                     $dr->addCell($cw2[0])->addText((string) ($globalBase + $i), $cF, $cCtr);
-                                    $dr->addCell($cw2[1])->addText((string) $stu->student_name, $cF, $cLeft);
+                                    $dr->addCell($cw2[1])->addText($studentNameWithTime($stu), $cF, $cLeft);
                                     $hCell = $dr->addCell($cw2[2]);
                                     $hCell->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
                                     $dr->addCell($cw2[3])->addText(
@@ -4473,7 +4538,7 @@ class AcademicScheduleController extends Controller
                                     $stu = $rightRow['student']; $ent = $rightRow['entry'];
                                     $info = $renderStudentInfo($stu, $ent);
                                     $dr->addCell($cw2[0])->addText((string) ($globalBase + $half + $i), $cF, $cCtr);
-                                    $dr->addCell($cw2[1])->addText((string) $stu->student_name, $cF, $cLeft);
+                                    $dr->addCell($cw2[1])->addText($studentNameWithTime($stu), $cF, $cLeft);
                                     $hCell = $dr->addCell($cw2[2]);
                                     $hCell->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
                                     $dr->addCell($cw2[3])->addText(
@@ -4504,7 +4569,7 @@ class AcademicScheduleController extends Controller
                                 $info = $renderStudentInfo($stu, $ent);
                                 $dr = $table->addRow();
                                 $dr->addCell(500)->addText((string) $globalIdx, $cF, $cCtr);
-                                $dr->addCell(7000)->addText((string) $stu->student_name, $cF, $cLeft);
+                                $dr->addCell(7000)->addText($studentNameWithTime($stu), $cF, $cLeft);
                                 $dr->addCell(800)->addText((string) ($info['jn'] ?? '0'), $cF, $cCtr);
                                 $dr->addCell(800)->addText((string) ($info['mt'] ?? '0'), $cF, $cCtr);
                                 $dr->addCell(1200)->addText(($info['qoldiq'] != 0 ? $info['qoldiq'] . '%' : '0%'), $cF, $cCtr);

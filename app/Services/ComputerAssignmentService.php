@@ -125,7 +125,62 @@ class ComputerAssignmentService
             ComputerAssignment::insert($rows);
         });
 
+        // Guruh vaqti barcha talabaga yozildi — endi individual grafikga ega
+        // (per-student exam_schedules qatori bor) talabalarning planned_start'ini
+        // o'z shaxsiy vaqtiga moslaymiz. TV displey va JIT reveal shu qiymatni
+        // o'qiydi.
+        $this->applyPerStudentTimeOverrides(
+            $schedule, $ynType, $attempt, $dateField, $timeField, $duration + $buffer
+        );
+
         return ['ok' => true, 'count' => $students->count()];
+    }
+
+    /**
+     * Guruh vaqti bilan ComputerAssignment qatorlari yozilgandan so'ng —
+     * per-student (individual grafik) exam_schedules qatorida shaxsiy
+     * vaqti bor talabalarning planned_start/planned_end/reveal_at qiymatini
+     * o'z vaqtiga moslaydi. ca qatorlari guruh exam_schedule_id ostida
+     * turadi, shuning uchun student_hemis_id bo'yicha topiladi.
+     */
+    private function applyPerStudentTimeOverrides(
+        ExamSchedule $schedule,
+        string $ynType,
+        int $attempt,
+        string $dateField,
+        string $timeField,
+        int $slotLen
+    ): void {
+        $perStudentRows = ExamSchedule::where('group_hemis_id', $schedule->group_hemis_id)
+            ->where('subject_id', $schedule->subject_id)
+            ->where('semester_code', $schedule->semester_code)
+            ->whereNotNull('student_hemis_id')
+            ->get();
+        if ($perStudentRows->isEmpty()) {
+            return;
+        }
+        $jitMin = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+        foreach ($perStudentRows as $ps) {
+            $psTime = $ps->{$timeField};
+            if (empty($psTime)) {
+                continue;
+            }
+            $start = $this->combineDateTime($ps->{$dateField} ?: $schedule->{$dateField}, $psTime);
+            if (!$start) {
+                continue;
+            }
+            $end = $start->copy()->addMinutes($slotLen);
+            ComputerAssignment::where('exam_schedule_id', $schedule->id)
+                ->where('student_hemis_id', (string) $ps->student_hemis_id)
+                ->where('yn_type', $ynType)
+                ->where('attempt', $attempt)
+                ->where('status', ComputerAssignment::STATUS_SCHEDULED)
+                ->update([
+                    'planned_start' => $start,
+                    'planned_end'   => $end,
+                    'reveal_at'     => $start->copy()->subMinutes($jitMin),
+                ]);
+        }
     }
 
     /**

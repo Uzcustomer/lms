@@ -81,7 +81,8 @@ class SubjectMatcherService
     public static function normalizeSubjectName(string $name): string
     {
         // Qavslar ichidagi bo'limni olib tashlash: "Xirurgik kasalliklar (c)" -> "Xirurgik kasalliklar"
-        $normalized = preg_replace('/\s*\([a-z]\)\s*$/i', '', $name);
+        // Variant harfi lotin ham, kirill ham bo'lishi mumkin (a/b/c/s yoki а/б/в/с).
+        $normalized = preg_replace('/\s*\([a-zA-Zа-яА-ЯёЁ]\)\s*$/u', '', $name);
         // Bosh va oxirgi bo'sh joylarni olib tashlash
         $normalized = trim($normalized);
         // Kichik harfga

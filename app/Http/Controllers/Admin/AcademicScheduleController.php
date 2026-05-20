@@ -774,6 +774,12 @@ class AcademicScheduleController extends Controller
                 $itEffTest = $itTestDate ?: $itLessonEnd;
                 $itOskiPassed = $itEffOski && $itEffOski < $today && !empty($itOskiMap);
                 $itTestPassed = $itEffTest && $itEffTest < $today && !empty($itTestMap);
+                // Joriy semestrdagi fan "qarz" deb hisoblanadi faqat 1-urinish YN kuni
+                // tugagandan keyin. Aks holda talaba hali birinchi urinishini topshirmagan
+                // (yoki topshirayotgan) — pullik/yiqilgan deb erta belgilash noto'g'ri.
+                // YN sanasi belgilanmagan bo'lsa, YN hali bo'lib o'tmagan deb qaraladi.
+                $itYnDayDone = ($itOskiDate && $itOskiDate < $today)
+                    || ($itTestDate && $itTestDate < $today);
                 $itStuList = $studentsByGroup->get($itGHid, collect());
                 foreach ($itStuList as $st) {
                     $stat = $itStatusByStudent[$st->hemis_id] ?? ['failed1' => false];
@@ -782,7 +788,7 @@ class AcademicScheduleController extends Controller
                     $explicitK = $st->hemis_id . '|' . $itSubj . '|' . $itSem;
                     $hasA2 = !empty($explicitAttemptByStudent[$explicitK]['attempt2']);
                     $eff1 = $stat['failed1'] || $missedO || $missedT || $hasA2;
-                    if ($eff1) {
+                    if ($eff1 && $itYnDayDone) {
                         $debtKey = $itSubj . '|' . $itSem;
                         if (!isset($currentDebtsByStudent[$st->hemis_id][$debtKey])) {
                             $currentDebtsByStudent[$st->hemis_id][$debtKey] = [
@@ -1237,20 +1243,22 @@ class AcademicScheduleController extends Controller
             }
         } catch (\Throwable $e) {}
 
-        // Per-student (individual grafik) 12a imtihon sanalari — talabaga guruh
-        // sanasidan farqli 2-urinish sanasi qo'yilgan bo'lsa, failed2 sana
-        // tekshiruvida o'sha sana ustuvor (jurnal bilan bir xil mantiq).
-        $perStudentResitMap = []; // hemis|subj|sem => ['oski_resit_date','test_resit_date']
+        // Per-student exam_schedules — alohida belgilangan individual 2-urinish
+        // sanalari (admin SAIDMURODOVA kabi yolg'iz 2-urinishchiga sana
+        // qo'ygan holatlar). Group naMap'da bo'lmasa shu yerdan olamiz.
+        $perStudentResitMap = []; // hemis|subj|sem => ['oski_resit_date', 'test_resit_date']
         try {
-            $psRows = DB::table('exam_schedules')
+            $rows = DB::table('exam_schedules')
                 ->whereNotNull('student_hemis_id')
-                ->whereIn('student_hemis_id', $allStudentHids)
+                ->whereIn('group_hemis_id', $allGroupHids)
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
-                ->select('student_hemis_id', 'subject_id', 'semester_code', 'oski_resit_date', 'test_resit_date')
+                ->select('student_hemis_id', 'subject_id', 'semester_code',
+                    'oski_resit_date', 'test_resit_date')
                 ->get();
-            foreach ($psRows as $r) {
-                $perStudentResitMap[$r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code] = [
+            foreach ($rows as $r) {
+                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                $perStudentResitMap[$k] = [
                     'oski_resit_date' => $r->oski_resit_date,
                     'test_resit_date' => $r->test_resit_date,
                 ];
@@ -1405,6 +1413,14 @@ class AcademicScheduleController extends Controller
         $examMap2 = [];
         $examLists2 = [];
         $enrolledAttempt2Map = []; // hemis|subj|sem => true
+        // Guruh sathida 2-urinish (attempt=2) imtihon sanasi — exam_schedules da
+        // resit sanasi belgilanmagan, lekin baho yozilgan holatlar uchun fallback.
+        // group|subj|sem|typeCode (101/102) => max(lesson_date) YYYY-MM-DD
+        $groupAttempt2DateMap = [];
+        // Talaba bo'yicha 2-urinish lesson_date — yakka talaba 2-urinishga
+        // kirgan (boshqa hech kim 2-urinishda emas) holatlar uchun.
+        // hemis|subj|sem|typeCode => max(lesson_date)
+        $studentAttempt2DateMap = [];
         try {
             if ($hasAttemptCol) {
                 $rows = DB::table('student_grades')
@@ -1414,7 +1430,7 @@ class AcademicScheduleController extends Controller
                     ->whereIn('semester_code', $allSemCodes)
                     ->whereIn('training_type_code', [101, 102, 103])
                     ->where('attempt', 2)
-                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade', 'quiz_result_id')
+                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade', 'quiz_result_id', 'lesson_date')
                     ->get();
 
                 $quizIds2 = $rows->where('training_type_code', 103)->pluck('quiz_result_id')->filter()->unique()->values()->all();
@@ -1439,6 +1455,29 @@ class AcademicScheduleController extends Controller
                             continue;
                         }
                     }
+
+                    // Group/Student-level attempt=2 sanasini yig'amiz (101/102 uchun)
+                    if (in_array($typeCode, [101, 102], true) && $r->lesson_date) {
+                        $dateStr = is_string($r->lesson_date)
+                            ? substr($r->lesson_date, 0, 10)
+                            : \Carbon\Carbon::parse($r->lesson_date)->format('Y-m-d');
+
+                        $gHid = $studentGroup[$r->student_hemis_id] ?? null;
+                        if ($gHid) {
+                            $gKey = $gHid . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $typeCode;
+                            if (!isset($groupAttempt2DateMap[$gKey]) || $dateStr > $groupAttempt2DateMap[$gKey]) {
+                                $groupAttempt2DateMap[$gKey] = $dateStr;
+                            }
+                        }
+
+                        // Per-student fallback — yakka talaba 2-urinishga kirgan
+                        // bo'lsa, uning o'z lesson_date'i orqali sana topiladi.
+                        $sKey = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $typeCode;
+                        if (!isset($studentAttempt2DateMap[$sKey]) || $dateStr > $studentAttempt2DateMap[$sKey]) {
+                            $studentAttempt2DateMap[$sKey] = $dateStr;
+                        }
+                    }
+
                     $effective = $r->retake_grade ?? $r->grade;
                     if ($effective === null) continue;
                     $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $typeCode;
@@ -1538,10 +1577,34 @@ class AcademicScheduleController extends Controller
                 $psResitKey = $hid . '|' . $s . '|' . $sem;
                 $oskiDate = $naMap[$naKey]['oski_date'] ?? null;
                 $testDate = $naMap[$naKey]['test_date'] ?? null;
-                $oskiResitDate = $perStudentResitMap[$psResitKey]['oski_resit_date']
-                    ?? $naMap[$naKey]['oski_resit_date'] ?? null;
-                $testResitDate = $perStudentResitMap[$psResitKey]['test_resit_date']
-                    ?? $naMap[$naKey]['test_resit_date'] ?? null;
+                // 2-urinish sanasi manbalari (ustuvorlik tartibida):
+                //   1) Guruh sathidagi exam_schedules (admin guruhga sana qo'ygan)
+                //   2) Talabaning individual exam_schedules yozuvi (admin
+                //      yakka talabaga sana qo'ygan — SAIDMURODOVA kabi yolg'iz holat)
+                //   3) Guruhdagi bironta talabaning attempt=2 student_grades lesson_date
+                //   4) Talabaning o'z attempt=2 student_grades lesson_date
+                // Birinchi topilgani ishlatiladi.
+                $oskiResitDate = $naMap[$naKey]['oski_resit_date'] ?? null;
+                $testResitDate = $naMap[$naKey]['test_resit_date'] ?? null;
+                $perStuKey = $hid . '|' . $s . '|' . $sem;
+                if ($oskiResitDate === null) {
+                    $oskiResitDate = $perStudentResitMap[$perStuKey]['oski_resit_date'] ?? null;
+                }
+                if ($testResitDate === null) {
+                    $testResitDate = $perStudentResitMap[$perStuKey]['test_resit_date'] ?? null;
+                }
+                if ($oskiResitDate === null) {
+                    $oskiResitDate = $groupAttempt2DateMap[$g . '|' . $s . '|' . $sem . '|101'] ?? null;
+                }
+                if ($testResitDate === null) {
+                    $testResitDate = $groupAttempt2DateMap[$g . '|' . $s . '|' . $sem . '|102'] ?? null;
+                }
+                if ($oskiResitDate === null) {
+                    $oskiResitDate = $studentAttempt2DateMap[$hid . '|' . $s . '|' . $sem . '|101'] ?? null;
+                }
+                if ($testResitDate === null) {
+                    $testResitDate = $studentAttempt2DateMap[$hid . '|' . $s . '|' . $sem . '|102'] ?? null;
+                }
                 $today = now()->format('Y-m-d');
 
                 // Pullik faqat haqiqatda past bo'lsa: null/yo'q ma'lumotni "past" deb sanamaymiz
@@ -3474,6 +3537,10 @@ class AcademicScheduleController extends Controller
             'compact' => 'nullable|boolean',
             'exam_date' => 'nullable|date_format:Y-m-d',
             'exam_time' => 'nullable|date_format:H:i',
+            // Diagnostika rejimi: docx o'rniga har item bo'yicha (guruh topildimi,
+            // talabalar soni, qaysi filtrda nechta talaba tushib qoldi va sababi)
+            // JSON qaytaradi. DB'ga hech narsa yozmaydi.
+            'debug' => 'nullable|boolean',
         ]);
 
         try {
@@ -3487,6 +3554,8 @@ class AcademicScheduleController extends Controller
             ->values()
             ->all();
         $compact = (bool) $request->boolean('compact');
+        $debug = (bool) $request->boolean('debug');
+        $debugInfo = [];
         $examDate = $request->input('exam_date');
         $examTime = $request->input('exam_time');
         // Multi-slot rejim: hech bo'lmasa bitta item per-item exam_time bilan
@@ -3625,7 +3694,18 @@ class AcademicScheduleController extends Controller
 
         foreach ($items as $itemData) {
             $group = Group::where('group_hemis_id', $itemData['group_hemis_id'])->first();
-            if (!$group) continue;
+            if (!$group) {
+                if ($debug) {
+                    $debugInfo[] = [
+                        'group_hemis_id' => $itemData['group_hemis_id'] ?? null,
+                        'subject_id' => $itemData['subject_id'] ?? null,
+                        'semester_code' => $itemData['semester_code'] ?? null,
+                        'attempt' => (int) ($itemData['attempt'] ?? 1),
+                        'skipped' => 'group_not_found',
+                    ];
+                }
+                continue;
+            }
 
             $semesterCode = $itemData['semester_code'];
             $subjectId = $itemData['subject_id'];
@@ -3645,7 +3725,20 @@ class AcademicScheduleController extends Controller
                 ->where('semester_code', $semesterCode)
                 ->first();
 
-            if (!$subject) continue;
+            if (!$subject) {
+                if ($debug) {
+                    $debugInfo[] = [
+                        'group' => $group->name,
+                        'group_hemis_id' => $group->group_hemis_id,
+                        'subject_id' => $subjectId,
+                        'semester_code' => $semesterCode,
+                        'attempt' => (int) ($itemData['attempt'] ?? 1),
+                        'skipped' => 'curriculum_subject_not_found',
+                        'curriculum_hemis_id' => $group->curriculum_hemis_id,
+                    ];
+                }
+                continue;
+            }
 
             $itemAttempt = (int) ($itemData['attempt'] ?? 1);
             $itemStudentHemisId = !empty($itemData['student_hemis_id'])
@@ -3666,6 +3759,8 @@ class AcademicScheduleController extends Controller
             // is_held_back va YnAdmissionService bo'yicha Ruxsat/Shartli/X).
             $lookupKey = $group->group_hemis_id . '|' . $subjectId . '|' . $semesterCode;
             $enrichedStudents = $enrichedStudentsByKey[$lookupKey] ?? [];
+            $dbgRawCount = count($enrichedStudents);
+            $dbgKeyExists = array_key_exists($lookupKey, $enrichedStudentsByKey);
 
             // Urinishga mos talabalarni saralash — test-center bilan bir xil
             // ($itemStudentHemisId per-student override'i ustuvor).
@@ -3685,6 +3780,7 @@ class AcademicScheduleController extends Controller
                 // guruh slotidagi Word'da chiqishi kerak.
                 $enrichedStudents = $this->filterStudentsForAttempt($enrichedStudents, $itemAttempt);
             }
+            $dbgAfterAttemptCount = count($enrichedStudents);
 
             // Kursdan qoldirilgan (4+ qarz) yoki YN ga ruxsat yo'q (X)
             // talabalarni ro'yxatdan chiqarib tashlaymiz — Word faqat
@@ -3692,19 +3788,57 @@ class AcademicScheduleController extends Controller
             // 4+ qarz uchun 3 manbadan tekshiriladi (yuqaridagi
             // students mapping bilan bir xil), JN/MT/davomat sabab "X"
             // bo'lganlar admission_status orqali aniqlanadi.
-            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($yearDebtCount) {
+            $dbgRemoved = [];
+            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($yearDebtCount, $debug, &$dbgRemoved) {
                 $hemisId = (string) ($row['hemis_id'] ?? '');
                 $debtCount = count($row['past_debts'] ?? []) + count($row['current_semester_debts'] ?? []);
                 $yearCnt = $yearDebtCount[$hemisId] ?? 0;
                 $isHeldBack = !empty($row['is_held_back']) || $debtCount >= 4 || $yearCnt >= 4;
-                if ($isHeldBack) return false;
+                if ($isHeldBack) {
+                    if ($debug) {
+                        $dbgRemoved[] = [
+                            'name' => $row['full_name'] ?? $hemisId,
+                            'hemis_id' => $hemisId,
+                            'reason' => 'held_back',
+                            'is_held_back_flag' => !empty($row['is_held_back']),
+                            'debt_count' => $debtCount,
+                            'year_debt_count' => $yearCnt,
+                        ];
+                    }
+                    return false;
+                }
                 // admission_status === 'X' (JN/MT/davomat past) — YN'ga
                 // ruxsat yo'q, ro'yxatga kiritmaymiz.
                 if (($row['admission_status'] ?? null) === \App\Services\YnAdmissionService::STATUS_X) {
+                    if ($debug) {
+                        $dbgRemoved[] = [
+                            'name' => $row['full_name'] ?? $hemisId,
+                            'hemis_id' => $hemisId,
+                            'reason' => 'admission_status_X',
+                        ];
+                    }
                     return false;
                 }
                 return true;
             }));
+
+            if ($debug) {
+                $debugInfo[] = [
+                    'group' => $group->name,
+                    'group_hemis_id' => $group->group_hemis_id,
+                    'subject' => $subject->subject_name ?? null,
+                    'subject_id' => $subjectId,
+                    'semester_code' => $semesterCode,
+                    'attempt' => $itemAttempt,
+                    'student_hemis_id_filter' => $itemStudentHemisId,
+                    'enriched_key_exists' => $dbgKeyExists,
+                    'raw_enriched_count' => $dbgRawCount,
+                    'after_attempt_filter_count' => $dbgAfterAttemptCount,
+                    'after_heldback_x_filter_count' => count($enrichedStudents),
+                    'removed_by_heldback_x' => $dbgRemoved,
+                    'will_appear_in_word' => count($enrichedStudents) > 0,
+                ];
+            }
 
             if (empty($enrichedStudents)) {
                 continue;
@@ -3833,6 +3967,17 @@ class AcademicScheduleController extends Controller
                 'attempt' => $itemAttempt,
                 'schedule_id' => !empty($itemData['schedule_id']) ? (int) $itemData['schedule_id'] : null,
             ];
+        }
+
+        // Diagnostika rejimi: docx yaratmasdan va DB'ga hech narsa yozmasdan
+        // har item bo'yicha to'plangan ma'lumotni JSON qaytaramiz.
+        if ($debug) {
+            return response()->json([
+                'multi_slot_mode' => $multiSlotMode,
+                'requested_items' => count($items),
+                'subject_pages_built' => count($subjectGroups),
+                'diagnostics' => $debugInfo,
+            ], 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
         }
 
         // Kompyuter raqamlari xaritasi: har slot vaqti (sana shu Word'da
@@ -4130,6 +4275,18 @@ class AcademicScheduleController extends Controller
                     $subjIdx++;
                     $subj = $subjectData['subject'];
                     $displayName = $subjectData['display_name'] ?? ($subj->subject_name ?? '');
+
+                    $attemptsInSubject = [];
+                    foreach ($subjectData['entries'] as $_e) {
+                        $_a = (int) ($_e['attempt'] ?? 1);
+                        if ($_a > 0 && !in_array($_a, $attemptsInSubject, true)) {
+                            $attemptsInSubject[] = $_a;
+                        }
+                    }
+                    sort($attemptsInSubject);
+                    if (!empty($attemptsInSubject)) {
+                        $displayName .= ' (' . implode('/', $attemptsInSubject) . '-urinish)';
+                    }
 
                     $section->addText(
                         $displayName,
@@ -6075,33 +6232,18 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        // Notification yuborish — individual grafikka ega talabalarni
-        // chiqarib tashlaymiz (ular guruh vaqtidan emas, o'z vaqtidan
-        // foydalanadi va alohida xabar oladi).
-        $students = $this->groupStudentsForExamNotify(
-            (string) $request->group_hemis_id,
-            (string) $request->subject_id,
-            (string) $request->semester_code,
-            $dateColumn,
-            $attempt
-        );
-        $sentCount = $this->notifyStudentsExamTime(
-            $students,
-            $examSchedule->subject_name ?? 'Fan',
-            $ynType,
-            $ynLabel,
-            $relatedDate ? \Carbon\Carbon::parse($relatedDate)->format('d.m.Y') : null,
-            $request->test_time,
-            $oldTime,
-            $ynSubmitted
-        );
+        // Guruh saqlashida talabalarga avtomatik Telegram/LMS xabarnoma yuborilmaydi.
+        // Xabar faqat "Xabarnoma yuborish" tugmasi orqali yuboriladi
+        // (test-center.notify-all route — notifyAllExamTimes()).
+        // Individual grafikga ega talabalar — saveStudentTime() va store() audit
+        // orqali saqlanganda o'zlari avtomatik xabar oladi.
 
         $statusMsg = $timeChanged ? ($ynLabel . ' vaqti o\'zgartirildi') : ($ynLabel . ' vaqti saqlandi');
 
         return response()->json([
             'success' => true,
             'time_changed' => $timeChanged,
-            'message' => $statusMsg . ($sentCount > 0 ? " va {$sentCount} ta talabaga xabar yuborildi" : ''),
+            'message' => $statusMsg,
         ]);
     }
 
@@ -6760,6 +6902,31 @@ class AcademicScheduleController extends Controller
                 ->toArray();
         }
 
+        // Tanlov fanlari uchun aniq son — student_subjects'dan
+        // (har talaba bitta variant tanlaydi; butun guruh sonini
+        // ishlatish (a)+(b)+(c) variantlar bandlik sig'imini
+        // soxtalashtirardi).
+        $subjectCounts = []; // [group_hemis_id|subject_id => cnt]
+        $subjectIdsForCount = $allItems->pluck('subject_id')->filter()->unique()->toArray();
+        if (!empty($allGroupIds) && !empty($subjectIdsForCount)) {
+            try {
+                $rowsCnt = \Illuminate\Support\Facades\DB::table('student_subjects as ss')
+                    ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+                    ->whereIn('st.group_id', $allGroupIds)
+                    ->whereIn('ss.subject_id', $subjectIdsForCount)
+                    ->where('st.student_status_code', 11)
+                    ->select('st.group_id', 'ss.subject_id',
+                        \Illuminate\Support\Facades\DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+                    ->groupBy('st.group_id', 'ss.subject_id')
+                    ->get();
+                foreach ($rowsCnt as $r) {
+                    $subjectCounts[$r->group_id . '|' . $r->subject_id] = (int) $r->cnt;
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichi: student_subjects so\'rovi xatolik: ' . $e->getMessage());
+            }
+        }
+
         // 2/3-urinish (resit) uchun haqiqiy talabalar sonini hisoblash —
         // butun guruh emas, faqat yiqilganlar. computeStudentAttemptStatuses
         // qoidalari bilan to'liq mos kelmasligi mumkin (V<60 ning aniq
@@ -6818,14 +6985,19 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        $eligibleCountForItem = function (array $item) use ($studentCounts, $resitEligibleMap): int {
+        $eligibleCountForItem = function (array $item) use ($studentCounts, $resitEligibleMap, $subjectCounts): int {
             $attemptN = (int) ($item['attempt'] ?? 1);
             if (!empty($item['student_hemis_id'])) {
                 return 1; // individual grafik — faqat shu talaba
             }
             $totalGroup = (int) ($studentCounts[$item['group_hemis_id']] ?? 0);
             if ($attemptN <= 1) {
-                return $totalGroup;
+                // Tanlov fanlari uchun student_subjects'dan aniq sonni olamiz;
+                // mandatory fanlar uchun butun guruh.
+                $subjKey = ($item['group_hemis_id'] ?? '') . '|' . ($item['subject_id'] ?? '');
+                return isset($subjectCounts[$subjKey])
+                    ? $subjectCounts[$subjKey]
+                    : $totalGroup;
             }
             $key = $item['group_hemis_id'] . '|' . ($item['subject_id'] ?? '') . '|' . ($item['semester_code'] ?? '') . '|' . $attemptN;
             if (array_key_exists($key, $resitEligibleMap)) {
@@ -7053,6 +7225,35 @@ class AcademicScheduleController extends Controller
                 ->toArray();
         }
 
+        // Tanlov fanlari (subject_type_code=12) — bir guruhda variant (a), (b),
+        // (c) bo'lishi mumkin va har talaba faqat BITTASIni tanlaydi. Butun
+        // guruh sonini olib ishlatish bandlik sig'imini noto'g'ri ko'rsatadi
+        // (15 talaba bo'lgan guruh variant (a)+(c) bo'lsa, 15+15=30 deb
+        // sanaladi). student_subjects jadvalida har talabaning aniq tanlagan
+        // variantining subject_id bor — shuni hisoblaymiz. Mandatory fanlar
+        // (subject_type != 12) uchun student_subjects yozuvi bo'lmasligi
+        // mumkin, ular uchun butun guruh soni fallback bo'ladi.
+        $subjectCounts = []; // [group_hemis_id|subject_id => cnt]
+        $subjectIdsForCount = $allGroups->pluck('subject_id')->filter()->unique()->toArray();
+        if (!empty($allGroupIds) && !empty($subjectIdsForCount)) {
+            try {
+                $rowsCnt = \Illuminate\Support\Facades\DB::table('student_subjects as ss')
+                    ->join('students as st', 'st.hemis_id', '=', 'ss.student_hemis_id')
+                    ->whereIn('st.group_id', $allGroupIds)
+                    ->whereIn('ss.subject_id', $subjectIdsForCount)
+                    ->where('st.student_status_code', 11)
+                    ->select('st.group_id', 'ss.subject_id',
+                        \Illuminate\Support\Facades\DB::raw('COUNT(DISTINCT ss.student_hemis_id) as cnt'))
+                    ->groupBy('st.group_id', 'ss.subject_id')
+                    ->get();
+                foreach ($rowsCnt as $r) {
+                    $subjectCounts[$r->group_id . '|' . $r->subject_id] = (int) $r->cnt;
+                }
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: student_subjects so\'rovi xatolik: ' . $e->getMessage());
+            }
+        }
+
         // 2/3-urinish (resit) uchun mos talabalar sonini hisoblash —
         // butun guruh emas, faqat yiqilganlar. Bitta batch DB so'rovi.
         $resitEligibleMap = [];
@@ -7130,13 +7331,20 @@ class AcademicScheduleController extends Controller
         // qatorlar guruh ichida qoladi). Per-student vaqti guruh vaqti bilan
         // teng bo'lsa ($mergedByCombo'da hisoblangan), guruhdan ayrilmaydi —
         // ular guruh slotida birlashtirib ko'rsatiladi.
-        $eligibleCount = function (array $grp, int $totalGroupCount) use ($resitEligibleMap, $perStudentTimeMap, $mergedByCombo): int {
+        $eligibleCount = function (array $grp, int $totalGroupCount) use ($resitEligibleMap, $perStudentTimeMap, $mergedByCombo, $subjectCounts): int {
             $attemptN = (int) ($grp['attempt'] ?? 1);
             if (!empty($grp['student_hemis_id'])) {
                 return 1;
             }
             if ($attemptN <= 1) {
-                $base = $totalGroupCount;
+                // Tanlov fanlari uchun student_subjects'dan aniq sonni olamiz
+                // (variant (a)/(b)/(c) lar uchun har talaba faqat birini
+                // tanlaydi, butun guruh soni emas). Yo'q bo'lsa — majburiy
+                // fan deb hisoblab butun guruh sonini ishlatamiz.
+                $subjKey = ($grp['group_hemis_id'] ?? '') . '|' . ($grp['subject_id'] ?? '');
+                $base = isset($subjectCounts[$subjKey])
+                    ? $subjectCounts[$subjKey]
+                    : $totalGroupCount;
             } else {
                 $resitKey = $grp['group_hemis_id'] . '|' . $grp['subject_id'] . '|' . $grp['semester_code'] . '|' . $attemptN;
                 $base = (int) ($resitEligibleMap[$resitKey] ?? 0);

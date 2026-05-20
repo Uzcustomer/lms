@@ -34,15 +34,39 @@
             gap: 12px;
             align-content: start;
         }
-        /* Pagination: faqat aktiv sahifani ko'rsatamiz */
-        .tv-page { display: none; height: 100%; }
-        .tv-page.active { display: flex; }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(8px); }
-            to   { opacity: 1; transform: translateY(0); }
+        /* Pagination: sahifalar host ichida ustma-ust joylashadi — almashish
+           paytida ikkalasi ham bir lahza ko'rinib, effekt bilan o'tadi. */
+        #tv-pages-host { position: relative; }
+        .tv-page {
+            display: none;
+            position: absolute;
+            inset: 0;
+            height: 100%;
+            flex-direction: column;
         }
-        .tv-page.active { animation: fadeIn 0.4s ease-out; }
+        .tv-page.active { display: flex; z-index: 2; }
+        .tv-page.tv-page-exit { display: flex; z-index: 1; }
+
+        /* Sahifa almashish effekti — yangi sahifa o'ngdan suzib kiradi,
+           eskisi chapga suzib chiqadi. Almashayotgani aniq sezilsin. */
+        @keyframes tvPageEnter {
+            0%   { opacity: 0; transform: translateX(7%) scale(0.97); filter: blur(5px); }
+            100% { opacity: 1; transform: translateX(0)  scale(1);    filter: blur(0); }
+        }
+        @keyframes tvPageExit {
+            0%   { opacity: 1; transform: translateX(0)   scale(1);    filter: blur(0); }
+            100% { opacity: 0; transform: translateX(-7%) scale(0.97); filter: blur(5px); }
+        }
+        .tv-page-enter { animation: tvPageEnter 0.6s cubic-bezier(0.22, 0.61, 0.36, 1) both; }
+        .tv-page-exit  { animation: tvPageExit  0.5s cubic-bezier(0.55, 0.06, 0.68, 0.19) both; }
+
+        /* Sahifa raqami almashganda urg'u beradi. */
+        @keyframes pageBump {
+            0%   { transform: scale(1);    color: #a5b4fc; }
+            40%  { transform: scale(1.35); color: #ffffff; }
+            100% { transform: scale(1);    color: #a5b4fc; }
+        }
+        .page-bump { display: inline-block; animation: pageBump 0.6s ease-out; }
     </style>
 </head>
 <body>
@@ -339,15 +363,51 @@
 
                 pageTotalEl.textContent = pagesData.length;
                 paginationEl.classList.toggle('hidden', pagesData.length <= 1);
-                showPage(0);
+                showPage(0, false);
                 lastBuildAt = Date.now();
             }
 
-            function showPage(idx) {
+            function bumpPageIndicator() {
+                pageCurrentEl.classList.remove('page-bump');
+                void pageCurrentEl.offsetWidth; // reflow — animatsiyani qayta tetiklaydi
+                pageCurrentEl.classList.add('page-bump');
+            }
+
+            function showPage(idx, animate) {
                 if (pagesData.length === 0) return;
-                activeIndex = idx % pagesData.length;
-                pagesData.forEach((p, i) => p.classList.toggle('active', i === activeIndex));
+                const total = pagesData.length;
+                const newIndex = ((idx % total) + total) % total;
+                const prev = pagesData[activeIndex];
+                const next = pagesData[newIndex];
+                activeIndex = newIndex;
                 pageCurrentEl.textContent = activeIndex + 1;
+
+                // Animatsiyasiz holat: dastlabki ko'rsatish yoki bitta sahifa.
+                if (!animate || prev === next || total <= 1) {
+                    pagesData.forEach((p, i) => {
+                        p.classList.remove('tv-page-enter', 'tv-page-exit');
+                        p.classList.toggle('active', i === activeIndex);
+                    });
+                    return;
+                }
+
+                bumpPageIndicator();
+
+                // Eski sahifa chapga suzib chiqadi.
+                prev.classList.remove('active');
+                prev.classList.add('tv-page-exit');
+                prev.addEventListener('animationend', function onExit() {
+                    prev.classList.remove('tv-page-exit');
+                    prev.removeEventListener('animationend', onExit);
+                }, { once: true });
+
+                // Yangi sahifa o'ngdan suzib kiradi.
+                next.classList.remove('tv-page-exit');
+                next.classList.add('active', 'tv-page-enter');
+                next.addEventListener('animationend', function onEnter() {
+                    next.classList.remove('tv-page-enter');
+                    next.removeEventListener('animationend', onEnter);
+                }, { once: true });
             }
 
             function nextPage() {
@@ -359,7 +419,7 @@
                     window.location.reload();
                     return;
                 }
-                showPage(activeIndex + 1);
+                showPage(activeIndex + 1, true);
             }
 
             buildPages();

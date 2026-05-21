@@ -16,8 +16,15 @@ use Maatwebsite\Excel\Facades\Excel;
 
 /**
  * Jurnal — OSKI/Test baholarini Excelga eksport qilish (background job).
- * Sana oralig'i, fakultetlar va kurslar bo'yicha barcha fanlardan OSKI va
- * Test baholari. Holat (foiz) cache hamda diskdagi meta faylga yoziladi.
+ * Baholar jurnal sahifasidagi bilan AYNAN bir xil mantiq bilan olinadi:
+ *  - 1-urinish (asosiy ustun): jurnal getEffectiveGrade qoidasi
+ *    (asl baho 60 dan past + retake bo'lsa retake ustun, status/reason
+ *    hisobga olinadi);
+ *  - 2/3-urinish va qo'shimcha farmoyish: jurnal fetchAttemptOskiTest
+ *    qoidasi;
+ *  - legacy 103 kodli quiz baholari quiz_type orqali OSKI(101)/Test(102)
+ *    ga aylantiriladi;
+ *  - bir urinishda bir nechta yozuv bo'lsa — o'rtacha (jurnaldagidek).
  */
 class JournalExamGradesExportJob implements ShouldQueue
 {
@@ -25,6 +32,9 @@ class JournalExamGradesExportJob implements ShouldQueue
 
     public int $tries = 1;
     public int $timeout = 1800;
+
+    private const OSKI_QUIZ_TYPES = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+    private const TEST_QUIZ_TYPES = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
 
     public function __construct(
         private readonly array $filters,
@@ -55,6 +65,60 @@ class JournalExamGradesExportJob implements ShouldQueue
         ];
     }
 
+    /**
+     * Jurnal getEffectiveGrade — 1-urinish (asosiy ustun) uchun.
+     */
+    private function effMain(object $r): ?float
+    {
+        if ($r->grade !== null && (float) $r->grade < 60 && $r->retake_grade !== null) {
+            return (float) $r->retake_grade;
+        }
+        if ($r->status === 'pending' && $r->reason === 'low_grade' && $r->grade !== null) {
+            return (float) $r->grade;
+        }
+        if ($r->status === 'pending') {
+            return null;
+        }
+        if ($r->reason === 'absent' && $r->grade === null) {
+            return $r->retake_grade !== null ? (float) $r->retake_grade : null;
+        }
+        if ($r->status === 'closed' && $r->reason === 'teacher_victim'
+            && $r->grade !== null && (float) $r->grade == 0.0 && $r->retake_grade === null) {
+            return null;
+        }
+        if ($r->status === 'recorded' || $r->status === 'closed') {
+            return $r->grade !== null ? (float) $r->grade : null;
+        }
+        if ($r->retake_grade !== null) {
+            return (float) $r->retake_grade;
+        }
+        return null;
+    }
+
+    /**
+     * Jurnal fetchAttemptOskiTest (excludeSababli=false) — 2/3-urinish
+     * va qo'shimcha farmoyish ustunlari uchun.
+     */
+    private function effAttempt(object $r): ?float
+    {
+        if ($r->status === 'pending' && $r->reason === 'low_grade' && $r->grade !== null) {
+            return (float) $r->grade;
+        }
+        if ($r->status === 'pending') {
+            return null;
+        }
+        if ($r->reason === 'absent' && $r->grade === null) {
+            return $r->retake_grade !== null ? (float) $r->retake_grade : null;
+        }
+        if ($r->status === 'recorded' || $r->status === 'closed') {
+            return $r->grade !== null ? (float) $r->grade : null;
+        }
+        if ($r->retake_grade !== null) {
+            return (float) $r->retake_grade;
+        }
+        return null;
+    }
+
     public function handle(): void
     {
         ini_set('memory_limit', '1024M');
@@ -70,11 +134,12 @@ class JournalExamGradesExportJob implements ShouldQueue
             $hasAttemptCol   = Schema::hasColumn('student_grades', 'attempt');
             $hasQoshimchaCol = Schema::hasColumn('student_grades', 'is_qoshimcha');
 
+            // OSKI (101), Test (102) va legacy quiz (103) baholari.
             $q = DB::table('student_grades as sg')
                 ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
                 ->leftJoin('groups as g', 'g.group_hemis_id', '=', 'st.group_id')
                 ->whereNull('sg.deleted_at')
-                ->whereIn('sg.training_type_code', [101, 102])
+                ->whereIn('sg.training_type_code', [101, 102, 103])
                 ->whereBetween('sg.lesson_date', [$from . ' 00:00:00', $to . ' 23:59:59']);
             if (!empty($facultyHemisIds)) {
                 $q->whereIn('g.department_hemis_id', $facultyHemisIds);
@@ -82,7 +147,7 @@ class JournalExamGradesExportJob implements ShouldQueue
             $select = [
                 'sg.student_hemis_id', 'sg.subject_id', 'sg.subject_name',
                 'sg.semester_code', 'sg.semester_name', 'sg.training_type_code',
-                'sg.grade', 'sg.retake_grade',
+                'sg.grade', 'sg.retake_grade', 'sg.status', 'sg.reason', 'sg.quiz_result_id',
                 'st.full_name', 'st.student_id_number', 'st.group_name',
             ];
             if ($hasAttemptCol)   $select[] = 'sg.attempt';
@@ -90,18 +155,78 @@ class JournalExamGradesExportJob implements ShouldQueue
             $grades = $q->select($select)->get();
 
             $total = $grades->count();
-            $this->updateStatus('running', "Baholar guruhlanmoqda... ({$total} ta yozuv)", 30);
+            $this->updateStatus('running', "Baholar guruhlanmoqda... ({$total} ta yozuv)", 25);
 
-            // (talaba, fan, semestr) bo'yicha guruhlash.
+            // Legacy 103 kodlarni quiz_type orqali OSKI/Test ga aylantirish uchun
+            // quiz_type'larni batch yuklaymiz.
+            $quizTypeMap = [];
+            $quizResultIds = $grades
+                ->where('training_type_code', 103)
+                ->pluck('quiz_result_id')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            if (!empty($quizResultIds)) {
+                $quizTypeMap = DB::table('hemis_quiz_results')
+                    ->whereIn('id', $quizResultIds)
+                    ->pluck('quiz_type', 'id')
+                    ->all();
+            }
+
+            // (talaba, fan, semestr) bo'yicha guruhlash — har urinish/qo'shimcha
+            // uchun baholar ro'yxati yig'iladi, keyin o'rtachasi olinadi.
             $map = [];
             $processed = 0;
             foreach ($grades as $r) {
                 $processed++;
                 if ($processed % 2000 === 0) {
-                    $percent = 30 + (int) (40 * ($processed / max(1, $total)));
+                    $percent = 25 + (int) (45 * ($processed / max(1, $total)));
                     $this->updateStatus('running', "Guruhlanmoqda... ({$processed}/{$total})", min(70, $percent));
                 }
 
+                $rawTtc = (int) $r->training_type_code;
+
+                // Legacy 103 -> 101/102.
+                $ttc = $rawTtc;
+                if ($rawTtc === 103) {
+                    $qt = $r->quiz_result_id ? ($quizTypeMap[$r->quiz_result_id] ?? null) : null;
+                    if (in_array($qt, self::OSKI_QUIZ_TYPES, true)) {
+                        $ttc = 101;
+                    } elseif (in_array($qt, self::TEST_QUIZ_TYPES, true)) {
+                        $ttc = 102;
+                    } else {
+                        continue; // aniqlanmagan legacy quiz — jurnalda ham e'tiborsiz
+                    }
+                }
+                if ($ttc !== 101 && $ttc !== 102) {
+                    continue;
+                }
+                $type = ($ttc === 101) ? 'oski' : 'test';
+
+                $attempt = $hasAttemptCol ? (int) ($r->attempt ?? 1) : 1;
+                if ($attempt < 1 || $attempt > 3) {
+                    $attempt = 1;
+                }
+                $isQosh = $hasQoshimchaCol && !empty($r->is_qoshimcha);
+
+                // Jurnalda legacy 103 faqat 1-urinish asosiy ustunda ishtirok etadi.
+                if ($rawTtc === 103 && ($attempt !== 1 || $isQosh)) {
+                    continue;
+                }
+
+                // Ustun (slot) va effektiv baho qoidasini aniqlash.
+                if ($isQosh) {
+                    $slot = ($attempt === 3) ? 'a3' : 'q';
+                } else {
+                    $slot = 'a' . $attempt;
+                }
+                $eff = ($slot === 'a1' && !$isQosh) ? $this->effMain($r) : $this->effAttempt($r);
+                if ($eff === null) {
+                    continue;
+                }
+
+                // Kurs (semestrdan) — kurslar filtri.
                 $semNum = null;
                 if (!empty($r->semester_name) && preg_match('/(\d+)/', (string) $r->semester_name, $m)) {
                     $semNum = (int) $m[1];
@@ -122,35 +247,23 @@ class JournalExamGradesExportJob implements ShouldQueue
                         'group'      => (string) ($r->group_name ?? '-'),
                         'subject'    => (string) ($r->subject_name ?? ''),
                         'semester'   => (string) ($r->semester_name ?: ($r->semester_code ?? '')),
-                        'oski'   => [1 => null, 2 => null, 3 => null],
-                        'oski_q' => null,
-                        'test'   => [1 => null, 2 => null, 3 => null],
-                        'test_q' => null,
+                        'oski' => ['a1' => [], 'a2' => [], 'a3' => [], 'q' => []],
+                        'test' => ['a1' => [], 'a2' => [], 'a3' => [], 'q' => []],
                     ];
                 }
 
-                $grade = $r->retake_grade ?? $r->grade;
-                if ($grade === null) {
-                    continue;
-                }
-                $grade = (float) $grade;
-                $attempt = $hasAttemptCol ? (int) ($r->attempt ?? 1) : 1;
-                if ($attempt < 1 || $attempt > 3) {
-                    $attempt = 1;
-                }
-                $type = ((int) $r->training_type_code === 101) ? 'oski' : 'test';
-
-                if ($hasQoshimchaCol && !empty($r->is_qoshimcha)) {
-                    $cur = $map[$key][$type . '_q'];
-                    $map[$key][$type . '_q'] = ($cur === null) ? $grade : max($cur, $grade);
-                } else {
-                    $cur = $map[$key][$type][$attempt];
-                    $map[$key][$type][$attempt] = ($cur === null) ? $grade : max($cur, $grade);
-                }
+                $map[$key][$type][$slot][] = $eff;
             }
             unset($grades);
 
             $this->updateStatus('running', 'Saralanmoqda...', 75);
+
+            $avg = function (array $vals): ?float {
+                if (empty($vals)) {
+                    return null;
+                }
+                return round(array_sum($vals) / count($vals), 1);
+            };
 
             $data = array_values($map);
             usort($data, function ($a, $b) {
@@ -165,6 +278,8 @@ class JournalExamGradesExportJob implements ShouldQueue
             $i = 0;
             foreach ($data as $d) {
                 $i++;
+                $o = $d['oski'];
+                $t = $d['test'];
                 $excelRows[] = [
                     $i,
                     $d['student_id'],
@@ -173,8 +288,8 @@ class JournalExamGradesExportJob implements ShouldQueue
                     $d['group'],
                     $d['subject'],
                     $d['semester'],
-                    $d['oski'][1], $d['oski'][2], $d['oski'][3], $d['oski_q'],
-                    $d['test'][1], $d['test'][2], $d['test'][3], $d['test_q'],
+                    $avg($o['a1']), $avg($o['a2']), $avg($o['a3']), $avg($o['q']),
+                    $avg($t['a1']), $avg($t['a2']), $avg($t['a3']), $avg($t['q']),
                 ];
             }
 

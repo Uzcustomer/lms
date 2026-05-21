@@ -1127,7 +1127,7 @@ class JournalController extends Controller
             // boshqa guruh/subgruppaga o'tib ketgan yoki ro'yxatda yo'q
             // talabaning eski topshirig'i "baholanmagan" deb sanalmasin
             // (manualMtGrades ham faqat shu ro'yxat bo'yicha yuklanadi).
-            $mtRosterSet = array_flip($studentHemisIds);
+            $mtRosterSet = array_flip(collect($studentHemisIds)->all());
             foreach ($mtSubmissions as $hemisId => $sub) {
                 if (!isset($mtRosterSet[$hemisId])) {
                     continue;

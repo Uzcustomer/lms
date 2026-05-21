@@ -748,12 +748,14 @@ class QuizResultController extends Controller
                 if ($dateTo)   $sub->whereDate('h2.date_finish', '<=', $dateTo);
             });
 
-            // Ism yoki shakl bo'yicha qidiruv: kiritilgan bo'lsa, barcha sanalarda
-            // qidiriladi (date_from/date_to e'tiborga olinmaydi).
+            // Ism bo'yicha qidiruv: tanlangan sana oralig'i e'tiborga olinmaydi,
+            // lekin faqat joriy yil natijalari chiqadi (eski yillar aralashmasin).
+            // Shakl qidiruvi esa barcha sanalarda qidiradi.
             $hasNameSearch = $request->filled('student_name');
             $hasShaklSearch = $request->filled('shakl_search');
             if ($hasNameSearch) {
                 $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
+                $query->whereYear('date_finish', now('Asia/Tashkent')->year);
             }
             if ($hasShaklSearch) {
                 $query->where('shakl', 'LIKE', '%' . $request->shakl_search . '%');

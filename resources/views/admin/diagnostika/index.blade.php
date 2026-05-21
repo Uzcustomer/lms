@@ -106,8 +106,6 @@
         /* Filter header row */
         .filter-header-row { background: #f1f5f9 !important; }
         .filter-header-row th { padding: 4px 4px 6px; border-bottom: 2px solid #94a3b8; }
-        .col-filter { width: 100%; padding: 3px 4px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; font-weight: 500; color: #334155; background: #fff; cursor: pointer; outline: none; height: 26px; }
-        .col-filter:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
         .col-filter-input { width: 100%; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; font-weight: 500; color: #334155; background: #fff; outline: none; height: 26px; }
         .col-filter-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
         .col-filter-input::placeholder { color: #94a3b8; }
@@ -132,14 +130,13 @@
         .adv-btn-apply { padding: 4px 10px; border: none; border-radius: 6px; font-size: 10px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #2563eb, #3b82f6); cursor: pointer; transition: all 0.15s; box-shadow: 0 1px 4px rgba(37,99,235,0.3); }
         .adv-btn-apply:hover { background: linear-gradient(135deg, #1d4ed8, #2563eb); transform: translateY(-1px); }
 
-        /* Tepa ko'p tanlovli filtrlar */
-        .ms-filter-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #cbd5e1; }
+        /* Ustun ko'p tanlovli filtrlari */
         .ms-wrap { position: relative; }
-        .ms-btn { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; min-width: 130px; padding: 0 8px; height: 34px; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 11px; font-weight: 600; color: #334155; background: #fff; cursor: pointer; outline: none; transition: all 0.15s; }
-        .ms-btn:hover { border-color: #2b5ea7; }
-        .ms-btn.ms-active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+        .ms-col-btn { display: flex; align-items: center; justify-content: space-between; gap: 3px; width: 100%; padding: 3px 5px; height: 26px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; font-weight: 500; color: #334155; background: #fff; cursor: pointer; outline: none; }
+        .ms-col-btn:hover { border-color: #2b5ea7; }
+        .ms-col-btn.ms-active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; font-weight: 700; }
         .ms-btn-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .ms-popup { display: none; position: absolute; top: 38px; left: 0; z-index: 200; width: 240px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.16); padding: 8px; }
+        .ms-popup { display: none; position: absolute; top: 30px; left: 0; z-index: 200; width: 230px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.16); padding: 8px; }
         .ms-search { width: 100%; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; outline: none; margin-bottom: 6px; box-sizing: border-box; }
         .ms-search:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
         .ms-opts { max-height: 220px; overflow-y: auto; }
@@ -239,7 +236,7 @@
                             </div>
                         </div>
                         <div class="filter-item" style="margin-left:auto;max-width:280px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Ism bo'yicha qidiruv (barcha sanalar)</label>
+                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Ism bo'yicha qidiruv ({{ now('Asia/Tashkent')->year }}-yil)</label>
                             <div style="display:flex;gap:6px;align-items:center;">
                                 <input type="text" id="search_student_name" class="date-input" placeholder="FISH kiriting..." autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();searchByName();}" style="flex:1;" />
                                 <button type="button" class="btn-tartibga" onclick="searchByName()" style="background:#10b981;border-color:#059669;white-space:nowrap;">
@@ -258,40 +255,6 @@
                                 </button>
                             </div>
                         </div>
-                    </div>
-                    @php
-                        $msFilterCols = [
-                            'faculty'     => 'Fakultet',
-                            'direction'   => "Yo'nalish",
-                            'kurs'        => 'Kurs',
-                            'semester'    => 'Semestr',
-                            'group'       => 'Guruh',
-                            'fan_name'    => 'Fan',
-                            'yn_turi'     => 'YN turi',
-                            'xulosa_code' => 'Xulosa',
-                        ];
-                    @endphp
-                    <div class="filter-row ms-filter-row" id="ms-filter-row" style="display:none;">
-                        @foreach($msFilterCols as $msCol => $msLabel)
-                            <div class="filter-item ms-wrap" style="max-width:170px;" data-ms="{{ $msCol }}">
-                                <label class="filter-label"><span class="fl-dot" style="background:#6366f1;"></span> {{ $msLabel }}</label>
-                                <button type="button" class="ms-btn" onclick="msToggle('{{ $msCol }}')">
-                                    <span class="ms-btn-text" id="ms-text-{{ $msCol }}">Barchasi</span>
-                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
-                                </button>
-                                <div class="ms-popup" id="ms-popup-{{ $msCol }}">
-                                    <input type="text" class="ms-search" placeholder="Qidirish..." oninput="msFilterOptions('{{ $msCol }}')">
-                                    <label class="ms-opt ms-opt-all">
-                                        <input type="checkbox" class="ms-all-cb" onchange="msToggleAll('{{ $msCol }}')">
-                                        <span>Barchasi</span>
-                                    </label>
-                                    <div class="ms-opts" id="ms-opts-{{ $msCol }}"></div>
-                                    <div class="ms-actions">
-                                        <button type="button" class="ms-clear" onclick="msClear('{{ $msCol }}')">Tozalash</button>
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
                     </div>
                 </div>
 
@@ -387,19 +350,35 @@
                                         <th>Xulosa</th>
                                         <th style="width:60px;">Jurnal</th>
                                     </tr>
+                                    @php
+                                        $msCell = function ($col) {
+                                            $h = e($col);
+                                            return '<div class="ms-wrap" data-ms="' . $h . '">'
+                                                . '<button type="button" class="ms-col-btn" onclick="msToggle(\'' . $h . '\')">'
+                                                . '<span class="ms-btn-text" id="ms-text-' . $h . '">Barchasi</span>'
+                                                . '<svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>'
+                                                . '</button>'
+                                                . '<div class="ms-popup" id="ms-popup-' . $h . '">'
+                                                . '<input type="text" class="ms-search" placeholder="Qidirish..." oninput="msFilterOptions(\'' . $h . '\')">'
+                                                . '<label class="ms-opt ms-opt-all"><input type="checkbox" class="ms-all-cb" onchange="msToggleAll(\'' . $h . '\')"><span>Barchasi</span></label>'
+                                                . '<div class="ms-opts" id="ms-opts-' . $h . '"></div>'
+                                                . '<div class="ms-actions"><button type="button" class="ms-clear" onclick="msClear(\'' . $h . '\')">Tozalash</button></div>'
+                                                . '</div></div>';
+                                        };
+                                    @endphp
                                     <tr class="filter-header-row">
                                         <th></th>
                                         <th></th>
                                         <th><input type="text" class="col-filter-input" data-col="student_id" placeholder="ID..."></th>
                                         <th><input type="text" class="col-filter-input" data-col="full_name" placeholder="Ism..."></th>
-                                        <th><select class="col-filter" data-col="faculty"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="direction"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="kurs"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="semester"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="group"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="fan_name"><option value="">Barchasi</option></select></th>
+                                        <th>{!! $msCell('faculty') !!}</th>
+                                        <th>{!! $msCell('direction') !!}</th>
+                                        <th>{!! $msCell('kurs') !!}</th>
+                                        <th>{!! $msCell('semester') !!}</th>
+                                        <th>{!! $msCell('group') !!}</th>
+                                        <th>{!! $msCell('fan_name') !!}</th>
                                         <th><input type="text" class="col-filter-input" data-col="fan_id" placeholder="Fan ID..."></th>
-                                        <th><select class="col-filter" data-col="yn_turi"><option value="">Barchasi</option></select></th>
+                                        <th>{!! $msCell('yn_turi') !!}</th>
                                         <th><input type="text" class="col-filter-input" data-col="shakl" placeholder="Shakl..."></th>
                                         <th>
                                             <div class="adv-filter-wrap">
@@ -457,7 +436,7 @@
                                                 </div>
                                             </div>
                                         </th>
-                                        <th><select class="col-filter" data-col="xulosa_code"><option value="">Barchasi</option></select></th>
+                                        <th>{!! $msCell('xulosa_code') !!}</th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -588,15 +567,12 @@
                         allData = []; filteredData = [];
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
                         $('#table-area').hide();
-                        $('#ms-filter-row').hide();
                         $('#btn-excel, #btn-excel-xulosa').prop('disabled', true);
                         $('#total-info').hide();
                         return;
                     }
                     allData = res.data;
-                    populateColumnFilters();
                     msPopulate();
-                    $('#ms-filter-row').css('display', 'flex');
                     applyColumnFilters();
                     $('#table-area').show();
                     $('#btn-excel, #btn-excel-xulosa').prop('disabled', false);
@@ -613,29 +589,7 @@
             });
         }
 
-        // ========== USTUN FILTRLARI ==========
-        function populateColumnFilters() {
-            var cols = ['faculty','direction','kurs','semester','group','fan_name','yn_turi','shakl','xulosa_code'];
-            cols.forEach(function(col) {
-                var unique = [];
-                var seen = {};
-                allData.forEach(function(r) {
-                    var v = r[col] || '';
-                    if (v && !seen[v]) { seen[v] = true; unique.push(v); }
-                });
-                unique.sort();
-                var sel = $('select.col-filter[data-col="' + col + '"]');
-                var curVal = sel.val();
-                sel.find('option:not(:first)').remove();
-                unique.forEach(function(v) {
-                    var label = col === 'xulosa_code' ? (xulosaCodes[v] || v) : v;
-                    sel.append('<option value="' + esc(v) + '">' + esc(label) + '</option>');
-                });
-                if (curVal) sel.val(curVal);
-            });
-        }
-
-        // ========== TEPA KO'P TANLOVLI FILTRLAR ==========
+        // ========== USTUN KO'P TANLOVLI FILTRLARI ==========
         var msSelected = {}; // col => [tanlangan qiymatlar]
         var msColsList = ['faculty','direction','kurs','semester','group','fan_name','yn_turi','xulosa_code'];
 
@@ -672,7 +626,17 @@
             var visible = popup.style.display === 'block';
             document.querySelectorAll('.ms-popup').forEach(function(p) { p.style.display = 'none'; });
             document.querySelectorAll('.adv-filter-popup').forEach(function(p) { p.style.display = 'none'; });
-            if (!visible) popup.style.display = 'block';
+            if (!visible) {
+                popup.style.left = '0';
+                popup.style.right = 'auto';
+                popup.style.display = 'block';
+                // Ekran o'ng chetidan chiqib ketsa — chapga ochiladi
+                var rect = popup.getBoundingClientRect();
+                if (rect.right > window.innerWidth - 8) {
+                    popup.style.left = 'auto';
+                    popup.style.right = '0';
+                }
+            }
         }
 
         function msFilterOptions(col) {
@@ -707,7 +671,7 @@
         function msUpdateLabel(col) {
             var vals = msSelected[col] || [];
             var textEl = $('#ms-text-' + col);
-            var btn = textEl.closest('.ms-btn');
+            var btn = textEl.closest('.ms-col-btn');
             if (!vals.length) {
                 textEl.text('Barchasi');
                 btn.removeClass('ms-active');
@@ -716,7 +680,7 @@
                 textEl.text(col === 'xulosa_code' ? (xulosaCodes[v] || v) : v);
                 btn.addClass('ms-active');
             } else {
-                textEl.text(vals.length + ' ta tanlandi');
+                textEl.text(vals.length + ' ta');
                 btn.addClass('ms-active');
             }
             var total = $('#ms-opts-' + col + ' .ms-cb').length;
@@ -735,10 +699,6 @@
 
         function applyColumnFilters() {
             var filters = {};
-            $('select.col-filter').each(function() {
-                var val = $(this).val();
-                if (val) filters[$(this).data('col')] = val;
-            });
             $('input.col-filter-input').each(function() {
                 var val = $.trim($(this).val()).toLowerCase();
                 if (val) filters[$(this).data('col')] = val;
@@ -748,13 +708,9 @@
                 for (var col in filters) {
                     var fv = filters[col];
                     var rv = (r[col] || '').toString();
-                    if ($('input.col-filter-input[data-col="' + col + '"]').length) {
-                        if (rv.toLowerCase().indexOf(fv) === -1) return false;
-                    } else {
-                        if (rv !== fv) return false;
-                    }
+                    if (rv.toLowerCase().indexOf(fv) === -1) return false;
                 }
-                // Tepa ko'p tanlovli filtrlar
+                // Ustun ko'p tanlovli filtrlari
                 for (var mc in msSelected) {
                     var sel = msSelected[mc];
                     if (sel && sel.length) {
@@ -1115,7 +1071,6 @@
                 $('#select-all').prop('checked', total > 0 && checked === total);
             });
 
-            $(document).on('change', 'select.col-filter', function() { applyColumnFilters(); });
             var filterTimer = null;
             $(document).on('input', 'input.col-filter-input', function() {
                 clearTimeout(filterTimer);

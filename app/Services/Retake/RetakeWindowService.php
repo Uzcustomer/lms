@@ -98,9 +98,12 @@ class RetakeWindowService
 
         // Tugash sanasi uzaytirilsa — necha kunga uzaytirilgan bo'lsa,
         // bugundan boshlab shuncha kun ariza qabuli qayta ochiladi.
-        $reopen = $this->reopenUntil($window->end_date, $endDate);
-        if ($reopen !== null) {
-            $update['application_reopen_until'] = $reopen;
+        // (Migration ishga tushgan bo'lsagina — aks holda jim qoladi.)
+        if (RetakeApplicationWindow::supportsReopen()) {
+            $reopen = $this->reopenUntil($window->end_date, $endDate);
+            if ($reopen !== null) {
+                $update['application_reopen_until'] = $reopen;
+            }
         }
 
         $window->update($update);

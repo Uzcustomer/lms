@@ -129,15 +129,18 @@ class RetakeWindowSessionController extends Controller
         // necha kunga uzaytirilgan bo'lsa shuncha kun ariza qabuli qayta
         // ochiladi (oynalarning eski tugash sanasi har xil bo'lishi mumkin).
         $windowService = app(\App\Services\Retake\RetakeWindowService::class);
+        $supportsReopen = \App\Models\RetakeApplicationWindow::supportsReopen();
         $count = 0;
         foreach ($windows as $w) {
             $update = [
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
             ];
-            $reopen = $windowService->reopenUntil($w->end_date, $data['end_date']);
-            if ($reopen !== null) {
-                $update['application_reopen_until'] = $reopen;
+            if ($supportsReopen) {
+                $reopen = $windowService->reopenUntil($w->end_date, $data['end_date']);
+                if ($reopen !== null) {
+                    $update['application_reopen_until'] = $reopen;
+                }
             }
             \App\Models\RetakeApplicationWindow::whereKey($w->id)->update($update);
             $count++;

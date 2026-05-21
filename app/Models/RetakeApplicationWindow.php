@@ -5,10 +5,30 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 class RetakeApplicationWindow extends Model
 {
     use SoftDeletes;
+
+    /**
+     * `application_reopen_until` ustuni mavjudligi (migration ishga tushganmi).
+     * Bir martagina tekshiriladi — agar migration hali ishlamagan bo'lsa,
+     * qayta ochish funksiyasi jim qoladi, 500 xato bermaydi.
+     */
+    protected static ?bool $reopenColumnExists = null;
+
+    public static function supportsReopen(): bool
+    {
+        if (self::$reopenColumnExists === null) {
+            try {
+                self::$reopenColumnExists = Schema::hasColumn('retake_application_windows', 'application_reopen_until');
+            } catch (\Throwable $e) {
+                self::$reopenColumnExists = false;
+            }
+        }
+        return self::$reopenColumnExists;
+    }
 
     protected $fillable = [
         'session_id',
@@ -55,6 +75,9 @@ class RetakeApplicationWindow extends Model
      */
     public function isApplicationReopened(): bool
     {
+        if (!self::supportsReopen()) {
+            return false;
+        }
         return $this->application_reopen_until !== null
             && $this->application_reopen_until->gte(Carbon::today());
     }
@@ -139,6 +162,11 @@ class RetakeApplicationWindow extends Model
     public function scopeActive($query)
     {
         $today = Carbon::today();
+
+        if (!self::supportsReopen()) {
+            return $query->whereDate('start_date', '>=', $today);
+        }
+
         return $query->where(function ($q) use ($today) {
             $q->whereDate('start_date', '>=', $today)
               ->orWhereDate('application_reopen_until', '>=', $today);

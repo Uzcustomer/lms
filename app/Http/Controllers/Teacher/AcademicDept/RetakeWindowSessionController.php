@@ -120,16 +120,28 @@ class RetakeWindowSessionController extends Controller
             ]);
         }
 
-        $windowIds = \App\Models\RetakeApplicationWindow::query()
+        $windows = \App\Models\RetakeApplicationWindow::query()
             ->where('session_id', $session->id)
-            ->pluck('id');
+            ->get(['id', 'end_date']);
+        $windowIds = $windows->pluck('id');
 
-        $count = \App\Models\RetakeApplicationWindow::query()
-            ->whereIn('id', $windowIds)
-            ->update([
+        // Har oyna uchun alohida: tugash sanasi uzaytirilgan bo'lsa,
+        // necha kunga uzaytirilgan bo'lsa shuncha kun ariza qabuli qayta
+        // ochiladi (oynalarning eski tugash sanasi har xil bo'lishi mumkin).
+        $windowService = app(\App\Services\Retake\RetakeWindowService::class);
+        $count = 0;
+        foreach ($windows as $w) {
+            $update = [
                 'start_date' => $data['start_date'],
                 'end_date' => $data['end_date'],
-            ]);
+            ];
+            $reopen = $windowService->reopenUntil($w->end_date, $data['end_date']);
+            if ($reopen !== null) {
+                $update['application_reopen_until'] = $reopen;
+            }
+            \App\Models\RetakeApplicationWindow::whereKey($w->id)->update($update);
+            $count++;
+        }
 
         // Telegram xabar JAVOBDAN KEYIN — sahifa muzlamasligi uchun.
         if ($windowIds->isNotEmpty()) {

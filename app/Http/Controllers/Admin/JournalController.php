@@ -1796,13 +1796,15 @@ class JournalController extends Controller
 
                 // 1-urinish OSKI/Test imtihonlari hali bo'lmaganida (sanalar
                 // o'tib ketmagan) talabani 2-urinish/Pullik deb belgilamaslik.
-                // Davomat ≥25% (V=-3) holati esa darhol ko'rsatiladi.
+                // Imtihon sanasi BUGUN bo'lsa ham hali "tugamagan" hisoblanadi —
+                // faqat sana o'tib ketgandagina (sana < bugun) 2-urinishga
+                // o'tkaziladi. Davomat ≥25% (V=-3) holati esa darhol ko'rsatiladi.
                 $today = now()->format('Y-m-d');
                 $oskiDone = $hasOskiForWeights
-                    ? ($examSchedule && $examSchedule->oski_date && $examSchedule->oski_date->format('Y-m-d') <= $today)
+                    ? ($examSchedule && $examSchedule->oski_date && $examSchedule->oski_date->format('Y-m-d') < $today)
                     : true;
                 $testDone = $hasTestForWeights
-                    ? ($examSchedule && $examSchedule->test_date && $examSchedule->test_date->format('Y-m-d') <= $today)
+                    ? ($examSchedule && $examSchedule->test_date && $examSchedule->test_date->format('Y-m-d') < $today)
                     : true;
                 $oneUrinishEnded = $oskiDone && $testDone;
                 $isDavomatFail = ($main['v'] ?? null) === -3;
@@ -5740,10 +5742,15 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
-        $jbColumns = $jbScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+        // Sana kalitlari Y-m-d ga normallashtiriladi — baho sanasi (timestamp)
+        // bilan mos bo'lishi uchun. Aks holda jbDatePairSet kaliti mos kelmay,
+        // JN snapshoti hammaga 0 bo'lib yoziladi (exportYnQaydnoma bilan bir xil).
+        $jbColumns = $jbScheduleRows->map(fn($s) => [
+            'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+            'pair' => $s->lesson_pair_code,
+        ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
 
-        $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $jbLessonDates = $jbColumns->pluck('date')->unique()->sort()->values()->toArray();
 
         $jbPairsPerDay = [];
         foreach ($jbColumns as $col) {
@@ -5775,10 +5782,12 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
-        $mtColumns = $mtScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+        $mtColumns = $mtScheduleRows->map(fn($s) => [
+            'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+            'pair' => $s->lesson_pair_code,
+        ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
 
-        $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $mtLessonDates = $mtColumns->pluck('date')->unique()->sort()->values()->toArray();
 
         $mtPairsPerDay = [];
         foreach ($mtColumns as $col) {
@@ -6670,9 +6679,12 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
-        $jbColumns = $jbScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
-        $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        // Sana kalitlari Y-m-d ga normallashtiriladi (exportYnQaydnoma bilan bir xil).
+        $jbColumns = $jbScheduleRows->map(fn($s) => [
+            'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+            'pair' => $s->lesson_pair_code,
+        ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+        $jbLessonDates = $jbColumns->pluck('date')->unique()->sort()->values()->toArray();
 
         $jbPairsPerDay = [];
         foreach ($jbColumns as $col) {
@@ -6702,9 +6714,11 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
-        $mtColumns = $mtScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
-        $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $mtColumns = $mtScheduleRows->map(fn($s) => [
+            'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+            'pair' => $s->lesson_pair_code,
+        ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+        $mtLessonDates = $mtColumns->pluck('date')->unique()->sort()->values()->toArray();
 
         $mtPairsPerDay = [];
         foreach ($mtColumns as $col) {

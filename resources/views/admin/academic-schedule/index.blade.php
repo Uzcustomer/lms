@@ -669,10 +669,10 @@
                                                     // Pullik (jn/mt past yoki davomat ≥25%) → 2/3-urinishda sana qo'yib bo'lmaydi
                                                     $pullikBlocked = ($stuUrinish > 1) && !empty($stuRow['is_pullik']);
                                                     // 4+ ta fandan qarz — "talabani ko'rsatish" rejimida sana qo'yishni
-                                                    // TO'XTATMAYDI: admin barcha urinishlarga sana qo'ya oladi, faqat
-                                                    // ogohlantirish badge'i ko'rsatiladi.
+                                                    // TO'XTATMAYDI: admin barcha urinishlarga (1-urinish ham) sana
+                                                    // qo'ya oladi, faqat ogohlantirish badge'i ko'rsatiladi.
                                                     $isHeldBack = !empty($stuRow['is_held_back']) || $stuDebtCount >= 4;
-                                                    $heldBackWarn = ($stuUrinish > 1) && $isHeldBack;
+                                                    $heldBackWarn = $isHeldBack;
                                                     $isBlocked = $pullikBlocked;
                                                     $blockedTitle = 'Pullik talaba — sana belgilab bo\'lmaydi';
                                                 @endphp

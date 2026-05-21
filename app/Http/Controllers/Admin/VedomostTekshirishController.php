@@ -205,8 +205,13 @@ class VedomostTekshirishController extends Controller
             ->get()
             ->keyBy(fn($r) => $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code);
 
-        // OSKI/Test sanalar exam_schedules jadvalida saqlanadi
+        // OSKI/Test sanalar exam_schedules jadvalida saqlanadi.
+        // Faqat guruh sathidagi yozuvlar (student_hemis_id NULL): per-student
+        // (individual 2/3-urinish) yozuvlarida oski_date/test_date NULL bo'ladi,
+        // va kalit student_hemis_id ni o'z ichiga olmagani uchun keyBy ularni
+        // guruh qatori ustiga yozib, sanani "—" qilib ko'rsatib qo'yardi.
         $examSchedules = DB::table('exam_schedules')
+            ->whereNull('student_hemis_id')
             ->whereIn('group_hemis_id', $allGroupHemisIds)
             ->whereIn('subject_id', $allSubjectIds)
             ->select('group_hemis_id', 'subject_id', 'semester_code', 'oski_date', 'test_date')
@@ -463,6 +468,13 @@ class VedomostTekshirishController extends Controller
 
         // --- Effective grade helper ---
         $getEffectiveGrade = function ($row) {
+            // ENG YUQORI QOIDA: asl baho < 60 va retake (otrabotka) mavjud →
+            // retake ustun. Jurnal (JournalController::getEffectiveGrade) va
+            // JnMtCalculator bilan bir xil — aks holda vedomostda otrabotka
+            // qilingan kunlar past asl baho bilan hisoblanib, JN past chiqadi.
+            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+                return (float) $row->retake_grade;
+            }
             if ($row->status === 'pending' && $row->reason === 'low_grade' && $row->grade !== null) {
                 return (float) $row->grade;
             }

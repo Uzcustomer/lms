@@ -31,6 +31,7 @@ use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\LessonController;
+use App\Http\Controllers\TvScheduleController;
 use App\Http\Controllers\Student\FaceIdController;
 use App\Http\Controllers\Admin\FaceIdAdminController;
 use App\Http\Controllers\Admin\ScheduleController;
@@ -858,6 +859,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/test-center/auto-time-all', [AcademicScheduleController::class, 'autoTimeAll'])->name('test-center.auto-time-all');
             Route::post('/test-center/clear-times', [AcademicScheduleController::class, 'clearTimes'])->name('test-center.clear-times');
             Route::post('/test-center/notify-all', [AcademicScheduleController::class, 'notifyAllExamTimes'])->name('test-center.notify-all');
+            Route::post('/test-center/assign-computers', [AcademicScheduleController::class, 'assignComputersForRange'])->name('test-center.assign-computers');
+            Route::get('/test-center/assign-computers/status', [AcademicScheduleController::class, 'assignComputersStatus'])->name('test-center.assign-computers.status');
             Route::post('/test-center/recheck-moodle', [AcademicScheduleController::class, 'recheckMoodle'])->name('test-center.recheck-moodle');
             Route::post('/test-center/bulk-recheck-moodle', [AcademicScheduleController::class, 'bulkRecheckMoodle'])->name('test-center.bulk-recheck-moodle');
             Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');
@@ -1457,6 +1460,8 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/test-center/auto-time-all', [AcademicScheduleController::class, 'autoTimeAll'])->name('test-center.auto-time-all');
             Route::post('/test-center/clear-times', [AcademicScheduleController::class, 'clearTimes'])->name('test-center.clear-times');
             Route::post('/test-center/notify-all', [AcademicScheduleController::class, 'notifyAllExamTimes'])->name('test-center.notify-all');
+            Route::post('/test-center/assign-computers', [AcademicScheduleController::class, 'assignComputersForRange'])->name('test-center.assign-computers');
+            Route::get('/test-center/assign-computers/status', [AcademicScheduleController::class, 'assignComputersStatus'])->name('test-center.assign-computers.status');
             Route::post('/test-center/recheck-moodle', [AcademicScheduleController::class, 'recheckMoodle'])->name('test-center.recheck-moodle');
             Route::post('/test-center/bulk-recheck-moodle', [AcademicScheduleController::class, 'bulkRecheckMoodle'])->name('test-center.bulk-recheck-moodle');
             Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');
@@ -1481,6 +1486,12 @@ Route::post('/moodle/exam-event', [MoodleExamEventController::class, 'handle'])
 // Telegram bot webhook (CSRF excluded in bootstrap/app.php)
 Route::post('/telegram/webhook/{token}', [\App\Http\Controllers\TelegramWebhookController::class, 'handle'])
     ->name('telegram.webhook');
+
+// TV displey uchun dars jadvali — keyingi 60 daqiqalik oyna (ochiq, login talab qilinmaydi)
+Route::prefix('tv')->name('tv.')->group(function () {
+    Route::get('/schedule', [TvScheduleController::class, 'index'])->name('schedule');
+    Route::get('/schedule/data', [TvScheduleController::class, 'data'])->name('schedule.data');
+});
 
 
 require __DIR__ . '/auth.php';

@@ -91,11 +91,16 @@ class ExamScheduleTickJob implements ShouldQueue
 
     private function processReveal(Carbon $now, ExamNotificationService $notifier): void
     {
+        // Komp raqami xabari faqat imtihonga shu daqiqalar qolganda yuboriladi.
+        // Vaqt planned_start ga bog'langan — stale yoki noto'g'ri reveal_at
+        // qiymati endi xabarni vaqtidan oldin jo'nata olmaydi.
+        $revealMinutes = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
         $due = ComputerAssignment::query()
             ->where('reveal_notified', false)
-            ->whereNotNull('reveal_at')
-            ->where('reveal_at', '<=', $now)
+            ->whereNotNull('computer_number')
             ->where('status', ComputerAssignment::STATUS_SCHEDULED)
+            ->where('planned_start', '<=', $now->copy()->addMinutes($revealMinutes))
+            ->where('planned_start', '>=', $now->copy()->subMinutes(120))
             ->limit(200)
             ->get();
 

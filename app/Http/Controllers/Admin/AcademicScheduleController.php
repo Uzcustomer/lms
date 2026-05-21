@@ -1075,12 +1075,28 @@ class AcademicScheduleController extends Controller
                 ->get()
                 ->all());
         }
+        // Talabaning JORIY (tiklangan) o'quv rejasi — qarz faqat shu reja
+        // bo'yicha hisoblanadi. Transfer/tiklangan talabada academic_records
+        // bir nechta eski curriculumga tegishli bo'lishi mumkin; eski rejalar
+        // hisobga olinsa (subject_id/semestr mos kelmay) o'tilgan fanlar xato
+        // "qarz" bo'lib chiqadi. Tiklangan talabaning baholari yangi rejaning
+        // academic_records iga ko'chiriladi — shuning uchun joriy reja kanonik.
+        $studentCurrentCurr = []; // hemis_id => joriy curriculum_id
+        foreach ($students as $st) {
+            if ($st->curriculum_id) {
+                $studentCurrentCurr[$st->hemis_id] = $st->curriculum_id;
+            }
+        }
+
         $arExistsLookup = []; // hemis_id|subject_id|semester_id => true
         $studentSemCurr = []; // hemis_id => [semester_id => curriculum_id]
         foreach ($arRecords as $ar) {
             $arExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
-            if (!isset($studentSemCurr[$ar->student_id][$ar->semester_id]) && $ar->curriculum_id) {
-                $studentSemCurr[$ar->student_id][$ar->semester_id] = $ar->curriculum_id;
+            // Har semestrni academic_records dagi eski curriculumga emas,
+            // talabaning JORIY rejasiga bog'laymiz.
+            $curr = $studentCurrentCurr[$ar->student_id] ?? null;
+            if ($curr && !isset($studentSemCurr[$ar->student_id][$ar->semester_id])) {
+                $studentSemCurr[$ar->student_id][$ar->semester_id] = $curr;
             }
         }
         unset($arRecords);

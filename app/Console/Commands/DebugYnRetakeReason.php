@@ -164,14 +164,23 @@ class DebugYnRetakeReason extends Command
             . '   (0 qiymat "baholanmagan" deb null ga aylanadi)');
 
         // --- B) JN/MT: tirik manbalar (snapshot null bo'lsa fallback) --------
-        $jnAvg = DB::table('student_grades')
+        // JN jurnal bilan bir xil "kunlik o'rtacha" usulida: avval har bir
+        // dars kuni uchun ROUND(AVG(eff)), keyin kunlar bo'yicha o'rtacha.
+        $jnDayRows = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->where('student_hemis_id', $hid)
             ->where('subject_id', $sid)
             ->where('semester_code', $sem)
             ->whereNotIn('training_type_code', [11, 99, 100, 101, 102, 103])
+            ->whereNotNull('lesson_date')
             ->whereRaw('COALESCE(retake_grade, grade) IS NOT NULL')
-            ->avg(DB::raw('COALESCE(retake_grade, grade)'));
+            ->selectRaw('DATE(lesson_date) as lesson_day,
+                COUNT(*) as n,
+                ROUND(AVG(COALESCE(retake_grade, grade))) as day_avg')
+            ->groupBy(DB::raw('DATE(lesson_date)'))
+            ->orderBy('lesson_day')
+            ->get();
+        $jnAvg = $jnDayRows->isNotEmpty() ? $jnDayRows->avg('day_avg') : null;
 
         $jnComponents = DB::table('student_grades')
             ->whereNull('deleted_at')
@@ -197,8 +206,9 @@ class DebugYnRetakeReason extends Command
             ->get();
 
         $this->newLine();
-        $this->line('--- B) TIRIK JN manbalari (snapshot JN null bo\'lsa ishlatiladi) ---');
-        $this->line('  JN = AVG(COALESCE(retake_grade,grade)), training_type_code NOT IN (11,99,100,101,102,103)');
+        $this->line('--- B) TIRIK JN (kunlik o\'rtacha — jurnal bilan bir xil) ---');
+        $this->line('  Har kun: ROUND(AVG(effective)); keyin kunlar o\'rtachasi.');
+        $this->line('  training_type_code NOT IN (11,99,100,101,102,103)');
         if ($jnComponents->isEmpty()) {
             $this->line('  (joriy baho yozuvlari yo\'q)');
         } else {
@@ -209,8 +219,13 @@ class DebugYnRetakeReason extends Command
                     $r->grade, $r->retake_grade, ($r->retake_grade ?? $r->grade), $r->lesson_date,
                 ])->toArray()
             );
+            $this->line('  Kunlik o\'rtacha:');
+            $this->table(
+                ['lesson_day', 'kun_baho_soni', 'day_avg'],
+                $jnDayRows->map(fn ($r) => [$r->lesson_day, $r->n, $r->day_avg])->toArray()
+            );
         }
-        $this->line('  → Tirik JN avg = ' . ($jnAvg !== null ? round((float) $jnAvg, 2)
+        $this->line('  → Tirik JN (kunlik o\'rtacha) = ' . ($jnAvg !== null ? round((float) $jnAvg, 2)
             . '  (yaxlitlangan: ' . (int) round((float) $jnAvg, 0, PHP_ROUND_HALF_UP) . ')' : 'null'));
 
         $this->newLine();

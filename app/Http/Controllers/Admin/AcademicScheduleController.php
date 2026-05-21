@@ -990,17 +990,18 @@ class AcademicScheduleController extends Controller
                     // Joriy semestrdagi BARCHA qarz fanlari (joriy semestrning
                     // hamma fanlari bo'yicha, sahifa fan-filtridan mustaqil).
                     $currentDebts = array_values($currentDebtsByStudent[$stu->hemis_id] ?? []);
-                    // O'tgan semestr qarzi sifatida sanalgan fanni joriy qarzdan
-                    // chiqaramiz — bitta fan (qayta o'qilayotgan) ikki marta
-                    // sanalib, qarz soni xato oshib ketmasligi uchun.
+                    // O'tgan semestr qarzi bilan AYNAN bir xil (fan + semestr)
+                    // bo'lgan joriy qarzni chiqaramiz — bitta qarz ikki marta
+                    // sanalmasin. Bir xil fan turli semestrlarda bo'lsa (yillik
+                    // fan, masalan Odam anatomiyasi) — har biri ALOHIDA qarz.
                     if (!empty($pastDebts)) {
-                        $pastSubjIds = [];
+                        $pastDebtKeys = [];
                         foreach ($pastDebts as $pd) {
-                            $pastSubjIds[(string) ($pd['subject_id'] ?? '')] = true;
+                            $pastDebtKeys[($pd['subject_id'] ?? '') . '|' . ($pd['semester_code'] ?? '')] = true;
                         }
                         $currentDebts = array_values(array_filter(
                             $currentDebts,
-                            fn ($d) => !isset($pastSubjIds[(string) ($d['subject_id'] ?? '')])
+                            fn ($d) => !isset($pastDebtKeys[($d['subject_id'] ?? '') . '|' . ($d['semester_code'] ?? '')])
                         ));
                     }
                     usort($currentDebts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);

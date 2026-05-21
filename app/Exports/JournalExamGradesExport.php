@@ -39,13 +39,21 @@ class JournalExamGradesExport implements FromArray, WithHeadings, WithStyles, Wi
             'Fan',
             'Semestr',
             'OSKI 1-urinish',
+            'OSKI 1-urinish sana',
             'OSKI 2-urinish',
+            'OSKI 2-urinish sana',
             'OSKI 3-urinish',
+            'OSKI 3-urinish sana',
             "OSKI (qo'shimcha farmoyish)",
+            "OSKI (qo'shimcha) sana",
             'Test 1-urinish',
+            'Test 1-urinish sana',
             'Test 2-urinish',
+            'Test 2-urinish sana',
             'Test 3-urinish',
+            'Test 3-urinish sana',
             "Test (qo'shimcha farmoyish)",
+            "Test (qo'shimcha) sana",
         ];
     }
 
@@ -56,8 +64,8 @@ class JournalExamGradesExport implements FromArray, WithHeadings, WithStyles, Wi
 
     public function styles(Worksheet $sheet)
     {
-        $sheet->getStyle('A1:O1')->getFont()->setBold(true);
-        $sheet->getStyle('A1:O1')->getFill()
+        $sheet->getStyle('A1:W1')->getFont()->setBold(true);
+        $sheet->getStyle('A1:W1')->getFill()
             ->setFillType(Fill::FILL_SOLID)
             ->getStartColor()->setRGB('D9E2F3');
         $sheet->freezePane('A2');

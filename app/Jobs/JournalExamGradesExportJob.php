@@ -199,6 +199,7 @@ class JournalExamGradesExportJob implements ShouldQueue
                 'sg.student_hemis_id', 'sg.subject_id', 'sg.subject_name',
                 'sg.semester_name', 'sg.semester_code', 'sg.training_type_code',
                 'sg.grade', 'sg.retake_grade', 'sg.status', 'sg.reason', 'sg.quiz_result_id',
+                'sg.lesson_date',
                 'st.full_name', 'st.student_id_number', 'st.group_name',
             ];
             if ($hasAttemptCol)   $select[] = 'sg.attempt';
@@ -288,8 +289,10 @@ class JournalExamGradesExportJob implements ShouldQueue
                             'semester'    => '-',
                             'kurs'        => '-',
                             '_sem_rank'   => 999,
-                            'oski' => ['a1' => [], 'a2' => [], 'a3' => [], 'q' => []],
-                            'test' => ['a1' => [], 'a2' => [], 'a3' => [], 'q' => []],
+                            'oski'   => ['a1' => [], 'a2' => [], 'a3' => [], 'q' => []],
+                            'test'   => ['a1' => [], 'a2' => [], 'a3' => [], 'q' => []],
+                            'oski_d' => ['a1' => null, 'a2' => null, 'a3' => null, 'q' => null],
+                            'test_d' => ['a1' => null, 'a2' => null, 'a3' => null, 'q' => null],
                         ];
                     }
 
@@ -303,6 +306,17 @@ class JournalExamGradesExportJob implements ShouldQueue
                     }
 
                     $map[$key][$type][$slot][] = $eff;
+
+                    // Imtihon sanasi — slotda bir nechta yozuv bo'lsa eng so'nggisi.
+                    if (!empty($r->lesson_date)) {
+                        $ds = is_string($r->lesson_date)
+                            ? substr($r->lesson_date, 0, 10)
+                            : \Carbon\Carbon::parse($r->lesson_date)->format('Y-m-d');
+                        $curD = $map[$key][$type . '_d'][$slot];
+                        if ($curD === null || $ds > $curD) {
+                            $map[$key][$type . '_d'][$slot] = $ds;
+                        }
+                    }
                 }
                 unset($rows);
 
@@ -329,12 +343,16 @@ class JournalExamGradesExportJob implements ShouldQueue
                 return strcmp($a['subject'], $b['subject']);
             });
 
+            $fmtDate = fn(?string $d): ?string => $d ? \Carbon\Carbon::parse($d)->format('d.m.Y') : null;
+
             $excelRows = [];
             $i = 0;
             foreach ($data as $d) {
                 $i++;
-                $o = $d['oski'];
-                $t = $d['test'];
+                $o  = $d['oski'];
+                $od = $d['oski_d'];
+                $t  = $d['test'];
+                $td = $d['test_d'];
                 $excelRows[] = [
                     $i,
                     $d['student_id'],
@@ -343,8 +361,14 @@ class JournalExamGradesExportJob implements ShouldQueue
                     $d['group'],
                     $d['subject'],
                     $d['semester'],
-                    $avg($o['a1']), $avg($o['a2']), $avg($o['a3']), $avg($o['q']),
-                    $avg($t['a1']), $avg($t['a2']), $avg($t['a3']), $avg($t['q']),
+                    $avg($o['a1']), $fmtDate($od['a1']),
+                    $avg($o['a2']), $fmtDate($od['a2']),
+                    $avg($o['a3']), $fmtDate($od['a3']),
+                    $avg($o['q']),  $fmtDate($od['q']),
+                    $avg($t['a1']), $fmtDate($td['a1']),
+                    $avg($t['a2']), $fmtDate($td['a2']),
+                    $avg($t['a3']), $fmtDate($td['a3']),
+                    $avg($t['q']),  $fmtDate($td['q']),
                 ];
             }
 

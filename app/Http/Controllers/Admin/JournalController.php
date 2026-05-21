@@ -1662,31 +1662,44 @@ class JournalController extends Controller
             $oskiQosh2Map = $aq2[101] ?? [];
             $testQosh2Map = $aq2[102] ?? [];
 
+            // Pullik/stage hisobida ishlatiladigan JN/MT o'rtacha jurnal
+            // jadvalida KO'RSATILADIGAN qiymat bilan AYNI bo'lishi shart:
+            // maxraj = grading cutoff (bugun) ichidagi BARCHA dars kunlari;
+            // bahosi yo'q kun 0 sifatida hisobga olinadi. (Avval faqat bahosi
+            // bor kunlar bo'linib, bahosi tushmagan kunli talabada stage JN
+            // ko'rsatilgan JN dan yuqori chiqib, pullik noto'g'ri aniqlanardi.)
+            $stageGradingCutoff = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
+            $jbDatesForAvg = array_values(array_filter($jbLessonDates, function ($d) use ($stageGradingCutoff) {
+                return \Carbon\Carbon::parse($d, 'Asia/Tashkent')->startOfDay()->lte($stageGradingCutoff);
+            }));
+            $totalJbForAvg = count($jbDatesForAvg);
+            $totalMtForAvg = count($mtLessonDates);
+
             foreach ($students as $stu) {
                 $h = $stu->hemis_id;
 
-                // JN/MT o'rtacha (joriy holat — sababli retake bilan)
-                $jnSum = 0; $jnDays = 0;
-                foreach ($jbLessonDates as $date) {
+                // JN/MT o'rtacha — jurnal jadvalidagi "JN %"/"MT %" bilan AYNI.
+                $jnDailySum = 0;
+                foreach ($jbDatesForAvg as $date) {
                     $dayGrades = $jbGrades[$h][$date] ?? [];
-                    if (empty($dayGrades)) continue;
                     $pairs = $jbPairsPerDay[$date] ?? 1;
                     $values = array_map(fn($g) => $g['grade'] ?? 0, $dayGrades);
-                    $jnSum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
-                    $jnDays++;
+                    $jnDailySum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
                 }
-                $jn = $jnDays > 0 ? (int) round($jnSum / $jnDays, 0, PHP_ROUND_HALF_UP) : 0;
+                $jn = $totalJbForAvg > 0
+                    ? (int) round($jnDailySum / $totalJbForAvg, 0, PHP_ROUND_HALF_UP)
+                    : 0;
 
-                $mtSum = 0; $mtDays = 0;
+                $mtDailySum = 0;
                 foreach ($mtLessonDates as $date) {
                     $dayGrades = $mtGrades[$h][$date] ?? [];
-                    if (empty($dayGrades)) continue;
                     $pairs = $mtPairsPerDay[$date] ?? 1;
                     $values = array_map(fn($g) => $g['grade'] ?? 0, $dayGrades);
-                    $mtSum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
-                    $mtDays++;
+                    $mtDailySum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
                 }
-                $mt = $mtDays > 0 ? (int) round($mtSum / $mtDays, 0, PHP_ROUND_HALF_UP) : 0;
+                $mt = $totalMtForAvg > 0
+                    ? (int) round($mtDailySum / $totalMtForAvg, 0, PHP_ROUND_HALF_UP)
+                    : 0;
 
                 if (isset($manualMtGrades[$h])) {
                     // $manualMtGrades qiymati bevosita float (object emas, 999-qatordagi map natijasi)

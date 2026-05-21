@@ -132,6 +132,26 @@
         .adv-btn-apply { padding: 4px 10px; border: none; border-radius: 6px; font-size: 10px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #2563eb, #3b82f6); cursor: pointer; transition: all 0.15s; box-shadow: 0 1px 4px rgba(37,99,235,0.3); }
         .adv-btn-apply:hover { background: linear-gradient(135deg, #1d4ed8, #2563eb); transform: translateY(-1px); }
 
+        /* Tepa ko'p tanlovli filtrlar */
+        .ms-filter-row { margin-top: 8px; padding-top: 8px; border-top: 1px dashed #cbd5e1; }
+        .ms-wrap { position: relative; }
+        .ms-btn { display: flex; align-items: center; justify-content: space-between; gap: 6px; width: 100%; min-width: 130px; padding: 0 8px; height: 34px; border: 1px solid #cbd5e1; border-radius: 7px; font-size: 11px; font-weight: 600; color: #334155; background: #fff; cursor: pointer; outline: none; transition: all 0.15s; }
+        .ms-btn:hover { border-color: #2b5ea7; }
+        .ms-btn.ms-active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; }
+        .ms-btn-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ms-popup { display: none; position: absolute; top: 38px; left: 0; z-index: 200; width: 240px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.16); padding: 8px; }
+        .ms-search { width: 100%; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; outline: none; margin-bottom: 6px; box-sizing: border-box; }
+        .ms-search:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
+        .ms-opts { max-height: 220px; overflow-y: auto; }
+        .ms-opt { display: flex; align-items: center; gap: 6px; padding: 4px 6px; font-size: 11px; font-weight: 500; color: #334155; cursor: pointer; border-radius: 5px; }
+        .ms-opt:hover { background: #f1f5f9; }
+        .ms-opt input[type="checkbox"] { width: 14px; height: 14px; cursor: pointer; flex: 0 0 auto; }
+        .ms-opt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ms-opt-all { border-bottom: 1px solid #e2e8f0; margin-bottom: 4px; padding-bottom: 6px; font-weight: 700; }
+        .ms-actions { display: flex; justify-content: flex-end; margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0; }
+        .ms-clear { padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 10px; font-weight: 600; color: #64748b; background: #f8fafc; cursor: pointer; }
+        .ms-clear:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
+
         .journal-table tbody tr { transition: all 0.15s; border-bottom: 1px solid #f1f5f9; }
         .journal-table tbody tr:nth-child(even) { background: #f8fafc; }
         .journal-table tbody tr:nth-child(odd) { background: #fff; }
@@ -238,6 +258,40 @@
                                 </button>
                             </div>
                         </div>
+                    </div>
+                    @php
+                        $msFilterCols = [
+                            'faculty'     => 'Fakultet',
+                            'direction'   => "Yo'nalish",
+                            'kurs'        => 'Kurs',
+                            'semester'    => 'Semestr',
+                            'group'       => 'Guruh',
+                            'fan_name'    => 'Fan',
+                            'yn_turi'     => 'YN turi',
+                            'xulosa_code' => 'Xulosa',
+                        ];
+                    @endphp
+                    <div class="filter-row ms-filter-row" id="ms-filter-row" style="display:none;">
+                        @foreach($msFilterCols as $msCol => $msLabel)
+                            <div class="filter-item ms-wrap" style="max-width:170px;" data-ms="{{ $msCol }}">
+                                <label class="filter-label"><span class="fl-dot" style="background:#6366f1;"></span> {{ $msLabel }}</label>
+                                <button type="button" class="ms-btn" onclick="msToggle('{{ $msCol }}')">
+                                    <span class="ms-btn-text" id="ms-text-{{ $msCol }}">Barchasi</span>
+                                    <svg width="12" height="12" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                                </button>
+                                <div class="ms-popup" id="ms-popup-{{ $msCol }}">
+                                    <input type="text" class="ms-search" placeholder="Qidirish..." oninput="msFilterOptions('{{ $msCol }}')">
+                                    <label class="ms-opt ms-opt-all">
+                                        <input type="checkbox" class="ms-all-cb" onchange="msToggleAll('{{ $msCol }}')">
+                                        <span>Barchasi</span>
+                                    </label>
+                                    <div class="ms-opts" id="ms-opts-{{ $msCol }}"></div>
+                                    <div class="ms-actions">
+                                        <button type="button" class="ms-clear" onclick="msClear('{{ $msCol }}')">Tozalash</button>
+                                    </div>
+                                </div>
+                            </div>
+                        @endforeach
                     </div>
                 </div>
 
@@ -534,12 +588,15 @@
                         allData = []; filteredData = [];
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
                         $('#table-area').hide();
+                        $('#ms-filter-row').hide();
                         $('#btn-excel, #btn-excel-xulosa').prop('disabled', true);
                         $('#total-info').hide();
                         return;
                     }
                     allData = res.data;
                     populateColumnFilters();
+                    msPopulate();
+                    $('#ms-filter-row').css('display', 'flex');
                     applyColumnFilters();
                     $('#table-area').show();
                     $('#btn-excel, #btn-excel-xulosa').prop('disabled', false);
@@ -578,6 +635,104 @@
             });
         }
 
+        // ========== TEPA KO'P TANLOVLI FILTRLAR ==========
+        var msSelected = {}; // col => [tanlangan qiymatlar]
+        var msColsList = ['faculty','direction','kurs','semester','group','fan_name','yn_turi','xulosa_code'];
+
+        function msPopulate() {
+            msColsList.forEach(function(col) {
+                var unique = [], seen = {};
+                allData.forEach(function(r) {
+                    var v = (r[col] || '').toString();
+                    if (v && !seen[v]) { seen[v] = true; unique.push(v); }
+                });
+                unique.sort(function(a, b) { return a.localeCompare(b, undefined, { numeric: true }); });
+
+                // Endi mavjud bo'lmagan tanlovlarni olib tashlash
+                if (msSelected[col]) {
+                    msSelected[col] = msSelected[col].filter(function(v) { return seen[v]; });
+                }
+
+                var box = $('#ms-opts-' + col);
+                box.empty();
+                unique.forEach(function(v) {
+                    var label = col === 'xulosa_code' ? (xulosaCodes[v] || v) : v;
+                    var checked = (msSelected[col] && msSelected[col].indexOf(v) !== -1) ? ' checked' : '';
+                    box.append(
+                        '<label class="ms-opt"><input type="checkbox" class="ms-cb" data-col="' + esc(col) + '" value="' + esc(v) + '"' + checked + '>' +
+                        '<span title="' + esc(label) + '">' + esc(label) + '</span></label>'
+                    );
+                });
+                msUpdateLabel(col);
+            });
+        }
+
+        function msToggle(col) {
+            var popup = document.getElementById('ms-popup-' + col);
+            var visible = popup.style.display === 'block';
+            document.querySelectorAll('.ms-popup').forEach(function(p) { p.style.display = 'none'; });
+            document.querySelectorAll('.adv-filter-popup').forEach(function(p) { p.style.display = 'none'; });
+            if (!visible) popup.style.display = 'block';
+        }
+
+        function msFilterOptions(col) {
+            var q = ($('#ms-popup-' + col + ' .ms-search').val() || '').toLowerCase();
+            $('#ms-opts-' + col + ' .ms-opt').each(function() {
+                $(this).toggle($(this).text().toLowerCase().indexOf(q) !== -1);
+            });
+        }
+
+        function msToggleAll(col) {
+            var checked = $('#ms-popup-' + col + ' .ms-all-cb').prop('checked');
+            $('#ms-opts-' + col + ' .ms-opt:visible .ms-cb').prop('checked', checked);
+            msApply(col);
+        }
+
+        function msClear(col) {
+            $('#ms-opts-' + col + ' .ms-cb').prop('checked', false);
+            $('#ms-popup-' + col + ' .ms-all-cb').prop('checked', false);
+            $('#ms-popup-' + col + ' .ms-search').val('');
+            msFilterOptions(col);
+            msApply(col);
+        }
+
+        function msApply(col) {
+            var vals = [];
+            $('#ms-opts-' + col + ' .ms-cb:checked').each(function() { vals.push($(this).val()); });
+            msSelected[col] = vals;
+            msUpdateLabel(col);
+            applyColumnFilters();
+        }
+
+        function msUpdateLabel(col) {
+            var vals = msSelected[col] || [];
+            var textEl = $('#ms-text-' + col);
+            var btn = textEl.closest('.ms-btn');
+            if (!vals.length) {
+                textEl.text('Barchasi');
+                btn.removeClass('ms-active');
+            } else if (vals.length === 1) {
+                var v = vals[0];
+                textEl.text(col === 'xulosa_code' ? (xulosaCodes[v] || v) : v);
+                btn.addClass('ms-active');
+            } else {
+                textEl.text(vals.length + ' ta tanlandi');
+                btn.addClass('ms-active');
+            }
+            var total = $('#ms-opts-' + col + ' .ms-cb').length;
+            var checked = $('#ms-opts-' + col + ' .ms-cb:checked').length;
+            $('#ms-popup-' + col + ' .ms-all-cb').prop('checked', total > 0 && checked === total);
+        }
+
+        $(document).on('change', '.ms-cb', function() {
+            msApply($(this).data('col'));
+        });
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('.ms-wrap').length) {
+                $('.ms-popup').hide();
+            }
+        });
+
         function applyColumnFilters() {
             var filters = {};
             $('select.col-filter').each(function() {
@@ -597,6 +752,13 @@
                         if (rv.toLowerCase().indexOf(fv) === -1) return false;
                     } else {
                         if (rv !== fv) return false;
+                    }
+                }
+                // Tepa ko'p tanlovli filtrlar
+                for (var mc in msSelected) {
+                    var sel = msSelected[mc];
+                    if (sel && sel.length) {
+                        if (sel.indexOf((r[mc] || '').toString()) === -1) return false;
                     }
                 }
                 if (!matchAdvFilter(advFilters.baho, r.grade, false)) return false;

@@ -1123,11 +1123,12 @@ class JournalController extends Controller
             }
 
             // Count ungraded/resubmitted submissions for MT tab badge.
-            // FAQAT joriy guruh ro'yxatidagi talabalar hisobga olinadi —
-            // boshqa guruh/subgruppaga o'tib ketgan yoki ro'yxatda yo'q
-            // talabaning eski topshirig'i "baholanmagan" deb sanalmasin
-            // (manualMtGrades ham faqat shu ro'yxat bo'yicha yuklanadi).
-            $mtRosterSet = array_flip(collect($studentHemisIds)->all());
+            // FAQAT jadvalda KO'RSATILADIGAN talabalar ($students) hisobga
+            // olinadi. $studentHemisIds — butun guruh; $students esa fanga
+            // biriktirilgan (subgruppa/status bo'yicha filtrlangan) ro'yxat.
+            // Boshqa subgruppa yoki ro'yxatda yo'q talabaning topshirig'i
+            // "baholanmagan" deb sanalmasin.
+            $mtRosterSet = array_flip($students->pluck('hemis_id')->all());
             foreach ($mtSubmissions as $hemisId => $sub) {
                 if (!isset($mtRosterSet[$hemisId])) {
                     continue;

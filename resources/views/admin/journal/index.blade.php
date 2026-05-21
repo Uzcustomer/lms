@@ -1,8 +1,17 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            Jurnal
-        </h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <h2 class="text-xl font-semibold leading-tight text-gray-800">
+                Jurnal
+            </h2>
+            <button type="button" onclick="document.getElementById('jx-export-modal').style.display='flex'"
+                    style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(217,119,6,0.3);">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                </svg>
+                OSKI / Test — Excel
+            </button>
+        </div>
     </x-slot>
 
     @if(session('error'))
@@ -717,4 +726,102 @@
             word-break: break-word;
         }
     </style>
+
+    {{-- OSKI/Test baholarini Excel'ga eksport modali --}}
+    <div id="jx-export-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.35);">
+            <div style="padding:14px 20px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;display:flex;align-items:center;justify-content:space-between;">
+                <h3 style="margin:0;font-size:16px;font-weight:700;">OSKI / Test baholarini Excelga olish</h3>
+                <button type="button" onclick="document.getElementById('jx-export-modal').style.display='none'" style="background:none;border:none;color:#fff;font-size:26px;line-height:1;cursor:pointer;">&times;</button>
+            </div>
+            <div style="padding:18px 20px;overflow-y:auto;">
+                <p style="margin:0 0 14px;font-size:13px;color:#475569;">
+                    Tanlangan sana oralig'idagi (imtihon kuni bo'yicha) barcha fanlardan OSKI va Test
+                    baholari — har urinish va qo'shimcha farmoyish alohida ustunda. Har qator — bitta talabaning bitta fani.
+                </p>
+
+                <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:160px;">
+                        <label style="display:block;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:4px;">Boshlanish sanasi</label>
+                        <input type="date" id="jx-date-from" value="{{ now()->startOfMonth()->format('Y-m-d') }}"
+                               style="width:100%;height:36px;padding:0 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                    </div>
+                    <div style="flex:1;min-width:160px;">
+                        <label style="display:block;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:4px;">Tugash sanasi</label>
+                        <input type="date" id="jx-date-to" value="{{ now()->format('Y-m-d') }}"
+                               style="width:100%;height:36px;padding:0 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                    </div>
+                </div>
+
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:6px;">Kurslar</label>
+                    <div style="display:flex;gap:14px;flex-wrap:wrap;">
+                        @for($k = 1; $k <= 5; $k++)
+                            <label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
+                                <input type="checkbox" class="jx-kurs" value="{{ $k }}"> {{ $k }}-kurs
+                            </label>
+                        @endfor
+                    </div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:3px;">Hech biri tanlanmasa — barcha kurslar olinadi.</div>
+                </div>
+
+                <div>
+                    <label style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:6px;">
+                        Fakultetlar
+                        <label style="font-size:11px;font-weight:600;text-transform:none;cursor:pointer;">
+                            <input type="checkbox" id="jx-fac-all"> Barchasi
+                        </label>
+                    </label>
+                    <div style="max-height:200px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
+                        @foreach($faculties as $faculty)
+                            <label style="display:block;font-size:13px;padding:3px 0;cursor:pointer;">
+                                <input type="checkbox" class="jx-fac" value="{{ $faculty->id }}"> {{ $faculty->name }}
+                            </label>
+                        @endforeach
+                    </div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:3px;">Hech biri tanlanmasa — barcha fakultetlar olinadi.</div>
+                </div>
+            </div>
+            <div style="padding:14px 20px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:10px;background:#f8fafc;">
+                <button type="button" onclick="document.getElementById('jx-export-modal').style.display='none'"
+                        style="padding:8px 18px;background:#f1f5f9;color:#475569;font-size:13px;font-weight:600;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;">Bekor qilish</button>
+                <button type="button" id="jx-export-submit"
+                        style="padding:8px 24px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer;">Excelga yuklab olish</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var exportUrl = @json(route('admin.journal.export-exam-grades-all'));
+
+            var facAll = document.getElementById('jx-fac-all');
+            if (facAll) {
+                facAll.addEventListener('change', function () {
+                    document.querySelectorAll('.jx-fac').forEach(function (cb) { cb.checked = facAll.checked; });
+                });
+            }
+
+            var submitBtn = document.getElementById('jx-export-submit');
+            if (submitBtn) {
+                submitBtn.addEventListener('click', function () {
+                    var from = (document.getElementById('jx-date-from').value || '').trim();
+                    var to = (document.getElementById('jx-date-to').value || '').trim();
+                    if (!from || !to) {
+                        alert('Boshlanish va tugash sanasini tanlang.');
+                        return;
+                    }
+                    var params = ['date_from=' + encodeURIComponent(from), 'date_to=' + encodeURIComponent(to)];
+                    document.querySelectorAll('.jx-fac:checked').forEach(function (cb) {
+                        params.push('faculties[]=' + encodeURIComponent(cb.value));
+                    });
+                    document.querySelectorAll('.jx-kurs:checked').forEach(function (cb) {
+                        params.push('kurslar[]=' + encodeURIComponent(cb.value));
+                    });
+                    window.location.href = exportUrl + '?' + params.join('&');
+                    document.getElementById('jx-export-modal').style.display = 'none';
+                });
+            }
+        })();
+    </script>
 </x-app-layout>

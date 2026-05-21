@@ -285,10 +285,16 @@ class QuizResultController extends Controller
                             ->get();
 
                         foreach ($gradeRows as $gr) {
-                            // Effective grade filtri (jurnal logikasi bilan bir xil)
-                            if ($gr->status === 'pending') continue;
+                            // Effective grade filtri (jurnal getEffectiveGrade logikasi bilan bir xil)
                             $effGrade = null;
-                            if ($gr->reason === 'absent' && $gr->grade === null) {
+                            if ($gr->grade !== null && (float) $gr->grade < 60 && $gr->retake_grade !== null) {
+                                // ENG YUQORI QOIDA: asl baho 60 dan past + retake mavjud -> retake ustun
+                                $effGrade = $gr->retake_grade;
+                            } elseif ($gr->status === 'pending' && $gr->reason === 'low_grade' && $gr->grade !== null) {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->status === 'pending') {
+                                continue;
+                            } elseif ($gr->reason === 'absent' && $gr->grade === null) {
                                 $effGrade = $gr->retake_grade !== null ? $gr->retake_grade : null;
                             } elseif ($gr->status === 'closed' && $gr->reason === 'teacher_victim' && $gr->grade == 0 && $gr->retake_grade === null) {
                                 continue;
@@ -914,10 +920,16 @@ class QuizResultController extends Controller
                             ->get();
 
                         foreach ($gradeRows as $gr) {
-                            // Effective grade filtri (jurnal logikasi bilan bir xil)
-                            if ($gr->status === 'pending') continue;
+                            // Effective grade filtri (jurnal getEffectiveGrade logikasi bilan bir xil)
                             $effGrade = null;
-                            if ($gr->reason === 'absent' && $gr->grade === null) {
+                            if ($gr->grade !== null && (float) $gr->grade < 60 && $gr->retake_grade !== null) {
+                                // ENG YUQORI QOIDA: asl baho 60 dan past + retake mavjud -> retake ustun
+                                $effGrade = $gr->retake_grade;
+                            } elseif ($gr->status === 'pending' && $gr->reason === 'low_grade' && $gr->grade !== null) {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->status === 'pending') {
+                                continue;
+                            } elseif ($gr->reason === 'absent' && $gr->grade === null) {
                                 $effGrade = $gr->retake_grade !== null ? $gr->retake_grade : null;
                             } elseif ($gr->status === 'closed' && $gr->reason === 'teacher_victim' && $gr->grade == 0 && $gr->retake_grade === null) {
                                 continue;
@@ -1037,10 +1049,16 @@ class QuizResultController extends Controller
                             ->get();
 
                         foreach ($gradeRows as $gr) {
-                            // Effective grade filtri (jurnal logikasi bilan bir xil)
-                            if ($gr->status === 'pending') continue;
+                            // Effective grade filtri (jurnal getEffectiveGrade logikasi bilan bir xil)
                             $effGrade = null;
-                            if ($gr->reason === 'absent' && $gr->grade === null) {
+                            if ($gr->grade !== null && (float) $gr->grade < 60 && $gr->retake_grade !== null) {
+                                // ENG YUQORI QOIDA: asl baho 60 dan past + retake mavjud -> retake ustun
+                                $effGrade = $gr->retake_grade;
+                            } elseif ($gr->status === 'pending' && $gr->reason === 'low_grade' && $gr->grade !== null) {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->status === 'pending') {
+                                continue;
+                            } elseif ($gr->reason === 'absent' && $gr->grade === null) {
                                 $effGrade = $gr->retake_grade !== null ? $gr->retake_grade : null;
                             } elseif ($gr->status === 'closed' && $gr->reason === 'teacher_victim' && $gr->grade == 0 && $gr->retake_grade === null) {
                                 continue;

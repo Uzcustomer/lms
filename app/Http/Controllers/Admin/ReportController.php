@@ -4818,8 +4818,13 @@ class ReportController extends Controller
             // Transfer qilingan talabada bitta semestrda bir nechta reja bo'lishi mumkin.
             $semCurrCounts = [];
             foreach ($arRecords as $ar) {
-                $arExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
+                // Ikki xil kalit: rejasiz (oddiy fanlar — mavjud mantiq) va rejaga
+                // bog'liq (guruhli "slot" fanlar — eski reja yozuvi yangi reja
+                // qarzini yopib qo'ymasligi uchun).
+                $arKeyBase = $ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id;
+                $arExistsLookup[$arKeyBase] = true;
                 if ($ar->curriculum_id) {
+                    $arExistsLookup[$arKeyBase . '|' . $ar->curriculum_id] = true;
                     $prev = $semCurrCounts[$ar->student_id][$ar->semester_id][$ar->curriculum_id] ?? 0;
                     $semCurrCounts[$ar->student_id][$ar->semester_id][$ar->curriculum_id] = $prev + 1;
                 }
@@ -4868,19 +4873,18 @@ class ReportController extends Controller
             $allSemCodes = collect($curriculumPairs)->keys()
                 ->map(fn ($k) => explode('|', $k)[1])->unique()->values()->all();
 
+            // in_group to'la (guruhli/variantli) fanlar ham yuklanadi — 6-qadamda
+            // "slot" mantig'i bilan hisoblanadi. Avval ular butunlay tashlanardi,
+            // natijada Jismoniy tarbiya kabi haqiqiy qarzlar ko'rinmay qolardi.
             $currSubjectsQuery = DB::table('curriculum_subjects as cs')
                 ->whereIn('cs.curricula_hemis_id', $allCurriculumIds ?: [0])
                 ->whereIn('cs.semester_code', $allSemCodes ?: [0])
                 ->where('cs.is_active', 1)
-                ->where(function ($q) {
-                    // in_group bo'sh yoki NULL bo'lganlar — guruhli fanlar e'tiborga olinmaydi
-                    $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
-                })
                 ->select(
                     'cs.curricula_hemis_id', 'cs.curriculum_subject_hemis_id',
                     'cs.semester_code', 'cs.semester_name',
                     'cs.subject_id', 'cs.subject_name', 'cs.subject_type_code',
-                    'cs.credit', 'cs.total_acload'
+                    'cs.credit', 'cs.total_acload', 'cs.in_group'
                 )
                 ->distinct();
 
@@ -4948,8 +4952,17 @@ class ReportController extends Controller
                     $subjectsForSem = $subjectsByPair->get($currId . '|' . $semCode, collect());
                     $subjectsForSem = $this->filterSubjectsByGroupSuffix($subjectsForSem, $st->group_name ?? '');
 
+                    // Guruhli fanlar (in_group to'la) in_group bo'yicha "slot"ga
+                    // birlashtiriladi; oddiy fanlar (in_group bo'sh) darrov tekshiriladi.
+                    $slots = []; // in_group => [ {subject}, ... ]
+
                     foreach ($subjectsForSem as $sub) {
-                        // Tanlov fan bo'lsa, talaba tanlovini olamiz
+                        if (trim((string) ($sub->in_group ?? '')) !== '') {
+                            $slots[(string) $sub->in_group][] = $sub;
+                            continue;
+                        }
+
+                        // --- Oddiy fan (mavjud mantiq, o'zgarmagan) ---
                         $effectiveSubjectId = $sub->subject_id;
                         $effectiveSubjectName = $sub->subject_name;
                         if ((string) $sub->subject_type_code === '12') {
@@ -4972,6 +4985,35 @@ class ReportController extends Controller
                             'semester_name' => $sub->semester_name,
                             'credit'        => $sub->credit,
                             'total_acload'  => $sub->total_acload,
+                        ];
+                    }
+
+                    // --- Guruhli fanlar: har "slot" — 1 ta potensial qarz ---
+                    // Slot ichidagi birorta fan joriy reja ostida topshirilgan bo'lsa
+                    // slot yopiq. Variant (a/b/c), tanlov va bog'langan majburiy
+                    // fanlar shu mantiq bilan bir xil to'g'ri hisoblanadi.
+                    foreach ($slots as $slotSubjects) {
+                        $slotClosed = false;
+                        foreach ($slotSubjects as $sub) {
+                            $arKey = $st->hemis_id . '|' . $sub->subject_id . '|'
+                                . $sub->semester_code . '|' . $currId;
+                            if (isset($arExistsLookup[$arKey])) {
+                                $slotClosed = true;
+                                break;
+                            }
+                        }
+                        if ($slotClosed) continue;
+
+                        // Slot ochiq — 1 qarz. Vakil: eng kichik subject_id'li fan.
+                        usort($slotSubjects, fn($a, $b) => $a->subject_id <=> $b->subject_id);
+                        $rep = $slotSubjects[0];
+                        $debts[] = [
+                            'subject_id'    => $rep->subject_id,
+                            'subject_name'  => $rep->subject_name,
+                            'semester_code' => $rep->semester_code,
+                            'semester_name' => $rep->semester_name,
+                            'credit'        => $rep->credit,
+                            'total_acload'  => $rep->total_acload,
                         ];
                     }
                 }

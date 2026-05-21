@@ -1306,20 +1306,33 @@ class AcademicScheduleController extends Controller
         // jurnal qulflagan qiymat kanonik. Snapshot null bo'lsa, tirik qiymatlar
         // bilan to'ldiramiz.
         //
-        // JN: training_type_code NOT IN [11,99,100,101,102,103] uchun AVG.
-        //   (11 = ma'ruza ham JN ga kirmaydi — jurnaldagi mantiq bilan mos.)
+        // JN: jurnal bilan AYNAN bir xil "kunlik o'rtacha" usulida hisoblanadi —
+        //   avval har bir DARS KUNI uchun o'rtacha (shu kundagi baholar
+        //   o'rtachasi), keyin kunlar bo'yicha o'rtacha. Tekis AVG() ishlatilsa
+        //   bir kunda 2 para dars o'tilgan kunlar ikki barobar og'irlik oladi va
+        //   JN jurnaldagi JN% dan past chiqadi — past baholari ko'p parali
+        //   kunlarga tushgan talaba noto'g'ri "pullik" bo'lib qolardi.
+        //   training_type_code NOT IN [11,99,100,101,102,103]: 11=ma'ruza,
+        //   99=MT, 100=ON, 101=OSKI, 102=Test, 103=Quiz — JN ga kirmaydi.
         // MT: jurnaldagi MT jadvalida yagona baho — training_type_code=99
         //   AND lesson_date IS NULL. Per-day MT (lesson_date bor) ishlatilmaydi.
         try {
-            $jnAvg = DB::table('student_grades')
+            $jnDaySub = DB::table('student_grades')
                 ->whereNull('deleted_at')
                 ->whereIn('student_hemis_id', $allStudentHids)
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
                 ->whereNotIn('training_type_code', [11, 99, 100, 101, 102, 103])
+                ->whereNotNull('lesson_date')
                 ->whereRaw('COALESCE(retake_grade, grade) IS NOT NULL')
                 ->selectRaw('student_hemis_id, subject_id, semester_code,
-                    AVG(COALESCE(retake_grade, grade)) as avg_grade')
+                    ROUND(AVG(COALESCE(retake_grade, grade))) as day_avg')
+                ->groupBy('student_hemis_id', 'subject_id', 'semester_code', DB::raw('DATE(lesson_date)'));
+
+            $jnAvg = DB::query()
+                ->fromSub($jnDaySub, 'jn_days')
+                ->selectRaw('student_hemis_id, subject_id, semester_code,
+                    AVG(day_avg) as avg_grade')
                 ->groupBy('student_hemis_id', 'subject_id', 'semester_code')
                 ->get();
             foreach ($jnAvg as $r) {

@@ -118,7 +118,8 @@ class DebugYnRetakeReason extends Command
         $this->info("FAN: " . ($subjectName ?? '(noma\'lum)') . "  [subject_id={$sid}, semester={$sem}]");
         $this->info('================================================================');
 
-        $year = DB::table('semesters')->where('semester_code', $sem)->value('education_year');
+        // Eslatma: `semesters` jadvalida ustun nomi `code` (semester_code emas).
+        $year = DB::table('semesters')->where('code', $sem)->value('education_year');
         $relevantYears = $year ? [$year] : [];
 
         // --- A) JN/MT: snapshot (yn_student_grades) ---------------------------

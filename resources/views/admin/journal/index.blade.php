@@ -782,27 +782,93 @@
                     <div style="font-size:11px;color:#94a3b8;margin-top:3px;">Hech biri tanlanmasa — barcha fakultetlar olinadi.</div>
                 </div>
             </div>
-            <div style="padding:14px 20px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:10px;background:#f8fafc;">
-                <button type="button" onclick="document.getElementById('jx-export-modal').style.display='none'"
-                        style="padding:8px 18px;background:#f1f5f9;color:#475569;font-size:13px;font-weight:600;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;">Bekor qilish</button>
-                <button type="button" id="jx-export-submit"
-                        style="padding:8px 24px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer;">Excelga yuklab olish</button>
+            <div style="padding:14px 20px;border-top:1px solid #e5e7eb;background:#f8fafc;">
+                <div id="jx-export-progress" style="display:none;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;color:#475569;margin-bottom:5px;">
+                        <span id="jx-export-msg" style="font-weight:600;">Tayyorlanmoqda...</span>
+                        <span id="jx-export-pct" style="font-weight:700;color:#d97706;">0%</span>
+                    </div>
+                    <div style="height:12px;background:#e2e8f0;border-radius:7px;overflow:hidden;">
+                        <div id="jx-export-bar" style="height:100%;width:0%;background:linear-gradient(135deg,#d97706,#f59e0b);transition:width .35s ease;border-radius:7px;"></div>
+                    </div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:5px;">Excel orqa fonda tayyorlanmoqda — bu oynani yopsangiz ham bo'ladi, tayyor bo'lgach yuklab olinadi.</div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:10px;">
+                    <button type="button" id="jx-export-cancel" onclick="document.getElementById('jx-export-modal').style.display='none'"
+                            style="padding:8px 18px;background:#f1f5f9;color:#475569;font-size:13px;font-weight:600;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;">Yopish</button>
+                    <button type="button" id="jx-export-submit"
+                            style="padding:8px 24px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer;">Excelga yuklab olish</button>
+                </div>
             </div>
         </div>
     </div>
 
     <script>
         (function () {
-            var exportUrl = @json(route('admin.journal.export-exam-grades-all'));
+            var startUrl    = @json(route('admin.journal.export-exam-grades-all.start'));
+            var statusUrl   = @json(route('admin.journal.export-exam-grades-all.status'));
+            var downloadUrl = @json(route('admin.journal.export-exam-grades-all.download'));
+            var csrfToken   = @json(csrf_token());
 
-            var facAll = document.getElementById('jx-fac-all');
+            var facAll      = document.getElementById('jx-fac-all');
+            var submitBtn   = document.getElementById('jx-export-submit');
+            var progressBox = document.getElementById('jx-export-progress');
+            var barEl       = document.getElementById('jx-export-bar');
+            var pctEl       = document.getElementById('jx-export-pct');
+            var msgEl       = document.getElementById('jx-export-msg');
+
+            var pollTimer = null;
+
             if (facAll) {
                 facAll.addEventListener('change', function () {
                     document.querySelectorAll('.jx-fac').forEach(function (cb) { cb.checked = facAll.checked; });
                 });
             }
 
-            var submitBtn = document.getElementById('jx-export-submit');
+            function setProgress(pct, msg) {
+                pct = Math.max(0, Math.min(100, parseInt(pct, 10) || 0));
+                barEl.style.width = pct + '%';
+                pctEl.textContent = pct + '%';
+                if (msg) msgEl.textContent = msg;
+            }
+
+            function showRunning() {
+                progressBox.style.display = 'block';
+                submitBtn.style.display = 'none';
+            }
+
+            function resetUi() {
+                if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+                progressBox.style.display = 'none';
+                submitBtn.style.display = '';
+                submitBtn.disabled = false;
+                setProgress(0, 'Tayyorlanmoqda...');
+            }
+
+            function poll(exportKey) {
+                fetch(statusUrl + '?export_key=' + encodeURIComponent(exportKey), {
+                    headers: { 'Accept': 'application/json' }
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var status = data.status || '';
+                    if (status === 'running') {
+                        setProgress(data.percent || 0, data.message || 'Ishlanmoqda...');
+                        pollTimer = setTimeout(function () { poll(exportKey); }, 1500);
+                    } else if (status === 'done') {
+                        setProgress(100, 'Tayyor — yuklab olinmoqda...');
+                        window.location.href = downloadUrl + '?export_key=' + encodeURIComponent(exportKey);
+                        setTimeout(resetUi, 2500);
+                    } else {
+                        alert('Eksport xatosi: ' + (data.message || 'noma\'lum xato'));
+                        resetUi();
+                    }
+                })
+                .catch(function () {
+                    pollTimer = setTimeout(function () { poll(exportKey); }, 2500);
+                });
+            }
+
             if (submitBtn) {
                 submitBtn.addEventListener('click', function () {
                     var from = (document.getElementById('jx-date-from').value || '').trim();
@@ -811,15 +877,42 @@
                         alert('Boshlanish va tugash sanasini tanlang.');
                         return;
                     }
-                    var params = ['date_from=' + encodeURIComponent(from), 'date_to=' + encodeURIComponent(to)];
+                    var payload = { date_from: from, date_to: to, faculties: [], kurslar: [] };
                     document.querySelectorAll('.jx-fac:checked').forEach(function (cb) {
-                        params.push('faculties[]=' + encodeURIComponent(cb.value));
+                        payload.faculties.push(parseInt(cb.value, 10));
                     });
                     document.querySelectorAll('.jx-kurs:checked').forEach(function (cb) {
-                        params.push('kurslar[]=' + encodeURIComponent(cb.value));
+                        payload.kurslar.push(parseInt(cb.value, 10));
                     });
-                    window.location.href = exportUrl + '?' + params.join('&');
-                    document.getElementById('jx-export-modal').style.display = 'none';
+
+                    submitBtn.disabled = true;
+                    showRunning();
+                    setProgress(0, 'Navbatga qo\'shilmoqda...');
+
+                    fetch(startUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken
+                        },
+                        body: JSON.stringify(payload)
+                    })
+                    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, body: d }; }); })
+                    .then(function (res) {
+                        if (!res.ok || !res.body.export_key) {
+                            var em = res.body && res.body.message ? res.body.message : 'Eksportni boshlab bo\'lmadi';
+                            alert(em);
+                            resetUi();
+                            return;
+                        }
+                        setProgress(res.body.percent || 0, res.body.message || 'Eksport boshlandi');
+                        poll(res.body.export_key);
+                    })
+                    .catch(function () {
+                        alert('Server bilan bog\'lanishda xato.');
+                        resetUi();
+                    });
                 });
             }
         })();

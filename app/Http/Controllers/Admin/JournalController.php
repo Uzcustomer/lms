@@ -8551,12 +8551,11 @@ class JournalController extends Controller
 
     /**
      * Jurnal — tanlangan sana oralig'i, fakultet(lar) va kurs(lar) bo'yicha
-     * BARCHA fanlardan OSKI va Test baholarini Excel ga eksport qilish.
-     * Har urinish (1/2/3) alohida ustun, qo'shimcha farmoyish bilan
-     * yuklanganlar ham alohida ustunda. Har qator — bitta talabaning
-     * bitta fani (student_id, F.I.SH., kurs, guruh, fan).
+     * BARCHA fanlardan OSKI va Test baholari Excel eksportini background
+     * jobda boshlash. Bir nechta fakultet/kurs tanlanganda so'rov timeout
+     * bo'lmasligi uchun ish navbatga qo'yiladi, foiz cache orqali kuzatiladi.
      */
-    public function exportExamGradesAll(Request $request)
+    public function startExamGradesExport(Request $request)
     {
         $request->validate([
             'date_from'   => 'required|date_format:Y-m-d',
@@ -8575,120 +8574,94 @@ class JournalController extends Controller
         $facultyIds = array_values(array_filter((array) $request->input('faculties', [])));
         $kurslar    = array_values(array_unique(array_map('intval', (array) $request->input('kurslar', []))));
 
-        // Tanlangan fakultet (Department.id) -> department_hemis_id (guruhlar shu
-        // ustun bo'yicha bog'lanadi).
+        // Tanlangan fakultet (Department.id) -> department_hemis_id.
         $facultyHemisIds = [];
         if (!empty($facultyIds)) {
             $facultyHemisIds = \App\Models\Department::whereIn('id', $facultyIds)
                 ->pluck('department_hemis_id')->filter()->values()->all();
         }
 
-        $hasAttemptCol   = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
-        $hasQoshimchaCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'is_qoshimcha');
-
-        // OSKI (101) va Test (102) baholari — imtihon sanasi (lesson_date)
-        // tanlangan oraliqda.
-        $q = DB::table('student_grades as sg')
-            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-            ->leftJoin('groups as g', 'g.group_hemis_id', '=', 'st.group_id')
-            ->whereNull('sg.deleted_at')
-            ->whereIn('sg.training_type_code', [101, 102])
-            ->whereBetween('sg.lesson_date', [$from . ' 00:00:00', $to . ' 23:59:59']);
-        if (!empty($facultyHemisIds)) {
-            $q->whereIn('g.department_hemis_id', $facultyHemisIds);
-        }
-        $select = [
-            'sg.student_hemis_id', 'sg.subject_id', 'sg.subject_name',
-            'sg.semester_code', 'sg.semester_name', 'sg.training_type_code',
-            'sg.grade', 'sg.retake_grade',
-            'st.full_name', 'st.student_id_number', 'st.group_name',
+        $filters = [
+            'from'              => $from,
+            'to'                => $to,
+            'kurslar'           => $kurslar,
+            'faculty_hemis_ids' => $facultyHemisIds,
         ];
-        if ($hasAttemptCol)   $select[] = 'sg.attempt';
-        if ($hasQoshimchaCol) $select[] = 'sg.is_qoshimcha';
-        $grades = $q->select($select)->get();
 
-        // (talaba, fan, semestr) bo'yicha guruhlash.
-        $map = [];
-        foreach ($grades as $r) {
-            $semNum = null;
-            if (!empty($r->semester_name) && preg_match('/(\d+)/', (string) $r->semester_name, $m)) {
-                $semNum = (int) $m[1];
-            } elseif (!empty($r->semester_code) && preg_match('/(\d+)/', (string) $r->semester_code, $m2)) {
-                $semNum = (int) $m2[1];
-            }
-            $kurs = $semNum ? (int) ceil($semNum / 2) : null;
-            if (!empty($kurslar) && (!$kurs || !in_array($kurs, $kurslar, true))) {
-                continue;
-            }
+        $exportKey = 'journal_exam_grades_export_' . auth()->id() . '_' . md5(json_encode($filters));
 
-            $key = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
-            if (!isset($map[$key])) {
-                $map[$key] = [
-                    'student_id' => (string) ($r->student_id_number ?? ''),
-                    'full_name'  => (string) ($r->full_name ?? ''),
-                    'kurs'       => $kurs ? $kurs . '-kurs' : '-',
-                    'group'      => (string) ($r->group_name ?? '-'),
-                    'subject'    => (string) ($r->subject_name ?? ''),
-                    'semester'   => (string) ($r->semester_name ?: ($r->semester_code ?? '')),
-                    'oski'   => [1 => null, 2 => null, 3 => null],
-                    'oski_q' => null,
-                    'test'   => [1 => null, 2 => null, 3 => null],
-                    'test_q' => null,
-                ];
-            }
+        $existing = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if ($existing && ($existing['status'] ?? '') === 'running') {
+            return response()->json([
+                'export_key' => $exportKey,
+                'status'     => 'running',
+                'message'    => $existing['message'] ?? 'Ishlanmoqda...',
+                'percent'    => $existing['percent'] ?? 0,
+            ]);
+        }
 
-            $grade = $r->retake_grade ?? $r->grade;
-            if ($grade === null) {
-                continue;
-            }
-            $grade = (float) $grade;
-            $attempt = $hasAttemptCol ? (int) ($r->attempt ?? 1) : 1;
-            if ($attempt < 1 || $attempt > 3) {
-                $attempt = 1;
-            }
-            $type = ((int) $r->training_type_code === 101) ? 'oski' : 'test';
+        \Illuminate\Support\Facades\Cache::put($exportKey, [
+            'status'     => 'running',
+            'message'    => 'Navbatga qo\'shilmoqda...',
+            'percent'    => 0,
+            'updated_at' => now()->toDateTimeString(),
+        ], 1800);
 
-            if ($hasQoshimchaCol && !empty($r->is_qoshimcha)) {
-                $cur = $map[$key][$type . '_q'];
-                $map[$key][$type . '_q'] = ($cur === null) ? $grade : max($cur, $grade);
-            } else {
-                $cur = $map[$key][$type][$attempt];
-                $map[$key][$type][$attempt] = ($cur === null) ? $grade : max($cur, $grade);
+        \App\Jobs\JournalExamGradesExportJob::dispatch($filters, $exportKey);
+
+        return response()->json([
+            'export_key' => $exportKey,
+            'status'     => 'running',
+            'message'    => 'Eksport boshlandi',
+            'percent'    => 0,
+        ]);
+    }
+
+    public function examGradesExportStatus(Request $request)
+    {
+        $exportKey = $request->get('export_key');
+        if (!$exportKey) {
+            return response()->json(['status' => 'error', 'message' => 'Export key topilmadi'], 400);
+        }
+
+        $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if (!$data) {
+            $paths = \App\Jobs\JournalExamGradesExportJob::pathsFor($exportKey);
+            if (file_exists($paths['meta'])) {
+                $data = json_decode(@file_get_contents($paths['meta']), true) ?: null;
             }
         }
 
-        // Guruh (tabiiy tartib) -> F.I.SH. -> fan bo'yicha saralash.
-        $data = array_values($map);
-        usort($data, function ($a, $b) {
-            $c = strnatcmp($a['group'], $b['group']);
-            if ($c !== 0) return $c;
-            $c = strcmp($a['full_name'], $b['full_name']);
-            if ($c !== 0) return $c;
-            return strcmp($a['subject'], $b['subject']);
-        });
-
-        $excelRows = [];
-        $i = 0;
-        foreach ($data as $d) {
-            $i++;
-            $excelRows[] = [
-                $i,
-                $d['student_id'],
-                $d['full_name'],
-                $d['kurs'],
-                $d['group'],
-                $d['subject'],
-                $d['semester'],
-                $d['oski'][1], $d['oski'][2], $d['oski'][3], $d['oski_q'],
-                $d['test'][1], $d['test'][2], $d['test'][3], $d['test_q'],
-            ];
+        if (!$data) {
+            return response()->json(['status' => 'error', 'message' => 'Eksport topilmadi yoki muddati tugagan']);
         }
 
-        $filename = 'jurnal_oski_test_' . $from . '_' . $to . '.xlsx';
-        return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Exports\JournalExamGradesExport($excelRows, $from, $to),
-            $filename
-        );
+        return response()->json($data);
+    }
+
+    public function examGradesExportDownload(Request $request)
+    {
+        $exportKey = $request->get('export_key');
+        if (!$exportKey) {
+            return response()->json(['error' => 'Export key topilmadi'], 400);
+        }
+
+        $paths = \App\Jobs\JournalExamGradesExportJob::pathsFor($exportKey);
+
+        $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if (!$data && file_exists($paths['meta'])) {
+            $data = json_decode(@file_get_contents($paths['meta']), true) ?: null;
+        }
+
+        if (!$data || ($data['status'] ?? '') !== 'done' || !file_exists($paths['xlsx'])) {
+            return response()->json(['error' => 'Fayl topilmadi yoki hali tayyor emas'], 404);
+        }
+
+        $fileName = $data['file_name'] ?? 'jurnal_oski_test.xlsx';
+
+        return response()->download($paths['xlsx'], $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 
     /**

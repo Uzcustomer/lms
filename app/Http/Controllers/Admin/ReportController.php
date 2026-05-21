@@ -4814,15 +4814,37 @@ class ReportController extends Controller
             }
 
             $arExistsLookup = [];
-            // [hemis_id][semester_code] => curriculum_id (talaba shu semestrda qaysi rejada o'qigan)
-            $studentSemCurr = [];
+            // [hemis_id][semester_id][curriculum_id] => yozuvlar soni.
+            // Transfer qilingan talabada bitta semestrda bir nechta reja bo'lishi mumkin.
+            $semCurrCounts = [];
             foreach ($arRecords as $ar) {
                 $arExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
-                if (!isset($studentSemCurr[$ar->student_id][$ar->semester_id]) && $ar->curriculum_id) {
-                    $studentSemCurr[$ar->student_id][$ar->semester_id] = $ar->curriculum_id;
+                if ($ar->curriculum_id) {
+                    $prev = $semCurrCounts[$ar->student_id][$ar->semester_id][$ar->curriculum_id] ?? 0;
+                    $semCurrCounts[$ar->student_id][$ar->semester_id][$ar->curriculum_id] = $prev + 1;
                 }
             }
             unset($arRecords);
+
+            // [hemis_id][semester_id] => curriculum_id — talaba shu semestrda qaysi
+            // rejada hisoblanishi. Bir semestrda bir nechta reja uchrasa: talabaning
+            // JORIY rejasini afzal ko'ramiz — uning baholari aynan shu reja
+            // subject_id'lari ostida yozilgan; aks holda eng ko'p yozuvga ega rejani
+            // olamiz. Bu nodeterministik "birinchi uchragan" tanlovni bartaraf etadi
+            // va transfer qilingan talabalarda soxta qarzlarni oldini oladi.
+            $studentSemCurr = [];
+            foreach ($semCurrCounts as $sid => $semesters) {
+                $currentCurr = $studentMap[$sid]->curriculum_id ?? null;
+                foreach ($semesters as $semId => $currCounts) {
+                    if ($currentCurr && isset($currCounts[$currentCurr])) {
+                        $studentSemCurr[$sid][$semId] = $currentCurr;
+                    } else {
+                        arsort($currCounts);
+                        $studentSemCurr[$sid][$semId] = array_key_first($currCounts);
+                    }
+                }
+            }
+            unset($semCurrCounts);
 
             // 3-QADAM: Talabalarning kerakli (curriculum_id, semester_code) juftliklarini yig'amiz.
             //  • O'tgan semestrlar uchun: academic_records'dagi tarixiy curriculum_id

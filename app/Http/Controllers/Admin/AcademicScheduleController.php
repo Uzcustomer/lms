@@ -1448,8 +1448,7 @@ class AcademicScheduleController extends Controller
 
         // 2) OSKI / Test attempt=1 baholari (101, 102, va legacy 103 quiz)
         // Legacy code 103 quiz grades: resolve to OSKI(101) or Test(102) via quiz_result
-        $examMap = []; // hemis_id|subj|sem|type => avg grade
-        $examLists = []; // hemis_id|subj|sem|type => [grades] (for averaging)
+        $examMap = []; // hemis_id|subj|sem|type => eng oxirgi (yangi) baho
         try {
             $rows = DB::table('student_grades')
                 ->whereNull('deleted_at')
@@ -1458,7 +1457,10 @@ class AcademicScheduleController extends Controller
                 ->whereIn('semester_code', $allSemCodes)
                 ->whereIn('training_type_code', [101, 102, 103])
                 ->when($hasAttemptCol, fn($q) => $q->where(fn($qq) => $qq->where('attempt', 1)->orWhereNull('attempt')))
-                ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade', 'quiz_result_id')
+                ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code',
+                    'grade', 'retake_grade', 'quiz_result_id', 'reason', 'lesson_date', 'id')
+                ->orderBy('lesson_date')
+                ->orderBy('id')
                 ->get();
 
             $quizIds = $rows->where('training_type_code', 103)->pluck('quiz_result_id')->filter()->unique()->values()->all();
@@ -1482,13 +1484,22 @@ class AcademicScheduleController extends Controller
                         continue;
                     }
                 }
+                // teacher_victim placeholder (eski/bekor yozuv, baho 0 yoki yo'q)
+                // hisobga olinmaydi — aks holda haqiqiy baho bilan o'rtachalanib
+                // (yoki uning o'rniga) natijani buzadi. Reinstated talabada eski
+                // o'qishidan qolgan 0-placeholder yangi haqiqiy baho bilan
+                // qo'shilib OSKI/Test ni xato pasaytirardi.
+                if ($r->reason === 'teacher_victim' && $r->retake_grade === null
+                    && ($r->grade === null || (float) $r->grade == 0.0)) {
+                    continue;
+                }
                 $effective = $r->retake_grade ?? $r->grade;
                 if ($effective === null) continue;
                 $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $typeCode;
-                $examLists[$k][] = (float) $effective;
-            }
-            foreach ($examLists as $k => $list) {
-                $examMap[$k] = count($list) ? array_sum($list) / count($list) : null;
+                // Bitta imtihon uchun bir nechta yozuv bo'lsa — o'rtacha emas,
+                // ENG OXIRGISI (yangi sana/id) olinadi. Qatorlar lesson_date,id
+                // bo'yicha tartiblangan, oxirgisi yozib qoldiriladi.
+                $examMap[$k] = (float) $effective;
             }
         } catch (\Throwable $e) {}
 

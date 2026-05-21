@@ -843,6 +843,9 @@ class AcademicScheduleController extends Controller
                 $stat = $statByStu[$st->hemis_id] ?? null;
                 $explicitK = $st->hemis_id . '|' . $s . '|' . $sem;
                 $hasA2 = !empty($explicitAttemptByStudent[$explicitK]['attempt2']);
+                // Fanni amalda o'tgan talaba — qarz emas (attempt=2 yozuvi
+                // bo'lsa ham: u 2-urinishni o'tgan bo'lishi mumkin).
+                if (!empty($stat) && !empty($stat['passed'])) continue;
                 $failedAndDone = $ynDayDone && !empty($stat) && !empty($stat['failed1']);
                 if (!$failedAndDone && !$hasA2) continue;
                 $debtKey = $s . '|' . $sem;
@@ -987,6 +990,12 @@ class AcademicScheduleController extends Controller
                     //   - student_grades.attempt=2 yozuvi mavjud (qo'lda 12a ga o'tkazilgan)
                     $effectiveFailed1 = $stat['failed1'] || $didNotAttend || $hasAttempt2;
                     $effectiveFailed2 = $stat['failed2'] || $hasAttempt3;
+                    // Fanni amalda o'tgan (OSKI/Test urinishlari birlashtirilib
+                    // o'tilgan) talaba — 2/3-urinishga tushmaydi.
+                    if (!empty($stat['passed'])) {
+                        $effectiveFailed1 = false;
+                        $effectiveFailed2 = false;
+                    }
                     // Joriy semestrdagi BARCHA qarz fanlari (joriy semestrning
                     // hamma fanlari bo'yicha, sahifa fan-filtridan mustaqil).
                     $currentDebts = array_values($currentDebtsByStudent[$stu->hemis_id] ?? []);
@@ -1726,6 +1735,27 @@ class AcademicScheduleController extends Controller
                     $failed2 = false;
                 }
 
+                // Talaba fanni AMALDA o'tgan bo'lsa — qarz EMAS. OSKI bir
+                // urinishda, Test boshqa urinishda o'tilgan bo'lishi mumkin —
+                // urinishlar BIRLASHTIRILADI (jurnal stage-aniqlashi kabi).
+                // Aks holda OSKI ni 1-urinishda, Test ni 2-urinishda o'tgan
+                // talaba xato 2/3-urinishga (qarzga) tushib qolardi.
+                $oskiBest = max(
+                    $oskiNum !== null ? $oskiNum : -1.0,
+                    (isset($oski2Num) && $oski2Num !== null) ? $oski2Num : -1.0
+                );
+                $testBest = max(
+                    $testNum !== null ? $testNum : -1.0,
+                    (isset($test2Num) && $test2Num !== null) ? $test2Num : -1.0
+                );
+                $oskiOk = !$oskiRequired || $oskiBest >= $minLimit;
+                $testOk = !$testRequired || $testBest >= $minLimit;
+                $fullyPassed = !$isPullik && $oskiOk && $testOk;
+                if ($fullyPassed) {
+                    $failed1 = false;
+                    $failed2 = false;
+                }
+
                 $key = $g . '|' . $s . '|' . $sem;
                 if (!isset($result[$key])) $result[$key] = [];
                 $result[$key][$hid] = [
@@ -1733,6 +1763,7 @@ class AcademicScheduleController extends Controller
                     'failed2' => $failed2,
                     'pullik' => $isPullik,
                     'held_back' => false,
+                    'passed' => $fullyPassed,
                 ];
             }
         }

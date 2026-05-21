@@ -1301,75 +1301,39 @@ class AcademicScheduleController extends Controller
             }
         } catch (\Throwable $e) {}
 
-        // 1b) Tirik manbalar — snapshot yo'q (jarayonda) bo'lganlar uchun.
+        // 1b) Tirik manbalar — snapshot yo'q yoki 0 bo'lgan talabalar uchun.
         // Tartib: snapshot (1a) eng birinchi va eng kuchli — YN topshirilganida
-        // jurnal qulflagan qiymat kanonik. Snapshot null bo'lsa, tirik qiymatlar
-        // bilan to'ldiramiz.
+        // qulflangan qiymat kanonik. Snapshot null bo'lsa, tirik qiymat bilan
+        // to'ldiramiz.
         //
-        // JN: jurnal bilan AYNAN bir xil "kunlik o'rtacha" usulida hisoblanadi —
-        //   avval har bir DARS KUNI uchun o'rtacha (shu kundagi baholar
-        //   o'rtachasi), keyin kunlar bo'yicha o'rtacha. Tekis AVG() ishlatilsa
-        //   bir kunda 2 para dars o'tilgan kunlar ikki barobar og'irlik oladi va
-        //   JN jurnaldagi JN% dan past chiqadi — past baholari ko'p parali
-        //   kunlarga tushgan talaba noto'g'ri "pullik" bo'lib qolardi.
-        //   training_type_code NOT IN [11,99,100,101,102,103]: 11=ma'ruza,
-        //   99=MT, 100=ON, 101=OSKI, 102=Test, 103=Quiz — JN ga kirmaydi.
-        // MT: jurnaldagi MT jadvalida yagona baho — training_type_code=99
-        //   AND lesson_date IS NULL. Per-day MT (lesson_date bor) ishlatilmaydi.
+        // JN/MT jurnal sahifasidagi formula bilan AYNAN bir xil hisoblanadi
+        // (App\Services\JournalGradeService): har bir dars kuni uchun kunlik
+        // o'rtacha (baho qo'yilmagan "NB" kun 0 sifatida), maxraj = jadvaldagi
+        // dars kunlari soni. Tekis AVG() ishlatilsa ko'p parali kunlar ortiqcha
+        // og'irlik olib, NB kunlar e'tibordan chetda qolardi — talaba noto'g'ri
+        // "pullik" yoki noto'g'ri "2-urinish" bo'lib qolardi.
         try {
-            $jnDaySub = DB::table('student_grades')
-                ->whereNull('deleted_at')
-                ->whereIn('student_hemis_id', $allStudentHids)
-                ->whereIn('subject_id', $allSubjectIds)
-                ->whereIn('semester_code', $allSemCodes)
-                ->whereNotIn('training_type_code', [11, 99, 100, 101, 102, 103])
-                ->whereNotNull('lesson_date')
-                ->whereRaw('COALESCE(retake_grade, grade) IS NOT NULL')
-                ->selectRaw('student_hemis_id, subject_id, semester_code,
-                    ROUND(AVG(COALESCE(retake_grade, grade))) as day_avg')
-                ->groupBy('student_hemis_id', 'subject_id', 'semester_code', DB::raw('DATE(lesson_date)'));
-
-            $jnAvg = DB::query()
-                ->fromSub($jnDaySub, 'jn_days')
-                ->selectRaw('student_hemis_id, subject_id, semester_code,
-                    AVG(day_avg) as avg_grade')
-                ->groupBy('student_hemis_id', 'subject_id', 'semester_code')
-                ->get();
-            foreach ($jnAvg as $r) {
-                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
-                if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
-                // Snapshot ustun: faqat snapshot null bo'lsa to'ldiramiz
-                if ($jnMtMap[$k]['jn'] === null) {
-                    $jnMtMap[$k]['jn'] = (int) round((float) $r->avg_grade, 0, PHP_ROUND_HALF_UP);
-                }
-            }
-
-            // Manual MT (lesson_date NULL) — jurnaldagi MT jadvalining yagona bahosi
-            $manualMt = DB::table('student_grades')
-                ->whereNull('deleted_at')
-                ->whereIn('student_hemis_id', $allStudentHids)
-                ->whereIn('subject_id', $allSubjectIds)
-                ->whereIn('semester_code', $allSemCodes)
-                ->where('training_type_code', 99)
-                ->whereNull('lesson_date')
-                // Bir nechta MT yozuvi bo'lsa eng oxirgisini (retake/tuzatishdan keyingi)
-                // ustuvor olish kerak. Aks holda eski past MT tasodifan olinib,
-                // talaba noto'g'ri "pullik" ko'rinib qolishi mumkin.
-                ->orderByDesc('updated_at')
-                ->orderByDesc('id')
-                ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade', 'retake_grade')
-                ->get();
-            foreach ($manualMt as $r) {
-                $effective = $r->retake_grade ?? $r->grade;
-                if ($effective === null) continue;
-                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
-                if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
-                if ($jnMtMap[$k]['mt'] === null) {
-                    $jnMtMap[$k]['mt'] = (int) round((float) $effective, 0, PHP_ROUND_HALF_UP);
+            $jnMtLive = \App\Services\JournalGradeService::computeJnMtBulk(
+                array_values($triples),
+                $studentGroup
+            );
+            foreach ($jnMtLive as $tripleKey => $perStudent) {
+                $parts = explode('|', $tripleKey);
+                if (count($parts) !== 3) continue;
+                [$g, $s, $sem] = $parts;
+                foreach ($perStudent as $hid => $vals) {
+                    $k = $hid . '|' . $s . '|' . $sem;
+                    if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
+                    if ($jnMtMap[$k]['jn'] === null && $vals['jn'] !== null) {
+                        $jnMtMap[$k]['jn'] = $vals['jn'];
+                    }
+                    if ($jnMtMap[$k]['mt'] === null && $vals['mt'] !== null) {
+                        $jnMtMap[$k]['mt'] = $vals['mt'];
+                    }
                 }
             }
         } catch (\Throwable $e) {
-            \Log::warning('Live JN/MT aggregate failed: ' . $e->getMessage());
+            \Log::warning('Live JN/MT (JournalGradeService) failed: ' . $e->getMessage());
         }
 
         // 2) OSKI / Test attempt=1 baholari (101, 102, va legacy 103 quiz)

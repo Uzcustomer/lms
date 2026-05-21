@@ -668,14 +668,13 @@
                                                     }
                                                     // Pullik (jn/mt past yoki davomat ≥25%) → 2/3-urinishda sana qo'yib bo'lmaydi
                                                     $pullikBlocked = ($stuUrinish > 1) && !empty($stuRow['is_pullik']);
-                                                    // 4+ ta fandan qarz → kursdan qoldiriladi, qayta topshira olmaydi
-                                                    // (eski is_held_back yoki yangi total qarz soni >= 4 — qaysi biri bo'lsa)
+                                                    // 4+ ta fandan qarz — "talabani ko'rsatish" rejimida sana qo'yishni
+                                                    // TO'XTATMAYDI: admin barcha urinishlarga sana qo'ya oladi, faqat
+                                                    // ogohlantirish badge'i ko'rsatiladi.
                                                     $isHeldBack = !empty($stuRow['is_held_back']) || $stuDebtCount >= 4;
-                                                    $heldBackBlocked = ($stuUrinish > 1) && $isHeldBack;
-                                                    $isBlocked = $pullikBlocked || $heldBackBlocked;
-                                                    $blockedTitle = $heldBackBlocked
-                                                        ? '4 tadan ortiq fandan qarz — kursdan qoldiriladi, qayta topshira olmaydi'
-                                                        : 'Pullik talaba — sana belgilab bo\'lmaydi';
+                                                    $heldBackWarn = ($stuUrinish > 1) && $isHeldBack;
+                                                    $isBlocked = $pullikBlocked;
+                                                    $blockedTitle = 'Pullik talaba — sana belgilab bo\'lmaydi';
                                                 @endphp
                                                 <tr class="student-sub-row" style="background:{{ $isBlocked ? '#fef2f2' : '#fafafa' }};border-top:1px dashed #e2e8f0;">
                                                     <td></td>
@@ -688,8 +687,8 @@
                                                         @if($stuCurrentDebtCount > 0)
                                                             <span class="debt-badge debt-badge-current" title="{{ $stuCurrentDebtTooltip }}">{{ $stuCurrentDebtCount }} joriy</span>
                                                         @endif
-                                                        @if($heldBackBlocked)
-                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="4 tadan ortiq fandan qarz — kursdan qoldiriladi">4 tadan ortiq qarz</span>
+                                                        @if($heldBackWarn)
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="4 tadan ortiq fandan qarz — ogohlantirish (sana qo'yish mumkin)">4 tadan ortiq qarz</span>
                                                         @elseif($pullikBlocked)
                                                             <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="JN/MT past yoki davomat ≥25% — qayta topshira olmaydi (pullik)">Pullik</span>
                                                         @endif

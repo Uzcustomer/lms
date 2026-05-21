@@ -679,9 +679,62 @@ class AcademicScheduleController extends Controller
             $perStudentMap[$key] = $row;
         }
 
-        // Per-student urinish-status: jn/mt/oski/test/davomat asosida — 2/3-urinish ro'yxatda
-        // kim "yiqilgan" va kim "pullik" ekanligini bilish uchun.
-        $studentStatus = $this->computeStudentAttemptStatuses($scheduleData);
+        // Per-student urinish-status: jn/mt/oski/test/davomat asosida.
+        // Sahifa fan bo'yicha filtrlangan bo'lishi mumkin, lekin 4+ qarz qoidasi
+        // (held_back) talabaning JORIY SEMESTRDAGI BARCHA fanlarini talab qiladi —
+        // aks holda ko'rinmayotgan fanlardagi qarzlar sanalmay, talaba xato
+        // 2-urinishga o'tib ketadi. Shu sababli joriy semestrning barcha
+        // (guruh, fan) triplelarini exam_schedules dan olib, statusni shular
+        // bo'yicha hisoblaymiz (display faqat filtrlangan qismni ko'rsatadi).
+        $semCodesForDebt = [];
+        $groupHidsForDebt = [];
+        $scheduleData->each(function ($items) use (&$semCodesForDebt, &$groupHidsForDebt) {
+            foreach ($items as $it) {
+                $g = $it['group']->group_hemis_id ?? null;
+                $sem = $it['subject']->semester_code ?? null;
+                if ($g) $groupHidsForDebt[(string) $g] = true;
+                if ($sem) $semCodesForDebt[(string) $sem] = true;
+            }
+        });
+
+        $fullTriples = [];
+        $examDateMap = []; // g|s|sem => ['oski'=>?Y-m-d, 'test'=>?Y-m-d]
+        if (!empty($groupHidsForDebt) && !empty($semCodesForDebt)) {
+            try {
+                $esRows = DB::table('exam_schedules')
+                    ->whereNull('student_hemis_id')
+                    ->whereIn('group_hemis_id', array_keys($groupHidsForDebt))
+                    ->whereIn('semester_code', array_keys($semCodesForDebt))
+                    ->select('group_hemis_id', 'subject_id', 'semester_code', 'oski_date', 'test_date')
+                    ->get();
+                foreach ($esRows as $r) {
+                    $tk = $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                    $fullTriples[$tk] = [$r->group_hemis_id, $r->subject_id, $r->semester_code];
+                    $examDateMap[$tk] = [
+                        'oski' => $r->oski_date ? substr((string) $r->oski_date, 0, 10) : null,
+                        'test' => $r->test_date ? substr((string) $r->test_date, 0, 10) : null,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('attachStudentsToSchedule: exam_schedules full load failed: ' . $e->getMessage());
+            }
+        }
+        // Ko'rinayotgan triplelar exam_schedules'da bo'lmasligi mumkin — qo'shamiz.
+        $scheduleData->each(function ($items) use (&$fullTriples) {
+            foreach ($items as $it) {
+                $g = $it['group']->group_hemis_id ?? null;
+                $s = $it['subject']->subject_id ?? null;
+                $sem = $it['subject']->semester_code ?? null;
+                if ($g && $s && $sem) {
+                    $tk = $g . '|' . $s . '|' . $sem;
+                    if (!isset($fullTriples[$tk])) {
+                        $fullTriples[$tk] = [$g, $s, $sem];
+                    }
+                }
+            }
+        });
+
+        $studentStatus = $this->computeAttemptStatusesForTriples($fullTriples);
 
         // O'tgan semestrlardagi qarz fanlari ro'yxatini hisoblash
         // (>4 qarzdorlar menyusidagi logika asosida — academic_records'da yo'q fanlar)
@@ -751,53 +804,56 @@ class AcademicScheduleController extends Controller
         }
         $today = now()->toDateString();
 
-        // Birinchi pass: har bir talabaning joriy semestrdagi qarz fanlari ro'yxatini
-        // butun scheduleData bo'ylab yig'amiz. Aks holda har row faqat o'z fanini
-        // hisoblaydi va talabaning bir nechta fandan qarzdorligi to'g'ri ko'rsatilmaydi.
-        // currentDebtsByStudent[hemis_id] = [subject_id|semester_code => ['subject_name', 'semester_name']]
+        // Joriy semestr qarzlari — sahifa fan-filtridan MUSTAQIL, $fullTriples
+        // (joriy semestrning barcha fanlari) bo'yicha. Fan "qarz" sanaladi:
+        //  - YN kuni (oski/test sanasi) o'tgan VA talaba yiqilgan (failed1), yoki
+        //  - talaba qo'lda 2-urinishga o'tkazilgan (student_grades.attempt=2).
+        // YN kuni hali kelmagan fan qarz emas — talaba 1-urinishini hali
+        // topshirmagan (3 qarz + joriy 1-urinish fan = 3, bloklanmaydi).
+        // currentDebtsByStudent[hemis_id] = [subject_id|semester_code => [...]]
         $currentDebtsByStudent = [];
-        foreach ($scheduleData as $itemsBatch) {
-            foreach ($itemsBatch as $itm) {
-                $itGHid = $itm['group']->group_hemis_id ?? null;
-                $itSubj = $itm['subject']->subject_id ?? null;
-                $itSem = $itm['subject']->semester_code ?? null;
-                if (!$itGHid || !$itSubj || !$itSem) continue;
-                $itStatusKey = $itGHid . '|' . $itSubj . '|' . $itSem;
-                $itStatusByStudent = $studentStatus[$itStatusKey] ?? [];
-                $itGroupKey = $itGHid . '|' . $itSubj . '|' . $itSem;
-                $itOskiMap = $attempt1OskiByKey[$itGroupKey] ?? [];
-                $itTestMap = $attempt1TestByKey[$itGroupKey] ?? [];
-                $itOskiDate = $itm['oski_date'] ?? null;
-                $itTestDate = $itm['test_date'] ?? null;
-                $itLessonEnd = $itm['lesson_end_date'] ?? null;
-                $itEffOski = $itOskiDate ?: $itLessonEnd;
-                $itEffTest = $itTestDate ?: $itLessonEnd;
-                $itOskiPassed = $itEffOski && $itEffOski < $today && !empty($itOskiMap);
-                $itTestPassed = $itEffTest && $itEffTest < $today && !empty($itTestMap);
-                // Joriy semestrdagi fan "qarz" deb hisoblanadi faqat 1-urinish YN kuni
-                // tugagandan keyin. Aks holda talaba hali birinchi urinishini topshirmagan
-                // (yoki topshirayotgan) — pullik/yiqilgan deb erta belgilash noto'g'ri.
-                // YN sanasi belgilanmagan bo'lsa, YN hali bo'lib o'tmagan deb qaraladi.
-                $itYnDayDone = ($itOskiDate && $itOskiDate < $today)
-                    || ($itTestDate && $itTestDate < $today);
-                $itStuList = $studentsByGroup->get($itGHid, collect());
-                foreach ($itStuList as $st) {
-                    $stat = $itStatusByStudent[$st->hemis_id] ?? ['failed1' => false];
-                    $missedO = $itOskiPassed && empty($itOskiMap[$st->hemis_id]);
-                    $missedT = $itTestPassed && empty($itTestMap[$st->hemis_id]);
-                    $explicitK = $st->hemis_id . '|' . $itSubj . '|' . $itSem;
-                    $hasA2 = !empty($explicitAttemptByStudent[$explicitK]['attempt2']);
-                    $eff1 = $stat['failed1'] || $missedO || $missedT || $hasA2;
-                    if ($eff1 && $itYnDayDone) {
-                        $debtKey = $itSubj . '|' . $itSem;
-                        if (!isset($currentDebtsByStudent[$st->hemis_id][$debtKey])) {
-                            $currentDebtsByStudent[$st->hemis_id][$debtKey] = [
-                                'subject_name' => $itm['subject']->subject_name ?? '',
-                                'semester_name' => $itm['subject']->semester_name ?? '',
-                                'semester_code' => (int) $itSem,
-                            ];
-                        }
-                    }
+        $debtSubjMeta = [];
+        if (!empty($fullTriples)) {
+            $debtSubjIds = array_values(array_unique(array_map(fn($t) => $t[1], $fullTriples)));
+            $debtSemCodes = array_values(array_unique(array_map(fn($t) => $t[2], $fullTriples)));
+            try {
+                $metaRows = DB::table('curriculum_subjects')
+                    ->whereIn('subject_id', $debtSubjIds)
+                    ->whereIn('semester_code', $debtSemCodes)
+                    ->select('subject_id', 'semester_code', 'subject_name', 'semester_name')
+                    ->get();
+                foreach ($metaRows as $mr) {
+                    $debtSubjMeta[$mr->subject_id . '|' . $mr->semester_code] = [
+                        'subject_name' => $mr->subject_name,
+                        'semester_name' => $mr->semester_name,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('attachStudentsToSchedule: debt subject meta load failed: ' . $e->getMessage());
+            }
+        }
+        foreach ($fullTriples as $tk => $triple) {
+            [$g, $s, $sem] = $triple;
+            $dates = $examDateMap[$tk] ?? [];
+            $oskiD = $dates['oski'] ?? null;
+            $testD = $dates['test'] ?? null;
+            $ynDayDone = ($oskiD && $oskiD < $today) || ($testD && $testD < $today);
+            $statByStu = $studentStatus[$tk] ?? [];
+            foreach ($studentsByGroup->get($g, collect()) as $st) {
+                $stat = $statByStu[$st->hemis_id] ?? null;
+                $explicitK = $st->hemis_id . '|' . $s . '|' . $sem;
+                $hasA2 = !empty($explicitAttemptByStudent[$explicitK]['attempt2']);
+                $failedAndDone = $ynDayDone && !empty($stat) && !empty($stat['failed1']);
+                if (!$failedAndDone && !$hasA2) continue;
+                $debtKey = $s . '|' . $sem;
+                if (!isset($currentDebtsByStudent[$st->hemis_id][$debtKey])) {
+                    $meta = $debtSubjMeta[$debtKey] ?? [];
+                    $currentDebtsByStudent[$st->hemis_id][$debtKey] = [
+                        'subject_id' => $s,
+                        'subject_name' => $meta['subject_name'] ?? '',
+                        'semester_name' => $meta['semester_name'] ?? '',
+                        'semester_code' => (int) $sem,
+                    ];
                 }
             }
         }
@@ -931,8 +987,22 @@ class AcademicScheduleController extends Controller
                     //   - student_grades.attempt=2 yozuvi mavjud (qo'lda 12a ga o'tkazilgan)
                     $effectiveFailed1 = $stat['failed1'] || $didNotAttend || $hasAttempt2;
                     $effectiveFailed2 = $stat['failed2'] || $hasAttempt3;
-                    // Joriy semestrdagi BARCHA qarz fanlari (barcha rowlar bo'yicha)
+                    // Joriy semestrdagi BARCHA qarz fanlari (joriy semestrning
+                    // hamma fanlari bo'yicha, sahifa fan-filtridan mustaqil).
                     $currentDebts = array_values($currentDebtsByStudent[$stu->hemis_id] ?? []);
+                    // O'tgan semestr qarzi sifatida sanalgan fanni joriy qarzdan
+                    // chiqaramiz — bitta fan (qayta o'qilayotgan) ikki marta
+                    // sanalib, qarz soni xato oshib ketmasligi uchun.
+                    if (!empty($pastDebts)) {
+                        $pastSubjIds = [];
+                        foreach ($pastDebts as $pd) {
+                            $pastSubjIds[(string) ($pd['subject_id'] ?? '')] = true;
+                        }
+                        $currentDebts = array_values(array_filter(
+                            $currentDebts,
+                            fn ($d) => !isset($pastSubjIds[(string) ($d['subject_id'] ?? '')])
+                        ));
+                    }
                     usort($currentDebts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
                     $admission = $admissionByStudent[$stu->hemis_id] ?? null;
                     $rows[] = [
@@ -1097,6 +1167,7 @@ class AcademicScheduleController extends Controller
                     if (isset($arExistsLookup[$arKey])) continue;
 
                     $debts[] = [
+                        'subject_id' => $effectiveSubjectId,
                         'subject_name' => $effectiveSubjectName,
                         'semester_name' => $sub->semester_name,
                         'semester_code' => (int) $sub->semester_code,
@@ -1139,10 +1210,6 @@ class AcademicScheduleController extends Controller
      */
     private function computeStudentAttemptStatuses($scheduleData): array
     {
-        $result = [];
-        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
-        $minLimit = 60;
-
         // Har item uchun (group, subject, semester) uchligini yig'amiz
         $triples = [];
         $scheduleData->each(function ($items) use (&$triples) {
@@ -1155,6 +1222,23 @@ class AcademicScheduleController extends Controller
                 }
             }
         });
+
+        return $this->computeAttemptStatusesForTriples($triples);
+    }
+
+    /**
+     * Berilgan (group|subj|sem) triplelar ro'yxati uchun urinish statusini
+     * hisoblaydi. computeStudentAttemptStatuses scheduleData'dan triple yasab
+     * shu metodga uzatadi; qarz sonini sahifa fan-filtridan mustaqil hisoblash
+     * uchun (joriy semestrning barcha fanlari bilan) ham chaqiriladi.
+     *
+     * @param array<string,array{0:mixed,1:mixed,2:mixed}> $triples
+     */
+    private function computeAttemptStatusesForTriples(array $triples): array
+    {
+        $result = [];
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+        $minLimit = 60;
 
         if (empty($triples)) return $result;
 

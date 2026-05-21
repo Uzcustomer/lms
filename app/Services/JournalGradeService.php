@@ -53,6 +53,13 @@ class JournalGradeService
         $semCodes    = array_values(array_unique(array_map(fn ($t) => (string) $t[2], $triples)));
         $studentHids = array_map('strval', array_keys($studentGroup));
 
+        // Joriy o'quv yili — tiklangan/transfer talabaning eski o'qishidan
+        // qolgan (boshqa education_year) baholarini chiqarib tashlash uchun.
+        $currentYearCode = null;
+        try {
+            $currentYearCode = \App\Models\Semester::where('current', true)->max('education_year');
+        } catch (\Throwable $e) {}
+
         // Talabalarni guruh bo'yicha indekslaymiz
         $studentsByGroup = [];
         foreach ($studentGroup as $hemis => $gHid) {
@@ -106,6 +113,10 @@ class JournalGradeService
                 ->whereIn('subject_id', $subjectIds)
                 ->whereIn('semester_code', $semCodes)
                 ->whereNotIn('training_type_code', [100, 101, 102, 103])
+                ->when($currentYearCode, fn ($q) => $q->where(function ($qq) use ($currentYearCode) {
+                    $qq->whereNull('education_year_code')
+                       ->orWhere('education_year_code', $currentYearCode);
+                }))
                 ->whereNotNull('lesson_date')
                 ->select('student_hemis_id', 'subject_id', 'semester_code',
                     'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
@@ -145,6 +156,10 @@ class JournalGradeService
                 ->whereIn('subject_id', $subjectIds)
                 ->whereIn('semester_code', $semCodes)
                 ->where('training_type_code', 99)
+                ->when($currentYearCode, fn ($q) => $q->where(function ($qq) use ($currentYearCode) {
+                    $qq->whereNull('education_year_code')
+                       ->orWhere('education_year_code', $currentYearCode);
+                }))
                 ->whereNull('lesson_date')
                 ->whereNotNull('grade')
                 ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade')

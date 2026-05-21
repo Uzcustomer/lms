@@ -236,7 +236,7 @@
                             </div>
                         </div>
                         <div class="filter-item" style="margin-left:auto;max-width:280px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Ism bo'yicha qidiruv (barcha sanalar)</label>
+                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Ism bo'yicha qidiruv ({{ now('Asia/Tashkent')->year }}-yil)</label>
                             <div style="display:flex;gap:6px;align-items:center;">
                                 <input type="text" id="search_student_name" class="date-input" placeholder="FISH kiriting..." autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();searchByName();}" style="flex:1;" />
                                 <button type="button" class="btn-tartibga" onclick="searchByName()" style="background:#10b981;border-color:#059669;white-space:nowrap;">

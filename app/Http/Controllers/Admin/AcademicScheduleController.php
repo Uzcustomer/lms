@@ -2596,19 +2596,37 @@ class AcademicScheduleController extends Controller
         // fieldlar yo'q (max_input_vars'ni tejash uchun). Har row uchun
         // department/specialty/curriculum/subject_name/closing_form to'ldiriladi.
         $uniqueGroupIds = array_unique(array_filter(array_column($validSchedules, 'group_hemis_id')));
-        $uniqueSubjectKeys = [];
-        foreach ($validSchedules as $s) {
-            $uniqueSubjectKeys[$s['subject_id'] . '|' . $s['semester_code']] = [
-                'subject_id' => $s['subject_id'],
-                'semester_code' => $s['semester_code'],
-            ];
-        }
 
         $groupMeta = !empty($uniqueGroupIds)
             ? \App\Models\Group::whereIn('group_hemis_id', $uniqueGroupIds)
                 ->get(['group_hemis_id', 'department_hemis_id', 'specialty_hemis_id', 'curriculum_hemis_id'])
                 ->keyBy('group_hemis_id')
             : collect();
+
+        // closing_form AYNAN qatorning o'quv rejasidagi (curriculum) fan
+        // yozuvidan olinishi shart. Bitta (subject_id, semester_code) juftligi
+        // bir nechta o'quv rejada uchraydi (semester_code global emas) va har
+        // birida closing_form turlicha bo'lishi mumkin. Curriculumsiz qidiruv
+        // boshqa rejaning yozuvini ('oski' kabi) tanlab, test sanasini jimgina
+        // null qilib yuboradi - shuning uchun qidiruvni curriculum bilan scope qilamiz.
+        $curriculumForRow = function (array $s) use ($groupMeta): ?string {
+            if (!empty($s['curriculum_hemis_id'])) {
+                return (string) $s['curriculum_hemis_id'];
+            }
+            $g = $groupMeta->get($s['group_hemis_id'] ?? null);
+            return $g && $g->curriculum_hemis_id !== null ? (string) $g->curriculum_hemis_id : null;
+        };
+
+        $uniqueSubjectKeys = [];
+        foreach ($validSchedules as $s) {
+            $cur = $curriculumForRow($s);
+            $uniqueSubjectKeys[$cur . '|' . $s['subject_id'] . '|' . $s['semester_code']] = [
+                'curricula_hemis_id' => $cur,
+                'subject_id' => $s['subject_id'],
+                'semester_code' => $s['semester_code'],
+            ];
+        }
+
         $subjectMeta = collect();
         if (!empty($uniqueSubjectKeys)) {
             $subjectQuery = \App\Models\CurriculumSubject::query();
@@ -2617,11 +2635,14 @@ class AcademicScheduleController extends Controller
                     $q->orWhere(function ($sub) use ($sk) {
                         $sub->where('subject_id', $sk['subject_id'])
                             ->where('semester_code', $sk['semester_code']);
+                        if (!empty($sk['curricula_hemis_id'])) {
+                            $sub->where('curricula_hemis_id', $sk['curricula_hemis_id']);
+                        }
                     });
                 }
             });
-            $subjectMeta = $subjectQuery->get(['subject_id', 'semester_code', 'subject_name', 'closing_form'])
-                ->keyBy(fn($s) => $s->subject_id . '|' . $s->semester_code);
+            $subjectMeta = $subjectQuery->get(['curricula_hemis_id', 'subject_id', 'semester_code', 'subject_name', 'closing_form'])
+                ->keyBy(fn($s) => $s->curricula_hemis_id . '|' . $s->subject_id . '|' . $s->semester_code);
         }
 
         foreach ($validSchedules as &$schedule) {
@@ -2631,8 +2652,8 @@ class AcademicScheduleController extends Controller
                 $schedule['specialty_hemis_id'] = $schedule['specialty_hemis_id'] ?? $g->specialty_hemis_id;
                 $schedule['curriculum_hemis_id'] = $schedule['curriculum_hemis_id'] ?? $g->curriculum_hemis_id;
             }
-            $subKey = $schedule['subject_id'] . '|' . $schedule['semester_code'];
-            $sm = $subjectMeta->get($subKey);
+            $cur = $curriculumForRow($schedule);
+            $sm = $subjectMeta->get($cur . '|' . $schedule['subject_id'] . '|' . $schedule['semester_code']);
             if ($sm) {
                 $schedule['subject_name'] = $schedule['subject_name'] ?? $sm->subject_name;
                 $schedule['closing_form'] = $schedule['closing_form'] ?? $sm->closing_form;

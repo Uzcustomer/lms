@@ -1980,15 +1980,7 @@ class QuizResultController extends Controller
             $ynManualOverride = $ynTuriOverridesAll[$ynOverrideKey] ?? null;
 
             if ($ynManualOverride && preg_match('/^mavzu_(\d+)$/i', $ynManualOverride, $mvm)) {
-                // Modal bitta (fan+guruh) guruhga bitta yn_turi majburlaydi. Agar
-                // natijaning O'Z shakli "N-mavzu" bo'lsa — o'sha shakldan foydalanamiz
-                // (aks holda har xil mavzular bitta raqamga yopishib, faqat bittasi
-                // yuklanardi). Modal tanlovi faqat shakl noaniq bo'lganda ishlatiladi.
-                if (preg_match('/^\d+-mavzu$/i', (string) $result->shakl)) {
-                    $this->uploadMavzuRetake($result, $rowInfo, $successCount, $errors, $subjectOverrides);
-                } else {
-                    $this->uploadMavzuRetake($result, $rowInfo, $successCount, $errors, $subjectOverrides, (int) $mvm[1]);
-                }
+                $this->uploadMavzuRetake($result, $rowInfo, $successCount, $errors, $subjectOverrides, (int) $mvm[1]);
                 continue;
             }
 

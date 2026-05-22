@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../utils/page_transitions.dart';
+import '../../widgets/clinic_header.dart';
 import 'face_login_screen.dart';
 import 'verify_2fa_screen.dart';
 
@@ -585,8 +586,8 @@ class _Hero extends StatelessWidget {
               right: 0,
               bottom: 0,
               child: CustomPaint(
-                size: Size(MediaQuery.of(context).size.width, 190),
-                painter: _BuildingPainter(color: Colors.white.withOpacity(0.08)),
+                size: Size(MediaQuery.of(context).size.width, 220),
+                painter: _BuildingPainter(color: Colors.white.withOpacity(0.13)),
               ),
             ),
             Padding(
@@ -722,42 +723,44 @@ class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
       width: 92,
       height: 92,
       decoration: BoxDecoration(
-        color: Colors.white,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.18),
+            color: Colors.black.withOpacity(0.2),
             blurRadius: 18,
             offset: const Offset(0, 8),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(22),
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // Running EKG line
-            Positioned.fill(
-              child: AnimatedBuilder(
-                animation: _sweep,
-                builder: (_, __) => CustomPaint(
-                  painter: _EkgPainter(_sweep.value),
+      child: ShinySweep(
+        radius: 22,
+        child: Container(
+          color: Colors.white,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Running EKG line
+              Positioned.fill(
+                child: AnimatedBuilder(
+                  animation: _sweep,
+                  builder: (_, __) => CustomPaint(
+                    painter: _EkgPainter(_sweep.value),
+                  ),
                 ),
               ),
-            ),
-            // Beating heart
-            AnimatedBuilder(
-              animation: _scale,
-              builder: (_, child) =>
-                  Transform.scale(scale: _scale.value, child: child),
-              child: const Icon(
-                Icons.favorite_rounded,
-                color: Color(0xFFE53935),
-                size: 38,
+              // Beating heart
+              AnimatedBuilder(
+                animation: _scale,
+                builder: (_, child) =>
+                    Transform.scale(scale: _scale.value, child: child),
+                child: const Icon(
+                  Icons.favorite_rounded,
+                  color: Color(0xFFE53935),
+                  size: 38,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -836,6 +839,8 @@ class _EkgPainter extends CustomPainter {
   bool shouldRepaint(_EkgPainter old) => old.progress != progress;
 }
 
+/// Classical medical-university facade — stepped base, columns, an
+/// architrave and a triangular pediment.
 class _BuildingPainter extends CustomPainter {
   final Color color;
   _BuildingPainter({required this.color});
@@ -843,47 +848,65 @@ class _BuildingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
-    const pillarCount = 11;
-    final pillarW = size.width * 0.042;
-    final gapX = size.width * 0.027;
-    final totalW = pillarCount * pillarW + (pillarCount - 1) * gapX;
-    final startX = (size.width - totalW) / 2;
+    final w = size.width;
+    final h = size.height;
+    final cx = w / 2;
+    final buildingW = w * 0.62;
 
-    final pillarH = size.height * 0.62;
-    final pillarTopY = size.height - pillarH;
-
-    final beamH = size.height * 0.045;
-    final beamGap = size.height * 0.04;
-    final beamY = pillarTopY - beamGap - beamH;
-
-    final roofPeakY = beamY - size.height * 0.20;
-
-    for (int i = 0; i < pillarCount; i++) {
-      final x = startX + i * (pillarW + gapX);
-      final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, pillarTopY, pillarW, pillarH),
-        const Radius.circular(2),
+    // ── Stepped base ──
+    final stepH = h * 0.032;
+    for (int i = 0; i < 3; i++) {
+      final extra = (2 - i) * buildingW * 0.07;
+      canvas.drawRect(
+        Rect.fromLTWH(
+          cx - buildingW / 2 - buildingW * 0.10 - extra,
+          h - stepH * (3 - i),
+          buildingW * 1.20 + extra * 2,
+          stepH,
+        ),
+        paint,
       );
-      canvas.drawRRect(rect, paint);
+    }
+    final stepsTop = h - stepH * 3;
+
+    // ── Columns ──
+    const colCount = 8;
+    final colH = h * 0.44;
+    final colsTop = stepsTop - colH;
+    final colSpan = buildingW * 0.94;
+    final colsLeft = cx - colSpan / 2;
+    final gap = colSpan / colCount;
+    final colW = gap * 0.5;
+    for (int i = 0; i < colCount; i++) {
+      final x = colsLeft + gap * i + (gap - colW) / 2;
+      canvas.drawRect(
+        Rect.fromLTWH(x, colsTop + colH * 0.07, colW, colH * 0.86), paint);
+      // capital
+      canvas.drawRect(
+        Rect.fromLTWH(x - colW * 0.16, colsTop, colW * 1.32, colH * 0.07),
+        paint);
+      // base
+      canvas.drawRect(
+        Rect.fromLTWH(
+            x - colW * 0.16, colsTop + colH * 0.93, colW * 1.32, colH * 0.07),
+        paint);
     }
 
-    final beamRect = Rect.fromLTWH(
-      startX - gapX * 2,
-      beamY,
-      totalW + gapX * 4,
-      beamH,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(beamRect, const Radius.circular(2)),
-      paint,
-    );
+    // ── Architrave (beam) ──
+    final beamH = h * 0.055;
+    final beamY = colsTop - beamH;
+    final beamLeft = cx - buildingW * 0.58;
+    final beamW = buildingW * 1.16;
+    canvas.drawRect(Rect.fromLTWH(beamLeft, beamY, beamW, beamH), paint);
 
-    final roofPath = Path()
-      ..moveTo(startX - gapX * 2, beamY)
-      ..lineTo(startX + totalW / 2, roofPeakY)
-      ..lineTo(startX + totalW + gapX * 2, beamY)
+    // ── Triangular pediment ──
+    final pedH = h * 0.20;
+    final roof = Path()
+      ..moveTo(beamLeft - w * 0.015, beamY)
+      ..lineTo(cx, beamY - pedH)
+      ..lineTo(beamLeft + beamW + w * 0.015, beamY)
       ..close();
-    canvas.drawPath(roofPath, paint);
+    canvas.drawPath(roof, paint);
   }
 
   @override

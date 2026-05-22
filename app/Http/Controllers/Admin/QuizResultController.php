@@ -2441,10 +2441,6 @@ class QuizResultController extends Controller
         $updatedAnyPair = false;
         $skipReasons = [];
 
-        // Feature toggle: yoqilgan bo'lsa YN qulflanganlik tekshiruvi o'tkazib
-        // yuboriladi — qulflangan fanga ham otrabotka (mavzu retake) bahosi yuklanadi.
-        $ignoreYnLock = Setting::get('feature_retake_upload_ignore_lock', '0') === '1';
-
         foreach ($sgRecords as $sg) {
             $isNb = $sg->reason === 'absent' && $sg->grade === null;
             $updates = null;
@@ -2474,9 +2470,7 @@ class QuizResultController extends Controller
             // YN qulflangan juftlik — odatda o'tkazib yuboriladi. ISTISNO:
             // NB SABABLI bo'lsa va retake aynan Farmoyish (Sababli ariza) makeup
             // sanalari oralig'ida topshirilgan bo'lsa — YN qulfiga qaramay yuklanadi.
-            // $ignoreYnLock feature toggle yoqilgan bo'lsa, tekshiruv butunlay
-            // o'tkazib yuboriladi.
-            if (!$ignoreYnLock && !empty($sg->is_yn_locked)) {
+            if (!empty($sg->is_yn_locked)) {
                 if (!$isNb || !$isSababli) {
                     $skipReasons[] = "juftlik {$sg->lesson_pair_code}: YN qulflangan";
                     continue;

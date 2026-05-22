@@ -29,10 +29,6 @@ class FeatureToggleController extends Controller
             'label' => 'Superadmin MT fayl yuklash (muddatdan keyin ham)',
             'description' => 'Yoqilgan bo\'lsa, superadmin talaba nomidan mustaqil ta\'lim faylini muddat tugagan bo\'lsa ham yuklay oladi va u jurnalda o\'sha talabaga ko\'rinadi.',
         ],
-        'retake_upload_ignore_lock' => [
-            'label' => 'Qulflangan fanga otrabotka yuklash',
-            'description' => 'Yoqilgan bo\'lsa, fan YN ga yuborilgan (qulflangan) bo\'lsa ham diagnostikada mavzu retake (otrabotka) bahosi yuklanaveradi. O\'chirilgan bo\'lsa, qulflangan fanga otrabotka yuklanmaydi (YN qulfi va sababli makeup sana sharti amal qiladi).',
-        ],
     ];
 
     private function ensureSuperadmin(): void

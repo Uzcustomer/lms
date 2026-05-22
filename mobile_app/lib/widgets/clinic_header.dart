@@ -127,3 +127,87 @@ class ClinicHeader extends StatelessWidget {
     );
   }
 }
+
+/// Wraps [child] with a looping diagonal "shine" sweep, clipped to a
+/// rounded rectangle of [radius]. Use for hero / feature cards.
+class ShinySweep extends StatefulWidget {
+  final Widget child;
+  final double radius;
+  const ShinySweep({super.key, required this.child, this.radius = 18});
+
+  @override
+  State<ShinySweep> createState() => _ShinySweepState();
+}
+
+class _ShinySweepState extends State<ShinySweep>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2800),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(widget.radius),
+      child: Stack(
+        children: [
+          widget.child,
+          Positioned.fill(
+            child: IgnorePointer(
+              child: AnimatedBuilder(
+                animation: _controller,
+                builder: (_, __) {
+                  return LayoutBuilder(
+                    builder: (_, c) {
+                      final dx =
+                          (-0.35 + 1.7 * _controller.value) * c.maxWidth;
+                      return Stack(
+                        children: [
+                          Positioned(
+                            left: dx,
+                            top: -90,
+                            child: Transform.rotate(
+                              angle: 0.42,
+                              child: Container(
+                                width: 58,
+                                height: 340,
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    begin: Alignment.centerLeft,
+                                    end: Alignment.centerRight,
+                                    colors: [
+                                      Colors.white.withOpacity(0),
+                                      Colors.white.withOpacity(0.30),
+                                      Colors.white.withOpacity(0),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

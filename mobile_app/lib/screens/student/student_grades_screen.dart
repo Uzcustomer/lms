@@ -205,6 +205,20 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return all;
   }
 
+  Map<String, dynamic>? _getBestSubject(List subjects) {
+    Map<String, dynamic>? best;
+    double bestGrade = 0;
+    for (final s in subjects) {
+      if (s is! Map<String, dynamic>) continue;
+      final yn = _getYn(s);
+      if (yn != null && yn > bestGrade) {
+        bestGrade = yn;
+        best = s;
+      }
+    }
+    return best;
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
@@ -239,6 +253,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             final completed = subjects.whereType<Map<String, dynamic>>().where((s) => _isSubjectCompleted(s)).length;
             final waiting = subjects.length - completed;
             final filtered = _filterSubjects(subjects);
+            final bestSubject = _getBestSubject(subjects);
             // If the dashboard asked us to focus a specific subject, move it
             // to the top of the list so it's the first card the user sees.
             if (_highlightedSubjectId != null) {
@@ -271,6 +286,10 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                           _buildSummaryCard(semesterAvg, subjects.length,
                               completed, waiting, semesterName, provider),
                           const SizedBox(height: 12),
+                          if (bestSubject != null) ...[
+                            _buildBestSubjectCard(bestSubject),
+                            const SizedBox(height: 12),
+                          ],
                           _buildFilterTabs(completed, waiting, subjects.length),
                           const SizedBox(height: 12),
                           ...filtered.asMap().entries.map((e) {
@@ -507,6 +526,58 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: _muted),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Best subject ─────────────────────────────────────
+  Widget _buildBestSubjectCard(Map<String, dynamic> subject) {
+    final name = subject['subject_name']?.toString() ?? '';
+    final grade = _getYn(subject)?.round() ?? 0;
+    const gold = Color(0xFFD97706);
+    return _calmCard(
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: gold.withOpacity(0.12),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(Icons.star_rounded, color: gold, size: 24),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'ENG YUQORI BAHO',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.5,
+                    color: _muted,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  name,
+                  style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w800, color: _ink),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Text(
+            '$grade',
+            style: const TextStyle(
+                fontSize: 26, fontWeight: FontWeight.w900, color: Color(0xFF15803D)),
           ),
         ],
       ),

@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
-import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
 import '../../config/theme.dart';
@@ -190,13 +189,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   // ── Clinic-calm palette ──────────────────────────────
-  static const _calmBg = Color(0xFFEFF2F6);
-  static const _calmInk = Color(0xFF1F2A37);
-  static const _calmMuted = Color(0xFF8C96A6);
-  static const _calmTeal = Color(0xFF17A89F);
-  static const _calmBlue = Color(0xFF3B5BDB);
-  static const _calmGreen = Color(0xFF12B886);
-  static const _calmLine = Color(0xFFE9ECF1);
+  static const _calmBg = Color(0xFFFFFFFF);
+  static const _calmInk = Color(0xFF0F172A);
+  static const _calmMuted = Color(0xFF64748B);
+  static const _calmFaint = Color(0xFF94A3B8);
+  static const _calmTeal = Color(0xFF0D9488);
+  static const _calmBlue = Color(0xFF1E3A8A);
+  static const _calmGreen = Color(0xFF047857);
+  static const _calmLine = Color(0xFFE2E8F0);
 
   Color get _ink => Theme.of(context).brightness == Brightness.dark
       ? Colors.white
@@ -211,23 +211,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       ? Colors.white.withOpacity(0.08)
       : _calmLine;
 
-  Widget _calmCard({required Widget child, EdgeInsets? padding, double radius = 20}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _calmCard({required Widget child, EdgeInsets? padding, double radius = 16}) {
     return Container(
       width: double.infinity,
-      padding: padding ?? const EdgeInsets.all(16),
+      padding: padding ?? const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(radius),
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                  color: const Color(0xFF1F2A37).withOpacity(0.05),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+        border: Border.all(color: _divider, width: 1),
       ),
       child: child,
     );
@@ -286,16 +277,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 children: [
                   _buildHeader(context, l),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildProfileCard(data, profile),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 8),
                         _buildGpaRow(data, profile, l),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 8),
                         _buildWeeklyActivity(data),
-                        const SizedBox(height: 14),
+                        const SizedBox(height: 8),
                         _buildLiveClassCard(),
                         _buildSubjectsOverview(provider.subjects, isDark, l),
                         _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
@@ -317,19 +308,22 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final statusBarH = MediaQuery.of(context).padding.top;
     return Container(
       padding: EdgeInsets.fromLTRB(16, statusBarH + 10, 16, 14),
-      color: _surface,
+      decoration: BoxDecoration(
+        color: _surface,
+        border: Border(bottom: BorderSide(color: _divider, width: 1)),
+      ),
       child: Row(
         children: [
           Container(
-            width: 42,
-            height: 42,
+            width: 38,
+            height: 38,
             decoration: BoxDecoration(
               color: _calmTeal,
-              borderRadius: BorderRadius.circular(13),
+              borderRadius: BorderRadius.circular(11),
             ),
-            child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 22),
+            child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 20),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 11),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -337,8 +331,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 'MED · UNIVERSITY',
                 style: TextStyle(
                   fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1.2,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 0.5,
                   color: _muted,
                 ),
               ),
@@ -346,8 +340,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               Text(
                 l.home,
                 style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
                   color: _ink,
                 ),
               ),
@@ -355,13 +349,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           ),
           const Spacer(),
           _headerIconButton(
-            child: const NotificationBell(iconColor: _calmInk, iconSize: 20),
+            child: NotificationBell(iconColor: _ink, iconSize: 18),
           ),
           const SizedBox(width: 8),
           _headerIconButton(
             child: IconButton(
               padding: EdgeInsets.zero,
-              icon: const Icon(Icons.settings_outlined, color: _calmInk, size: 20),
+              icon: Icon(Icons.settings_outlined, color: _ink, size: 18),
               onPressed: () => showSettingsSheet(context),
             ),
           ),
@@ -373,11 +367,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   Widget _headerIconButton({required Widget child}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
-      width: 42,
-      height: 42,
+      width: 38,
+      height: 38,
       decoration: BoxDecoration(
-        color: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFEEF1F5),
-        borderRadius: BorderRadius.circular(13),
+        color: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFF1F5F9),
+        borderRadius: BorderRadius.circular(11),
       ),
       child: child,
     );
@@ -385,20 +379,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
 
   // Kept for tuition/contract sections — now renders a plain clinic-calm card.
-  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
+  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 16, Color? cardColor}) {
     return Container(
       decoration: BoxDecoration(
         color: _surface,
         borderRadius: BorderRadius.circular(borderRadius),
-        boxShadow: isDark
-            ? null
-            : [
-                BoxShadow(
-                  color: const Color(0xFF1F2A37).withOpacity(0.05),
-                  blurRadius: 16,
-                  offset: const Offset(0, 6),
-                ),
-              ],
+        border: Border.all(color: _divider, width: 1),
       ),
       child: child,
     );
@@ -423,8 +409,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           Row(
             children: [
               Container(
-                width: 56,
-                height: 56,
+                width: 52,
+                height: 52,
                 decoration: const BoxDecoration(
                   color: _calmTeal,
                   shape: BoxShape.circle,
@@ -433,15 +419,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 child: imageUrl != null && imageUrl.isNotEmpty
                     ? CachedNetworkImage(
                         imageUrl: imageUrl,
-                        width: 56,
-                        height: 56,
+                        width: 52,
+                        height: 52,
                         fit: BoxFit.cover,
                         placeholder: (_, __) => _avatarInitials(fullName),
                         errorWidget: (_, __, ___) => _avatarInitials(fullName),
                       )
                     : _avatarInitials(fullName),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -449,25 +435,38 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     Text(
                       fullName.toUpperCase(),
                       style: TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.2,
                         color: _ink,
                         height: 1.25,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 3),
-                    Text(
-                      'ID · $studentId',
-                      style: TextStyle(fontSize: 11.5, color: _muted, fontWeight: FontWeight.w500),
+                    const SizedBox(height: 4),
+                    Text.rich(
+                      TextSpan(
+                        children: [
+                          TextSpan(
+                            text: 'ID · ',
+                            style: TextStyle(
+                                fontSize: 11, color: _muted, fontWeight: FontWeight.w400),
+                          ),
+                          TextSpan(
+                            text: studentId,
+                            style: TextStyle(
+                                fontSize: 11, color: _ink, fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
                     ),
                     const SizedBox(height: 6),
                     if (paymentFormName.isNotEmpty)
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                         decoration: BoxDecoration(
-                          color: _calmGreen.withOpacity(0.12),
+                          color: const Color(0xFFF0FDF4),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -477,14 +476,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                               width: 6,
                               height: 6,
                               decoration: const BoxDecoration(
-                                  color: _calmGreen, shape: BoxShape.circle),
+                                  color: Color(0xFF10B981), shape: BoxShape.circle),
                             ),
                             const SizedBox(width: 5),
                             Text(
                               paymentFormName,
                               style: const TextStyle(
                                 fontSize: 10.5,
-                                fontWeight: FontWeight.w700,
+                                fontWeight: FontWeight.w600,
                                 color: _calmGreen,
                               ),
                             ),
@@ -522,8 +521,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       child: Text(
         _getInitials(name).toUpperCase(),
         style: const TextStyle(
-          fontSize: 20,
-          fontWeight: FontWeight.w800,
+          fontSize: 19,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.5,
           color: Colors.white,
         ),
       ),
@@ -539,10 +539,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           Text(
             label,
             style: TextStyle(
-              fontSize: 9.5,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 0.6,
-              color: _muted,
+              fontSize: 9,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.4,
+              color: _calmFaint,
             ),
           ),
           const SizedBox(height: 4),
@@ -560,100 +560,70 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   // ── Weekly activity ──────────────────────────────────
   Widget _buildWeeklyActivity(Map<String, dynamic>? data) {
-    final recent = (data?['recent_grades'] as List?) ?? [];
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final counts = List<int>.filled(7, 0);
-    for (final g in recent) {
-      if (g is! Map) continue;
-      final d = DateTime.tryParse(g['lesson_date']?.toString() ?? '') ??
-          DateTime.tryParse(g['created_at']?.toString() ?? '');
-      if (d == null) continue;
-      final diff = today.difference(DateTime(d.year, d.month, d.day)).inDays;
-      if (diff >= 0 && diff < 7) counts[6 - diff] += 1;
-    }
-    final activeDays = counts.where((c) => c > 0).length;
-    final isGood = activeDays >= 3;
-    final maxC = counts.fold<int>(0, (a, b) => a > b ? a : b);
+    // Attendance streak — consecutive days since the last absence (API).
+    final streakRaw = data?['attendance_streak_days'];
+    final streak = streakRaw is num ? streakRaw.toInt() : 0;
+    final isGood = streak >= 7;
+    final accent = isGood ? _calmTeal : AppTheme.warningColor;
 
     return _calmCard(
+      padding: const EdgeInsets.all(12),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               const Icon(Icons.favorite_rounded, size: 16, color: _calmTeal),
-              const SizedBox(width: 6),
-              Text(
-                'HAFTALIK FAOLLIK',
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1,
-                  color: _muted,
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'HAFTALIK FAOLLIK',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                        color: _muted,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$streak kun · ketma-ket',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: _ink,
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: (isGood ? _calmGreen : AppTheme.warningColor).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(20),
+                  color: isGood
+                      ? const Color(0xFFF0FDF4)
+                      : AppTheme.warningColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
                   isGood ? 'NORMA' : 'PAST',
                   style: TextStyle(
                     fontSize: 10,
-                    fontWeight: FontWeight.w800,
+                    fontWeight: FontWeight.w700,
                     color: isGood ? _calmGreen : AppTheme.warningColor,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                '$activeDays kun',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _ink),
-              ),
-              const SizedBox(width: 6),
-              Text("· so'nggi hafta", style: TextStyle(fontSize: 12, color: _muted)),
-            ],
-          ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           SizedBox(
-            height: 56,
-            child: LineChart(
-              LineChartData(
-                gridData: const FlGridData(show: false),
-                titlesData: const FlTitlesData(show: false),
-                borderData: FlBorderData(show: false),
-                lineTouchData: const LineTouchData(enabled: false),
-                minY: 0,
-                maxY: maxC.toDouble().clamp(1, 999) + 1,
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: [
-                      for (int i = 0; i < 7; i++)
-                        FlSpot(i.toDouble(), counts[i].toDouble()),
-                    ],
-                    isCurved: true,
-                    curveSmoothness: 0.35,
-                    color: _calmTeal,
-                    barWidth: 2.5,
-                    dotData: const FlDotData(show: false),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: _calmTeal.withOpacity(0.12),
-                    ),
-                  ),
-                ],
-              ),
-            ),
+            height: 46,
+            width: double.infinity,
+            child: _EcgLine(accent),
           ),
         ],
       ),
@@ -705,12 +675,12 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 6),
+        const SizedBox(height: 4),
         Row(
           children: [
             Text(
               'Fanlar',
-              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _ink),
+              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: _ink),
             ),
             const Spacer(),
             GestureDetector(
@@ -720,12 +690,13 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   Text(
                     'Barchasi',
                     style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
                       color: _calmTeal,
                     ),
                   ),
-                  const Icon(Icons.arrow_forward_rounded, size: 15, color: _calmTeal),
+                  const SizedBox(width: 2),
+                  const Icon(Icons.arrow_forward_rounded, size: 13, color: _calmTeal),
                 ],
               ),
             ),
@@ -783,18 +754,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 42,
+                height: 42,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: badgeColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  color: badgeColor.withOpacity(0.14),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   jn != null ? jn.round().toString() : '—',
                   style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
                     color: badgeColor,
                   ),
                 ),
@@ -807,8 +778,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     Text(
                       name,
                       style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
                         color: _ink,
                       ),
                       maxLines: 2,
@@ -831,7 +802,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         const SizedBox(width: 8),
                         Text(
                           '$absent/$total soat',
-                          style: TextStyle(fontSize: 10.5, color: _muted),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            color: _muted,
+                          ),
                         ),
                       ],
                     ),
@@ -839,7 +814,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 ),
               ),
               const SizedBox(width: 6),
-              Icon(Icons.chevron_right_rounded, size: 20, color: _muted),
+              Icon(Icons.chevron_right_rounded, size: 18, color: _calmFaint),
             ],
           ),
         ),
@@ -1178,7 +1153,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final shadowColor = isActive ? const Color(0xFF43A047) : const Color(0xFFF57C00);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Container(
         width: double.infinity,
         clipBehavior: Clip.antiAlias,
@@ -1375,7 +1350,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(18),
@@ -1465,6 +1440,18 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       avgTrend = curAvg.toDouble() - prevAvg.toDouble();
     }
 
+    // GPA trend = current vs previous semester GPA (real data).
+    final curGpa = data?['current_semester_gpa'];
+    final prevGpa = data?['prev_semester_gpa'];
+    double? gpaTrend;
+    if (curGpa is num && prevGpa is num) {
+      final diff = curGpa.toDouble() - prevGpa.toDouble();
+      // Guard against non-GPA-scale data — GPA shifts are small.
+      if (curGpa <= 5 && prevGpa <= 5 && diff.abs() <= 1.5) {
+        gpaTrend = diff;
+      }
+    }
+
     return Row(
       children: [
         Expanded(
@@ -1473,19 +1460,21 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             value: gpa.toStringAsFixed(2),
             maxLabel: '/ 5',
             progress: (gpa / 5.0).clamp(0.0, 1.0),
-            accent: _calmGreen,
-            trend: null,
+            accent: _calmTeal,
+            trend: gpaTrend,
+            trendDigits: 2,
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
           child: _buildStatCard(
-            label: l.avgGrade.toUpperCase(),
+            label: 'O\'RTACHA',
             value: avgGrade.toStringAsFixed(1),
             maxLabel: '/ 100',
             progress: (avgGrade / 100.0).clamp(0.0, 1.0),
             accent: _calmBlue,
             trend: avgTrend,
+            trendDigits: 1,
           ),
         ),
       ],
@@ -1499,6 +1488,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     required double progress,
     required Color accent,
     double? trend,
+    int trendDigits = 1,
   }) {
     return _calmCard(
       padding: const EdgeInsets.all(14),
@@ -1511,9 +1501,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 child: Text(
                   label,
                   style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.8,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    letterSpacing: 0.5,
                     color: _muted,
                   ),
                   maxLines: 1,
@@ -1525,14 +1515,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      trend > 0 ? Icons.arrow_drop_up_rounded : Icons.arrow_drop_down_rounded,
-                      size: 16,
+                      trend > 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                      size: 10,
                       color: trend > 0 ? _calmGreen : AppTheme.errorColor,
                     ),
+                    const SizedBox(width: 1),
                     Text(
-                      '${trend > 0 ? '+' : ''}${trend.toStringAsFixed(1)}',
+                      '${trend > 0 ? '+' : ''}${trend.toStringAsFixed(trendDigits)}',
                       style: TextStyle(
-                        fontSize: 11,
+                        fontSize: 10,
                         fontWeight: FontWeight.w700,
                         color: trend > 0 ? _calmGreen : AppTheme.errorColor,
                       ),
@@ -1549,8 +1540,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               Text(
                 value,
                 style: TextStyle(
-                  fontSize: 30,
-                  fontWeight: FontWeight.w800,
+                  fontSize: 32,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: -0.5,
                   color: accent,
                   height: 1,
                 ),
@@ -1581,4 +1573,111 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       ),
     );
   }
+}
+
+/// Animated ECG / heartbeat line for the weekly-activity card — a bright
+/// pulse sweeps along a faint baseline trace, like a heart monitor.
+class _EcgLine extends StatefulWidget {
+  final Color color;
+  const _EcgLine(this.color);
+
+  @override
+  State<_EcgLine> createState() => _EcgLineState();
+}
+
+class _EcgLineState extends State<_EcgLine> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) => CustomPaint(
+        size: Size.infinite,
+        painter: _EcgLinePainter(widget.color, _controller.value),
+      ),
+    );
+  }
+}
+
+class _EcgLinePainter extends CustomPainter {
+  final Color color;
+  final double progress;
+  const _EcgLinePainter(this.color, this.progress);
+
+  // Normalized (0–1) points of an ECG trace — flat baseline with QRS spikes.
+  static const List<Offset> _points = [
+    Offset(0.000, 0.5), Offset(0.111, 0.5), Offset(0.153, 0.5),
+    Offset(0.181, 0.2), Offset(0.208, 0.8), Offset(0.236, 0.5),
+    Offset(0.333, 0.5), Offset(0.375, 0.5), Offset(0.403, 0.16),
+    Offset(0.431, 0.84), Offset(0.458, 0.5), Offset(0.583, 0.5),
+    Offset(0.625, 0.5), Offset(0.653, 0.24), Offset(0.681, 0.76),
+    Offset(0.708, 0.5), Offset(0.833, 0.5), Offset(0.875, 0.5),
+    Offset(0.903, 0.2), Offset(0.931, 0.8), Offset(0.958, 0.5),
+    Offset(1.000, 0.5),
+  ];
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path();
+    for (var i = 0; i < _points.length; i++) {
+      final x = _points[i].dx * size.width;
+      final y = _points[i].dy * size.height;
+      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+    }
+
+    // Faint full baseline trace.
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color.withOpacity(0.18)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+
+    final metrics = path.computeMetrics().toList();
+    if (metrics.isEmpty) return;
+    final metric = metrics.first;
+    final len = metric.length;
+    final head = progress * len;
+    final tail = (head - len * 0.32).clamp(0.0, len);
+
+    // Bright pulse segment sweeping along the trace.
+    canvas.drawPath(
+      metric.extractPath(tail, head.clamp(0.0, len)),
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+
+    // Leading pulse dot.
+    final tan = metric.getTangentForOffset(head.clamp(0.0, len));
+    if (tan != null) {
+      canvas.drawCircle(tan.position, 3.4, Paint()..color = color);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_EcgLinePainter old) =>
+      old.progress != progress || old.color != color;
 }

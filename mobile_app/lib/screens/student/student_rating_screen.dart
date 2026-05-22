@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../config/theme.dart';
-import '../../config/aurora_themes.dart';
-import '../../providers/settings_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
+import '../../widgets/clinic_header.dart';
 
 class StudentRatingScreen extends StatefulWidget {
   const StudentRatingScreen({super.key});
@@ -59,112 +56,75 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final aurora = context.watch<SettingsProvider>().auroraTheme;
-    final statusBarH = MediaQuery.of(context).padding.top;
-    final card = isDark ? AppTheme.darkCard : Colors.white;
-    final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-
     return Scaffold(
-      backgroundColor: auroraBase(aurora, isDark),
+      backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
-          Container(
-            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
-            height: statusBarH + 64,
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-              ),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                const Expanded(
-                  child: Text(
-                    'Talabalar reytingi',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(width: 48),
-              ],
-            ),
+          ClinicHeader(
+            overline: 'FOYDALI',
+            title: 'Talabalar reytingi',
+            onBack: () => Navigator.pop(context),
           ),
-
-          // My rank card
-          _buildMyRankCard(isDark),
-
-          // Filter chips
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+            padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+            child: _buildMyRankCard(),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
             child: Row(
-              children: _filters
-                  .map((f) => Expanded(
-                        child: GestureDetector(
-                          onTap: () {
-                            if (_activeFilter != f) {
-                              _activeFilter = f;
-                              _load();
-                            }
-                          },
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            margin: const EdgeInsets.symmetric(horizontal: 3),
-                            padding: const EdgeInsets.symmetric(vertical: 10),
-                            decoration: BoxDecoration(
-                              color: _activeFilter == f
-                                  ? const Color(0xFF4A6CF7)
-                                  : isDark
-                                      ? Colors.white.withOpacity(0.06)
-                                      : Colors.white,
-                              borderRadius: BorderRadius.circular(10),
-                              border: _activeFilter != f
-                                  ? Border.all(
-                                      color: isDark
-                                          ? Colors.white12
-                                          : Colors.grey.shade200)
-                                  : null,
-                            ),
-                            child: Text(
-                              _filterLabels[f]!,
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w600,
-                                color: _activeFilter == f
-                                    ? Colors.white
-                                    : sub,
-                              ),
-                            ),
-                          ),
+              children: _filters.map((f) {
+                final active = _activeFilter == f;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () {
+                      if (_activeFilter != f) {
+                        _activeFilter = f;
+                        _load();
+                      }
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      margin: EdgeInsets.only(
+                          right: f != _filters.last ? 8 : 0),
+                      padding: const EdgeInsets.symmetric(vertical: 9),
+                      decoration: BoxDecoration(
+                        color: active
+                            ? ClinicTheme.teal
+                            : (Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white.withOpacity(0.06)
+                                : const Color(0xFFF1F5F9)),
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        _filterLabels[f]!,
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: active ? FontWeight.w800 : FontWeight.w600,
+                          color: active ? Colors.white : ClinicTheme.mutedOf(context),
                         ),
-                      ))
-                  .toList(),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
             ),
           ),
-
-          // Student list
+          const SizedBox(height: 12),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
                 : _students.isEmpty
                     ? Center(
                         child: Text('Ma\'lumot topilmadi',
-                            style: TextStyle(color: sub)))
+                            style: TextStyle(color: ClinicTheme.mutedOf(context))))
                     : RefreshIndicator(
                         onRefresh: _load,
                         child: ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
+                          padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
                           itemCount: _students.length,
-                          itemBuilder: (_, i) => _buildStudentTile(
-                              _students[i], card, txt, sub, isDark),
+                          itemBuilder: (_, i) => _buildStudentTile(_students[i]),
                         ),
                       ),
           ),
@@ -173,34 +133,20 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
     );
   }
 
-  Widget _buildMyRankCard(bool isDark) {
-    const color = Color(0xFF4CAF50);
-
-    IconData rankIcon;
-    if (_myRank == 1) {
-      rankIcon = Icons.emoji_events_rounded;
-    } else if (_myRank == 2) {
-      rankIcon = Icons.emoji_events_rounded;
-    } else if (_myRank == 3) {
-      rankIcon = Icons.emoji_events_rounded;
-    } else {
-      rankIcon = Icons.leaderboard_rounded;
-    }
-
+  Widget _buildMyRankCard() {
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color, color.withOpacity(0.7)],
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0F766E), Color(0xFF1E3A8A)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: color.withOpacity(0.3),
-            blurRadius: 16,
+            color: const Color(0xFF0F766E).withOpacity(0.35),
+            blurRadius: 14,
             offset: const Offset(0, 6),
           ),
         ],
@@ -208,49 +154,44 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
       child: Row(
         children: [
           Container(
-            width: 56,
-            height: 56,
+            width: 54,
+            height: 54,
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.2),
-              borderRadius: BorderRadius.circular(16),
+              color: Colors.white.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(15),
             ),
             alignment: Alignment.center,
             child: _loading
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white))
+                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : _myRank <= 3 && _myRank > 0
-                    ? const Icon(Icons.emoji_events_rounded,
-                        color: Colors.white, size: 28)
+                    ? const Icon(Icons.emoji_events_rounded, color: Colors.white, size: 28)
                     : Text(
                         _myRank > 0 ? '$_myRank' : '—',
                         style: const TextStyle(
-                            fontSize: 22,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white),
+                            fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white),
                       ),
           ),
-          const SizedBox(width: 16),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Sizning o\'rningiz',
+                Text('SIZNING O\'RNINGIZ',
                     style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w500)),
-                const SizedBox(height: 2),
+                        fontSize: 10,
+                        letterSpacing: 0.5,
+                        color: Colors.white.withOpacity(0.8),
+                        fontWeight: FontWeight.w700)),
+                const SizedBox(height: 3),
                 Text(
                   _loading
                       ? '...'
-                      : '$_totalStudents talaba ichida ${_myRank}-o\'rin',
+                      : '$_totalStudents talaba ichida $_myRank-o\'rin',
                   style: const TextStyle(
-                      fontSize: 15,
-                      color: Colors.white,
-                      fontWeight: FontWeight.w600),
+                      fontSize: 14, color: Colors.white, fontWeight: FontWeight.w700),
                 ),
               ],
             ),
@@ -258,14 +199,16 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              const Text('O\'rtacha',
-                  style: TextStyle(fontSize: 11, color: Colors.white60)),
+              Text('O\'RTACHA',
+                  style: TextStyle(
+                      fontSize: 9,
+                      letterSpacing: 0.5,
+                      color: Colors.white.withOpacity(0.7),
+                      fontWeight: FontWeight.w700)),
               Text(
                 _loading ? '...' : _myAvg.toStringAsFixed(1),
                 style: const TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white),
+                    fontSize: 24, fontWeight: FontWeight.w900, color: Colors.white),
               ),
             ],
           ),
@@ -274,72 +217,52 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
     );
   }
 
-  Widget _buildStudentTile(dynamic s, Color card, Color txt, Color sub,
-      bool isDark) {
+  Widget _buildStudentTile(dynamic s) {
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
     final rank = s['rank'] as int? ?? 0;
     final name = s['full_name']?.toString() ?? '';
     final group = s['group_name']?.toString() ?? '';
     final avg = (s['jn_average'] as num?)?.toDouble() ?? 0;
     final isMe = s['is_me'] == true;
 
-    final Color? medalColor;
-    IconData? medalIcon;
+    Color? medalColor;
     if (rank == 1) {
-      medalColor = const Color(0xFFFFD700);
-      medalIcon = Icons.emoji_events_rounded;
+      medalColor = const Color(0xFFD4A017);
     } else if (rank == 2) {
-      medalColor = const Color(0xFFC0C0C0);
-      medalIcon = Icons.emoji_events_rounded;
+      medalColor = const Color(0xFF94A3B8);
     } else if (rank == 3) {
-      medalColor = const Color(0xFFCD7F32);
-      medalIcon = Icons.emoji_events_rounded;
-    } else {
-      medalColor = null;
-      medalIcon = null;
+      medalColor = const Color(0xFFB45309);
     }
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 6),
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: isMe
-            ? const Color(0xFF4A6CF7).withOpacity(isDark ? 0.15 : 0.06)
-            : card,
+        color: ClinicTheme.surfaceOf(context),
         borderRadius: BorderRadius.circular(12),
-        border: isMe
-            ? Border.all(
-                color: const Color(0xFF4A6CF7).withOpacity(0.3), width: 1.5)
-            : null,
-        boxShadow: isMe
-            ? null
-            : [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.02),
-                  blurRadius: 6,
-                  offset: const Offset(0, 1),
-                ),
-              ],
+        border: Border.all(
+          color: isMe ? ClinicTheme.teal : ClinicTheme.dividerOf(context),
+          width: isMe ? 1.5 : 1,
+        ),
+        boxShadow: ClinicTheme.cardShadow,
       ),
       child: Row(
         children: [
-          // Rank
           SizedBox(
-            width: 36,
+            width: 34,
             child: medalColor != null
-                ? Icon(medalIcon, color: medalColor, size: 24)
+                ? Icon(Icons.emoji_events_rounded, color: medalColor, size: 24)
                 : Text(
                     '$rank',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                         fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: isMe
-                            ? const Color(0xFF4A6CF7)
-                            : sub),
+                        fontWeight: FontWeight.w900,
+                        color: isMe ? ClinicTheme.teal : muted),
                   ),
           ),
           const SizedBox(width: 10),
-          // Name
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -348,39 +271,31 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
                   name,
                   style: TextStyle(
                       fontSize: 13,
-                      fontWeight:
-                          isMe ? FontWeight.w700 : FontWeight.w500,
-                      color: isMe
-                          ? const Color(0xFF4A6CF7)
-                          : txt),
+                      fontWeight: FontWeight.w700,
+                      color: isMe ? ClinicTheme.teal : ink),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
                 if (_activeFilter != 'group')
-                  Text(group,
-                      style: TextStyle(fontSize: 11, color: sub)),
+                  Text(group, style: TextStyle(fontSize: 11, color: muted)),
               ],
             ),
           ),
-          // Average
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
             decoration: BoxDecoration(
-              color: _avgColor(avg).withOpacity(isDark ? 0.15 : 0.08),
+              color: _avgColor(avg),
               borderRadius: BorderRadius.circular(8),
             ),
             child: Text(
               avg.toStringAsFixed(1),
-              style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.bold,
-                  color: _avgColor(avg)),
+              style: const TextStyle(
+                  fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
             ),
           ),
           if (isMe) ...[
             const SizedBox(width: 6),
-            const Icon(Icons.person_rounded,
-                size: 16, color: Color(0xFF4A6CF7)),
+            const Icon(Icons.person_rounded, size: 16, color: ClinicTheme.teal),
           ],
         ],
       ),
@@ -388,9 +303,9 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
   }
 
   Color _avgColor(double avg) {
-    if (avg >= 86) return const Color(0xFF4CAF50);
-    if (avg >= 71) return const Color(0xFF29B6F6);
-    if (avg >= 56) return const Color(0xFFFF9800);
-    return const Color(0xFFE53935);
+    if (avg >= 86) return const Color(0xFF15803D);
+    if (avg >= 71) return const Color(0xFF1D4ED8);
+    if (avg >= 56) return const Color(0xFFB45309);
+    return const Color(0xFFBE123C);
   }
 }

@@ -1,8 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../services/api_service.dart';
-import '../../services/student_service.dart';
+import '../../services/student_data_cache.dart';
 import '../../widgets/clinic_header.dart';
 
 class ExamScheduleScreen extends StatefulWidget {
@@ -36,12 +35,12 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
     _loadExams();
   }
 
-  Future<void> _loadExams() async {
+  Future<void> _loadExams({bool force = false}) async {
     try {
-      final api = ApiService();
-      final service = StudentService(api);
-      final response = await service.getExamSchedule();
-      if (mounted && response['success'] == true) {
+      final cache = StudentDataCache();
+      await cache.ensureFresh(force: force);
+      final response = cache.examSchedule;
+      if (mounted && response != null && response['success'] == true) {
         setState(() {
           _exams = response['data'] as List<dynamic>? ?? [];
           _loading = false;
@@ -146,7 +145,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                             const SizedBox(height: 12),
                             Expanded(
                               child: RefreshIndicator(
-                                onRefresh: _loadExams,
+                                onRefresh: () => _loadExams(force: true),
                                 child: selectedExams.isEmpty
                                     ? ListView(
                                         padding: EdgeInsets.zero,

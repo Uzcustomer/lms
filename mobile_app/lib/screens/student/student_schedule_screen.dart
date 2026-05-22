@@ -290,7 +290,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
           });
 
           return RefreshIndicator(
-            onRefresh: () => provider.loadSchedule(),
+            onRefresh: () => provider.refreshAll(),
             child: ListView(
               padding: EdgeInsets.zero,
               children: [

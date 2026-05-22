@@ -272,12 +272,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
           return RefreshIndicator(
             onRefresh: () async {
-              await Future.wait([
-                provider.loadDashboard(),
-                provider.loadProfile(),
-                provider.loadContract(),
-                provider.loadSubjects(),
-              ]);
+              await provider.refreshAll();
               _loadTodaySchedule();
             },
             child: SingleChildScrollView(

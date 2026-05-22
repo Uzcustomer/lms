@@ -1,8 +1,15 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../services/student_service.dart';
+import '../services/student_data_cache.dart';
 import '../services/api_service.dart';
 
+/// Student data provider.
+///
+/// Reads every screen's data through [StudentDataCache] — a 24h disk cache.
+/// During the day the UI is served straight from the cache (instant, no
+/// network); a refresh only happens when the cache is older than 24h or
+/// when the user explicitly pulls to refresh.
 class StudentProvider extends ChangeNotifier {
   final StudentService _service;
 
@@ -18,6 +25,10 @@ class StudentProvider extends ChangeNotifier {
   Map<String, dynamic>? _contract;
   List<dynamic>? _contractList;
 
+  // True while a specific (non-default) week is shown, so a cache sync
+  // doesn't reset the schedule back to the default week.
+  bool _customSchedule = false;
+
   StudentProvider(this._service);
 
   bool get isLoading => _isLoading;
@@ -31,43 +42,97 @@ class StudentProvider extends ChangeNotifier {
   Map<String, dynamic>? get contract => _contract;
   List<dynamic>? get contractList => _contractList;
 
-  Future<void> loadDashboard() async {
-    _isLoading = true;
-    _error = null;
+  // ── Cache plumbing ───────────────────────────────────
+
+  /// Copies the latest cached responses into the provider's fields.
+  void _syncFromCache() {
+    final c = StudentDataCache();
+    _dashboard = c.dashboard?['data'] as Map<String, dynamic>?;
+    _profile = c.profile?['data'] as Map<String, dynamic>?;
+    _subjects = c.subjects?['data'] as List<dynamic>?;
+    _attendance = c.attendance?['data'] as Map<String, dynamic>?;
+    _pendingLessons = c.pendingLessons?['data'] as List<dynamic>?;
+    _contract = c.contract?['data'] as Map<String, dynamic>?;
+    _contractList = _contract?['contracts'] as List<dynamic>?;
+    _excuses = c.excuses?['data'] as List<dynamic>?;
+    if (!_customSchedule) {
+      _schedule = c.schedule?['data'] as Map<String, dynamic>?;
+    }
+  }
+
+  /// Ensures the cache is warm and mirrors it into the provider.
+  /// [force] = true re-runs every API call (pull-to-refresh).
+  Future<void> _ensureLoaded({bool force = false}) async {
+    final cache = StudentDataCache();
+    await cache.loadFromDisk();
+    final hasAny = cache.hasData;
+
+    // Show disk data immediately; only show a spinner on a truly cold start.
+    if (hasAny) _syncFromCache();
+    if (!hasAny || force) {
+      _isLoading = true;
+    }
     notifyListeners();
 
     try {
-      final response = await _service.getDashboard();
-      _dashboard = response['data'] as Map<String, dynamic>?;
-    } on ApiException catch (e) {
-      _error = e.message;
-    }
+      if (force) {
+        await cache.refresh();
+      } else {
+        await cache.ensureFresh();
+      }
+    } catch (_) {}
 
+    _syncFromCache();
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> loadProfile() async {
+  /// Pull-to-refresh — forces a full re-fetch of every endpoint.
+  Future<void> refreshAll() => _ensureLoaded(force: true);
+
+  // ── Cache-backed loaders ─────────────────────────────
+
+  Future<void> loadDashboard({bool force = false}) =>
+      _ensureLoaded(force: force);
+
+  Future<void> loadProfile({bool force = false}) =>
+      _ensureLoaded(force: force);
+
+  Future<void> loadContract({bool force = false}) =>
+      _ensureLoaded(force: force);
+
+  Future<void> loadPendingLessons({bool force = false}) =>
+      _ensureLoaded(force: force);
+
+  Future<void> loadSubjects({String? semesterCode, bool force = false}) async {
+    if (semesterCode == null) {
+      _customSchedule = false;
+      return _ensureLoaded(force: force);
+    }
+    // Specific semester — bypass the cache.
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
-      final response = await _service.getProfile();
-      _profile = response['data'] as Map<String, dynamic>?;
+      final response = await _service.getSubjects(semesterCode: semesterCode);
+      _subjects = response['data'] as List<dynamic>?;
     } on ApiException catch (e) {
       _error = e.message;
     }
-
     _isLoading = false;
     notifyListeners();
   }
 
   Future<void> loadSchedule({String? semesterId, String? weekId}) async {
+    if (semesterId == null && weekId == null) {
+      _customSchedule = false;
+      return _ensureLoaded();
+    }
+    // Week / semester navigation — always a fresh call.
+    _customSchedule = true;
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
       final response = await _service.getSchedule(
         semesterId: semesterId,
@@ -77,69 +142,22 @@ class StudentProvider extends ChangeNotifier {
     } on ApiException catch (e) {
       _error = e.message;
     }
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  Future<void> loadSubjects({String? semesterCode}) async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final response = await _service.getSubjects(semesterCode: semesterCode);
-      _subjects = response['data'] as List<dynamic>?;
-    } on ApiException catch (e) {
-      _error = e.message;
-    }
-
     _isLoading = false;
     notifyListeners();
   }
 
   Future<void> loadAttendance({String? semesterCode}) async {
+    if (semesterCode == null) return _ensureLoaded();
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
       final response = await _service.getAttendance(semesterCode: semesterCode);
       _attendance = response['data'] as Map<String, dynamic>?;
     } on ApiException catch (e) {
       _error = e.message;
     }
-
     _isLoading = false;
-    notifyListeners();
-  }
-
-  Future<void> loadPendingLessons() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final response = await _service.getPendingLessons();
-      _pendingLessons = response['data'] as List<dynamic>?;
-    } on ApiException catch (e) {
-      _error = e.message;
-    }
-
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  Future<void> loadContract() async {
-    try {
-      final response = await _service.getContract();
-      _contract = response['data'] as Map<String, dynamic>?;
-      _contractList = _contract?['contracts'] as List<dynamic>?;
-    } on ApiException catch (e) {
-      // Contract data is optional, don't set error
-      _contract = null;
-      _contractList = null;
-    }
     notifyListeners();
   }
 
@@ -170,27 +188,14 @@ class StudentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadExcuses() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
-    try {
-      final response = await _service.getExcuses();
-      _excuses = response['data'] as List<dynamic>?;
-    } on ApiException catch (e) {
-      _error = e.message;
-    }
-
-    _isLoading = false;
-    notifyListeners();
-  }
+  Future<void> loadExcuses({bool force = false}) => _ensureLoaded(force: force);
 
   Future<Map<String, dynamic>> getExcuseDetail(int id) async {
     return await _service.getExcuseDetail(id);
   }
 
-  Future<Map<String, dynamic>> getMissedAssessments(String startDate, String endDate) async {
+  Future<Map<String, dynamic>> getMissedAssessments(
+      String startDate, String endDate) async {
     return await _service.getMissedAssessments(startDate, endDate);
   }
 
@@ -227,6 +232,7 @@ class StudentProvider extends ChangeNotifier {
     _contractList = null;
     _excuses = null;
     _excuseReasons = null;
+    _customSchedule = false;
     notifyListeners();
   }
 }

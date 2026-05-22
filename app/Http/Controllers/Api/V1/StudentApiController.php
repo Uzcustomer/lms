@@ -127,6 +127,24 @@ class StudentApiController extends Controller
             ? $semesterAvgs[$semesterKeys[$currentIndex - 1]]
             : null;
 
+        // Semester-level GPA (5-point scale) for the GPA trend chip.
+        $semesterGpas = AcademicRecord::where('student_id', $student->hemis_id)
+            ->whereNotNull('grade')
+            ->whereNotIn('grade', ['', '0'])
+            ->select('semester_id', DB::raw('AVG(CAST(grade AS DECIMAL(10,2))) as semester_gpa'))
+            ->groupBy('semester_id')
+            ->orderBy('semester_id')
+            ->pluck('semester_gpa', 'semester_id');
+
+        $gpaKeys = array_map('strval', $semesterGpas->keys()->toArray());
+        $currentGpaIndex = array_search((string) $currentSemesterId, $gpaKeys);
+        $currentSemesterGpa = ($currentGpaIndex !== false)
+            ? $semesterGpas[$semesterGpas->keys()[$currentGpaIndex]]
+            : null;
+        $prevSemesterGpa = ($currentGpaIndex !== false && $currentGpaIndex > 0)
+            ? $semesterGpas[$semesterGpas->keys()[$currentGpaIndex - 1]]
+            : null;
+
         return response()->json([
             'data' => [
                 'student_name' => $student->full_name,
@@ -134,6 +152,8 @@ class StudentApiController extends Controller
                 'avg_grade' => $student->avg_grade ?? 0,
                 'current_semester_avg' => $currentSemesterAvg ? round((float) $currentSemesterAvg, 2) : null,
                 'prev_semester_avg' => $prevSemesterAvg ? round((float) $prevSemesterAvg, 2) : null,
+                'current_semester_gpa' => $currentSemesterGpa ? round((float) $currentSemesterGpa, 2) : null,
+                'prev_semester_gpa' => $prevSemesterGpa ? round((float) $prevSemesterGpa, 2) : null,
                 'debt_subjects' => $debtSubjectsCount,
                 'debt_by_semester' => $debtBySemester,
                 'total_absences' => $totalAbsent,

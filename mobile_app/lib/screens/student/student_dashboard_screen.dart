@@ -1,19 +1,14 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
-import 'dart:ui';
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
-import '../../config/aurora_themes.dart';
 import '../../providers/student_provider.dart';
-import '../../providers/settings_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
-import '../../widgets/scale_tap.dart';
 import '../../widgets/settings_sheet.dart';
 import '../../widgets/notification_bell.dart';
 import 'student_home_screen.dart';
@@ -194,20 +189,61 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return '$baseHost$path';
   }
 
+  // ── Clinic-calm palette ──────────────────────────────
+  static const _calmBg = Color(0xFFEFF2F6);
+  static const _calmInk = Color(0xFF1F2A37);
+  static const _calmMuted = Color(0xFF8C96A6);
+  static const _calmTeal = Color(0xFF17A89F);
+  static const _calmBlue = Color(0xFF3B5BDB);
+  static const _calmGreen = Color(0xFF12B886);
+  static const _calmLine = Color(0xFFE9ECF1);
+
+  Color get _ink => Theme.of(context).brightness == Brightness.dark
+      ? Colors.white
+      : _calmInk;
+  Color get _muted => Theme.of(context).brightness == Brightness.dark
+      ? AppTheme.darkTextSecondary
+      : _calmMuted;
+  Color get _surface => Theme.of(context).brightness == Brightness.dark
+      ? AppTheme.darkCard
+      : Colors.white;
+  Color get _divider => Theme.of(context).brightness == Brightness.dark
+      ? Colors.white.withOpacity(0.08)
+      : _calmLine;
+
+  Widget _calmCard({required Widget child, EdgeInsets? padding, double radius = 20}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: double.infinity,
+      padding: padding ?? const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(radius),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: const Color(0xFF1F2A37).withOpacity(0.05),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final aurora = context.watch<SettingsProvider>().auroraTheme;
 
     return Scaffold(
+      backgroundColor: isDark ? AppTheme.darkBackground : _calmBg,
       body: Consumer<StudentProvider>(
         builder: (context, provider, _) {
           if (provider.isLoading && provider.dashboard == null && provider.profile == null) {
-            return Container(
-              color: auroraBase(aurora, isDark),
-              child: const LoadingWidget(),
-            );
+            return const LoadingWidget();
           }
 
           final data = provider.dashboard;
@@ -218,9 +254,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Icon(Icons.error_outline, size: 48, color: AppTheme.textSecondary),
+                  Icon(Icons.error_outline, size: 48, color: _muted),
                   const SizedBox(height: 16),
-                  Text(provider.error ?? l.noData),
+                  Text(provider.error ?? l.noData, style: TextStyle(color: _ink)),
                   const SizedBox(height: 16),
                   ElevatedButton(
                     onPressed: () {
@@ -234,40 +270,40 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             );
           }
 
-          return Container(
-            color: auroraBase(aurora, isDark),
-            child: RefreshIndicator(
-              onRefresh: () async {
-                await Future.wait([
-                  provider.loadDashboard(),
-                  provider.loadProfile(),
-                  provider.loadContract(),
-                  provider.loadSubjects(),
-                ]);
-                _loadTodaySchedule();
-              },
-              child: SingleChildScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                child: Column(
-                  children: [
-                    _buildProfileHeader(context, data, profile, l, isDark),
-                    const SizedBox(height: 16),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildLiveClassCard(),
-                          _buildGpaRow(data, profile, l),
-                          const SizedBox(height: 16),
-                          _buildSubjectsOverview(provider.subjects, isDark, l),
-                          _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
-                          const SizedBox(height: 100),
-                        ],
-                      ),
+          return RefreshIndicator(
+            onRefresh: () async {
+              await Future.wait([
+                provider.loadDashboard(),
+                provider.loadProfile(),
+                provider.loadContract(),
+                provider.loadSubjects(),
+              ]);
+              _loadTodaySchedule();
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              child: Column(
+                children: [
+                  _buildHeader(context, l),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildProfileCard(data, profile),
+                        const SizedBox(height: 14),
+                        _buildGpaRow(data, profile, l),
+                        const SizedBox(height: 14),
+                        _buildWeeklyActivity(data),
+                        const SizedBox(height: 14),
+                        _buildLiveClassCard(),
+                        _buildSubjectsOverview(provider.subjects, isDark, l),
+                        _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
+                        const SizedBox(height: 100),
+                      ],
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           );
@@ -276,82 +312,104 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
-    final cc = cardColor ?? const Color(0xFF1E3A8A);
-    final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(borderRadius),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(borderRadius),
-            boxShadow: [
-              BoxShadow(
-                color: isDark ? Colors.black.withOpacity(0.3) : const Color(0xFF1A1340).withOpacity(0.06),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
+  // ── Header ───────────────────────────────────────────
+  Widget _buildHeader(BuildContext context, AppLocalizations l) {
+    final statusBarH = MediaQuery.of(context).padding.top;
+    return Container(
+      padding: EdgeInsets.fromLTRB(16, statusBarH + 10, 16, 14),
+      color: _surface,
+      child: Row(
+        children: [
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: _calmTeal,
+              borderRadius: BorderRadius.circular(13),
+            ),
+            child: const Icon(Icons.account_balance_rounded, color: Colors.white, size: 22),
           ),
-          child: Stack(
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Positioned(
-                top: -50,
-                right: -50,
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-                  child: Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [cc.withOpacity(isDark ? 0.4 : 0.32), cc.withOpacity(0)],
-                        stops: const [0.0, 0.7],
-                      ),
-                    ),
-                  ),
+              Text(
+                'MED · UNIVERSITY',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1.2,
+                  color: _muted,
                 ),
               ),
-              child,
+              const SizedBox(height: 2),
+              Text(
+                l.home,
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: _ink,
+                ),
+              ),
             ],
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBlob(Color color) {
-    return ImageFiltered(
-      imageFilter: ImageFilter.blur(sigmaX: 24, sigmaY: 24),
-      child: Container(
-        width: 240,
-        height: 240,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          gradient: RadialGradient(
-            colors: [color, color.withOpacity(0)],
-            stops: const [0.0, 0.7],
+          const Spacer(),
+          _headerIconButton(
+            child: const NotificationBell(iconColor: _calmInk, iconSize: 20),
           ),
-        ),
+          const SizedBox(width: 8),
+          _headerIconButton(
+            child: IconButton(
+              padding: EdgeInsets.zero,
+              icon: const Icon(Icons.settings_outlined, color: _calmInk, size: 20),
+              onPressed: () => showSettingsSheet(context),
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildProfileHeader(
-    BuildContext context,
-    Map<String, dynamic>? data,
-    Map<String, dynamic>? profile,
-    AppLocalizations l,
-    bool isDark,
-  ) {
+  Widget _headerIconButton({required Widget child}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: 42,
+      height: 42,
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.06) : const Color(0xFFEEF1F5),
+        borderRadius: BorderRadius.circular(13),
+      ),
+      child: child,
+    );
+  }
+
+
+  // Kept for tuition/contract sections — now renders a plain clinic-calm card.
+  Widget _buildGlassCard({required Widget child, required bool isDark, double borderRadius = 20, Color? cardColor}) {
+    return Container(
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(borderRadius),
+        boxShadow: isDark
+            ? null
+            : [
+                BoxShadow(
+                  color: const Color(0xFF1F2A37).withOpacity(0.05),
+                  blurRadius: 16,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+      ),
+      child: child,
+    );
+  }
+
+  // ── Profile card ─────────────────────────────────────
+  Widget _buildProfileCard(Map<String, dynamic>? data, Map<String, dynamic>? profile) {
     final fullName = profile?['full_name']?.toString() ??
         data?['student_name']?.toString() ??
         '';
     final studentId = profile?['student_id_number']?.toString() ?? '';
-    final faculty = profile?['department_name']?.toString() ?? '';
     final imageUrl = _buildImageUrl(profile?['image']?.toString());
     final course = profile?['course']?.toString() ?? '';
     final yearOfEnter = profile?['year_of_enter']?.toString() ?? '';
@@ -359,317 +417,138 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final semesterName = profile?['semester_name']?.toString() ?? '';
     final paymentFormName = profile?['payment_form_name']?.toString() ?? '';
 
-    final statusBarHeight = MediaQuery.of(context).padding.top;
-    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
-    final subTextColor = isDark ? Colors.white70 : AppTheme.textSecondary;
-
-    return Column(
-      children: [
-        // Top bar
-        Container(
-          padding: EdgeInsets.only(top: statusBarHeight, left: 16, right: 4),
-          height: statusBarHeight + 64,
-          decoration: BoxDecoration(
-            color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
-            borderRadius: BorderRadius.only(
-              bottomLeft: Radius.circular(18),
-              bottomRight: Radius.circular(18),
-            ),
-          ),
-          child: Row(
+    return _calmCard(
+      child: Column(
+        children: [
+          Row(
             children: [
-              const Icon(Icons.account_balance, color: Colors.white, size: 24),
-              const Spacer(),
-              Text(l.home, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
-              const Spacer(),
-              const NotificationBell(),
-              IconButton(
-                icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
-                onPressed: () => showSettingsSheet(context),
+              Container(
+                width: 56,
+                height: 56,
+                decoration: const BoxDecoration(
+                  color: _calmTeal,
+                  shape: BoxShape.circle,
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: imageUrl != null && imageUrl.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: imageUrl,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                        placeholder: (_, __) => _avatarInitials(fullName),
+                        errorWidget: (_, __, ___) => _avatarInitials(fullName),
+                      )
+                    : _avatarInitials(fullName),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      fullName.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: _ink,
+                        height: 1.25,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      'ID · $studentId',
+                      style: TextStyle(fontSize: 11.5, color: _muted, fontWeight: FontWeight.w500),
+                    ),
+                    const SizedBox(height: 6),
+                    if (paymentFormName.isNotEmpty)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: _calmGreen.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 6,
+                              height: 6,
+                              decoration: const BoxDecoration(
+                                  color: _calmGreen, shape: BoxShape.circle),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              paymentFormName,
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w700,
+                                color: _calmGreen,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
-        ),
-
-        const SizedBox(height: 16),
-
-        // Glass profile card
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: _buildGlassCard(
-            isDark: isDark,
-            cardColor: const Color(0xFF1565C0),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  // Photo + name row
-                  Row(
-                    children: [
-                      // Avatar
-                      Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: isDark ? Colors.white24 : Colors.white,
-                            width: 3,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: Colors.black.withOpacity(0.15),
-                              blurRadius: 10,
-                            ),
-                          ],
-                        ),
-                        child: imageUrl != null && imageUrl.isNotEmpty
-                            ? ClipOval(
-                                child: CachedNetworkImage(
-                                  imageUrl: imageUrl,
-                                  width: 64,
-                                  height: 64,
-                                  fit: BoxFit.cover,
-                                  placeholder: (_, __) => CircleAvatar(
-                                    radius: 32,
-                                    backgroundColor: isDark
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.grey[200],
-                                    child: Text(_getInitials(fullName),
-                                        style: TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.bold,
-                                            color: textColor)),
-                                  ),
-                                  errorWidget: (_, __, ___) => CircleAvatar(
-                                    radius: 32,
-                                    backgroundColor: isDark
-                                        ? Colors.white.withOpacity(0.1)
-                                        : Colors.grey[200],
-                                    child: Text(_getInitials(fullName),
-                                        style: TextStyle(
-                                            fontSize: 22,
-                                            fontWeight: FontWeight.bold,
-                                            color: textColor)),
-                                  ),
-                                ),
-                              )
-                            : CircleAvatar(
-                                radius: 32,
-                                backgroundColor: isDark
-                                    ? Colors.white.withOpacity(0.1)
-                                    : const Color(0xFFE8D5C4),
-                                child: Text(
-                                  _getInitials(fullName),
-                                  style: TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold,
-                                    color: isDark ? Colors.white : const Color(0xFF5C3D2E),
-                                  ),
-                                ),
-                              ),
-                      ),
-                      const SizedBox(width: 14),
-                      // Name + ID + badge
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              fullName.toUpperCase(),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                                color: textColor,
-                                letterSpacing: 0.3,
-                              ),
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              'ID: $studentId',
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: subTextColor,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                            const SizedBox(height: 6),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFF43A047).withOpacity(0.15),
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Text(
-                                paymentFormName.isNotEmpty
-                                    ? paymentFormName
-                                    : (faculty.isNotEmpty ? faculty : ''),
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFF43A047),
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 14),
-
-                  // Stats row pills
-                  Row(
-                    children: [
-                      _buildStatPill(yearOfEnter.isNotEmpty ? yearOfEnter : '-', isDark),
-                      const SizedBox(width: 8),
-                      _buildStatPill(course.isNotEmpty ? '$course-kurs' : '-', isDark),
-                      const SizedBox(width: 8),
-                      _buildStatPill(semesterName.isNotEmpty ? '$semesterName' : '-', isDark),
-                      const SizedBox(width: 8),
-                      _buildStatPill(educationYear.isNotEmpty ? educationYear : '-', isDark),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+          const SizedBox(height: 14),
+          Divider(height: 1, color: _divider),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              _buildStatCell('YIL', yearOfEnter.isNotEmpty ? yearOfEnter : '—'),
+              _statDivider(),
+              _buildStatCell('KURS', course.isNotEmpty ? '$course-kurs' : '—'),
+              _statDivider(),
+              _buildStatCell('SEMESTR', semesterName.isNotEmpty ? semesterName : '—'),
+              _statDivider(),
+              _buildStatCell('O\'QUV YIL', educationYear.isNotEmpty ? educationYear : '—'),
+            ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
-  Widget _buildStatPill(String text, bool isDark) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 6),
-        decoration: BoxDecoration(
-          color: isDark
-              ? Colors.white.withOpacity(0.08)
-              : Colors.white.withOpacity(0.7),
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(
-            color: isDark
-                ? Colors.white.withOpacity(0.1)
-                : Colors.white.withOpacity(0.9),
-          ),
-        ),
-        child: Text(
-          text,
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: isDark ? Colors.white : const Color(0xFF5C3D2E),
-          ),
-          textAlign: TextAlign.center,
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
+  Widget _avatarInitials(String name) {
+    return Container(
+      color: _calmTeal,
+      alignment: Alignment.center,
+      child: Text(
+        _getInitials(name).toUpperCase(),
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.w800,
+          color: Colors.white,
         ),
       ),
     );
   }
 
-  Widget _buildProfileAvatar(String? imageUrl, String fullName) {
-    return Stack(
-      children: [
-        Container(
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            border: Border.all(color: Colors.white, width: 4),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withAlpha(40),
-                blurRadius: 12,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: imageUrl != null && imageUrl.isNotEmpty
-              ? ClipOval(
-                  child: CachedNetworkImage(
-                    imageUrl: imageUrl,
-                    width: 100,
-                    height: 100,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      width: 100,
-                      height: 100,
-                      color: Colors.white.withAlpha(50),
-                      child: const Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                    errorWidget: (context, url, error) => CircleAvatar(
-                      radius: 50,
-                      backgroundColor: Colors.white.withAlpha(50),
-                      child: Text(
-                        _getInitials(fullName),
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                    ),
-                  ),
-                )
-              : CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.white.withAlpha(50),
-                  child: Text(
-                    _getInitials(fullName),
-                    style: const TextStyle(
-                      fontSize: 32,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-        ),
-        Positioned(
-          bottom: 4,
-          right: 4,
-          child: Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              border: Border.all(color: AppTheme.primaryColor, width: 2),
-            ),
-            child: const Icon(Icons.camera_alt, color: AppTheme.primaryColor, size: 14),
-          ),
-        ),
-      ],
-    );
-  }
+  Widget _statDivider() => Container(width: 1, height: 30, color: _divider);
 
-  Widget _buildMiniStat(String label, String value, Color labelColor, Color valueColor) {
+  Widget _buildStatCell(String label, String value) {
     return Expanded(
       child: Column(
         children: [
           Text(
             label,
-            style: TextStyle(fontSize: 10, color: labelColor),
-            textAlign: TextAlign.center,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              fontSize: 9.5,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.6,
+              color: _muted,
+            ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: valueColor,
-            ),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _ink),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -679,8 +558,106 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _buildVerticalDivider(Color color) {
-    return Container(width: 1, height: 35, color: color);
+  // ── Weekly activity ──────────────────────────────────
+  Widget _buildWeeklyActivity(Map<String, dynamic>? data) {
+    final recent = (data?['recent_grades'] as List?) ?? [];
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final counts = List<int>.filled(7, 0);
+    for (final g in recent) {
+      if (g is! Map) continue;
+      final d = DateTime.tryParse(g['lesson_date']?.toString() ?? '') ??
+          DateTime.tryParse(g['created_at']?.toString() ?? '');
+      if (d == null) continue;
+      final diff = today.difference(DateTime(d.year, d.month, d.day)).inDays;
+      if (diff >= 0 && diff < 7) counts[6 - diff] += 1;
+    }
+    final activeDays = counts.where((c) => c > 0).length;
+    final isGood = activeDays >= 3;
+    final maxC = counts.fold<int>(0, (a, b) => a > b ? a : b);
+
+    return _calmCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.favorite_rounded, size: 16, color: _calmTeal),
+              const SizedBox(width: 6),
+              Text(
+                'HAFTALIK FAOLLIK',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1,
+                  color: _muted,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
+                decoration: BoxDecoration(
+                  color: (isGood ? _calmGreen : AppTheme.warningColor).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  isGood ? 'NORMA' : 'PAST',
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    color: isGood ? _calmGreen : AppTheme.warningColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                '$activeDays kun',
+                style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800, color: _ink),
+              ),
+              const SizedBox(width: 6),
+              Text("· so'nggi hafta", style: TextStyle(fontSize: 12, color: _muted)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 56,
+            child: LineChart(
+              LineChartData(
+                gridData: const FlGridData(show: false),
+                titlesData: const FlTitlesData(show: false),
+                borderData: FlBorderData(show: false),
+                lineTouchData: const LineTouchData(enabled: false),
+                minY: 0,
+                maxY: maxC.toDouble().clamp(1, 999) + 1,
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: [
+                      for (int i = 0; i < 7; i++)
+                        FlSpot(i.toDouble(), counts[i].toDouble()),
+                    ],
+                    isCurved: true,
+                    curveSmoothness: 0.35,
+                    color: _calmTeal,
+                    barWidth: 2.5,
+                    dotData: const FlDotData(show: false),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: _calmTeal.withOpacity(0.12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   String _getInitials(String name) {
@@ -701,28 +678,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return buf.toString();
   }
 
-  static const List<List<Color>> _subjectGradients = [
-    [Color(0xFFE3F2FD), Color(0xFFBBDEFB)],
-    [Color(0xFFE8F5E9), Color(0xFFC8E6C9)],
-    [Color(0xFFFFF3E0), Color(0xFFFFE0B2)],
-    [Color(0xFFF3E5F5), Color(0xFFE1BEE7)],
-    [Color(0xFFFCE4EC), Color(0xFFF8BBD0)],
-    [Color(0xFFE0F7FA), Color(0xFFB2EBF2)],
-    [Color(0xFFFFF8E1), Color(0xFFFFECB3)],
-    [Color(0xFFE8EAF6), Color(0xFFC5CAE9)],
-  ];
-
-  static const List<Color> _subjectAccents = [
-    Color(0xFF1565C0),
-    Color(0xFF2E7D32),
-    Color(0xFFE65100),
-    Color(0xFF7B1FA2),
-    Color(0xFFC62828),
-    Color(0xFF00838F),
-    Color(0xFFF9A825),
-    Color(0xFF283593),
-  ];
-
+  // ── Fanlar ───────────────────────────────────────────
   Widget _buildSubjectsOverview(List<dynamic>? subjects, bool isDark, AppLocalizations l) {
     if (subjects == null || subjects.isEmpty) return const SizedBox.shrink();
 
@@ -732,138 +688,162 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       final grades = s['grades'] as Map<String, dynamic>? ?? {};
       final jn = grades['jn'];
       final jnVal = jn != null
-          ? (jn is num ? jn.toDouble() : double.tryParse(jn.toString()) ?? 0)
+          ? (jn is num ? jn.toDouble() : double.tryParse(jn.toString()))
           : null;
       final absentHours = _toDouble(s['absent_hours']);
       final totalHours = _toDouble(s['auditorium_hours']);
-      final attendance = totalHours > 0
-          ? ((totalHours - absentHours) / totalHours * 100).clamp(0.0, 100.0)
-          : 100.0;
       items.add({
         'subject_id': s['subject_id'],
         'name': s['subject_name']?.toString() ?? '',
         'jn': jnVal,
-        'attendance': attendance,
         'absent': absentHours.round(),
         'total': totalHours.round(),
       });
     }
-
     if (items.isEmpty) return const SizedBox.shrink();
-
-    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
-    final subTextColor = isDark ? Colors.white70 : AppTheme.textSecondary;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          'Fanlar',
-          style: TextStyle(
-            fontSize: 17,
-            fontWeight: FontWeight.w800,
-            color: textColor,
-            letterSpacing: 0.3,
-          ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Text(
+              'Fanlar',
+              style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: _ink),
+            ),
+            const Spacer(),
+            GestureDetector(
+              onTap: () => StudentHomeScreen.switchToGrades(context),
+              child: Row(
+                children: [
+                  Text(
+                    'Barchasi',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: _calmTeal,
+                    ),
+                  ),
+                  const Icon(Icons.arrow_forward_rounded, size: 15, color: _calmTeal),
+                ],
+              ),
+            ),
+          ],
         ),
         const SizedBox(height: 10),
-        ...List.generate(items.length, (index) {
-          final item = items[index];
-          final jn = item['jn'] as double?;
-          final att = item['attendance'] as double;
+        _calmCard(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Column(
+            children: [
+              for (int i = 0; i < items.length; i++) ...[
+                if (i > 0)
+                  Divider(height: 1, indent: 16, endIndent: 16, color: _divider),
+                _buildSubjectRow(items[i]),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 4),
+      ],
+    );
+  }
 
-          Color jnColor;
-          if (jn == null) {
-            jnColor = AppTheme.textSecondary;
-          } else if (jn >= 71) {
-            jnColor = const Color(0xFF4A6CF7);
-          } else if (jn >= 56) {
-            jnColor = const Color(0xFFFFA726);
-          } else {
-            jnColor = const Color(0xFFE53935);
-          }
+  Widget _buildSubjectRow(Map<String, dynamic> item) {
+    final jn = item['jn'] as double?;
+    final name = item['name'] as String;
+    final absent = item['absent'] as int;
+    final total = item['total'] as int;
 
-          const subjectColors = [Color(0xFF43A047), Color(0xFF7C4DFF), Color(0xFFE65100), Color(0xFF0097A7), Color(0xFFE91E63), Color(0xFF1565C0)];
-          final rawId = item['subject_id'];
-          final subjectId = rawId is int
-              ? rawId
-              : (rawId == null ? null : int.tryParse(rawId.toString()));
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 8),
-            child: ScaleTap(
-              onTap: () => subjectId != null
-                  ? StudentHomeScreen.openSubject(context, subjectId)
-                  : StudentHomeScreen.switchToGrades(context),
-              child: _buildGlassCard(
-              isDark: isDark,
-              cardColor: subjectColors[index % subjectColors.length],
-              borderRadius: 16,
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Row(
+    Color badgeColor;
+    if (jn == null) {
+      badgeColor = _calmMuted;
+    } else if (jn >= 71) {
+      badgeColor = _calmBlue;
+    } else if (jn >= 56) {
+      badgeColor = AppTheme.warningColor;
+    } else {
+      badgeColor = AppTheme.errorColor;
+    }
+
+    final rawId = item['subject_id'];
+    final subjectId = rawId is int
+        ? rawId
+        : (rawId == null ? null : int.tryParse(rawId.toString()));
+    final progress = total > 0 ? ((total - absent) / total).clamp(0.0, 1.0) : 0.0;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => subjectId != null
+            ? StudentHomeScreen.openSubject(context, subjectId)
+            : StudentHomeScreen.switchToGrades(context),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: badgeColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  jn != null ? jn.round().toString() : '—',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: badgeColor,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      width: 46,
-                      height: 46,
-                      decoration: BoxDecoration(
-                        color: jnColor.withOpacity(isDark ? 0.2 : 0.12),
-                        borderRadius: BorderRadius.circular(14),
+                    Text(
+                      name,
+                      style: TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w700,
+                        color: _ink,
                       ),
-                      child: Center(
-                        child: Text(
-                          jn != null ? jn.round().toString() : '-',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w800,
-                            color: jnColor,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 7),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(3),
+                            child: LinearProgressIndicator(
+                              value: progress,
+                              minHeight: 4,
+                              backgroundColor: _divider,
+                              valueColor: AlwaysStoppedAnimation<Color>(_calmTeal),
+                            ),
                           ),
                         ),
-                      ),
+                        const SizedBox(width: 8),
+                        Text(
+                          '$absent/$total soat',
+                          style: TextStyle(fontSize: 10.5, color: _muted),
+                        ),
+                      ],
                     ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            item['name'] as String,
-                            style: TextStyle(
-                              fontSize: 13.5,
-                              fontWeight: FontWeight.w600,
-                              color: textColor,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Icon(Icons.access_time_rounded,
-                                  size: 12, color: subTextColor),
-                              const SizedBox(width: 3),
-                              Text(
-                                '${att.round()}% · ${item['absent']}/${item['total']} soat',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  color: subTextColor,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    _TapHintChevron(color: subTextColor),
                   ],
                 ),
               ),
-            ),
-            ),
-          );
-        }),
-        const SizedBox(height: 16),
-      ],
+              const SizedBox(width: 6),
+              Icon(Icons.chevron_right_rounded, size: 20, color: _muted),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -1472,210 +1452,132 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     return double.tryParse(val.toString()) ?? 0;
   }
 
-  Color _gradeColor(dynamic grade) {
-    if (grade == null) return AppTheme.textSecondary;
-    final g = grade is num ? grade.toDouble() : double.tryParse(grade.toString()) ?? 0;
-    if (g >= 86) return AppTheme.successColor;
-    if (g >= 71) return AppTheme.primaryColor;
-    if (g >= 56) return AppTheme.warningColor;
-    return AppTheme.errorColor;
-  }
-
+  // ── GPA + O'rtacha cards ─────────────────────────────
   Widget _buildGpaRow(Map<String, dynamic>? data, Map<String, dynamic>? profile, AppLocalizations l) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final gpa = _toDouble(data?['gpa'] ?? profile?['avg_gpa']);
     final avgGrade = _toDouble(data?['avg_grade'] ?? profile?['avg_grade']);
+
+    // O'rtacha trend = current vs previous semester average (real data).
+    final curAvg = data?['current_semester_avg'];
+    final prevAvg = data?['prev_semester_avg'];
+    double? avgTrend;
+    if (curAvg is num && prevAvg is num) {
+      avgTrend = curAvg.toDouble() - prevAvg.toDouble();
+    }
 
     return Row(
       children: [
         Expanded(
-          child: _buildDonutCard(
+          child: _buildStatCard(
             label: 'GPA',
-            value: gpa,
-            maxValue: 5.0,
-            displayText: gpa.toStringAsFixed(2),
-            ringColor: const Color(0xFF43A047),
-            isDark: isDark,
+            value: gpa.toStringAsFixed(2),
+            maxLabel: '/ 5',
+            progress: (gpa / 5.0).clamp(0.0, 1.0),
+            accent: _calmGreen,
+            trend: null,
           ),
         ),
         const SizedBox(width: 12),
         Expanded(
-          child: _buildDonutCard(
-            label: l.avgGrade,
-            value: avgGrade,
-            maxValue: 100.0,
-            displayText: avgGrade.toStringAsFixed(1),
-            ringColor: const Color(0xFFFFC107),
-            isDark: isDark,
+          child: _buildStatCard(
+            label: l.avgGrade.toUpperCase(),
+            value: avgGrade.toStringAsFixed(1),
+            maxLabel: '/ 100',
+            progress: (avgGrade / 100.0).clamp(0.0, 1.0),
+            accent: _calmBlue,
+            trend: avgTrend,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildDonutCard({
+  Widget _buildStatCard({
     required String label,
-    required double value,
-    required double maxValue,
-    required String displayText,
-    required Color ringColor,
-    required bool isDark,
+    required String value,
+    required String maxLabel,
+    required double progress,
+    required Color accent,
+    double? trend,
   }) {
-    final textColor = isDark ? Colors.white : AppTheme.textPrimary;
-    final subTextColor = isDark ? Colors.white70 : Colors.grey[600]!;
-    final trackColor = isDark ? Colors.white.withOpacity(0.08) : ringColor.withOpacity(0.12);
-    final percent = (value / maxValue).clamp(0.0, 1.0);
-
-    return _buildGlassCard(
-      isDark: isDark,
-      cardColor: ringColor,
-      child: Center(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            mainAxisSize: MainAxisSize.min,
+    return _calmCard(
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-            TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: percent),
-              duration: const Duration(milliseconds: 1400),
+              Expanded(
+                child: Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                    color: _muted,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (trend != null && trend != 0)
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      trend > 0 ? Icons.arrow_drop_up_rounded : Icons.arrow_drop_down_rounded,
+                      size: 16,
+                      color: trend > 0 ? _calmGreen : AppTheme.errorColor,
+                    ),
+                    Text(
+                      '${trend > 0 ? '+' : ''}${trend.toStringAsFixed(1)}',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: trend > 0 ? _calmGreen : AppTheme.errorColor,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w800,
+                  color: accent,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(width: 4),
+              Text(
+                maxLabel,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _muted),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: TweenAnimationBuilder<double>(
+              tween: Tween(begin: 0, end: progress),
+              duration: const Duration(milliseconds: 1100),
               curve: Curves.easeOutCubic,
-              builder: (context, animVal, _) {
-                return SizedBox(
-                  width: 110,
-                  height: 110,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: 110,
-                        height: 110,
-                        child: PieChart(
-                          PieChartData(
-                            startDegreeOffset: -90,
-                            sectionsSpace: 0,
-                            centerSpaceRadius: 38,
-                            sections: [
-                              PieChartSectionData(
-                                value: animVal * maxValue,
-                                color: ringColor,
-                                radius: 14,
-                                showTitle: false,
-                              ),
-                              PieChartSectionData(
-                                value: maxValue - (animVal * maxValue),
-                                color: trackColor,
-                                radius: 14,
-                                showTitle: false,
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Column(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            displayText,
-                            style: TextStyle(
-                              fontSize: 24,
-                              fontWeight: FontWeight.w800,
-                              color: ringColor,
-                            ),
-                          ),
-                          Text(
-                            '/ ${maxValue % 1 == 0 ? maxValue.toInt() : maxValue}',
-                            style: TextStyle(
-                              fontSize: 10,
-                              fontWeight: FontWeight.w500,
-                              color: subTextColor,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 10),
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: textColor,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ],
-        ),
-      ),
-      ),
-    );
-  }
-}
-
-/// Right-side "tap me" affordance for tappable dashboard subject cards.
-/// A pointing-hand icon sitting on top of a pulsing colored halo, so the
-/// affordance is unambiguous and catches the eye.
-class _TapHintChevron extends StatefulWidget {
-  final Color? color;
-  const _TapHintChevron({this.color});
-
-  @override
-  State<_TapHintChevron> createState() => _TapHintChevronState();
-}
-
-class _TapHintChevronState extends State<_TapHintChevron>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _ctrl = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 900),
-  )..repeat(reverse: true);
-
-  late final Animation<double> _opacity = Tween<double>(begin: 0.15, end: 0.85)
-      .animate(CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut));
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    const haloColor = Color(0xFFFFA726); // bright amber — eye-catching
-    return AnimatedBuilder(
-      animation: _opacity,
-      builder: (_, __) => SizedBox(
-        width: 36,
-        height: 36,
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: haloColor.withOpacity(_opacity.value * 0.35),
-                boxShadow: [
-                  BoxShadow(
-                    color: haloColor.withOpacity(_opacity.value * 0.6),
-                    blurRadius: 14,
-                    spreadRadius: 1,
-                  ),
-                ],
+              builder: (_, v, __) => LinearProgressIndicator(
+                value: v,
+                minHeight: 6,
+                backgroundColor: accent.withOpacity(0.12),
+                valueColor: AlwaysStoppedAnimation<Color>(accent),
               ),
             ),
-            const Icon(
-              Icons.touch_app_rounded,
-              size: 20,
-              color: haloColor,
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

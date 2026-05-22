@@ -229,85 +229,38 @@
     </div>
 
     <script>
-        // Aeroport uslubidagi "ting-ting-ting" ovozi — Web Audio API orqali
-        // generatsiya qilinadi (tashqi audio fayl shart emas). Brauzer autoplay
-        // siyosati tufayli ovoz birinchi marta foydalanuvchi ekranga bosgandan
-        // keyin ochiladi; shundan so'ng sahifa qayta yuklansa ham (domen bilan
-        // muloqot bo'lgani uchun) avtomatik chiqaveradi.
+        // Yuklangan "ting-ting-ting" ovoz fayli — HTMLAudioElement bilan chiqariladi.
+        // Brauzer autoplay siyosati tufayli ovoz birinchi marta foydalanuvchi
+        // ekranga bosgandan keyin ochiladi; shundan so'ng sahifa qayta yuklansa ham
+        // avtomatik chiqaveradi.
         window.tvChime = (function() {
-            const AC = window.AudioContext || window.webkitAudioContext;
-            let ctx = null;
+            const audio = new Audio('{{ asset("audio/chime.m4a") }}');
+            audio.preload = 'auto';
 
             function hint(show) {
                 const h = document.getElementById('tv-sound-hint');
                 if (h) h.style.display = show ? 'block' : 'none';
             }
 
-            function ensureCtx() {
-                if (!AC) return null;
-                if (!ctx) ctx = new AC();
-                return ctx;
-            }
-
-            // Bitta jarangli "ting" tovushi — asosiy ton + oktava overton,
-            // tez ko'tarilib, sekin so'nadigan qo'ng'iroqsimon envelope bilan.
-            function note(c, freq, startAt, duration, peak) {
-                const osc = c.createOscillator();
-                const overtone = c.createOscillator();
-                const gain = c.createGain();
-                const overGain = c.createGain();
-                osc.type = 'sine';
-                overtone.type = 'sine';
-                osc.frequency.value = freq;
-                overtone.frequency.value = freq * 2.01;
-                overGain.gain.value = 0.3;
-                osc.connect(gain);
-                overtone.connect(overGain);
-                overGain.connect(gain);
-                gain.connect(c.destination);
-                gain.gain.setValueAtTime(0.0001, startAt);
-                gain.gain.exponentialRampToValueAtTime(peak, startAt + 0.012);
-                gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
-                osc.start(startAt);
-                overtone.start(startAt);
-                osc.stop(startAt + duration + 0.05);
-                overtone.stop(startAt + duration + 0.05);
-            }
-
             function play() {
-                const c = ensureCtx();
-                if (!c) return;
-                if (c.state === 'suspended') c.resume().catch(function() {});
-                if (c.state !== 'running') { hint(true); return; }
-                hint(false);
-                const t0 = c.currentTime + 0.04;
-                const freqs = [783.99, 1046.50, 1318.51]; // G5 → C6 → E6, ko'tariluvchi
-                const gap = 0.22;
-                freqs.forEach(function(f, i) {
-                    note(c, f, t0 + i * gap, 0.55, 0.3);
-                });
+                audio.pause();
+                audio.currentTime = 0;
+                const p = audio.play();
+                if (p && typeof p.then === 'function') {
+                    p.then(function() { hint(false); }).catch(function() { hint(true); });
+                }
             }
 
             function unlock() {
-                const c = ensureCtx();
-                if (!c) return;
-                if (c.state === 'suspended') {
-                    c.resume().then(function() { hint(false); }).catch(function() {});
-                } else {
-                    hint(false);
-                }
+                hint(false);
             }
 
-            function init() {
-                const c = ensureCtx();
-                if (!c || c.state === 'suspended') {
-                    hint(true);
-                    ['click', 'keydown', 'touchstart', 'pointerdown'].forEach(function(ev) {
-                        document.addEventListener(ev, unlock, { passive: true });
-                    });
-                }
-            }
-            init();
+            // Dastlab ko'rsatmani ko'rsatamiz; foydalanuvchi biror tugma/ekran
+            // bosgandan keyin yashiramiz va audio ochiladi.
+            hint(true);
+            ['click', 'keydown', 'touchstart', 'pointerdown'].forEach(function(ev) {
+                document.addEventListener(ev, unlock, { passive: true });
+            });
 
             return { play: play, unlock: unlock };
         })();

@@ -211,3 +211,73 @@ class _ShinySweepState extends State<ShinySweep>
     );
   }
 }
+
+/// Just the looping diagonal shine band — drop into a Stack as a
+/// `Positioned.fill` layer (the Stack itself should be clipped).
+class ShineOverlay extends StatefulWidget {
+  final double opacity;
+  const ShineOverlay({super.key, this.opacity = 0.22});
+
+  @override
+  State<ShineOverlay> createState() => _ShineOverlayState();
+}
+
+class _ShineOverlayState extends State<ShineOverlay>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 3000),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (_, __) => LayoutBuilder(
+          builder: (_, c) {
+            final dx = (-0.4 + 1.8 * _controller.value) * c.maxWidth;
+            return Stack(
+              children: [
+                Positioned(
+                  left: dx,
+                  top: -220,
+                  child: Transform.rotate(
+                    angle: 0.42,
+                    child: Container(
+                      width: 72,
+                      height: c.maxHeight + 440,
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                          colors: [
+                            Colors.white.withOpacity(0),
+                            Colors.white.withOpacity(widget.opacity),
+                            Colors.white.withOpacity(0),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
+      ),
+    );
+  }
+}

@@ -401,14 +401,7 @@ class _LoginScreenState extends State<LoginScreen> {
             borderRadius: BorderRadius.circular(14),
             onTap: loading ? null : _submit,
             child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 15),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [_accent, _accentDeep],
-                  begin: Alignment.centerLeft,
-                  end: Alignment.centerRight,
-                ),
                 borderRadius: BorderRadius.circular(14),
                 boxShadow: [
                   BoxShadow(
@@ -418,35 +411,57 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ],
               ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  if (loading) ...[
-                    const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        valueColor: AlwaysStoppedAnimation(Colors.white),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Stack(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [_accent, _accentDeep],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (loading) ...[
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.4,
+                                valueColor:
+                                    AlwaysStoppedAnimation(Colors.white),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Text(
+                            loading ? 'Tekshirilmoqda…' : 'Tizimga kirish',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          if (!loading) ...[
+                            const SizedBox(width: 6),
+                            const Icon(Icons.arrow_forward_rounded,
+                                color: Colors.white, size: 17),
+                          ],
+                        ],
                       ),
                     ),
-                    const SizedBox(width: 8),
-                  ],
-                  Text(
-                    loading ? 'Tekshirilmoqda…' : 'Tizimga kirish',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.3,
+                    const Positioned.fill(
+                      child: ShineOverlay(opacity: 0.28),
                     ),
-                  ),
-                  if (!loading) ...[
-                    const SizedBox(width: 6),
-                    const Icon(Icons.arrow_forward_rounded,
-                        color: Colors.white, size: 17),
                   ],
-                ],
+                ),
               ),
             ),
           ),
@@ -591,6 +606,8 @@ class _Hero extends StatelessWidget {
                 painter: _BuildingPainter(color: Colors.white.withOpacity(0.13)),
               ),
             ),
+            // Shimmer sweeps over the header, under the logo + texts.
+            const Positioned.fill(child: ShineOverlay()),
             Padding(
               padding: EdgeInsets.fromLTRB(24, topPadding + 26, 24, 30),
               child: Column(
@@ -674,8 +691,12 @@ class _HeartLogo extends StatefulWidget {
 }
 
 class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
+  static const double _card = 86;
+  static const double _box = 152;
+
   late final AnimationController _beat;
   late final AnimationController _sweep;
+  late final AnimationController _wave;
   late final Animation<double> _scale;
 
   @override
@@ -688,19 +709,19 @@ class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
     _scale = TweenSequence<double>([
       TweenSequenceItem(tween: ConstantTween(1.0), weight: 14),
       TweenSequenceItem(
-          tween: Tween(begin: 1.0, end: 1.20)
+          tween: Tween(begin: 1.0, end: 1.22)
               .chain(CurveTween(curve: Curves.easeOut)),
           weight: 8),
       TweenSequenceItem(
-          tween: Tween(begin: 1.20, end: 1.0)
+          tween: Tween(begin: 1.22, end: 1.0)
               .chain(CurveTween(curve: Curves.easeIn)),
           weight: 10),
       TweenSequenceItem(
-          tween: Tween(begin: 1.0, end: 1.11)
+          tween: Tween(begin: 1.0, end: 1.12)
               .chain(CurveTween(curve: Curves.easeOut)),
           weight: 7),
       TweenSequenceItem(
-          tween: Tween(begin: 1.11, end: 1.0)
+          tween: Tween(begin: 1.12, end: 1.0)
               .chain(CurveTween(curve: Curves.easeIn)),
           weight: 9),
       TweenSequenceItem(tween: ConstantTween(1.0), weight: 52),
@@ -709,130 +730,205 @@ class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 2200),
     )..repeat();
+    _wave = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    )..repeat();
   }
 
   @override
   void dispose() {
     _beat.dispose();
     _sweep.dispose();
+    _wave.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 94,
-      height: 94,
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 18,
-            offset: const Offset(0, 8),
+    return SizedBox(
+      width: _box,
+      height: _box,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Pulsing waves radiating from the card.
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _wave,
+              builder: (_, __) => CustomPaint(
+                painter: _WavePainter(_wave.value, _card),
+              ),
+            ),
+          ),
+          // Logo card.
+          Container(
+            width: _card,
+            height: _card,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(21),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.22),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
+            ),
+            child: ShinySweep(
+              radius: 21,
+              child: SizedBox.expand(
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    // Beating heart (under the line).
+                    AnimatedBuilder(
+                      animation: _scale,
+                      builder: (_, child) =>
+                          Transform.scale(scale: _scale.value, child: child),
+                      child: const Icon(
+                        Icons.favorite_rounded,
+                        color: Color(0xFFE53935),
+                        size: 58,
+                      ),
+                    ),
+                    // EKG line on top — white where it crosses the heart.
+                    Positioned.fill(
+                      child: AnimatedBuilder(
+                        animation: _sweep,
+                        builder: (_, __) => CustomPaint(
+                          painter: _EkgPainter(_sweep.value),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ),
         ],
-      ),
-      child: ShinySweep(
-        radius: 22,
-        child: SizedBox.expand(
-          child: Stack(
-            alignment: Alignment.center,
-            children: [
-              // Running EKG line
-              Positioned.fill(
-                child: AnimatedBuilder(
-                  animation: _sweep,
-                  builder: (_, __) => CustomPaint(
-                    painter: _EkgPainter(_sweep.value),
-                  ),
-                ),
-              ),
-              // Beating heart
-              AnimatedBuilder(
-                animation: _scale,
-                builder: (_, child) =>
-                    Transform.scale(scale: _scale.value, child: child),
-                child: const Icon(
-                  Icons.favorite_rounded,
-                  color: Color(0xFFE53935),
-                  size: 52,
-                ),
-              ),
-            ],
-          ),
-        ),
       ),
     );
   }
 }
 
-/// Flat-line EKG with periodic QRS spikes and a bright sweeping pulse.
+/// Concentric rounded-square waves expanding out from the logo card.
+class _WavePainter extends CustomPainter {
+  final double progress;
+  final double cardSide;
+  const _WavePainter(this.progress, this.cardSide);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    const count = 2;
+    for (int i = 0; i < count; i++) {
+      final t = (progress + i / count) % 1.0;
+      final side = cardSide + t * 58;
+      final opacity = (1 - t) * 0.45;
+      if (opacity <= 0) continue;
+      final rrect = RRect.fromRectAndRadius(
+        Rect.fromCenter(center: center, width: side, height: side),
+        Radius.circular(21 + t * 14),
+      );
+      canvas.drawRRect(
+        rrect,
+        Paint()
+          ..color = Colors.white.withOpacity(opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_WavePainter old) => old.progress != progress;
+}
+
+/// Single-impulse EKG trace — red on the white card, white over the heart.
 class _EkgPainter extends CustomPainter {
   final double progress;
   const _EkgPainter(this.progress);
 
-  // One heartbeat — x fraction within a beat, y 0(top)–1(bottom), base 0.5.
+  // One heartbeat — x fraction across the width, y 0(top)–1(bottom).
   static const List<Offset> _beat = [
-    Offset(0.00, 0.5), Offset(0.30, 0.5),
-    Offset(0.38, 0.32), Offset(0.45, 0.86),
-    Offset(0.52, 0.12), Offset(0.59, 0.66),
-    Offset(0.66, 0.5), Offset(1.00, 0.5),
+    Offset(0.00, 0.5), Offset(0.26, 0.5),
+    Offset(0.36, 0.30), Offset(0.44, 0.88),
+    Offset(0.52, 0.10), Offset(0.60, 0.68),
+    Offset(0.70, 0.5), Offset(1.00, 0.5),
   ];
-  static const int _beats = 1;
   static const Color _red = Color(0xFFE53935);
+
+  Path _buildPath(Size size) {
+    final path = Path();
+    for (var i = 0; i < _beat.length; i++) {
+      final x = _beat[i].dx * size.width;
+      final y = _beat[i].dy * size.height;
+      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+    }
+    return path;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final path = Path();
-    final beatW = size.width / _beats;
-    var first = true;
-    for (var b = 0; b < _beats; b++) {
-      for (final p in _beat) {
-        final x = (b + p.dx) * beatW;
-        final y = p.dy * size.height;
-        if (first) {
-          path.moveTo(x, y);
-          first = false;
-        } else {
-          path.lineTo(x, y);
-        }
-      }
-    }
-
-    // Faint resting trace.
-    canvas.drawPath(
-      path,
-      Paint()
-        ..color = _red.withOpacity(0.22)
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
+    final path = _buildPath(size);
+    final heart = Rect.fromCenter(
+      center: Offset(size.width / 2, size.height / 2),
+      width: size.width * 0.60,
+      height: size.height * 0.56,
     );
 
     final metrics = path.computeMetrics().toList();
-    if (metrics.isEmpty) return;
-    final metric = metrics.first;
-    final len = metric.length;
+    final metric = metrics.isEmpty ? null : metrics.first;
+    final len = metric?.length ?? 0;
     final head = progress * len;
     final tail = (head - len * 0.30).clamp(0.0, len);
+    final sweep =
+        metric?.extractPath(tail, head.clamp(0.0, len));
 
-    // Bright sweeping pulse.
-    canvas.drawPath(
-      metric.extractPath(tail, head.clamp(0.0, len)),
-      Paint()
-        ..color = _red
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.6
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
+    void drawTrace(Color base, Color bright) {
+      canvas.drawPath(
+        path,
+        Paint()
+          ..color = base
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.4
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+      if (sweep != null) {
+        canvas.drawPath(
+          sweep,
+          Paint()
+            ..color = bright
+            ..style = PaintingStyle.stroke
+            ..strokeWidth = 3
+            ..strokeCap = StrokeCap.round
+            ..strokeJoin = StrokeJoin.round,
+        );
+      }
+    }
 
-    final tan = metric.getTangentForOffset(head.clamp(0.0, len));
-    if (tan != null) {
-      canvas.drawCircle(tan.position, 3, Paint()..color = _red);
+    // Red over the white card.
+    drawTrace(_red.withOpacity(0.32), _red);
+    // White where the line runs over the heart.
+    canvas.save();
+    canvas.clipRect(heart);
+    drawTrace(Colors.white.withOpacity(0.65), Colors.white);
+    canvas.restore();
+
+    // Leading pulse dot.
+    if (metric != null) {
+      final tan = metric.getTangentForOffset(head.clamp(0.0, len));
+      if (tan != null) {
+        final onHeart = heart.contains(tan.position);
+        canvas.drawCircle(
+          tan.position,
+          3,
+          Paint()..color = onHeart ? Colors.white : _red,
+        );
+      }
     }
   }
 

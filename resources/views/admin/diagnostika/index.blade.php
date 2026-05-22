@@ -1430,13 +1430,15 @@
                         }
                     });
 
-                    // Semestr override — default'dan farq qilsa yuboriladi
+                    // Semestr — modalda tanlangan qiymat DOIM yuboriladi. Modal = aniq
+                    // qaror: tanlangan semestr talabaning joriy semestri bilan bir xil
+                    // bo'lsa ham, natija semestri bilan mos kelmaslik tekshiruvi
+                    // o'tkazib yuborilishi kerak (aks holda "Semestr mos kelmadi" xatosi).
                     var semesterOverrides = {};
                     $('.reupload-semester-select').each(function() {
                         var key = $(this).data('key');
                         var val = String($(this).val() || '');
-                        var def = String($(this).data('default') || '');
-                        if (val && val !== def) {
+                        if (val) {
                             semesterOverrides[key] = val;
                         }
                     });

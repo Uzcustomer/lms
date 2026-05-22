@@ -236,7 +236,7 @@
         // ekranga bosgandan keyin ochiladi; shundan so'ng sahifa qayta yuklansa ham
         // avtomatik chiqaveradi.
         window.tvChime = (function() {
-            const audio = new Audio('{{ asset("audio/chime.m4a") }}');
+            const audio = new Audio('{{ asset("audio/chime.mp3") }}');
             audio.preload = 'auto';
 
             function hint(show) {

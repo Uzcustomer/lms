@@ -251,7 +251,7 @@
                                             </button>
                                         </form>
                                     @endif
-                                    @if($group->is_locked && auth()->user()?->hasAnyRole(['superadmin', 'admin']))
+                                    @if($group->is_locked && auth()->user()?->hasRole('superadmin'))
                                         <form method="POST" action="{{ route('admin.retake-journal.unlock', $group->id) }}"
                                               onsubmit="return confirm('{{ __("Lock'ni bekor qilishni tasdiqlaysizmi?") }}')">
                                             @csrf

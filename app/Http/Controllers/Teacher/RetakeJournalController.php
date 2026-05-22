@@ -150,7 +150,7 @@ class RetakeJournalController extends Controller
         $semesterNames = $studentInfo->pluck('semester_name')->filter()->unique()->values();
         $groupNames = $studentInfo->pluck('group_name')->filter()->unique()->values();
 
-        $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
+        $isAdmin = $actor->hasRole(ProjectRole::SUPERADMIN->value);
         $canEdit = $isAdmin
             || ($actor instanceof Teacher && $this->service->isAssignedTeacher($group, $actor) && $this->service->isEditable($group));
 
@@ -188,7 +188,8 @@ class RetakeJournalController extends Controller
         ]);
 
         $group = RetakeGroup::findOrFail($groupId);
-        $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
+        // Baho qo'yish faqat biriktirilgan o'qituvchi yoki superadmin (admin emas)
+        $isAdmin = $actor->hasRole(ProjectRole::SUPERADMIN->value);
 
         if (!$isAdmin) {
             if (!$actor instanceof Teacher || !$this->service->isAssignedTeacher($group, $actor)) {
@@ -231,7 +232,8 @@ class RetakeJournalController extends Controller
         if (!$actor) abort(403);
 
         $group = RetakeGroup::findOrFail($groupId);
-        $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
+        // Faqat biriktirilgan o'qituvchi yoki superadmin (admin emas)
+        $isAdmin = $actor->hasRole(ProjectRole::SUPERADMIN->value);
         if (!$isAdmin && (!$actor instanceof Teacher || !$this->service->isAssignedTeacher($group, $actor))) {
             abort(403);
         }
@@ -251,7 +253,7 @@ class RetakeJournalController extends Controller
     public function unlock(int $groupId): RedirectResponse
     {
         $actor = RetakeAccess::currentStaff();
-        if (!$actor || !$actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value])) {
+        if (!$actor || !$actor->hasRole(ProjectRole::SUPERADMIN->value)) {
             abort(403);
         }
         $group = RetakeGroup::findOrFail($groupId);
@@ -351,7 +353,8 @@ class RetakeJournalController extends Controller
         if (!$actor) abort(403);
 
         $group = RetakeGroup::findOrFail($groupId);
-        $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
+        // Faqat biriktirilgan o'qituvchi yoki superadmin (admin emas)
+        $isAdmin = $actor->hasRole(ProjectRole::SUPERADMIN->value);
         if (!$isAdmin && (!$actor instanceof Teacher || !$this->service->isAssignedTeacher($group, $actor))) {
             abort(403);
         }
@@ -410,7 +413,8 @@ class RetakeJournalController extends Controller
         ]);
 
         $group = RetakeGroup::findOrFail($groupId);
-        $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
+        // Baho qo'yish faqat biriktirilgan o'qituvchi yoki superadmin (admin emas)
+        $isAdmin = $actor->hasRole(ProjectRole::SUPERADMIN->value);
 
         if (!$isAdmin) {
             if (!$actor instanceof Teacher || !$this->service->isAssignedTeacher($group, $actor)) {
@@ -458,9 +462,10 @@ class RetakeJournalController extends Controller
 
         $group = RetakeGroup::findOrFail($groupId);
 
-        $isAdmin = $actor->hasAnyRole([ProjectRole::SUPERADMIN->value, ProjectRole::ADMIN->value]);
+        // Baho qo'yish faqat biriktirilgan o'qituvchi yoki superadmin (admin emas)
+        $isAdmin = $actor->hasRole(ProjectRole::SUPERADMIN->value);
 
-        // Tahrirlash huquqi — assigned teacher yoki admin
+        // Tahrirlash huquqi — assigned teacher yoki superadmin
         if (!$isAdmin) {
             if (!$actor instanceof Teacher || !$this->service->isAssignedTeacher($group, $actor)) {
                 return response()->json(['success' => false, 'message' => 'Siz bu guruhga biriktirilmagansiz'], 403);

@@ -1897,6 +1897,7 @@ class QuizResultController extends Controller
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:hemis_quiz_results,id',
             'subject_overrides' => 'nullable|array',
+            'semester_overrides' => 'nullable|array',
         ]);
 
         $results = HemisQuizResult::whereIn('id', $request->ids)->get();
@@ -1904,6 +1905,9 @@ class QuizResultController extends Controller
         // subject_overrides — manual o'zgartirilgan fan_id larni saqlovchi map
         // Format: { "<original_fan_id>_<group_id>": <new_subject_id> }
         $subjectOverrides = $request->input('subject_overrides', []);
+        // semester_overrides — modalda qo'lda tanlangan semestr kodlari
+        // Format: { "<original_fan_id>_<group_id>": <semester_code> }
+        $semesterOverrides = $request->input('semester_overrides', []);
 
         $successCount = 0;
         $errors = [];
@@ -1968,21 +1972,29 @@ class QuizResultController extends Controller
                 continue;
             }
 
+            // Semestr override (modaldan) — foydalanuvchi to'g'ri semestrni tanlagan
+            $semOverrideKey = $result->fan_id . '_' . ($student->group_id ?? '');
+            $semOverride = $semesterOverrides[$semOverrideKey] ?? null;
+
             // Semestr filtri — natija semestri talaba joriy semestriga mos kelmasa
             // (masalan 5-semestr natijasi 6-semestrga, yoki aksincha) — yuklamaymiz.
             // Diagnostika jadvalidagi SEMESTR ustuni shu mantiq asosida.
-            $resultSemNum = null;
-            if (!empty($result->semester) && preg_match('/(\d+)/', (string) $result->semester, $sm)) {
-                $resultSemNum = (int) $sm[1];
-            }
-            $studentSemNum = null;
-            if (!empty($student->semester_name) && preg_match('/(\d+)/', (string) $student->semester_name, $ssm)) {
-                $studentSemNum = (int) $ssm[1];
-            }
-            if ($resultSemNum !== null && $studentSemNum !== null && $resultSemNum !== $studentSemNum) {
-                $rowInfo['error'] = "Semestr mos kelmadi: natija {$resultSemNum}-semestr, talaba {$studentSemNum}-semestrda — yuklanmadi";
-                $errors[] = $rowInfo;
-                continue;
+            // Foydalanuvchi modalda semestrni qo'lda tanlagan bo'lsa — bu tekshiruv
+            // o'tkazib yuboriladi (override = aniq qaror).
+            if ($semOverride === null) {
+                $resultSemNum = null;
+                if (!empty($result->semester) && preg_match('/(\d+)/', (string) $result->semester, $sm)) {
+                    $resultSemNum = (int) $sm[1];
+                }
+                $studentSemNum = null;
+                if (!empty($student->semester_name) && preg_match('/(\d+)/', (string) $student->semester_name, $ssm)) {
+                    $studentSemNum = (int) $ssm[1];
+                }
+                if ($resultSemNum !== null && $studentSemNum !== null && $resultSemNum !== $studentSemNum) {
+                    $rowInfo['error'] = "Semestr mos kelmadi: natija {$resultSemNum}-semestr, talaba {$studentSemNum}-semestrda — yuklanmadi";
+                    $errors[] = $rowInfo;
+                    continue;
+                }
             }
 
             $group = Group::where('group_hemis_id', $student->group_id)->first();
@@ -2012,8 +2024,9 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            // Semester — talabaning hozirgi semestri bo'yicha (jurnal shu semestrni ko'rsatadi)
-            $semesterCode = $student->semester_code;
+            // Semester — override bo'lsa foydalanuvchi tanlagan semestr, aks holda
+            // talabaning hozirgi semestri (jurnal shu semestrni ko'rsatadi).
+            $semesterCode = $semOverride ?? $student->semester_code;
             $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
                 ->where('code', $semesterCode)
                 ->first();
@@ -2066,7 +2079,7 @@ class QuizResultController extends Controller
                     'student_id' => $student->id,
                     'student_hemis_id' => $student->hemis_id,
                     'hemis_id' => 999999999,
-                    'semester_code' => $semester->code ?? $student->semester_code,
+                    'semester_code' => $semester->code ?? $semesterCode,
                     'semester_name' => $semester->name ?? $student->semester_name,
                     'subject_schedule_id' => 0,
                     'subject_id' => $subject->subject_id,
@@ -2101,7 +2114,7 @@ class QuizResultController extends Controller
                         ->where('student_hemis_id', $student->hemis_id)
                         ->where('subject_id', $subject->subject_id)
                         ->where('training_type_code', $trainingTypeCode)
-                        ->where('semester_code', $semester->code ?? $student->semester_code)
+                        ->where('semester_code', $semester->code ?? $semesterCode)
                         ->where('attempt', $attemptNum)
                         ->where('is_qoshimcha', 0)
                         ->where('id', '!=', $created->id ?? 0)
@@ -2112,7 +2125,7 @@ class QuizResultController extends Controller
                             ->where('student_hemis_id', $student->hemis_id)
                             ->where('subject_id', $subject->subject_id)
                             ->where('training_type_code', $trainingTypeCode)
-                            ->where('semester_code', $semester->code ?? $student->semester_code)
+                            ->where('semester_code', $semester->code ?? $semesterCode)
                             ->where('attempt', 2)
                             ->where('is_qoshimcha', 0)
                             ->delete();
@@ -2391,6 +2404,7 @@ class QuizResultController extends Controller
             'ids' => 'required|array|min:1',
             'ids.*' => 'integer|exists:hemis_quiz_results,id',
             'subject_overrides' => 'nullable|array',
+            'semester_overrides' => 'nullable|array',
         ]);
 
         // Qayta yuklashdan oldin eski yozuvlarni tozalash. Ikki xil mantiq:
@@ -2496,44 +2510,62 @@ class QuizResultController extends Controller
         }
         unset($g);
 
-        // Har bir guruh uchun (curriculum + semester) bo'yicha biriktirilgan fanlar
-        // ro'yxatini olamiz. Faqat hozirgi semestr fanlari chiqadi.
+        // Har bir guruh uchun curriculum'dagi BARCHA semestr fanlarini olamiz —
+        // semestr bo'yicha guruhlangan. Modal foydalanuvchiga semestrni tanlash
+        // (noto'g'ri bo'lsa to'g'rilash) va o'sha semestr fanidan tanlash imkonini beradi.
         foreach ($groups as &$g) {
+            $g['available_semesters'] = [];
+            $g['subjects_by_semester'] = [];
+            $g['available_subjects'] = [];
             if (!$g['curriculum_hemis_id']) continue;
 
-            $query = CurriculumSubject::where('curricula_hemis_id', $g['curriculum_hemis_id']);
-            if (!empty($g['semester_code'])) {
-                $query->where('semester_code', $g['semester_code']);
-            }
-            $subjects = $query
+            $allSubjects = CurriculumSubject::where('curricula_hemis_id', $g['curriculum_hemis_id'])
                 ->select('subject_id', 'subject_name', 'subject_code', 'semester_code', 'semester_name')
+                ->orderBy('semester_code')
                 ->orderBy('subject_name')
-                ->get()
-                ->unique('subject_id')
-                ->values();
+                ->get();
 
-            $g['available_subjects'] = $subjects->map(fn($s) => [
-                'subject_id' => $s->subject_id,
-                'subject_name' => $s->subject_name,
-                'subject_code' => $s->subject_code,
-                'semester_name' => $s->semester_name,
-                'lesson_count' => 0,
-            ])->toArray();
+            $bySem = [];     // semester_code => [subject_id => subject]
+            $semNames = [];  // semester_code => semester_name
+            foreach ($allSubjects as $s) {
+                $sc = (string) $s->semester_code;
+                if ($sc === '') continue;
+                if (!isset($bySem[$sc])) {
+                    $bySem[$sc] = [];
+                    $semNames[$sc] = $s->semester_name ?: ($sc . '-semestr');
+                }
+                if (isset($bySem[$sc][$s->subject_id])) continue;
+                $bySem[$sc][$s->subject_id] = [
+                    'subject_id' => $s->subject_id,
+                    'subject_name' => $s->subject_name,
+                    'subject_code' => $s->subject_code,
+                    'semester_name' => $s->semester_name,
+                    'lesson_count' => 0,
+                ];
+            }
+            ksort($bySem, SORT_NUMERIC);
+            foreach ($bySem as $sc => $subs) {
+                $g['subjects_by_semester'][$sc] = array_values($subs);
+                $g['available_semesters'][] = ['code' => $sc, 'name' => $semNames[$sc]];
+            }
+            $g['available_subjects'] = $g['subjects_by_semester'][(string) $g['semester_code']] ?? [];
         }
         unset($g);
 
-        // Har bir (group, available_subject, semester) uchun mavzu (amaliy dars) sonini hisoblash
-        // Bu son YN turi dropdownida 1-mavzu..N-mavzu opsiyalarini ko'rsatish uchun ishlatiladi
+        // Har bir (group, subject, semester) uchun mavzu (amaliy dars) sonini hisoblash —
+        // barcha semestrlar bo'yicha (semestr modalda o'zgartirilishi mumkin).
         $excludedSchedTypes = [11, 17, 99, 100, 101, 102, 103];
         $countTriples = [];
         foreach ($groups as $g) {
-            foreach ($g['available_subjects'] as $s) {
-                $key = $g['group_hemis_id'] . '|' . $s['subject_id'] . '|' . $g['semester_code'];
-                $countTriples[$key] = [
-                    'group' => $g['group_hemis_id'],
-                    'subject' => $s['subject_id'],
-                    'sem' => $g['semester_code'],
-                ];
+            foreach ($g['subjects_by_semester'] as $sc => $subs) {
+                foreach ($subs as $s) {
+                    $key = $g['group_hemis_id'] . '|' . $s['subject_id'] . '|' . $sc;
+                    $countTriples[$key] = [
+                        'group' => $g['group_hemis_id'],
+                        'subject' => $s['subject_id'],
+                        'sem' => $sc,
+                    ];
+                }
             }
         }
         $lessonCounts = [];
@@ -2561,11 +2593,15 @@ class QuizResultController extends Controller
         }
 
         foreach ($groups as &$g) {
-            foreach ($g['available_subjects'] as &$s) {
-                $k = $g['group_hemis_id'] . '|' . $s['subject_id'] . '|' . $g['semester_code'];
-                $s['lesson_count'] = $lessonCounts[$k] ?? 0;
+            foreach ($g['subjects_by_semester'] as $sc => &$subs) {
+                foreach ($subs as &$s) {
+                    $k = $g['group_hemis_id'] . '|' . $s['subject_id'] . '|' . $sc;
+                    $s['lesson_count'] = $lessonCounts[$k] ?? 0;
+                }
+                unset($s);
             }
-            unset($s);
+            unset($subs);
+            $g['available_subjects'] = $g['subjects_by_semester'][(string) $g['semester_code']] ?? [];
         }
         unset($g);
 

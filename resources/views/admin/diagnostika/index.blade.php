@@ -1162,27 +1162,70 @@
 
             // Qayta yuklash modal
             function showReuploadModal(groups, ids) {
+                var groupMap = {};
+                groups.forEach(function(g) { groupMap[g.key] = g; });
+
+                // Berilgan semestr uchun "Yuklanadigan fan" select HTML
+                function buildSubjectSelect(g, semCode) {
+                    var subs = (g.subjects_by_semester && g.subjects_by_semester[semCode]) || [];
+                    if (subs.length === 0) {
+                        return '<div style="color:#dc2626;font-size:12px;">Bu semestrda fanlar topilmadi — faqat asl ID (' + esc(g.original_fan_id) + ') ishlatiladi</div>';
+                    }
+                    var foundOriginal = subs.some(function(s) {
+                        return String(s.subject_id) === String(g.original_fan_id);
+                    });
+                    var h = '<select class="reupload-subject-select" data-key="' + esc(g.key) + '" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">';
+                    if (!foundOriginal) {
+                        h += '<option value="' + esc(g.original_fan_id) + '" data-lesson-count="0" selected style="color:#dc2626;">';
+                        h += esc(g.original_fan_name) + ' (Moodle, ID: ' + g.original_fan_id + ' — semestrda yo\'q)';
+                        h += '</option>';
+                        h += '<option disabled>──── Semestr fanlari ────</option>';
+                    }
+                    subs.forEach(function(s) {
+                        var selected = foundOriginal && String(s.subject_id) === String(g.original_fan_id);
+                        var lc = s.lesson_count || 0;
+                        h += '<option value="' + esc(s.subject_id) + '" data-lesson-count="' + lc + '"' + (selected ? ' selected' : '') + '>';
+                        h += esc(s.subject_name);
+                        if (s.subject_code) h += ' [' + esc(s.subject_code) + ']';
+                        h += ' (ID: ' + s.subject_id + (lc > 0 ? ', ' + lc + ' ta dars' : '') + ')';
+                        h += '</option>';
+                    });
+                    h += '</select>';
+                    return h;
+                }
+
                 var html = '<div id="reupload-modal-overlay" class="reupload-modal-overlay">';
                 html += '<div class="reupload-modal">';
                 html += '<div class="reupload-modal-header">';
-                html += '<h3>Qayta yuklash — fan ID ni tasdiqlang</h3>';
+                html += '<h3>Qayta yuklash — semestr va fanni tasdiqlang</h3>';
                 html += '<button type="button" class="reupload-modal-close" onclick="closeReuploadModal()">&times;</button>';
                 html += '</div>';
                 html += '<div class="reupload-modal-body">';
-                html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Dropdown — talabaning <strong>joriy semestriga biriktirilgan fanlar</strong>. Default — Moodledan kelgan fan, lekin to\'g\'ri fanga o\'zgartirib yuklash mumkin.</p>';
+                html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Semestr noto\'g\'ri bo\'lsa — to\'g\'ri semestrni tanlang, "Yuklanadigan fan" ro\'yxati o\'sha semestr fanlariga yangilanadi.</p>';
                 html += '<table class="reupload-modal-table">';
                 html += '<thead><tr><th>#</th><th>Guruh</th><th>Semestr</th><th>Moodle fan</th><th>Baholar</th><th>YN turi</th><th>Yuklanadigan fan</th></tr></thead>';
                 html += '<tbody>';
                 groups.forEach(function(g, i) {
+                    var defSem = String(g.semester_code || '');
                     html += '<tr>';
                     html += '<td>' + (i + 1) + '</td>';
                     html += '<td><strong>' + esc(g.group_name) + '</strong></td>';
-                    html += '<td style="font-size:12px;color:#475569;">' + esc(g.semester_name || g.semester_code || '-') + '</td>';
+                    // Semestr — tanlanadigan dropdown
+                    html += '<td>';
+                    if (g.available_semesters && g.available_semesters.length > 0) {
+                        html += '<select class="reupload-semester-select" data-key="' + esc(g.key) + '" data-default="' + esc(defSem) + '" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;min-width:120px;">';
+                        g.available_semesters.forEach(function(sm) {
+                            var sel = String(sm.code) === defSem ? ' selected' : '';
+                            html += '<option value="' + esc(sm.code) + '"' + sel + '>' + esc(sm.name || (sm.code + '-semestr')) + '</option>';
+                        });
+                        html += '</select>';
+                    } else {
+                        html += '<span style="font-size:12px;color:#475569;">' + esc(g.semester_name || g.semester_code || '-') + '</span>';
+                    }
+                    html += '</td>';
                     html += '<td><div style="font-weight:600;">' + esc(g.original_fan_name) + '</div><div style="font-size:11px;color:#94a3b8;">ID: ' + g.original_fan_id + '</div></td>';
                     html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
-                    html += '<td>';
-                    // Har bir qator uchun YN turi tanlovi doim ochiq bo'ladi:
-                    // OSKI/Test + mavzular (1..N). Default — qatordagi joriy qiymat.
+                    // YN turi tanlovi: OSKI/Test + mavzular (1..N). Default — qatordagi qiymat.
                     var defaultYnTuri = '';
                     if (g.yn_turi === 'oski' || g.yn_turi === 'test') {
                         defaultYnTuri = g.yn_turi;
@@ -1190,44 +1233,11 @@
                         var m = String(g.mavzu_shakl || g.shakl || '').match(/(\d+)\s*-\s*mavzu/i);
                         if (m && m[1]) defaultYnTuri = 'mavzu_' + m[1];
                     }
-                    html += '<select class="reupload-yn-turi-select" data-key="' + esc(g.key) + '" data-default="' + esc(defaultYnTuri) + '" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;min-width:140px;">';
-                    html += '<option value="">Tanlang</option>';
-                    html += '<option value="oski">OSKI</option>';
-                    html += '<option value="test">Test</option>';
-                    html += '</select>';
-                    html += '</td>';
-                    html += '<td>';
-                    if (g.available_subjects && g.available_subjects.length > 0) {
-                        // Moodle ID semestr ro'yxatida bormi tekshirish
-                        var foundOriginal = g.available_subjects.some(function(s) {
-                            return String(s.subject_id) === String(g.original_fan_id);
-                        });
-
-                        var selectHtml = '<select class="reupload-subject-select" data-key="' + esc(g.key) + '" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">';
-
-                        // Agar Moodle ID ro'yxatda bo'lmasa — yuqoriga "Moodle (jadvalda yo'q)" qator qo'shamiz
-                        if (!foundOriginal) {
-                            selectHtml += '<option value="' + esc(g.original_fan_id) + '" data-lesson-count="0" selected style="color:#dc2626;">';
-                            selectHtml += esc(g.original_fan_name) + ' (Moodle, ID: ' + g.original_fan_id + ' — semestrda yo\'q)';
-                            selectHtml += '</option>';
-                            selectHtml += '<option disabled>──── Joriy semestr fanlari ────</option>';
-                        }
-
-                        g.available_subjects.forEach(function(s) {
-                            var selected = foundOriginal && String(s.subject_id) === String(g.original_fan_id);
-                            var lc = s.lesson_count || 0;
-                            selectHtml += '<option value="' + esc(s.subject_id) + '" data-lesson-count="' + lc + '"' + (selected ? ' selected' : '') + '>';
-                            selectHtml += esc(s.subject_name);
-                            if (s.subject_code) selectHtml += ' [' + esc(s.subject_code) + ']';
-                            selectHtml += ' (ID: ' + s.subject_id + (lc > 0 ? ', ' + lc + ' ta dars' : '') + ')';
-                            selectHtml += '</option>';
-                        });
-                        selectHtml += '</select>';
-                        html += selectHtml;
-                    } else {
-                        html += '<div style="color:#dc2626;font-size:12px;">Joriy semestrda fanlar topilmadi — faqat asl ID (' + g.original_fan_id + ') ishlatiladi</div>';
-                    }
-                    html += '</td>';
+                    html += '<td><select class="reupload-yn-turi-select" data-key="' + esc(g.key) + '" data-default="' + esc(defaultYnTuri) + '" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;min-width:140px;">';
+                    html += '<option value="">Tanlang</option><option value="oski">OSKI</option><option value="test">Test</option>';
+                    html += '</select></td>';
+                    // Yuklanadigan fan — semestr o'zgarsa shu yacheyka qayta quriladi
+                    html += '<td class="reupload-subject-cell" data-key="' + esc(g.key) + '">' + buildSubjectSelect(g, defSem) + '</td>';
                     html += '</tr>';
                 });
                 html += '</tbody></table>';
@@ -1238,6 +1248,8 @@
                 html += '</div>';
                 html += '</div></div>';
                 $('body').append(html);
+
+                var $overlay = $('#reupload-modal-overlay');
 
                 // YN turi dropdownini fan tanloviga qarab yangilash:
                 // OSKI, Test + tanlangan fanning lesson_count'iga qarab 1-mavzu..N-mavzu
@@ -1267,9 +1279,20 @@
                     refreshYnTuriOptions($(this).data('key'));
                 });
 
-                // Fan o'zgarganda — shu qator uchun YN turi opsiyalari yangilanadi
-                $('.reupload-subject-select').on('change', function() {
+                // Fan o'zgarganda — YN turi opsiyalari yangilanadi (delegatsiya: fan
+                // select semestr o'zgarganda qayta yaratiladi)
+                $overlay.on('change', '.reupload-subject-select', function() {
                     refreshYnTuriOptions($(this).data('key'));
+                });
+
+                // Semestr o'zgarganda — shu qator fan ro'yxati o'sha semestrga yangilanadi
+                $overlay.on('change', '.reupload-semester-select', function() {
+                    var key = $(this).data('key');
+                    var g = groupMap[key];
+                    if (!g) return;
+                    $('.reupload-subject-cell[data-key="' + $.escapeSelector(key) + '"]')
+                        .html(buildSubjectSelect(g, String($(this).val())));
+                    refreshYnTuriOptions(key);
                 });
 
                 $('#reupload-modal-submit').on('click', function() {
@@ -1280,6 +1303,17 @@
                         var origFanId = key.split('_')[0];
                         if (String(newSubjectId) !== String(origFanId)) {
                             overrides[key] = newSubjectId;
+                        }
+                    });
+
+                    // Semestr override — default'dan farq qilsa yuboriladi
+                    var semesterOverrides = {};
+                    $('.reupload-semester-select').each(function() {
+                        var key = $(this).data('key');
+                        var val = String($(this).val() || '');
+                        var def = String($(this).data('default') || '');
+                        if (val && val !== def) {
+                            semesterOverrides[key] = val;
                         }
                     });
 
@@ -1300,7 +1334,7 @@
                         url: reuploadUrl, type: 'POST',
                         headers: { 'X-CSRF-TOKEN': csrfToken },
                         contentType: 'application/json',
-                        data: JSON.stringify({ ids: ids, subject_overrides: overrides, yn_turi_overrides: ynTuriOverrides }),
+                        data: JSON.stringify({ ids: ids, subject_overrides: overrides, yn_turi_overrides: ynTuriOverrides, semester_overrides: semesterOverrides }),
                         success: function(data) {
                             closeReuploadModal();
                             var html = '';

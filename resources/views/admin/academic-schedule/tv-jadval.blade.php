@@ -158,7 +158,9 @@
                                 : 'bg-cyan-500/30 text-cyan-100 border-cyan-400/40';
                         @endphp
                         <div class="tv-card rounded-2xl border-2 {{ $statusClass }} p-3 flex flex-col gap-2 transition"
-                             data-time="{{ $it['planned_time'] }}">
+                             data-time="{{ $it['planned_time'] }}"
+                             data-revealed="{{ $it['show_computer'] ? '1' : '0' }}"
+                             data-status="{{ $it['status'] }}">
                             <div class="flex items-center gap-3">
                                 {{-- Komp № katta blok --}}
                                 <div class="w-24 h-24 flex-shrink-0 rounded-2xl {{ $compBg }} flex items-center justify-center shadow-lg">
@@ -249,6 +251,7 @@
                 if (p && typeof p.then === 'function') {
                     p.then(function() { hint(false); }).catch(function() { hint(true); });
                 }
+                return p;
             }
 
             function unlock() {
@@ -305,7 +308,6 @@
             let activeIndex = 0;
             let pageTimer = null;
             let lastBuildAt = Date.now();
-            let lastAnnouncedTime = null;
 
             function calcCols() {
                 const w = main.clientWidth - PADDING_X;
@@ -344,7 +346,6 @@
             function makeSection(time, cardEls, count, continued) {
                 const sec = document.createElement('div');
                 sec.className = 'tv-section flex flex-col';
-                sec.dataset.time = time;
                 sec.style.marginBottom = SECTION_GAP + 'px';
                 sec.appendChild(makeTimeHeader(time, count, continued));
                 const grid = document.createElement('div');
@@ -424,18 +425,6 @@
                 pageCurrentEl.classList.add('page-bump');
             }
 
-            // Sahifada ko'rsatilayotgan birinchi vaqt seksiyasi oldingisidan
-            // farq qilsa — aeroport uslubidagi "ting-ting-ting" ovozini chiqaramiz.
-            function announceTime(pageEl) {
-                if (!pageEl) return;
-                const firstSection = pageEl.querySelector('.tv-section');
-                const t = firstSection ? firstSection.dataset.time : null;
-                if (t && t !== lastAnnouncedTime) {
-                    lastAnnouncedTime = t;
-                    if (window.tvChime) window.tvChime.play();
-                }
-            }
-
             function showPage(idx, animate) {
                 if (pagesData.length === 0) return;
                 const total = pagesData.length;
@@ -444,7 +433,6 @@
                 const next = pagesData[newIndex];
                 activeIndex = newIndex;
                 pageCurrentEl.textContent = activeIndex + 1;
-                announceTime(next);
 
                 // Animatsiyasiz holat: dastlabki ko'rsatish yoki bitta sahifa.
                 if (!animate || prev === next || total <= 1) {
@@ -507,6 +495,80 @@
                     }
                 }, 250);
             });
+        })();
+
+        // Kompyuter raqamlari yangi ochilganda bir marta ovoz chiqaramiz.
+        // Imtihon boshlanishiga {{ $revealMin }} daqiqa qolganda raqamlar
+        // ochiladi — aynan shu payt televizorda ovoz yangraydi. Sahifa har
+        // ~60 sekundda qayta yuklanadi; qaysi vaqtlar uchun raqamlar
+        // allaqachon e'lon qilingani localStorage'da saqlanadi, shu sababli
+        // ovoz har sahifa almashganda emas, faqat yangi ochilishda chiqadi.
+        (function() {
+            const STORE_KEY = 'tvJadvalAnnouncedReveals';
+            const today = '{{ $date->format('Y-m-d') }}';
+
+            function loadAnnounced() {
+                try {
+                    const raw = JSON.parse(localStorage.getItem(STORE_KEY) || 'null');
+                    if (raw && raw.date === today && Array.isArray(raw.times)) {
+                        return raw.times;
+                    }
+                } catch (e) {}
+                return [];
+            }
+
+            function saveAnnounced(times) {
+                try {
+                    localStorage.setItem(STORE_KEY, JSON.stringify({ date: today, times: times }));
+                } catch (e) {}
+            }
+
+            // Har planned_time uchun: raqamlar ochilganmi va status 'near'
+            // (endigina ochilgan, hali boshlanmagan)mi — aniqlaymiz.
+            const groups = {};
+            document.querySelectorAll('#tv-all-cards .tv-card').forEach(function(c) {
+                const t = c.getAttribute('data-time');
+                if (!t) return;
+                if (!groups[t]) groups[t] = { near: false, anyRevealed: false };
+                if (c.getAttribute('data-revealed') === '1') {
+                    groups[t].anyRevealed = true;
+                    if (c.getAttribute('data-status') === 'near') groups[t].near = true;
+                }
+            });
+
+            const announced = loadAnnounced();
+            let chime = false;
+            let changed = false;
+            Object.keys(groups).forEach(function(t) {
+                if (announced.indexOf(t) !== -1) return; // allaqachon e'lon qilingan
+                const g = groups[t];
+                if (g.near) {
+                    // Raqamlar endigina ochildi — ovoz chiqaramiz.
+                    announced.push(t);
+                    changed = true;
+                    chime = true;
+                } else if (g.anyRevealed) {
+                    // Imtihon allaqachon boshlangan / boshlanish vaqti o'tgan —
+                    // raqamlar biz kuzatishni boshlashdan oldin ochilgan,
+                    // ovozsiz belgilab qo'yamiz (keyin jiringlamasin).
+                    announced.push(t);
+                    changed = true;
+                }
+                // aks holda hali ochilmagan — keyingi yuklanishda tekshiriladi.
+            });
+
+            if (chime) {
+                const p = window.tvChime ? window.tvChime.play() : null;
+                if (p && typeof p.then === 'function') {
+                    // Ovoz haqiqatan chiqsagina saqlaymiz; autoplay bloklangan
+                    // bo'lsa keyingi yuklanishda qayta uriniladi.
+                    p.then(function() { saveAnnounced(announced); }).catch(function() {});
+                } else {
+                    saveAnnounced(announced);
+                }
+            } else if (changed) {
+                saveAnnounced(announced);
+            }
         })();
     </script>
 </body>

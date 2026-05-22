@@ -2442,19 +2442,14 @@ class QuizResultController extends Controller
         $skipReasons = [];
 
         foreach ($sgRecords as $sg) {
-            // YN qulflangan juftlikni o'tkazib yuboramiz
-            if (!empty($sg->is_yn_locked)) {
-                $skipReasons[] = "juftlik {$sg->lesson_pair_code}: YN qulflangan";
-                continue;
-            }
-
             $isNb = $sg->reason === 'absent' && $sg->grade === null;
             $updates = null;
 
+            // NB sababli/sababsizligini aniqlaymiz — retake multiplier va YN-qulf
+            // bypass uchun kerak. absent_on > 0 — sababli (yashil/ko'k NB);
+            // yoki tasdiqlangan sababli ariza shu sanani qamrasa — sababli.
+            $isSababli = false;
             if ($isNb) {
-                // NB scenario: sababli/sababsiz aniqlash (HEMIS davomat orqali, jurnal bilan bir xil)
-                // absent_on > 0 — sababli (yashil/ko'k NB) → retake × 1.0
-                // absent_on = 0 — sababsiz (qizil NB) → retake × 0.8
                 $isSababli = DB::table('attendances')
                     ->where('student_hemis_id', $student->hemis_id)
                     ->where('subject_id', $targetFanId)
@@ -2470,7 +2465,23 @@ class QuizResultController extends Controller
                         ->whereDate('end_date', '>=', $targetDate)
                         ->exists();
                 }
+            }
 
+            // YN qulflangan juftlik — odatda o'tkazib yuboriladi. ISTISNO:
+            // NB SABABLI bo'lsa va retake aynan Farmoyish (Sababli ariza) makeup
+            // sanalari oralig'ida topshirilgan bo'lsa — YN qulfiga qaramay yuklanadi.
+            if (!empty($sg->is_yn_locked)) {
+                if (!$isNb || !$isSababli) {
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: YN qulflangan";
+                    continue;
+                }
+                if (!$this->retakeWithinMakeupWindow($student, $targetFanId, $result)) {
+                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: Farmoyishda qayta topshirish kunlari bilan mos kelmadi";
+                    continue;
+                }
+            }
+
+            if ($isNb) {
                 $multiplier = $isSababli ? 1.0 : 0.8;
                 $retakeValue = round($moodleGrade * $multiplier, 2);
 
@@ -2556,6 +2567,45 @@ class QuizResultController extends Controller
             // Hech qaysi juftlik yangilanmadi
             $rowInfo['error'] = implode('; ', $skipReasons) ?: 'Barcha juftliklar skip qilindi';
             $errors[] = $rowInfo;
+        }
+    }
+
+    /**
+     * Retake (Moodle quiz) aynan Sababli ariza (Farmoyish) bo'yicha shu fanga
+     * belgilangan makeup sanalari oralig'ida topshirilganmi — tekshiradi.
+     * Faqat tasdiqlangan ariza (status=approved) va JN turdagi makeup'lar hisobga
+     * olinadi. YN qulflangan bo'lsa ham sababli retake'ni shu shart bilan o'tkazadi.
+     */
+    private function retakeWithinMakeupWindow($student, $subjectId, $result): bool
+    {
+        try {
+            if (empty($result->date_finish)) {
+                return false;
+            }
+            $retakeDate = \Carbon\Carbon::parse($result->date_finish)->toDateString();
+
+            $makeups = \App\Models\AbsenceExcuseMakeup::whereHas('absenceExcuse', function ($q) use ($student) {
+                    $q->where('status', 'approved')
+                      ->where('student_hemis_id', (string) $student->hemis_id);
+                })
+                ->where('subject_id', (string) $subjectId)
+                ->where('assessment_type', 'jn')
+                ->whereNotNull('makeup_date')
+                ->get(['makeup_date', 'makeup_end_date']);
+
+            foreach ($makeups as $mk) {
+                $from = \Carbon\Carbon::parse($mk->makeup_date)->toDateString();
+                $to = $mk->makeup_end_date
+                    ? \Carbon\Carbon::parse($mk->makeup_end_date)->toDateString()
+                    : $from;
+                if ($retakeDate >= $from && $retakeDate <= $to) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (\Throwable $e) {
+            Log::warning('retakeWithinMakeupWindow xatosi: ' . $e->getMessage());
+            return false;
         }
     }
 

@@ -285,10 +285,16 @@ class QuizResultController extends Controller
                             ->get();
 
                         foreach ($gradeRows as $gr) {
-                            // Effective grade filtri (jurnal logikasi bilan bir xil)
-                            if ($gr->status === 'pending') continue;
+                            // Effective grade filtri (jurnal getEffectiveGrade logikasi bilan bir xil)
                             $effGrade = null;
-                            if ($gr->reason === 'absent' && $gr->grade === null) {
+                            if ($gr->grade !== null && (float) $gr->grade < 60 && $gr->retake_grade !== null) {
+                                // ENG YUQORI QOIDA: asl baho 60 dan past + retake mavjud -> retake ustun
+                                $effGrade = $gr->retake_grade;
+                            } elseif ($gr->status === 'pending' && $gr->reason === 'low_grade' && $gr->grade !== null) {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->status === 'pending') {
+                                continue;
+                            } elseif ($gr->reason === 'absent' && $gr->grade === null) {
                                 $effGrade = $gr->retake_grade !== null ? $gr->retake_grade : null;
                             } elseif ($gr->status === 'closed' && $gr->reason === 'teacher_victim' && $gr->grade == 0 && $gr->retake_grade === null) {
                                 continue;
@@ -742,12 +748,14 @@ class QuizResultController extends Controller
                 if ($dateTo)   $sub->whereDate('h2.date_finish', '<=', $dateTo);
             });
 
-            // Ism yoki shakl bo'yicha qidiruv: kiritilgan bo'lsa, barcha sanalarda
-            // qidiriladi (date_from/date_to e'tiborga olinmaydi).
+            // Ism bo'yicha qidiruv: tanlangan sana oralig'i e'tiborga olinmaydi,
+            // lekin faqat joriy yil natijalari chiqadi (eski yillar aralashmasin).
+            // Shakl qidiruvi esa barcha sanalarda qidiradi.
             $hasNameSearch = $request->filled('student_name');
             $hasShaklSearch = $request->filled('shakl_search');
             if ($hasNameSearch) {
                 $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
+                $query->whereYear('date_finish', now('Asia/Tashkent')->year);
             }
             if ($hasShaklSearch) {
                 $query->where('shakl', 'LIKE', '%' . $request->shakl_search . '%');
@@ -914,10 +922,16 @@ class QuizResultController extends Controller
                             ->get();
 
                         foreach ($gradeRows as $gr) {
-                            // Effective grade filtri (jurnal logikasi bilan bir xil)
-                            if ($gr->status === 'pending') continue;
+                            // Effective grade filtri (jurnal getEffectiveGrade logikasi bilan bir xil)
                             $effGrade = null;
-                            if ($gr->reason === 'absent' && $gr->grade === null) {
+                            if ($gr->grade !== null && (float) $gr->grade < 60 && $gr->retake_grade !== null) {
+                                // ENG YUQORI QOIDA: asl baho 60 dan past + retake mavjud -> retake ustun
+                                $effGrade = $gr->retake_grade;
+                            } elseif ($gr->status === 'pending' && $gr->reason === 'low_grade' && $gr->grade !== null) {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->status === 'pending') {
+                                continue;
+                            } elseif ($gr->reason === 'absent' && $gr->grade === null) {
                                 $effGrade = $gr->retake_grade !== null ? $gr->retake_grade : null;
                             } elseif ($gr->status === 'closed' && $gr->reason === 'teacher_victim' && $gr->grade == 0 && $gr->retake_grade === null) {
                                 continue;
@@ -1037,10 +1051,16 @@ class QuizResultController extends Controller
                             ->get();
 
                         foreach ($gradeRows as $gr) {
-                            // Effective grade filtri (jurnal logikasi bilan bir xil)
-                            if ($gr->status === 'pending') continue;
+                            // Effective grade filtri (jurnal getEffectiveGrade logikasi bilan bir xil)
                             $effGrade = null;
-                            if ($gr->reason === 'absent' && $gr->grade === null) {
+                            if ($gr->grade !== null && (float) $gr->grade < 60 && $gr->retake_grade !== null) {
+                                // ENG YUQORI QOIDA: asl baho 60 dan past + retake mavjud -> retake ustun
+                                $effGrade = $gr->retake_grade;
+                            } elseif ($gr->status === 'pending' && $gr->reason === 'low_grade' && $gr->grade !== null) {
+                                $effGrade = $gr->grade;
+                            } elseif ($gr->status === 'pending') {
+                                continue;
+                            } elseif ($gr->reason === 'absent' && $gr->grade === null) {
                                 $effGrade = $gr->retake_grade !== null ? $gr->retake_grade : null;
                             } elseif ($gr->status === 'closed' && $gr->reason === 'teacher_victim' && $gr->grade == 0 && $gr->retake_grade === null) {
                                 continue;
@@ -1204,6 +1224,21 @@ class QuizResultController extends Controller
                 // Kursni semestr raqamidan hisoblash
                 $kurs = $semNum ? (int) ceil($semNum / 2) : null;
 
+                // Quiz semestri (Moodle quiz nomidan) talabaning LMS dagi
+                // haqiqiy semestriga mos kelmasligini aniqlash — bunday qatorlar
+                // jadvalda qizil belgilanadi (boshqa kurs/semestr natijasi).
+                $quizSemNum = null;
+                if (!empty($result->semester) && preg_match('/(\d+)/', (string) $result->semester, $qsm)) {
+                    $quizSemNum = (int) $qsm[1];
+                }
+                $studentSemNum = null;
+                if ($student && !empty($student->semester_name)
+                    && preg_match('/(\d+)/', (string) $student->semester_name, $ssm)) {
+                    $studentSemNum = (int) $ssm[1];
+                }
+                $semesterMismatch = ($quizSemNum !== null && $studentSemNum !== null
+                    && $quizSemNum !== $studentSemNum);
+
                 // YN turi aniqlash
                 $ynTuri = '-';
                 if (in_array($result->quiz_type, $testTypes)) {
@@ -1236,6 +1271,8 @@ class QuizResultController extends Controller
                     'direction' => $student ? $student->specialty_name : '-',
                     'kurs' => $kurs ? $kurs . '-kurs' : '-',
                     'semester' => $semNum ? $semNum . '-sem' : ($semLabel ?: '-'),
+                    'semester_mismatch' => $semesterMismatch,
+                    'student_semester' => $studentSemNum ? $studentSemNum . '-sem' : '-',
                     'group' => $student ? $student->group_name : '-',
                     'fan_name' => $result->fan_name,
                     'fan_id' => $result->fan_id,
@@ -1913,6 +1950,13 @@ class QuizResultController extends Controller
         $errors = [];
         $duplicateTracker = [];
 
+        // 4+ qarz (kursdan qoldirilgan) talabalarni aniqlab olamiz — bunday
+        // talabalarga OSKI/Test bahosi yuklanmaydi (YN kunini belgilash
+        // sahifasidagi qizil "4 tadan ortiq qarz" mantig'i bilan bir xil).
+        $heldBackMap = $this->computeHeldBackDebts(
+            $results->pluck('student_id')->filter()->unique()->values()->all()
+        );
+
         foreach ($results as $result) {
             $rowInfo = [
                 'id' => $result->id,
@@ -2062,6 +2106,17 @@ class QuizResultController extends Controller
             $ynOverrideKey = $result->fan_id . '_' . ($student->group_id ?? '');
             $manualYnTuri = $ynTuriOverrides[$ynOverrideKey] ?? null;
 
+            // Shakl (urinish) override — modaldan foydalanuvchi 12 / 12a / 12b
+            // ni qo'lda tanlagan bo'lsa, attempt shu tanlovga qarab yoziladi.
+            // Tanlanmagan bo'lsa Moodle shaklidan aniqlangan $attemptNum ishlatiladi.
+            $attemptOverrides = $request->input('attempt_overrides', []);
+            $attemptOverrideRaw = $attemptOverrides[$ynOverrideKey] ?? null;
+            $effectiveAttempt = $attemptNum;
+            if ($attemptOverrideRaw !== null && $attemptOverrideRaw !== ''
+                && in_array((int) $attemptOverrideRaw, [1, 2, 3], true)) {
+                $effectiveAttempt = (int) $attemptOverrideRaw;
+            }
+
             if ($manualYnTuri === 'oski' || in_array($result->quiz_type, $oskiTypes) || $shaklLower === 'oski' || stripos($result->quiz_type ?? '', 'OSKI') !== false) {
                 $trainingTypeCode = 101;
                 $trainingTypeName = 'Oski';
@@ -2100,9 +2155,8 @@ class QuizResultController extends Controller
                     'grade' => round($result->grade),
                     'deadline' => now(),
                     'quiz_result_id' => $result->id,
-                    'attempt' => self::parseAttemptFromShakl($result->shakl, $result->attempt_number),
                     'is_final' => true,
-                    'attempt' => $attemptNum,
+                    'attempt' => $effectiveAttempt,
                     'is_qoshimcha' => $hasQoshimchaPre = (preg_match('/\(.*qo\'?shimcha.*\)/iu', $shaklRaw) || mb_stripos($shaklRaw, 'farmoyish') !== false),
                 ]);
 
@@ -2120,7 +2174,7 @@ class QuizResultController extends Controller
                         ->where('id', '!=', $created->id ?? 0)
                         ->delete();
 
-                    if ($attemptNum === 1) {
+                    if ($effectiveAttempt === 1) {
                         DB::table('student_grades')
                             ->where('student_hemis_id', $student->hemis_id)
                             ->where('subject_id', $subject->subject_id)
@@ -2160,6 +2214,82 @@ class QuizResultController extends Controller
             'error_count' => count($errors),
             'errors' => $errors,
         ]);
+    }
+
+    /**
+     * Berilgan talabalardan 4+ qarzga ega (kursdan qoldirilgan) bo'lganlarini
+     * aniqlaydi. Qarz = o'tgan semestrlardagi topshirilmagan fanlar +
+     * joriy semestrda OSKI/Test 1-urinishdan yiqilgan fanlar — YN kunini
+     * belgilash sahifasidagi "4 tadan ortiq qarz" mantig'i bilan bir xil.
+     *
+     * @param  array  $studentIdValues  hemis_id yoki student_id_number qiymatlari
+     * @return array<string,array{names:string[],count:int}>  hemis_id => qarz ma'lumoti
+     */
+    private function computeHeldBackDebts(array $studentIdValues): array
+    {
+        $studentIdValues = array_values(array_filter(array_unique($studentIdValues)));
+        if (empty($studentIdValues)) {
+            return [];
+        }
+
+        // student_id qiymati hemis_id yoki student_id_number bo'lishi mumkin.
+        $students = Student::where(function ($q) use ($studentIdValues) {
+            $q->whereIn('hemis_id', $studentIdValues)
+              ->orWhereIn('student_id_number', $studentIdValues);
+        })->get(['hemis_id', 'semester_code']);
+        if ($students->isEmpty()) {
+            return [];
+        }
+        $hemisIds = $students->pluck('hemis_id')->map(fn($v) => (string) $v)->unique()->values()->all();
+
+        // O'tgan semestrlardagi qarzlar — YN sahifasidagi AYNI metod.
+        $pastDebts = \App\Http\Controllers\Admin\AcademicScheduleController::computeStudentPastSemesterDebts($hemisIds);
+
+        // Joriy semestrdagi qarzlar — talabaning o'z semester_code'idagi
+        // OSKI/Test 1-urinishidan yiqilgan (COALESCE(retake_grade,grade) < 60) fanlar.
+        $currentDebts = []; // hemis_id => [subject_id => subject_name]
+        try {
+            $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+            $q = DB::table('student_grades as sg')
+                ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                ->whereIn('sg.student_hemis_id', $hemisIds)
+                ->whereColumn('sg.semester_code', 'st.semester_code')
+                ->whereIn('sg.training_type_code', [101, 102])
+                ->whereNull('sg.deleted_at')
+                ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
+            if ($hasAttemptCol) {
+                $q->where(function ($x) {
+                    $x->where('sg.attempt', 1)->orWhereNull('sg.attempt');
+                });
+            }
+            foreach ($q->select('sg.student_hemis_id', 'sg.subject_id', 'sg.subject_name')->distinct()->get() as $r) {
+                $currentDebts[(string) $r->student_hemis_id][(string) $r->subject_id] = (string) $r->subject_name;
+            }
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('computeHeldBackDebts: joriy qarz so\'rovi xatolik: ' . $e->getMessage());
+        }
+
+        $result = [];
+        foreach ($hemisIds as $hid) {
+            $pastList = $pastDebts[$hid] ?? [];
+            $currentList = $currentDebts[$hid] ?? [];
+            $total = count($pastList) + count($currentList);
+            if ($total < 4) {
+                continue;
+            }
+            $names = [];
+            foreach ($pastList as $d) {
+                $names[] = (string) ($d['subject_name'] ?? '');
+            }
+            foreach ($currentList as $nm) {
+                $names[] = $nm;
+            }
+            $result[$hid] = [
+                'names' => array_values(array_filter(array_unique($names))),
+                'count' => $total,
+            ];
+        }
+        return $result;
     }
 
     /**

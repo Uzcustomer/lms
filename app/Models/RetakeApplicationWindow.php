@@ -5,10 +5,30 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Schema;
 
 class RetakeApplicationWindow extends Model
 {
     use SoftDeletes;
+
+    /**
+     * `application_reopen_until` ustuni mavjudligi (migration ishga tushganmi).
+     * Bir martagina tekshiriladi — agar migration hali ishlamagan bo'lsa,
+     * qayta ochish funksiyasi jim qoladi, 500 xato bermaydi.
+     */
+    protected static ?bool $reopenColumnExists = null;
+
+    public static function supportsReopen(): bool
+    {
+        if (self::$reopenColumnExists === null) {
+            try {
+                self::$reopenColumnExists = Schema::hasColumn('retake_application_windows', 'application_reopen_until');
+            } catch (\Throwable $e) {
+                self::$reopenColumnExists = false;
+            }
+        }
+        return self::$reopenColumnExists;
+    }
 
     protected $fillable = [
         'session_id',
@@ -21,6 +41,7 @@ class RetakeApplicationWindow extends Model
         'semester_name',
         'start_date',
         'end_date',
+        'application_reopen_until',
         'created_by_user_id',
         'created_by_name',
         'creation_batch_id',
@@ -29,6 +50,7 @@ class RetakeApplicationWindow extends Model
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'application_reopen_until' => 'date',
     ];
 
     public function session()
@@ -47,9 +69,24 @@ class RetakeApplicationWindow extends Model
     }
 
     /**
+     * Ariza qabuli qayta ochilganmi? Tugash sanasi Override orqali
+     * uzaytirilganda `application_reopen_until` to'ldiriladi — shu sanagacha
+     * (shu kun ham) o'qish davrida ham ariza qabuli ochiq turadi.
+     */
+    public function isApplicationReopened(): bool
+    {
+        if (!self::supportsReopen()) {
+            return false;
+        }
+        return $this->application_reopen_until !== null
+            && $this->application_reopen_until->gte(Carbon::today());
+    }
+
+    /**
      * Window holatlari:
      *  - active : today <= start_date — ariza qabul ochiq (start_date kuni ham
-     *             ariza yuborilishi mumkin)
+     *             ariza yuborilishi mumkin). Override bilan qayta ochilgan
+     *             bo'lsa, o'qish davrida ham 'active' bo'ladi.
      *  - study  : start_date < today <= end_date — o'qish davri (jurnal ishlaydi)
      *  - closed : today > end_date — tugagan
      */
@@ -57,7 +94,7 @@ class RetakeApplicationWindow extends Model
     {
         $today = Carbon::today();
 
-        if ($this->start_date->gte($today)) {
+        if ($this->start_date->gte($today) || $this->isApplicationReopened()) {
             return 'active';
         }
         if ($this->end_date->lt($today)) {
@@ -117,10 +154,22 @@ class RetakeApplicationWindow extends Model
      * yoki shu kun. Ya'ni start_date kuni ham talaba ariza yubora oladi.
      * (start_date — qayta o'qish "o'qish davrining" boshlanish kuni, ammo
      * shu kun ham ariza qabuli yopilmaydi).
+     *
+     * Bundan tashqari: Override bilan tugash sanasi uzaytirilgan bo'lsa,
+     * `application_reopen_until` sanasigacha (shu kun ham) ariza qabuli
+     * qayta ochiq turadi.
      */
     public function scopeActive($query)
     {
         $today = Carbon::today();
-        return $query->whereDate('start_date', '>=', $today);
+
+        if (!self::supportsReopen()) {
+            return $query->whereDate('start_date', '>=', $today);
+        }
+
+        return $query->where(function ($q) use ($today) {
+            $q->whereDate('start_date', '>=', $today)
+              ->orWhereDate('application_reopen_until', '>=', $today);
+        });
     }
 }

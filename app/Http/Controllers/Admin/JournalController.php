@@ -1122,8 +1122,17 @@ class JournalController extends Controller
                 }
             }
 
-            // Count ungraded/resubmitted submissions for MT tab badge
+            // Count ungraded/resubmitted submissions for MT tab badge.
+            // FAQAT jadvalda KO'RSATILADIGAN talabalar ($students) hisobga
+            // olinadi. $studentHemisIds — butun guruh; $students esa fanga
+            // biriktirilgan (subgruppa/status bo'yicha filtrlangan) ro'yxat.
+            // Boshqa subgruppa yoki ro'yxatda yo'q talabaning topshirig'i
+            // "baholanmagan" deb sanalmasin.
+            $mtRosterSet = array_flip($students->pluck('hemis_id')->all());
             foreach ($mtSubmissions as $hemisId => $sub) {
+                if (!isset($mtRosterSet[$hemisId])) {
+                    continue;
+                }
                 $gradeVal = $manualMtGrades[$hemisId] ?? null;
                 $gradeRowForBadge = $manualMtGradesRaw[$hemisId] ?? null;
                 $needsBadge = false;
@@ -1662,31 +1671,44 @@ class JournalController extends Controller
             $oskiQosh2Map = $aq2[101] ?? [];
             $testQosh2Map = $aq2[102] ?? [];
 
+            // Pullik/stage hisobida ishlatiladigan JN/MT o'rtacha jurnal
+            // jadvalida KO'RSATILADIGAN qiymat bilan AYNI bo'lishi shart:
+            // maxraj = grading cutoff (bugun) ichidagi BARCHA dars kunlari;
+            // bahosi yo'q kun 0 sifatida hisobga olinadi. (Avval faqat bahosi
+            // bor kunlar bo'linib, bahosi tushmagan kunli talabada stage JN
+            // ko'rsatilgan JN dan yuqori chiqib, pullik noto'g'ri aniqlanardi.)
+            $stageGradingCutoff = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
+            $jbDatesForAvg = array_values(array_filter($jbLessonDates, function ($d) use ($stageGradingCutoff) {
+                return \Carbon\Carbon::parse($d, 'Asia/Tashkent')->startOfDay()->lte($stageGradingCutoff);
+            }));
+            $totalJbForAvg = count($jbDatesForAvg);
+            $totalMtForAvg = count($mtLessonDates);
+
             foreach ($students as $stu) {
                 $h = $stu->hemis_id;
 
-                // JN/MT o'rtacha (joriy holat — sababli retake bilan)
-                $jnSum = 0; $jnDays = 0;
-                foreach ($jbLessonDates as $date) {
+                // JN/MT o'rtacha — jurnal jadvalidagi "JN %"/"MT %" bilan AYNI.
+                $jnDailySum = 0;
+                foreach ($jbDatesForAvg as $date) {
                     $dayGrades = $jbGrades[$h][$date] ?? [];
-                    if (empty($dayGrades)) continue;
                     $pairs = $jbPairsPerDay[$date] ?? 1;
                     $values = array_map(fn($g) => $g['grade'] ?? 0, $dayGrades);
-                    $jnSum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
-                    $jnDays++;
+                    $jnDailySum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
                 }
-                $jn = $jnDays > 0 ? (int) round($jnSum / $jnDays, 0, PHP_ROUND_HALF_UP) : 0;
+                $jn = $totalJbForAvg > 0
+                    ? (int) round($jnDailySum / $totalJbForAvg, 0, PHP_ROUND_HALF_UP)
+                    : 0;
 
-                $mtSum = 0; $mtDays = 0;
+                $mtDailySum = 0;
                 foreach ($mtLessonDates as $date) {
                     $dayGrades = $mtGrades[$h][$date] ?? [];
-                    if (empty($dayGrades)) continue;
                     $pairs = $mtPairsPerDay[$date] ?? 1;
                     $values = array_map(fn($g) => $g['grade'] ?? 0, $dayGrades);
-                    $mtSum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
-                    $mtDays++;
+                    $mtDailySum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
                 }
-                $mt = $mtDays > 0 ? (int) round($mtSum / $mtDays, 0, PHP_ROUND_HALF_UP) : 0;
+                $mt = $totalMtForAvg > 0
+                    ? (int) round($mtDailySum / $totalMtForAvg, 0, PHP_ROUND_HALF_UP)
+                    : 0;
 
                 if (isset($manualMtGrades[$h])) {
                     // $manualMtGrades qiymati bevosita float (object emas, 999-qatordagi map natijasi)
@@ -5720,10 +5742,15 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
-        $jbColumns = $jbScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+        // Sana kalitlari Y-m-d ga normallashtiriladi — baho sanasi (timestamp)
+        // bilan mos bo'lishi uchun. Aks holda jbDatePairSet kaliti mos kelmay,
+        // JN snapshoti hammaga 0 bo'lib yoziladi (exportYnQaydnoma bilan bir xil).
+        $jbColumns = $jbScheduleRows->map(fn($s) => [
+            'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+            'pair' => $s->lesson_pair_code,
+        ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
 
-        $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $jbLessonDates = $jbColumns->pluck('date')->unique()->sort()->values()->toArray();
 
         $jbPairsPerDay = [];
         foreach ($jbColumns as $col) {
@@ -5755,10 +5782,12 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
-        $mtColumns = $mtScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+        $mtColumns = $mtScheduleRows->map(fn($s) => [
+            'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+            'pair' => $s->lesson_pair_code,
+        ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
 
-        $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $mtLessonDates = $mtColumns->pluck('date')->unique()->sort()->values()->toArray();
 
         $mtPairsPerDay = [];
         foreach ($mtColumns as $col) {
@@ -6650,9 +6679,12 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
-        $jbColumns = $jbScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
-        $jbLessonDates = $jbScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        // Sana kalitlari Y-m-d ga normallashtiriladi (exportYnQaydnoma bilan bir xil).
+        $jbColumns = $jbScheduleRows->map(fn($s) => [
+            'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+            'pair' => $s->lesson_pair_code,
+        ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+        $jbLessonDates = $jbColumns->pluck('date')->unique()->sort()->values()->toArray();
 
         $jbPairsPerDay = [];
         foreach ($jbColumns as $col) {
@@ -6682,9 +6714,11 @@ class JournalController extends Controller
             ->orderBy('lesson_pair_code')
             ->get();
 
-        $mtColumns = $mtScheduleRows->map(fn($s) => ['date' => $s->lesson_date, 'pair' => $s->lesson_pair_code])
-            ->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
-        $mtLessonDates = $mtScheduleRows->pluck('lesson_date')->unique()->sort()->values()->toArray();
+        $mtColumns = $mtScheduleRows->map(fn($s) => [
+            'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+            'pair' => $s->lesson_pair_code,
+        ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+        $mtLessonDates = $mtColumns->pluck('date')->unique()->sort()->values()->toArray();
 
         $mtPairsPerDay = [];
         foreach ($mtColumns as $col) {
@@ -8527,6 +8561,121 @@ class JournalController extends Controller
         } catch (\Exception $e) {
             return response()->json(['success' => false, 'message' => 'Xatolik: ' . $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Jurnal — tanlangan sana oralig'i, fakultet(lar) va kurs(lar) bo'yicha
+     * BARCHA fanlardan OSKI va Test baholari Excel eksportini background
+     * jobda boshlash. Bir nechta fakultet/kurs tanlanganda so'rov timeout
+     * bo'lmasligi uchun ish navbatga qo'yiladi, foiz cache orqali kuzatiladi.
+     */
+    public function startExamGradesExport(Request $request)
+    {
+        $request->validate([
+            'date_from'   => 'required|date_format:Y-m-d',
+            'date_to'     => 'required|date_format:Y-m-d',
+            'faculties'   => 'nullable|array',
+            'faculties.*' => 'integer',
+            'kurslar'     => 'nullable|array',
+            'kurslar.*'   => 'integer|min:1|max:6',
+        ]);
+
+        $from = $request->input('date_from');
+        $to   = $request->input('date_to');
+        if ($from > $to) {
+            [$from, $to] = [$to, $from];
+        }
+        $facultyIds = array_values(array_filter((array) $request->input('faculties', [])));
+        $kurslar    = array_values(array_unique(array_map('intval', (array) $request->input('kurslar', []))));
+
+        // Tanlangan fakultet (Department.id) -> department_hemis_id.
+        $facultyHemisIds = [];
+        if (!empty($facultyIds)) {
+            $facultyHemisIds = \App\Models\Department::whereIn('id', $facultyIds)
+                ->pluck('department_hemis_id')->filter()->values()->all();
+        }
+
+        $filters = [
+            'from'              => $from,
+            'to'                => $to,
+            'kurslar'           => $kurslar,
+            'faculty_hemis_ids' => $facultyHemisIds,
+        ];
+
+        $exportKey = 'journal_exam_grades_export_' . auth()->id() . '_' . md5(json_encode($filters));
+
+        $existing = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if ($existing && ($existing['status'] ?? '') === 'running') {
+            return response()->json([
+                'export_key' => $exportKey,
+                'status'     => 'running',
+                'message'    => $existing['message'] ?? 'Ishlanmoqda...',
+                'percent'    => $existing['percent'] ?? 0,
+            ]);
+        }
+
+        \Illuminate\Support\Facades\Cache::put($exportKey, [
+            'status'     => 'running',
+            'message'    => 'Navbatga qo\'shilmoqda...',
+            'percent'    => 0,
+            'updated_at' => now()->toDateTimeString(),
+        ], 1800);
+
+        \App\Jobs\JournalExamGradesExportJob::dispatch($filters, $exportKey);
+
+        return response()->json([
+            'export_key' => $exportKey,
+            'status'     => 'running',
+            'message'    => 'Eksport boshlandi',
+            'percent'    => 0,
+        ]);
+    }
+
+    public function examGradesExportStatus(Request $request)
+    {
+        $exportKey = $request->get('export_key');
+        if (!$exportKey) {
+            return response()->json(['status' => 'error', 'message' => 'Export key topilmadi'], 400);
+        }
+
+        $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if (!$data) {
+            $paths = \App\Jobs\JournalExamGradesExportJob::pathsFor($exportKey);
+            if (file_exists($paths['meta'])) {
+                $data = json_decode(@file_get_contents($paths['meta']), true) ?: null;
+            }
+        }
+
+        if (!$data) {
+            return response()->json(['status' => 'error', 'message' => 'Eksport topilmadi yoki muddati tugagan']);
+        }
+
+        return response()->json($data);
+    }
+
+    public function examGradesExportDownload(Request $request)
+    {
+        $exportKey = $request->get('export_key');
+        if (!$exportKey) {
+            return response()->json(['error' => 'Export key topilmadi'], 400);
+        }
+
+        $paths = \App\Jobs\JournalExamGradesExportJob::pathsFor($exportKey);
+
+        $data = \Illuminate\Support\Facades\Cache::get($exportKey);
+        if (!$data && file_exists($paths['meta'])) {
+            $data = json_decode(@file_get_contents($paths['meta']), true) ?: null;
+        }
+
+        if (!$data || ($data['status'] ?? '') !== 'done' || !file_exists($paths['xlsx'])) {
+            return response()->json(['error' => 'Fayl topilmadi yoki hali tayyor emas'], 404);
+        }
+
+        $fileName = $data['file_name'] ?? 'jurnal_oski_test.xlsx';
+
+        return response()->download($paths['xlsx'], $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
     }
 
     /**

@@ -679,9 +679,62 @@ class AcademicScheduleController extends Controller
             $perStudentMap[$key] = $row;
         }
 
-        // Per-student urinish-status: jn/mt/oski/test/davomat asosida — 2/3-urinish ro'yxatda
-        // kim "yiqilgan" va kim "pullik" ekanligini bilish uchun.
-        $studentStatus = $this->computeStudentAttemptStatuses($scheduleData);
+        // Per-student urinish-status: jn/mt/oski/test/davomat asosida.
+        // Sahifa fan bo'yicha filtrlangan bo'lishi mumkin, lekin 4+ qarz qoidasi
+        // (held_back) talabaning JORIY SEMESTRDAGI BARCHA fanlarini talab qiladi —
+        // aks holda ko'rinmayotgan fanlardagi qarzlar sanalmay, talaba xato
+        // 2-urinishga o'tib ketadi. Shu sababli joriy semestrning barcha
+        // (guruh, fan) triplelarini exam_schedules dan olib, statusni shular
+        // bo'yicha hisoblaymiz (display faqat filtrlangan qismni ko'rsatadi).
+        $semCodesForDebt = [];
+        $groupHidsForDebt = [];
+        $scheduleData->each(function ($items) use (&$semCodesForDebt, &$groupHidsForDebt) {
+            foreach ($items as $it) {
+                $g = $it['group']->group_hemis_id ?? null;
+                $sem = $it['subject']->semester_code ?? null;
+                if ($g) $groupHidsForDebt[(string) $g] = true;
+                if ($sem) $semCodesForDebt[(string) $sem] = true;
+            }
+        });
+
+        $fullTriples = [];
+        $examDateMap = []; // g|s|sem => ['oski'=>?Y-m-d, 'test'=>?Y-m-d]
+        if (!empty($groupHidsForDebt) && !empty($semCodesForDebt)) {
+            try {
+                $esRows = DB::table('exam_schedules')
+                    ->whereNull('student_hemis_id')
+                    ->whereIn('group_hemis_id', array_keys($groupHidsForDebt))
+                    ->whereIn('semester_code', array_keys($semCodesForDebt))
+                    ->select('group_hemis_id', 'subject_id', 'semester_code', 'oski_date', 'test_date')
+                    ->get();
+                foreach ($esRows as $r) {
+                    $tk = $r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                    $fullTriples[$tk] = [$r->group_hemis_id, $r->subject_id, $r->semester_code];
+                    $examDateMap[$tk] = [
+                        'oski' => $r->oski_date ? substr((string) $r->oski_date, 0, 10) : null,
+                        'test' => $r->test_date ? substr((string) $r->test_date, 0, 10) : null,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('attachStudentsToSchedule: exam_schedules full load failed: ' . $e->getMessage());
+            }
+        }
+        // Ko'rinayotgan triplelar exam_schedules'da bo'lmasligi mumkin — qo'shamiz.
+        $scheduleData->each(function ($items) use (&$fullTriples) {
+            foreach ($items as $it) {
+                $g = $it['group']->group_hemis_id ?? null;
+                $s = $it['subject']->subject_id ?? null;
+                $sem = $it['subject']->semester_code ?? null;
+                if ($g && $s && $sem) {
+                    $tk = $g . '|' . $s . '|' . $sem;
+                    if (!isset($fullTriples[$tk])) {
+                        $fullTriples[$tk] = [$g, $s, $sem];
+                    }
+                }
+            }
+        });
+
+        $studentStatus = $this->computeAttemptStatusesForTriples($fullTriples);
 
         // O'tgan semestrlardagi qarz fanlari ro'yxatini hisoblash
         // (>4 qarzdorlar menyusidagi logika asosida — academic_records'da yo'q fanlar)
@@ -751,53 +804,56 @@ class AcademicScheduleController extends Controller
         }
         $today = now()->toDateString();
 
-        // Birinchi pass: har bir talabaning joriy semestrdagi qarz fanlari ro'yxatini
-        // butun scheduleData bo'ylab yig'amiz. Aks holda har row faqat o'z fanini
-        // hisoblaydi va talabaning bir nechta fandan qarzdorligi to'g'ri ko'rsatilmaydi.
-        // currentDebtsByStudent[hemis_id] = [subject_id|semester_code => ['subject_name', 'semester_name']]
+        // Joriy semestr qarzlari — sahifa fan-filtridan MUSTAQIL, $fullTriples
+        // (joriy semestrning barcha fanlari) bo'yicha. Fan "qarz" sanaladi:
+        //  - YN kuni (oski/test sanasi) o'tgan VA talaba yiqilgan (failed1), yoki
+        //  - talaba qo'lda 2-urinishga o'tkazilgan (student_grades.attempt=2).
+        // YN kuni hali kelmagan fan qarz emas — talaba 1-urinishini hali
+        // topshirmagan (3 qarz + joriy 1-urinish fan = 3, bloklanmaydi).
+        // currentDebtsByStudent[hemis_id] = [subject_id|semester_code => [...]]
         $currentDebtsByStudent = [];
-        foreach ($scheduleData as $itemsBatch) {
-            foreach ($itemsBatch as $itm) {
-                $itGHid = $itm['group']->group_hemis_id ?? null;
-                $itSubj = $itm['subject']->subject_id ?? null;
-                $itSem = $itm['subject']->semester_code ?? null;
-                if (!$itGHid || !$itSubj || !$itSem) continue;
-                $itStatusKey = $itGHid . '|' . $itSubj . '|' . $itSem;
-                $itStatusByStudent = $studentStatus[$itStatusKey] ?? [];
-                $itGroupKey = $itGHid . '|' . $itSubj . '|' . $itSem;
-                $itOskiMap = $attempt1OskiByKey[$itGroupKey] ?? [];
-                $itTestMap = $attempt1TestByKey[$itGroupKey] ?? [];
-                $itOskiDate = $itm['oski_date'] ?? null;
-                $itTestDate = $itm['test_date'] ?? null;
-                $itLessonEnd = $itm['lesson_end_date'] ?? null;
-                $itEffOski = $itOskiDate ?: $itLessonEnd;
-                $itEffTest = $itTestDate ?: $itLessonEnd;
-                $itOskiPassed = $itEffOski && $itEffOski < $today && !empty($itOskiMap);
-                $itTestPassed = $itEffTest && $itEffTest < $today && !empty($itTestMap);
-                // Joriy semestrdagi fan "qarz" deb hisoblanadi faqat 1-urinish YN kuni
-                // tugagandan keyin. Aks holda talaba hali birinchi urinishini topshirmagan
-                // (yoki topshirayotgan) — pullik/yiqilgan deb erta belgilash noto'g'ri.
-                // YN sanasi belgilanmagan bo'lsa, YN hali bo'lib o'tmagan deb qaraladi.
-                $itYnDayDone = ($itOskiDate && $itOskiDate < $today)
-                    || ($itTestDate && $itTestDate < $today);
-                $itStuList = $studentsByGroup->get($itGHid, collect());
-                foreach ($itStuList as $st) {
-                    $stat = $itStatusByStudent[$st->hemis_id] ?? ['failed1' => false];
-                    $missedO = $itOskiPassed && empty($itOskiMap[$st->hemis_id]);
-                    $missedT = $itTestPassed && empty($itTestMap[$st->hemis_id]);
-                    $explicitK = $st->hemis_id . '|' . $itSubj . '|' . $itSem;
-                    $hasA2 = !empty($explicitAttemptByStudent[$explicitK]['attempt2']);
-                    $eff1 = $stat['failed1'] || $missedO || $missedT || $hasA2;
-                    if ($eff1 && $itYnDayDone) {
-                        $debtKey = $itSubj . '|' . $itSem;
-                        if (!isset($currentDebtsByStudent[$st->hemis_id][$debtKey])) {
-                            $currentDebtsByStudent[$st->hemis_id][$debtKey] = [
-                                'subject_name' => $itm['subject']->subject_name ?? '',
-                                'semester_name' => $itm['subject']->semester_name ?? '',
-                                'semester_code' => (int) $itSem,
-                            ];
-                        }
-                    }
+        $debtSubjMeta = [];
+        if (!empty($fullTriples)) {
+            $debtSubjIds = array_values(array_unique(array_map(fn($t) => $t[1], $fullTriples)));
+            $debtSemCodes = array_values(array_unique(array_map(fn($t) => $t[2], $fullTriples)));
+            try {
+                $metaRows = DB::table('curriculum_subjects')
+                    ->whereIn('subject_id', $debtSubjIds)
+                    ->whereIn('semester_code', $debtSemCodes)
+                    ->select('subject_id', 'semester_code', 'subject_name', 'semester_name')
+                    ->get();
+                foreach ($metaRows as $mr) {
+                    $debtSubjMeta[$mr->subject_id . '|' . $mr->semester_code] = [
+                        'subject_name' => $mr->subject_name,
+                        'semester_name' => $mr->semester_name,
+                    ];
+                }
+            } catch (\Throwable $e) {
+                \Log::warning('attachStudentsToSchedule: debt subject meta load failed: ' . $e->getMessage());
+            }
+        }
+        foreach ($fullTriples as $tk => $triple) {
+            [$g, $s, $sem] = $triple;
+            $dates = $examDateMap[$tk] ?? [];
+            $oskiD = $dates['oski'] ?? null;
+            $testD = $dates['test'] ?? null;
+            $ynDayDone = ($oskiD && $oskiD < $today) || ($testD && $testD < $today);
+            $statByStu = $studentStatus[$tk] ?? [];
+            foreach ($studentsByGroup->get($g, collect()) as $st) {
+                $stat = $statByStu[$st->hemis_id] ?? null;
+                $explicitK = $st->hemis_id . '|' . $s . '|' . $sem;
+                $hasA2 = !empty($explicitAttemptByStudent[$explicitK]['attempt2']);
+                $failedAndDone = $ynDayDone && !empty($stat) && !empty($stat['failed1']);
+                if (!$failedAndDone && !$hasA2) continue;
+                $debtKey = $s . '|' . $sem;
+                if (!isset($currentDebtsByStudent[$st->hemis_id][$debtKey])) {
+                    $meta = $debtSubjMeta[$debtKey] ?? [];
+                    $currentDebtsByStudent[$st->hemis_id][$debtKey] = [
+                        'subject_id' => $s,
+                        'subject_name' => $meta['subject_name'] ?? '',
+                        'semester_name' => $meta['semester_name'] ?? '',
+                        'semester_code' => (int) $sem,
+                    ];
                 }
             }
         }
@@ -931,8 +987,23 @@ class AcademicScheduleController extends Controller
                     //   - student_grades.attempt=2 yozuvi mavjud (qo'lda 12a ga o'tkazilgan)
                     $effectiveFailed1 = $stat['failed1'] || $didNotAttend || $hasAttempt2;
                     $effectiveFailed2 = $stat['failed2'] || $hasAttempt3;
-                    // Joriy semestrdagi BARCHA qarz fanlari (barcha rowlar bo'yicha)
+                    // Joriy semestrdagi BARCHA qarz fanlari (joriy semestrning
+                    // hamma fanlari bo'yicha, sahifa fan-filtridan mustaqil).
                     $currentDebts = array_values($currentDebtsByStudent[$stu->hemis_id] ?? []);
+                    // O'tgan semestr qarzi bilan AYNAN bir xil (fan + semestr)
+                    // bo'lgan joriy qarzni chiqaramiz — bitta qarz ikki marta
+                    // sanalmasin. Bir xil fan turli semestrlarda bo'lsa (yillik
+                    // fan, masalan Odam anatomiyasi) — har biri ALOHIDA qarz.
+                    if (!empty($pastDebts)) {
+                        $pastDebtKeys = [];
+                        foreach ($pastDebts as $pd) {
+                            $pastDebtKeys[($pd['subject_id'] ?? '') . '|' . ($pd['semester_code'] ?? '')] = true;
+                        }
+                        $currentDebts = array_values(array_filter(
+                            $currentDebts,
+                            fn ($d) => !isset($pastDebtKeys[($d['subject_id'] ?? '') . '|' . ($d['semester_code'] ?? '')])
+                        ));
+                    }
                     usort($currentDebts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
                     $admission = $admissionByStudent[$stu->hemis_id] ?? null;
                     $rows[] = [
@@ -980,7 +1051,7 @@ class AcademicScheduleController extends Controller
      * @param array $studentHemisIds
      * @return array [hemis_id => [['subject_name' => ..., 'semester_name' => ..., 'semester_code' => ...], ...]]
      */
-    private function computeStudentPastSemesterDebts(array $studentHemisIds): array
+    public static function computeStudentPastSemesterDebts(array $studentHemisIds): array
     {
         if (empty($studentHemisIds)) return [];
 
@@ -1004,12 +1075,28 @@ class AcademicScheduleController extends Controller
                 ->get()
                 ->all());
         }
+        // Talabaning JORIY (tiklangan) o'quv rejasi — qarz faqat shu reja
+        // bo'yicha hisoblanadi. Transfer/tiklangan talabada academic_records
+        // bir nechta eski curriculumga tegishli bo'lishi mumkin; eski rejalar
+        // hisobga olinsa (subject_id/semestr mos kelmay) o'tilgan fanlar xato
+        // "qarz" bo'lib chiqadi. Tiklangan talabaning baholari yangi rejaning
+        // academic_records iga ko'chiriladi — shuning uchun joriy reja kanonik.
+        $studentCurrentCurr = []; // hemis_id => joriy curriculum_id
+        foreach ($students as $st) {
+            if ($st->curriculum_id) {
+                $studentCurrentCurr[$st->hemis_id] = $st->curriculum_id;
+            }
+        }
+
         $arExistsLookup = []; // hemis_id|subject_id|semester_id => true
         $studentSemCurr = []; // hemis_id => [semester_id => curriculum_id]
         foreach ($arRecords as $ar) {
             $arExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
-            if (!isset($studentSemCurr[$ar->student_id][$ar->semester_id]) && $ar->curriculum_id) {
-                $studentSemCurr[$ar->student_id][$ar->semester_id] = $ar->curriculum_id;
+            // Har semestrni academic_records dagi eski curriculumga emas,
+            // talabaning JORIY rejasiga bog'laymiz.
+            $curr = $studentCurrentCurr[$ar->student_id] ?? null;
+            if ($curr && !isset($studentSemCurr[$ar->student_id][$ar->semester_id])) {
+                $studentSemCurr[$ar->student_id][$ar->semester_id] = $curr;
             }
         }
         unset($arRecords);
@@ -1078,7 +1165,7 @@ class AcademicScheduleController extends Controller
                 if ($studentSemCode && (int) $semCode >= $studentSemCode) continue;
 
                 $subjectsForSem = $subjectsByPair->get($currId . '|' . $semCode, collect());
-                $subjectsForSem = $this->filterSubjectsByGroupSuffixSimple($subjectsForSem, $st->group_name ?? '');
+                $subjectsForSem = self::filterSubjectsByGroupSuffixSimple($subjectsForSem, $st->group_name ?? '');
 
                 foreach ($subjectsForSem as $sub) {
                     $effectiveSubjectId = $sub->subject_id;
@@ -1097,6 +1184,7 @@ class AcademicScheduleController extends Controller
                     if (isset($arExistsLookup[$arKey])) continue;
 
                     $debts[] = [
+                        'subject_id' => $effectiveSubjectId,
                         'subject_name' => $effectiveSubjectName,
                         'semester_name' => $sub->semester_name,
                         'semester_code' => (int) $sub->semester_code,
@@ -1115,7 +1203,7 @@ class AcademicScheduleController extends Controller
     /**
      * Guruh suffiksiga qarab fan variantlarini filtrlash (ReportController logikasi nusxasi).
      */
-    private function filterSubjectsByGroupSuffixSimple($records, string $groupName)
+    public static function filterSubjectsByGroupSuffixSimple($records, string $groupName)
     {
         if (empty($groupName)) return $records;
         $groupSuffix = '';
@@ -1139,10 +1227,6 @@ class AcademicScheduleController extends Controller
      */
     private function computeStudentAttemptStatuses($scheduleData): array
     {
-        $result = [];
-        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
-        $minLimit = 60;
-
         // Har item uchun (group, subject, semester) uchligini yig'amiz
         $triples = [];
         $scheduleData->each(function ($items) use (&$triples) {
@@ -1155,6 +1239,23 @@ class AcademicScheduleController extends Controller
                 }
             }
         });
+
+        return $this->computeAttemptStatusesForTriples($triples);
+    }
+
+    /**
+     * Berilgan (group|subj|sem) triplelar ro'yxati uchun urinish statusini
+     * hisoblaydi. computeStudentAttemptStatuses scheduleData'dan triple yasab
+     * shu metodga uzatadi; qarz sonini sahifa fan-filtridan mustaqil hisoblash
+     * uchun (joriy semestrning barcha fanlari bilan) ham chaqiriladi.
+     *
+     * @param array<string,array{0:mixed,1:mixed,2:mixed}> $triples
+     */
+    private function computeAttemptStatusesForTriples(array $triples): array
+    {
+        $result = [];
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+        $minLimit = 60;
 
         if (empty($triples)) return $result;
 
@@ -1301,62 +1402,39 @@ class AcademicScheduleController extends Controller
             }
         } catch (\Throwable $e) {}
 
-        // 1b) Tirik manbalar — snapshot yo'q (jarayonda) bo'lganlar uchun.
+        // 1b) Tirik manbalar — snapshot yo'q yoki 0 bo'lgan talabalar uchun.
         // Tartib: snapshot (1a) eng birinchi va eng kuchli — YN topshirilganida
-        // jurnal qulflagan qiymat kanonik. Snapshot null bo'lsa, tirik qiymatlar
-        // bilan to'ldiramiz.
+        // qulflangan qiymat kanonik. Snapshot null bo'lsa, tirik qiymat bilan
+        // to'ldiramiz.
         //
-        // JN: training_type_code NOT IN [11,99,100,101,102,103] uchun AVG.
-        //   (11 = ma'ruza ham JN ga kirmaydi — jurnaldagi mantiq bilan mos.)
-        // MT: jurnaldagi MT jadvalida yagona baho — training_type_code=99
-        //   AND lesson_date IS NULL. Per-day MT (lesson_date bor) ishlatilmaydi.
+        // JN/MT jurnal sahifasidagi formula bilan AYNAN bir xil hisoblanadi
+        // (App\Services\JournalGradeService): har bir dars kuni uchun kunlik
+        // o'rtacha (baho qo'yilmagan "NB" kun 0 sifatida), maxraj = jadvaldagi
+        // dars kunlari soni. Tekis AVG() ishlatilsa ko'p parali kunlar ortiqcha
+        // og'irlik olib, NB kunlar e'tibordan chetda qolardi — talaba noto'g'ri
+        // "pullik" yoki noto'g'ri "2-urinish" bo'lib qolardi.
         try {
-            $jnAvg = DB::table('student_grades')
-                ->whereNull('deleted_at')
-                ->whereIn('student_hemis_id', $allStudentHids)
-                ->whereIn('subject_id', $allSubjectIds)
-                ->whereIn('semester_code', $allSemCodes)
-                ->whereNotIn('training_type_code', [11, 99, 100, 101, 102, 103])
-                ->whereRaw('COALESCE(retake_grade, grade) IS NOT NULL')
-                ->selectRaw('student_hemis_id, subject_id, semester_code,
-                    AVG(COALESCE(retake_grade, grade)) as avg_grade')
-                ->groupBy('student_hemis_id', 'subject_id', 'semester_code')
-                ->get();
-            foreach ($jnAvg as $r) {
-                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
-                if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
-                // Snapshot ustun: faqat snapshot null bo'lsa to'ldiramiz
-                if ($jnMtMap[$k]['jn'] === null) {
-                    $jnMtMap[$k]['jn'] = (int) round((float) $r->avg_grade, 0, PHP_ROUND_HALF_UP);
-                }
-            }
-
-            // Manual MT (lesson_date NULL) — jurnaldagi MT jadvalining yagona bahosi
-            $manualMt = DB::table('student_grades')
-                ->whereNull('deleted_at')
-                ->whereIn('student_hemis_id', $allStudentHids)
-                ->whereIn('subject_id', $allSubjectIds)
-                ->whereIn('semester_code', $allSemCodes)
-                ->where('training_type_code', 99)
-                ->whereNull('lesson_date')
-                // Bir nechta MT yozuvi bo'lsa eng oxirgisini (retake/tuzatishdan keyingi)
-                // ustuvor olish kerak. Aks holda eski past MT tasodifan olinib,
-                // talaba noto'g'ri "pullik" ko'rinib qolishi mumkin.
-                ->orderByDesc('updated_at')
-                ->orderByDesc('id')
-                ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade', 'retake_grade')
-                ->get();
-            foreach ($manualMt as $r) {
-                $effective = $r->retake_grade ?? $r->grade;
-                if ($effective === null) continue;
-                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
-                if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
-                if ($jnMtMap[$k]['mt'] === null) {
-                    $jnMtMap[$k]['mt'] = (int) round((float) $effective, 0, PHP_ROUND_HALF_UP);
+            $jnMtLive = \App\Services\JournalGradeService::computeJnMtBulk(
+                array_values($triples),
+                $studentGroup
+            );
+            foreach ($jnMtLive as $tripleKey => $perStudent) {
+                $parts = explode('|', $tripleKey);
+                if (count($parts) !== 3) continue;
+                [$g, $s, $sem] = $parts;
+                foreach ($perStudent as $hid => $vals) {
+                    $k = $hid . '|' . $s . '|' . $sem;
+                    if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
+                    if ($jnMtMap[$k]['jn'] === null && $vals['jn'] !== null) {
+                        $jnMtMap[$k]['jn'] = $vals['jn'];
+                    }
+                    if ($jnMtMap[$k]['mt'] === null && $vals['mt'] !== null) {
+                        $jnMtMap[$k]['mt'] = $vals['mt'];
+                    }
                 }
             }
         } catch (\Throwable $e) {
-            \Log::warning('Live JN/MT aggregate failed: ' . $e->getMessage());
+            \Log::warning('Live JN/MT (JournalGradeService) failed: ' . $e->getMessage());
         }
 
         // 2) OSKI / Test attempt=1 baholari (101, 102, va legacy 103 quiz)
@@ -2596,19 +2674,37 @@ class AcademicScheduleController extends Controller
         // fieldlar yo'q (max_input_vars'ni tejash uchun). Har row uchun
         // department/specialty/curriculum/subject_name/closing_form to'ldiriladi.
         $uniqueGroupIds = array_unique(array_filter(array_column($validSchedules, 'group_hemis_id')));
-        $uniqueSubjectKeys = [];
-        foreach ($validSchedules as $s) {
-            $uniqueSubjectKeys[$s['subject_id'] . '|' . $s['semester_code']] = [
-                'subject_id' => $s['subject_id'],
-                'semester_code' => $s['semester_code'],
-            ];
-        }
 
         $groupMeta = !empty($uniqueGroupIds)
             ? \App\Models\Group::whereIn('group_hemis_id', $uniqueGroupIds)
                 ->get(['group_hemis_id', 'department_hemis_id', 'specialty_hemis_id', 'curriculum_hemis_id'])
                 ->keyBy('group_hemis_id')
             : collect();
+
+        // closing_form AYNAN qatorning o'quv rejasidagi (curriculum) fan
+        // yozuvidan olinishi shart. Bitta (subject_id, semester_code) juftligi
+        // bir nechta o'quv rejada uchraydi (semester_code global emas) va har
+        // birida closing_form turlicha bo'lishi mumkin. Curriculumsiz qidiruv
+        // boshqa rejaning yozuvini ('oski' kabi) tanlab, test sanasini jimgina
+        // null qilib yuboradi - shuning uchun qidiruvni curriculum bilan scope qilamiz.
+        $curriculumForRow = function (array $s) use ($groupMeta): ?string {
+            if (!empty($s['curriculum_hemis_id'])) {
+                return (string) $s['curriculum_hemis_id'];
+            }
+            $g = $groupMeta->get($s['group_hemis_id'] ?? null);
+            return $g && $g->curriculum_hemis_id !== null ? (string) $g->curriculum_hemis_id : null;
+        };
+
+        $uniqueSubjectKeys = [];
+        foreach ($validSchedules as $s) {
+            $cur = $curriculumForRow($s);
+            $uniqueSubjectKeys[$cur . '|' . $s['subject_id'] . '|' . $s['semester_code']] = [
+                'curricula_hemis_id' => $cur,
+                'subject_id' => $s['subject_id'],
+                'semester_code' => $s['semester_code'],
+            ];
+        }
+
         $subjectMeta = collect();
         if (!empty($uniqueSubjectKeys)) {
             $subjectQuery = \App\Models\CurriculumSubject::query();
@@ -2617,11 +2713,14 @@ class AcademicScheduleController extends Controller
                     $q->orWhere(function ($sub) use ($sk) {
                         $sub->where('subject_id', $sk['subject_id'])
                             ->where('semester_code', $sk['semester_code']);
+                        if (!empty($sk['curricula_hemis_id'])) {
+                            $sub->where('curricula_hemis_id', $sk['curricula_hemis_id']);
+                        }
                     });
                 }
             });
-            $subjectMeta = $subjectQuery->get(['subject_id', 'semester_code', 'subject_name', 'closing_form'])
-                ->keyBy(fn($s) => $s->subject_id . '|' . $s->semester_code);
+            $subjectMeta = $subjectQuery->get(['curricula_hemis_id', 'subject_id', 'semester_code', 'subject_name', 'closing_form'])
+                ->keyBy(fn($s) => $s->curricula_hemis_id . '|' . $s->subject_id . '|' . $s->semester_code);
         }
 
         foreach ($validSchedules as &$schedule) {
@@ -2631,8 +2730,8 @@ class AcademicScheduleController extends Controller
                 $schedule['specialty_hemis_id'] = $schedule['specialty_hemis_id'] ?? $g->specialty_hemis_id;
                 $schedule['curriculum_hemis_id'] = $schedule['curriculum_hemis_id'] ?? $g->curriculum_hemis_id;
             }
-            $subKey = $schedule['subject_id'] . '|' . $schedule['semester_code'];
-            $sm = $subjectMeta->get($subKey);
+            $cur = $curriculumForRow($schedule);
+            $sm = $subjectMeta->get($cur . '|' . $schedule['subject_id'] . '|' . $schedule['semester_code']);
             if ($sm) {
                 $schedule['subject_name'] = $schedule['subject_name'] ?? $sm->subject_name;
                 $schedule['closing_form'] = $schedule['closing_form'] ?? $sm->closing_form;
@@ -2788,19 +2887,34 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        // Kunlik sig'im validatsiyasi (har bir yangi/o'zgargan sana uchun)
-        // Eslatma: har bir sananing o'z sig'imi pastda alohida hisoblanadi
-        $defaultDailyCapacity = ExamCapacityService::dailyCapacity();
+        // Kunlik sig'im validatsiyasi (har bir yangi/o'zgargan sana uchun).
+        // Sig'im ham, talaba soni ham bandlik ko'rsatkichi dashboard'i bilan
+        // bir xil usulda hisoblanadi, aks holda ikki sahifa bir-biriga zid
+        // raqam ko'rsatadi:
+        //   - sig'im: reserve pool ayrilgan effective kunlik sig'im;
+        //   - talaba soni: tanlov fani (variant a/b/c), per-student grafik va
+        //     urinish bo'yicha aniq son — butun guruh emas.
+        $defaultDailyCapacity = ExamCapacityService::effectiveDailyCapacityForDate(null);
         if ($defaultDailyCapacity > 0) {
-            // Aggregat: $dateStudents[$date] = qancha qo'shilayotgan talaba (ushbu so'rov ichida)
+            // $pendingByDate[$date] = ushbu so'rovda shu kunga ko'chirilayotgan talabalar soni
             $pendingByDate = [];
-            $groupCountCache = [];
+            $subjectCountCache = [];
 
-            $countOf = function ($groupId) use (&$groupCountCache) {
-                if (!isset($groupCountCache[$groupId])) {
-                    $groupCountCache[$groupId] = ExamCapacityService::groupStudentCount($groupId);
+            $countOfSchedule = function (array $schedule) use (&$subjectCountCache) {
+                // Per-student grafik — faqat shu talaba.
+                if (!empty($schedule['student_hemis_id'])) {
+                    return 1;
                 }
-                return $groupCountCache[$groupId];
+                // Tanlov fani (variant a/b/c) bo'lsa student_subjects'dan aniq
+                // son; mandatory fan bo'lsa butun guruh.
+                $key = $schedule['group_hemis_id'] . '|' . ($schedule['subject_id'] ?? '');
+                if (!isset($subjectCountCache[$key])) {
+                    $subjectCountCache[$key] = ExamCapacityService::subjectStudentCount(
+                        $schedule['group_hemis_id'],
+                        $schedule['subject_id'] ?? null
+                    );
+                }
+                return $subjectCountCache[$key];
             };
 
             foreach ($validSchedules as $schedule) {
@@ -2816,74 +2930,33 @@ class AcademicScheduleController extends Controller
                 $oskiNa = !empty($schedule['oski_na']);
                 $testNa = !empty($schedule['test_na']);
 
-                // OSKI: agar yangi yoki o'zgargan sana bo'lsa
+                // OSKI: faqat yangi yoki o'zgargan sana hisobga olinadi
                 if (!empty($schedule['oski_date']) && !$oskiNa) {
                     $oldOski = $existingRec?->oski_date?->format('Y-m-d');
                     $newOski = $schedule['oski_date'];
                     if ($oldOski !== $newOski) {
-                        $pendingByDate[$newOski]['students'] = ($pendingByDate[$newOski]['students'] ?? 0) + $countOf($schedule['group_hemis_id']);
-                        $pendingByDate[$newOski]['exclude'][] = [
-                            'group_hemis_id' => $schedule['group_hemis_id'],
-                            'subject_id' => $schedule['subject_id'],
-                            'semester_code' => $schedule['semester_code'],
-                            'yn_type' => 'oski',
-                        ];
+                        $pendingByDate[$newOski] = ($pendingByDate[$newOski] ?? 0) + $countOfSchedule($schedule);
                     }
                 }
-                // Test: agar yangi yoki o'zgargan sana bo'lsa
+                // Test: faqat yangi yoki o'zgargan sana hisobga olinadi
                 if (!empty($schedule['test_date']) && !$testNa) {
                     $oldTest = $existingRec?->test_date?->format('Y-m-d');
                     $newTest = $schedule['test_date'];
                     if ($oldTest !== $newTest) {
-                        $pendingByDate[$newTest]['students'] = ($pendingByDate[$newTest]['students'] ?? 0) + $countOf($schedule['group_hemis_id']);
-                        $pendingByDate[$newTest]['exclude'][] = [
-                            'group_hemis_id' => $schedule['group_hemis_id'],
-                            'subject_id' => $schedule['subject_id'],
-                            'semester_code' => $schedule['semester_code'],
-                            'yn_type' => 'test',
-                        ];
+                        $pendingByDate[$newTest] = ($pendingByDate[$newTest] ?? 0) + $countOfSchedule($schedule);
                     }
                 }
             }
 
-            foreach ($pendingByDate as $date => $info) {
-                // Sanada allaqachon belgilangan boshqa yozuvlar (joriy o'zgartirilayotganlardan tashqari)
-                $existingTotal = 0;
-                $excludeList = $info['exclude'] ?? [];
-                $rowsOnDate = ExamSchedule::where(function ($q) use ($date) {
-                    $q->where(function ($q2) use ($date) {
-                        $q2->whereDate('oski_date', $date)->where('oski_na', false);
-                    })->orWhere(function ($q2) use ($date) {
-                        $q2->whereDate('test_date', $date)->where('test_na', false);
-                    });
-                })->get();
-
-                foreach ($rowsOnDate as $row) {
-                    $isExcluded = function (string $ynType) use ($row, $excludeList): bool {
-                        foreach ($excludeList as $ex) {
-                            if ($ex['group_hemis_id'] === $row->group_hemis_id
-                                && (string) $ex['subject_id'] === (string) $row->subject_id
-                                && (string) $ex['semester_code'] === (string) $row->semester_code
-                                && $ex['yn_type'] === $ynType) {
-                                return true;
-                            }
-                        }
-                        return false;
-                    };
-
-                    $oskiMatch = $row->oski_date && $row->oski_date->format('Y-m-d') === $date && !$row->oski_na;
-                    $testMatch = $row->test_date && $row->test_date->format('Y-m-d') === $date && !$row->test_na;
-
-                    if ($oskiMatch && !$isExcluded('oski')) {
-                        $existingTotal += $countOf($row->group_hemis_id);
-                    }
-                    if ($testMatch && !$isExcluded('test')) {
-                        $existingTotal += $countOf($row->group_hemis_id);
-                    }
-                }
-
-                $combined = $existingTotal + ($info['students'] ?? 0);
-                $perDayCapacity = ExamCapacityService::dailyCapacityForDate($date);
+            foreach ($pendingByDate as $date => $pendingStudents) {
+                // Sanada DB'da allaqachon belgilangan yozuvlar bo'yicha aniq
+                // talaba soni (tanlov fani / per-student / urinish bilan).
+                // O'zgarayotgan qatorlarning eski sanasi DB'da hali boshqa
+                // kunda turgani uchun bu yerda qayta sanalmaydi — pending
+                // alohida qo'shiladi.
+                $existingTotal = ExamCapacityService::totalStudentsOnDate($date);
+                $combined = $existingTotal + $pendingStudents;
+                $perDayCapacity = ExamCapacityService::effectiveDailyCapacityForDate($date);
                 if ($perDayCapacity > 0 && $combined > $perDayCapacity) {
                     $dateFormatted = \Carbon\Carbon::parse($date)->format('d.m.Y');
                     return redirect()->back()->with('error',
@@ -2895,6 +2968,11 @@ class AcademicScheduleController extends Controller
         DB::beginTransaction();
         $bookingsToDispatch = [];
         $autoDistributeToDispatch = [];
+        // Vaqt yoki sana o'zgarganda ComputerAssignment'ni qayta hisoblash —
+        // TV displey planned_start'ni o'qiydi. Doim GURUH schedule id bo'yicha
+        // (per-student emas) — assign() ichidagi override pass shaxsiy
+        // vaqtlarni qo'llaydi. "groupId|yn" kalit bilan dedup qilinadi.
+        $assignReassign = [];
         try {
             foreach ($validSchedules as $schedule) {
                 $oskiNa = !empty($schedule['oski_na']);
@@ -3273,12 +3351,44 @@ class AcademicScheduleController extends Controller
                 if ($testDateChanged && $newTestDate && !$newTestNa && empty($record->test_time)) {
                     $autoDistributeToDispatch[] = [$record->id, 'test'];
                 }
+
+                // 1-urinish OSKI/Test vaqti yoki sanasi o'zgargan bo'lsa —
+                // ComputerAssignment'ni qayta hisoblaymiz (TV displey va JIT
+                // shu planned_start'ni o'qiydi). Sana-only o'zgarishni
+                // yuqoridagi $bookingsToDispatch allaqachon qamragan, bu yer
+                // esa VAQT-only o'zgarishni ham qo'shadi. Per-student qatorda
+                // guruh schedule id topiladi — assign() override pass shaxsiy
+                // vaqtni qo'llaydi.
+                $oskiTimeOrDate = array_key_exists('oski_time', $auditDirty) || array_key_exists('oski_date', $auditDirty);
+                $testTimeOrDate = array_key_exists('test_time', $auditDirty) || array_key_exists('test_date', $auditDirty);
+                if (($oskiTimeOrDate && !$newOskiNa && $newOskiDate && $record->oski_time)
+                    || ($testTimeOrDate && !$newTestNa && $newTestDate && $record->test_time)) {
+                    $reassignGroupId = $studentHemisIdForRow
+                        ? ExamSchedule::where('group_hemis_id', $record->group_hemis_id)
+                            ->where('subject_id', $record->subject_id)
+                            ->where('semester_code', $record->semester_code)
+                            ->whereNull('student_hemis_id')
+                            ->value('id')
+                        : $record->id;
+                    if ($reassignGroupId) {
+                        if ($oskiTimeOrDate && !$newOskiNa && $newOskiDate && $record->oski_time) {
+                            $assignReassign[$reassignGroupId . '|oski'] = [(int) $reassignGroupId, 'oski'];
+                        }
+                        if ($testTimeOrDate && !$newTestNa && $newTestDate && $record->test_time) {
+                            $assignReassign[$reassignGroupId . '|test'] = [(int) $reassignGroupId, 'test'];
+                        }
+                    }
+                }
             }
             DB::commit();
 
             foreach ($bookingsToDispatch as [$id, $yn]) {
-                AssignComputersJob::dispatch($id, $yn);
                 BookMoodleGroupExam::dispatch($id, $yn);
+            }
+            // AssignComputersJob — vaqt yoki sana o'zgarganda, doim guruh
+            // schedule id bo'yicha (assign() per-student override pass bilan).
+            foreach ($assignReassign as [$gid, $yn]) {
+                AssignComputersJob::dispatch($gid, $yn);
             }
             foreach ($autoDistributeToDispatch ?? [] as [$id, $yn]) {
                 \App\Jobs\AutoDistributeOnDateSetJob::dispatch($id, $yn);
@@ -3504,6 +3614,17 @@ class AcademicScheduleController extends Controller
         if ($deny = $this->ensureTestCenterAccess()) {
             return $deny;
         }
+        return $this->processYnOldiWord($request);
+    }
+
+    /**
+     * generateYnOldiWord ning asosiy qismi — kirish huquqi tekshiruvisiz.
+     * HTTP endpoint (generateYnOldiWord) va AssignComputersForRangeJob navbat
+     * job'i shu metodni chaqiradi. Job kontekstida kirish huquqi tugma
+     * bosilganda (assignComputersForRange) allaqachon tekshirilgan bo'ladi.
+     */
+    public function processYnOldiWord(Request $request)
+    {
         $request->validate([
             'items' => 'required|array|min:1',
             'items.*.group_hemis_id' => 'required|string',
@@ -3533,6 +3654,10 @@ class AcademicScheduleController extends Controller
             // talabalar soni, qaysi filtrda nechta talaba tushib qoldi va sababi)
             // JSON qaytaradi. DB'ga hech narsa yozmaydi.
             'debug' => 'nullable|boolean',
+            // "Kompyuter raqamlarini taqsimlash" tugmasi: docx yaratmasdan
+            // komp raqamlarini ComputerAssignment'ga yozib JSON qaytaradi.
+            // Word yuklab olish (bu bayroqsiz) endi raqam taqsimlamaydi.
+            'assign_computers' => 'nullable|boolean',
         ]);
 
         try {
@@ -3568,6 +3693,7 @@ class AcademicScheduleController extends Controller
         }
         $compact = (bool) $request->boolean('compact');
         $debug = (bool) $request->boolean('debug');
+        $assignComputers = (bool) $request->boolean('assign_computers');
         $debugInfo = [];
         $examDate = $request->input('exam_date');
         $examTime = $request->input('exam_time');
@@ -3639,70 +3765,13 @@ class AcademicScheduleController extends Controller
             : collect();
         // Lookup: (groupHid|subjectId|sem) → enriched students array.
         $enrichedStudentsByKey = [];
-        $allEnrichedHemisIds = [];
         foreach ($enrichedScheduleData as $groupItems) {
             foreach ($groupItems as $eItem) {
                 $k = $eItem['group']->group_hemis_id . '|'
                     . ($eItem['subject']->subject_id ?? '') . '|'
                     . ($eItem['subject']->semester_code ?? '');
                 $enrichedStudentsByKey[$k] = $eItem['students'] ?? [];
-                foreach ($eItem['students'] ?? [] as $s) {
-                    if (!empty($s['hemis_id'])) {
-                        $allEnrichedHemisIds[(string) $s['hemis_id']] = true;
-                    }
-                }
             }
-        }
-        $allEnrichedHemisIds = array_keys($allEnrichedHemisIds);
-
-        // Joriy o'quv yili bo'yi 1-urinishdan o'tmagan (V<60) fanlar soni —
-        // is_held_back uchun fallback. attachStudentsToSchedule ichida
-        // current_year_debt_count $scheduleData scope'iga bog'liq edi va
-        // bandlik Word'da faqat 1-2 ta fan yuborilganda 4+ ni topa olmasdi.
-        // Bu yerda butun yil semestrlari uchun SQL bilan to'g'ridan-to'g'ri
-        // sanab olamiz — YN belgilash sahifasidagi qarz hisobi bilan AYNI.
-        // DIQQAT: semesters jadvalida semester kod ustuni "code" deb
-        // nomlangan (curriculum_subjects'da esa "semester_code").
-        // Joriy o'quv yili bo'yi 1-urinishdan o'tmagan (V<60) fanlar soni —
-        // is_held_back uchun fallback. DIQQAT: semester_code qiymatlari
-        // turli curriculum'larda ham bir xil bo'lishi mumkin (masalan,
-        // kod=18 bir curriculum'da 4-kurs, boshqasida 3-kurs). Shu sababli
-        // semesters jadvaliga curriculum_id orqali JOIN qilamiz — faqat
-        // talabaning AYNAN o'ziniki curriculum'idagi va joriy yildagi
-        // failed grade'lar sanaladi. Test natijalari (Rashidov=5,
-        // Mamarasulov=0) YN belgilash sahifasidagi qarz badge'lari bilan
-        // amaliy ravishda mos keladi.
-        $yearDebtCount = [];
-        try {
-            $currentYear = DB::table('semesters')->where('current', true)->value('education_year');
-            if ($currentYear && !empty($allEnrichedHemisIds)) {
-                $hasAttemptColYr = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
-                $debtQ = DB::table('student_grades as sg')
-                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                    ->join('semesters as sm', function ($j) {
-                        $j->on('sm.curriculum_hemis_id', '=', 'st.curriculum_id')
-                          ->on('sm.code', '=', 'sg.semester_code');
-                    })
-                    ->whereIn('sg.student_hemis_id', $allEnrichedHemisIds)
-                    ->where('sm.education_year', $currentYear)
-                    ->whereIn('sg.training_type_code', [101, 102])
-                    ->whereNull('sg.deleted_at')
-                    ->whereRaw('COALESCE(sg.retake_grade, sg.grade) < 60');
-                if ($hasAttemptColYr) {
-                    $debtQ->where(function ($x) {
-                        $x->where('sg.attempt', 1)->orWhereNull('sg.attempt');
-                    });
-                }
-                $debtRows = $debtQ
-                    ->selectRaw('sg.student_hemis_id, COUNT(DISTINCT CONCAT(sg.subject_id, "-", sg.semester_code)) as cnt')
-                    ->groupBy('sg.student_hemis_id')
-                    ->get();
-                foreach ($debtRows as $r) {
-                    $yearDebtCount[(string) $r->student_hemis_id] = (int) $r->cnt;
-                }
-            }
-        } catch (\Throwable $e) {
-            \Log::warning('generateYnOldiWord: year debt count failed: ' . $e->getMessage());
         }
 
         foreach ($items as $itemData) {
@@ -3798,24 +3867,21 @@ class AcademicScheduleController extends Controller
             // Kursdan qoldirilgan (4+ qarz) yoki YN ga ruxsat yo'q (X)
             // talabalarni ro'yxatdan chiqarib tashlaymiz — Word faqat
             // "kiradiganlar"ni ko'rsatadi (Ruxsat yoki Shartli).
-            // 4+ qarz uchun 3 manbadan tekshiriladi (yuqaridagi
-            // students mapping bilan bir xil), JN/MT/davomat sabab "X"
-            // bo'lganlar admission_status orqali aniqlanadi.
+            // Qarz hisobi test-center "talabalarni ko'rsatish" bilan AYNI
+            // o'lchov: o'tgan semestrlar academic_records'dan (past_debts),
+            // joriy semestr jurnal mantig'idan (current_semester_debts).
+            // "X" admission_status orqali aniqlanadi.
             $dbgRemoved = [];
-            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($yearDebtCount, $debug, &$dbgRemoved) {
+            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($debug, &$dbgRemoved) {
                 $hemisId = (string) ($row['hemis_id'] ?? '');
                 $debtCount = count($row['past_debts'] ?? []) + count($row['current_semester_debts'] ?? []);
-                $yearCnt = $yearDebtCount[$hemisId] ?? 0;
-                $isHeldBack = !empty($row['is_held_back']) || $debtCount >= 4 || $yearCnt >= 4;
-                if ($isHeldBack) {
+                if ($debtCount >= 4) {
                     if ($debug) {
                         $dbgRemoved[] = [
                             'name' => $row['full_name'] ?? $hemisId,
                             'hemis_id' => $hemisId,
                             'reason' => 'held_back',
-                            'is_held_back_flag' => !empty($row['is_held_back']),
                             'debt_count' => $debtCount,
-                            'year_debt_count' => $yearCnt,
                         ];
                     }
                     return false;
@@ -3870,7 +3936,20 @@ class AcademicScheduleController extends Controller
             // $student->student_name kabi property'larga tayanadi. "Kirmaydigan"
             // talabalar (held_back/X) yuqorida allaqachon filterlangan,
             // shuning uchun bu yerda admission_status faqat Ruxsat/Shartli.
-            $students = collect($enrichedStudents)->map(function ($row) use ($liveGrades) {
+            // Per-student individual imtihon vaqti uchun maydon — yn_type va
+            // attempt bo'yicha tanlanadi. Talabaga guruh vaqtidan farqli vaqt
+            // qo'yilgan bo'lsa, Word jadvalida ism yonida ko'rsatiladi.
+            $indivTimeField = null;
+            if ($itemYnType === 'oski') {
+                $indivTimeField = match ($itemAttempt) {
+                    2 => 'oski_resit_time', 3 => 'oski_resit2_time', default => 'oski_time',
+                };
+            } elseif ($itemYnType === 'test') {
+                $indivTimeField = match ($itemAttempt) {
+                    2 => 'test_resit_time', 3 => 'test_resit2_time', default => 'test_time',
+                };
+            }
+            $students = collect($enrichedStudents)->map(function ($row) use ($liveGrades, $indivTimeField) {
                 $hemisId = (string) ($row['hemis_id'] ?? '');
                 $obj = new \stdClass();
                 $obj->hemis_id = $row['hemis_id'] ?? null;
@@ -3879,6 +3958,9 @@ class AcademicScheduleController extends Controller
                 $obj->jn = $liveGrades[$hemisId]['jn'] ?? 0;
                 $obj->mt = $liveGrades[$hemisId]['mt'] ?? 0;
                 $obj->admission_status = $row['admission_status'] ?? null;
+                // Individual (per-student exam_schedules) vaqti — HH:MM ko'rinishida.
+                $rawIndivTime = $indivTimeField ? ($row[$indivTimeField] ?? null) : null;
+                $obj->individual_time = !empty($rawIndivTime) ? substr((string) $rawIndivTime, 0, 5) : null;
                 return $obj;
             })->sortBy('student_name')->values();
 
@@ -4008,6 +4090,65 @@ class AcademicScheduleController extends Controller
         }
         $brokenLookup = array_flip(array_map('intval', $brokenSet));
 
+        // Boshqa jadvallar band qilgan kompyuter raqamlari — har slot vaqti
+        // uchun alohida. Bularni hisobga olmasak, bu taqsimotga kirmaydigan
+        // (individual vaqt qo'yilgan talaba yoki ayni paytda imtihon
+        // topshirayotgan) talabaning kompyuteri qayta ishlatilib, bitta
+        // kompyuter ikki kishiga tushib qolardi. Buzilgan kompyuterlar kabi
+        // chetlab o'tiladi. Faqat taqsimlash rejimida (assign_computers) kerak.
+        $occupiedBySlot = [];
+        if ($assignComputers && $examDate) {
+            $batchScheduleIds = [];
+            foreach ($subjectGroups as $sgOcc) {
+                foreach ($sgOcc['entries'] as $entryOcc) {
+                    if (!empty($entryOcc['schedule_id'])) {
+                        $batchScheduleIds[(int) $entryOcc['schedule_id']] = true;
+                    }
+                }
+            }
+            $batchScheduleIds = array_keys($batchScheduleIds);
+            $durationForOcc = (int) (ExamCapacityService::getSettingsForDate($examDate)['test_duration_minutes'] ?? 15);
+            $slotTimesForOcc = [];
+            foreach ($subjectGroups as $sgOcc) {
+                $stOcc = $multiSlotMode ? (string) ($sgOcc['slot_time'] ?? '') : (string) ($examTime ?? '');
+                if ($stOcc !== '') {
+                    $slotTimesForOcc[$stOcc] = true;
+                }
+            }
+            foreach (array_keys($slotTimesForOcc) as $stOcc) {
+                try {
+                    $winStart = \Carbon\Carbon::parse($examDate . ' ' . $stOcc);
+                } catch (\Throwable $e) {
+                    continue;
+                }
+                $winEnd = $winStart->copy()->addMinutes($durationForOcc);
+                $occRows = \App\Models\ComputerAssignment::query()
+                    ->whereNotNull('computer_number')
+                    ->where('planned_start', '<', $winEnd)
+                    ->where('planned_end', '>', $winStart)
+                    ->where(function ($q) use ($batchScheduleIds) {
+                        // in_progress — har qanday jadvalniki (kompyuter fizik band);
+                        // scheduled — faqat bu taqsimotga kirmaydigan jadvallar
+                        // (masalan, individual vaqt qo'yilgan talabalar).
+                        $q->where('status', \App\Models\ComputerAssignment::STATUS_IN_PROGRESS);
+                        if (!empty($batchScheduleIds)) {
+                            $q->orWhere(function ($q2) use ($batchScheduleIds) {
+                                $q2->where('status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
+                                    ->whereNotIn('exam_schedule_id', $batchScheduleIds);
+                            });
+                        }
+                    })
+                    ->pluck('computer_number');
+                $set = [];
+                foreach ($occRows as $cn) {
+                    if ($cn !== null) {
+                        $set[(int) $cn] = true;
+                    }
+                }
+                $occupiedBySlot[$stOcc] = $set;
+            }
+        }
+
         // Raqamlar Word'dagi qator tartibida beriladi — proktor qog'ozda
         // 1, 2, 3, ... ketma-ket o'qiy oladi. Slot ichida tartib: sahifa
         // tartibi (subjectGroups iteratsiyasi) → entry tartibi → entry ichida
@@ -4017,12 +4158,14 @@ class AcademicScheduleController extends Controller
         foreach ($subjectGroups as $sg) {
             $slot = $multiSlotMode ? ($sg['slot_time'] ?? '') : ($examTime ?? '');
             if (!isset($slotCounters[$slot])) $slotCounters[$slot] = 1;
+            $occSlot = $occupiedBySlot[$slot] ?? [];
             foreach ($sg['entries'] as $entry) {
                 foreach ($entry['students'] as $st) {
                     $hemis = (string) $st->hemis_id;
                     $key = $slot . '|' . $hemis;
                     if (isset($computerNumberMap[$key])) continue;
-                    while ($slotCounters[$slot] <= $configuredCompCount && isset($brokenLookup[$slotCounters[$slot]])) {
+                    while ($slotCounters[$slot] <= $configuredCompCount
+                        && (isset($brokenLookup[$slotCounters[$slot]]) || isset($occSlot[$slotCounters[$slot]]))) {
                         $slotCounters[$slot]++;
                     }
                     if ($slotCounters[$slot] > $configuredCompCount) break 2;
@@ -4032,20 +4175,23 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        // DB persistence: bandlik path'ida (examDate + entries yn_type + schedule_id
-        // bilan kelganda) komp raqamlarini ComputerAssignment'ga is_pinned=true
-        // bilan yozamiz. Shunda student portali, JIT/notification — hammasi shu
-        // raqamni ko'radi va JIT tick job qayta belgilashga urinmaydi.
+        // DB persistence: faqat "Kompyuter raqamlarini taqsimlash" tugmasi
+        // (assign_computers=true) chaqirilganda komp raqamlarini
+        // ComputerAssignment'ga is_pinned=true bilan yozamiz. Word yuklab
+        // olish endi raqam taqsimlamaydi — bu yozuv o'sha tugmaga ko'chirildi.
+        // Shunda student portali, JIT/notification — hammasi shu raqamni
+        // ko'radi va JIT tick job qayta belgilashga urinmaydi.
         //  - 1-urinish: mavjud "scheduled" qator UPDATE qilinadi.
         //  - 2-/3-urinish: yangi qator INSERT qilinadi (attempt ustuni mavjud).
         //  - status != scheduled bo'lganlar (in_progress/finished) tegmaydi.
-        if ($examDate && !empty($computerNumberMap)) {
+        $persistedCount = 0;
+        if ($assignComputers && $examDate && !empty($computerNumberMap)) {
             try {
                 $durationMin = (int) (ExamCapacityService::getSettingsForDate($examDate)['test_duration_minutes'] ?? 15);
                 // JIT tick job processReveal'i reveal_at <= now bo'lganda
                 // Telegram yuboradi. Pinned qator shu loop'ga tushishi uchun
                 // reveal_at'ni planned_start dan jit_minutes oldin o'rnatamiz.
-                $jitMinutesBefore = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+                $jitMinutesBefore = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
                 // Stale cleanup uchun: har (schedule_id, yn_type, attempt) bo'yicha
                 // bu chaqiriqda kim'lar pin qilinayotganini yig'amiz. Word so'ngida
                 // shu kombinatsiyadagi boshqa "scheduled" qatorlar (avvalgi noto'g'ri
@@ -4115,6 +4261,8 @@ class AcademicScheduleController extends Controller
                         }
                     }
                 }
+                $persistedCount = array_sum(array_map('count', $persistedKeys));
+
                 // Stale qatorlarni tozalash: items'da kelgan har bucket bo'yicha
                 // (eligible students 0 bo'lsa ham) shu (schedule_id, yn_type,
                 // attempt) bo'yicha scheduled qatorlar — kept'larsiz hammasi —
@@ -4139,6 +4287,18 @@ class AcademicScheduleController extends Controller
                 ]);
             }
         }
+
+        // "Kompyuter raqamlarini taqsimlash" tugmasi: DB ga yozgandan keyin
+        // og'ir Word generatsiyasini o'tkazib yuborib, JSON natija qaytaramiz.
+        if ($assignComputers) {
+            return response()->json(['ok' => true, 'assigned' => $persistedCount]);
+        }
+
+        // Word yuklab olish kompyuter raqamlarini TAQSIMLAMAYDI — mavjud
+        // ComputerAssignment yozuvlaridan faqat o'qib, hujjatda ko'rsatadi.
+        // (Avval yuqorida on-the-fly hisoblangan $computerNumberMap shu yerda
+        // DB'dagi haqiqiy qiymatlar bilan almashtiriladi.)
+        $computerNumberMap = $this->readPersistedComputerNumbers($subjectGroups, $multiSlotMode, $examTime);
 
         // Multi-slot rejimda: slot vaqti bo'yicha o'sish tartibida, ichida fan
         // bo'yicha — shunda 9:15 → 9:30 → 9:45 ketma-ketligida sahifalar
@@ -4359,6 +4519,18 @@ class AcademicScheduleController extends Controller
 
                     $sectionExamTime = $slotTime ?: $examTime;
 
+                    // Talaba ismiga individual imtihon vaqtini qo'shadi — agar
+                    // talabaga guruh slot vaqtidan FARQLI shaxsiy vaqt qo'yilgan
+                    // bo'lsa, Word jadvalida "F.I.O (HH:MM)" ko'rinishida chiqadi.
+                    $studentNameWithTime = function ($stu) use ($sectionExamTime) {
+                        $name = (string) ($stu->student_name ?? '');
+                        $t = $stu->individual_time ?? null;
+                        if (!empty($t) && $t !== $sectionExamTime) {
+                            $name .= ' (' . $t . ')';
+                        }
+                        return $name;
+                    };
+
                     $defaultCutoffs = json_encode([
                         ['deadline' => '2025-10-01', 'percent' => 25],
                         ['deadline' => '2026-01-01', 'percent' => 50],
@@ -4448,7 +4620,7 @@ class AcademicScheduleController extends Controller
                                     $stu = $leftRow['student']; $ent = $leftRow['entry'];
                                     $info = $renderStudentInfo($stu, $ent);
                                     $dr->addCell($cw2[0])->addText((string) ($globalBase + $i), $cF, $cCtr);
-                                    $dr->addCell($cw2[1])->addText((string) $stu->student_name, $cF, $cLeft);
+                                    $dr->addCell($cw2[1])->addText($studentNameWithTime($stu), $cF, $cLeft);
                                     $hCell = $dr->addCell($cw2[2]);
                                     $hCell->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
                                     $dr->addCell($cw2[3])->addText(
@@ -4473,7 +4645,7 @@ class AcademicScheduleController extends Controller
                                     $stu = $rightRow['student']; $ent = $rightRow['entry'];
                                     $info = $renderStudentInfo($stu, $ent);
                                     $dr->addCell($cw2[0])->addText((string) ($globalBase + $half + $i), $cF, $cCtr);
-                                    $dr->addCell($cw2[1])->addText((string) $stu->student_name, $cF, $cLeft);
+                                    $dr->addCell($cw2[1])->addText($studentNameWithTime($stu), $cF, $cLeft);
                                     $hCell = $dr->addCell($cw2[2]);
                                     $hCell->addText($info['holat'], $info['holat'] === 'Shartli' ? $cFOr : $cF, $cCtr);
                                     $dr->addCell($cw2[3])->addText(
@@ -4504,7 +4676,7 @@ class AcademicScheduleController extends Controller
                                 $info = $renderStudentInfo($stu, $ent);
                                 $dr = $table->addRow();
                                 $dr->addCell(500)->addText((string) $globalIdx, $cF, $cCtr);
-                                $dr->addCell(7000)->addText((string) $stu->student_name, $cF, $cLeft);
+                                $dr->addCell(7000)->addText($studentNameWithTime($stu), $cF, $cLeft);
                                 $dr->addCell(800)->addText((string) ($info['jn'] ?? '0'), $cF, $cCtr);
                                 $dr->addCell(800)->addText((string) ($info['mt'] ?? '0'), $cF, $cCtr);
                                 $dr->addCell(1200)->addText(($info['qoldiq'] != 0 ? $info['qoldiq'] . '%' : '0%'), $cF, $cCtr);
@@ -5756,7 +5928,7 @@ class AcademicScheduleController extends Controller
                             $bktDur = (int) (ExamCapacityService::getSettingsForDate($b['date'])['test_duration_minutes'] ?? 15);
                             $bktStart = \Carbon\Carbon::parse($b['date'] . ' ' . $assignedTime);
                             $bktEnd = $bktStart->copy()->addMinutes($bktDur);
-                            $bktJit = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+                            $bktJit = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
                             $bktReveal = $bktStart->copy()->subMinutes($bktJit);
                             foreach ($b['schedules'] as $s) {
                                 \App\Models\ComputerAssignment::where('exam_schedule_id', $s->id)
@@ -5868,6 +6040,179 @@ class AcademicScheduleController extends Controller
         \App\Jobs\NotifyExamTimesJob::dispatch($from, $to);
 
         return back()->with('success', "Xabarnomalar yuborish navbatga qo'yildi ({$from} – {$to}). Telegram orqali tarqalishi bir necha daqiqa olishi mumkin.");
+    }
+
+    /**
+     * Test markazi jadvalida belgilangan (checkbox) guruhlar uchun
+     * talabalarga kompyuter raqamlarini taqsimlash.
+     *
+     * Avval bu ish "YN oldi word" yuklab olishning yon ta'siri sifatida
+     * bajarilardi — har yuklab olishda raqamlar qayta hisoblanib, talabaning
+     * kompyuteri o'zgarib ketardi. Endi taqsimlash faqat shu tugma orqali
+     * bajariladi; Word esa faqat mavjud raqamlarni o'qib ko'rsatadi.
+     *
+     * Og'ir YN pipeline sekin — sinxron bajarilsa HTTP so'rov 504 timeout
+     * beradi. Shu sabab AssignComputersForRangeJob navbat job'ida fonda
+     * bajariladi.
+     */
+    public function assignComputersForRange(Request $request)
+    {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
+        $user = auth()->user() ?? auth('teacher')->user();
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        $allowedBulkRoles = array_merge(
+            ExamDateRoleService::adminRoles(),
+            [\App\Enums\ProjectRole::TEST_CENTER->value]
+        );
+        if (!in_array($activeRole, $allowedBulkRoles, true)) {
+            return response()->json([
+                'success' => false,
+                'message' => "Bu amal faqat Test markazi va admin rollari uchun ochiq.",
+            ], 403);
+        }
+
+        $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.schedule_id' => 'required|integer',
+            'items.*.yn_type' => 'required|string|in:OSKI,Test,oski,test',
+            'items.*.attempt' => 'nullable|integer|min:1|max:3',
+        ]);
+
+        // Belgilangan qatorlardan takrorlanmas (schedule_id, yn_type, attempt)
+        // uchliklarini yig'amiz — job ularni sana bo'yicha guruhlab taqsimlaydi.
+        $items = [];
+        $seen = [];
+        foreach ((array) $request->input('items') as $it) {
+            $scheduleId = (int) ($it['schedule_id'] ?? 0);
+            $ynType = strtolower((string) ($it['yn_type'] ?? ''));
+            $attempt = (int) ($it['attempt'] ?? 1);
+            if ($scheduleId <= 0 || !in_array($ynType, ['oski', 'test'], true)) {
+                continue;
+            }
+            $key = $scheduleId . '|' . $ynType . '|' . $attempt;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $items[] = [
+                'schedule_id' => $scheduleId,
+                'yn_type' => $ynType,
+                'attempt' => $attempt,
+            ];
+        }
+
+        if (empty($items)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Yaroqli guruh topilmadi.',
+            ], 422);
+        }
+
+        // Holatni cache'da kuzatamiz — frontend token bilan polling qiladi
+        // va job tugaganda "tayyor" xabarini ko'rsatadi.
+        $token = (string) \Illuminate\Support\Str::uuid();
+        cache()->put('assign_computers:' . $token, [
+            'status' => 'queued',
+            'requested' => count($items),
+        ], 1800);
+
+        \App\Jobs\AssignComputersForRangeJob::dispatch($items, $token);
+
+        return response()->json([
+            'success' => true,
+            'token' => $token,
+            'message' => count($items) . ' ta guruh navbatga qo\'yildi.',
+        ]);
+    }
+
+    /**
+     * AssignComputersForRangeJob holatini qaytaradi — frontend polling uchun.
+     * Holat cache'da 'assign_computers:{token}' kalitida saqlanadi.
+     */
+    public function assignComputersStatus(Request $request)
+    {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
+        $token = trim((string) $request->query('token', ''));
+        $state = $token !== '' ? cache()->get('assign_computers:' . $token) : null;
+        if (!is_array($state)) {
+            return response()->json(['status' => 'unknown']);
+        }
+        return response()->json($state);
+    }
+
+    /**
+     * Word yuklab olish uchun: $subjectGroups ichidagi har talabaning
+     * oldindan taqsimlangan kompyuter raqamini ComputerAssignment jadvalidan
+     * o'qiydi. Word endi raqam taqsimlamaydi — bu faqat ko'rsatish uchun.
+     *
+     * @return array<string,int> "slot|hemis_id" => computer_number
+     */
+    private function readPersistedComputerNumbers(array $subjectGroups, bool $multiSlotMode, ?string $examTime): array
+    {
+        $map = [];
+        $scheduleIdsCache = [];
+        foreach ($subjectGroups as $sg) {
+            $slot = $multiSlotMode ? (string) ($sg['slot_time'] ?? '') : (string) ($examTime ?? '');
+            foreach ($sg['entries'] as $entry) {
+                $group = $entry['group'] ?? null;
+                $subject = $entry['subject'] ?? null;
+                if (!$group || !$subject) {
+                    continue;
+                }
+                $ynType = !empty($entry['yn_type']) ? strtolower((string) $entry['yn_type']) : null;
+                $attempt = (int) ($entry['attempt'] ?? 1);
+
+                $hemisIds = [];
+                foreach ($entry['students'] as $st) {
+                    if (!empty($st->hemis_id)) {
+                        $hemisIds[] = (string) $st->hemis_id;
+                    }
+                }
+                if (empty($hemisIds)) {
+                    continue;
+                }
+
+                // Bu (guruh, fan, semestr) ga tegishli BARCHA exam_schedules
+                // id'lari — guruh-level qator va individual (per-student)
+                // qatorlar. Talabaning komp raqami qaysi jadval ostida
+                // saqlangan bo'lsa ham topiladi: bulk tugma guruh jadvali
+                // ostiga, individual vaqt esa per-student jadvali ostiga
+                // yozadi — faqat guruh id bo'yicha qidirsak individuallar
+                // tushib qolardi.
+                $cacheKey = $group->group_hemis_id . '|' . $subject->subject_id . '|' . $subject->semester_code;
+                if (!array_key_exists($cacheKey, $scheduleIdsCache)) {
+                    $scheduleIdsCache[$cacheKey] = ExamSchedule::where('group_hemis_id', $group->group_hemis_id)
+                        ->where('subject_id', $subject->subject_id)
+                        ->where('semester_code', $subject->semester_code)
+                        ->pluck('id')
+                        ->all();
+                }
+                $scheduleIds = $scheduleIdsCache[$cacheKey];
+                if (empty($scheduleIds)) {
+                    continue;
+                }
+
+                $query = \App\Models\ComputerAssignment::query()
+                    ->whereIn('exam_schedule_id', $scheduleIds)
+                    ->where('attempt', $attempt)
+                    ->whereIn('student_hemis_id', $hemisIds)
+                    ->whereNotNull('computer_number')
+                    ->orderBy('updated_at');
+                if ($ynType !== null) {
+                    $query->where('yn_type', $ynType);
+                }
+                foreach ($query->get(['student_hemis_id', 'computer_number']) as $row) {
+                    // orderBy updated_at — talabada bir nechta qator bo'lsa
+                    // eng so'nggi yangilangani qoladi.
+                    $map[$slot . '|' . (string) $row->student_hemis_id] = (int) $row->computer_number;
+                }
+            }
+        }
+        return $map;
     }
 
     public function clearTimes(Request $request)
@@ -6172,7 +6517,7 @@ class AcademicScheduleController extends Controller
             $duration2 = (int) (ExamCapacityService::getSettingsForDate($relatedDateStr2)['test_duration_minutes'] ?? 15);
             $newPlannedStart = \Carbon\Carbon::parse($relatedDateStr2 . ' ' . substr($request->test_time, 0, 5));
             $newPlannedEnd = $newPlannedStart->copy()->addMinutes($duration2);
-            $jitMin = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+            $jitMin = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
             $newRevealAt = $newPlannedStart->copy()->subMinutes($jitMin);
 
             \App\Models\ComputerAssignment::where('exam_schedule_id', $examSchedule->id)
@@ -6457,7 +6802,7 @@ class AcademicScheduleController extends Controller
         $durSt = (int) (ExamCapacityService::getSettingsForDate($resolvedDateStr)['test_duration_minutes'] ?? 15);
         $stPlannedStart = \Carbon\Carbon::parse($resolvedDateStr . ' ' . substr($request->test_time, 0, 5));
         $stPlannedEnd = $stPlannedStart->copy()->addMinutes($durSt);
-        $jitMinSt = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+        $jitMinSt = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
 
         \App\Models\ComputerAssignment::where('exam_schedule_id', $perStudent->id)
             ->where('yn_type', strtolower($request->yn_type))
@@ -6482,6 +6827,23 @@ class AcademicScheduleController extends Controller
             ->when(!empty($eligibleStHemisIds), fn($q) => $q->whereNotIn('student_hemis_id', $eligibleStHemisIds))
             ->delete();
 
+        // Individual vaqt qo'yilgan talabaga bo'sh kompyuter raqamini avtomatik
+        // biriktiramiz — guruh va boshqa individual talabalar band qilgan
+        // raqamlar chetlab o'tiladi (bitta kompyuter ikki kishiga tushmasin).
+        // Komp biriktirishdagi xato vaqt saqlashni bekor qilmaydi.
+        $compResult = ['ok' => false];
+        try {
+            $compResult = app(\App\Services\ComputerAssignmentService::class)->assignSingleStudent(
+                $perStudent,
+                (string) $request->yn_type,
+                (int) $request->attempt,
+                (string) $request->student_hemis_id,
+                $stPlannedStart
+            );
+        } catch (\Throwable $e) {
+            \Log::warning('saveStudentTime: komp avtomatik biriktirish xatosi: ' . $e->getMessage());
+        }
+
         // Faqat shu talabaga notification (individual grafik — guruh xabari emas).
         $ynLabel = $request->yn_type === 'OSKI' ? 'OSKI' : 'Test';
         $attemptInt = (int) $request->attempt;
@@ -6498,12 +6860,21 @@ class AcademicScheduleController extends Controller
             $oldStudentTime
         );
 
+        $compMsg = '';
+        if (!empty($compResult['ok']) && !empty($compResult['computer_number'])) {
+            $compMsg = ' Kompyuter №' . $compResult['computer_number'] . ' biriktirildi.';
+        } elseif (empty($compResult['ok'])) {
+            $compMsg = ' Diqqat: bu vaqt uchun bo\'sh kompyuter topilmadi — raqamni qo\'lda biriktiring.';
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Talaba uchun vaqt saqlandi.'
-                . ($sentCount > 0 ? ' Telegramda xabar yuborildi.' : ''),
+                . ($sentCount > 0 ? ' Telegramda xabar yuborildi.' : '')
+                . $compMsg,
             'time' => $request->test_time,
             'notified' => $sentCount,
+            'computer_number' => $compResult['computer_number'] ?? null,
         ]);
     }
 
@@ -7501,10 +7872,10 @@ class AcademicScheduleController extends Controller
         }
         $date = $carbonDate->format('Y-m-d');
         // Ekranda kim kirishi ko'rinishi uchun keng oyna (60 daq). Komp №
-        // esa faqat reveal vaqti yetganda (jit_assign_minutes_before, default 10)
+        // esa faqat reveal vaqti yetganda (reveal_minutes_before, default 10)
         // ko'rsatiladi — talaba erta bilib qo'yib boshqa kompga o'tirmasin.
         $upcomingWindowMin = 60;
-        $revealWindowMin = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+        $revealWindowMin = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
         $windowEnd = $now->copy()->addMinutes($upcomingWindowMin);
 
         // Shu kunda planned_start'i bo'lgan barcha aktiv qatorlar (in_progress

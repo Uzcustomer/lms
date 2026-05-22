@@ -112,6 +112,14 @@
                                     </svg>
                                     YN oldi word
                                 </button>
+                                <button type="button" id="btn-assign-computers" onclick="tcAssignComputers()" disabled
+                                        style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#4f46e5,#6366f1);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;height:36px;"
+                                        title="Belgilangan guruhlar talabalariga kompyuter raqamlarini taqsimlash">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"/>
+                                    </svg>
+                                    Kompyuter raqamlarini taqsimlash
+                                </button>
                                 <button type="button" id="btn-bulk-moodle" onclick="tcBulkRecheckMoodle()" disabled
                                         style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#0e9f6e,#10b981);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;white-space:nowrap;height:36px;"
                                         title="Tanlangan qatorlarni Moodle bilan tekshirish (navbatga qo'shadi)">
@@ -1594,6 +1602,8 @@
             if (btn) btn.disabled = checkedCount === 0;
             var bulkBtn = document.getElementById('btn-bulk-moodle');
             if (bulkBtn) bulkBtn.disabled = checkedCount === 0;
+            var acBtn = document.getElementById('btn-assign-computers');
+            if (acBtn) acBtn.disabled = checkedCount === 0;
             var headerCb = document.getElementById('tc-select-all-header');
             if (headerCb) headerCb.checked = checkedCount > 0 && checkedCount === visible.length;
         }
@@ -1645,6 +1655,102 @@
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
             });
+        }
+
+        var assignComputersUrl = '{{ route($routePrefix . ".academic-schedule.test-center.assign-computers") }}';
+        var assignComputersStatusUrl = '{{ route($routePrefix . ".academic-schedule.test-center.assign-computers.status") }}';
+
+        // Belgilangan guruhlar talabalariga kompyuter raqamlarini taqsimlash.
+        // Og'ir ish — server uni fonda navbat job'ida bajaradi.
+        function tcAssignComputers() {
+            var items = [];
+            document.querySelectorAll('.tc-row-checkbox:checked').forEach(function(cb) {
+                var tr = cb.closest('tr.data-row');
+                if (!tr) return;
+                var sid = tr.getAttribute('data-schedule-id');
+                var yn = tr.getAttribute('data-yn-type') || '';
+                if (!sid || !yn) return;
+                items.push({
+                    schedule_id: sid,
+                    yn_type: yn,
+                    attempt: tr.getAttribute('data-attempt') || '1'
+                });
+            });
+            if (items.length === 0) {
+                alert('Kamida bitta guruhni tanlang (YN turi belgilangan bo\'lishi kerak)');
+                return;
+            }
+            if (!confirm(items.length + ' ta guruhga kompyuter raqamlari taqsimlansinmi? Bu mavjud taqsimotni qayta hisoblaydi.')) {
+                return;
+            }
+            var btn = document.getElementById('btn-assign-computers');
+            var originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.textContent = 'Yuborilmoqda...';
+            fetch(assignComputersUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                },
+                body: JSON.stringify({ items: items })
+            })
+            .then(function(r) {
+                return r.json().then(function(j) { return { ok: r.ok, body: j }; });
+            })
+            .then(function(res) {
+                if (!res.ok || !res.body || !res.body.success) {
+                    alert((res.body && (res.body.message || res.body.error)) || 'Xatolik yuz berdi');
+                    btn.disabled = false; btn.innerHTML = originalHTML; tcUpdateSelection();
+                    return;
+                }
+                if (!res.body.token) {
+                    alert(res.body.message || 'Navbatga qo\'yildi');
+                    btn.disabled = false; btn.innerHTML = originalHTML; tcUpdateSelection();
+                    return;
+                }
+                // Job navbatga qo'yildi — holatini kuzatib boramiz.
+                btn.textContent = 'Taqsimlanmoqda…';
+                tcPollAssignStatus(res.body.token, btn, originalHTML, 0);
+            })
+            .catch(function(e) {
+                alert('Xatolik: ' + e.message);
+                btn.disabled = false; btn.innerHTML = originalHTML; tcUpdateSelection();
+            });
+        }
+
+        // Taqsimlash job'i tugaganini bilish uchun har 3 soniyada holatni
+        // so'rab turamiz. Job tugaganda aniq "tayyor" xabari ko'rsatiladi.
+        function tcPollAssignStatus(token, btn, originalHTML, attempts) {
+            if (attempts > 120) { // ~6 daqiqa
+                alert('Taqsimlash kutilganidan uzoq davom etmoqda. Keyinroq natijani tekshiring.');
+                btn.disabled = false; btn.innerHTML = originalHTML; tcUpdateSelection();
+                return;
+            }
+            setTimeout(function() {
+                fetch(assignComputersStatusUrl + '?token=' + encodeURIComponent(token), {
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(st) {
+                    if (st && st.status === 'done') {
+                        alert('✅ Tayyor! ' + (st.assigned || 0) + ' ta talabaga kompyuter raqami taqsimlandi.'
+                              + (st.message ? ('\n' + st.message) : ''));
+                        btn.disabled = false; btn.innerHTML = originalHTML; tcUpdateSelection();
+                    } else if (st && st.status === 'failed') {
+                        alert('❌ Taqsimlashda xatolik yuz berdi. Qayta urinib ko\'ring.');
+                        btn.disabled = false; btn.innerHTML = originalHTML; tcUpdateSelection();
+                    } else {
+                        // queued / running / unknown — kutishda davom etamiz.
+                        tcPollAssignStatus(token, btn, originalHTML, attempts + 1);
+                    }
+                })
+                .catch(function() {
+                    tcPollAssignStatus(token, btn, originalHTML, attempts + 1);
+                });
+            }, 3000);
         }
 
         var ynOldiWordUrl = '{{ route($routePrefix . ".academic-schedule.test-center.generate-yn-oldi-word") }}';

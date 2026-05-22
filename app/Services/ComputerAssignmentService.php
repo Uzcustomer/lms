@@ -125,7 +125,62 @@ class ComputerAssignmentService
             ComputerAssignment::insert($rows);
         });
 
+        // Guruh vaqti barcha talabaga yozildi — endi individual grafikga ega
+        // (per-student exam_schedules qatori bor) talabalarning planned_start'ini
+        // o'z shaxsiy vaqtiga moslaymiz. TV displey va JIT reveal shu qiymatni
+        // o'qiydi.
+        $this->applyPerStudentTimeOverrides(
+            $schedule, $ynType, $attempt, $dateField, $timeField, $duration + $buffer
+        );
+
         return ['ok' => true, 'count' => $students->count()];
+    }
+
+    /**
+     * Guruh vaqti bilan ComputerAssignment qatorlari yozilgandan so'ng —
+     * per-student (individual grafik) exam_schedules qatorida shaxsiy
+     * vaqti bor talabalarning planned_start/planned_end/reveal_at qiymatini
+     * o'z vaqtiga moslaydi. ca qatorlari guruh exam_schedule_id ostida
+     * turadi, shuning uchun student_hemis_id bo'yicha topiladi.
+     */
+    private function applyPerStudentTimeOverrides(
+        ExamSchedule $schedule,
+        string $ynType,
+        int $attempt,
+        string $dateField,
+        string $timeField,
+        int $slotLen
+    ): void {
+        $perStudentRows = ExamSchedule::where('group_hemis_id', $schedule->group_hemis_id)
+            ->where('subject_id', $schedule->subject_id)
+            ->where('semester_code', $schedule->semester_code)
+            ->whereNotNull('student_hemis_id')
+            ->get();
+        if ($perStudentRows->isEmpty()) {
+            return;
+        }
+        $jitMin = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+        foreach ($perStudentRows as $ps) {
+            $psTime = $ps->{$timeField};
+            if (empty($psTime)) {
+                continue;
+            }
+            $start = $this->combineDateTime($ps->{$dateField} ?: $schedule->{$dateField}, $psTime);
+            if (!$start) {
+                continue;
+            }
+            $end = $start->copy()->addMinutes($slotLen);
+            ComputerAssignment::where('exam_schedule_id', $schedule->id)
+                ->where('student_hemis_id', (string) $ps->student_hemis_id)
+                ->where('yn_type', $ynType)
+                ->where('attempt', $attempt)
+                ->where('status', ComputerAssignment::STATUS_SCHEDULED)
+                ->update([
+                    'planned_start' => $start,
+                    'planned_end'   => $end,
+                    'reveal_at'     => $start->copy()->subMinutes($jitMin),
+                ]);
+        }
     }
 
     /**
@@ -386,6 +441,111 @@ class ComputerAssignmentService
             'count'          => count($rows),
             'earliest_time'  => $earliest ? $earliest->format('H:i') : null,
         ];
+    }
+
+    /**
+     * Bitta talabaga (individual vaqt qo'yilganda) bo'sh kompyuter raqamini
+     * avtomatik biriktiradi. Slot oralig'ida boshqa jadvallar — guruh yoki
+     * boshqa individual talabalar — band qilgan, hamda buzilgan raqamlar
+     * chetlab o'tiladi, shu sabab bitta kompyuter ikki kishiga tushmaydi.
+     *
+     * Talabada allaqachon scheduled qator bo'lsa va uning raqami hali bo'sh
+     * bo'lsa — o'sha raqam saqlab qolinadi (barqarorlik). in_progress /
+     * finished qatorlarga tegilmaydi.
+     *
+     * @return array{ok:bool, computer_number?:int|null, skipped?:bool, reason?:string}
+     */
+    public function assignSingleStudent(
+        ExamSchedule $schedule,
+        string $ynType,
+        int $attempt,
+        string $studentHemisId,
+        Carbon $startsAt
+    ): array {
+        $ynType = strtolower($ynType);
+        if (!in_array($ynType, ['oski', 'test'], true)) {
+            return ['ok' => false, 'reason' => 'invalid yn_type'];
+        }
+        if (!in_array($attempt, [1, 2, 3], true)) {
+            return ['ok' => false, 'reason' => 'invalid attempt'];
+        }
+
+        $dateStr = $startsAt->toDateString();
+        $capacity = ExamCapacityService::getSettingsForDate($dateStr);
+        $duration = max(1, (int) ($capacity['test_duration_minutes'] ?? 15));
+        $buffer = max(0, (int) config('services.moodle.computer_buffer_minutes', 0));
+        $plannedEnd = $startsAt->copy()->addMinutes($duration + $buffer);
+
+        $existing = ComputerAssignment::where('exam_schedule_id', $schedule->id)
+            ->where('yn_type', $ynType)
+            ->where('attempt', $attempt)
+            ->where('student_hemis_id', $studentHemisId)
+            ->first();
+
+        // Imtihon boshlangan yoki tugagan bo'lsa — tarix, tegmaymiz.
+        if ($existing && $existing->status !== ComputerAssignment::STATUS_SCHEDULED) {
+            return [
+                'ok' => true,
+                'skipped' => true,
+                'reason' => 'in progress or finished',
+                'computer_number' => $existing->computer_number !== null ? (int) $existing->computer_number : null,
+            ];
+        }
+
+        $broken = array_map('intval', (array) ($capacity['broken_computers'] ?? []));
+        $total = max(1, (int) ($capacity['computer_count'] ?? config('services.moodle.total_computers', 60)));
+        $occupied = $this->occupiedComputerNumbers($startsAt, $plannedEnd, $schedule->id, $ynType);
+        $taken = array_flip(array_map('intval', array_merge($occupied, $broken)));
+
+        // Mavjud raqam hali ham bo'sh bo'lsa — o'zgartirmaymiz.
+        $compNum = null;
+        if ($existing && $existing->computer_number !== null
+            && !isset($taken[(int) $existing->computer_number])
+            && (int) $existing->computer_number <= $total) {
+            $compNum = (int) $existing->computer_number;
+        } else {
+            for ($n = 1; $n <= $total; $n++) {
+                if (!isset($taken[$n])) {
+                    $compNum = $n;
+                    break;
+                }
+            }
+        }
+        if ($compNum === null) {
+            return ['ok' => false, 'reason' => 'no free computer at this slot'];
+        }
+
+        $jitMinutes = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
+        $revealAt = $startsAt->copy()->subMinutes($jitMinutes);
+
+        if ($existing) {
+            $existing->computer_number = $compNum;
+            $existing->planned_start = $startsAt;
+            $existing->planned_end = $plannedEnd;
+            if (empty($existing->reveal_at)) {
+                $existing->reveal_at = $revealAt;
+            }
+            $existing->is_pinned = true;
+            $existing->save();
+        } else {
+            $studentIdNumber = (string) (Student::where('hemis_id', $studentHemisId)->value('student_id_number') ?? '');
+            ComputerAssignment::create([
+                'exam_schedule_id' => $schedule->id,
+                'student_id_number' => $studentIdNumber,
+                'student_hemis_id' => $studentHemisId,
+                'yn_type' => $ynType,
+                'attempt' => $attempt,
+                'computer_number' => $compNum,
+                'planned_start' => $startsAt,
+                'planned_end' => $plannedEnd,
+                'reveal_at' => $revealAt,
+                'is_pinned' => true,
+                'is_reserve' => false,
+                'status' => ComputerAssignment::STATUS_SCHEDULED,
+            ]);
+        }
+
+        return ['ok' => true, 'computer_number' => $compNum];
     }
 
     private function combineDateTime(mixed $date, mixed $time): ?Carbon

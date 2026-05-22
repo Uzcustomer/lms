@@ -91,10 +91,43 @@ class RetakeWindowService
     {
         $this->validateDateRange($startDate, $endDate);
 
-        $window->update([
+        $update = [
             'start_date' => $startDate,
             'end_date' => $endDate,
-        ]);
+        ];
+
+        // Tugash sanasi uzaytirilsa — necha kunga uzaytirilgan bo'lsa,
+        // bugundan boshlab shuncha kun ariza qabuli qayta ochiladi.
+        // (Migration ishga tushgan bo'lsagina — aks holda jim qoladi.)
+        if (RetakeApplicationWindow::supportsReopen()) {
+            $reopen = $this->reopenUntil($window->end_date, $endDate);
+            if ($reopen !== null) {
+                $update['application_reopen_until'] = $reopen;
+            }
+        }
+
+        $window->update($update);
+    }
+
+    /**
+     * Eski va yangi tugash sanalariga qarab ariza qayta ochilish sanasini
+     * hisoblaydi. Tugash sanasi uzaytirilgan bo'lsagina (N > 0) — bugundan
+     * +N kun qaytaradi, aks holda null.
+     */
+    public function reopenUntil($oldEndDate, string $newEndDate): ?\Illuminate\Support\Carbon
+    {
+        if ($oldEndDate === null) {
+            return null;
+        }
+        $old = \Illuminate\Support\Carbon::parse($oldEndDate)->startOfDay();
+        $new = \Illuminate\Support\Carbon::parse($newEndDate)->startOfDay();
+
+        $extraDays = $old->diffInDays($new, false);
+        if ($extraDays <= 0) {
+            return null;
+        }
+
+        return \Illuminate\Support\Carbon::today()->addDays($extraDays);
     }
 
     private function validateDateRange(string $start, string $end): void

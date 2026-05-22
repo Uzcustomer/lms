@@ -323,6 +323,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/download-submission/{submissionId}', [JournalController::class, 'downloadSubmission'])->name('download-submission');
             Route::get('/download-history-file/{historyId}', [JournalController::class, 'downloadHistoryFile'])->name('download-history-file');
             Route::get('/export-student-grades', [JournalController::class, 'exportStudentGrades'])->name('export-student-grades');
+            Route::post('/export-exam-grades-all/start', [JournalController::class, 'startExamGradesExport'])->name('export-exam-grades-all.start');
+            Route::get('/export-exam-grades-all/status', [JournalController::class, 'examGradesExportStatus'])->name('export-exam-grades-all.status');
+            Route::get('/export-exam-grades-all/download', [JournalController::class, 'examGradesExportDownload'])->name('export-exam-grades-all.download');
             Route::post('/delete-mt-submission', [JournalController::class, 'deleteMtSubmission'])->name('delete-mt-submission');
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
             Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');
@@ -856,6 +859,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/test-center/auto-time-all', [AcademicScheduleController::class, 'autoTimeAll'])->name('test-center.auto-time-all');
             Route::post('/test-center/clear-times', [AcademicScheduleController::class, 'clearTimes'])->name('test-center.clear-times');
             Route::post('/test-center/notify-all', [AcademicScheduleController::class, 'notifyAllExamTimes'])->name('test-center.notify-all');
+            Route::post('/test-center/assign-computers', [AcademicScheduleController::class, 'assignComputersForRange'])->name('test-center.assign-computers');
+            Route::get('/test-center/assign-computers/status', [AcademicScheduleController::class, 'assignComputersStatus'])->name('test-center.assign-computers.status');
             Route::post('/test-center/recheck-moodle', [AcademicScheduleController::class, 'recheckMoodle'])->name('test-center.recheck-moodle');
             Route::post('/test-center/bulk-recheck-moodle', [AcademicScheduleController::class, 'bulkRecheckMoodle'])->name('test-center.bulk-recheck-moodle');
             Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');
@@ -1455,6 +1460,8 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/test-center/auto-time-all', [AcademicScheduleController::class, 'autoTimeAll'])->name('test-center.auto-time-all');
             Route::post('/test-center/clear-times', [AcademicScheduleController::class, 'clearTimes'])->name('test-center.clear-times');
             Route::post('/test-center/notify-all', [AcademicScheduleController::class, 'notifyAllExamTimes'])->name('test-center.notify-all');
+            Route::post('/test-center/assign-computers', [AcademicScheduleController::class, 'assignComputersForRange'])->name('test-center.assign-computers');
+            Route::get('/test-center/assign-computers/status', [AcademicScheduleController::class, 'assignComputersStatus'])->name('test-center.assign-computers.status');
             Route::post('/test-center/recheck-moodle', [AcademicScheduleController::class, 'recheckMoodle'])->name('test-center.recheck-moodle');
             Route::post('/test-center/bulk-recheck-moodle', [AcademicScheduleController::class, 'bulkRecheckMoodle'])->name('test-center.bulk-recheck-moodle');
             Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');

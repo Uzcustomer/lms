@@ -727,7 +727,7 @@
             var okCount = 0, mavzuCount = 0, uploadedCount = 0, errCount = 0;
             filteredData.forEach(function(r) {
                 if (r.xulosa_code === 'ok') okCount++;
-                else if (r.xulosa_code === 'mavzu' || r.xulosa_code === 'mavzu_nb' || r.xulosa_code === 'mavzu_grade') mavzuCount++;
+                else if (r.xulosa_code === 'mavzu') mavzuCount++;
                 else if (r.xulosa_code === 'uploaded' || r.xulosa_code === 'mavzu_uploaded') uploadedCount++;
                 else errCount++;
             });
@@ -1205,8 +1205,7 @@
                 var skippedCount = 0;
                 ids.forEach(function(id) {
                     var row = allData.find(function(r) { return r.id === id; });
-                    if (row && (row.xulosa_code === 'ok' || row.xulosa_code === 'mavzu'
-                            || row.xulosa_code === 'mavzu_nb' || row.xulosa_code === 'mavzu_grade')) {
+                    if (row && (row.xulosa_code === 'ok' || row.xulosa_code === 'mavzu')) {
                         okIds.push(id);
                     } else {
                         skippedCount++;

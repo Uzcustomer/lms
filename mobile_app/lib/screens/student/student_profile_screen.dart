@@ -364,9 +364,10 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
   Widget _facultyCol(IconData icon, String label, String value) {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(icon, size: 12, color: Colors.white.withOpacity(0.75)),
             const SizedBox(width: 4),
@@ -384,6 +385,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
         const SizedBox(height: 4),
         Text(
           value.isEmpty ? '—' : value,
+          textAlign: TextAlign.center,
           style: const TextStyle(
               fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white),
           maxLines: 2,

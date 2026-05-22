@@ -178,12 +178,12 @@ class _ShinySweepState extends State<ShinySweep>
                         children: [
                           Positioned(
                             left: dx,
-                            top: -90,
+                            top: -200,
                             child: Transform.rotate(
                               angle: 0.42,
                               child: Container(
                                 width: 58,
-                                height: 340,
+                                height: c.maxHeight + 400,
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     begin: Alignment.centerLeft,

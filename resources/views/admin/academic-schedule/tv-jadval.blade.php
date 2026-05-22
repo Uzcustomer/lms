@@ -98,6 +98,7 @@
                     <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 ring-2 ring-amber-400/30"></span>Kiring</span>
                     <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-sky-400 ring-2 ring-sky-400/30"></span>Komp № ochildi</span>
                     <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-slate-500 ring-2 ring-slate-500/30"></span>Kutmoqda</span>
+                    <span class="flex items-center gap-1.5"><span class="w-2.5 h-2.5 rounded-full bg-indigo-400 ring-2 ring-indigo-400/30"></span>Rejada</span>
                 </div>
                 {{-- Sahifa ko'rsatkichi — bir sahifadan ko'p bo'lsa ko'rinadi --}}
                 <div id="tv-pagination" class="hidden text-right">
@@ -133,6 +134,7 @@
                                 'in_progress' => 'bg-emerald-500/10 border-emerald-400/40 pulse-now',
                                 'imminent'    => 'bg-amber-500/10 border-amber-400/40 pulse-imminent',
                                 'near'        => 'bg-sky-500/10 border-sky-400/40',
+                                'pending'     => 'bg-indigo-500/5 border-indigo-500/30 border-dashed',
                                 default       => 'bg-slate-800/40 border-slate-700/60',
                             };
                             $compBg = match($it['status']) {
@@ -145,12 +147,14 @@
                                 'in_progress' => 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/30',
                                 'imminent'    => 'bg-amber-500/20 text-amber-200 border border-amber-400/30',
                                 'near'        => 'bg-sky-500/20 text-sky-200 border border-sky-400/30',
+                                'pending'     => 'bg-indigo-500/20 text-indigo-200 border border-indigo-400/30',
                                 default       => 'bg-slate-700/40 text-slate-300 border border-slate-600/40',
                             };
                             $badgeText = match($it['status']) {
                                 'in_progress' => 'TOPSHIRAYAPTI',
                                 'imminent'    => 'KIRING',
                                 'near'        => 'KUTING',
+                                'pending'     => 'REJADA',
                                 default       => $it['minutes_until'] . ' daq.',
                             };
                             $ynBg = $it['yn_type'] === 'OSKI'

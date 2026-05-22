@@ -1605,7 +1605,7 @@ class _EcgLineState extends State<_EcgLine> with SingleTickerProviderStateMixin 
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2600),
+      duration: const Duration(milliseconds: 5200),
     )..repeat();
   }
 
@@ -1632,26 +1632,45 @@ class _EcgLinePainter extends CustomPainter {
   final double progress;
   const _EcgLinePainter(this.color, this.progress);
 
-  // Normalized (0–1) points of an ECG trace — flat baseline with QRS spikes.
-  static const List<Offset> _points = [
-    Offset(0.000, 0.5), Offset(0.111, 0.5), Offset(0.153, 0.5),
-    Offset(0.181, 0.2), Offset(0.208, 0.8), Offset(0.236, 0.5),
-    Offset(0.333, 0.5), Offset(0.375, 0.5), Offset(0.403, 0.16),
-    Offset(0.431, 0.84), Offset(0.458, 0.5), Offset(0.583, 0.5),
-    Offset(0.625, 0.5), Offset(0.653, 0.24), Offset(0.681, 0.76),
-    Offset(0.708, 0.5), Offset(0.833, 0.5), Offset(0.875, 0.5),
-    Offset(0.903, 0.2), Offset(0.931, 0.8), Offset(0.958, 0.5),
-    Offset(1.000, 0.5),
+  // A single PQRST heartbeat — x is the fraction within one beat, y runs
+  // from 0 (top) to 1 (bottom) with the baseline at 0.58: small P wave,
+  // a sharp QRS spike, then a rounded T wave.
+  static const List<Offset> _beat = [
+    Offset(0.00, 0.58), Offset(0.10, 0.58),
+    Offset(0.13, 0.55), Offset(0.16, 0.47), Offset(0.19, 0.55), Offset(0.22, 0.58),
+    Offset(0.34, 0.58),
+    Offset(0.37, 0.67),
+    Offset(0.40, 0.05),
+    Offset(0.43, 0.90),
+    Offset(0.47, 0.58),
+    Offset(0.58, 0.58),
+    Offset(0.63, 0.52), Offset(0.69, 0.38), Offset(0.75, 0.52), Offset(0.80, 0.58),
+    Offset(1.00, 0.58),
   ];
+  static const int _beats = 3;
+
+  Path _buildPath(Size size) {
+    final path = Path();
+    final beatW = size.width / _beats;
+    var first = true;
+    for (var b = 0; b < _beats; b++) {
+      for (final p in _beat) {
+        final x = (b + p.dx) * beatW;
+        final y = p.dy * size.height;
+        if (first) {
+          path.moveTo(x, y);
+          first = false;
+        } else {
+          path.lineTo(x, y);
+        }
+      }
+    }
+    return path;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final path = Path();
-    for (var i = 0; i < _points.length; i++) {
-      final x = _points[i].dx * size.width;
-      final y = _points[i].dy * size.height;
-      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
-    }
+    final path = _buildPath(size);
 
     // Faint full baseline trace.
     canvas.drawPath(

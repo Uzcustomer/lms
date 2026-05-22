@@ -213,8 +213,6 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
   // ── Profile card ─────────────────────────────────────
   Widget _buildProfileCard(BuildContext context, Map<String, dynamic> profile) {
-    final ink = ClinicTheme.inkOf(context);
-    final muted = ClinicTheme.mutedOf(context);
     final fullName = profile['full_name']?.toString() ?? '';
     final studentId = profile['student_id_number']?.toString() ?? '';
     final faculty = profile['department_name']?.toString() ?? '';
@@ -225,91 +223,129 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     final semester = profile['semester_name']?.toString() ?? '';
     final payment = profile['payment_form_name']?.toString() ?? '';
 
-    return _card(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          Stack(
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D9488).withOpacity(0.32),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ShinySweep(
+        radius: 18,
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
+            ),
+          ),
+          padding: const EdgeInsets.all(18),
+          child: Column(
             children: [
+              _AvatarHalo(
+                size: 84,
+                child: _buildAvatar(photoUrl, fullName),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                fullName.toUpperCase(),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white),
+              ),
+              const SizedBox(height: 7),
               Container(
-                width: 84,
-                height: 84,
-                decoration: const BoxDecoration(
-                  color: ClinicTheme.teal,
-                  shape: BoxShape.circle,
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(20),
                 ),
-                clipBehavior: Clip.antiAlias,
-                child: photoUrl != null && photoUrl.isNotEmpty
-                    ? Image.network(photoUrl, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => _avatarInitials(fullName))
-                    : _avatarInitials(fullName),
+                child: Text(
+                  'ID · $studentId',
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white),
+                ),
               ),
-              Positioned(
-                right: 0,
-                bottom: 2,
-                child: Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: ClinicTheme.teal,
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                        color: ClinicTheme.surfaceOf(context), width: 2.5),
+              const SizedBox(height: 14),
+              Divider(height: 1, color: Colors.white.withOpacity(0.22)),
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _facultyCol(
+                        Icons.account_balance_rounded, 'FAKULTET', faculty),
                   ),
-                  child: const Icon(Icons.check, size: 12, color: Colors.white),
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _facultyCol(
+                        Icons.school_rounded, 'YO\'NALISH', major),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  if (year.isNotEmpty) _chip(year),
+                  if (course.isNotEmpty) _chip('$course-kurs'),
+                  if (semester.isNotEmpty) _chip(semester),
+                  if (payment.isNotEmpty) _chip(payment),
+                ],
               ),
             ],
           ),
-          const SizedBox(height: 12),
-          Text(
-            fullName.toUpperCase(),
-            textAlign: TextAlign.center,
-            style: TextStyle(
-                fontSize: 15, fontWeight: FontWeight.w800, color: ink),
-          ),
-          const SizedBox(height: 7),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatar(String? photoUrl, String fullName) {
+    return SizedBox(
+      width: 84,
+      height: 84,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+            width: 84,
+            height: 84,
             decoration: BoxDecoration(
-              color: const Color(0xFFF0FDF4),
-              borderRadius: BorderRadius.circular(20),
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.18),
+              border: Border.all(color: Colors.white, width: 3),
             ),
-            child: Text(
-              'ID · $studentId',
-              style: const TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w800,
-                  color: ClinicTheme.green),
+            clipBehavior: Clip.antiAlias,
+            child: photoUrl != null && photoUrl.isNotEmpty
+                ? Image.network(photoUrl, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _avatarInitials(fullName))
+                : _avatarInitials(fullName),
+          ),
+          Positioned(
+            right: -2,
+            bottom: 0,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: ClinicTheme.green,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2.5),
+              ),
+              child: const Icon(Icons.check, size: 12, color: Colors.white),
             ),
-          ),
-          const SizedBox(height: 14),
-          Divider(height: 1, color: ClinicTheme.dividerOf(context)),
-          const SizedBox(height: 14),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: _facultyCol(
-                    Icons.account_balance_rounded, 'FAKULTET', faculty),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _facultyCol(
-                    Icons.school_rounded, 'YO\'NALISH', major),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              if (year.isNotEmpty) _chip(year),
-              if (course.isNotEmpty) _chip('$course-kurs'),
-              if (semester.isNotEmpty) _chip(semester),
-              if (payment.isNotEmpty) _chip(payment),
-            ],
           ),
         ],
       ),
@@ -327,13 +363,12 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   }
 
   Widget _facultyCol(IconData icon, String label, String value) {
-    final muted = ClinicTheme.mutedOf(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
-            Icon(icon, size: 12, color: muted),
+            Icon(icon, size: 12, color: Colors.white.withOpacity(0.75)),
             const SizedBox(width: 4),
             Text(
               label,
@@ -341,7 +376,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 fontSize: 9.5,
                 fontWeight: FontWeight.w700,
                 letterSpacing: 0.4,
-                color: muted,
+                color: Colors.white.withOpacity(0.75),
               ),
             ),
           ],
@@ -349,10 +384,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
         const SizedBox(height: 4),
         Text(
           value.isEmpty ? '—' : value,
-          style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w800,
-              color: ClinicTheme.inkOf(context)),
+          style: const TextStyle(
+              fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white),
           maxLines: 2,
           overflow: TextOverflow.ellipsis,
         ),
@@ -364,18 +397,16 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
       decoration: BoxDecoration(
-        color: Theme.of(context).brightness == Brightness.dark
-            ? Colors.white.withOpacity(0.05)
-            : const Color(0xFFF1F5F9),
+        color: Colors.white.withOpacity(0.16),
         borderRadius: BorderRadius.circular(9),
-        border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
+        border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
       ),
       child: Text(
         text,
-        style: TextStyle(
+        style: const TextStyle(
             fontSize: 11.5,
             fontWeight: FontWeight.w700,
-            color: ClinicTheme.inkOf(context)),
+            color: Colors.white),
       ),
     );
   }
@@ -852,4 +883,84 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
       ),
     );
   }
+}
+
+/// Avatar wrapped with a looping "shine" — expanding rings around it.
+class _AvatarHalo extends StatefulWidget {
+  final Widget child;
+  final double size;
+  const _AvatarHalo({required this.child, required this.size});
+
+  @override
+  State<_AvatarHalo> createState() => _AvatarHaloState();
+}
+
+class _AvatarHaloState extends State<_AvatarHalo>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final box = widget.size + 40;
+    return SizedBox(
+      width: box,
+      height: box,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (_, __) => Stack(
+          alignment: Alignment.center,
+          children: [
+            CustomPaint(
+              size: Size(box, box),
+              painter: _HaloPainter(_controller.value, widget.size / 2),
+            ),
+            widget.child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HaloPainter extends CustomPainter {
+  final double progress;
+  final double avatarRadius;
+  const _HaloPainter(this.progress, this.avatarRadius);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    const count = 3;
+    for (int i = 0; i < count; i++) {
+      final t = (progress + i / count) % 1.0;
+      final opacity = (1 - t) * 0.55;
+      if (opacity <= 0) continue;
+      canvas.drawCircle(
+        center,
+        avatarRadius + 4 + t * 16,
+        Paint()
+          ..color = Colors.white.withOpacity(opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_HaloPainter old) => old.progress != progress;
 }

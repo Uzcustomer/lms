@@ -580,6 +580,7 @@ class _Hero extends StatelessWidget {
           ),
         ),
         child: Stack(
+          alignment: Alignment.topCenter,
           children: [
             Positioned(
               left: 0,
@@ -756,7 +757,7 @@ class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
                 child: const Icon(
                   Icons.favorite_rounded,
                   color: Color(0xFFE53935),
-                  size: 40,
+                  size: 52,
                 ),
               ),
             ],
@@ -779,7 +780,7 @@ class _EkgPainter extends CustomPainter {
     Offset(0.52, 0.12), Offset(0.59, 0.66),
     Offset(0.66, 0.5), Offset(1.00, 0.5),
   ];
-  static const int _beats = 2;
+  static const int _beats = 1;
   static const Color _red = Color(0xFFE53935);
 
   @override
@@ -851,60 +852,56 @@ class _BuildingPainter extends CustomPainter {
     final w = size.width;
     final h = size.height;
     final cx = w / 2;
-    final buildingW = w * 0.62;
 
-    // ── Stepped base ──
-    final stepH = h * 0.032;
+    Rect centered(double width, double top, double height) =>
+        Rect.fromLTWH(cx - width / 2, top, width, height);
+
+    // ── Stepped base (widest ~92% of the width) ──
+    final stepH = h * 0.03;
+    const stepFrac = [0.92, 0.86, 0.80];
     for (int i = 0; i < 3; i++) {
-      final extra = (2 - i) * buildingW * 0.07;
       canvas.drawRect(
-        Rect.fromLTWH(
-          cx - buildingW / 2 - buildingW * 0.10 - extra,
-          h - stepH * (3 - i),
-          buildingW * 1.20 + extra * 2,
-          stepH,
-        ),
+        centered(w * stepFrac[i], h - stepH * (i + 1), stepH),
         paint,
       );
     }
     final stepsTop = h - stepH * 3;
 
     // ── Columns ──
-    const colCount = 8;
-    final colH = h * 0.44;
+    const colCount = 9;
+    final colH = h * 0.46;
     final colsTop = stepsTop - colH;
-    final colSpan = buildingW * 0.94;
+    final colSpan = w * 0.74;
     final colsLeft = cx - colSpan / 2;
     final gap = colSpan / colCount;
-    final colW = gap * 0.5;
+    final colW = gap * 0.56;
     for (int i = 0; i < colCount; i++) {
       final x = colsLeft + gap * i + (gap - colW) / 2;
       canvas.drawRect(
-        Rect.fromLTWH(x, colsTop + colH * 0.07, colW, colH * 0.86), paint);
+          Rect.fromLTWH(x, colsTop + colH * 0.08, colW, colH * 0.84), paint);
       // capital
       canvas.drawRect(
-        Rect.fromLTWH(x - colW * 0.16, colsTop, colW * 1.32, colH * 0.07),
-        paint);
+          Rect.fromLTWH(x - colW * 0.18, colsTop, colW * 1.36, colH * 0.08),
+          paint);
       // base
       canvas.drawRect(
-        Rect.fromLTWH(
-            x - colW * 0.16, colsTop + colH * 0.93, colW * 1.32, colH * 0.07),
-        paint);
+          Rect.fromLTWH(
+              x - colW * 0.18, colsTop + colH * 0.92, colW * 1.36, colH * 0.08),
+          paint);
     }
 
     // ── Architrave (beam) ──
-    final beamH = h * 0.055;
+    final beamH = h * 0.05;
+    final beamW = w * 0.80;
     final beamY = colsTop - beamH;
-    final beamLeft = cx - buildingW * 0.58;
-    final beamW = buildingW * 1.16;
-    canvas.drawRect(Rect.fromLTWH(beamLeft, beamY, beamW, beamH), paint);
+    canvas.drawRect(centered(beamW, beamY, beamH), paint);
 
     // ── Triangular pediment ──
-    final pedH = h * 0.20;
+    final pedH = h * 0.19;
     final roof = Path()
-      ..moveTo(beamLeft - w * 0.015, beamY)
+      ..moveTo(cx - beamW / 2 - w * 0.012, beamY)
       ..lineTo(cx, beamY - pedH)
-      ..lineTo(beamLeft + beamW + w * 0.015, beamY)
+      ..lineTo(cx + beamW / 2 + w * 0.012, beamY)
       ..close();
     canvas.drawPath(roof, paint);
   }

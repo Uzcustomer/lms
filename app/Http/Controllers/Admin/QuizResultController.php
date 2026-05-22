@@ -2475,7 +2475,7 @@ class QuizResultController extends Controller
                     $skipReasons[] = "juftlik {$sg->lesson_pair_code}: YN qulflangan";
                     continue;
                 }
-                if (!$this->retakeWithinMakeupWindow($student, $targetFanId, $targetDate, $result)) {
+                if (!$this->retakeWithinMakeupWindow($student, $targetFanId, $result)) {
                     $skipReasons[] = "juftlik {$sg->lesson_pair_code}: Farmoyishda qayta topshirish kunlari bilan mos kelmadi";
                     continue;
                 }
@@ -2571,29 +2571,22 @@ class QuizResultController extends Controller
     }
 
     /**
-     * Retake (Moodle quiz) aynan SHU MAVZUGA tegishli Sababli ariza (Farmoyish)
-     * makeup oynasi ichida topshirilganmi — tekshiradi.
-     * Mavzu sanasi ($missedDate) qaysi tasdiqlangan arizaning yo'qlik davriga
-     * (start_date..end_date) tushsa, o'sha arizaning JN makeup oynasi
-     * (makeup_date..makeup_end_date) bilan solishtiriladi. Bir talabada bir
-     * nechta ariza/oyna bo'lishi mumkin — shuning uchun mavzuga to'g'ri keladigani
-     * tanlanadi (aks holda boshqa arizaning kengroq oynasi xato ruxsat berardi).
+     * Retake (Moodle quiz) aynan Sababli ariza (Farmoyish) bo'yicha shu fanga
+     * belgilangan makeup sanalari oralig'ida topshirilganmi — tekshiradi.
+     * Faqat tasdiqlangan ariza (status=approved) va JN turdagi makeup'lar hisobga
+     * olinadi. YN qulflangan bo'lsa ham sababli retake'ni shu shart bilan o'tkazadi.
      */
-    private function retakeWithinMakeupWindow($student, $subjectId, $missedDate, $result): bool
+    private function retakeWithinMakeupWindow($student, $subjectId, $result): bool
     {
         try {
-            if (empty($result->date_finish) || empty($missedDate)) {
+            if (empty($result->date_finish)) {
                 return false;
             }
             $retakeDate = \Carbon\Carbon::parse($result->date_finish)->toDateString();
-            $missDate = \Carbon\Carbon::parse($missedDate)->toDateString();
 
-            $makeups = \App\Models\AbsenceExcuseMakeup::query()
-                ->whereHas('absenceExcuse', function ($q) use ($student, $missDate) {
+            $makeups = \App\Models\AbsenceExcuseMakeup::whereHas('absenceExcuse', function ($q) use ($student) {
                     $q->where('status', 'approved')
-                      ->where('student_hemis_id', (string) $student->hemis_id)
-                      ->whereDate('start_date', '<=', $missDate)
-                      ->whereDate('end_date', '>=', $missDate);
+                      ->where('student_hemis_id', (string) $student->hemis_id);
                 })
                 ->where('subject_id', (string) $subjectId)
                 ->where('assessment_type', 'jn')

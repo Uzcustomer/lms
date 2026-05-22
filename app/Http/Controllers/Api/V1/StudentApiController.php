@@ -146,8 +146,12 @@ class StudentApiController extends Controller
             : null;
 
         // Attendance streak — consecutive days since the student's last absence.
+        // An absence = a lesson with absent_on > 0 OR absent_off > 0.
         $lastAbsenceDate = Attendance::where('student_id', $student->id)
-            ->where('absent_on', '>', 0)
+            ->where(function ($q) {
+                $q->where('absent_on', '>', 0)
+                  ->orWhere('absent_off', '>', 0);
+            })
             ->max('lesson_date');
         $firstLessonDate = Attendance::where('student_id', $student->id)
             ->min('lesson_date');

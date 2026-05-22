@@ -641,7 +641,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           SizedBox(
             height: 46,
             width: double.infinity,
-            child: CustomPaint(painter: _EcgLinePainter(accent)),
+            child: _EcgLine(accent),
           ),
         ],
       ),
@@ -1593,10 +1593,50 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 }
 
-/// Decorative ECG / heartbeat line for the weekly-activity card.
+/// Animated ECG / heartbeat line for the weekly-activity card — a bright
+/// pulse sweeps along a faint baseline trace, like a heart monitor.
+class _EcgLine extends StatefulWidget {
+  final Color color;
+  const _EcgLine(this.color);
+
+  @override
+  State<_EcgLine> createState() => _EcgLineState();
+}
+
+class _EcgLineState extends State<_EcgLine> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) => CustomPaint(
+        size: Size.infinite,
+        painter: _EcgLinePainter(widget.color, _controller.value),
+      ),
+    );
+  }
+}
+
 class _EcgLinePainter extends CustomPainter {
   final Color color;
-  const _EcgLinePainter(this.color);
+  final double progress;
+  const _EcgLinePainter(this.color, this.progress);
 
   // Normalized (0–1) points of an ECG trace — flat baseline with QRS spikes.
   static const List<Offset> _points = [
@@ -1612,34 +1652,50 @@ class _EcgLinePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.8
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
-
     final path = Path();
     for (var i = 0; i < _points.length; i++) {
-      final p = _points[i];
-      final x = p.dx * size.width;
-      final y = p.dy * size.height;
-      if (i == 0) {
-        path.moveTo(x, y);
-      } else {
-        path.lineTo(x, y);
-      }
+      final x = _points[i].dx * size.width;
+      final y = _points[i].dy * size.height;
+      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
     }
-    canvas.drawPath(path, paint);
 
-    // End-of-trace dot, like the design's pulse marker.
-    canvas.drawCircle(
-      Offset(size.width, size.height * 0.5),
-      2.6,
-      Paint()..color = color,
+    // Faint full baseline trace.
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = color.withOpacity(0.18)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.8
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
     );
+
+    final metrics = path.computeMetrics().toList();
+    if (metrics.isEmpty) return;
+    final metric = metrics.first;
+    final len = metric.length;
+    final head = progress * len;
+    final tail = (head - len * 0.32).clamp(0.0, len);
+
+    // Bright pulse segment sweeping along the trace.
+    canvas.drawPath(
+      metric.extractPath(tail, head.clamp(0.0, len)),
+      Paint()
+        ..color = color
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+
+    // Leading pulse dot.
+    final tan = metric.getTangentForOffset(head.clamp(0.0, len));
+    if (tan != null) {
+      canvas.drawCircle(tan.position, 3.4, Paint()..color = color);
+    }
   }
 
   @override
-  bool shouldRepaint(_EcgLinePainter old) => old.color != color;
+  bool shouldRepaint(_EcgLinePainter old) =>
+      old.progress != progress || old.color != color;
 }

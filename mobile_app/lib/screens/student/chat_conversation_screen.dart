@@ -200,7 +200,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                     width: 60,
                                     height: 60,
                                     decoration: BoxDecoration(
-                                      color: const Color(0xFF4A6CF7)
+                                      color: const Color(0xFF0F766E)
                                           .withOpacity(0.1),
                                       shape: BoxShape.circle,
                                     ),
@@ -339,7 +339,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
         decoration: BoxDecoration(
           gradient: isMe
               ? const LinearGradient(
-                  colors: [Color(0xFF4A6CF7), Color(0xFF5B7BF8)],
+                  colors: [Color(0xFF0F766E), Color(0xFF1E3A8A)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 )
@@ -363,7 +363,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
           boxShadow: [
             BoxShadow(
               color: isMe
-                  ? const Color(0xFF4A6CF7).withOpacity(0.2)
+                  ? const Color(0xFF0F766E).withOpacity(0.2)
                   : Colors.black.withOpacity(0.05),
               blurRadius: 8,
               offset: const Offset(0, 2),
@@ -463,14 +463,14 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
           Container(
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF4A6CF7), Color(0xFF6C63FF)],
+                colors: [Color(0xFF0F766E), Color(0xFF1E3A8A)],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF4A6CF7).withOpacity(0.3),
+                  color: const Color(0xFF0F766E).withOpacity(0.3),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -514,13 +514,13 @@ class _MedicalPatternPainter extends CustomPainter {
         Paint()..color = bgColor);
 
     final paint = Paint()
-      ..color = (isDark ? Colors.white : const Color(0xFF4A6CF7))
+      ..color = (isDark ? Colors.white : const Color(0xFF0F766E))
           .withOpacity(isDark ? 0.03 : 0.04)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
 
     final fillPaint = Paint()
-      ..color = (isDark ? Colors.white : const Color(0xFF4A6CF7))
+      ..color = (isDark ? Colors.white : const Color(0xFF0F766E))
           .withOpacity(isDark ? 0.015 : 0.02)
       ..style = PaintingStyle.fill;
 

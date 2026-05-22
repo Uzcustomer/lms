@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
+import '../../services/student_data_cache.dart';
 import '../../widgets/clinic_header.dart';
 
 class StudentRatingScreen extends StatefulWidget {
@@ -31,13 +32,19 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
     _load();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool force = false}) async {
     setState(() => _loading = true);
     try {
-      final api = ApiService();
-      final service = StudentService(api);
-      final res = await service.getRating(filter: _activeFilter);
-      if (mounted && res['success'] == true) {
+      Map<String, dynamic>? res;
+      if (_activeFilter == 'group') {
+        // Default rating is part of the shared 24h cache.
+        final cache = StudentDataCache();
+        await cache.ensureFresh(force: force);
+        res = cache.rating;
+      } else {
+        res = await StudentService(ApiService()).getRating(filter: _activeFilter);
+      }
+      if (mounted && res != null && res['success'] == true) {
         final data = res['data'] as Map<String, dynamic>;
         setState(() {
           _myRank = data['my_rank'] as int? ?? 0;
@@ -120,7 +127,7 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
                         child: Text('Ma\'lumot topilmadi',
                             style: TextStyle(color: ClinicTheme.mutedOf(context))))
                     : RefreshIndicator(
-                        onRefresh: _load,
+                        onRefresh: () => _load(force: true),
                         child: ListView.builder(
                           padding: const EdgeInsets.fromLTRB(14, 0, 14, 24),
                           itemCount: _students.length,

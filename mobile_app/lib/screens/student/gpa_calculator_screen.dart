@@ -163,13 +163,7 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
     final dark = Color.lerp(color, const Color(0xFF0F172A), 0.38)!;
 
     return Container(
-      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [color, dark],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
         borderRadius: BorderRadius.circular(18),
         boxShadow: [
           BoxShadow(
@@ -179,7 +173,18 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
           ),
         ],
       ),
-      child: Column(
+      child: ShinySweep(
+        radius: 18,
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [color, dark],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Column(
         children: [
           Row(
             children: [
@@ -293,6 +298,8 @@ class _GpaCalculatorScreenState extends State<GpaCalculatorScreen> {
             ),
           ],
         ],
+          ),
+        ),
       ),
     );
   }

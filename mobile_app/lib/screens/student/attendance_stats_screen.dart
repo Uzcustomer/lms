@@ -1,8 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/student_provider.dart';
-import '../../services/api_service.dart';
-import '../../services/student_service.dart';
+import '../../services/student_data_cache.dart';
 import '../../widgets/clinic_header.dart';
 
 class AttendanceStatsScreen extends StatefulWidget {
@@ -54,14 +53,14 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     }
   }
 
-  Future<void> _loadGrades(int subjectId) async {
+  Future<void> _loadGrades(int subjectId, {bool force = false}) async {
     setState(() => _loadingGrades = true);
     try {
-      final api = ApiService();
-      final service = StudentService(api);
-      final res = await service.getSubjectGrades(subjectId);
+      final cache = StudentDataCache();
+      await cache.ensureFresh(force: force);
+      final res = cache.subjectGrades(subjectId);
       if (mounted) {
-        final data = res['data'] as Map<String, dynamic>? ?? {};
+        final data = res?['data'] as Map<String, dynamic>? ?? {};
         setState(() {
           _grades = (data['grades'] as List<dynamic>? ?? []);
           _loadingGrades = false;
@@ -108,7 +107,8 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                 child: _loadingGrades
                     ? const Center(child: CircularProgressIndicator())
                     : RefreshIndicator(
-                        onRefresh: () => _loadGrades(_selectedSubjectId!),
+                        onRefresh: () =>
+                            _loadGrades(_selectedSubjectId!, force: true),
                         child: _buildContent(),
                       ),
               ),

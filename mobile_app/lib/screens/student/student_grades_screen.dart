@@ -5,7 +5,7 @@ import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/student_provider.dart';
 import '../../services/api_service.dart';
-import '../../services/student_service.dart';
+import '../../services/student_data_cache.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
 import '../../utils/page_transitions.dart';
@@ -272,7 +272,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             final semesterName = provider.profile?['semester_name']?.toString() ?? '';
 
             return RefreshIndicator(
-              onRefresh: () => provider.loadSubjects(),
+              onRefresh: () => provider.refreshAll(),
               child: SingleChildScrollView(
                 physics: const AlwaysScrollableScrollPhysics(),
                 child: Column(
@@ -1260,12 +1260,12 @@ class _JnGradesPageState extends State<_JnGradesPage> {
 
   Future<void> _loadGrades() async {
     try {
-      final service = StudentService(ApiService());
-      final response = await service.getSubjectGrades(widget.subjectId);
+      await StudentDataCache().ensureFresh();
+      final response = StudentDataCache().subjectGrades(widget.subjectId);
 
       List<dynamic> grades = [];
       List<dynamic> scheduleDates = [];
-      final data = response['data'];
+      final data = response?['data'];
       if (data is Map<String, dynamic>) {
         grades = (data['grades'] as List<dynamic>?) ?? [];
         scheduleDates = (data['schedule_dates'] as List<dynamic>?) ?? [];

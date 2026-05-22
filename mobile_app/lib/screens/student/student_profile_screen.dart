@@ -247,7 +247,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
           padding: const EdgeInsets.all(18),
           child: Column(
             children: [
-              _AvatarHalo(
+              AvatarHalo(
                 size: 84,
                 child: _buildAvatar(photoUrl, fullName),
               ),
@@ -887,82 +887,3 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   }
 }
 
-/// Avatar wrapped with a looping "shine" — expanding rings around it.
-class _AvatarHalo extends StatefulWidget {
-  final Widget child;
-  final double size;
-  const _AvatarHalo({required this.child, required this.size});
-
-  @override
-  State<_AvatarHalo> createState() => _AvatarHaloState();
-}
-
-class _AvatarHaloState extends State<_AvatarHalo>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 2400),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final box = widget.size + 40;
-    return SizedBox(
-      width: box,
-      height: box,
-      child: AnimatedBuilder(
-        animation: _controller,
-        builder: (_, __) => Stack(
-          alignment: Alignment.center,
-          children: [
-            CustomPaint(
-              size: Size(box, box),
-              painter: _HaloPainter(_controller.value, widget.size / 2),
-            ),
-            widget.child,
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _HaloPainter extends CustomPainter {
-  final double progress;
-  final double avatarRadius;
-  const _HaloPainter(this.progress, this.avatarRadius);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(size.width / 2, size.height / 2);
-    const count = 3;
-    for (int i = 0; i < count; i++) {
-      final t = (progress + i / count) % 1.0;
-      final opacity = (1 - t) * 0.55;
-      if (opacity <= 0) continue;
-      canvas.drawCircle(
-        center,
-        avatarRadius + 4 + t * 16,
-        Paint()
-          ..color = Colors.white.withOpacity(opacity)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_HaloPainter old) => old.progress != progress;
-}

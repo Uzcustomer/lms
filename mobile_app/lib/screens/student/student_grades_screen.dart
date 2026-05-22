@@ -415,115 +415,143 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     double? trend;
     if (cur is num && prev is num) trend = cur.toDouble() - prev.toDouble();
 
-    final avgColor = avg >= 71
-        ? _calmGreen
-        : avg >= 56
-            ? const Color(0xFFB45309)
-            : const Color(0xFFBE123C);
-
-    return _calmCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D9488).withOpacity(0.30),
+            blurRadius: 16,
+            offset: const Offset(0, 7),
+          ),
+        ],
+      ),
+      child: ShinySweep(
+        radius: 16,
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
+            ),
+          ),
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: Text(
-                  semester.isNotEmpty
-                      ? '${semester.toUpperCase()} · O\'RTACHA'
-                      : 'SEMESTR · O\'RTACHA',
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.5,
-                    color: _muted,
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      semester.isNotEmpty
+                          ? '${semester.toUpperCase()} · O\'RTACHA'
+                          : 'SEMESTR · O\'RTACHA',
+                      style: TextStyle(
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                        color: Colors.white.withOpacity(0.8),
+                      ),
+                    ),
+                  ),
+                  if (trend != null && trend != 0) _trendChip(trend),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.baseline,
+                textBaseline: TextBaseline.alphabetic,
+                children: [
+                  Text(
+                    avg.toStringAsFixed(1),
+                    style: const TextStyle(
+                      fontSize: 40,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: -1,
+                      color: Colors.white,
+                      height: 1,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text('/ 100',
+                      style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white.withOpacity(0.7))),
+                ],
+              ),
+              const SizedBox(height: 12),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0, end: (avg / 100).clamp(0.0, 1.0)),
+                  duration: const Duration(milliseconds: 1100),
+                  curve: Curves.easeOutCubic,
+                  builder: (_, v, __) => LinearProgressIndicator(
+                    value: v,
+                    minHeight: 7,
+                    backgroundColor: Colors.white.withOpacity(0.18),
+                    valueColor:
+                        const AlwaysStoppedAnimation<Color>(Colors.white),
                   ),
                 ),
               ),
-              if (trend != null && trend != 0) _trendChip(trend),
-            ],
-          ),
-          const SizedBox(height: 8),
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.baseline,
-            textBaseline: TextBaseline.alphabetic,
-            children: [
-              Text(
-                avg.toStringAsFixed(1),
-                style: TextStyle(
-                  fontSize: 40,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: -1,
-                  color: avgColor,
-                  height: 1,
-                ),
+              const SizedBox(height: 14),
+              Divider(height: 1, color: Colors.white.withOpacity(0.22)),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  _buildStatCell('$total', 'Fanlar'),
+                  _statDivider(),
+                  _buildStatCell('$completed', 'Topshirilgan'),
+                  _statDivider(),
+                  _buildStatCell('$waiting', 'Kutilmoqda'),
+                ],
               ),
-              const SizedBox(width: 4),
-              Text('/ 100',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _muted)),
             ],
           ),
-          const SizedBox(height: 12),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(4),
-            child: TweenAnimationBuilder<double>(
-              tween: Tween(begin: 0, end: (avg / 100).clamp(0.0, 1.0)),
-              duration: const Duration(milliseconds: 1100),
-              curve: Curves.easeOutCubic,
-              builder: (_, v, __) => LinearProgressIndicator(
-                value: v,
-                minHeight: 7,
-                backgroundColor: avgColor.withOpacity(0.12),
-                valueColor: AlwaysStoppedAnimation<Color>(avgColor),
-              ),
-            ),
-          ),
-          const SizedBox(height: 14),
-          Divider(height: 1, color: _divider),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              _buildStatCell('$total', 'Fanlar', _ink),
-              _statDivider(),
-              _buildStatCell('$completed', 'Topshirilgan', _calmTeal),
-              _statDivider(),
-              _buildStatCell('$waiting', 'Kutilmoqda', const Color(0xFFB45309)),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
 
   Widget _trendChip(double trend) {
     final up = trend > 0;
-    final c = up ? _calmGreen : const Color(0xFFBE123C);
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
         Icon(up ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-            size: 11, color: c),
+            size: 11, color: Colors.white),
         const SizedBox(width: 1),
         Text(
           '${up ? '+' : ''}${trend.toStringAsFixed(1)}',
-          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: c),
+          style: const TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w800, color: Colors.white),
         ),
       ],
     );
   }
 
-  Widget _statDivider() => Container(width: 1, height: 30, color: _divider);
+  Widget _statDivider() =>
+      Container(width: 1, height: 30, color: Colors.white.withOpacity(0.22));
 
-  Widget _buildStatCell(String value, String label, Color valueColor) {
+  Widget _buildStatCell(String value, String label) {
     return Expanded(
       child: Column(
         children: [
           Text(value,
-              style: TextStyle(fontSize: 19, fontWeight: FontWeight.w900, color: valueColor)),
+              style: const TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white)),
           const SizedBox(height: 3),
           Text(
             label,
-            style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.w600, color: _muted),
+            style: TextStyle(
+                fontSize: 10.5,
+                fontWeight: FontWeight.w600,
+                color: Colors.white.withOpacity(0.75)),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),

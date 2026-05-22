@@ -41,6 +41,35 @@ class JournalGradeService
      * @return array<string,array<string,array{jn:?int,mt:?int}>>
      *         ["groupHid|subjectId|semesterCode" => [hemis_id => ['jn'=>?int,'mt'=>?int]]]
      */
+    /**
+     * Joriy o'quv yili boshlanish sanasi (Y-m-d H:i:s).
+     *
+     * HEMIS dagi curriculum_weeks (semestr haftalari) jadvalidan olinadi —
+     * joriy o'quv yili (semesters.current=1 dagi eng katta education_year)
+     * semestrlarining eng erta haftasi = o'quv yili boshlanishi. Tiklangan/
+     * transfer talabaning eski o'qishidagi baholarini sana bo'yicha aniq
+     * ajratish uchun ishlatiladi. Haftalar sinxron qilinmagan bo'lsa —
+     * <joriy_yil>-08-01 ga qaytadi.
+     */
+    public static function currentAcademicYearStart(): ?string
+    {
+        try {
+            $cy = \App\Models\Semester::where('current', true)->max('education_year');
+            if (!$cy) {
+                return null;
+            }
+            $start = DB::table('curriculum_weeks as cw')
+                ->join('semesters as s', 's.semester_hemis_id', '=', 'cw.semester_hemis_id')
+                ->where('s.current', true)
+                ->where('s.education_year', $cy)
+                ->min('cw.start_date');
+            return $start ?: (((int) $cy) . '-08-01 00:00:00');
+        } catch (\Throwable $e) {
+            Log::warning('JournalGradeService currentAcademicYearStart failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+
     public static function computeJnMtBulk(array $triples, array $studentGroup): array
     {
         $result = [];
@@ -53,16 +82,10 @@ class JournalGradeService
         $semCodes    = array_values(array_unique(array_map(fn ($t) => (string) $t[2], $triples)));
         $studentHids = array_map('strval', array_keys($studentGroup));
 
-        // Joriy o'quv yili — tiklangan/transfer talabaning eski o'qishidan
-        // qolgan baholarini chiqarib tashlash uchun. Kunlik baholar (lesson_date
-        // bor) SANA bo'yicha ajratiladi (education_year_code ishonchsiz);
-        // manual MT (lesson_date NULL) education_year_code bo'yicha.
-        $currentYearCode = null;
-        $currentYearStart = null;
-        try {
-            $currentYearCode = \App\Models\Semester::where('current', true)->max('education_year');
-            if ($currentYearCode) $currentYearStart = ((int) $currentYearCode) . '-08-01';
-        } catch (\Throwable $e) {}
+        // Joriy o'quv yili boshlanish sanasi — HEMIS curriculum_weeks dan.
+        // Kunlik baholar (lesson_date bor) shu sana bo'yicha ajratiladi;
+        // manual MT (lesson_date NULL) created_at bo'yicha.
+        $currentYearStart = self::currentAcademicYearStart();
 
         // Talabalarni guruh bo'yicha indekslaymiz
         $studentsByGroup = [];
@@ -157,10 +180,7 @@ class JournalGradeService
                 ->whereIn('subject_id', $subjectIds)
                 ->whereIn('semester_code', $semCodes)
                 ->where('training_type_code', 99)
-                ->when($currentYearCode, fn ($q) => $q->where(function ($qq) use ($currentYearCode) {
-                    $qq->whereNull('education_year_code')
-                       ->orWhere('education_year_code', $currentYearCode);
-                }))
+                ->when($currentYearStart, fn ($q) => $q->where('created_at', '>=', $currentYearStart))
                 ->whereNull('lesson_date')
                 ->whereNotNull('grade')
                 ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade')

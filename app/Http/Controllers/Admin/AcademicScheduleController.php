@@ -1268,15 +1268,11 @@ class AcademicScheduleController extends Controller
 
         if (empty($triples)) return $result;
 
-        // Joriy o'quv yili boshlanish sanasi — tiklangan/transfer talabaning
-        // eski o'qishidan qolgan baholarini (eski sanalardagi) chiqarib tashlash
-        // uchun. education_year_code ishonchsiz (826k yozuvda NULL, sanalari
-        // 2024-2026 oraliqda) — shuning uchun lesson_date bo'yicha ajratamiz.
-        $currentYearStart = null;
-        try {
-            $yc = \App\Models\Semester::where('current', true)->max('education_year');
-            if ($yc) $currentYearStart = ((int) $yc) . '-08-01';
-        } catch (\Throwable $e) {}
+        // Joriy o'quv yili boshlanish sanasi — HEMIS curriculum_weeks dan
+        // (semestr haftalari). Tiklangan/transfer talabaning eski o'qishidagi
+        // baholarini sana bo'yicha aniq ajratish uchun: lesson_date shu sanadan
+        // oldin bo'lsa — eski yozuv, hisobga olinmaydi.
+        $currentYearStart = \App\Services\JournalGradeService::currentAcademicYearStart();
 
         $allGroupHids = array_unique(array_column($triples, 0));
         $allSubjectIds = array_unique(array_column($triples, 1));

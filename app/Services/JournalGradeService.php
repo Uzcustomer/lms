@@ -41,6 +41,114 @@ class JournalGradeService
      * @return array<string,array<string,array{jn:?int,mt:?int}>>
      *         ["groupHid|subjectId|semesterCode" => [hemis_id => ['jn'=>?int,'mt'=>?int]]]
      */
+    /**
+     * Joriy o'quv yili boshlanish sanasi (global zaxira qiymat).
+     *
+     * curriculum_weeks dan: joriy o'quv yili (semesters.current=1 dagi eng
+     * katta education_year) ning BARCHA semestrlari (kuzgi + bahorgi)
+     * haftalaridan eng ertasi. Aniqrog'i — academicYearStartByGroup() per-reja
+     * sanani beradi; bu metod faqat zaxira (reja topilmasa).
+     */
+    public static function currentAcademicYearStart(): ?string
+    {
+        try {
+            $cy = \App\Models\Semester::where('current', true)->max('education_year');
+            if (!$cy) {
+                return null;
+            }
+            $start = DB::table('curriculum_weeks as cw')
+                ->join('semesters as s', 's.semester_hemis_id', '=', 'cw.semester_hemis_id')
+                ->where('s.education_year', $cy)
+                ->min('cw.start_date');
+            return $start ?: (((int) $cy) . '-08-01 00:00:00');
+        } catch (\Throwable $e) {
+            Log::warning('JournalGradeService currentAcademicYearStart failed: ' . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Har bir guruh uchun JORIY o'quv yili boshlanish sanasi — o'quv reja
+     * (curriculum) bo'yicha ALOHIDA.
+     *
+     * Bir o'quv yili 2 semestrdan iborat (kuzgi + bahorgi). O'quv yili
+     * boshlanishi = shu yildagi BIRINCHI (eng erta) semestr boshlanishi —
+     * talaba hozir 2-semestrda bo'lsa ham chegara 1-semestr boshidan olinadi.
+     * Yo'l: guruh → curriculum → joriy education_year dagi semestrlar →
+     * curriculum_weeks ichidan eng erta hafta.
+     *
+     * @param array $groupHids   guruh hemis id lari
+     * @return array<string,string>  [group_hemis_id => "Y-m-d H:i:s"]
+     */
+    public static function academicYearStartByGroup(array $groupHids): array
+    {
+        $map = [];
+        if (empty($groupHids)) {
+            return $map;
+        }
+        try {
+            $cy = \App\Models\Semester::where('current', true)->max('education_year');
+            if (!$cy) {
+                return $map;
+            }
+
+            $groupCurr = DB::table('groups')
+                ->whereIn('group_hemis_id', $groupHids)
+                ->whereNotNull('curriculum_hemis_id')
+                ->pluck('curriculum_hemis_id', 'group_hemis_id');
+            if ($groupCurr->isEmpty()) {
+                return $map;
+            }
+            $currIds = array_values(array_unique($groupCurr->all()));
+
+            // Joriy o'quv yili (education_year = $cy) semestrlari — har curriculum uchun
+            $sems = DB::table('semesters')
+                ->whereIn('curriculum_hemis_id', $currIds)
+                ->where('education_year', $cy)
+                ->select('curriculum_hemis_id', 'semester_hemis_id')
+                ->get();
+            $semHidsByCurr = [];
+            $allSemHids = [];
+            foreach ($sems as $s) {
+                $semHidsByCurr[$s->curriculum_hemis_id][] = $s->semester_hemis_id;
+                $allSemHids[] = $s->semester_hemis_id;
+            }
+            if (empty($allSemHids)) {
+                return $map;
+            }
+
+            // Har semestr uchun eng erta hafta
+            $weekMin = DB::table('curriculum_weeks')
+                ->whereIn('semester_hemis_id', $allSemHids)
+                ->groupBy('semester_hemis_id')
+                ->selectRaw('semester_hemis_id, MIN(start_date) as ms')
+                ->pluck('ms', 'semester_hemis_id');
+
+            // Har curriculum uchun — semestrlari ichidan eng erta (= 1-semestr boshi)
+            $currStart = [];
+            foreach ($semHidsByCurr as $curr => $hids) {
+                $dates = [];
+                foreach ($hids as $h) {
+                    if (isset($weekMin[$h])) {
+                        $dates[] = $weekMin[$h];
+                    }
+                }
+                if (!empty($dates)) {
+                    $currStart[$curr] = min($dates);
+                }
+            }
+
+            foreach ($groupCurr as $gHid => $curr) {
+                if (isset($currStart[$curr])) {
+                    $map[(string) $gHid] = $currStart[$curr];
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('JournalGradeService academicYearStartByGroup failed: ' . $e->getMessage());
+        }
+        return $map;
+    }
+
     public static function computeJnMtBulk(array $triples, array $studentGroup): array
     {
         $result = [];
@@ -52,6 +160,12 @@ class JournalGradeService
         $subjectIds  = array_values(array_unique(array_map(fn ($t) => (string) $t[1], $triples)));
         $semCodes    = array_values(array_unique(array_map(fn ($t) => (string) $t[2], $triples)));
         $studentHids = array_map('strval', array_keys($studentGroup));
+
+        // O'quv yili ajratish — kunlik baholar (lesson_date bor) har bir
+        // guruhning o'z o'quv-yili boshlanish sanasi (1-semestr) bo'yicha;
+        // manual MT (lesson_date NULL) global o'quv yili boshi (created_at).
+        $yearStart = self::currentAcademicYearStart();
+        $yearStartByGroup = self::academicYearStartByGroup($groupHids);
 
         // Talabalarni guruh bo'yicha indekslaymiz
         $studentsByGroup = [];
@@ -116,6 +230,12 @@ class JournalGradeService
                 if ($gHid === null) {
                     continue;
                 }
+                // O'quv yili ajratish — dars sanasi joriy o'quv yili (1-semestr)
+                // boshlanishidan oldin bo'lsa: eski o'qishidagi yozuv, o'tkazamiz.
+                $rStart = $yearStartByGroup[(string) $gHid] ?? $yearStart;
+                if ($rStart && substr((string) $r->lesson_date, 0, 10) < substr((string) $rStart, 0, 10)) {
+                    continue;
+                }
                 $key = $gHid . '|' . $r->subject_id . '|' . $r->semester_code;
                 $eff = self::effectiveGrade($r);
                 if ($eff === null) {
@@ -145,6 +265,7 @@ class JournalGradeService
                 ->whereIn('subject_id', $subjectIds)
                 ->whereIn('semester_code', $semCodes)
                 ->where('training_type_code', 99)
+                ->when($yearStart, fn ($q) => $q->where('created_at', '>=', $yearStart))
                 ->whereNull('lesson_date')
                 ->whereNotNull('grade')
                 ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade')

@@ -843,6 +843,9 @@ class AcademicScheduleController extends Controller
                 $stat = $statByStu[$st->hemis_id] ?? null;
                 $explicitK = $st->hemis_id . '|' . $s . '|' . $sem;
                 $hasA2 = !empty($explicitAttemptByStudent[$explicitK]['attempt2']);
+                // Fanni amalda o'tgan talaba — qarz emas (attempt=2 yozuvi
+                // bo'lsa ham: u 2-urinishni o'tgan bo'lishi mumkin).
+                if (!empty($stat) && !empty($stat['passed'])) continue;
                 $failedAndDone = $ynDayDone && !empty($stat) && !empty($stat['failed1']);
                 if (!$failedAndDone && !$hasA2) continue;
                 $debtKey = $s . '|' . $sem;
@@ -987,6 +990,12 @@ class AcademicScheduleController extends Controller
                     //   - student_grades.attempt=2 yozuvi mavjud (qo'lda 12a ga o'tkazilgan)
                     $effectiveFailed1 = $stat['failed1'] || $didNotAttend || $hasAttempt2;
                     $effectiveFailed2 = $stat['failed2'] || $hasAttempt3;
+                    // Fanni amalda o'tgan (OSKI/Test urinishlari birlashtirilib
+                    // o'tilgan) talaba — 2/3-urinishga tushmaydi.
+                    if (!empty($stat['passed'])) {
+                        $effectiveFailed1 = false;
+                        $effectiveFailed2 = false;
+                    }
                     // Joriy semestrdagi BARCHA qarz fanlari (joriy semestrning
                     // hamma fanlari bo'yicha, sahifa fan-filtridan mustaqil).
                     $currentDebts = array_values($currentDebtsByStudent[$stu->hemis_id] ?? []);
@@ -1263,6 +1272,16 @@ class AcademicScheduleController extends Controller
         $allSubjectIds = array_unique(array_column($triples, 1));
         $allSemCodes = array_unique(array_column($triples, 2));
 
+        // Har bir guruh uchun JORIY o'quv yili boshlanish sanasi — o'quv reja
+        // bo'yicha ALOHIDA (HEMIS curriculum_weeks dan). Bir o'quv yili 2
+        // semestr; chegara — yilning 1-semestri boshlanishi. Tiklangan/transfer
+        // talabaning eski o'qishidagi baholarini aniq ajratish uchun. Reja
+        // topilmasa — global o'quv yili boshi (zaxira).
+        $yearStartFallback = \App\Services\JournalGradeService::currentAcademicYearStart();
+        $yearStartByGroup = \App\Services\JournalGradeService::academicYearStartByGroup(
+            array_values($allGroupHids)
+        );
+
         // Ko'rinadigan triples (status qaytarish uchun) va kengaytirilgan triples
         // (4+ qarz qoidasi uchun, butun o'quv yili bo'yicha sanash kerak).
         $visibleTriples = $triples;
@@ -1439,8 +1458,7 @@ class AcademicScheduleController extends Controller
 
         // 2) OSKI / Test attempt=1 baholari (101, 102, va legacy 103 quiz)
         // Legacy code 103 quiz grades: resolve to OSKI(101) or Test(102) via quiz_result
-        $examMap = []; // hemis_id|subj|sem|type => avg grade
-        $examLists = []; // hemis_id|subj|sem|type => [grades] (for averaging)
+        $examMap = []; // hemis_id|subj|sem|type => eng oxirgi (yangi) baho
         try {
             $rows = DB::table('student_grades')
                 ->whereNull('deleted_at')
@@ -1449,7 +1467,10 @@ class AcademicScheduleController extends Controller
                 ->whereIn('semester_code', $allSemCodes)
                 ->whereIn('training_type_code', [101, 102, 103])
                 ->when($hasAttemptCol, fn($q) => $q->where(fn($qq) => $qq->where('attempt', 1)->orWhereNull('attempt')))
-                ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade', 'quiz_result_id')
+                ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code',
+                    'grade', 'retake_grade', 'quiz_result_id', 'reason', 'lesson_date', 'id')
+                ->orderBy('lesson_date')
+                ->orderBy('id')
                 ->get();
 
             $quizIds = $rows->where('training_type_code', 103)->pluck('quiz_result_id')->filter()->unique()->values()->all();
@@ -1461,6 +1482,16 @@ class AcademicScheduleController extends Controller
             $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
 
             foreach ($rows as $r) {
+                // O'quv yili ajratish — dars/imtihon sanasi shu semestr (o'quv
+                // reja) boshlanishidan oldin bo'lsa: tiklangan talabaning eski
+                // o'qishidagi yozuvi, hisobga olinmaydi.
+                $rg = $studentGroup[$r->student_hemis_id] ?? null;
+                $rStart = ($rg !== null ? ($yearStartByGroup[(string) $rg] ?? null) : null)
+                    ?? $yearStartFallback;
+                if ($rStart && $r->lesson_date
+                    && substr((string) $r->lesson_date, 0, 10) < substr((string) $rStart, 0, 10)) {
+                    continue;
+                }
                 $typeCode = (int) $r->training_type_code;
                 if ($typeCode === 103) {
                     if (!$r->quiz_result_id) continue;
@@ -1473,13 +1504,22 @@ class AcademicScheduleController extends Controller
                         continue;
                     }
                 }
+                // teacher_victim placeholder (eski/bekor yozuv, baho 0 yoki yo'q)
+                // hisobga olinmaydi — aks holda haqiqiy baho bilan o'rtachalanib
+                // (yoki uning o'rniga) natijani buzadi. Reinstated talabada eski
+                // o'qishidan qolgan 0-placeholder yangi haqiqiy baho bilan
+                // qo'shilib OSKI/Test ni xato pasaytirardi.
+                if ($r->reason === 'teacher_victim' && $r->retake_grade === null
+                    && ($r->grade === null || (float) $r->grade == 0.0)) {
+                    continue;
+                }
                 $effective = $r->retake_grade ?? $r->grade;
                 if ($effective === null) continue;
                 $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $typeCode;
-                $examLists[$k][] = (float) $effective;
-            }
-            foreach ($examLists as $k => $list) {
-                $examMap[$k] = count($list) ? array_sum($list) / count($list) : null;
+                // Bitta imtihon uchun bir nechta yozuv bo'lsa — o'rtacha emas,
+                // ENG OXIRGISI (yangi sana/id) olinadi. Qatorlar lesson_date,id
+                // bo'yicha tartiblangan, oxirgisi yozib qoldiriladi.
+                $examMap[$k] = (float) $effective;
             }
         } catch (\Throwable $e) {}
 
@@ -1520,6 +1560,15 @@ class AcademicScheduleController extends Controller
                 $testTypes2 = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
 
                 foreach ($rows as $r) {
+                    // O'quv yili ajratish — eski o'qishidagi attempt=2 yozuvi
+                    // (eski sana) joriy hisobga kirmaydi.
+                    $rg = $studentGroup[$r->student_hemis_id] ?? null;
+                    $rStart = ($rg !== null ? ($yearStartByGroup[(string) $rg] ?? null) : null)
+                        ?? $yearStartFallback;
+                    if ($rStart && $r->lesson_date
+                        && substr((string) $r->lesson_date, 0, 10) < substr((string) $rStart, 0, 10)) {
+                        continue;
+                    }
                     $enrolledAttempt2Map[$r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code] = true;
                     $typeCode = (int) $r->training_type_code;
                     if ($typeCode === 103) {
@@ -1726,6 +1775,27 @@ class AcademicScheduleController extends Controller
                     $failed2 = false;
                 }
 
+                // Talaba fanni AMALDA o'tgan bo'lsa — qarz EMAS. OSKI bir
+                // urinishda, Test boshqa urinishda o'tilgan bo'lishi mumkin —
+                // urinishlar BIRLASHTIRILADI (jurnal stage-aniqlashi kabi).
+                // Aks holda OSKI ni 1-urinishda, Test ni 2-urinishda o'tgan
+                // talaba xato 2/3-urinishga (qarzga) tushib qolardi.
+                $oskiBest = max(
+                    $oskiNum !== null ? $oskiNum : -1.0,
+                    (isset($oski2Num) && $oski2Num !== null) ? $oski2Num : -1.0
+                );
+                $testBest = max(
+                    $testNum !== null ? $testNum : -1.0,
+                    (isset($test2Num) && $test2Num !== null) ? $test2Num : -1.0
+                );
+                $oskiOk = !$oskiRequired || $oskiBest >= $minLimit;
+                $testOk = !$testRequired || $testBest >= $minLimit;
+                $fullyPassed = !$isPullik && $oskiOk && $testOk;
+                if ($fullyPassed) {
+                    $failed1 = false;
+                    $failed2 = false;
+                }
+
                 $key = $g . '|' . $s . '|' . $sem;
                 if (!isset($result[$key])) $result[$key] = [];
                 $result[$key][$hid] = [
@@ -1733,6 +1803,7 @@ class AcademicScheduleController extends Controller
                     'failed2' => $failed2,
                     'pullik' => $isPullik,
                     'held_back' => false,
+                    'passed' => $fullyPassed,
                 ];
             }
         }

@@ -490,10 +490,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
         width: 36,
         height: 36,
         decoration: BoxDecoration(
-          color: enabled ? _calmTeal.withOpacity(0.10) : Colors.transparent,
+          color: enabled ? _calmTeal : _divider,
           borderRadius: BorderRadius.circular(9),
         ),
-        child: Icon(icon, size: 22, color: enabled ? _calmTeal : _calmFaint),
+        child: Icon(icon, size: 22, color: enabled ? Colors.white : _calmFaint),
       ),
     );
   }
@@ -595,10 +595,10 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
               width: 36,
               height: 36,
               decoration: BoxDecoration(
-                color: _calmTeal.withOpacity(0.12),
+                color: _calmTeal,
                 borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(Icons.calendar_month_rounded, size: 20, color: _calmTeal),
+              child: const Icon(Icons.calendar_month_rounded, size: 20, color: Colors.white),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -624,7 +624,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF0FDF4),
+                  color: _calmGreen,
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: Row(
@@ -634,7 +634,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                       width: 6,
                       height: 6,
                       decoration: const BoxDecoration(
-                          color: _calmGreen, shape: BoxShape.circle),
+                          color: Colors.white, shape: BoxShape.circle),
                     ),
                     const SizedBox(width: 5),
                     const Text(
@@ -643,7 +643,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 0.3,
-                        color: _calmGreen,
+                        color: Colors.white,
                       ),
                     ),
                   ],
@@ -722,15 +722,15 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 3),
                   decoration: BoxDecoration(
-                    color: accent.withOpacity(0.12),
+                    color: accent,
                     borderRadius: BorderRadius.circular(7),
                   ),
                   child: Text(
                     trainingType,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 10,
                       fontWeight: FontWeight.w800,
-                      color: accent,
+                      color: Colors.white,
                     ),
                   ),
                 ),

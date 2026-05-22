@@ -213,9 +213,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   List<BoxShadow> get _cardShadow => [
         BoxShadow(
-          color: const Color(0xFF0F172A).withOpacity(0.06),
-          blurRadius: 10,
-          offset: const Offset(0, 3),
+          color: const Color(0xFF0F172A).withOpacity(0.14),
+          blurRadius: 5,
+          offset: const Offset(0, 2),
         ),
       ];
 
@@ -466,7 +466,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           TextSpan(
                             text: studentId,
                             style: TextStyle(
-                                fontSize: 11, color: _ink, fontWeight: FontWeight.w600),
+                                fontSize: 11, color: _ink, fontWeight: FontWeight.w800),
                           ),
                         ],
                       ),
@@ -558,7 +558,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           const SizedBox(height: 4),
           Text(
             value,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _ink),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: _ink),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -603,7 +603,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       '$streak kun · ketma-ket',
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         color: _ink,
                       ),
                     ),
@@ -770,15 +770,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 height: 42,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: badgeColor.withOpacity(0.14),
+                  color: badgeColor,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   jn != null ? jn.round().toString() : '—',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: badgeColor,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -816,7 +816,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           '$absent/$total soat',
                           style: TextStyle(
                             fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w800,
                             color: _muted,
                           ),
                         ),
@@ -1562,7 +1562,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               const SizedBox(width: 4),
               Text(
                 maxLabel,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _muted),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _muted),
               ),
             ],
           ),

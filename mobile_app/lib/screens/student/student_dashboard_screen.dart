@@ -1552,9 +1552,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               Text(
                 value,
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 38,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
+                  letterSpacing: -0.8,
                   color: accent,
                   height: 1,
                 ),

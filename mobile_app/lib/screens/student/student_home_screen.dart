@@ -199,45 +199,47 @@ class _NavItemWidgetState extends State<_NavItemWidget>
     final inactiveColor = isDark ? Colors.white60 : const Color(0xFF94A3B8);
     final color = widget.isActive ? activeColor : inactiveColor;
 
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Top indicator bar for the active tab.
-        Container(
-          height: 3,
-          width: 22,
-          decoration: BoxDecoration(
-            color: widget.isActive ? activeColor : Colors.transparent,
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(3)),
+    return Container(
+      height: 66,
+      decoration: widget.isActive
+          ? const BoxDecoration(
+              border: Border(
+                top: BorderSide(color: activeColor, width: 2.5),
+                left: BorderSide(color: activeColor, width: 2.5),
+                right: BorderSide(color: activeColor, width: 2.5),
+              ),
+            )
+          : null,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedBuilder(
+            animation: _scale,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: widget.isActive ? _scale.value : 1.0,
+                child: child,
+              );
+            },
+            child: Icon(
+              widget.isActive ? widget.item.activeIcon : widget.item.icon,
+              color: color,
+              size: 25,
+            ),
           ),
-        ),
-        const SizedBox(height: 7),
-        AnimatedBuilder(
-          animation: _scale,
-          builder: (context, child) {
-            return Transform.scale(
-              scale: widget.isActive ? _scale.value : 1.0,
-              child: child,
-            );
-          },
-          child: Icon(
-            widget.isActive ? widget.item.activeIcon : widget.item.icon,
-            color: color,
-            size: 24,
+          const SizedBox(height: 5),
+          Text(
+            widget.item.label,
+            style: TextStyle(
+              fontSize: 10.5,
+              fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.w500,
+              color: color,
+            ),
+            overflow: TextOverflow.ellipsis,
           ),
-        ),
-        const SizedBox(height: 3),
-        Text(
-          widget.item.label,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.w500,
-            color: color,
-          ),
-          overflow: TextOverflow.ellipsis,
-        ),
-        const SizedBox(height: 7),
-      ],
+        ],
+      ),
     );
   }
 }

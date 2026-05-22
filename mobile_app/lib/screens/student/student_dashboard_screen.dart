@@ -574,7 +574,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final streakRaw = data?['attendance_streak_days'];
     final streak = streakRaw is num ? streakRaw.toInt() : 0;
     final isGood = streak >= 7;
-    final accent = isGood ? _calmTeal : AppTheme.warningColor;
 
     return _calmCard(
       padding: const EdgeInsets.all(12),
@@ -630,10 +629,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          SizedBox(
+          const SizedBox(
             height: 46,
             width: double.infinity,
-            child: _EcgLine(accent),
+            child: _EcgLine(),
           ),
         ],
       ),
@@ -1590,8 +1589,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 /// Animated ECG / heartbeat line for the weekly-activity card — a bright
 /// pulse sweeps along a faint baseline trace, like a heart monitor.
 class _EcgLine extends StatefulWidget {
-  final Color color;
-  const _EcgLine(this.color);
+  const _EcgLine();
 
   @override
   State<_EcgLine> createState() => _EcgLineState();
@@ -1621,16 +1619,19 @@ class _EcgLineState extends State<_EcgLine> with SingleTickerProviderStateMixin 
       animation: _controller,
       builder: (_, __) => CustomPaint(
         size: Size.infinite,
-        painter: _EcgLinePainter(widget.color, _controller.value),
+        painter: _EcgLinePainter(_controller.value),
       ),
     );
   }
 }
 
 class _EcgLinePainter extends CustomPainter {
-  final Color color;
   final double progress;
-  const _EcgLinePainter(this.color, this.progress);
+  const _EcgLinePainter(this.progress);
+
+  // Light-red resting trace; the moving pulse is drawn in dark red.
+  static const Color _baseColor = Color(0xFFEF9A9A);
+  static const Color _pulseColor = Color(0xFFC62828);
 
   // A single PQRST heartbeat — x is the fraction within one beat, y runs
   // from 0 (top) to 1 (bottom) with the baseline at 0.58: small P wave,
@@ -1672,11 +1673,11 @@ class _EcgLinePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final path = _buildPath(size);
 
-    // Faint full baseline trace.
+    // Light-red resting trace.
     canvas.drawPath(
       path,
       Paint()
-        ..color = color.withOpacity(0.18)
+        ..color = _baseColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.8
         ..strokeCap = StrokeCap.round
@@ -1690,13 +1691,13 @@ class _EcgLinePainter extends CustomPainter {
     final head = progress * len;
     final tail = (head - len * 0.32).clamp(0.0, len);
 
-    // Bright pulse segment sweeping along the trace.
+    // Dark-red pulse segment sweeping along the trace.
     canvas.drawPath(
       metric.extractPath(tail, head.clamp(0.0, len)),
       Paint()
-        ..color = color
+        ..color = _pulseColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.2
+        ..strokeWidth = 2.4
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round,
     );
@@ -1704,11 +1705,10 @@ class _EcgLinePainter extends CustomPainter {
     // Leading pulse dot.
     final tan = metric.getTangentForOffset(head.clamp(0.0, len));
     if (tan != null) {
-      canvas.drawCircle(tan.position, 3.4, Paint()..color = color);
+      canvas.drawCircle(tan.position, 3.4, Paint()..color = _pulseColor);
     }
   }
 
   @override
-  bool shouldRepaint(_EcgLinePainter old) =>
-      old.progress != progress || old.color != color;
+  bool shouldRepaint(_EcgLinePainter old) => old.progress != progress;
 }

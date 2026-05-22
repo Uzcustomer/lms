@@ -586,7 +586,7 @@ class _Hero extends StatelessWidget {
               right: 0,
               bottom: 0,
               child: CustomPaint(
-                size: Size(MediaQuery.of(context).size.width, 220),
+                size: Size(MediaQuery.of(context).size.width, 300),
                 painter: _BuildingPainter(color: Colors.white.withOpacity(0.13)),
               ),
             ),
@@ -720,9 +720,10 @@ class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     return Container(
-      width: 92,
-      height: 92,
+      width: 94,
+      height: 94,
       decoration: BoxDecoration(
+        color: Colors.white,
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
@@ -734,8 +735,7 @@ class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
       ),
       child: ShinySweep(
         radius: 22,
-        child: Container(
-          color: Colors.white,
+        child: SizedBox.expand(
           child: Stack(
             alignment: Alignment.center,
             children: [
@@ -756,7 +756,7 @@ class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
                 child: const Icon(
                   Icons.favorite_rounded,
                   color: Color(0xFFE53935),
-                  size: 38,
+                  size: 40,
                 ),
               ),
             ],

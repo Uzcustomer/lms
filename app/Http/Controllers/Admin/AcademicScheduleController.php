@@ -1268,15 +1268,19 @@ class AcademicScheduleController extends Controller
 
         if (empty($triples)) return $result;
 
-        // Joriy o'quv yili boshlanish sanasi — HEMIS curriculum_weeks dan
-        // (semestr haftalari). Tiklangan/transfer talabaning eski o'qishidagi
-        // baholarini sana bo'yicha aniq ajratish uchun: lesson_date shu sanadan
-        // oldin bo'lsa — eski yozuv, hisobga olinmaydi.
-        $currentYearStart = \App\Services\JournalGradeService::currentAcademicYearStart();
-
         $allGroupHids = array_unique(array_column($triples, 0));
         $allSubjectIds = array_unique(array_column($triples, 1));
         $allSemCodes = array_unique(array_column($triples, 2));
+
+        // Har bir guruh uchun JORIY o'quv yili boshlanish sanasi — o'quv reja
+        // bo'yicha ALOHIDA (HEMIS curriculum_weeks dan). Bir o'quv yili 2
+        // semestr; chegara — yilning 1-semestri boshlanishi. Tiklangan/transfer
+        // talabaning eski o'qishidagi baholarini aniq ajratish uchun. Reja
+        // topilmasa — global o'quv yili boshi (zaxira).
+        $yearStartFallback = \App\Services\JournalGradeService::currentAcademicYearStart();
+        $yearStartByGroup = \App\Services\JournalGradeService::academicYearStartByGroup(
+            array_values($allGroupHids)
+        );
 
         // Ko'rinadigan triples (status qaytarish uchun) va kengaytirilgan triples
         // (4+ qarz qoidasi uchun, butun o'quv yili bo'yicha sanash kerak).
@@ -1462,7 +1466,6 @@ class AcademicScheduleController extends Controller
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
                 ->whereIn('training_type_code', [101, 102, 103])
-                ->when($currentYearStart, fn($q) => $q->where('lesson_date', '>=', $currentYearStart))
                 ->when($hasAttemptCol, fn($q) => $q->where(fn($qq) => $qq->where('attempt', 1)->orWhereNull('attempt')))
                 ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code',
                     'grade', 'retake_grade', 'quiz_result_id', 'reason', 'lesson_date', 'id')
@@ -1479,6 +1482,16 @@ class AcademicScheduleController extends Controller
             $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
 
             foreach ($rows as $r) {
+                // O'quv yili ajratish — dars/imtihon sanasi shu semestr (o'quv
+                // reja) boshlanishidan oldin bo'lsa: tiklangan talabaning eski
+                // o'qishidagi yozuvi, hisobga olinmaydi.
+                $rg = $studentGroup[$r->student_hemis_id] ?? null;
+                $rStart = ($rg !== null ? ($yearStartByGroup[(string) $rg] ?? null) : null)
+                    ?? $yearStartFallback;
+                if ($rStart && $r->lesson_date
+                    && substr((string) $r->lesson_date, 0, 10) < substr((string) $rStart, 0, 10)) {
+                    continue;
+                }
                 $typeCode = (int) $r->training_type_code;
                 if ($typeCode === 103) {
                     if (!$r->quiz_result_id) continue;
@@ -1534,7 +1547,6 @@ class AcademicScheduleController extends Controller
                     ->whereIn('subject_id', $allSubjectIds)
                     ->whereIn('semester_code', $allSemCodes)
                     ->whereIn('training_type_code', [101, 102, 103])
-                    ->when($currentYearStart, fn($q) => $q->where('lesson_date', '>=', $currentYearStart))
                     ->where('attempt', 2)
                     ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade', 'quiz_result_id', 'lesson_date')
                     ->get();
@@ -1548,6 +1560,15 @@ class AcademicScheduleController extends Controller
                 $testTypes2 = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
 
                 foreach ($rows as $r) {
+                    // O'quv yili ajratish — eski o'qishidagi attempt=2 yozuvi
+                    // (eski sana) joriy hisobga kirmaydi.
+                    $rg = $studentGroup[$r->student_hemis_id] ?? null;
+                    $rStart = ($rg !== null ? ($yearStartByGroup[(string) $rg] ?? null) : null)
+                        ?? $yearStartFallback;
+                    if ($rStart && $r->lesson_date
+                        && substr((string) $r->lesson_date, 0, 10) < substr((string) $rStart, 0, 10)) {
+                        continue;
+                    }
                     $enrolledAttempt2Map[$r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code] = true;
                     $typeCode = (int) $r->training_type_code;
                     if ($typeCode === 103) {

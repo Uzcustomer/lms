@@ -1,11 +1,8 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
-import '../../config/aurora_themes.dart';
-import '../../providers/settings_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
@@ -1311,44 +1308,101 @@ class _JnGradesPageState extends State<_JnGradesPage> {
     return result;
   }
 
+  // ── Clinic-calm palette ──────────────────────────────
+  static const _calmInk = Color(0xFF0F172A);
+  static const _calmMuted = Color(0xFF64748B);
+  static const _calmFaint = Color(0xFF94A3B8);
+  static const _calmLine = Color(0xFFE2E8F0);
+
+  Color get _ink => Theme.of(context).brightness == Brightness.dark
+      ? Colors.white
+      : _calmInk;
+  Color get _muted => Theme.of(context).brightness == Brightness.dark
+      ? AppTheme.darkTextSecondary
+      : _calmMuted;
+  Color get _surface => Theme.of(context).brightness == Brightness.dark
+      ? AppTheme.darkCard
+      : Colors.white;
+  Color get _divider => Theme.of(context).brightness == Brightness.dark
+      ? Colors.white.withOpacity(0.08)
+      : _calmLine;
+
+  Widget _calmCard({required Widget child}) {
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: _surface,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: _divider, width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.14),
+            blurRadius: 5,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final secondaryText = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final aurora = context.watch<SettingsProvider>().auroraTheme;
     final statusBarH = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      backgroundColor: auroraBase(aurora, isDark),
+      backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
       body: Column(
         children: [
           Container(
-            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
-            height: statusBarH + 64,
+            padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
             decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-              ),
+              color: _surface,
+              border: Border(bottom: BorderSide(color: _divider, width: 1)),
             ),
             child: Row(
               children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                Expanded(
-                  child: Text(
-                    widget.subjectName,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.06)
+                        : const Color(0xFFF1F5F9),
+                    borderRadius: BorderRadius.circular(11),
+                  ),
+                  child: IconButton(
+                    padding: EdgeInsets.zero,
+                    icon: Icon(Icons.arrow_back_rounded, color: _ink, size: 20),
+                    onPressed: () => Navigator.pop(context),
                   ),
                 ),
-                const SizedBox(width: 48),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        widget.fullLabel.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          letterSpacing: 0.5,
+                          color: _muted,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.subjectName,
+                        style: TextStyle(
+                            fontSize: 15, fontWeight: FontWeight.w700, color: _ink),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           ),
@@ -1360,7 +1414,7 @@ class _JnGradesPageState extends State<_JnGradesPage> {
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Text(_error!, style: TextStyle(color: secondaryText)),
+                            Text(_error!, style: TextStyle(color: _muted)),
                             const SizedBox(height: 16),
                             ElevatedButton(
                               onPressed: _loadGrades,
@@ -1374,66 +1428,20 @@ class _JnGradesPageState extends State<_JnGradesPage> {
                             child: Column(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
-                                Icon(Icons.school_outlined, size: 48, color: secondaryText),
+                                Icon(Icons.school_outlined, size: 48, color: _muted),
                                 const SizedBox(height: 12),
-                                Text('Ma\'lumot topilmadi', style: TextStyle(color: secondaryText)),
+                                Text('Ma\'lumot topilmadi', style: TextStyle(color: _muted)),
                               ],
                             ),
                           )
-                        : _buildVerticalTable(isDark, textColor, secondaryText),
+                        : _buildVerticalTable(),
           ),
         ],
       ),
     );
   }
 
-  Widget _glassCard({required Widget child, required bool isDark, Color hueColor = const Color(0xFF1565C0)}) {
-    final surface = isDark ? Colors.white.withOpacity(0.10) : Colors.white.withOpacity(0.7);
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(20),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          decoration: BoxDecoration(
-            color: surface,
-            borderRadius: BorderRadius.circular(20),
-            boxShadow: [
-              BoxShadow(
-                color: isDark ? Colors.black.withOpacity(0.3) : const Color(0xFF1A1340).withOpacity(0.06),
-                blurRadius: 24,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Stack(
-            children: [
-              Positioned(
-                top: -50,
-                right: -50,
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
-                  child: Container(
-                    width: 140,
-                    height: 140,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: RadialGradient(
-                        colors: [hueColor.withOpacity(isDark ? 0.4 : 0.32), hueColor.withOpacity(0)],
-                        stops: const [0.0, 0.7],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-              child,
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildVerticalTable(bool isDark, Color textColor, Color secondaryText) {
+  Widget _buildVerticalTable() {
     final hasAmaliy = _amaliyByDate.isNotEmpty;
     final hasMaruza = _maruzaByDate.isNotEmpty;
 
@@ -1450,7 +1458,7 @@ class _JnGradesPageState extends State<_JnGradesPage> {
       onRefresh: _loadGrades,
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 24),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -1458,37 +1466,28 @@ class _JnGradesPageState extends State<_JnGradesPage> {
               _buildSectionCard(
                 title: 'Amaliy mashg\'ulotlar',
                 icon: Icons.assignment_turned_in_rounded,
-                hueColor: const Color(0xFF43A047),
+                hueColor: const Color(0xFF15803D),
                 gradesByDate: _amaliyByDate,
                 dates: amaliyDates,
-                isDark: isDark,
-                textColor: textColor,
-                secondaryText: secondaryText,
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 12),
             ],
             if (hasMaruza) ...[
               _buildSectionCard(
                 title: 'Ma\'ruzalar',
                 icon: Icons.menu_book_rounded,
-                hueColor: const Color(0xFF1565C0),
+                hueColor: const Color(0xFF1D4ED8),
                 gradesByDate: _maruzaByDate,
                 dates: maruzaDates,
-                isDark: isDark,
-                textColor: textColor,
-                secondaryText: secondaryText,
               ),
             ],
             if (!hasAmaliy && !hasMaruza)
               _buildSectionCard(
                 title: 'Baholar',
                 icon: Icons.school_outlined,
-                hueColor: const Color(0xFF7C4DFF),
+                hueColor: const Color(0xFF6D28D9),
                 gradesByDate: const {},
                 dates: _allDates,
-                isDark: isDark,
-                textColor: textColor,
-                secondaryText: secondaryText,
               ),
           ],
         ),
@@ -1502,24 +1501,20 @@ class _JnGradesPageState extends State<_JnGradesPage> {
     required Color hueColor,
     required Map<String, dynamic> gradesByDate,
     required List<String> dates,
-    required bool isDark,
-    required Color textColor,
-    required Color secondaryText,
   }) {
-    return _glassCard(
-      isDark: isDark,
-      hueColor: hueColor,
+    return _calmCard(
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(14, 14, 14, 4),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
                 Container(
-                  width: 36, height: 36,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
-                    color: hueColor.withOpacity(0.15),
+                    color: hueColor.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(icon, color: hueColor, size: 20),
@@ -1528,20 +1523,28 @@ class _JnGradesPageState extends State<_JnGradesPage> {
                 Expanded(
                   child: Text(
                     title,
-                    style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: textColor),
+                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _ink),
                   ),
                 ),
-                Text(
-                  '${dates.length}',
-                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: secondaryText),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: hueColor.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(7),
+                  ),
+                  child: Text(
+                    '${dates.length}',
+                    style: TextStyle(
+                        fontSize: 11, fontWeight: FontWeight.w800, color: hueColor),
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 6),
             if (dates.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 12),
-                child: Text('Ma\'lumot yo\'q', style: TextStyle(fontSize: 13, color: secondaryText)),
+                child: Text('Ma\'lumot yo\'q', style: TextStyle(fontSize: 13, color: _muted)),
               )
             else
               ...dates.asMap().entries.map((e) {
@@ -1549,9 +1552,6 @@ class _JnGradesPageState extends State<_JnGradesPage> {
                 return _buildGradeRow(
                   dateKey: e.value,
                   value: gradesByDate[e.value],
-                  isDark: isDark,
-                  textColor: textColor,
-                  secondaryText: secondaryText,
                   showDivider: !isLast,
                 );
               }),
@@ -1564,70 +1564,56 @@ class _JnGradesPageState extends State<_JnGradesPage> {
   Widget _buildGradeRow({
     required String dateKey,
     required dynamic value,
-    required bool isDark,
-    required Color textColor,
-    required Color secondaryText,
     required bool showDivider,
   }) {
     String text;
     Color valueColor;
     Color chipBg;
 
-    if (value == null) {
-      text = '—';
-      valueColor = secondaryText;
-      chipBg = isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04);
-    } else if (value == 'NB') {
+    if (value == 'NB') {
       text = 'NB';
       valueColor = Colors.white;
-      chipBg = AppTheme.errorColor;
-    } else if (value is int) {
+      chipBg = const Color(0xFFBE123C);
+    } else if (value is int && value >= 70) {
       text = value.toString();
-      if (value >= 70) {
-        valueColor = Colors.white;
-        chipBg = const Color(0xFF43A047);
-      } else if (value > 0) {
-        valueColor = Colors.white;
-        chipBg = const Color(0xFFFF9800);
-      } else {
-        text = '—';
-        valueColor = secondaryText;
-        chipBg = isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04);
-      }
+      valueColor = Colors.white;
+      chipBg = const Color(0xFF15803D);
+    } else if (value is int && value > 0) {
+      text = value.toString();
+      valueColor = Colors.white;
+      chipBg = const Color(0xFFB45309);
     } else {
       text = '—';
-      valueColor = secondaryText;
-      chipBg = isDark ? Colors.white.withOpacity(0.04) : Colors.black.withOpacity(0.04);
+      valueColor = _calmFaint;
+      chipBg = _divider;
     }
-
-    final divider = isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.06);
 
     return Container(
       decoration: BoxDecoration(
-        border: showDivider ? Border(bottom: BorderSide(color: divider)) : null,
+        border: showDivider ? Border(bottom: BorderSide(color: _divider)) : null,
       ),
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.symmetric(vertical: 11),
       child: Row(
         children: [
-          Icon(Icons.event_outlined, size: 16, color: secondaryText),
+          Icon(Icons.event_outlined, size: 16, color: _calmFaint),
           const SizedBox(width: 10),
           Expanded(
             child: Text(
               _formatDateLong(dateKey),
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: textColor),
+              style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w600, color: _ink),
             ),
           ),
           Container(
-            constraints: const BoxConstraints(minWidth: 48),
+            constraints: const BoxConstraints(minWidth: 46),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             alignment: Alignment.center,
             decoration: BoxDecoration(
               color: chipBg,
-              borderRadius: BorderRadius.circular(10),
+              borderRadius: BorderRadius.circular(9),
             ),
             child: Text(
               text,
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: valueColor),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w900, color: valueColor),
             ),
           ),
         ],

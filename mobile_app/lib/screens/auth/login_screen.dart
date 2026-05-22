@@ -23,11 +23,9 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _remember = true;
 
   static const _ink = Color(0xFF0F1B3D);
+  static const _accent = Color(0xFF0D9488); // teal
+  static const _accentDeep = Color(0xFF1E3A8A); // navy
 
-  Color get _accent =>
-      _role == _Role.student ? const Color(0xFF1E3A8A) : const Color(0xFF0F766E);
-  Color get _accentSoft =>
-      _role == _Role.student ? const Color(0xFF2950C8) : const Color(0xFF14B8A6);
   bool get _isStudent => _role == _Role.student;
 
   @override
@@ -96,8 +94,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.of(context).padding.top;
     final safeBottom = MediaQuery.of(context).padding.bottom;
-    final screenH = MediaQuery.of(context).size.height;
-    final heroH = screenH * 0.36;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
@@ -105,14 +101,9 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Hero(
-              accent: _accent,
-              accentSoft: _accentSoft,
-              topPadding: safeTop,
-              height: heroH,
-            ),
+            _Hero(topPadding: safeTop),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+              padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
               child: Form(
                 key: _formKey,
                 child: Column(
@@ -123,23 +114,21 @@ class _LoginScreenState extends State<LoginScreen> {
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontSize: 24,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         letterSpacing: -0.6,
                         color: _ink,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      _isStudent
-                          ? 'Talaba portaliga kirish'
-                          : 'Xodimlar portaliga kirish',
+                      'Hisobingizga kirib davom eting',
                       textAlign: TextAlign.center,
                       style: TextStyle(
-                          fontSize: 13, color: _ink.withOpacity(0.6)),
+                          fontSize: 13, color: _ink.withOpacity(0.55)),
                     ),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 18),
                     _buildRoleTabs(),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     _buildIdField(),
                     const SizedBox(height: 10),
                     _buildPasswordField(),
@@ -176,10 +165,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                     ),
                     _buildSubmitButton(),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     _buildOrDivider(),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     _buildFaceIdButton(),
+                    const SizedBox(height: 18),
+                    _buildFooter(),
                     SizedBox(height: 16 + safeBottom),
                   ],
                 ),
@@ -201,18 +192,16 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       child: Row(
         children: [
-          _tabButton('Talaba', _Role.student),
+          _tabButton('Talaba', Icons.school_outlined, _Role.student),
           const SizedBox(width: 4),
-          _tabButton('Xodim', _Role.staff),
+          _tabButton('Xodim', Icons.badge_outlined, _Role.staff),
         ],
       ),
     );
   }
 
-  Widget _tabButton(String label, _Role r) {
+  Widget _tabButton(String label, IconData icon, _Role r) {
     final on = _role == r;
-    final color =
-        r == _Role.student ? const Color(0xFF1E3A8A) : const Color(0xFF0F766E);
     return Expanded(
       child: GestureDetector(
         onTap: () => _onRoleChanged(r),
@@ -233,13 +222,21 @@ class _LoginScreenState extends State<LoginScreen> {
                   ]
                 : null,
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: on ? color : _ink.withOpacity(0.55),
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon,
+                  size: 16, color: on ? _accent : _ink.withOpacity(0.5)),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: on ? _accent : _ink.withOpacity(0.55),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -248,53 +245,52 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildIdField() {
     return _FieldShell(
-      label: 'LOGIN',
+      icon: Icons.person_outline_rounded,
+      label: 'LOGIN · ID RAQAM',
+      trailing: _idCtrl.text.trim().isNotEmpty
+          ? Container(
+              width: 20,
+              height: 20,
+              decoration: const BoxDecoration(
+                color: _accent,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check, size: 13, color: Colors.white),
+            )
+          : null,
       child: TextFormField(
         controller: _idCtrl,
         keyboardType: TextInputType.visiblePassword,
         autocorrect: false,
         enableSuggestions: false,
         cursorColor: _accent,
+        onChanged: (_) => setState(() {}),
         style: const TextStyle(
           fontSize: 15,
-          fontWeight: FontWeight.w600,
+          fontWeight: FontWeight.w700,
           color: _ink,
         ),
         validator: (v) {
           if (v == null || v.trim().isEmpty) return 'Login kiriting';
           return null;
         },
-        decoration: const InputDecoration(
-          isDense: true,
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: EdgeInsets.zero,
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          errorBorder: InputBorder.none,
-          focusedErrorBorder: InputBorder.none,
-          errorStyle: TextStyle(
-            fontSize: 11,
-            color: Color(0xFFB91C1C),
-            height: 1.2,
-          ),
-        ),
+        decoration: _inputDecoration,
       ),
     );
   }
 
   Widget _buildPasswordField() {
     return _FieldShell(
-      label: 'PASSWORD',
-      trailing: GestureDetector(
+      icon: Icons.lock_outline_rounded,
+      label: 'PAROL',
+      labelTrailing: GestureDetector(
         onTap: () => ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(
                 "Parolni tiklash uchun universitet IT-bo'limiga murojaat qiling."),
           ),
         ),
-        child: Text(
+        child: const Text(
           'Unutdingizmi?',
           style: TextStyle(
             fontSize: 11,
@@ -303,89 +299,94 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextFormField(
-              controller: _pwCtrl,
-              obscureText: !_showPw,
-              autocorrect: false,
-              enableSuggestions: false,
-              cursorColor: _accent,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: _ink,
-              ),
-              validator: (v) {
-                if (v == null || v.isEmpty) return 'Parol kiriting';
-                return null;
-              },
-              decoration: const InputDecoration(
-                isDense: true,
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: EdgeInsets.zero,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                errorBorder: InputBorder.none,
-                focusedErrorBorder: InputBorder.none,
-                errorStyle: TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFFB91C1C),
-                  height: 1.2,
-                ),
-              ),
-            ),
-          ),
-          GestureDetector(
-            onTap: () => setState(() => _showPw = !_showPw),
-            child: Icon(
-              _showPw
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              size: 18,
-              color: _ink.withOpacity(0.55),
-            ),
-          ),
-        ],
+      trailing: GestureDetector(
+        onTap: () => setState(() => _showPw = !_showPw),
+        child: Icon(
+          _showPw
+              ? Icons.visibility_off_outlined
+              : Icons.visibility_outlined,
+          size: 19,
+          color: _ink.withOpacity(0.5),
+        ),
+      ),
+      child: TextFormField(
+        controller: _pwCtrl,
+        obscureText: !_showPw,
+        autocorrect: false,
+        enableSuggestions: false,
+        cursorColor: _accent,
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w700,
+          color: _ink,
+        ),
+        validator: (v) {
+          if (v == null || v.isEmpty) return 'Parol kiriting';
+          return null;
+        },
+        decoration: _inputDecoration,
       ),
     );
   }
 
+  static const _inputDecoration = InputDecoration(
+    isDense: true,
+    filled: true,
+    fillColor: Colors.white,
+    contentPadding: EdgeInsets.zero,
+    border: InputBorder.none,
+    enabledBorder: InputBorder.none,
+    focusedBorder: InputBorder.none,
+    errorBorder: InputBorder.none,
+    focusedErrorBorder: InputBorder.none,
+    errorStyle: TextStyle(
+      fontSize: 11,
+      color: Color(0xFFB91C1C),
+      height: 1.2,
+    ),
+  );
+
   Widget _buildRememberCheckbox() {
-    return GestureDetector(
-      onTap: () => setState(() => _remember = !_remember),
-      behavior: HitTestBehavior.opaque,
-      child: Row(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            width: 18,
-            height: 18,
-            decoration: BoxDecoration(
-              color: _remember ? _accent : Colors.white,
-              borderRadius: BorderRadius.circular(5),
-              border: _remember
-                  ? null
-                  : Border.all(color: _ink.withOpacity(0.25), width: 1.5),
-            ),
-            child: _remember
-                ? const Icon(Icons.check, size: 12, color: Colors.white)
-                : null,
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _remember = !_remember),
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: _remember ? _accent : Colors.white,
+                  borderRadius: BorderRadius.circular(5),
+                  border: _remember
+                      ? null
+                      : Border.all(color: _ink.withOpacity(0.25), width: 1.5),
+                ),
+                child: _remember
+                    ? const Icon(Icons.check, size: 12, color: Colors.white)
+                    : null,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Meni eslab qol',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: _ink,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          const Text(
-            'Meni eslab qol',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: _ink,
-            ),
-          ),
-        ],
-      ),
+        ),
+        const Spacer(),
+        Text(
+          '30 kun davomida',
+          style: TextStyle(fontSize: 11, color: _ink.withOpacity(0.45)),
+        ),
+      ],
     );
   }
 
@@ -393,47 +394,59 @@ class _LoginScreenState extends State<LoginScreen> {
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
         final loading = auth.state == AuthState.loading;
-        return InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: loading ? null : _submit,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: _accent.withOpacity(loading ? 0.7 : 1),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: _accent.withOpacity(0.33),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
+        return Opacity(
+          opacity: loading ? 0.75 : 1,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: loading ? null : _submit,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 15),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [_accent, _accentDeep],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
                 ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (loading) ...[
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      valueColor: AlwaysStoppedAnimation(Colors.white),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: _accent.withOpacity(0.33),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  if (loading) ...[
+                    const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.4,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  Text(
+                    loading ? 'Tekshirilmoqda…' : 'Tizimga kirish',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.3,
                     ),
                   ),
-                  const SizedBox(width: 8),
+                  if (!loading) ...[
+                    const SizedBox(width: 6),
+                    const Icon(Icons.arrow_forward_rounded,
+                        color: Colors.white, size: 17),
+                  ],
                 ],
-                Text(
-                  loading ? 'Tekshirilmoqda…' : 'Tizimga kirish',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         );
@@ -450,9 +463,9 @@ class _LoginScreenState extends State<LoginScreen> {
           'YOKI',
           style: TextStyle(
             fontSize: 10.5,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             letterSpacing: 1,
-            color: _ink.withOpacity(0.45),
+            color: _ink.withOpacity(0.4),
           ),
         ),
         const SizedBox(width: 10),
@@ -466,36 +479,32 @@ class _LoginScreenState extends State<LoginScreen> {
       borderRadius: BorderRadius.circular(14),
       onTap: _faceIdLogin,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 14),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: Border.all(color: _accent, width: 1.5),
+          border: Border.all(color: _ink.withOpacity(0.12), width: 1.4),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 24,
-              height: 24,
+              width: 26,
+              height: 26,
               decoration: BoxDecoration(
-                color: _accent,
-                borderRadius: BorderRadius.circular(6),
+                color: _accent.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
               ),
               alignment: Alignment.center,
-              child: const Icon(
-                Icons.face_outlined,
-                color: Colors.white,
-                size: 16,
-              ),
+              child: const Icon(Icons.face_outlined, color: _accent, size: 17),
             ),
             const SizedBox(width: 10),
-            Text(
+            const Text(
               'Face ID orqali kirish',
               style: TextStyle(
-                color: _accent,
+                color: _ink,
                 fontSize: 13.5,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
@@ -503,35 +512,70 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+
+  Widget _buildFooter() {
+    return Column(
+      children: [
+        Text(
+          "v2.4.1 · 256-bit SSL · Maxfiy ma'lumotlar himoyalangan",
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 10,
+            fontWeight: FontWeight.w500,
+            color: _ink.withOpacity(0.35),
+          ),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _footerLink('Yordam'),
+            _footerDot(),
+            _footerLink('Foydalanish shartlari'),
+            _footerDot(),
+            _footerLink('Maxfiylik'),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _footerLink(String text) => Text(
+        text,
+        style: const TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          color: _accent,
+        ),
+      );
+
+  Widget _footerDot() => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: Text('·',
+            style: TextStyle(fontSize: 11, color: _ink.withOpacity(0.35))),
+      );
 }
 
+// ─────────────────────────────────────────────────────
+// Hero header with an animated heart + EKG logo
+// ─────────────────────────────────────────────────────
 class _Hero extends StatelessWidget {
-  final Color accent;
-  final Color accentSoft;
   final double topPadding;
-  final double height;
-  const _Hero({
-    required this.accent,
-    required this.accentSoft,
-    required this.topPadding,
-    required this.height,
-  });
+  const _Hero({required this.topPadding});
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: const BorderRadius.only(
-        bottomLeft: Radius.circular(36),
-        bottomRight: Radius.circular(36),
+        bottomLeft: Radius.circular(34),
+        bottomRight: Radius.circular(34),
       ),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        height: height,
-        decoration: BoxDecoration(
+      child: Container(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [accent, accentSoft],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF115E59), Color(0xFF0D9488)],
           ),
         ),
         child: Stack(
@@ -541,57 +585,75 @@ class _Hero extends StatelessWidget {
               right: 0,
               bottom: 0,
               child: CustomPaint(
-                size: Size(MediaQuery.of(context).size.width, height * 0.82),
-                painter: _BuildingPainter(
-                  color: Colors.white.withOpacity(0.10),
-                ),
+                size: Size(MediaQuery.of(context).size.width, 190),
+                painter: _BuildingPainter(color: Colors.white.withOpacity(0.08)),
               ),
             ),
-            Positioned.fill(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(24, topPadding + 24, 24, 28),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 12),
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.16),
-                        border: Border.all(
-                            color: Colors.white.withOpacity(0.45), width: 1.5),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: const Icon(Icons.school_rounded,
-                          color: Colors.white, size: 36),
+            Padding(
+              padding: EdgeInsets.fromLTRB(24, topPadding + 26, 24, 30),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const _HeartLogo(),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'TASHMEDUNI · LMS',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 14,
+                      letterSpacing: 2.4,
+                      fontWeight: FontWeight.w800,
                     ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'TASHMEDUNITF - LMS',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        letterSpacing: 2.5,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Toshkent Davlat Tibbiyot Universiteti',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Toshkent Davlat Tibbiyot Universiteti\nTermiz filiali',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.75),
-                        fontSize: 11.5,
-                        letterSpacing: 1,
-                        fontWeight: FontWeight.w500,
-                        height: 1.4,
-                      ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Termiz filiali · 1991',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.16),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(color: Colors.white.withOpacity(0.25)),
+                    ),
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.favorite_rounded,
+                            size: 11, color: Color(0xFF7DF0C8)),
+                        SizedBox(width: 6),
+                        Text(
+                          'TIZIM ONLAYN',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            letterSpacing: 1.2,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -599,6 +661,179 @@ class _Hero extends StatelessWidget {
       ),
     );
   }
+}
+
+/// White rounded card holding a beating heart over a running EKG line.
+class _HeartLogo extends StatefulWidget {
+  const _HeartLogo();
+
+  @override
+  State<_HeartLogo> createState() => _HeartLogoState();
+}
+
+class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
+  late final AnimationController _beat;
+  late final AnimationController _sweep;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _beat = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..repeat();
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 14),
+      TweenSequenceItem(
+          tween: Tween(begin: 1.0, end: 1.20)
+              .chain(CurveTween(curve: Curves.easeOut)),
+          weight: 8),
+      TweenSequenceItem(
+          tween: Tween(begin: 1.20, end: 1.0)
+              .chain(CurveTween(curve: Curves.easeIn)),
+          weight: 10),
+      TweenSequenceItem(
+          tween: Tween(begin: 1.0, end: 1.11)
+              .chain(CurveTween(curve: Curves.easeOut)),
+          weight: 7),
+      TweenSequenceItem(
+          tween: Tween(begin: 1.11, end: 1.0)
+              .chain(CurveTween(curve: Curves.easeIn)),
+          weight: 9),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 52),
+    ]).animate(_beat);
+    _sweep = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _beat.dispose();
+    _sweep.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 92,
+      height: 92,
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.18),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(22),
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            // Running EKG line
+            Positioned.fill(
+              child: AnimatedBuilder(
+                animation: _sweep,
+                builder: (_, __) => CustomPaint(
+                  painter: _EkgPainter(_sweep.value),
+                ),
+              ),
+            ),
+            // Beating heart
+            AnimatedBuilder(
+              animation: _scale,
+              builder: (_, child) =>
+                  Transform.scale(scale: _scale.value, child: child),
+              child: const Icon(
+                Icons.favorite_rounded,
+                color: Color(0xFFE53935),
+                size: 38,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Flat-line EKG with periodic QRS spikes and a bright sweeping pulse.
+class _EkgPainter extends CustomPainter {
+  final double progress;
+  const _EkgPainter(this.progress);
+
+  // One heartbeat — x fraction within a beat, y 0(top)–1(bottom), base 0.5.
+  static const List<Offset> _beat = [
+    Offset(0.00, 0.5), Offset(0.30, 0.5),
+    Offset(0.38, 0.32), Offset(0.45, 0.86),
+    Offset(0.52, 0.12), Offset(0.59, 0.66),
+    Offset(0.66, 0.5), Offset(1.00, 0.5),
+  ];
+  static const int _beats = 2;
+  static const Color _red = Color(0xFFE53935);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = Path();
+    final beatW = size.width / _beats;
+    var first = true;
+    for (var b = 0; b < _beats; b++) {
+      for (final p in _beat) {
+        final x = (b + p.dx) * beatW;
+        final y = p.dy * size.height;
+        if (first) {
+          path.moveTo(x, y);
+          first = false;
+        } else {
+          path.lineTo(x, y);
+        }
+      }
+    }
+
+    // Faint resting trace.
+    canvas.drawPath(
+      path,
+      Paint()
+        ..color = _red.withOpacity(0.22)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+
+    final metrics = path.computeMetrics().toList();
+    if (metrics.isEmpty) return;
+    final metric = metrics.first;
+    final len = metric.length;
+    final head = progress * len;
+    final tail = (head - len * 0.30).clamp(0.0, len);
+
+    // Bright sweeping pulse.
+    canvas.drawPath(
+      metric.extractPath(tail, head.clamp(0.0, len)),
+      Paint()
+        ..color = _red
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.6
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+
+    final tan = metric.getTangentForOffset(head.clamp(0.0, len));
+    if (tan != null) {
+      canvas.drawCircle(tan.position, 3, Paint()..color = _red);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_EkgPainter old) => old.progress != progress;
 }
 
 class _BuildingPainter extends CustomPainter {
@@ -656,41 +891,63 @@ class _BuildingPainter extends CustomPainter {
 }
 
 class _FieldShell extends StatelessWidget {
+  final IconData icon;
   final String label;
+  final Widget? labelTrailing;
   final Widget child;
   final Widget? trailing;
-  const _FieldShell({required this.label, required this.child, this.trailing});
+  const _FieldShell({
+    required this.icon,
+    required this.label,
+    required this.child,
+    this.labelTrailing,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) {
     const ink = Color(0xFF0F1B3D);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: ink.withOpacity(0.10)),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(13),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: ink.withOpacity(0.5),
-                  letterSpacing: 1,
+          Icon(icon, size: 19, color: ink.withOpacity(0.4)),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        color: ink.withOpacity(0.45),
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    if (labelTrailing != null) ...[
+                      const Spacer(),
+                      labelTrailing!,
+                    ],
+                  ],
                 ),
-              ),
-              if (trailing != null) trailing!,
-            ],
+                const SizedBox(height: 1),
+                child,
+              ],
+            ),
           ),
-          const SizedBox(height: 2),
-          child,
+          if (trailing != null) ...[
+            const SizedBox(width: 10),
+            trailing!,
+          ],
         ],
       ),
     );

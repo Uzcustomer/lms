@@ -591,7 +591,7 @@ class _Hero extends StatelessWidget {
           gradient: LinearGradient(
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
-            colors: [Color(0xFF0B4A47), Color(0xFF0D9488), Color(0xFF19B6A6)],
+            colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
           ),
         ),
         child: Stack(
@@ -602,7 +602,7 @@ class _Hero extends StatelessWidget {
               right: 0,
               bottom: 0,
               child: CustomPaint(
-                size: Size(MediaQuery.of(context).size.width, 300),
+                size: Size(MediaQuery.of(context).size.width, 380),
                 painter: _BuildingPainter(color: Colors.white.withOpacity(0.13)),
               ),
             ),
@@ -616,60 +616,33 @@ class _Hero extends StatelessWidget {
                   const _HeartLogo(),
                   const SizedBox(height: 16),
                   const Text(
-                    'TASHMEDUNI · LMS',
+                    'TASHMEDUNITF · LMS',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.white,
-                      fontSize: 14,
-                      letterSpacing: 2.4,
+                      fontSize: 17,
+                      letterSpacing: 2.2,
                       fontWeight: FontWeight.w800,
                     ),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 7),
                   Text(
                     'Toshkent Davlat Tibbiyot Universiteti',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.9),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
+                      color: Colors.white.withOpacity(0.92),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 3),
                   Text(
-                    'Termiz filiali · 1991',
+                    'Termiz filiali · 2018',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.7),
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 5),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.16),
-                      borderRadius: BorderRadius.circular(999),
-                      border: Border.all(color: Colors.white.withOpacity(0.25)),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.favorite_rounded,
-                            size: 11, color: Color(0xFF7DF0C8)),
-                        SizedBox(width: 6),
-                        Text(
-                          'TIZIM ONLAYN',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            letterSpacing: 1.2,
-                            fontWeight: FontWeight.w800,
-                          ),
-                        ),
-                      ],
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ],

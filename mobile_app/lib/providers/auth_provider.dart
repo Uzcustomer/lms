@@ -312,8 +312,15 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// True after an explicit in-session logout — the login screen uses
+  /// this to avoid auto-prompting biometric right after the user chose
+  /// to sign out.
+  bool _loggedOut = false;
+  bool get loggedOut => _loggedOut;
+
   Future<void> logout() async {
     _state = AuthState.loading;
+    _loggedOut = true;
     notifyListeners();
 
     await _authService.logout();

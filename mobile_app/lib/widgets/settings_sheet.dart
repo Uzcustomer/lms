@@ -238,6 +238,7 @@ class _BiometricTileState extends State<_BiometricTile> {
       }
     } else {
       await _bio.setEnabled(false);
+      await _bio.clearCredentials();
       if (mounted) setState(() => _enabled = false);
     }
     if (mounted) setState(() => _busy = false);

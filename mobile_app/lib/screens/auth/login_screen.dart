@@ -682,7 +682,7 @@ class _Hero extends StatelessWidget {
   }
 }
 
-/// Heart-shaped white logo with a red border and a red EKG impulse.
+/// White heart logo with a realistic, looping ECG sweep.
 class _HeartLogo extends StatefulWidget {
   const _HeartLogo();
 
@@ -690,19 +690,9 @@ class _HeartLogo extends StatefulWidget {
   State<_HeartLogo> createState() => _HeartLogoState();
 }
 
-/// Heart outline that fills a [w]×[h] box (origin at 0,0).
-Path _heartPath(double w, double h) {
-  return Path()
-    ..moveTo(w * 0.50, h * 0.96)
-    ..cubicTo(w * 0.12, h * 0.70, w * 0.02, h * 0.34, w * 0.26, h * 0.17)
-    ..cubicTo(w * 0.41, h * 0.05, w * 0.50, h * 0.14, w * 0.50, h * 0.30)
-    ..cubicTo(w * 0.50, h * 0.14, w * 0.59, h * 0.05, w * 0.74, h * 0.17)
-    ..cubicTo(w * 0.98, h * 0.34, w * 0.88, h * 0.70, w * 0.50, h * 0.96)
-    ..close();
-}
-
 class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
-  static const double _box = 150;
+  static const double _box = 156;
+  static const double _heart = 112;
 
   late final AnimationController _beat;
   late final AnimationController _sweep;
@@ -719,26 +709,26 @@ class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
     _scale = TweenSequence<double>([
       TweenSequenceItem(tween: ConstantTween(1.0), weight: 14),
       TweenSequenceItem(
-          tween: Tween(begin: 1.0, end: 1.22)
+          tween: Tween(begin: 1.0, end: 1.20)
               .chain(CurveTween(curve: Curves.easeOut)),
           weight: 8),
       TweenSequenceItem(
-          tween: Tween(begin: 1.22, end: 1.0)
+          tween: Tween(begin: 1.20, end: 1.0)
               .chain(CurveTween(curve: Curves.easeIn)),
           weight: 10),
       TweenSequenceItem(
-          tween: Tween(begin: 1.0, end: 1.12)
+          tween: Tween(begin: 1.0, end: 1.10)
               .chain(CurveTween(curve: Curves.easeOut)),
           weight: 7),
       TweenSequenceItem(
-          tween: Tween(begin: 1.12, end: 1.0)
+          tween: Tween(begin: 1.10, end: 1.0)
               .chain(CurveTween(curve: Curves.easeIn)),
           weight: 9),
       TweenSequenceItem(tween: ConstantTween(1.0), weight: 52),
     ]).animate(_beat);
     _sweep = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2200),
+      duration: const Duration(milliseconds: 1700),
     )..repeat();
     _wave = AnimationController(
       vsync: this,
@@ -759,140 +749,135 @@ class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
     return SizedBox(
       width: _box,
       height: _box,
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Heart-shaped waves radiating outward.
-          Positioned.fill(
-            child: AnimatedBuilder(
-              animation: _wave,
-              builder: (_, __) => CustomPaint(
-                painter: _WavePainter(_wave.value),
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_scale, _sweep, _wave]),
+        builder: (_, __) {
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              // Expanding heart-shaped waves.
+              for (int i = 0; i < 2; i++)
+                _waveHeart((_wave.value + i / 2) % 1.0),
+              // Beating white heart with the ECG sweep on top.
+              Transform.scale(
+                scale: _scale.value,
+                child: SizedBox(
+                  width: _heart + 10,
+                  height: _heart,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Icon(
+                        Icons.favorite_rounded,
+                        color: Colors.white,
+                        size: _heart,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withOpacity(0.25),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      Positioned.fill(
+                        child: CustomPaint(painter: _EkgPainter(_sweep.value)),
+                      ),
+                    ],
+                  ),
+                ),
               ),
-            ),
-          ),
-          // Beating heart logo.
-          AnimatedBuilder(
-            animation: Listenable.merge([_scale, _sweep]),
-            builder: (_, __) => Transform.scale(
-              scale: _scale.value,
-              child: CustomPaint(
-                size: const Size(108, 100),
-                painter: _HeartLogoPainter(_sweep.value),
-              ),
-            ),
-          ),
-        ],
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _waveHeart(double t) {
+    final opacity = (1 - t) * 0.4;
+    if (opacity <= 0) return const SizedBox.shrink();
+    return Transform.scale(
+      scale: 0.94 + t * 0.55,
+      child: Icon(
+        Icons.favorite_border_rounded,
+        color: Colors.white.withOpacity(opacity),
+        size: _heart,
       ),
     );
   }
 }
 
-/// Heart-shaped waves expanding out from the logo.
-class _WavePainter extends CustomPainter {
+/// Realistic looping ECG monitor sweep — the trace is drawn left-to-right
+/// by a glowing head, bright near the head and fading behind it.
+class _EkgPainter extends CustomPainter {
   final double progress;
-  const _WavePainter(this.progress);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final cx = size.width / 2;
-    final cy = size.height / 2;
-    const count = 2;
-    for (int i = 0; i < count; i++) {
-      final t = (progress + i / count) % 1.0;
-      final opacity = (1 - t) * 0.4;
-      if (opacity <= 0) continue;
-      final scale = 0.66 + t * 0.4;
-      final hw = size.width * scale;
-      final hh = size.height * scale;
-      final heart =
-          _heartPath(hw, hh).shift(Offset(cx - hw / 2, cy - hh / 2));
-      canvas.drawPath(
-        heart,
-        Paint()
-          ..color = Colors.white.withOpacity(opacity)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 2,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(_WavePainter old) => old.progress != progress;
-}
-
-/// White heart with a red border and a single red EKG impulse inside.
-class _HeartLogoPainter extends CustomPainter {
-  final double sweep;
-  const _HeartLogoPainter(this.sweep);
+  const _EkgPainter(this.progress);
 
   static const Color _red = Color(0xFFE53935);
 
+  // Flat baseline with a small P wave then a sharp QRS complex.
+  static const List<Offset> _pts = [
+    Offset(0.02, 0.52), Offset(0.30, 0.52),
+    Offset(0.36, 0.45), Offset(0.41, 0.58),
+    Offset(0.46, 0.14), Offset(0.52, 0.90), Offset(0.57, 0.42),
+    Offset(0.64, 0.52), Offset(0.98, 0.52),
+  ];
+
+  Path _buildPath(Size size) {
+    final path = Path();
+    for (var i = 0; i < _pts.length; i++) {
+      final x = _pts[i].dx * size.width;
+      final y = _pts[i].dy * size.height;
+      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+    }
+    return path;
+  }
+
   @override
   void paint(Canvas canvas, Size size) {
-    const pad = 5.0;
-    final hw = size.width - pad * 2;
-    final hh = size.height - pad * 2;
-    final heart = _heartPath(hw, hh).shift(const Offset(pad, pad));
+    final path = _buildPath(size);
+    final metrics = path.computeMetrics().toList();
+    if (metrics.isEmpty) return;
+    final m = metrics.first;
+    final len = m.length;
+    final head = (progress * len).clamp(0.0, len);
 
-    canvas.drawShadow(heart, Colors.black, 5, false);
-    canvas.drawPath(heart, Paint()..color = Colors.white);
-    canvas.drawPath(
-      heart,
-      Paint()
-        ..color = _red
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3.6
-        ..strokeJoin = StrokeJoin.round,
-    );
-
-    // EKG impulse crossing the middle, clipped inside the heart.
-    canvas.save();
-    canvas.clipPath(heart);
-    final baseY = pad + hh * 0.55;
-    const pts = [
-      Offset(0.00, 0.0), Offset(0.30, 0.0),
-      Offset(0.39, -0.13), Offset(0.46, 0.24),
-      Offset(0.53, -0.36), Offset(0.61, 0.15),
-      Offset(0.70, 0.0), Offset(1.00, 0.0),
-    ];
-    final ekg = Path();
-    for (var i = 0; i < pts.length; i++) {
-      final x = pad + pts[i].dx * hw;
-      final y = baseY + pts[i].dy * hh;
-      i == 0 ? ekg.moveTo(x, y) : ekg.lineTo(x, y);
-    }
-    canvas.drawPath(
-      ekg,
-      Paint()
-        ..color = _red
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 3
-        ..strokeCap = StrokeCap.round
-        ..strokeJoin = StrokeJoin.round,
-    );
-    // Bright running highlight along the impulse.
-    final metrics = ekg.computeMetrics().toList();
-    if (metrics.isNotEmpty) {
-      final m = metrics.first;
-      final len = m.length;
-      final head = sweep * len;
-      final tail = (head - len * 0.26).clamp(0.0, len);
+    // Faint already-drawn trace.
+    if (head > 0) {
       canvas.drawPath(
-        m.extractPath(tail, head.clamp(0.0, len)),
+        m.extractPath(0, head),
         Paint()
-          ..color = const Color(0xFFFF7A7A)
+          ..color = _red.withOpacity(0.26)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 3.6
+          ..strokeWidth = 2.6
           ..strokeCap = StrokeCap.round
           ..strokeJoin = StrokeJoin.round,
       );
     }
-    canvas.restore();
+    // Bright recent segment behind the head.
+    final brightTail = (head - len * 0.32).clamp(0.0, len);
+    if (head > brightTail) {
+      canvas.drawPath(
+        m.extractPath(brightTail, head),
+        Paint()
+          ..color = _red
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.4
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+    // Glowing sweep head.
+    final tan = m.getTangentForOffset(head);
+    if (tan != null) {
+      canvas.drawCircle(
+          tan.position, 7, Paint()..color = _red.withOpacity(0.22));
+      canvas.drawCircle(tan.position, 3.4, Paint()..color = _red);
+    }
   }
 
   @override
-  bool shouldRepaint(_HeartLogoPainter old) => old.sweep != sweep;
+  bool shouldRepaint(_EkgPainter old) => old.progress != progress;
 }
 
 /// Classical medical-university facade — stepped base, columns, an

@@ -560,28 +560,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   // ── Weekly activity ──────────────────────────────────
   Widget _buildWeeklyActivity(Map<String, dynamic>? data) {
-    final recent = (data?['recent_grades'] as List?) ?? [];
-    // Unique calendar days (epoch-day numbers) that have a recorded grade.
-    final activeDayNums = <int>{};
-    for (final g in recent) {
-      if (g is! Map) continue;
-      final d = DateTime.tryParse(g['lesson_date']?.toString() ?? '') ??
-          DateTime.tryParse(g['created_at']?.toString() ?? '');
-      if (d == null) continue;
-      activeDayNums.add(DateTime(d.year, d.month, d.day).millisecondsSinceEpoch ~/
-          Duration.millisecondsPerDay);
-    }
-
-    // Consecutive-day streak ending at the most recent active day.
-    int streak = 0;
-    if (activeDayNums.isNotEmpty) {
-      var probe = activeDayNums.reduce((a, b) => a > b ? a : b);
-      while (activeDayNums.contains(probe)) {
-        streak++;
-        probe--;
-      }
-    }
-    final isGood = streak >= 3;
+    // Attendance streak — consecutive days since the last absence (API).
+    final streakRaw = data?['attendance_streak_days'];
+    final streak = streakRaw is num ? streakRaw.toInt() : 0;
+    final isGood = streak >= 7;
     final accent = isGood ? _calmTeal : AppTheme.warningColor;
 
     return _calmCard(

@@ -145,6 +145,20 @@ class StudentApiController extends Controller
             ? $semesterGpas[$semesterGpas->keys()[$currentGpaIndex - 1]]
             : null;
 
+        // Attendance streak — consecutive days since the student's last absence.
+        $lastAbsenceDate = Attendance::where('student_id', $student->id)
+            ->where('absent_on', '>', 0)
+            ->max('lesson_date');
+        $firstLessonDate = Attendance::where('student_id', $student->id)
+            ->min('lesson_date');
+        $attendanceStreak = null;
+        $today = Carbon::now()->startOfDay();
+        if ($lastAbsenceDate) {
+            $attendanceStreak = Carbon::parse($lastAbsenceDate)->startOfDay()->diffInDays($today);
+        } elseif ($firstLessonDate) {
+            $attendanceStreak = Carbon::parse($firstLessonDate)->startOfDay()->diffInDays($today);
+        }
+
         return response()->json([
             'data' => [
                 'student_name' => $student->full_name,
@@ -154,6 +168,7 @@ class StudentApiController extends Controller
                 'prev_semester_avg' => $prevSemesterAvg ? round((float) $prevSemesterAvg, 2) : null,
                 'current_semester_gpa' => $currentSemesterGpa ? round((float) $currentSemesterGpa, 2) : null,
                 'prev_semester_gpa' => $prevSemesterGpa ? round((float) $prevSemesterGpa, 2) : null,
+                'attendance_streak_days' => $attendanceStreak,
                 'debt_subjects' => $debtSubjectsCount,
                 'debt_by_semester' => $debtBySemester,
                 'total_absences' => $totalAbsent,

@@ -1948,7 +1948,10 @@ class QuizResultController extends Controller
 
         $successCount = 0;
         $errors = [];
+        $warnings = [];
         $duplicateTracker = [];
+        // Variant (a/b/c) fanlar uchun jurnal roster keshi: "subjectId|semester" => [hemis_id => true]
+        $variantRosterCache = [];
 
         // 4+ qarz (kursdan qoldirilgan) talabalarni aniqlab olamiz — bunday
         // talabalarga OSKI/Test bahosi yuklanmaydi (YN kunini belgilash
@@ -2074,6 +2077,38 @@ class QuizResultController extends Controller
             $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
                 ->where('code', $semesterCode)
                 ->first();
+
+            // Variant fan tekshiruvi: fan nomi (a)/(b)/(c) bilan tugasa — bu
+            // subgrouplarga bo'lingan fan. Moodle faqat fan nomini yuboradi,
+            // shuning uchun talaba aynan tanlangan variantda (jurnal bo'yicha)
+            // bor-yo'qligini tekshiramiz. Jurnal roster JournalController bilan
+            // bir xil: student_subjects YOKI student_grades (subject_id + semestr).
+            if (preg_match('/\(([a-zA-Zа-яА-Я])\)\s*$/u', (string) $subject->subject_name)) {
+                $rosterKey = $subject->subject_id . '|' . $semesterCode;
+                if (!isset($variantRosterCache[$rosterKey])) {
+                    $roster = [];
+                    foreach (DB::table('student_subjects')
+                        ->where('subject_id', $subject->subject_id)
+                        ->where('semester_id', $semesterCode)
+                        ->pluck('student_hemis_id') as $hid) {
+                        $roster[(string) $hid] = true;
+                    }
+                    foreach (DB::table('student_grades')
+                        ->where('subject_id', $subject->subject_id)
+                        ->where('semester_code', $semesterCode)
+                        ->whereNull('deleted_at')
+                        ->distinct()
+                        ->pluck('student_hemis_id') as $hid) {
+                        $roster[(string) $hid] = true;
+                    }
+                    $variantRosterCache[$rosterKey] = $roster;
+                }
+                if (!isset($variantRosterCache[$rosterKey][(string) $student->hemis_id])) {
+                    $rowInfo['error'] = "Talaba jurnalda \"{$subject->subject_name}\" variantida yo'q — fanning boshqa shaklida (variant) bo'lishi mumkin";
+                    $warnings[] = $rowInfo;
+                    continue;
+                }
+            }
 
             $existing = StudentGrade::where('quiz_result_id', $result->id)->first();
             if ($existing) {
@@ -2213,6 +2248,8 @@ class QuizResultController extends Controller
             'success_count' => $successCount,
             'error_count' => count($errors),
             'errors' => $errors,
+            'warning_count' => count($warnings),
+            'warnings' => $warnings,
         ]);
     }
 

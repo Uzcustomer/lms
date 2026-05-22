@@ -54,10 +54,14 @@ class JournalGradeService
         $studentHids = array_map('strval', array_keys($studentGroup));
 
         // Joriy o'quv yili — tiklangan/transfer talabaning eski o'qishidan
-        // qolgan (boshqa education_year) baholarini chiqarib tashlash uchun.
+        // qolgan baholarini chiqarib tashlash uchun. Kunlik baholar (lesson_date
+        // bor) SANA bo'yicha ajratiladi (education_year_code ishonchsiz);
+        // manual MT (lesson_date NULL) education_year_code bo'yicha.
         $currentYearCode = null;
+        $currentYearStart = null;
         try {
             $currentYearCode = \App\Models\Semester::where('current', true)->max('education_year');
+            if ($currentYearCode) $currentYearStart = ((int) $currentYearCode) . '-08-01';
         } catch (\Throwable $e) {}
 
         // Talabalarni guruh bo'yicha indekslaymiz
@@ -113,10 +117,7 @@ class JournalGradeService
                 ->whereIn('subject_id', $subjectIds)
                 ->whereIn('semester_code', $semCodes)
                 ->whereNotIn('training_type_code', [100, 101, 102, 103])
-                ->when($currentYearCode, fn ($q) => $q->where(function ($qq) use ($currentYearCode) {
-                    $qq->whereNull('education_year_code')
-                       ->orWhere('education_year_code', $currentYearCode);
-                }))
+                ->when($currentYearStart, fn ($q) => $q->where('lesson_date', '>=', $currentYearStart))
                 ->whereNotNull('lesson_date')
                 ->select('student_hemis_id', 'subject_id', 'semester_code',
                     'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')

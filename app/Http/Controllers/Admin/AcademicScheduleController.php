@@ -1268,13 +1268,14 @@ class AcademicScheduleController extends Controller
 
         if (empty($triples)) return $result;
 
-        // Joriy o'quv yili — tiklangan/transfer talabaning eski o'qishidan
-        // qolgan baholarini (boshqa education_year) chiqarib tashlash uchun.
-        // student_grades.education_year_code joriy yilga teng yoki NULL bo'lsa
-        // hisobga olinadi; eski yil kodli yozuvlar e'tiborga olinmaydi.
-        $currentYearCode = null;
+        // Joriy o'quv yili boshlanish sanasi — tiklangan/transfer talabaning
+        // eski o'qishidan qolgan baholarini (eski sanalardagi) chiqarib tashlash
+        // uchun. education_year_code ishonchsiz (826k yozuvda NULL, sanalari
+        // 2024-2026 oraliqda) — shuning uchun lesson_date bo'yicha ajratamiz.
+        $currentYearStart = null;
         try {
-            $currentYearCode = \App\Models\Semester::where('current', true)->max('education_year');
+            $yc = \App\Models\Semester::where('current', true)->max('education_year');
+            if ($yc) $currentYearStart = ((int) $yc) . '-08-01';
         } catch (\Throwable $e) {}
 
         $allGroupHids = array_unique(array_column($triples, 0));
@@ -1465,10 +1466,7 @@ class AcademicScheduleController extends Controller
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
                 ->whereIn('training_type_code', [101, 102, 103])
-                ->when($currentYearCode, fn($q) => $q->where(function ($qq) use ($currentYearCode) {
-                    $qq->whereNull('education_year_code')
-                       ->orWhere('education_year_code', $currentYearCode);
-                }))
+                ->when($currentYearStart, fn($q) => $q->where('lesson_date', '>=', $currentYearStart))
                 ->when($hasAttemptCol, fn($q) => $q->where(fn($qq) => $qq->where('attempt', 1)->orWhereNull('attempt')))
                 ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code',
                     'grade', 'retake_grade', 'quiz_result_id', 'reason', 'lesson_date', 'id')
@@ -1540,10 +1538,7 @@ class AcademicScheduleController extends Controller
                     ->whereIn('subject_id', $allSubjectIds)
                     ->whereIn('semester_code', $allSemCodes)
                     ->whereIn('training_type_code', [101, 102, 103])
-                    ->when($currentYearCode, fn($q) => $q->where(function ($qq) use ($currentYearCode) {
-                        $qq->whereNull('education_year_code')
-                           ->orWhere('education_year_code', $currentYearCode);
-                    }))
+                    ->when($currentYearStart, fn($q) => $q->where('lesson_date', '>=', $currentYearStart))
                     ->where('attempt', 2)
                     ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade', 'quiz_result_id', 'lesson_date')
                     ->get();

@@ -12,6 +12,7 @@ import '../../utils/page_transitions.dart';
 import '../../widgets/scale_tap.dart';
 import '../../widgets/settings_sheet.dart';
 import '../../widgets/notification_bell.dart';
+import '../../widgets/clinic_header.dart';
 import 'student_home_screen.dart';
 
 class StudentGradesScreen extends StatefulWidget {

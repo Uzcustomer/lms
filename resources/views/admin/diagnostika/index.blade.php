@@ -858,10 +858,11 @@
 
         // ========== JADVAL RENDERI ==========
         function renderTable(data) {
-            // Yuklanmagan (yuklasa bo'ladi / mavzu) qatorlar doim tepada joylashsin
+            // Jurnalga yuklanganlar pastga tushadi, yuklanmaganlarning HAMMASI
+            // (yuklasa bo'ladi, baho bor, mavzu, xato va h.k.) tepada joylashadi
             data.sort(function(a, b) {
-                var ua = (a.xulosa_code === 'ok' || a.xulosa_code === 'mavzu') ? 0 : 1;
-                var ub = (b.xulosa_code === 'ok' || b.xulosa_code === 'mavzu') ? 0 : 1;
+                var ua = (a.xulosa_code === 'uploaded' || a.xulosa_code === 'mavzu_uploaded') ? 1 : 0;
+                var ub = (b.xulosa_code === 'uploaded' || b.xulosa_code === 'mavzu_uploaded') ? 1 : 0;
                 return ua - ub;
             });
             var html = '';

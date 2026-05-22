@@ -70,7 +70,8 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
     final goingRight = _currentIndex > _previousIndex;
     final slideBegin = Offset(goingRight ? 0.08 : -0.08, 0);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final navBg = isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A);
+    final navBg = isDark ? AppTheme.darkCard : Colors.white;
+    final navBorder = isDark ? Colors.white12 : const Color(0xFFE2E8F0);
 
     return Scaffold(
       extendBody: true,
@@ -95,42 +96,35 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
           child: _screens[_currentIndex],
         ),
       ),
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: navBg,
-            borderRadius: BorderRadius.circular(28),
-            boxShadow: [
-              BoxShadow(
-                color: navBg.withAlpha(50),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
-              ),
-            ],
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(navItems.length, (index) {
-                  final item = navItems[index];
-                  final isActive = _currentIndex == index;
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => _onTabTapped(index),
-                      behavior: HitTestBehavior.opaque,
-                      child: _NavItemWidget(
-                        isActive: isActive,
-                        item: item,
-                      ),
-                    ),
-                  );
-                }),
-              ),
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          color: navBg,
+          border: Border(top: BorderSide(color: navBorder, width: 1)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF0F172A).withOpacity(0.06),
+              blurRadius: 8,
+              offset: const Offset(0, -2),
             ),
+          ],
+        ),
+        child: SafeArea(
+          top: false,
+          child: Row(
+            children: List.generate(navItems.length, (index) {
+              final item = navItems[index];
+              final isActive = _currentIndex == index;
+              return Expanded(
+                child: GestureDetector(
+                  onTap: () => _onTabTapped(index),
+                  behavior: HitTestBehavior.opaque,
+                  child: _NavItemWidget(
+                    isActive: isActive,
+                    item: item,
+                  ),
+                ),
+              );
+            }),
           ),
         ),
       ),
@@ -200,9 +194,24 @@ class _NavItemWidgetState extends State<_NavItemWidget>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const activeColor = Color(0xFF0D9488);
+    final inactiveColor = isDark ? Colors.white60 : const Color(0xFF94A3B8);
+    final color = widget.isActive ? activeColor : inactiveColor;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Small top indicator border for the active tab.
+        Container(
+          height: 3,
+          width: 22,
+          decoration: BoxDecoration(
+            color: widget.isActive ? activeColor : Colors.transparent,
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(3)),
+          ),
+        ),
+        const SizedBox(height: 7),
         AnimatedBuilder(
           animation: _scale,
           builder: (context, child) {
@@ -211,34 +220,23 @@ class _NavItemWidgetState extends State<_NavItemWidget>
               child: child,
             );
           },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: widget.isActive
-                  ? Colors.white.withAlpha(20)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              widget.isActive ? widget.item.activeIcon : widget.item.icon,
-              color: widget.isActive
-                  ? const Color(0xFFFF9800)
-                  : Colors.white70,
-              size: 26,
-            ),
+          child: Icon(
+            widget.isActive ? widget.item.activeIcon : widget.item.icon,
+            color: color,
+            size: 24,
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 3),
         Text(
           widget.item.label,
           style: TextStyle(
             fontSize: 10,
-            fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.normal,
-            color: widget.isActive ? Colors.white : Colors.white70,
+            fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.w500,
+            color: color,
           ),
           overflow: TextOverflow.ellipsis,
         ),
+        const SizedBox(height: 7),
       ],
     );
   }

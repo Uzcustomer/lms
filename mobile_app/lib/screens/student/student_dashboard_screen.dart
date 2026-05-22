@@ -213,9 +213,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
   List<BoxShadow> get _cardShadow => [
         BoxShadow(
-          color: const Color(0xFF0F172A).withOpacity(0.06),
-          blurRadius: 10,
-          offset: const Offset(0, 3),
+          color: const Color(0xFF0F172A).withOpacity(0.14),
+          blurRadius: 5,
+          offset: const Offset(0, 2),
         ),
       ];
 
@@ -466,7 +466,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           TextSpan(
                             text: studentId,
                             style: TextStyle(
-                                fontSize: 11, color: _ink, fontWeight: FontWeight.w600),
+                                fontSize: 11, color: _ink, fontWeight: FontWeight.w800),
                           ),
                         ],
                       ),
@@ -558,7 +558,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           const SizedBox(height: 4),
           Text(
             value,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w800, color: _ink),
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: _ink),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -574,7 +574,6 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final streakRaw = data?['attendance_streak_days'];
     final streak = streakRaw is num ? streakRaw.toInt() : 0;
     final isGood = streak >= 7;
-    final accent = isGood ? _calmTeal : AppTheme.warningColor;
 
     return _calmCard(
       padding: const EdgeInsets.all(12),
@@ -583,7 +582,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.favorite_rounded, size: 16, color: _calmTeal),
+              const Icon(Icons.favorite_rounded, size: 32, color: Color(0xFFE53935)),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(
@@ -603,7 +602,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                       '$streak kun · ketma-ket',
                       style: TextStyle(
                         fontSize: 13,
-                        fontWeight: FontWeight.w700,
+                        fontWeight: FontWeight.w800,
                         color: _ink,
                       ),
                     ),
@@ -630,10 +629,10 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             ],
           ),
           const SizedBox(height: 10),
-          SizedBox(
+          const SizedBox(
             height: 46,
             width: double.infinity,
-            child: _EcgLine(accent),
+            child: _EcgLine(),
           ),
         ],
       ),
@@ -770,15 +769,15 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 height: 42,
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: badgeColor.withOpacity(0.14),
+                  color: badgeColor,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
                   jn != null ? jn.round().toString() : '—',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 15,
-                    fontWeight: FontWeight.w700,
-                    color: badgeColor,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -816,7 +815,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           '$absent/$total soat',
                           style: TextStyle(
                             fontSize: 10,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.w800,
                             color: _muted,
                           ),
                         ),
@@ -1552,9 +1551,9 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               Text(
                 value,
                 style: TextStyle(
-                  fontSize: 32,
+                  fontSize: 38,
                   fontWeight: FontWeight.w900,
-                  letterSpacing: -0.5,
+                  letterSpacing: -0.8,
                   color: accent,
                   height: 1,
                 ),
@@ -1562,7 +1561,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               const SizedBox(width: 4),
               Text(
                 maxLabel,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _muted),
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w800, color: _muted),
               ),
             ],
           ),
@@ -1590,8 +1589,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 /// Animated ECG / heartbeat line for the weekly-activity card — a bright
 /// pulse sweeps along a faint baseline trace, like a heart monitor.
 class _EcgLine extends StatefulWidget {
-  final Color color;
-  const _EcgLine(this.color);
+  const _EcgLine();
 
   @override
   State<_EcgLine> createState() => _EcgLineState();
@@ -1605,7 +1603,7 @@ class _EcgLineState extends State<_EcgLine> with SingleTickerProviderStateMixin 
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 2600),
+      duration: const Duration(milliseconds: 5200),
     )..repeat();
   }
 
@@ -1621,43 +1619,65 @@ class _EcgLineState extends State<_EcgLine> with SingleTickerProviderStateMixin 
       animation: _controller,
       builder: (_, __) => CustomPaint(
         size: Size.infinite,
-        painter: _EcgLinePainter(widget.color, _controller.value),
+        painter: _EcgLinePainter(_controller.value),
       ),
     );
   }
 }
 
 class _EcgLinePainter extends CustomPainter {
-  final Color color;
   final double progress;
-  const _EcgLinePainter(this.color, this.progress);
+  const _EcgLinePainter(this.progress);
 
-  // Normalized (0–1) points of an ECG trace — flat baseline with QRS spikes.
-  static const List<Offset> _points = [
-    Offset(0.000, 0.5), Offset(0.111, 0.5), Offset(0.153, 0.5),
-    Offset(0.181, 0.2), Offset(0.208, 0.8), Offset(0.236, 0.5),
-    Offset(0.333, 0.5), Offset(0.375, 0.5), Offset(0.403, 0.16),
-    Offset(0.431, 0.84), Offset(0.458, 0.5), Offset(0.583, 0.5),
-    Offset(0.625, 0.5), Offset(0.653, 0.24), Offset(0.681, 0.76),
-    Offset(0.708, 0.5), Offset(0.833, 0.5), Offset(0.875, 0.5),
-    Offset(0.903, 0.2), Offset(0.931, 0.8), Offset(0.958, 0.5),
-    Offset(1.000, 0.5),
+  // Light-red resting trace; the moving pulse is drawn in dark red.
+  static const Color _baseColor = Color(0xFFEF9A9A);
+  static const Color _pulseColor = Color(0xFFC62828);
+
+  // A single PQRST heartbeat — x is the fraction within one beat, y runs
+  // from 0 (top) to 1 (bottom) with the baseline at 0.58: small P wave,
+  // a sharp QRS spike, then a rounded T wave.
+  static const List<Offset> _beat = [
+    Offset(0.00, 0.58), Offset(0.10, 0.58),
+    Offset(0.13, 0.55), Offset(0.16, 0.47), Offset(0.19, 0.55), Offset(0.22, 0.58),
+    Offset(0.34, 0.58),
+    Offset(0.37, 0.67),
+    Offset(0.40, 0.05),
+    Offset(0.43, 0.90),
+    Offset(0.47, 0.58),
+    Offset(0.58, 0.58),
+    Offset(0.63, 0.52), Offset(0.69, 0.38), Offset(0.75, 0.52), Offset(0.80, 0.58),
+    Offset(1.00, 0.58),
   ];
+  static const int _beats = 3;
+
+  Path _buildPath(Size size) {
+    final path = Path();
+    final beatW = size.width / _beats;
+    var first = true;
+    for (var b = 0; b < _beats; b++) {
+      for (final p in _beat) {
+        final x = (b + p.dx) * beatW;
+        final y = p.dy * size.height;
+        if (first) {
+          path.moveTo(x, y);
+          first = false;
+        } else {
+          path.lineTo(x, y);
+        }
+      }
+    }
+    return path;
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
-    final path = Path();
-    for (var i = 0; i < _points.length; i++) {
-      final x = _points[i].dx * size.width;
-      final y = _points[i].dy * size.height;
-      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
-    }
+    final path = _buildPath(size);
 
-    // Faint full baseline trace.
+    // Light-red resting trace.
     canvas.drawPath(
       path,
       Paint()
-        ..color = color.withOpacity(0.18)
+        ..color = _baseColor
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.8
         ..strokeCap = StrokeCap.round
@@ -1671,13 +1691,13 @@ class _EcgLinePainter extends CustomPainter {
     final head = progress * len;
     final tail = (head - len * 0.32).clamp(0.0, len);
 
-    // Bright pulse segment sweeping along the trace.
+    // Dark-red pulse segment sweeping along the trace.
     canvas.drawPath(
       metric.extractPath(tail, head.clamp(0.0, len)),
       Paint()
-        ..color = color
+        ..color = _pulseColor
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.2
+        ..strokeWidth = 2.4
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round,
     );
@@ -1685,11 +1705,10 @@ class _EcgLinePainter extends CustomPainter {
     // Leading pulse dot.
     final tan = metric.getTangentForOffset(head.clamp(0.0, len));
     if (tan != null) {
-      canvas.drawCircle(tan.position, 3.4, Paint()..color = color);
+      canvas.drawCircle(tan.position, 3.4, Paint()..color = _pulseColor);
     }
   }
 
   @override
-  bool shouldRepaint(_EcgLinePainter old) =>
-      old.progress != progress || old.color != color;
+  bool shouldRepaint(_EcgLinePainter old) => old.progress != progress;
 }

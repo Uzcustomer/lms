@@ -1,12 +1,9 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import 'package:provider/provider.dart';
-import '../../config/theme.dart';
-import '../../config/aurora_themes.dart';
-import '../../providers/settings_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
+import '../../widgets/clinic_header.dart';
 
 class ExamScheduleScreen extends StatefulWidget {
   const ExamScheduleScreen({super.key});
@@ -17,6 +14,10 @@ class ExamScheduleScreen extends StatefulWidget {
 
 class _ExamScheduleScreenState extends State<ExamScheduleScreen>
     with SingleTickerProviderStateMixin {
+  static const _oski = Color(0xFF1D4ED8);
+  static const _test = Color(0xFF15803D);
+  static const _past = Color(0xFFB45309);
+
   List<dynamic> _exams = [];
   bool _loading = true;
   DateTime _focusedMonth = DateTime.now();
@@ -79,21 +80,11 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
     super.dispose();
   }
 
-  Set<String> get _examDates =>
-      _exams.map((e) => e['date']?.toString() ?? '').toSet();
-
   List<dynamic> _examsForDate(String dateStr) =>
       _exams.where((e) => e['date']?.toString() == dateStr).toList();
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final aurora = context.watch<SettingsProvider>().auroraTheme;
-    final statusBarH = MediaQuery.of(context).padding.top;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-
     final selectedDateStr = _selectedDate != null
         ? DateFormat('yyyy-MM-dd').format(_selectedDate!)
         : null;
@@ -101,253 +92,207 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
         selectedDateStr != null ? _examsForDate(selectedDateStr) : <dynamic>[];
 
     return Scaffold(
-      backgroundColor: auroraBase(aurora, isDark),
+      backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
-          Container(
-            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
-            height: statusBarH + 64,
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-              ),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                const Expanded(
-                  child: Text(
-                    'Imtihon sanalari',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(width: 48),
-              ],
-            ),
+          ClinicHeader(
+            overline: 'FOYDALI',
+            title: 'Imtihon sanalari',
+            onBack: () => Navigator.pop(context),
           ),
-          Expanded(child: GestureDetector(
-        onTap: () {
-          if (_showHint) _dismissHint();
-        },
-        behavior: HitTestBehavior.translucent,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : Stack(
-                children: [
-                  Column(
-                    children: [
-                      // Calendar
-                      Container(
-                  margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-                  decoration: BoxDecoration(
-                    color: cardColor,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.04),
-                        blurRadius: 10,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      _buildMonthHeader(textColor, subColor),
-                      _buildWeekDayHeaders(subColor),
-                      _buildCalendarGrid(textColor, subColor, isDark),
-                      const SizedBox(height: 8),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Legend
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 20),
-                  child: Wrap(
-                    spacing: 14,
-                    runSpacing: 6,
-                    children: [
-                      _legendDot(const Color(0xFF29B6F6), 'OSKI'),
-                      _legendDot(const Color(0xFF66BB6A), 'Test'),
-                      _legendDot(const Color(0xFFE6A817), 'O\'tgan'),
-                    ],
-                  ),
-                ),
-
-                const SizedBox(height: 12),
-
-                // Selected date exams
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: _loadExams,
-                    child: selectedExams.isEmpty
-                        ? ListView(
-                            padding: EdgeInsets.zero,
-                            children: [
-                              SizedBox(
-                                height: 200,
-                                child: Center(
-                                  child: Text(
-                                    _selectedDate == null
-                                        ? 'Sanani tanlang'
-                                        : 'Bu kunda imtihon yo\'q',
-                                    style: TextStyle(fontSize: 14, color: subColor),
-                                  ),
-                                ),
+          Expanded(
+            child: GestureDetector(
+              onTap: () {
+                if (_showHint) _dismissHint();
+              },
+              behavior: HitTestBehavior.translucent,
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : Stack(
+                      children: [
+                        Column(
+                          children: [
+                            Container(
+                              margin: const EdgeInsets.fromLTRB(14, 14, 14, 0),
+                              decoration: BoxDecoration(
+                                color: ClinicTheme.surfaceOf(context),
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                    color: ClinicTheme.dividerOf(context), width: 1),
+                                boxShadow: ClinicTheme.cardShadow,
                               ),
-                            ],
-                          )
-                        : ListView.separated(
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: selectedExams.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(height: 10),
-                            itemBuilder: (_, i) => _buildExamTile(
-                                selectedExams[i], textColor, subColor, isDark,
-                                cardColor),
-                          ),
-                  ),
-                ),
-              ],
-            ),
-                  if (_showHint)
-                    Positioned.fill(
-                      child: FadeTransition(
-                        opacity: _hintAnim,
-                        child: GestureDetector(
-                          onTap: _dismissHint,
-                          child: BackdropFilter(
-                            filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-                            child: Container(
-                              color: Colors.black.withOpacity(0.3),
-                              alignment: Alignment.center,
-                              child: GestureDetector(
-                                onTap: () {},
-                                child: Container(
-                                  width: 260,
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20, vertical: 28),
-                                  decoration: BoxDecoration(
-                                    color: isDark
-                                        ? const Color(0xFF2A2D3E)
-                                        : Colors.white,
-                                    borderRadius: BorderRadius.circular(16),
-                                    boxShadow: [
-                                      BoxShadow(
-                                        color: Colors.black.withOpacity(0.15),
-                                        blurRadius: 24,
-                                        offset: const Offset(0, 8),
-                                      ),
-                                    ],
-                                  ),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        width: 52,
-                                        height: 52,
-                                        decoration: BoxDecoration(
-                                          color: const Color(0xFF4A6CF7)
-                                              .withOpacity(0.1),
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: const Icon(
-                                          Icons.touch_app_rounded,
-                                          color: Color(0xFF4A6CF7),
-                                          size: 26,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 16),
-                                      Text(
-                                        'Belgilangan kunlarga\nbosib ko\'ring',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w600,
-                                          color: textColor,
-                                          height: 1.4,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        'Imtihon ma\'lumotlarini ko\'rish uchun',
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          color: subColor,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 18),
-                                      Row(
-                                        mainAxisAlignment:
-                                            MainAxisAlignment.center,
+                              child: Column(
+                                children: [
+                                  _buildMonthHeader(),
+                                  _buildWeekDayHeaders(),
+                                  _buildCalendarGrid(),
+                                  const SizedBox(height: 8),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 18),
+                              child: Wrap(
+                                spacing: 14,
+                                runSpacing: 6,
+                                children: [
+                                  _legendDot(_oski, 'OSKI'),
+                                  _legendDot(_test, 'Test'),
+                                  _legendDot(_past, 'O\'tgan'),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Expanded(
+                              child: RefreshIndicator(
+                                onRefresh: _loadExams,
+                                child: selectedExams.isEmpty
+                                    ? ListView(
+                                        padding: EdgeInsets.zero,
                                         children: [
-                                          _legendDot(
-                                              const Color(0xFF29B6F6), 'OSKI'),
-                                          const SizedBox(width: 12),
-                                          _legendDot(
-                                              const Color(0xFF66BB6A), 'Test'),
-                                          const SizedBox(width: 12),
-                                          _legendDot(
-                                              const Color(0xFFE6A817),
-                                              'O\'tgan'),
+                                          SizedBox(
+                                            height: 200,
+                                            child: Center(
+                                              child: Text(
+                                                _selectedDate == null
+                                                    ? 'Sanani tanlang'
+                                                    : 'Bu kunda imtihon yo\'q',
+                                                style: TextStyle(
+                                                    fontSize: 14,
+                                                    color: ClinicTheme.mutedOf(context)),
+                                              ),
+                                            ),
+                                          ),
                                         ],
+                                      )
+                                    : ListView.separated(
+                                        padding:
+                                            const EdgeInsets.fromLTRB(14, 0, 14, 24),
+                                        itemCount: selectedExams.length,
+                                        separatorBuilder: (_, __) =>
+                                            const SizedBox(height: 10),
+                                        itemBuilder: (_, i) =>
+                                            _buildExamTile(selectedExams[i]),
                                       ),
-                                    ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        if (_showHint)
+                          Positioned.fill(
+                            child: FadeTransition(
+                              opacity: _hintAnim,
+                              child: GestureDetector(
+                                onTap: _dismissHint,
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
+                                  child: Container(
+                                    color: Colors.black.withOpacity(0.3),
+                                    alignment: Alignment.center,
+                                    child: GestureDetector(
+                                      onTap: () {},
+                                      child: Container(
+                                        width: 260,
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 20, vertical: 26),
+                                        decoration: BoxDecoration(
+                                          color: ClinicTheme.surfaceOf(context),
+                                          borderRadius: BorderRadius.circular(16),
+                                          boxShadow: [
+                                            BoxShadow(
+                                              color: Colors.black.withOpacity(0.15),
+                                              blurRadius: 24,
+                                              offset: const Offset(0, 8),
+                                            ),
+                                          ],
+                                        ),
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Container(
+                                              width: 52,
+                                              height: 52,
+                                              decoration: const BoxDecoration(
+                                                color: ClinicTheme.teal,
+                                                shape: BoxShape.circle,
+                                              ),
+                                              child: const Icon(
+                                                Icons.touch_app_rounded,
+                                                color: Colors.white,
+                                                size: 26,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 14),
+                                            Text(
+                                              'Belgilangan kunlarga\nbosib ko\'ring',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: 15,
+                                                fontWeight: FontWeight.w800,
+                                                color: ClinicTheme.inkOf(context),
+                                                height: 1.4,
+                                              ),
+                                            ),
+                                            const SizedBox(height: 6),
+                                            Text(
+                                              'Imtihon ma\'lumotlarini ko\'rish uchun',
+                                              textAlign: TextAlign.center,
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                color: ClinicTheme.mutedOf(context),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                               ),
                             ),
                           ),
-                        ),
-                      ),
+                      ],
                     ),
-                ],
-              ),
-      )),
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildMonthHeader(Color textColor, Color subColor) {
+  Widget _buildMonthHeader() {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 8, 4),
+      padding: const EdgeInsets.fromLTRB(14, 12, 6, 4),
       child: Row(
         children: [
           Text(
             DateFormat('MMMM yyyy').format(_focusedMonth),
             style: TextStyle(
-              fontSize: 18,
-              fontWeight: FontWeight.bold,
-              color: textColor,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+              color: ClinicTheme.inkOf(context),
             ),
           ),
           const Spacer(),
           IconButton(
-            icon: Icon(Icons.chevron_left_rounded, color: subColor),
+            icon: Icon(Icons.chevron_left_rounded,
+                color: ClinicTheme.mutedOf(context)),
             onPressed: () {
               setState(() {
-                _focusedMonth = DateTime(
-                    _focusedMonth.year, _focusedMonth.month - 1);
+                _focusedMonth =
+                    DateTime(_focusedMonth.year, _focusedMonth.month - 1);
                 _selectedDate = null;
               });
             },
           ),
           IconButton(
-            icon: Icon(Icons.chevron_right_rounded, color: subColor),
+            icon: Icon(Icons.chevron_right_rounded,
+                color: ClinicTheme.mutedOf(context)),
             onPressed: () {
               setState(() {
-                _focusedMonth = DateTime(
-                    _focusedMonth.year, _focusedMonth.month + 1);
+                _focusedMonth =
+                    DateTime(_focusedMonth.year, _focusedMonth.month + 1);
                 _selectedDate = null;
               });
             },
@@ -357,7 +302,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
     );
   }
 
-  Widget _buildWeekDayHeaders(Color subColor) {
+  Widget _buildWeekDayHeaders() {
     const days = ['Du', 'Se', 'Cho', 'Pa', 'Ju', 'Sha', 'Ya'];
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12),
@@ -368,9 +313,9 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                     child: Text(
                       d,
                       style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: subColor,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                        color: ClinicTheme.mutedOf(context),
                       ),
                     ),
                   ),
@@ -380,7 +325,9 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
     );
   }
 
-  Widget _buildCalendarGrid(Color textColor, Color subColor, bool isDark) {
+  Widget _buildCalendarGrid() {
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
     final year = _focusedMonth.year;
     final month = _focusedMonth.month;
     final firstDay = DateTime(year, month, 1);
@@ -389,12 +336,12 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
     final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
     final cells = <Widget>[];
-
     for (int i = 0; i < startWeekday; i++) {
       cells.add(const SizedBox());
     }
 
-    final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+    final today = DateTime(
+        DateTime.now().year, DateTime.now().month, DateTime.now().day);
 
     for (int day = 1; day <= lastDay.day; day++) {
       final date = DateTime(year, month, day);
@@ -410,15 +357,13 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
 
       Color? cellBg;
       if (isSelected) {
-        cellBg = const Color(0xFF4A6CF7);
+        cellBg = ClinicTheme.teal;
       } else if (hasExam && isPast) {
-        cellBg = const Color(0xFFE6A817).withOpacity(isDark ? 0.3 : 0.22);
+        cellBg = _past.withOpacity(0.14);
       } else if (hasOski && !isPast) {
-        cellBg = const Color(0xFF29B6F6).withOpacity(isDark ? 0.25 : 0.18);
+        cellBg = _oski.withOpacity(0.12);
       } else if (hasTest && !isPast) {
-        cellBg = const Color(0xFF66BB6A).withOpacity(isDark ? 0.25 : 0.18);
-      } else if (isToday) {
-        cellBg = const Color(0xFF4A6CF7).withOpacity(0.08);
+        cellBg = _test.withOpacity(0.12);
       }
 
       cells.add(
@@ -430,7 +375,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
               color: cellBg ?? Colors.transparent,
               borderRadius: BorderRadius.circular(10),
               border: isToday && !isSelected
-                  ? Border.all(color: const Color(0xFF4A6CF7), width: 1.5)
+                  ? Border.all(color: ClinicTheme.teal, width: 1.5)
                   : null,
             ),
             child: Column(
@@ -440,13 +385,14 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                   '$day',
                   style: TextStyle(
                     fontSize: 14,
-                    fontWeight:
-                        hasExam || isToday ? FontWeight.w700 : FontWeight.w400,
+                    fontWeight: hasExam || isToday
+                        ? FontWeight.w800
+                        : FontWeight.w500,
                     color: isSelected
                         ? Colors.white
                         : hasExam
-                            ? textColor
-                            : subColor,
+                            ? ink
+                            : muted,
                   ),
                 ),
                 if (hasExam)
@@ -463,8 +409,8 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                             color: isSelected
                                 ? Colors.white
                                 : isPast
-                                    ? const Color(0xFFE6A817)
-                                    : const Color(0xFF29B6F6),
+                                    ? _past
+                                    : _oski,
                           ),
                         ),
                       if (hasTest)
@@ -477,8 +423,8 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                             color: isSelected
                                 ? Colors.white
                                 : isPast
-                                    ? const Color(0xFFE6A817)
-                                    : const Color(0xFF66BB6A),
+                                    ? _past
+                                    : _test,
                           ),
                         ),
                     ],
@@ -502,8 +448,9 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
     );
   }
 
-  Widget _buildExamTile(dynamic exam, Color textColor, Color subColor,
-      bool isDark, Color cardColor) {
+  Widget _buildExamTile(dynamic exam) {
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
     final subject = exam['subject_name']?.toString() ?? '';
     final examType = exam['exam_type']?.toString() ?? '';
     final timeStr = exam['time']?.toString() ?? '';
@@ -513,7 +460,8 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
     bool isPast = false;
     try {
       final date = DateTime.parse(dateStr);
-      final now = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      final now = DateTime(
+          DateTime.now().year, DateTime.now().month, DateTime.now().day);
       final diff = date.difference(now).inDays;
       isPast = diff < 0;
       if (diff == 0) {
@@ -527,115 +475,118 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
       }
     } catch (_) {}
 
-    final Color color;
-    if (isPast) {
-      color = const Color(0xFFE6A817);
-    } else if (isOski) {
-      color = const Color(0xFF29B6F6);
-    } else {
-      color = const Color(0xFF66BB6A);
-    }
+    final color = isPast ? _past : (isOski ? _oski : _test);
 
     return Container(
-      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: cardColor,
+        color: ClinicTheme.surfaceOf(context),
         borderRadius: BorderRadius.circular(14),
-        border: Border(
-          left: BorderSide(color: color, width: 3.5),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.03),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
+        boxShadow: ClinicTheme.cardShadow,
       ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: color.withOpacity(isDark ? 0.2 : 0.1),
-              borderRadius: BorderRadius.circular(11),
-            ),
-            child: Icon(
-              isOski ? Icons.record_voice_over_rounded : Icons.quiz_rounded,
-              color: color,
-              size: 20,
-            ),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  subject,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w600,
-                    color: textColor,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 4),
-                Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 7, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: color.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(5),
-                      ),
-                      child: Text(
-                        examType,
-                        style: TextStyle(
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(14),
+        child: IntrinsicHeight(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Container(width: 4, color: color),
+              Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.all(13),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
                           color: color,
+                          borderRadius: BorderRadius.circular(11),
+                        ),
+                        child: Icon(
+                          isOski
+                              ? Icons.record_voice_over_rounded
+                              : Icons.quiz_rounded,
+                          color: Colors.white,
+                          size: 20,
                         ),
                       ),
-                    ),
-                    if (timeStr.isNotEmpty) ...[
-                      const SizedBox(width: 10),
-                      Icon(Icons.access_time_rounded,
-                          size: 13, color: subColor),
-                      const SizedBox(width: 3),
-                      Text(
-                        timeStr,
-                        style: TextStyle(
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
-                          color: textColor,
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              subject,
+                              style: TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                                color: ink,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            const SizedBox(height: 5),
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(
+                                      horizontal: 7, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: color,
+                                    borderRadius: BorderRadius.circular(5),
+                                  ),
+                                  child: Text(
+                                    examType,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                ),
+                                if (timeStr.isNotEmpty) ...[
+                                  const SizedBox(width: 10),
+                                  Icon(Icons.access_time_rounded,
+                                      size: 13, color: muted),
+                                  const SizedBox(width: 3),
+                                  Text(
+                                    timeStr,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: ink,
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                          ],
                         ),
                       ),
+                      if (daysLeft.isNotEmpty)
+                        Text(
+                          daysLeft,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            color: color,
+                          ),
+                        ),
                     ],
-                  ],
+                  ),
                 ),
-              ],
-            ),
-          ),
-          if (daysLeft.isNotEmpty)
-            Text(
-              daysLeft,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w600,
-                color: color,
               ),
-            ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _legendDot(Color color, String label) {
     return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
         Container(
           width: 8,
@@ -647,9 +598,8 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
           label,
           style: TextStyle(
             fontSize: 12,
-            color: Theme.of(context).brightness == Brightness.dark
-                ? AppTheme.darkTextSecondary
-                : AppTheme.textSecondary,
+            fontWeight: FontWeight.w600,
+            color: ClinicTheme.mutedOf(context),
           ),
         ),
       ],

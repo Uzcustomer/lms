@@ -1473,6 +1473,11 @@
                             if (data.success_count > 0) {
                                 html += '<div class="diag-msg diag-success"><strong>Muvaffaqiyatli!</strong> ' + data.success_count + ' ta natija qayta yuklandi.</div>';
                             }
+                            if (data.warning_count > 0) {
+                                html += '<div class="diag-msg diag-warning"><strong>' + data.warning_count + ' ta ogohlantirish:</strong><ul style="margin-top:4px;padding-left:20px;">';
+                                data.warnings.forEach(function(w) { html += '<li>' + esc(w.student_name) + ' — ' + esc(w.fan_name) + ': ' + esc(w.error) + '</li>'; });
+                                html += '</ul></div>';
+                            }
                             if (data.error_count > 0) {
                                 html += '<div class="diag-msg diag-error"><strong>' + data.error_count + ' ta xato:</strong><ul style="margin-top:4px;padding-left:20px;">';
                                 data.errors.forEach(function(err) { html += '<li>' + esc(err.student_name) + ' — ' + esc(err.fan_name) + ': ' + esc(err.error) + '</li>'; });

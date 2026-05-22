@@ -2467,19 +2467,20 @@ class QuizResultController extends Controller
                 }
             }
 
-            // YN qulflangan juftlik — odatda o'tkazib yuboriladi. ISTISNO:
-            // NB SABABLI bo'lsa va retake aynan Farmoyish (Sababli ariza) makeup
-            // sanalari oralig'ida topshirilgan bo'lsa — YN qulfiga qaramay yuklanadi.
-            if (!empty($sg->is_yn_locked)) {
-                if (!$isNb || !$isSababli) {
-                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: YN qulflangan";
-                    continue;
-                }
-                if (!$this->retakeWithinMakeupWindow($student, $targetFanId, $result)) {
-                    $skipReasons[] = "juftlik {$sg->lesson_pair_code}: Farmoyishda qayta topshirish kunlari bilan mos kelmadi";
-                    continue;
-                }
-            }
+            // === VAQTINCHALIK O'CHIRILGAN (foydalanuvchi so'rovi bilan) ===
+            // YN qulflanganlik tekshiruvi vaqtincha o'chirildi — qulflangan
+            // fanlarga ham mavzu retake bahosini qo'yish uchun. Ish tugagach
+            // quyidagi blok izohdan chiqarilib, qayta yoqiladi.
+            // if (!empty($sg->is_yn_locked)) {
+            //     if (!$isNb || !$isSababli) {
+            //         $skipReasons[] = "juftlik {$sg->lesson_pair_code}: YN qulflangan";
+            //         continue;
+            //     }
+            //     if (!$this->retakeWithinMakeupWindow($student, $targetFanId, $result)) {
+            //         $skipReasons[] = "juftlik {$sg->lesson_pair_code}: Farmoyishda qayta topshirish kunlari bilan mos kelmadi";
+            //         continue;
+            //     }
+            // }
 
             if ($isNb) {
                 $multiplier = $isSababli ? 1.0 : 0.8;

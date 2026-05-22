@@ -1,12 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../config/api_config.dart';
-import '../../config/theme.dart';
-import '../../config/aurora_themes.dart';
-import '../../providers/settings_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../utils/page_transitions.dart';
+import '../../widgets/clinic_header.dart';
 import 'chat_conversation_screen.dart';
 import 'chat_group_screen.dart';
 
@@ -56,73 +53,53 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final aurora = context.watch<SettingsProvider>().auroraTheme;
-    final statusBarH = MediaQuery.of(context).padding.top;
-    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-
     return Scaffold(
-      backgroundColor: auroraBase(aurora, isDark),
+      backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
+          ClinicHeader(
+            overline: 'FOYDALI',
+            title: 'Xabarlar',
+            onBack: () => Navigator.pop(context),
+          ),
           Container(
-            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
             decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
+              color: ClinicTheme.surfaceOf(context),
+              border: Border(
+                bottom: BorderSide(color: ClinicTheme.dividerOf(context), width: 1),
               ),
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SizedBox(height: statusBarH > 0 ? 0 : 8),
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                    const Expanded(
-                      child: Text(
-                        'Xabarlar',
-                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                    const SizedBox(width: 48),
-                  ],
-                ),
-                TabBar(
-                  controller: _tabController,
-                  indicatorColor: Colors.white,
-                  indicatorWeight: 3,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white60,
-                  labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-                  unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w400),
-                  tabs: const [
-                    Tab(text: 'Foydalanuvchilar'),
-                    Tab(text: 'Guruh'),
-                  ],
-                ),
+            child: TabBar(
+              controller: _tabController,
+              indicatorColor: ClinicTheme.teal,
+              indicatorWeight: 2.5,
+              indicatorSize: TabBarIndicatorSize.tab,
+              labelColor: ClinicTheme.teal,
+              unselectedLabelColor: ClinicTheme.mutedOf(context),
+              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
+              unselectedLabelStyle:
+                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              tabs: const [
+                Tab(text: 'Foydalanuvchilar'),
+                Tab(text: 'Guruh'),
               ],
             ),
           ),
-          Expanded(child: TabBarView(
-            controller: _tabController,
-            children: [
-              _buildContactsTab(isDark, sub),
-              const ChatGroupScreen(),
-            ],
-          )),
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildContactsTab(),
+                const ChatGroupScreen(),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildContactsTab(bool isDark, Color sub) {
+  Widget _buildContactsTab() {
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -135,18 +112,18 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: const Color(0xFF4A6CF7).withOpacity(0.08),
+                color: ClinicTheme.teal.withOpacity(0.10),
                 shape: BoxShape.circle,
               ),
               child: Icon(Icons.chat_bubble_outline_rounded,
-                  size: 36, color: sub),
+                  size: 36, color: ClinicTheme.teal),
             ),
             const SizedBox(height: 16),
             Text('Guruhda boshqa talaba topilmadi',
                 style: TextStyle(
-                    color: sub,
-                    fontSize: 15,
-                    fontWeight: FontWeight.w500)),
+                    color: ClinicTheme.mutedOf(context),
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600)),
           ],
         ),
       );
@@ -154,17 +131,16 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
     return RefreshIndicator(
       onRefresh: _load,
       child: ListView.builder(
-        padding: const EdgeInsets.fromLTRB(14, 10, 14, 20),
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
         itemCount: _contacts.length,
-        itemBuilder: (_, i) => _buildContact(_contacts[i], isDark),
+        itemBuilder: (_, i) => _buildContact(_contacts[i]),
       ),
     );
   }
 
-  Widget _buildContact(dynamic c, bool isDark) {
-    final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final cardBg = isDark ? AppTheme.darkCard : Colors.white;
+  Widget _buildContact(dynamic c) {
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
     final name = c['name']?.toString() ?? '';
     final image = c['image']?.toString();
     final lastMsg = c['last_message']?.toString();
@@ -193,14 +169,12 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
         .join();
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        elevation: isDark ? 0 : 1,
-        shadowColor: Colors.black12,
+        color: ClinicTheme.surfaceOf(context),
+        borderRadius: BorderRadius.circular(14),
         child: InkWell(
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(14),
           onTap: () async {
             await Navigator.push(
               context,
@@ -215,53 +189,32 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
             _load();
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(16),
+              borderRadius: BorderRadius.circular(14),
               border: Border.all(
-                color: unread > 0
-                    ? const Color(0xFF4A6CF7).withOpacity(0.4)
-                    : isDark
-                        ? Colors.white10
-                        : Colors.grey.shade200,
+                color: unread > 0 ? ClinicTheme.teal : ClinicTheme.dividerOf(context),
                 width: unread > 0 ? 1.5 : 1,
               ),
+              boxShadow: ClinicTheme.cardShadow,
             ),
             child: Row(
               children: [
-                Container(
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: Border.all(
-                      color: const Color(0xFF4A6CF7).withOpacity(0.2),
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF4A6CF7).withOpacity(0.1),
-                        blurRadius: 8,
-                        offset: const Offset(0, 2),
-                      ),
-                    ],
-                  ),
-                  child: CircleAvatar(
-                    radius: 26,
-                    backgroundColor:
-                        const Color(0xFF4A6CF7).withOpacity(0.08),
-                    backgroundImage: image != null && image.isNotEmpty
-                        ? NetworkImage(
-                            '${ApiConfig.baseUrl}/image-proxy?url=$image')
-                        : null,
-                    child: image == null || image.isEmpty
-                        ? Text(initials,
-                            style: const TextStyle(
-                                fontSize: 15,
-                                fontWeight: FontWeight.w700,
-                                color: Color(0xFF4A6CF7)))
-                        : null,
-                  ),
+                CircleAvatar(
+                  radius: 25,
+                  backgroundColor: ClinicTheme.teal,
+                  backgroundImage: image != null && image.isNotEmpty
+                      ? NetworkImage('${ApiConfig.baseUrl}/image-proxy?url=$image')
+                      : null,
+                  child: image == null || image.isEmpty
+                      ? Text(initials,
+                          style: const TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white))
+                      : null,
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -271,45 +224,36 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
                           Expanded(
                             child: Text(name,
                                 style: TextStyle(
-                                    fontSize: 14.5,
-                                    fontWeight: unread > 0
-                                        ? FontWeight.w700
-                                        : FontWeight.w600,
-                                    color: txt),
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w800,
+                                    color: ink),
                                 overflow: TextOverflow.ellipsis),
                           ),
                           if (timeStr != null)
                             Text(timeStr,
                                 style: TextStyle(
                                     fontSize: 11,
-                                    fontWeight: unread > 0
-                                        ? FontWeight.w600
-                                        : FontWeight.normal,
-                                    color: unread > 0
-                                        ? const Color(0xFF4A6CF7)
-                                        : sub)),
+                                    fontWeight:
+                                        unread > 0 ? FontWeight.w700 : FontWeight.w500,
+                                    color: unread > 0 ? ClinicTheme.teal : muted)),
                         ],
                       ),
-                      const SizedBox(height: 5),
+                      const SizedBox(height: 4),
                       Row(
                         children: [
                           if (lastIsMe)
                             Padding(
                               padding: const EdgeInsets.only(right: 3),
-                              child: Icon(Icons.done_all,
-                                  size: 14,
-                                  color: const Color(0xFF4A6CF7)
-                                      .withOpacity(0.6)),
+                              child: Icon(Icons.done_all, size: 14, color: muted),
                             ),
                           Expanded(
                             child: Text(
                               lastMsg ?? 'Xabar yo\'q',
                               style: TextStyle(
-                                  fontSize: 12.5,
-                                  color: unread > 0 ? txt : sub,
-                                  fontWeight: unread > 0
-                                      ? FontWeight.w500
-                                      : FontWeight.normal),
+                                  fontSize: 12,
+                                  color: unread > 0 ? ink : muted,
+                                  fontWeight:
+                                      unread > 0 ? FontWeight.w600 : FontWeight.w400),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
@@ -318,21 +262,16 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
                             const SizedBox(width: 8),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 3),
+                                  horizontal: 7, vertical: 2),
                               decoration: BoxDecoration(
-                                gradient: const LinearGradient(
-                                  colors: [
-                                    Color(0xFF4A6CF7),
-                                    Color(0xFF6C63FF),
-                                  ],
-                                ),
-                                borderRadius: BorderRadius.circular(12),
+                                color: ClinicTheme.teal,
+                                borderRadius: BorderRadius.circular(10),
                               ),
                               child: Text('$unread',
                                   style: const TextStyle(
                                       fontSize: 11,
                                       color: Colors.white,
-                                      fontWeight: FontWeight.w700)),
+                                      fontWeight: FontWeight.w800)),
                             ),
                           ],
                         ],

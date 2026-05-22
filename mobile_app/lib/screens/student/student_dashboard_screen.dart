@@ -583,7 +583,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.favorite_rounded, size: 16, color: _calmTeal),
+              const Icon(Icons.favorite_rounded, size: 32, color: Color(0xFFE53935)),
               const SizedBox(width: 8),
               Expanded(
                 child: Column(

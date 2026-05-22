@@ -211,6 +211,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
       ? Colors.white.withOpacity(0.08)
       : _calmLine;
 
+  List<BoxShadow> get _cardShadow => [
+        BoxShadow(
+          color: const Color(0xFF0F172A).withOpacity(0.06),
+          blurRadius: 10,
+          offset: const Offset(0, 3),
+        ),
+      ];
+
   Widget _calmCard({required Widget child, EdgeInsets? padding, double radius = 16}) {
     return Container(
       width: double.infinity,
@@ -219,6 +227,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         color: _surface,
         borderRadius: BorderRadius.circular(radius),
         border: Border.all(color: _divider, width: 1),
+        boxShadow: _cardShadow,
       ),
       child: child,
     );
@@ -385,6 +394,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         color: _surface,
         borderRadius: BorderRadius.circular(borderRadius),
         border: Border.all(color: _divider, width: 1),
+        boxShadow: _cardShadow,
       ),
       child: child,
     );
@@ -729,12 +739,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     Color badgeColor;
     if (jn == null) {
       badgeColor = _calmMuted;
+    } else if (jn >= 86) {
+      badgeColor = const Color(0xFF059669); // a'lo
     } else if (jn >= 71) {
-      badgeColor = _calmBlue;
+      badgeColor = _calmBlue; // yaxshi
     } else if (jn >= 56) {
-      badgeColor = AppTheme.warningColor;
+      badgeColor = AppTheme.warningColor; // qoniqarli
     } else {
-      badgeColor = AppTheme.errorColor;
+      badgeColor = AppTheme.errorColor; // qoniqarsiz
     }
 
     final rawId = item['subject_id'];
@@ -1541,7 +1553,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 value,
                 style: TextStyle(
                   fontSize: 32,
-                  fontWeight: FontWeight.w700,
+                  fontWeight: FontWeight.w900,
                   letterSpacing: -0.5,
                   color: accent,
                   height: 1,

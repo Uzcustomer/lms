@@ -231,17 +231,30 @@
     </div>
 
     <script>
-        // Yuklangan "ting-ting-ting" ovoz fayli — HTMLAudioElement bilan chiqariladi.
-        // Brauzer autoplay siyosati tufayli ovoz birinchi marta foydalanuvchi
-        // ekranga bosgandan keyin ochiladi; shundan so'ng sahifa qayta yuklansa ham
-        // avtomatik chiqaveradi.
+        // Yuklangan ovoz fayli — HTMLAudioElement bilan chiqariladi. Brauzer
+        // autoplay siyosati tufayli ovoz birinchi marta operator ekranga
+        // bosgandan keyin ochiladi. Bir marta bosilgach localStorage'da
+        // saqlanadi — sahifa har ~60 sekundda qayta yuklansa ham "ovozni
+        // yoqish" ko'rsatmasi qaytadan chiqavermaydi.
         window.tvChime = (function() {
             const audio = new Audio('{{ asset("audio/chime.mp3") }}');
             audio.preload = 'auto';
+            const UNLOCK_KEY = 'tvJadvalAudioUnlocked';
 
             function hint(show) {
                 const h = document.getElementById('tv-sound-hint');
                 if (h) h.style.display = show ? 'block' : 'none';
+            }
+
+            function isUnlocked() {
+                try { return localStorage.getItem(UNLOCK_KEY) === '1'; } catch (e) { return false; }
+            }
+
+            function setUnlocked(v) {
+                try {
+                    if (v) localStorage.setItem(UNLOCK_KEY, '1');
+                    else localStorage.removeItem(UNLOCK_KEY);
+                } catch (e) {}
             }
 
             function play() {
@@ -249,21 +262,34 @@
                 audio.currentTime = 0;
                 const p = audio.play();
                 if (p && typeof p.then === 'function') {
-                    p.then(function() { hint(false); }).catch(function() { hint(true); });
+                    p.then(function() {
+                        hint(false);
+                        setUnlocked(true);
+                    }).catch(function() {
+                        // Avtomatik ijro bloklangan — operator bir marta bossin.
+                        hint(true);
+                        setUnlocked(false);
+                    });
                 }
                 return p;
             }
 
             function unlock() {
                 hint(false);
+                setUnlocked(true);
             }
 
-            // Dastlab ko'rsatmani ko'rsatamiz; foydalanuvchi biror tugma/ekran
-            // bosgandan keyin yashiramiz va audio ochiladi.
-            hint(true);
+            // Ovozni ochish — ekran/tugma bosilganda. Listener'lar doim faol
+            // turadi (keyinroq ijro bloklansa ham ishlayversin).
             ['click', 'keydown', 'touchstart', 'pointerdown'].forEach(function(ev) {
                 document.addEventListener(ev, unlock, { passive: true });
             });
+
+            // Ko'rsatmani faqat hali biror marta ovoz yoqilmagan bo'lsa
+            // chiqaramiz — yoqilgach qayta yuklanishlarda ko'rinmaydi.
+            if (!isUnlocked()) {
+                hint(true);
+            }
 
             return { play: play, unlock: unlock };
         })();

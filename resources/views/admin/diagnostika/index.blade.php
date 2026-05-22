@@ -379,7 +379,7 @@
                                         <th>{!! $msCell('fan_name') !!}</th>
                                         <th><input type="text" class="col-filter-input" data-col="fan_id" placeholder="Fan ID..."></th>
                                         <th>{!! $msCell('yn_turi') !!}</th>
-                                        <th><input type="text" class="col-filter-input" data-col="shakl" placeholder="Shakl..."></th>
+                                        <th>{!! $msCell('shakl') !!}</th>
                                         <th>
                                             <div class="adv-filter-wrap">
                                                 <button type="button" class="adv-filter-btn" onclick="toggleAdvFilter('baho')">
@@ -591,7 +591,7 @@
 
         // ========== USTUN KO'P TANLOVLI FILTRLARI ==========
         var msSelected = {}; // col => [tanlangan qiymatlar]
-        var msColsList = ['faculty','direction','kurs','semester','group','fan_name','yn_turi','xulosa_code'];
+        var msColsList = ['faculty','direction','kurs','semester','group','fan_name','yn_turi','shakl','xulosa_code'];
 
         function msPopulate() {
             msColsList.forEach(function(col) {

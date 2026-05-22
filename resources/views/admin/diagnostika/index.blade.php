@@ -330,9 +330,8 @@
                             <table class="journal-table" id="results-table">
                                 <thead>
                                     <tr>
-                                        <th style="width:62px;padding-left:14px;white-space:nowrap;">
-                                            <input type="checkbox" id="select-uploadable" class="cb-styled" title="Faqat yuklanmaganlarni (yuklasa bo'ladi) belgilash" style="display:none;margin-right:8px;accent-color:#16a34a;">
-                                            <input type="checkbox" id="select-all" class="cb-styled" title="Hammasini belgilash">
+                                        <th style="width:40px;padding-left:14px;">
+                                            <input type="checkbox" id="select-all" class="cb-styled">
                                         </th>
                                         <th class="th-num">#</th>
                                         <th>Student ID</th>
@@ -909,10 +908,6 @@
             }
             $('#table-body').html(html);
             $('#select-all').prop('checked', false);
-            // Yuklanmagan (yuklasa bo'ladi/mavzu) qatorlar bo'lsa — "yuklanmaganlarni
-            // belgilash" checkboxi paydo bo'ladi
-            var hasUploadable = data.some(function(r) { return r.xulosa_code === 'ok' || r.xulosa_code === 'mavzu'; });
-            $('#select-uploadable').prop('checked', false).toggle(hasUploadable);
         }
 
         // ========== TANLASH BOSHQARUVI ==========
@@ -1070,42 +1065,16 @@
                 $('#btn-import').prop('disabled', !name);
             });
 
-            // Sarlavhadagi ikki checkbox holatini qator checkboxlardan qayta hisoblash
-            function syncHeaderChecks() {
-                var $rows = $('.row-checkbox');
-                var total = $rows.length;
-                var checkedCount = $rows.filter(':checked').length;
-                $('#select-all').prop('checked', total > 0 && checkedCount === total);
-                var $up = $rows.filter('[data-xulosa="ok"],[data-xulosa="mavzu"]');
-                var upTotal = $up.length;
-                var upChecked = $up.filter(':checked').length;
-                // "Yuklanmaganlar" checkbox — barcha yuklanadigan qatorlar belgilangan
-                // va boshqa hech narsa belgilanmagan bo'lsagina yoqilgan ko'rinadi
-                $('#select-uploadable').prop('checked', upTotal > 0 && upChecked === upTotal && checkedCount === upChecked);
-            }
-
             $('#select-all').on('change', function() {
                 var checked = $(this).is(':checked');
                 $('.row-checkbox:not(:disabled)').prop('checked', checked);
                 updateButtons();
-                syncHeaderChecks();
-            });
-            // "Yuklanmaganlarni belgilash" — faqat yuklasa bo'ladigan (ok/mavzu) qatorlarni belgilaydi
-            $('#select-uploadable').on('change', function() {
-                if ($(this).is(':checked')) {
-                    $('.row-checkbox').each(function() {
-                        var x = $(this).data('xulosa');
-                        $(this).prop('checked', x === 'ok' || x === 'mavzu');
-                    });
-                } else {
-                    $('.row-checkbox').prop('checked', false);
-                }
-                updateButtons();
-                syncHeaderChecks();
             });
             $(document).on('change', '.row-checkbox', function() {
                 updateButtons();
-                syncHeaderChecks();
+                var total = $('.row-checkbox:not(:disabled)').length;
+                var checked = $('.row-checkbox:checked').length;
+                $('#select-all').prop('checked', total > 0 && checked === total);
             });
 
             var filterTimer = null;

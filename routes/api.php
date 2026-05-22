@@ -120,6 +120,12 @@ Route::prefix('v1')->group(function () {
             Route::get('/exam-schedule', [StudentApiController::class, 'examSchedule']);
             Route::get('/rating', [StudentApiController::class, 'studentRating']);
 
+            // Notifications (bell icon)
+            Route::get('/notifications', [StudentApiController::class, 'notifications']);
+            Route::get('/notifications/unread-count', [StudentApiController::class, 'notificationsUnreadCount']);
+            Route::post('/notifications/{id}/read', [StudentApiController::class, 'markNotificationRead']);
+            Route::post('/notifications/read-all', [StudentApiController::class, 'markAllNotificationsRead']);
+
             // Profile completion
             Route::post('/complete-profile/phone', [StudentApiController::class, 'savePhone']);
             Route::post('/complete-profile/telegram', [StudentApiController::class, 'saveTelegram']);

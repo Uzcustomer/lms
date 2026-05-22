@@ -29,6 +29,12 @@ class ApiConfig {
   static const String studentExamSchedule = '/student/exam-schedule';
   static const String studentRating = '/student/rating';
 
+  // Notifications
+  static const String studentNotifications = '/student/notifications';
+  static const String studentNotificationsUnreadCount = '/student/notifications/unread-count';
+  static const String studentNotificationsReadAll = '/student/notifications/read-all';
+  // Per-item read: POST '/student/notifications/{id}/read'
+
   // Absence excuse endpoints
   static const String studentExcuseReasons = '/student/excuses/reasons';
   static const String studentExcuses = '/student/excuses';

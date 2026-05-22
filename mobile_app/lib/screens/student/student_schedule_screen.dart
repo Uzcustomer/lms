@@ -8,6 +8,7 @@ import '../../providers/student_provider.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/settings_sheet.dart';
+import '../../widgets/notification_bell.dart';
 import 'student_home_screen.dart';
 
 class StudentScheduleScreen extends StatefulWidget {
@@ -255,10 +256,7 @@ class _StudentScheduleScreenState extends State<StudentScheduleScreen> {
                         const Spacer(),
                         Text(l.schedule, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
                         const Spacer(),
-                        IconButton(
-                          icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
-                          onPressed: () {},
-                        ),
+                        const NotificationBell(),
                         IconButton(
                           icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
                           onPressed: () => showSettingsSheet(context),

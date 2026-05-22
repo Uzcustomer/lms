@@ -8,6 +8,7 @@ import '../../providers/settings_provider.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/scale_tap.dart';
 import '../../widgets/settings_sheet.dart';
+import '../../widgets/notification_bell.dart';
 import 'student_services_screen.dart';
 import 'student_exam_schedule_screen.dart';
 import 'attendance_stats_screen.dart';
@@ -109,10 +110,7 @@ class StudentUsefulScreen extends StatelessWidget {
                       const Spacer(),
                       Text(l.useful, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
                       const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.notifications_outlined, color: Colors.white, size: 22),
-                        onPressed: () {},
-                      ),
+                      const NotificationBell(),
                       IconButton(
                         icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
                         onPressed: () => showSettingsSheet(context),

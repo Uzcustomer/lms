@@ -66,6 +66,27 @@ class StudentService {
     return await _api.get(ApiConfig.studentRating, queryParams: {'filter': filter});
   }
 
+  // Notifications
+  Future<Map<String, dynamic>> getNotifications({int page = 1, int perPage = 30, bool unreadOnly = false}) async {
+    return await _api.get(ApiConfig.studentNotifications, queryParams: {
+      'page': page.toString(),
+      'per_page': perPage.toString(),
+      if (unreadOnly) 'unread_only': '1',
+    });
+  }
+
+  Future<Map<String, dynamic>> getNotificationsUnreadCount() async {
+    return await _api.get(ApiConfig.studentNotificationsUnreadCount);
+  }
+
+  Future<Map<String, dynamic>> markNotificationRead(int id) async {
+    return await _api.post('${ApiConfig.studentNotifications}/$id/read', const {}, auth: true);
+  }
+
+  Future<Map<String, dynamic>> markAllNotificationsRead() async {
+    return await _api.post(ApiConfig.studentNotificationsReadAll, const {}, auth: true);
+  }
+
   // Absence excuse methods
   Future<Map<String, dynamic>> getExcuseReasons() async {
     return await _api.get(ApiConfig.studentExcuseReasons);

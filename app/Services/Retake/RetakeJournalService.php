@@ -271,35 +271,84 @@ class RetakeJournalService
             ]);
         }
 
-        // Eski faylni o'chirish (qayta yuklayotgan bo'lsa)
+        // Mavjud topshiriq — qayta yuklash chegaralarini tekshiramiz.
         $existing = RetakeMustaqilSubmission::where('retake_group_id', $group->id)
             ->where('application_id', $app->id)
             ->first();
+
+        $attemptColumnExists = $this->mustaqilAttemptColumnExists();
+
+        if ($existing) {
+            // 60+ baho olgan bo'lsa — o'tgan, qayta yuklash shart emas
+            if ($existing->grade !== null
+                && (float) $existing->grade >= RetakeMustaqilSubmission::PASS_GRADE) {
+                throw ValidationException::withMessages([
+                    'file' => 'Siz mustaqil ta\'limdan o\'tdingiz (60+ baho) — qayta yuklash shart emas',
+                ]);
+            }
+            // 3 marta urinish tugagan bo'lsa — boshqa yuklab bo'lmaydi
+            if ($attemptColumnExists
+                && (int) $existing->attempt_count >= RetakeMustaqilSubmission::MAX_ATTEMPTS) {
+                throw ValidationException::withMessages([
+                    'file' => 'Mustaqil ta\'lim uchun ' . RetakeMustaqilSubmission::MAX_ATTEMPTS
+                        . ' marta urinish imkoni tugagan',
+                ]);
+            }
+        }
+
+        // Eski faylni o'chirish (qayta yuklayotgan bo'lsa)
         if ($existing && $existing->file_path && Storage::disk('public')->exists($existing->file_path)) {
             Storage::disk('public')->delete($existing->file_path);
         }
 
         $path = $file->store("retake/mustaqil/{$group->id}", 'public');
 
+        $values = [
+            'student_hemis_id' => $student->hemis_id,
+            'file_path' => $path,
+            'original_filename' => $file->getClientOriginalName(),
+            'student_comment' => $comment,
+            'submitted_at' => now(),
+            // Qayta yuklaganda eski bahoni saqlab qoldirmaslik (qayta baholash uchun)
+            'grade' => null,
+            'teacher_comment' => null,
+            'graded_by_user_id' => null,
+            'graded_by_name' => null,
+            'graded_at' => null,
+        ];
+        if ($attemptColumnExists) {
+            $values['attempt_count'] = ((int) ($existing->attempt_count ?? 0)) + 1;
+        }
+
         return RetakeMustaqilSubmission::updateOrCreate(
             [
                 'retake_group_id' => $group->id,
                 'application_id' => $app->id,
             ],
-            [
-                'student_hemis_id' => $student->hemis_id,
-                'file_path' => $path,
-                'original_filename' => $file->getClientOriginalName(),
-                'student_comment' => $comment,
-                'submitted_at' => now(),
-                // Qayta yuklaganda eski bahoni saqlab qoldirmaslik (qayta baholash uchun)
-                'grade' => null,
-                'teacher_comment' => null,
-                'graded_by_user_id' => null,
-                'graded_by_name' => null,
-                'graded_at' => null,
-            ]
+            $values,
         );
+    }
+
+    /**
+     * `attempt_count` ustuni mavjudligi (migration ishga tushganmi) — bir
+     * martagina tekshiriladi va keshlanadi. Migration hali ishlamagan
+     * bo'lsa, urinish cheklovi jim qoladi, 500 xato bermaydi.
+     */
+    private ?bool $mustaqilAttemptColumn = null;
+
+    private function mustaqilAttemptColumnExists(): bool
+    {
+        if ($this->mustaqilAttemptColumn === null) {
+            try {
+                $this->mustaqilAttemptColumn = \Illuminate\Support\Facades\Schema::hasColumn(
+                    'retake_mustaqil_submissions',
+                    'attempt_count'
+                );
+            } catch (\Throwable $e) {
+                $this->mustaqilAttemptColumn = false;
+            }
+        }
+        return $this->mustaqilAttemptColumn;
     }
 
     /**

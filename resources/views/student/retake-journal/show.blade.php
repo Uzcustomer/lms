@@ -204,27 +204,55 @@
                     @endif
 
                     {{-- Yuklash formasi --}}
-                    @if($isEditable)
+                    @php
+                        $maxAttempts = \App\Models\RetakeMustaqilSubmission::MAX_ATTEMPTS;
+                        $passGrade = \App\Models\RetakeMustaqilSubmission::PASS_GRADE;
+                        $attemptCount = (int) ($mustaqil->attempt_count ?? 0);
+                        $mustaqilPassed = $mustaqil && $mustaqil->grade !== null && (float) $mustaqil->grade >= $passGrade;
+                        $attemptsLeft = max(0, $maxAttempts - $attemptCount);
+                        $mustaqilExhausted = $mustaqil && $attemptCount >= $maxAttempts;
+                        $canUploadMustaqil = $isEditable && !$mustaqilPassed && !$mustaqilExhausted;
+                    @endphp
+
+                    @if($mustaqilPassed)
+                        <div class="bg-green-50 border border-green-200 rounded-lg p-3 text-xs text-green-800 flex items-start gap-2">
+                            <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
+                            <span>{{ __("Siz mustaqil ta'limdan o'tdingiz (60+ baho) — qayta yuklash shart emas.") }}</span>
+                        </div>
+                    @elseif(!$isEditable)
+                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 flex items-start gap-2">
+                            <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                            <span>{{ __("Guruh muddati tugagan, fayl yuklash mumkin emas") }}</span>
+                        </div>
+                    @elseif($mustaqilExhausted)
+                        <div class="bg-red-50 border border-red-200 rounded-lg p-3 text-xs text-red-800 flex items-start gap-2">
+                            <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+                            <span>{{ __("Mustaqil ta'lim uchun :n marta urinish imkoni tugadi.", ['n' => $maxAttempts]) }}</span>
+                        </div>
+                    @else
                         <form method="POST"
                               action="{{ route('student.retake-journal.mustaqil-upload', $group->id) }}"
                               enctype="multipart/form-data"
                               class="space-y-3 pt-3 border-t border-gray-100">
                             @csrf
-                            <div>
-                                <label class="block text-xs font-medium text-gray-700 mb-1">
+                            <div class="flex items-center justify-between flex-wrap gap-1">
+                                <label class="block text-xs font-medium text-gray-700">
                                     @if($mustaqil)
                                         {{ __("Faylni qayta yuklash") }} (max 5 MB)
                                     @else
                                         {{ __("Fayl yuklash") }} (max 5 MB) <span class="text-red-500">*</span>
                                     @endif
                                 </label>
-                                <input type="file"
-                                       name="file"
-                                       accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.zip,.rar"
-                                       required
-                                       class="block w-full text-xs text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-red-50 file:text-red-700 hover:file:bg-red-100">
-                                <p class="text-[11px] text-gray-500 mt-1">PDF, DOC, JPG, PNG, ZIP, RAR · max 5 MB</p>
+                                <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+                                    {{ __("Urinish") }}: {{ $attemptCount }}/{{ $maxAttempts }}
+                                </span>
                             </div>
+                            <input type="file"
+                                   name="file"
+                                   accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.zip,.rar"
+                                   required
+                                   class="block w-full text-xs text-gray-700 file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border-0 file:text-xs file:font-medium file:bg-red-50 file:text-red-700 hover:file:bg-red-100">
+                            <p class="text-[11px] text-gray-500">PDF, DOC, JPG, PNG, ZIP, RAR · max 5 MB</p>
                             <div>
                                 <label class="block text-xs font-medium text-gray-700 mb-1">
                                     {{ __("Izoh (ixtiyoriy)") }}
@@ -240,17 +268,14 @@
                                 @if($mustaqil) {{ __("Qayta yuklash") }} @else {{ __("Yuklash") }} @endif
                             </button>
 
-                            @if($mustaqil)
-                                <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
-                                    ⚠️ {{ __("Qayta yuklasangiz, mavjud baho va izoh bekor qilinadi va o'qituvchi qaytadan tekshiradi.") }}
-                                </p>
-                            @endif
+                            <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">
+                                ⚠️ {{ __("Mustaqil ta'limni eng ko'pi :n marta yuklash mumkin. 60+ baho olsangiz qayta yuklash yopiladi.", ['n' => $maxAttempts]) }}
+                                @if($mustaqil)
+                                    {{ __("Qayta yuklasangiz, mavjud baho bekor qilinadi va o'qituvchi qaytadan tekshiradi.") }}
+                                @endif
+                                {{ __("Sizda yana :n marta imkon bor.", ['n' => $attemptsLeft]) }}
+                            </p>
                         </form>
-                    @else
-                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-900 flex items-start gap-2">
-                            <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
-                            <span>{{ __("Guruh muddati tugagan, fayl yuklash mumkin emas") }}</span>
-                        </div>
                     @endif
                 </div>
             </div>

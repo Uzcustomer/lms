@@ -189,7 +189,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   // ── Clinic-calm palette ──────────────────────────────
-  static const _calmBg = Color(0xFFF8FAFC);
+  static const _calmBg = Color(0xFFFFFFFF);
   static const _calmInk = Color(0xFF0F172A);
   static const _calmMuted = Color(0xFF64748B);
   static const _calmFaint = Color(0xFF94A3B8);
@@ -277,16 +277,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                 children: [
                   _buildHeader(context, l),
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 0),
+                    padding: const EdgeInsets.fromLTRB(14, 10, 14, 0),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         _buildProfileCard(data, profile),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         _buildGpaRow(data, profile, l),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         _buildWeeklyActivity(data),
-                        const SizedBox(height: 12),
+                        const SizedBox(height: 8),
                         _buildLiveClassCard(),
                         _buildSubjectsOverview(provider.subjects, isDark, l),
                         _buildTuitionFeeSection(context, profile, provider.contract, provider.contractList, l, isDark),
@@ -1171,7 +1171,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final shadowColor = isActive ? const Color(0xFF43A047) : const Color(0xFFF57C00);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Container(
         width: double.infinity,
         clipBehavior: Clip.antiAlias,
@@ -1368,7 +1368,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     }
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.only(bottom: 8),
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.all(18),

@@ -290,6 +290,9 @@
                         <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Yo'nalish") }}</th>
                         <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase">{{ __("Kredit") }}</th>
                         <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Holat") }}</th>
+                        @if($group->status !== 'completed')
+                            <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase">{{ __("Amal") }}</th>
+                        @endif
                     </tr>
                     </thead>
                     <tbody class="bg-white divide-y divide-gray-100">
@@ -312,6 +315,20 @@
                                     {{ $app->final_status }}
                                 </span>
                             </td>
+                            @if($group->status !== 'completed')
+                                <td class="px-3 py-2 text-right">
+                                    <form method="POST" action="{{ route('admin.retake-groups.students.remove', [$group->id, $app->id]) }}"
+                                          onsubmit="return confirm('{{ __('Bu talabani guruhdan chiqarishni tasdiqlaysizmi? U qayta guruhlash ro\'yxatiga qaytadi.') }}')"
+                                          class="inline">
+                                        @csrf @method('DELETE')
+                                        <button type="submit"
+                                                class="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-medium text-red-700 bg-red-50 rounded-lg hover:bg-red-100">
+                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                            {{ __("Guruhdan chiqarish") }}
+                                        </button>
+                                    </form>
+                                </td>
+                            @endif
                         </tr>
                     @endforeach
                     </tbody>

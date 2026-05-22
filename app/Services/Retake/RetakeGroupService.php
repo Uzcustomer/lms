@@ -265,6 +265,71 @@ class RetakeGroupService
     }
 
     /**
+     * Talabani guruhdan chiqarish — adashib noto'g'ri fanga guruhlangan
+     * bo'lsa ishlatiladi. Ariza yana "guruhlanmagan, tasdiqlangan" holatga
+     * qaytadi (retake_group_id = NULL, final_status = pending), shuning uchun
+     * QO': Guruhlar ro'yxatida qayta ko'rinadi va boshqa to'g'ri fan guruhiga
+     * biriktirilishi mumkin.
+     */
+    public function removeApplicationFromGroup(RetakeGroup $group, int $applicationId, Teacher $actor): void
+    {
+        if ($group->status === RetakeGroup::STATUS_COMPLETED) {
+            throw ValidationException::withMessages([
+                'group' => "Tugagan guruhdan talabani chiqarib bo'lmaydi",
+            ]);
+        }
+
+        $app = RetakeApplication::where('id', $applicationId)
+            ->where('retake_group_id', $group->id)
+            ->first();
+        if (!$app) {
+            throw ValidationException::withMessages([
+                'application' => 'Ariza bu guruhga tegishli emas',
+            ]);
+        }
+
+        DB::transaction(function () use ($group, $app, $actor) {
+            // Guruhga oid kunlik baholar
+            \App\Models\RetakeGrade::where('retake_group_id', $group->id)
+                ->where('application_id', $app->id)
+                ->delete();
+
+            // Guruhga oid mustaqil ta'lim topshiriqlari (fayllari bilan)
+            $submissions = \App\Models\RetakeMustaqilSubmission::where('retake_group_id', $group->id)
+                ->where('application_id', $app->id)
+                ->get();
+            foreach ($submissions as $sub) {
+                if ($sub->file_path
+                    && \Illuminate\Support\Facades\Storage::disk('public')->exists($sub->file_path)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($sub->file_path);
+                }
+                $sub->delete();
+            }
+
+            // Arizani "guruhlanmagan, tasdiqlangan" holatiga qaytarish.
+            // academic_dept_status = approved saqlanib qoladi — shuning uchun
+            // ariza QO': Guruhlar ro'yxatida qayta ko'rinadi.
+            $app->update([
+                'retake_group_id' => null,
+                'final_status' => RetakeApplication::STATUS_PENDING,
+                'joriy_score' => null,
+                'joriy_graded_by_name' => null,
+                'joriy_graded_at' => null,
+            ]);
+
+            RetakeApplicationLog::create([
+                'application_id' => $app->id,
+                'group_id' => $app->group_id,
+                'user_id' => $actor->id,
+                'user_type' => 'teacher',
+                'user_name' => $actor->full_name,
+                'action' => RetakeApplicationLog::ACTION_GROUP_REMOVED,
+                'metadata' => ['retake_group_id' => $group->id],
+            ]);
+        });
+    }
+
+    /**
      * Forming holatidagi guruhni "publish" qilish — talabalarni tasdiqlash.
      */
     public function publish(RetakeGroup $group, Teacher $actor): RetakeGroup

@@ -18,6 +18,7 @@ class RetakeApplicationLog extends Model
     public const ACTION_AUTO_CANCELLED_HEMIS = 'auto_cancelled_hemis';
     public const ACTION_AUTO_REJECTED_WINDOW_CLOSED = 'auto_rejected_window_closed';
     public const ACTION_GROUP_ASSIGNED = 'group_assigned';
+    public const ACTION_GROUP_REMOVED = 'group_removed';
     public const ACTION_STATUS_CHANGED = 'status_changed';
 
     protected $fillable = [

@@ -373,6 +373,28 @@ class RetakeGroupController extends Controller
     }
 
     /**
+     * Talabani guruhdan chiqarish (noto'g'ri guruhlangan bo'lsa).
+     * Ariza yana QO': Guruhlar ro'yxatiga qaytadi.
+     */
+    public function removeStudent(int $groupId, int $applicationId): RedirectResponse
+    {
+        $this->authorize();
+
+        $group = RetakeGroup::findOrFail($groupId);
+
+        try {
+            /** @var Teacher $actor */
+            $actor = RetakeAccess::currentStaff();
+            $this->groupService->removeApplicationFromGroup($group, $applicationId, $actor);
+        } catch (ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors());
+        }
+
+        return redirect()->route('admin.retake-groups.edit', $groupId)
+            ->with('success', __("Talaba guruhdan chiqarildi — qayta guruhlash uchun ro'yxatga qaytdi"));
+    }
+
+    /**
      * Guruhni tahrirlash sahifasi.
      */
     public function edit(int $groupId)

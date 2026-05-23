@@ -27,15 +27,16 @@ use Throwable;
 class MoodleTriggerPushController extends Controller
 {
     /**
-     * Date columns on exam_schedules → (yn_type, attempt) the job expects.
+     * (date column, time column) pairs on exam_schedules → (yn_type, attempt)
+     * the job expects. Time column may be NULL — treated as 00:00:00.
      */
     private const DATE_COLUMN_MAP = [
-        'test_date'        => ['test', 1],
-        'test_resit_date'  => ['test', 2],
-        'test_resit2_date' => ['test', 3],
-        'oski_date'        => ['oski', 1],
-        'oski_resit_date'  => ['oski', 2],
-        'oski_resit2_date' => ['oski', 3],
+        'test_date'        => ['test_time',        'test', 1],
+        'test_resit_date'  => ['test_resit_time',  'test', 2],
+        'test_resit2_date' => ['test_resit2_time', 'test', 3],
+        'oski_date'        => ['oski_time',        'oski', 1],
+        'oski_resit_date'  => ['oski_resit_time',  'oski', 2],
+        'oski_resit2_date' => ['oski_resit2_time', 'oski', 3],
     ];
 
     /**
@@ -55,9 +56,13 @@ class MoodleTriggerPushController extends Controller
     {
         $startedAt = microtime(true);
 
+        // Accept either a plain date (YYYY-MM-DD) — expanded to the full day —
+        // or a datetime (YYYY-MM-DD HH:MM[:SS]). Laravel's `date` rule accepts
+        // both via strtotime; we try `date_format:Y-m-d` first so we can tell
+        // them apart and expand date-only inputs to full-day bounds.
         $data = $request->validate([
-            'from'    => ['required', 'date'],
-            'to'      => ['required', 'date', 'after_or_equal:from'],
+            'from'    => ['required', 'string', 'date'],
+            'to'      => ['required', 'string', 'date', 'after_or_equal:from'],
             'api_key' => ['required', 'string'],
         ]);
 
@@ -69,8 +74,8 @@ class MoodleTriggerPushController extends Controller
             ], 401);
         }
 
-        $from = CarbonImmutable::parse($data['from'])->startOfDay();
-        $to   = CarbonImmutable::parse($data['to'])->endOfDay();
+        $from = $this->parseBound((string) $data['from'], false);
+        $to   = $this->parseBound((string) $data['to'], true);
 
         if ($from->diffInDays($to) > self::MAX_RANGE_DAYS) {
             return response()->json([
@@ -80,18 +85,24 @@ class MoodleTriggerPushController extends Controller
         }
 
         Log::info('moodle.trigger_push', [
-            'phase' => 'start',
-            'from'  => $from->toDateString(),
-            'to'    => $to->toDateString(),
-            'ip'    => $request->ip(),
+            'phase'   => 'start',
+            'from'    => $from->toDateString(),
+            'to'      => $to->toDateString(),
+            'from_dt' => $from->toIso8601String(),
+            'to_dt'   => $to->toIso8601String(),
+            'ip'      => $request->ip(),
         ]);
 
         // Build the WHERE: schedule matches if ANY of the six date columns
-        // falls inside [from, to]. whereBetween on a date column with full
-        // day-bounded timestamps works for both DATE and DATETIME columns.
-        $query = ExamSchedule::query()->where(function ($q) use ($from, $to) {
+        // falls inside [from-day, to-day]. We deliberately compare only the
+        // date part here (widening to whole-day bounds) so that rows on the
+        // boundary days survive the SQL filter — the per-row datetime check
+        // below refines them down to the exact [from, to] window.
+        $fromDay = $from->startOfDay();
+        $toDay   = $to->endOfDay();
+        $query = ExamSchedule::query()->where(function ($q) use ($fromDay, $toDay) {
             foreach (array_keys(self::DATE_COLUMN_MAP) as $col) {
-                $q->orWhereBetween($col, [$from, $to]);
+                $q->orWhereBetween($col, [$fromDay, $toDay]);
             }
         });
 
@@ -110,17 +121,29 @@ class MoodleTriggerPushController extends Controller
             &$truncated
         ) {
             foreach ($chunk as $schedule) {
-                foreach (self::DATE_COLUMN_MAP as $col => [$ynType, $attempt]) {
-                    $val = $schedule->{$col};
-                    if (!$val) {
+                foreach (self::DATE_COLUMN_MAP as $dateCol => [$timeCol, $ynType, $attempt]) {
+                    $dateVal = $schedule->{$dateCol};
+                    if (!$dateVal) {
                         continue;
                     }
 
-                    // Column may be cast to Carbon (DATETIME) or returned as
-                    // a date string. Normalize via CarbonImmutable.
-                    $dt = CarbonImmutable::parse(
-                        $val instanceof \DateTimeInterface ? $val->format('Y-m-d') : (string) $val
-                    )->startOfDay();
+                    // Combine (date, time) into a full datetime. Time column
+                    // may be NULL — fall back to 00:00:00. Date column may be
+                    // cast to Carbon (DATETIME) or returned as a string.
+                    $dateStr = $dateVal instanceof \DateTimeInterface
+                        ? $dateVal->format('Y-m-d')
+                        : substr((string) $dateVal, 0, 10);
+
+                    $timeVal = $schedule->{$timeCol} ?? null;
+                    if ($timeVal instanceof \DateTimeInterface) {
+                        $timeStr = $timeVal->format('H:i:s');
+                    } elseif ($timeVal !== null && $timeVal !== '') {
+                        $timeStr = (string) $timeVal;
+                    } else {
+                        $timeStr = '00:00:00';
+                    }
+
+                    $dt = CarbonImmutable::parse($dateStr.' '.$timeStr);
 
                     if ($dt->lt($from) || $dt->gt($to)) {
                         continue;
@@ -182,5 +205,25 @@ class MoodleTriggerPushController extends Controller
         }
 
         return response()->json($response);
+    }
+
+    /**
+     * Parse a `from`/`to` bound. A bare YYYY-MM-DD expands to start/end of
+     * day (controlled by $isUpperBound); a YYYY-MM-DD HH:MM[:SS] is used
+     * as-is. Already validated by Laravel's `date` rule before we get here.
+     */
+    private function parseBound(string $value, bool $isUpperBound): CarbonImmutable
+    {
+        $value = trim($value);
+
+        // Date-only → expand to full-day bound for backward compatibility
+        // with the original date-range callers.
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $value) === 1) {
+            $dt = CarbonImmutable::parse($value);
+
+            return $isUpperBound ? $dt->endOfDay() : $dt->startOfDay();
+        }
+
+        return CarbonImmutable::parse($value);
     }
 }

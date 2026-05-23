@@ -4521,13 +4521,24 @@ class AcademicScheduleController extends Controller
                     $displayName = $subjectData['display_name'] ?? ($subj->subject_name ?? '');
 
                     $attemptsInSubject = [];
+                    $ynTypesInSubject = [];
                     foreach ($subjectData['entries'] as $_e) {
                         $_a = (int) ($_e['attempt'] ?? 1);
                         if ($_a > 0 && !in_array($_a, $attemptsInSubject, true)) {
                             $attemptsInSubject[] = $_a;
                         }
+                        $_yn = strtolower((string) ($_e['yn_type'] ?? ''));
+                        if ($_yn === 'oski' || $_yn === 'test') {
+                            $_ynLabel = $_yn === 'oski' ? 'OSKI' : 'Test';
+                            if (!in_array($_ynLabel, $ynTypesInSubject, true)) {
+                                $ynTypesInSubject[] = $_ynLabel;
+                            }
+                        }
                     }
                     sort($attemptsInSubject);
+                    if (!empty($ynTypesInSubject)) {
+                        $displayName = implode('/', $ynTypesInSubject) . ' — ' . $displayName;
+                    }
                     if (!empty($attemptsInSubject)) {
                         $displayName .= ' (' . implode('/', $attemptsInSubject) . '-urinish)';
                     }
@@ -4837,9 +4848,24 @@ class AcademicScheduleController extends Controller
             $textRun->addText('     Guruh: ', $infoBold);
             $textRun->addText(implode(', ', $groupNames) ?: '-', $infoStyle);
 
+            $ynTypesForSubject = [];
+            foreach ($subjectData['entries'] as $_e) {
+                $_yn = strtolower((string) ($_e['yn_type'] ?? ''));
+                if ($_yn === 'oski' || $_yn === 'test') {
+                    $_ynLabel = $_yn === 'oski' ? 'OSKI' : 'Test';
+                    if (!in_array($_ynLabel, $ynTypesForSubject, true)) {
+                        $ynTypesForSubject[] = $_ynLabel;
+                    }
+                }
+            }
+            $subjectNameWithYn = $subject->subject_name ?? '-';
+            if (!empty($ynTypesForSubject)) {
+                $subjectNameWithYn = implode('/', $ynTypesForSubject) . ' — ' . $subjectNameWithYn;
+            }
+
             $textRun = $section->addTextRun($infoParaStyle);
             $textRun->addText('Fan: ', $infoBold);
-            $textRun->addText($subject->subject_name ?? '-', $infoStyle);
+            $textRun->addText($subjectNameWithYn, $infoStyle);
 
             $textRun = $section->addTextRun($infoParaStyle);
             $textRun->addText("Ma'ruzachi: ", $infoBold);
@@ -7912,12 +7938,39 @@ class AcademicScheduleController extends Controller
             ->sortBy(fn($r) => $r['time'] === null ? 'zz' : $r['time'])
             ->values();
 
+        // Kompyuter raqami qo'yilmagan talabalar soni: vaqti belgilangan
+        // (no_time = false) slotlardagi jami talabalardan, shu schedule_id'lar
+        // bo'yicha computer_assignments'da computer_number IS NOT NULL bo'lgan
+        // qatorlar soni ayriladi. Agar bironta ham assignment yo'q bo'lsa,
+        // hammasi "qo'yilmagan" deb hisoblanadi.
+        $scheduledScheduleIds = $slots
+            ->where('no_time', false)
+            ->flatMap(fn ($r) => collect($r['groups'])->pluck('schedule_id'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $scheduledStudents = (int) $slots->where('no_time', false)->sum('occupied');
+        $assignedComputerCount = 0;
+        if (!empty($scheduledScheduleIds)) {
+            try {
+                $assignedComputerCount = (int) DB::table('computer_assignments')
+                    ->whereIn('exam_schedule_id', $scheduledScheduleIds)
+                    ->whereNotNull('computer_number')
+                    ->count();
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: computer_number hisobi xatolik berdi: ' . $e->getMessage());
+            }
+        }
+        $pendingComputerStudents = max(0, $scheduledStudents - $assignedComputerCount);
+
         return view('admin.academic-schedule.bandlik-kursatkichi-show', [
             'date' => $carbonDate,
             'slots' => $slots,
             'totalComputers' => $totalComputers,
             'settings' => $settings,
             'dailyCapacity' => $dailyCapacity,
+            'pendingComputerStudents' => $pendingComputerStudents,
         ]);
     }
 

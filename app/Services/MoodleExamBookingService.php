@@ -6,6 +6,7 @@ use App\Models\ExamSchedule;
 use App\Models\HemisQuizResult;
 use App\Models\Semester;
 use App\Models\Student;
+use App\Models\StudentSubject;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
@@ -344,15 +345,19 @@ class MoodleExamBookingService
      * (group, subject): the "{subject}_{N-sem}_{faculty}_{direction}" segment,
      * which is identical across language and attempt number.
      *
-     * The subject portion always comes from this schedule's `subject_name` -
-     * Mark is the source of truth for how the academic department wrote the
-     * subject. The "{N-sem}_{faculty}_{direction}" tail is group-specific and
-     * is lifted from hemis_quiz_results.attempt_name (the real quiz names
-     * Moodle pushed back during the Diagnostika results import). The subject
-     * portion is never replayed from history, because a stray Moodle quiz
-     * with a typo subject (e.g. a trailing "." on "...ortepediyasi.") would
-     * otherwise poison every follow-up booking once a single student happened
-     * to take that typo quiz.
+     * The subject portion comes from the freshest HEMIS-synced source —
+     * `student_subjects.subject_name` for this group + this subject_id, which
+     * is refreshed per student on every HEMIS `student-subject-list` sync.
+     * exam_schedules.subject_name is a snapshot taken at schedule creation
+     * time, so it can lag if HEMIS later corrects the subject text.
+     *
+     * The "{N-sem}_{faculty}_{direction}" tail is group-specific and is
+     * lifted from hemis_quiz_results.attempt_name (the real quiz names Moodle
+     * pushed back during the Diagnostika results import). The subject portion
+     * is never replayed from history, because a stray Moodle quiz with a
+     * typo subject (e.g. a trailing "." on "...ortepediyasi.") would
+     * otherwise poison every follow-up booking once a single student
+     * happened to take that typo quiz.
      *
      * Resolution order:
      *  1. Prefer a tail from this group's own {prefix} attempt for THIS
@@ -375,7 +380,7 @@ class MoodleExamBookingService
             return null;
         }
 
-        $subjectName = $this->stripGroupSuffix(trim((string) $schedule->subject_name));
+        $subjectName = $this->resolveHemisSubjectName($schedule);
         if ($subjectName === '') {
             return null;
         }
@@ -426,6 +431,46 @@ class MoodleExamBookingService
         }
 
         return null;
+    }
+
+    /**
+     * Subject name for this schedule, taken from the freshest HEMIS-synced
+     * source: `student_subjects.subject_name` for any student in this group
+     * who carries this subject_id. That row is refreshed on every HEMIS
+     * `student-subject-list` sync, so it always reflects HEMIS's current
+     * spelling. Falls back to exam_schedules.subject_name when no
+     * student_subjects row exists (e.g. a brand-new student / subject pair).
+     *
+     * The "(a)/(b)" parallel-stream suffix is stripped — Moodle quiz names
+     * never carry it.
+     */
+    private function resolveHemisSubjectName(ExamSchedule $schedule): string
+    {
+        // student_hemis_id (per-student schedule) bo'lsa — faqat shu talabaga
+        // mos student_subjects ni qaraymiz; aks holda butun guruh bo'yicha.
+        $query = StudentSubject::where('subject_id', $schedule->subject_id)
+            ->whereNotNull('subject_name')
+            ->where('subject_name', '!=', '');
+
+        if (!empty($schedule->student_hemis_id)) {
+            $query->where('student_hemis_id', $schedule->student_hemis_id);
+        } else {
+            $groupStudentHemisIds = Student::where('group_id', $schedule->group_hemis_id)
+                ->pluck('hemis_id')
+                ->all();
+            if (!empty($groupStudentHemisIds)) {
+                $query->whereIn('student_hemis_id', $groupStudentHemisIds);
+            }
+        }
+
+        $name = (string) $query->orderByDesc('updated_at')
+            ->orderByDesc('id')
+            ->value('subject_name');
+
+        if ($name === '') {
+            $name = (string) $schedule->subject_name;
+        }
+        return $this->stripGroupSuffix(trim($name));
     }
 
     /**

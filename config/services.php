@@ -66,11 +66,6 @@ return [
         'sync_secret' => env('MOODLE_SYNC_SECRET'),
         'pull_secret' => env('MOODLE_PULL_SECRET'),
 
-        // Moodle base URL (wwwroot). Used to build redirect URLs back into
-        // Moodle from LMS-rendered pages such as the trilingual exam
-        // language picker. When unset we fall back to deriving it from
-        // ws_url (which is "{wwwroot}/webservice/rest/server.php").
-        'wwwroot' => env('MOODLE_WWWROOT'),
         // local_hemisexport plugin web service
         'ws_url' => env('MOODLE_WS_URL'),
         'ws_token' => env('MOODLE_WS_TOKEN'),

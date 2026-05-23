@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\ExamSchedule;
-use App\Models\Group;
 use App\Models\HemisQuizResult;
 use App\Models\Semester;
 use App\Models\Student;
@@ -182,12 +181,18 @@ class MoodleExamBookingService
             ];
         }
 
-        $studentsByLang = $this->studentsByLanguage(
+        // ALL admitted students for this booking, ignoring per-student language
+        // preference: every student is pushed to every language variant of the
+        // exam that actually exists on Moodle. The student picks the language
+        // at exam time on the Moodle-side picker (auth/faceid/picker.php).
+        // student.exam_language_code is no longer consulted here — it remains
+        // an informational field only.
+        $usernames = $this->collectStudentUsernames(
             $schedule->group_hemis_id,
             $perStudentHemisId,
             $perStudentHemisId === null ? $deniedHemisIds : []
         );
-        if (empty($studentsByLang)) {
+        if (empty($usernames)) {
             $reason = $perStudentHemisId !== null
                 ? 'student ' . $perStudentHemisId . ' not found in group ' . $schedule->group_hemis_id
                 : (count($deniedHemisIds) > 0
@@ -196,10 +201,18 @@ class MoodleExamBookingService
             return $this->fail($schedule, $prefix, $reason);
         }
 
+        // The trilingual exam picker lives in Moodle: we push the same
+        // booking row to every language variant of this exam quiz that
+        // exists on Moodle, and the student chooses at exam time. The set
+        // of language tokens to try is derived from services.moodle.lang_map.
+        $langTokens = $this->resolveLangQuizTokens();
+
         $calls = [];
         $allOk = true;
+        $pushedTokens = [];
+        $skippedNotFoundTokens = [];
 
-        foreach ($studentsByLang as $langCode => $usernames) {
+        foreach ($langTokens as $langCode) {
             $quizName = $this->buildQuizName($ynType, $langCode, $quizMiddle, $attempt);
             $payload = [
                 'wstoken' => $token,
@@ -221,11 +234,46 @@ class MoodleExamBookingService
             $callResult['lang'] = $langCode;
             $callResult['quiz_name'] = $quizName;
             $callResult['student_count'] = count($usernames);
-            $calls[] = $callResult;
 
-            if (!$callResult['ok']) {
+            // A non-existent quiz variant (this exam isn't offered in this
+            // language on Moodle) is NOT a failure - just record it and move
+            // on. The book_group_exam WS throws coursenotfound / quiznotfound
+            // when the named quiz isn't in the Moodle DB.
+            if (!$callResult['ok'] && $this->isQuizNotFound($callResult)) {
+                $callResult['skipped_not_found'] = true;
+                $skippedNotFoundTokens[] = $langCode;
+                $calls[] = $callResult;
+                continue;
+            }
+
+            $calls[] = $callResult;
+            if ($callResult['ok']) {
+                $pushedTokens[] = $langCode;
+            } else {
                 $allOk = false;
             }
+        }
+
+        // If every variant was "quiz not found", the exam isn't published in
+        // Moodle yet — surface that as a real failure so the proctor "Add
+        // manual booking" flow can take over, matching the old behaviour for
+        // missing-quiz situations.
+        if (empty($pushedTokens) && !empty($skippedNotFoundTokens)) {
+            $allOk = false;
+        }
+
+        // Per-student informational telemetry: which language variants we
+        // successfully pushed for each student in this booking. The picker
+        // on the Moodle side now decides which language the student actually
+        // uses at exam time.
+        foreach ($usernames as $hid) {
+            Log::info('moodle.booking.pushed', [
+                'student'           => (string) $hid,
+                'schedule'          => $schedule->id,
+                'yn'                => $ynType,
+                'attempt'           => $attempt,
+                'lang_tokens_pushed' => $pushedTokens,
+            ]);
         }
 
         $result = [
@@ -443,20 +491,20 @@ class MoodleExamBookingService
     }
 
     /**
-     * Group student usernames (= student_id_number) by their effective exam language.
-     * Effective = student.exam_language_code (override) ?? group.education_lang_code.
+     * Collect all admitted student usernames (= student_id_number) for the
+     * booking — without splitting by exam language. The trilingual picker on
+     * the Moodle side decides which language each student actually uses, so
+     * the booking row is pushed identically for every language variant of the
+     * quiz that exists on Moodle.
      *
      * @param string|null $studentHemisId Per-student schedule (individual grafik)
      *                                     bo'lsa, faqat shu talabaga filtrlaymiz —
      *                                     Moodle booking guruh emas, shu talabagagina
      *                                     tushadi.
-     * @return array<string, array<int, string>> [langCode => [username, ...]]
+     * @return array<int, string> list of usernames
      */
-    private function studentsByLanguage(string $groupHemisId, ?string $studentHemisId = null, array $excludeHemisIds = []): array
+    private function collectStudentUsernames(string $groupHemisId, ?string $studentHemisId = null, array $excludeHemisIds = []): array
     {
-        $group = Group::where('group_hemis_id', $groupHemisId)->first();
-        $defaultLang = $this->normalizeLang($group?->education_lang_code);
-
         $studentsQuery = Student::where('group_id', $groupHemisId)
             ->whereNotNull('student_id_number');
         if ($studentHemisId !== null) {
@@ -465,42 +513,63 @@ class MoodleExamBookingService
         if (!empty($excludeHemisIds)) {
             $studentsQuery->whereNotIn('hemis_id', $excludeHemisIds);
         }
-        $students = $studentsQuery->get(['student_id_number', 'exam_language_code']);
+        $usernames = $studentsQuery->pluck('student_id_number')
+            ->map(fn ($u) => (string) $u)
+            ->filter(fn ($u) => $u !== '')
+            ->unique()
+            ->values()
+            ->all();
 
-        $bucket = [];
-        foreach ($students as $st) {
-            // Default = group's educationLang; student override wins.
-            $lang = $this->normalizeLang($st->exam_language_code ?: $defaultLang);
-            $bucket[$lang][] = (string) $st->student_id_number;
-        }
-        // Deduplicate just in case
-        foreach ($bucket as $k => $list) {
-            $bucket[$k] = array_values(array_unique($list));
-        }
-        return $bucket;
+        return $usernames;
     }
 
-    private function normalizeLang(?string $code): string
+    /**
+     * The de-duplicated set of Moodle quiz language tokens we attempt the
+     * booking against, derived from services.moodle.lang_map (typically
+     * ['uzb', 'rus', 'eng']). Runtime-computed; no new env var required.
+     */
+    private function resolveLangQuizTokens(): array
     {
-        $code = strtolower(trim((string) $code));
-        if ($code === '') {
-            return (string) (config('services.moodle.lang_map.uz') ?? 'uzb');
+        $cached = config('services.moodle.lang_quiz_tokens');
+        if (is_array($cached) && !empty($cached)) {
+            return array_values(array_unique(array_map('strval', $cached)));
         }
+
         $map = (array) config('services.moodle.lang_map', []);
-        // Allow both raw HEMIS code (uz/ru/en) and already-mapped code (uzb/rus/eng).
-        if (isset($map[$code])) {
-            return (string) $map[$code];
+        $tokens = array_values(array_unique(array_map(
+            fn ($v) => strtolower((string) $v),
+            array_filter($map, fn ($v) => is_string($v) && $v !== '')
+        )));
+        if (empty($tokens)) {
+            $tokens = ['uzb', 'rus', 'eng'];
         }
-        if (in_array($code, $map, true)) {
-            return $code;
+        // Cache on the config repo for subsequent calls in this request /
+        // worker lifetime.
+        config(['services.moodle.lang_quiz_tokens' => $tokens]);
+        return $tokens;
+    }
+
+    /**
+     * Detect a "quiz/course not found" error from a Moodle WS response: this
+     * means the named language variant of the exam quiz isn't published in
+     * Moodle, which is expected for mono-lingual exams. We silently skip
+     * such variants rather than failing the whole booking.
+     */
+    private function isQuizNotFound(array $callResult): bool
+    {
+        $resp = $callResult['response'] ?? null;
+        if (!is_array($resp)) {
+            return false;
         }
-        // Best-effort short->long
-        return match ($code) {
-            'uz', 'oz', 'uzb' => 'uzb',
-            'ru', 'rus' => 'rus',
-            'en', 'eng' => 'eng',
-            default => $code,
-        };
+        $code = (string) ($resp['errorcode'] ?? '');
+        if ($code === 'quiznotfound' || $code === 'coursenotfound') {
+            return true;
+        }
+        $message = strtolower((string) ($resp['message'] ?? $resp['exception'] ?? ''));
+        return str_contains($message, 'quiznotfound')
+            || str_contains($message, 'coursenotfound')
+            || str_contains($message, 'no such quiz')
+            || str_contains($message, 'quiz not found');
     }
 
     /**

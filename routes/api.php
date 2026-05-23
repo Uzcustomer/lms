@@ -4,7 +4,6 @@ use App\Http\Controllers\Api\ExamAccessCheckController;
 use App\Http\Controllers\Api\ExamLoginCheckController;
 use App\Http\Controllers\Api\ProctorActionController;
 use App\Http\Controllers\Api\ExamLayoutController;
-use App\Http\Controllers\Api\ExamLandingTokenController;
 use App\Http\Controllers\Api\ExamQuizTargetController;
 use App\Http\Controllers\Api\MoodleDescriptorCallbackController;
 use App\Http\Controllers\Api\MoodleDescriptorFailedCallbackController;
@@ -77,15 +76,6 @@ Route::post('/exam-layout-today', [ExamLayoutController::class, 'today'])
 Route::post('/exam-quiz-target', [ExamQuizTargetController::class, 'target'])
     ->middleware('throttle:120,1')
     ->name('api.moodle.exam-quiz-target');
-
-// Moodle auth_faceid plugin → mint a short-lived token + URL for the LMS
-// trilingual exam language picker. The plugin redirects the browser to the
-// returned URL instead of straight to /mod/quiz/view.php so mixed-language
-// groups can choose their preferred language at exam time. Same X-SYNC-SECRET
-// auth as the other server-to-server endpoints.
-Route::post('/exam-landing-token', [ExamLandingTokenController::class, 'issue'])
-    ->middleware('throttle:120,1')
-    ->name('api.moodle.exam-landing-token');
 
 /*
 |--------------------------------------------------------------------------

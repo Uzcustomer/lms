@@ -98,6 +98,17 @@ Route::post('/staff-evaluate/{token}', [\App\Http\Controllers\StaffEvaluateContr
 // Til almashtirish (Language switch)
 Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->name('language.switch');
 
+// Trilingual exam language picker (between FaceID login and the Moodle quiz).
+// Public URL — identity is proven by the short-lived token in the path, which
+// the Moodle auth_faceid plugin mints via /api/exam-landing-token right after
+// a successful login. The "choose" POST persists the chosen language on
+// students.exam_language_code, runs a fresh booking push and returns the
+// Moodle quiz redirect URL for the browser to follow.
+Route::get('/exam/landing/{token}', [\App\Http\Controllers\ExamLandingController::class, 'show'])
+    ->name('exam.landing');
+Route::post('/exam/landing/{token}/choose', [\App\Http\Controllers\ExamLandingController::class, 'choose'])
+    ->name('exam.landing.choose');
+
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {
         Route::post('/login', [AdminAuthController::class, 'login'])->name('login.post');

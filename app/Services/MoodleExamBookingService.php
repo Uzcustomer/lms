@@ -344,19 +344,23 @@ class MoodleExamBookingService
      * (group, subject): the "{subject}_{N-sem}_{faculty}_{direction}" segment,
      * which is identical across language and attempt number.
      *
-     * Source of truth = hemis_quiz_results.attempt_name, the real quiz names
-     * Moodle pushed back during the Diagnostika results import. cm.idnumber is
-     * empty on the Moodle install and course.idnumber is unreliable, so the
-     * quiz NAME is the only dependable key.
+     * The subject portion always comes from this schedule's `subject_name` -
+     * Mark is the source of truth for how the academic department wrote the
+     * subject. The "{N-sem}_{faculty}_{direction}" tail is group-specific and
+     * is lifted from hemis_quiz_results.attempt_name (the real quiz names
+     * Moodle pushed back during the Diagnostika results import). The subject
+     * portion is never replayed from history, because a stray Moodle quiz
+     * with a typo subject (e.g. a trailing "." on "...ortepediyasi.") would
+     * otherwise poison every follow-up booking once a single student happened
+     * to take that typo quiz.
      *
      * Resolution order:
-     *  1. This group already sat a {prefix} ({lang}) quiz for THIS subject -
-     *     replay that exact middle.
-     *  2. First {prefix} for this subject for this group: take the
-     *     "{N-sem}_{faculty}_{direction}" tail from any of the group's recorded
-     *     quiz names in the matching semester and prepend this schedule's
-     *     subject name. The tail is group-specific and identical across
-     *     subjects, so this rebuilds the real Moodle quiz name.
+     *  1. Prefer a tail from this group's own {prefix} attempt for THIS
+     *     subject - the tail is then guaranteed to match what Moodle stored
+     *     for this exact (group, subject) pair.
+     *  2. Fall back to the tail from any of the group's recorded attempts in
+     *     the matching semester (the tail is group-specific and identical
+     *     across subjects).
      *
      * Returns null when the group has no usable recorded attempt at all - the
      * caller then skips the booking for a proctor to add manually.
@@ -371,10 +375,14 @@ class MoodleExamBookingService
             return null;
         }
 
+        $subjectName = $this->stripGroupSuffix(trim((string) $schedule->subject_name));
+        if ($subjectName === '') {
+            return null;
+        }
+
         $prefix = $ynType === 'oski' ? 'OSKI' : 'YN test';
 
-        // 1. This group already has a {prefix} quiz recorded for this subject -
-        //    replay that exact middle.
+        // 1. Tail from this group's own {prefix} attempt for THIS subject.
         $names = HemisQuizResult::query()
             ->where('fan_id', $schedule->subject_id)
             ->whereIn('student_id', $groupStudentIds)
@@ -385,19 +393,16 @@ class MoodleExamBookingService
             ->pluck('attempt_name');
 
         foreach ($names as $name) {
-            $middle = $this->extractQuizMiddle((string) $name, $prefix);
-            if ($middle !== null) {
-                return $middle;
+            $tail = $this->extractMiddleTail((string) $name);
+            if ($tail !== null) {
+                return $subjectName . '_' . $tail;
             }
         }
 
-        // 2. First {prefix} for this group+subject. The "{N-sem}_{faculty}_
-        //    {direction}" tail is group-specific and identical across subjects,
-        //    so lift it off any of the group's recorded quiz names in the same
-        //    semester and prepend this schedule's subject name.
-        $subjectName = $this->stripGroupSuffix(trim((string) $schedule->subject_name));
+        // 2. Fall back to the tail from any of the group's recorded attempts
+        //    in the matching semester.
         $targetNsem = $this->resolveTargetNsem($schedule);
-        if ($subjectName === '' || $targetNsem === null) {
+        if ($targetNsem === null) {
             return null;
         }
 

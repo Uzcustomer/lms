@@ -141,7 +141,7 @@ class JournalController extends Controller
                 $sub->select('semester_hemis_id')
                     ->from('curriculum_weeks')
                     ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
             });
         }
 
@@ -244,7 +244,7 @@ class JournalController extends Controller
                 $sub->select('semester_hemis_id')
                     ->from('curriculum_weeks')
                     ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
             });
         }
 
@@ -4326,7 +4326,7 @@ class JournalController extends Controller
                 $sub->select('semester_hemis_id')
                     ->from('curriculum_weeks')
                     ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()');
+                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
             });
         }
 
@@ -4447,7 +4447,7 @@ class JournalController extends Controller
             $currentSemesterHemisIds = DB::table('curriculum_weeks')
                 ->select('semester_hemis_id')
                 ->groupBy('semester_hemis_id')
-                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= NOW()')
+                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= DATE_SUB(NOW(), INTERVAL 30 DAY)')
                 ->pluck('semester_hemis_id');
             $curriculaIds = Semester::whereIn('semester_hemis_id', $currentSemesterHemisIds)
                 ->pluck('curriculum_hemis_id');

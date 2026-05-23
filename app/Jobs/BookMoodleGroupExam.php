@@ -62,6 +62,17 @@ class BookMoodleGroupExam implements ShouldQueue
 
         // Skipped (no config / na / missing time / no quiz history) - do not retry.
         if (!empty($result['skipped'])) {
+            // Surface the skip reason onto the schedule so the YN jadvali UI's
+            // per-row error column tells a proctor why the booking didn't push
+            // (especially for individual student schedules where a missing
+            // group-level quiz template otherwise fails silently).
+            $reason = $result['reason'] ?? null;
+            if (is_string($reason) && $reason !== '') {
+                $prefix = $service->attemptPrefix($this->ynType, $this->attempt);
+                $schedule->forceFill([
+                    $prefix . '_moodle_error' => $reason,
+                ])->save();
+            }
             return;
         }
 

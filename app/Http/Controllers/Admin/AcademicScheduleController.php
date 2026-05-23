@@ -2057,6 +2057,51 @@ class AcademicScheduleController extends Controller
             return $item;
         });
 
+        // Kompyuter raqami filtri: 'missing' (qo'yilmagan), 'assigned' (qo'yilgan)
+        // yoki bo'sh (barchasi). computer_assignments'da computer_number IS NOT NULL
+        // bo'lgan qatorlar soni (exam_schedule_id, yn_type, attempt) bo'yicha
+        // student_count bilan solishtiriladi.
+        $compFilter = $request->get('comp_filter');
+        if (in_array($compFilter, ['missing', 'assigned'], true)) {
+            $scheduleIdsForComp = $transformedData
+                ->pluck('schedule_id')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            $compAssignedMap = []; // "schedule_id|yn|attempt" => assigned_count
+            if (!empty($scheduleIdsForComp)) {
+                try {
+                    $rows = DB::table('computer_assignments')
+                        ->whereIn('exam_schedule_id', $scheduleIdsForComp)
+                        ->whereNotNull('computer_number')
+                        ->groupBy('exam_schedule_id', 'yn_type', 'attempt')
+                        ->select('exam_schedule_id', 'yn_type', 'attempt', DB::raw('COUNT(*) as cnt'))
+                        ->get();
+                    foreach ($rows as $r) {
+                        $k = $r->exam_schedule_id . '|' . strtolower((string) $r->yn_type) . '|' . (int) $r->attempt;
+                        $compAssignedMap[$k] = (int) $r->cnt;
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('buildTestCenterData: comp_filter hisobi xatolik berdi: ' . $e->getMessage());
+                }
+            }
+            $transformedData = $transformedData->filter(function ($item) use ($compFilter, $compAssignedMap) {
+                $sid = $item['schedule_id'] ?? null;
+                if (!$sid) {
+                    return $compFilter === 'missing';
+                }
+                $yn = strtolower((string) ($item['yn_type'] ?? ''));
+                $att = (int) ($item['attempt'] ?? 1);
+                $assigned = (int) ($compAssignedMap[$sid . '|' . $yn . '|' . $att] ?? 0);
+                $required = (int) ($item['student_count'] ?? 0);
+                if ($compFilter === 'missing') {
+                    return $assigned < $required;
+                }
+                return $required > 0 && $assigned >= $required;
+            })->values();
+        }
+
         $scheduleData = $transformedData->groupBy(fn($item) => $item['group']->group_hemis_id);
 
         return [
@@ -2064,6 +2109,7 @@ class AcademicScheduleController extends Controller
             'currentEducationYear' => $currentEducationYear,
             'urinishFilter' => $urinishFilter,
             'showStudents' => $showStudents,
+            'compFilter' => $compFilter,
         ];
     }
 
@@ -2305,6 +2351,7 @@ class AcademicScheduleController extends Controller
 
         $urinishFilter = $request->get('urinish');
         $showStudents = $request->get('show_students') === '1';
+        $compFilter = $request->get('comp_filter');
 
         try {
             $result = $this->buildTestCenterData($request);
@@ -2312,6 +2359,7 @@ class AcademicScheduleController extends Controller
             $currentEducationYear = $result['currentEducationYear'];
             $urinishFilter = $result['urinishFilter'] ?? $urinishFilter;
             $showStudents = $result['showStudents'] ?? $showStudents;
+            $compFilter = $result['compFilter'] ?? $compFilter;
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('testCenterView xatolik: ' . $e->getMessage(), [
                 'file' => $e->getFile() . ':' . $e->getLine(),
@@ -2337,6 +2385,7 @@ class AcademicScheduleController extends Controller
                 'currentSemesterToggle',
                 'urinishFilter',
                 'showStudents',
+                'compFilter',
                 'isSearched',
                 'currentEducationYear',
                 'routePrefix',
@@ -4544,13 +4593,24 @@ class AcademicScheduleController extends Controller
                     $displayName = $subjectData['display_name'] ?? ($subj->subject_name ?? '');
 
                     $attemptsInSubject = [];
+                    $ynTypesInSubject = [];
                     foreach ($subjectData['entries'] as $_e) {
                         $_a = (int) ($_e['attempt'] ?? 1);
                         if ($_a > 0 && !in_array($_a, $attemptsInSubject, true)) {
                             $attemptsInSubject[] = $_a;
                         }
+                        $_yn = strtolower((string) ($_e['yn_type'] ?? ''));
+                        if ($_yn === 'oski' || $_yn === 'test') {
+                            $_ynLabel = $_yn === 'oski' ? 'OSKI' : 'Test';
+                            if (!in_array($_ynLabel, $ynTypesInSubject, true)) {
+                                $ynTypesInSubject[] = $_ynLabel;
+                            }
+                        }
                     }
                     sort($attemptsInSubject);
+                    if (!empty($ynTypesInSubject)) {
+                        $displayName = implode('/', $ynTypesInSubject) . ' — ' . $displayName;
+                    }
                     if (!empty($attemptsInSubject)) {
                         $displayName .= ' (' . implode('/', $attemptsInSubject) . '-urinish)';
                     }
@@ -4860,9 +4920,24 @@ class AcademicScheduleController extends Controller
             $textRun->addText('     Guruh: ', $infoBold);
             $textRun->addText(implode(', ', $groupNames) ?: '-', $infoStyle);
 
+            $ynTypesForSubject = [];
+            foreach ($subjectData['entries'] as $_e) {
+                $_yn = strtolower((string) ($_e['yn_type'] ?? ''));
+                if ($_yn === 'oski' || $_yn === 'test') {
+                    $_ynLabel = $_yn === 'oski' ? 'OSKI' : 'Test';
+                    if (!in_array($_ynLabel, $ynTypesForSubject, true)) {
+                        $ynTypesForSubject[] = $_ynLabel;
+                    }
+                }
+            }
+            $subjectNameWithYn = $subject->subject_name ?? '-';
+            if (!empty($ynTypesForSubject)) {
+                $subjectNameWithYn = implode('/', $ynTypesForSubject) . ' — ' . $subjectNameWithYn;
+            }
+
             $textRun = $section->addTextRun($infoParaStyle);
             $textRun->addText('Fan: ', $infoBold);
-            $textRun->addText($subject->subject_name ?? '-', $infoStyle);
+            $textRun->addText($subjectNameWithYn, $infoStyle);
 
             $textRun = $section->addTextRun($infoParaStyle);
             $textRun->addText("Ma'ruzachi: ", $infoBold);
@@ -7935,12 +8010,39 @@ class AcademicScheduleController extends Controller
             ->sortBy(fn($r) => $r['time'] === null ? 'zz' : $r['time'])
             ->values();
 
+        // Kompyuter raqami qo'yilmagan talabalar soni: vaqti belgilangan
+        // (no_time = false) slotlardagi jami talabalardan, shu schedule_id'lar
+        // bo'yicha computer_assignments'da computer_number IS NOT NULL bo'lgan
+        // qatorlar soni ayriladi. Agar bironta ham assignment yo'q bo'lsa,
+        // hammasi "qo'yilmagan" deb hisoblanadi.
+        $scheduledScheduleIds = $slots
+            ->where('no_time', false)
+            ->flatMap(fn ($r) => collect($r['groups'])->pluck('schedule_id'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $scheduledStudents = (int) $slots->where('no_time', false)->sum('occupied');
+        $assignedComputerCount = 0;
+        if (!empty($scheduledScheduleIds)) {
+            try {
+                $assignedComputerCount = (int) DB::table('computer_assignments')
+                    ->whereIn('exam_schedule_id', $scheduledScheduleIds)
+                    ->whereNotNull('computer_number')
+                    ->count();
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: computer_number hisobi xatolik berdi: ' . $e->getMessage());
+            }
+        }
+        $pendingComputerStudents = max(0, $scheduledStudents - $assignedComputerCount);
+
         return view('admin.academic-schedule.bandlik-kursatkichi-show', [
             'date' => $carbonDate,
             'slots' => $slots,
             'totalComputers' => $totalComputers,
             'settings' => $settings,
             'dailyCapacity' => $dailyCapacity,
+            'pendingComputerStudents' => $pendingComputerStudents,
         ]);
     }
 

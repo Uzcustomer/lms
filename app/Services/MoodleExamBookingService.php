@@ -302,7 +302,7 @@ class MoodleExamBookingService
      * *_moodle_* columns all share it: attempt 1 = "oski"/"test",
      * attempt 2 = "*_resit", attempt 3 = "*_resit2".
      */
-    private function attemptPrefix(string $ynType, int $attempt): string
+    public function attemptPrefix(string $ynType, int $attempt): string
     {
         return match ($attempt) {
             2 => $ynType . '_resit',
@@ -372,6 +372,41 @@ class MoodleExamBookingService
      */
     private function resolveQuizMiddle(ExamSchedule $schedule, string $ynType): ?string
     {
+        $prefix = $ynType === 'oski' ? 'OSKI' : 'YN test';
+
+        $subjectName = $this->resolveHemisSubjectName($schedule);
+        if ($subjectName === '') {
+            return null;
+        }
+
+        // 0. Per-student schedule: the student may have been re-assigned out of
+        //    their original group, so the group-keyed history can be empty for
+        //    this subject. Try the student's own hemis_quiz_results rows first
+        //    using the same subject + name-prefix filters as the group path,
+        //    and rebuild "{subject}_{tail}" so the (possibly corrected) HEMIS
+        //    subject name overrides any typo Moodle still has on file.
+        if (!empty($schedule->student_hemis_id)) {
+            $studentIdNumber = Student::where('hemis_id', $schedule->student_hemis_id)
+                ->value('student_id_number');
+            if (!empty($studentIdNumber)) {
+                $studentNames = HemisQuizResult::query()
+                    ->where('fan_id', $schedule->subject_id)
+                    ->where('student_id', $studentIdNumber)
+                    ->whereNotNull('attempt_name')
+                    ->where('attempt_name', 'LIKE', $prefix . ' (%')
+                    ->orderByDesc('synced_at')
+                    ->orderByDesc('id')
+                    ->pluck('attempt_name');
+
+                foreach ($studentNames as $name) {
+                    $tail = $this->extractMiddleTail((string) $name);
+                    if ($tail !== null) {
+                        return $subjectName . '_' . $tail;
+                    }
+                }
+            }
+        }
+
         $groupStudentIds = Student::where('group_id', $schedule->group_hemis_id)
             ->whereNotNull('student_id_number')
             ->pluck('student_id_number')
@@ -379,13 +414,6 @@ class MoodleExamBookingService
         if (empty($groupStudentIds)) {
             return null;
         }
-
-        $subjectName = $this->resolveHemisSubjectName($schedule);
-        if ($subjectName === '') {
-            return null;
-        }
-
-        $prefix = $ynType === 'oski' ? 'OSKI' : 'YN test';
 
         // 1. Tail from this group's own {prefix} attempt for THIS subject.
         $names = HemisQuizResult::query()

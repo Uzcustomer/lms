@@ -88,6 +88,14 @@
                                 <option value="3" {{ ($urinishFilter ?? '') === '3' ? 'selected' : '' }}>3-urinish</option>
                             </select>
                         </div>
+                        <div class="filter-item" style="min-width: 150px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Komp №</label>
+                            <select id="comp_filter" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                <option value="missing" {{ ($compFilter ?? '') === 'missing' ? 'selected' : '' }}>Qo'yilmagan</option>
+                                <option value="assigned" {{ ($compFilter ?? '') === 'assigned' ? 'selected' : '' }}>Qo'yilgan</option>
+                            </select>
+                        </div>
                         <div class="filter-item" style="min-width: 180px;">
                             <label class="filter-label">&nbsp;</label>
                             <div class="toggle-switch {{ ($showStudents ?? false) ? 'active' : '' }}" id="show-students-toggle" onclick="toggleShowStudents()">
@@ -1230,6 +1238,7 @@
             var subj = $('#subject_id').val();
             var status = $('#status').val();
             var urinish = $('#urinish_filter').val();
+            var compF = $('#comp_filter').val();
             var cs = document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0';
             var ss = document.getElementById('show-students-toggle').classList.contains('active') ? '1' : '0';
             var dateFrom = $('#date_from').val();
@@ -1243,6 +1252,7 @@
             if (subj) url.searchParams.set('subject_id', subj);
             if (status) url.searchParams.set('status', status);
             if (urinish) url.searchParams.set('urinish', urinish);
+            if (compF) url.searchParams.set('comp_filter', compF);
             if (dateFrom) url.searchParams.set('date_from', dateFrom);
             if (dateTo) url.searchParams.set('date_to', dateTo);
             url.searchParams.set('current_semester', cs);

@@ -387,7 +387,7 @@ class MoodleExamBookingService
         foreach ($names as $name) {
             $middle = $this->extractQuizMiddle((string) $name, $prefix);
             if ($middle !== null) {
-                return $middle;
+                return $this->normalizeMiddle($middle);
             }
         }
 
@@ -416,11 +416,26 @@ class MoodleExamBookingService
         foreach ($anyNames as $name) {
             $tail = $this->extractMiddleTail((string) $name);
             if ($tail !== null && str_starts_with($tail, $targetNsem . '_')) {
-                return $subjectName . '_' . $tail;
+                return $this->normalizeMiddle($subjectName . '_' . $tail);
             }
         }
 
         return null;
+    }
+
+    /**
+     * Strip a trailing punctuation character (typically ".") from the subject
+     * portion of a replayed quiz middle. Past `hemis_quiz_results` entries can
+     * carry a typo dot at the end of the subject name — e.g. when a tutor
+     * created a duplicate Moodle quiz with "...ortepediyasi._8-sem_..." instead
+     * of the canonical "...ortepediyasi_8-sem_...". Replaying that name as-is
+     * makes the next attempt's booking fail with coursenotfound, since the
+     * follow-up quiz (3-urinish here) is only published under the canonical
+     * (dotless) name. We normalise by removing any "_<N>-sem" leading dot.
+     */
+    private function normalizeMiddle(string $middle): string
+    {
+        return preg_replace('/\.+(?=_\d+-sem(?:_|$))/u', '', $middle);
     }
 
     /**

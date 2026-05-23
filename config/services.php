@@ -65,6 +65,10 @@ return [
         'push_script' => env('MOODLE_PUSH_SCRIPT', '/opt/scripts/moodle_to_lmsttatf_push.php'),
         'sync_secret' => env('MOODLE_SYNC_SECRET'),
         'pull_secret' => env('MOODLE_PULL_SECRET'),
+        // Shared secret for the admin-triggered bulk re-push endpoint
+        // (POST /api/moodle/trigger-push), called by the Moodle lmsguard
+        // plugin when an admin clicks "Markdan ma'lumot olish".
+        'api_key' => env('MOODLE_API_KEY'),
 
         // local_hemisexport plugin web service
         'ws_url' => env('MOODLE_WS_URL'),

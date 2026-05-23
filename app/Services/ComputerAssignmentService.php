@@ -71,8 +71,31 @@ class ComputerAssignmentService
         // i.e. attempt-end + buffer.
         $plannedEnd = $startsAt->copy()->addMinutes($duration + $buffer);
 
+        // Exclude students who already have their OWN individual exam_schedules
+        // row covering the same exam (same subject + semester + same calendar
+        // date for this yn_type+attempt). Those students are driven by their
+        // individual schedule's assignSingleStudent() flow; if we also pick
+        // them up here, they end up with two computer_assignments rows
+        // (one for the group's exam_schedule_id, one for the personal one),
+        // which silently blocks an extra PC and confuses FaceID.
+        $groupDateStr = $startsAt->toDateString();
+        $individualHemisIds = ExamSchedule::query()
+            ->whereNotNull('student_hemis_id')
+            ->where('subject_id', $schedule->subject_id)
+            ->where('semester_code', $schedule->semester_code)
+            ->whereDate($dateField, $groupDateStr)
+            ->pluck('student_hemis_id')
+            ->filter()
+            ->map(fn($v) => (string) $v)
+            ->unique()
+            ->values()
+            ->all();
+
         $students = Student::where('group_id', $schedule->group_hemis_id)
             ->whereNotNull('student_id_number')
+            ->when(!empty($individualHemisIds), function ($q) use ($individualHemisIds) {
+                $q->whereNotIn('hemis_id', $individualHemisIds);
+            })
             ->get(['student_id_number', 'hemis_id']);
 
         if ($students->isEmpty()) {

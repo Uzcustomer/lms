@@ -1609,10 +1609,12 @@
         }
 
         var bulkMoodleUrl = '{{ route($routePrefix . ".academic-schedule.test-center.bulk-recheck-moodle") }}';
+        var bulkMoodleStatusUrl = '{{ route($routePrefix . ".academic-schedule.test-center.bulk-recheck-moodle.status") }}';
 
         // Bulk "recheck on Moodle": collect every selected row's
         // (schedule, yn_type, attempt) and queue a BookMoodleGroupExam job
-        // for each. The proctor refreshes once the queue has drained.
+        // for each. A progress widget polls the queue and auto-refreshes the
+        // page when the last job has drained.
         function tcBulkRecheckMoodle() {
             var items = [];
             document.querySelectorAll('.tc-row-checkbox:checked').forEach(function(cb) {
@@ -1648,13 +1650,102 @@
                 return r.json().then(function(j) { return { ok: r.ok, body: j }; });
             })
             .then(function(res) {
-                alert(res.ok ? (res.body.message || 'Navbatga qo\'shildi') : (res.body.error || 'Xatolik yuz berdi'));
+                if (res.ok) {
+                    tcStartMoodlePushProgress(items.length);
+                } else {
+                    alert(res.body.error || 'Xatolik yuz berdi');
+                }
             })
             .catch(function(e) { alert('Xatolik: ' + e.message); })
             .finally(function() {
                 btn.disabled = false;
                 btn.innerHTML = originalHTML;
             });
+        }
+
+        // Real-time progress: poll the BookMoodleGroupExam job queue every 2s
+        // and update the on-page widget so the proctor can see push progress
+        // without manually refreshing.
+        var tcMoodlePushPoll = null;
+
+        function tcStartMoodlePushProgress(initialDispatched) {
+            var widget = document.getElementById('tc-moodle-push-progress');
+            if (!widget) {
+                widget = document.createElement('div');
+                widget.id = 'tc-moodle-push-progress';
+                widget.style.cssText = 'position:fixed;bottom:18px;right:18px;z-index:9999;'
+                    + 'background:#0f172a;color:#f8fafc;padding:14px 18px;border-radius:10px;'
+                    + 'box-shadow:0 8px 24px rgba(15,23,42,.35);min-width:280px;font-size:13px;';
+                widget.innerHTML = '<div style="display:flex;align-items:center;gap:8px;'
+                    + 'justify-content:space-between;margin-bottom:8px;">'
+                    + '<strong>Moodle push</strong>'
+                    + '<button type="button" id="tc-moodle-push-close" '
+                    + 'style="background:transparent;border:0;color:#94a3b8;cursor:pointer;'
+                    + 'font-size:16px;line-height:1;">&times;</button></div>'
+                    + '<div class="progress-text" style="margin-bottom:6px;">Boshlanmoqda...</div>'
+                    + '<div style="background:#1e293b;border-radius:6px;overflow:hidden;height:8px;">'
+                    + '<div class="progress-bar-fill" style="background:#22c55e;height:100%;width:0;'
+                    + 'transition:width .4s ease;"></div></div>'
+                    + '<div class="progress-detail" style="margin-top:6px;color:#94a3b8;'
+                    + 'font-size:11px;">Tekshirilmoqda...</div>';
+                document.body.appendChild(widget);
+                document.getElementById('tc-moodle-push-close').onclick = function () {
+                    if (tcMoodlePushPoll) { clearInterval(tcMoodlePushPoll); tcMoodlePushPoll = null; }
+                    widget.remove();
+                };
+            }
+            var textEl = widget.querySelector('.progress-text');
+            var barEl = widget.querySelector('.progress-bar-fill');
+            var detailEl = widget.querySelector('.progress-detail');
+
+            var startedAt = Date.now();
+            var maxPending = initialDispatched;
+            var stalledSince = null;
+            var lastPending = -1;
+
+            function tick() {
+                fetch(bulkMoodleStatusUrl, { headers: { 'Accept': 'application/json' } })
+                    .then(function (r) { return r.json(); })
+                    .then(function (j) {
+                        var pending = Number(j.pending || 0);
+                        var failed = Number(j.failed_recent || 0);
+                        if (pending > maxPending) { maxPending = pending; }
+                        var done = Math.max(0, maxPending - pending);
+                        var pct = maxPending > 0 ? Math.round(done / maxPending * 100) : 100;
+
+                        textEl.textContent = 'Bajarildi: ' + done + ' / ' + maxPending + ' (' + pct + '%)';
+                        barEl.style.width = pct + '%';
+                        detailEl.textContent = 'Kutmoqda: ' + pending
+                            + (failed > 0 ? ' · Xato (1 soat): ' + failed : '');
+
+                        if (pending !== lastPending) {
+                            stalledSince = null;
+                        } else if (pending > 0) {
+                            if (stalledSince === null) { stalledSince = Date.now(); }
+                            if (Date.now() - stalledSince > 90 * 1000) {
+                                detailEl.style.color = '#fca5a5';
+                                detailEl.textContent = '⚠️ ' + pending + ' job kutmoqda, lekin '
+                                    + 'oxirgi 90s da progress yo‘q. Queue worker ishlayotganini '
+                                    + 'tekshiring (php artisan queue:work).';
+                            }
+                        }
+                        lastPending = pending;
+
+                        if (pending === 0) {
+                            clearInterval(tcMoodlePushPoll); tcMoodlePushPoll = null;
+                            barEl.style.background = '#10b981';
+                            textEl.innerHTML = '✅ Tugadi! Sahifa yangilanmoqda...';
+                            detailEl.textContent = '';
+                            setTimeout(function () { location.reload(); }, 1500);
+                        }
+                    })
+                    .catch(function (e) {
+                        detailEl.textContent = 'Status so‘rovi xato: ' + e.message;
+                    });
+            }
+            if (tcMoodlePushPoll) { clearInterval(tcMoodlePushPoll); }
+            tick();
+            tcMoodlePushPoll = setInterval(tick, 2000);
         }
 
         var assignComputersUrl = '{{ route($routePrefix . ".academic-schedule.test-center.assign-computers") }}';

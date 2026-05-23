@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\ExamQuizTargetController;
 use App\Http\Controllers\Api\MoodleDescriptorCallbackController;
 use App\Http\Controllers\Api\MoodleDescriptorFailedCallbackController;
 use App\Http\Controllers\Api\MoodlePhotoSyncController;
+use App\Http\Controllers\Api\MoodleTriggerPushController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
 use App\Http\Controllers\Api\V1\ChatApiController;
@@ -76,6 +77,15 @@ Route::post('/exam-layout-today', [ExamLayoutController::class, 'today'])
 Route::post('/exam-quiz-target', [ExamQuizTargetController::class, 'target'])
     ->middleware('throttle:120,1')
     ->name('api.moodle.exam-quiz-target');
+
+// Moodle lmsguard plugin → admin-triggered bulk re-push of exam schedules
+// in a given date range. Fires the same BookMoodleGroupExam job that the
+// ExamSchedule observer dispatches automatically, just on demand from the
+// "Markdan ma'lumot olish" button on the plugin settings page. Auth is an
+// inline shared-secret (MOODLE_API_KEY) check in the controller.
+Route::post('/moodle/trigger-push', MoodleTriggerPushController::class)
+    ->middleware('throttle:10,1')
+    ->name('api.moodle.trigger-push');
 
 /*
 |--------------------------------------------------------------------------

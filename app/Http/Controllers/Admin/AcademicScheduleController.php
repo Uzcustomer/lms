@@ -477,6 +477,7 @@ class AcademicScheduleController extends Controller
         $allowPastExamDates = ExamDateRoleService::allowPastExamDates();
         $allowTodayExamDates = ExamDateRoleService::allowTodayExamDates();
         $examDateSubmissionCutoffHour = ExamDateRoleService::examDateSubmissionCutoffHour();
+        $allow4PlusDebtorsRetake = ExamDateRoleService::allow4PlusDebtorsRetake();
 
         return view('admin.academic-schedule.index', compact(
             'scheduleData',
@@ -512,6 +513,7 @@ class AcademicScheduleController extends Controller
             'allowPastExamDates',
             'allowTodayExamDates',
             'examDateSubmissionCutoffHour',
+            'allow4PlusDebtorsRetake',
         ));
     }
 
@@ -2369,6 +2371,8 @@ class AcademicScheduleController extends Controller
             $currentEducationYear = null;
         }
 
+        $allow4PlusDebtorsRetake = ExamDateRoleService::allow4PlusDebtorsRetake();
+
         try {
             return view('admin.academic-schedule.test-center', compact(
                 'scheduleData',
@@ -2391,6 +2395,7 @@ class AcademicScheduleController extends Controller
                 'routePrefix',
                 'readOnly',
                 'isTestCenter',
+                'allow4PlusDebtorsRetake',
             ))->render();
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('testCenterView VIEW RENDER xatolik: ' . $e->getMessage(), [
@@ -4014,11 +4019,15 @@ class AcademicScheduleController extends Controller
             // o'lchov: o'tgan semestrlar academic_records'dan (past_debts),
             // joriy semestr jurnal mantig'idan (current_semester_debts).
             // "X" admission_status orqali aniqlanadi.
+            // Sozlama: agar "4+ qarzdorlarga qayta topshirishga ruxsat" toggle
+            // yoqilgan bo'lsa, debt count filterini chetlab o'tamiz — bunday
+            // talabalar ham Word ro'yxatiga tushadi.
+            $allow4Plus = ExamDateRoleService::allow4PlusDebtorsRetake();
             $dbgRemoved = [];
-            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($debug, &$dbgRemoved) {
+            $enrichedStudents = array_values(array_filter($enrichedStudents, function ($row) use ($debug, &$dbgRemoved, $allow4Plus) {
                 $hemisId = (string) ($row['hemis_id'] ?? '');
                 $debtCount = count($row['past_debts'] ?? []) + count($row['current_semester_debts'] ?? []);
-                if ($debtCount >= 4) {
+                if (!$allow4Plus && $debtCount >= 4) {
                     if ($debug) {
                         $dbgRemoved[] = [
                             'name' => $row['full_name'] ?? $hemisId,

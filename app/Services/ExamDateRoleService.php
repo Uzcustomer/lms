@@ -57,6 +57,15 @@ class ExamDateRoleService
      *  o'chirib qo'yish tavsiya etiladi. */
     public const SETTING_ALLOW_TODAY_DATES = 'allow_today_exam_dates';
 
+    /** Setting kaliti: 4 ta va undan ortiq fandan qarzi bor talabalarga
+     *  qayta topshirishga (2/3-urinishga) ruxsat berish. Default
+     *  o'chirilgan — joriy xulq saqlanadi (4+ qarz → kursdan qoldiriladi,
+     *  imtihon sanasi belgilanmaydi, Word ro'yxatiga tushmaydi). Toggle
+     *  yoqilgan bo'lsa, qarz soni cheklovi olib tashlanadi: 4+ qarzdorlar
+     *  ham boshqa talabalar qatori imtihon topshira oladi. "4 tadan ortiq
+     *  qarz" badge'i informativ tarzda qoladi, lekin bloklamaydi. */
+    public const SETTING_ALLOW_4PLUS_DEBTORS_RETAKE = 'allow_4plus_debtors_retake';
+
     /**
      * Whether the test-centre role may currently edit today's exam times.
      */
@@ -128,6 +137,22 @@ class ExamDateRoleService
     public static function setAllowTodayExamDates(bool $value): void
     {
         \App\Models\Setting::set(self::SETTING_ALLOW_TODAY_DATES, $value ? '1' : '0');
+    }
+
+    /**
+     * 4+ qarzdor talabalarga qayta topshirishga ruxsat berilganmi.
+     */
+    public static function allow4PlusDebtorsRetake(): bool
+    {
+        return (bool) \App\Models\Setting::get(self::SETTING_ALLOW_4PLUS_DEBTORS_RETAKE, false);
+    }
+
+    /**
+     * Persist the "allow 4+ debtors retake" toggle. Admin-only caller.
+     */
+    public static function setAllow4PlusDebtorsRetake(bool $value): void
+    {
+        \App\Models\Setting::set(self::SETTING_ALLOW_4PLUS_DEBTORS_RETAKE, $value ? '1' : '0');
     }
 
     /**

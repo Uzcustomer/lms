@@ -70,8 +70,22 @@ return [
         'ws_url' => env('MOODLE_WS_URL'),
         'ws_token' => env('MOODLE_WS_TOKEN'),
         'ws_timeout' => (int) env('MOODLE_WS_TIMEOUT', 30),
+        // Master toggle for the narrow exam time window. When false
+        // (default for now), the booking push opens the quiz for the
+        // whole exam day instead of only ±N minutes around the
+        // scheduled time — access is then governed solely by:
+        //   1. The booking row in local_hemisexport_cutoffs
+        //      (no row → fail-closed, blocked).
+        //   2. The exam_access computer-binding check (if enabled).
+        // Flip to true once the precise time-window flow is fully
+        // validated; the narrow-window logic below is still in place
+        // and is used as-is when this flag is on.
+        'enforce_time_window' => (bool) env('MOODLE_ENFORCE_TIME_WINDOW', false),
         // Window around exam start during which a student may begin attempt (minutes)
         'open_window_minutes' => (int) env('MOODLE_OPEN_WINDOW_MINUTES', 10),
+        // Extra minutes after the late-entry cutoff during which a student
+        // who finished FaceID right on the edge can still click "Start".
+        'attempt_start_buffer_minutes' => (int) env('MOODLE_ATTEMPT_START_BUFFER_MINUTES', 2),
         // After the start cutoff (exam_time + open_window), how many extra minutes
         // remain before timeclose. Must be >= the Moodle quiz timelimit so that
         // students who started right before the cutoff still get their full time.

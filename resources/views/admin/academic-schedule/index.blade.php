@@ -672,7 +672,9 @@
                                                     // urinishda (1-urinish ham) imtihon sanasi belgilab bo'lmaydi.
                                                     // (eski is_held_back yoki yangi total qarz soni >= 4 — qaysi biri bo'lsa)
                                                     $isHeldBack = !empty($stuRow['is_held_back']) || $stuDebtCount >= 4;
-                                                    $heldBackBlocked = $isHeldBack;
+                                                    // Sozlama yoqilgan bo'lsa — "4 tadan ortiq qarz" badge'i informativ
+                                                    // tarzda qoladi, lekin sana qo'yishni bloklamaydi.
+                                                    $heldBackBlocked = $isHeldBack && empty($allow4PlusDebtorsRetake);
                                                     $isBlocked = $pullikBlocked || $heldBackBlocked;
                                                     $blockedTitle = $heldBackBlocked
                                                         ? '4 tadan ortiq fandan qarz — kursdan qoldiriladi, imtihon topshira olmaydi'

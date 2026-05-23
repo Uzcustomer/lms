@@ -348,6 +348,21 @@
                             </div>
                         </label>
 
+                        <input type="hidden" name="allow_4plus_debtors_retake" value="0">
+                        <label style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px; border: 1px solid {{ $allow4PlusDebtorsRetake ? '#0ea5e9' : '#e5e7eb' }}; background: {{ $allow4PlusDebtorsRetake ? '#f0f9ff' : '#fff' }}; cursor: pointer; margin-bottom: 16px;">
+                            <input type="checkbox" name="allow_4plus_debtors_retake" value="1" {{ $allow4PlusDebtorsRetake ? 'checked' : '' }} style="width: 18px; height: 18px; accent-color: #0ea5e9;">
+                            <div>
+                                <div style="font-size: 14px; font-weight: 600; color: #0f172a;">4 ta va undan ortiq qarzdorlarga qayta topshirishga ruxsat berish</div>
+                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">
+                                    Sukut bo'yicha 4 ta va undan ortiq fandan qarzi bor talaba kursdan qoldiriladi —
+                                    unga 2- yoki 3-urinish (qayta topshirish) sanasi belgilanmaydi va u
+                                    YN oldi qaydnoma (Word) ro'yxatiga tushmaydi. Toggle yoqilsa, qarz soni
+                                    cheklovi olib tashlanadi va bunday talabalar ham boshqalar qatori
+                                    imtihon topshira oladi. "4 tadan ortiq qarz" badge'i informativ tarzda qoladi.
+                                </div>
+                            </div>
+                        </label>
+
                         <div style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px; border: 1px solid #e5e7eb; background: #fff; margin-bottom: 16px;">
                             <div style="flex: 1;">
                                 <div style="font-size: 14px; font-weight: 600; color: #0f172a;">Ertangi kunga sana belgilash cutoff soati</div>

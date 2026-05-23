@@ -45,6 +45,8 @@ class SettingsController extends Controller
         $data['allowTodayExamDates'] = ExamDateRoleService::allowTodayExamDates();
         // Ertangi kunga sana belgilash uchun bugungi cutoff soat (default 18)
         $data['examDateSubmissionCutoffHour'] = ExamDateRoleService::examDateSubmissionCutoffHour();
+        // 4+ qarzdorlarga qayta topshirishga ruxsat toggle'i
+        $data['allow4PlusDebtorsRetake'] = ExamDateRoleService::allow4PlusDebtorsRetake();
 
         // Test markazi sig'imi sozlamalari
         $data['examCapacity'] = ExamCapacityService::getSettings();
@@ -262,10 +264,12 @@ class SettingsController extends Controller
         $request->validate([
             'allow_past_dates' => 'nullable|in:0,1',
             'allow_today_dates' => 'nullable|in:0,1',
+            'allow_4plus_debtors_retake' => 'nullable|in:0,1',
             'submission_cutoff_hour' => 'nullable|integer|min:0|max:23',
         ]);
         ExamDateRoleService::setAllowPastExamDates((bool) $request->input('allow_past_dates', 0));
         ExamDateRoleService::setAllowTodayExamDates((bool) $request->input('allow_today_dates', 0));
+        ExamDateRoleService::setAllow4PlusDebtorsRetake((bool) $request->input('allow_4plus_debtors_retake', 0));
         if ($request->filled('submission_cutoff_hour')) {
             ExamDateRoleService::setExamDateSubmissionCutoffHour((int) $request->input('submission_cutoff_hour'));
         }

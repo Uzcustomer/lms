@@ -556,9 +556,11 @@
                                                     $stuAdmission = $stuRow['admission_status'] ?? null;
                                                     $stuAdmReasons = $stuRow['admission_reasons'] ?? [];
                                                     $stuDeniedYn = $stuAdmission === 'X';
+                                                    // Sozlama yoqilgan bo'lsa — 4+ qarz endi bloklamaydi (badge informativ qoladi).
+                                                    $stuHeldBackBlocks = $stuHeldBack && empty($allow4PlusDebtorsRetake);
                                                     // X (YN ga ruxsat yo'q) — vaqt/kompyuter qo'yishni bloklaymiz,
                                                     // huddi pullik/held_back kabi. Ruxsat va Shartli — vaqt qo'yishga ruxsat beriladi.
-                                                    $stuBlocked = (($attempt > 1) && ($stuPullik || $stuHeldBack)) || $stuDeniedYn;
+                                                    $stuBlocked = (($attempt > 1) && ($stuPullik || $stuHeldBackBlocks)) || $stuDeniedYn;
                                                     $stuPersonalDate = null;
                                                     if ($attempt === 2) {
                                                         $stuPersonalDate = ($item['yn_type'] === 'OSKI') ? ($stuRow['oski_resit_date'] ?? null) : ($stuRow['test_resit_date'] ?? null);

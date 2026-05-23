@@ -2212,6 +2212,29 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * Return the count of BookMoodleGroupExam jobs still pending in the
+     * queue, plus how many failed in the last hour. Polled by the test
+     * centre UI to show "Moodle push: X / Y" progress after a bulk recheck
+     * dispatch — the user no longer has to manually refresh and wait.
+     */
+    public function bulkRecheckMoodleStatus(Request $request)
+    {
+        $pending = DB::table('jobs')
+            ->where('payload', 'LIKE', '%BookMoodleGroupExam%')
+            ->count();
+
+        $failedRecent = DB::table('failed_jobs')
+            ->where('payload', 'LIKE', '%BookMoodleGroupExam%')
+            ->where('failed_at', '>=', now()->subHour())
+            ->count();
+
+        return response()->json([
+            'pending'        => $pending,
+            'failed_recent'  => $failedRecent,
+        ]);
+    }
+
+    /**
      * Tanlangan urinish uchun talabalar ro'yxatini filtrlash:
      *  - 1-urinish: barcha talabalar
      *  - 2-urinish: 1-urinishdan o'tmaganlar (failed_attempt1) YOKI shaxsiy

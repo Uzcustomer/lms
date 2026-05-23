@@ -2057,6 +2057,51 @@ class AcademicScheduleController extends Controller
             return $item;
         });
 
+        // Kompyuter raqami filtri: 'missing' (qo'yilmagan), 'assigned' (qo'yilgan)
+        // yoki bo'sh (barchasi). computer_assignments'da computer_number IS NOT NULL
+        // bo'lgan qatorlar soni (exam_schedule_id, yn_type, attempt) bo'yicha
+        // student_count bilan solishtiriladi.
+        $compFilter = $request->get('comp_filter');
+        if (in_array($compFilter, ['missing', 'assigned'], true)) {
+            $scheduleIdsForComp = $transformedData
+                ->pluck('schedule_id')
+                ->filter()
+                ->unique()
+                ->values()
+                ->all();
+            $compAssignedMap = []; // "schedule_id|yn|attempt" => assigned_count
+            if (!empty($scheduleIdsForComp)) {
+                try {
+                    $rows = DB::table('computer_assignments')
+                        ->whereIn('exam_schedule_id', $scheduleIdsForComp)
+                        ->whereNotNull('computer_number')
+                        ->groupBy('exam_schedule_id', 'yn_type', 'attempt')
+                        ->select('exam_schedule_id', 'yn_type', 'attempt', DB::raw('COUNT(*) as cnt'))
+                        ->get();
+                    foreach ($rows as $r) {
+                        $k = $r->exam_schedule_id . '|' . strtolower((string) $r->yn_type) . '|' . (int) $r->attempt;
+                        $compAssignedMap[$k] = (int) $r->cnt;
+                    }
+                } catch (\Throwable $e) {
+                    \Illuminate\Support\Facades\Log::warning('buildTestCenterData: comp_filter hisobi xatolik berdi: ' . $e->getMessage());
+                }
+            }
+            $transformedData = $transformedData->filter(function ($item) use ($compFilter, $compAssignedMap) {
+                $sid = $item['schedule_id'] ?? null;
+                if (!$sid) {
+                    return $compFilter === 'missing';
+                }
+                $yn = strtolower((string) ($item['yn_type'] ?? ''));
+                $att = (int) ($item['attempt'] ?? 1);
+                $assigned = (int) ($compAssignedMap[$sid . '|' . $yn . '|' . $att] ?? 0);
+                $required = (int) ($item['student_count'] ?? 0);
+                if ($compFilter === 'missing') {
+                    return $assigned < $required;
+                }
+                return $required > 0 && $assigned >= $required;
+            })->values();
+        }
+
         $scheduleData = $transformedData->groupBy(fn($item) => $item['group']->group_hemis_id);
 
         return [
@@ -2064,6 +2109,7 @@ class AcademicScheduleController extends Controller
             'currentEducationYear' => $currentEducationYear,
             'urinishFilter' => $urinishFilter,
             'showStudents' => $showStudents,
+            'compFilter' => $compFilter,
         ];
     }
 
@@ -2282,6 +2328,7 @@ class AcademicScheduleController extends Controller
 
         $urinishFilter = $request->get('urinish');
         $showStudents = $request->get('show_students') === '1';
+        $compFilter = $request->get('comp_filter');
 
         try {
             $result = $this->buildTestCenterData($request);
@@ -2289,6 +2336,7 @@ class AcademicScheduleController extends Controller
             $currentEducationYear = $result['currentEducationYear'];
             $urinishFilter = $result['urinishFilter'] ?? $urinishFilter;
             $showStudents = $result['showStudents'] ?? $showStudents;
+            $compFilter = $result['compFilter'] ?? $compFilter;
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('testCenterView xatolik: ' . $e->getMessage(), [
                 'file' => $e->getFile() . ':' . $e->getLine(),
@@ -2314,6 +2362,7 @@ class AcademicScheduleController extends Controller
                 'currentSemesterToggle',
                 'urinishFilter',
                 'showStudents',
+                'compFilter',
                 'isSearched',
                 'currentEducationYear',
                 'routePrefix',

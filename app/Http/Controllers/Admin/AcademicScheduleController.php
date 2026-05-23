@@ -8072,21 +8072,30 @@ class AcademicScheduleController extends Controller
         // ko'rsatiladi — talaba erta bilib qo'yib boshqa kompga o'tirmasin.
         $upcomingWindowMin = 60;
         $revealWindowMin = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
+        // Kechikkan SCHEDULED qatorlar uchun "grace" oyna: planned_start o'tib
+        // ketgan bo'lsa ham shuncha daqiqagacha ko'rsatib turamiz (talaba
+        // kechikib kelishi ham mumkin). Bundan oshsa — ekranga tushmaydi.
+        $staleGraceMin = 15;
         $windowEnd = $now->copy()->addMinutes($upcomingWindowMin);
+        $windowStart = $now->copy()->subMinutes($staleGraceMin);
 
         // Shu kunda planned_start'i bo'lgan barcha aktiv qatorlar (in_progress
         // yoki kelgusi 60 daqiqada boshlanadigan). computer_number NULL bo'lsa
         // ham olamiz — view'da "tez orada" deb chiqaramiz.
+        // SCHEDULED qatorlar uchun ham yuqori, ham pastki chegara qo'yiladi —
+        // aks holda allaqachon o'tib ketgan, lekin status'i yangilanmagan
+        // qatorlar ekranda muzlab qoladi.
         $rows = DB::table('computer_assignments as ca')
             ->leftJoin('students as st', 'st.hemis_id', '=', 'ca.student_hemis_id')
             ->leftJoin('exam_schedules as es', 'es.id', '=', 'ca.exam_schedule_id')
             ->leftJoin('groups as g', 'g.group_hemis_id', '=', 'es.group_hemis_id')
             ->whereDate('ca.planned_start', $date)
-            ->where(function ($q) use ($windowEnd) {
+            ->where(function ($q) use ($windowEnd, $windowStart) {
                 $q->where('ca.status', \App\Models\ComputerAssignment::STATUS_IN_PROGRESS)
-                    ->orWhere(function ($q2) use ($windowEnd) {
+                    ->orWhere(function ($q2) use ($windowEnd, $windowStart) {
                         $q2->where('ca.status', \App\Models\ComputerAssignment::STATUS_SCHEDULED)
-                            ->where('ca.planned_start', '<=', $windowEnd);
+                            ->where('ca.planned_start', '<=', $windowEnd)
+                            ->where('ca.planned_start', '>=', $windowStart);
                     });
             })
             ->orderBy('ca.planned_start')

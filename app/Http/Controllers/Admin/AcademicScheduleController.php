@@ -1110,12 +1110,36 @@ class AcademicScheduleController extends Controller
         }
         unset($arRecords);
 
-        // (curriculum_id, semester_code) juftliklari
+        // Bir o'quv yili ikki semestrdan iborat (kuzgi + bahorgi). academic_records
+        // yil oxirida qo'yiladi — shuning uchun joriy o'quv yili ichidagi avvalgi
+        // semestr (masalan 1-kursning 1-semestri yangi tugagan, hozir 2-semestrda)
+        // "o'tgan qarz" emas. O'tgan qarz = oldingi o'quv yillaridagi semestrlar.
+        // Buning uchun har talabaning JORIY o'quv yili kerak.
+        $studentCurrYear = []; // hemis_id => current education_year
+        try {
+            $rows = DB::table('semesters')
+                ->whereIn('curriculum_hemis_id', array_filter($students->pluck('curriculum_id')->unique()->all()))
+                ->select('curriculum_hemis_id', 'code', 'education_year')
+                ->get();
+            $semYearByCurrCode = [];
+            foreach ($rows as $r) {
+                $semYearByCurrCode[$r->curriculum_hemis_id . '|' . $r->code] = $r->education_year;
+            }
+            foreach ($students as $st) {
+                $k = $st->curriculum_id . '|' . $st->semester_code;
+                if (isset($semYearByCurrCode[$k])) {
+                    $studentCurrYear[$st->hemis_id] = $semYearByCurrCode[$k];
+                }
+            }
+        } catch (\Throwable $e) {}
+
+        // (curriculum_id, semester_code) juftliklari — faqat OLDINGI o'quv yillari
         $curriculumPairs = []; // 'curr_id|sem' => true
         foreach ($students as $st) {
-            $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
+            $myYear = $studentCurrYear[$st->hemis_id] ?? null;
             foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
-                if (!$studentSemCode || (int) $semCode < $studentSemCode) {
+                $semYear = $semYearByCurrCode[$currId . '|' . $semCode] ?? null;
+                if ($myYear && $semYear && (string) $semYear < (string) $myYear) {
                     $curriculumPairs[$currId . '|' . $semCode] = true;
                 }
             }
@@ -1168,10 +1192,13 @@ class AcademicScheduleController extends Controller
 
         // Har bir talaba uchun qarz fanlarini yig'ish
         foreach ($students as $st) {
-            $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
+            $myYear = $studentCurrYear[$st->hemis_id] ?? null;
             $debts = [];
             foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
-                if ($studentSemCode && (int) $semCode >= $studentSemCode) continue;
+                // Faqat OLDINGI o'quv yili semestrlari (joriy yil ichidagi
+                // kuzgi semestr "o'tgan qarz" emas — yil oxirida AR qo'yiladi).
+                $semYear = $semYearByCurrCode[$currId . '|' . $semCode] ?? null;
+                if (!$myYear || !$semYear || (string) $semYear >= (string) $myYear) continue;
 
                 $subjectsForSem = $subjectsByPair->get($currId . '|' . $semCode, collect());
                 $subjectsForSem = self::filterSubjectsByGroupSuffixSimple($subjectsForSem, $st->group_name ?? '');

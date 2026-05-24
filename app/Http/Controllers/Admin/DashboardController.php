@@ -195,4 +195,12 @@ class DashboardController extends Controller
         Artisan::queue('import:curriculum-subject-teachers');
         return back()->with('success', 'Fan-o\'qituvchi biriktirishlarni import qilish boshlandi (fon rejimida).');
     }
+
+    public function importAcademicRecords(): RedirectResponse
+    {
+        $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan Akkreditatsiya (academic_records) sinxronizatsiyasi boshlandi");
+        ActivityLogService::log('import', 'academic_record', 'Akkreditatsiya sinxronizatsiyasi boshlandi');
+        Artisan::queue('import:academic-records');
+        return back()->with('success', 'Akkreditatsiya (talaba baholari) importi boshlandi (fon rejimida). 359k+ yozuv, bir necha daqiqa olishi mumkin.');
+    }
 }

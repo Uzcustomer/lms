@@ -2586,9 +2586,56 @@ class AcademicScheduleController extends Controller
 
         if ($curriculumIds->isEmpty()) return collect();
 
+        // YN sanasi filtri qo'llanilganda — avval exam_schedules dan kichik
+        // to'plamni topib, qolgan barcha so'rovlarni (subjects/groups/schedules
+        // jurnalidan dars sanalari) shu to'plamdagi guruh/fan/semestrlar bilan
+        // cheklaymiz. Aks holda 500+ guruh × 30+ fan kombinatsiyalari uchun
+        // og'ir queries ishlatiladi va schedules jadvali (millionlab qator)
+        // bo'yicha lessonDatesRaw GROUP BY 504 beradi.
+        $dateRestricted = $filterByYnDate && ($dateFrom || $dateTo);
+        $preFilteredKeys = null;          // group_hid|subject_id|semester_code => true
+        $preFilteredGroupHids = null;
+        $preFilteredSubjectIds = null;
+        $preFilteredSemCodes = null;
+        if ($dateRestricted) {
+            $dateCols = ['oski_date', 'test_date', 'oski_resit_date', 'test_resit_date',
+                         'oski_resit2_date', 'test_resit2_date'];
+            $preQuery = DB::table('exam_schedules')->whereNull('student_hemis_id');
+            if ($selectedDepartment) $preQuery->where('department_hemis_id', $selectedDepartment);
+            if ($selectedSpecialty) $preQuery->where('specialty_hemis_id', $selectedSpecialty);
+            if ($selectedGroup) $preQuery->where('group_hemis_id', $selectedGroup);
+            if ($selectedSubject) $preQuery->where('subject_id', $selectedSubject);
+            if ($semesterCodes->isNotEmpty()) $preQuery->whereIn('semester_code', $semesterCodes);
+            $preQuery->where(function ($outer) use ($dateCols, $dateFrom, $dateTo) {
+                foreach ($dateCols as $col) {
+                    $outer->orWhere(function ($qq) use ($col, $dateFrom, $dateTo) {
+                        $qq->whereNotNull($col);
+                        if ($dateFrom) $qq->where($col, '>=', $dateFrom);
+                        if ($dateTo) $qq->where($col, '<=', $dateTo);
+                    });
+                }
+            });
+            $preRows = $preQuery->select('group_hemis_id', 'subject_id', 'semester_code')->get();
+            if ($preRows->isEmpty()) return collect();
+            $preFilteredKeys = [];
+            $gids = []; $sids = []; $secs = [];
+            foreach ($preRows as $r) {
+                $preFilteredKeys[$r->group_hemis_id . '_' . $r->subject_id . '_' . $r->semester_code] = true;
+                $gids[$r->group_hemis_id] = true;
+                $sids[$r->subject_id] = true;
+                $secs[$r->semester_code] = true;
+            }
+            $preFilteredGroupHids = array_keys($gids);
+            $preFilteredSubjectIds = array_keys($sids);
+            $preFilteredSemCodes = array_keys($secs);
+        }
+
         // Fanlar
         $subjectQuery = CurriculumSubject::whereIn('curricula_hemis_id', $curriculumIds)
             ->where('is_active', true);
+        if ($preFilteredSubjectIds !== null) {
+            $subjectQuery->whereIn('subject_id', $preFilteredSubjectIds);
+        }
         if ($currentSemesterOnly && !$selectedSemester) {
             // Har bir curriculum uchun alohida joriy semestr kodi bo'yicha aniq filtr
             $semQuery = $semesterFilter(Semester::query())->whereIn('curriculum_hemis_id', $curriculumIds);
@@ -2625,6 +2672,9 @@ class AcademicScheduleController extends Controller
         if ($selectedDepartment) $groupQuery->where('department_hemis_id', $selectedDepartment);
         if ($selectedSpecialty) $groupQuery->where('specialty_hemis_id', $selectedSpecialty);
         if ($selectedGroup) $groupQuery->where('group_hemis_id', $selectedGroup);
+        if ($preFilteredGroupHids !== null) {
+            $groupQuery->whereIn('group_hemis_id', $preFilteredGroupHids);
+        }
         $filteredGroups = $groupQuery->orderBy('name')->get();
 
         if ($filteredGroups->isEmpty()) return collect();
@@ -2645,38 +2695,44 @@ class AcademicScheduleController extends Controller
         if ($selectedSpecialty) $scheduleQuery->where('specialty_hemis_id', $selectedSpecialty);
         if ($selectedGroup) $scheduleQuery->where('group_hemis_id', $selectedGroup);
         if ($semesterCodes->isNotEmpty()) $scheduleQuery->whereIn('semester_code', $semesterCodes);
-        // YN sanasi filtri SQL darajasida — aks holda BARCHA exam_schedules
-        // yozuvlari yuklanib, PHP'da collect()->filter() bilan kesib tashlanadi.
-        // Bir kunlik diapazonda ham tizim 15k+ qatorni xotiraga oladi va 504
-        // beradi. Sanalarning birortasi diapazonga tushishi shart (6 ta urinish
-        // ustuni: oski/test va resit/resit2 variantlari).
-        $dateRestricted = $filterByYnDate && ($dateFrom || $dateTo);
-        if ($dateRestricted) {
-            $dateCols = ['oski_date', 'test_date', 'oski_resit_date', 'test_resit_date',
-                         'oski_resit2_date', 'test_resit2_date'];
-            $scheduleQuery->where(function ($outer) use ($dateCols, $dateFrom, $dateTo) {
-                foreach ($dateCols as $col) {
-                    $outer->orWhere(function ($qq) use ($col, $dateFrom, $dateTo) {
-                        $qq->whereNotNull($col);
-                        if ($dateFrom) $qq->where($col, '>=', $dateFrom);
-                        if ($dateTo) $qq->where($col, '<=', $dateTo);
-                    });
-                }
-            });
+        // Date filter qo'llanilsa — preFilteredKeys orqali kichik to'plamga
+        // cheklaymiz (full to'plam yuqorida pre-query qilingan).
+        if ($preFilteredGroupHids !== null) {
+            $scheduleQuery->whereIn('group_hemis_id', $preFilteredGroupHids);
+        }
+        if ($preFilteredSubjectIds !== null) {
+            $scheduleQuery->whereIn('subject_id', $preFilteredSubjectIds);
+        }
+        if ($preFilteredSemCodes !== null) {
+            $scheduleQuery->whereIn('semester_code', $preFilteredSemCodes);
         }
         $existingSchedules = $scheduleQuery->get()
             ->keyBy(fn($item) => $item->group_hemis_id . '_' . $item->subject_id . '_' . $item->semester_code);
 
         // Sana filtri qo'llanilsa — outer loopni faqat tegishli (group, subject,
-        // semester) triplelar bilan cheklaymiz. Bu O(groups × subjects) ni
-        // O(scheduled_rows_in_date_range) ga tushiradi.
-        $dateFilteredKeys = $dateRestricted ? $existingSchedules->keys()->flip()->all() : null;
+        // semester) triplelar bilan cheklaymiz.
+        $dateFilteredKeys = $preFilteredKeys;
 
-        // Dars jadvalidan boshlanish/tugash sanalarini olish (schedules jadvalidan)
-        $lessonDatesRaw = DB::table('schedules')
+        // Dars jadvalidan boshlanish/tugash sanalarini olish (schedules jadvalidan).
+        // Date filter faolligida — faqat tegishli guruh+fan kombinatsiyalarini
+        // so'raymiz, aks holda 500+ guruhlik full scan minutes ketadi.
+        $lessonDatesQuery = DB::table('schedules')
             ->select('group_id', 'subject_id', 'subject_name', DB::raw('MIN(lesson_date) as lesson_start'), DB::raw('MAX(lesson_date) as lesson_end'))
             ->whereIn('group_id', $filteredGroups->pluck('group_hemis_id'))
-            ->whereNull('deleted_at')
+            ->whereNull('deleted_at');
+        if ($preFilteredSubjectIds !== null) {
+            // schedules.subject_id curriculum_subject_hemis_id YOKI HEMIS subject_id bo'lishi
+            // mumkin — ikkalasini ham qabul qilamiz.
+            $curriculumSubjHids = $subjects->pluck('curriculum_subject_hemis_id')->filter()->all();
+            $allowedSubjIds = array_values(array_unique(array_merge(
+                $preFilteredSubjectIds,
+                array_values($curriculumSubjHids)
+            )));
+            if (!empty($allowedSubjIds)) {
+                $lessonDatesQuery->whereIn('subject_id', $allowedSubjIds);
+            }
+        }
+        $lessonDatesRaw = $lessonDatesQuery
             ->groupBy('group_id', 'subject_id', 'subject_name')
             ->get();
 

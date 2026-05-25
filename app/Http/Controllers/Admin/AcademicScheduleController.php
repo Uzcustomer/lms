@@ -9335,5 +9335,123 @@ class AcademicScheduleController extends Controller
             'message' => "Qo'lda biriktirma saqlandi: " . ($result['count'] ?? 0) . " ta talaba.",
         ]);
     }
+
+    /**
+     * Debug yordamchi: Yo'nalish filtrli qidiruv nima uchun bo'sh natija berayotganini
+     * bosqichma-bosqich tushuntiradi. URL paramlari index() bilan bir xil.
+     * Foydalanish: /admin/academic-schedule/debug-specialty?department_id=54&specialty_id=...
+     */
+    public function debugSpecialty(Request $request)
+    {
+        if (!auth()->user()?->hasAnyRole(['admin', 'superadmin'])) {
+            abort(403);
+        }
+
+        $departmentId = $request->get('department_id');
+        $specialtyId = $request->get('specialty_id');
+        $levelCode = $request->get('level_code');
+        $semesterCode = $request->get('semester_code');
+        $currentSemesterToggle = $request->get('current_semester', '1');
+        $currentSemesterOnly = $currentSemesterToggle === '1';
+
+        $currentEducationYear = Semester::where('current', true)->value('education_year');
+
+        $out = [
+            'inputs' => compact('departmentId', 'specialtyId', 'levelCode', 'semesterCode', 'currentSemesterOnly', 'currentEducationYear'),
+        ];
+
+        // 1. Tanlangan specialty_hemis_id ga mos Specialty yozuvlari
+        if ($specialtyId) {
+            $selectedSpec = Specialty::where('specialty_hemis_id', $specialtyId)->get(['specialty_hemis_id', 'name']);
+            $out['selected_specialty_record'] = $selectedSpec->toArray();
+
+            // Shu nom ostida boshqa specialty_hemis_id variantlari
+            $names = $selectedSpec->pluck('name')->unique()->toArray();
+            if (!empty($names)) {
+                $sameNameSpecs = Specialty::whereIn('name', $names)->get(['specialty_hemis_id', 'name']);
+                $out['same_name_specialty_variants'] = $sameNameSpecs->toArray();
+            }
+        }
+
+        // 2. Curriculum bosqichi
+        $curriculumBase = Curriculum::query();
+        if ($currentSemesterOnly) {
+            $curriculumBase->where(function($q) {
+                $q->where('current', true)
+                  ->orWhereIn('curricula_hemis_id', Semester::where('current', true)->select('curriculum_hemis_id'));
+            });
+        } else {
+            $curriculumBase->whereIn('curricula_hemis_id', Semester::where('education_year', $currentEducationYear)->select('curriculum_hemis_id'));
+        }
+
+        $curQ1 = (clone $curriculumBase);
+        if ($departmentId) $curQ1->where('department_hemis_id', $departmentId);
+        $out['curricula_dept_only'] = [
+            'count' => $curQ1->count(),
+            'specialty_hemis_id_variants' => $curQ1->select('specialty_hemis_id')->distinct()->pluck('specialty_hemis_id')->toArray(),
+            'sample' => $curQ1->limit(20)->get(['curricula_hemis_id', 'name', 'department_hemis_id', 'specialty_hemis_id'])->toArray(),
+        ];
+
+        if ($specialtyId) {
+            $curQ2 = (clone $curriculumBase);
+            if ($departmentId) $curQ2->where('department_hemis_id', $departmentId);
+            $curQ2->where('specialty_hemis_id', $specialtyId);
+            $out['curricula_dept_plus_specialty'] = [
+                'count' => $curQ2->count(),
+                'sample' => $curQ2->limit(20)->get(['curricula_hemis_id', 'name', 'department_hemis_id', 'specialty_hemis_id'])->toArray(),
+            ];
+        }
+
+        // 3. Group bosqichi (curriculum filtrisiz va bilan)
+        $groupQ1 = Group::where('active', true);
+        if ($departmentId) $groupQ1->where('department_hemis_id', $departmentId);
+        $out['groups_dept_only'] = [
+            'count' => $groupQ1->count(),
+            'specialty_hemis_id_variants' => $groupQ1->select('specialty_hemis_id', 'specialty_name')
+                ->distinct()->get()->toArray(),
+        ];
+
+        if ($specialtyId) {
+            $groupQ2 = Group::where('active', true);
+            if ($departmentId) $groupQ2->where('department_hemis_id', $departmentId);
+            $groupQ2->where('specialty_hemis_id', $specialtyId);
+            $out['groups_dept_plus_specialty'] = [
+                'count' => $groupQ2->count(),
+                'sample' => $groupQ2->limit(20)->get(['group_hemis_id', 'name', 'department_hemis_id', 'specialty_hemis_id', 'specialty_name', 'curriculum_hemis_id'])->toArray(),
+            ];
+
+            // Groups in dept that have specialty_name = selected name but different ID
+            $names = Specialty::where('specialty_hemis_id', $specialtyId)->pluck('name')->toArray();
+            if (!empty($names)) {
+                $groupQ3 = Group::where('active', true);
+                if ($departmentId) $groupQ3->where('department_hemis_id', $departmentId);
+                $groupQ3->whereIn('specialty_name', $names);
+                $out['groups_with_same_specialty_name'] = [
+                    'count' => $groupQ3->count(),
+                    'distinct_specialty_hemis_id_in_groups' => $groupQ3->distinct()->pluck('specialty_hemis_id')->toArray(),
+                    'sample' => $groupQ3->limit(20)->get(['group_hemis_id', 'name', 'specialty_hemis_id', 'specialty_name', 'curriculum_hemis_id'])->toArray(),
+                ];
+            }
+        }
+
+        // 4. Curriculum+Group bog'liqligi: yo'nalish bo'yicha guruh va uning curriculumi
+        if ($specialtyId) {
+            $groupsBySpecName = $out['groups_with_same_specialty_name']['sample'] ?? [];
+            $debugLinks = [];
+            foreach ($groupsBySpecName as $g) {
+                $curr = Curriculum::where('curricula_hemis_id', $g['curriculum_hemis_id'] ?? null)
+                    ->first(['curricula_hemis_id', 'department_hemis_id', 'specialty_hemis_id', 'name']);
+                $debugLinks[] = [
+                    'group' => $g,
+                    'curriculum' => $curr ? $curr->toArray() : null,
+                    'mismatch_specialty' => $curr ? ($curr->specialty_hemis_id != ($g['specialty_hemis_id'] ?? null)) : null,
+                    'mismatch_department' => $curr && $departmentId ? ($curr->department_hemis_id != $departmentId) : null,
+                ];
+            }
+            $out['group_curriculum_links'] = $debugLinks;
+        }
+
+        return response()->json($out, 200, ['Content-Type' => 'application/json; charset=UTF-8'], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE);
+    }
 }
 

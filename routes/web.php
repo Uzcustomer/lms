@@ -840,6 +840,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // O'quv bo'limi: YN kunini belgilash (imtihon jadvali)
         Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
             Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
+            Route::get('/debug-specialty', [AcademicScheduleController::class, 'debugSpecialty'])->name('debug-specialty');
             Route::get('/export-excel', [AcademicScheduleController::class, 'exportExcel'])->name('export-excel');
             Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
             Route::post('/clear-date', [AcademicScheduleController::class, 'clearDate'])->name('clear-date');
@@ -1456,6 +1457,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         // O'quv bo'limi: YN kunini belgilash (imtihon jadvali)
         Route::prefix('academic-schedule')->name('academic-schedule.')->group(function () {
             Route::get('/', [AcademicScheduleController::class, 'index'])->name('index');
+            Route::get('/debug-specialty', [AcademicScheduleController::class, 'debugSpecialty'])->name('debug-specialty');
             Route::get('/export-excel', [AcademicScheduleController::class, 'exportExcel'])->name('export-excel');
             Route::post('/store', [AcademicScheduleController::class, 'store'])->name('store');
             Route::post('/clear-date', [AcademicScheduleController::class, 'clearDate'])->name('clear-date');

@@ -320,6 +320,16 @@ class AcademicScheduleController extends Controller
         $adminRoles = ExamDateRoleService::adminRoles();
         $isAdmin = $user && in_array($activeRole, $adminRoles, true);
         if (!ExamDateRoleService::canViewPage($activeRole)) {
+            // Test markazi roli bu sahifani (YN kunini belgilash) ko'rmaydi,
+            // lekin uning o'rniga YN jadvali (test-center) ga kirishi mumkin.
+            // Bookmark yoki eski linkdan kelgan bo'lsa 403 berish o'rniga
+            // to'g'ri sahifaga yo'naltiramiz.
+            if ($activeRole === \App\Enums\ProjectRole::TEST_CENTER->value) {
+                $route = auth('teacher')->check()
+                    ? 'teacher.academic-schedule.test-center'
+                    : 'admin.academic-schedule.test-center';
+                return redirect()->route($route);
+            }
             abort(403, 'Bu sahifaga kirish uchun ruxsat yo\'q.');
         }
 

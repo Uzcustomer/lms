@@ -2016,10 +2016,20 @@ class AcademicScheduleController extends Controller
         // hech qanday qator tushib qolmaydi - faqat keraksiz so'rovlar
         // (unscoped 8 ta SQL bilan butun student_grades/yn_submissions skani)
         // qilinmaydi. Bu test-center sahifasini bir necha barobar tezlashtiradi.
-        $needSubjectIds = $transformedData->pluck('subject')->pluck('subject_id')->unique()->filter()->values()->toArray();
-        $needSemCodes = $transformedData->pluck('subject')->pluck('semester_code')->unique()->filter()->values()->toArray();
-        $attemptNeedsMap = $this->computeAttemptNeedsMap($groupHemisIds, $needSubjectIds, $needSemCodes)['needs'];
-        $perfLog('computeAttemptNeedsMap');
+        // computeAttemptNeedsMap faqat 2-3 urinish (resit) itemlari uchun ishlatiladi.
+        // Agar sahifada faqat attempt=1 (asosiy OSKI/Test) qatorlar bo'lsa,
+        // bu funksiyani umuman chaqirmaymiz — 8 ta student_grades so'rovi
+        // tushib qoladi va sahifa darhol ochiladi. Resit kuni bo'lsa, faqat
+        // shu (group, subject, semester) triplelari uchungina hisoblaymiz.
+        $attemptNeedsMap = [];
+        $resitItems = $transformedData->filter(fn($it) => ((int) ($it['attempt'] ?? 1)) >= 2);
+        if ($resitItems->isNotEmpty()) {
+            $resitGroupHids = $resitItems->pluck('group')->pluck('group_hemis_id')->unique()->filter()->values()->toArray();
+            $resitSubjectIds = $resitItems->pluck('subject')->pluck('subject_id')->unique()->filter()->values()->toArray();
+            $resitSemCodes = $resitItems->pluck('subject')->pluck('semester_code')->unique()->filter()->values()->toArray();
+            $attemptNeedsMap = $this->computeAttemptNeedsMap($resitGroupHids, $resitSubjectIds, $resitSemCodes)['needs'];
+        }
+        $perfLog('computeAttemptNeedsMap (resit qator soni=' . $resitItems->count() . ')');
 
         $transformedData = $transformedData->map(function ($item) use ($studentCounts, $quizCounts, $ynSubmissions, $attemptNeedsMap) {
             $attempt = (int) ($item['attempt'] ?? 1);
@@ -8418,89 +8428,67 @@ class AcademicScheduleController extends Controller
         try {
             $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
 
-            foreach ([2, 3] as $att) {
-                $check = $att === 2 ? 1 : 2;
-                $rows = DB::table('student_grades as sg')
-                    ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                    ->when(!empty($groupHemisIds), fn($q) => $q->whereIn('st.group_id', $groupHemisIds))
-                    ->when(!empty($subjectIds), fn($q) => $q->whereIn('sg.subject_id', $subjectIds))
-                    ->when(!empty($semesterCodes), fn($q) => $q->whereIn('sg.semester_code', $semesterCodes))
-                    ->whereNull('sg.deleted_at')
-                    ->whereIn('sg.training_type_code', [101, 102])
-                    ->where(function ($q) {
-                        $q->where(function ($qq) {
-                            $qq->whereNotNull('sg.retake_grade')->where('sg.retake_grade', '<', 60);
-                        })->orWhere(function ($qq) {
-                            $qq->whereNull('sg.retake_grade')
-                               ->whereNotNull('sg.grade')
-                               ->where('sg.grade', '<', 60);
-                        });
-                    })
-                    ->when($hasAttemptCol, function ($q) use ($check) {
-                        $q->where(function ($qq) use ($check) {
-                            if ($check === 1) {
-                                $qq->where('sg.attempt', 1)->orWhereNull('sg.attempt');
-                            } else {
-                                $qq->where('sg.attempt', $check);
-                            }
-                        });
-                    })
-                    ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', DB::raw('COUNT(DISTINCT sg.student_hemis_id) as c'))
-                    ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
-                    ->get();
-                foreach ($rows as $r) {
-                    $needsByKey[$r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att] = (int) $r->c;
+            // 1-so'rov: student_grades dan failed (V<60) talabalarni attempt
+            // bo'yicha bir martada hisoblaymiz (4 ta alohida so'rov o'rniga 1 ta
+            // CASE WHEN ichida). 8 ta query — bu metodning asosiy 504 sababi edi.
+            $sgQuery = DB::table('student_grades as sg')
+                ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                ->when(!empty($groupHemisIds), fn($q) => $q->whereIn('st.group_id', $groupHemisIds))
+                ->when(!empty($subjectIds), fn($q) => $q->whereIn('sg.subject_id', $subjectIds))
+                ->when(!empty($semesterCodes), fn($q) => $q->whereIn('sg.semester_code', $semesterCodes))
+                ->whereNull('sg.deleted_at')
+                ->whereIn('sg.training_type_code', [101, 102]);
+            $failedExpr = 'CASE WHEN COALESCE(sg.retake_grade, sg.grade) < 60 THEN 1 ELSE 0 END';
+            $att1Cond = $hasAttemptCol ? '(sg.attempt = 1 OR sg.attempt IS NULL)' : '1';
+            $att2Cond = $hasAttemptCol ? 'sg.attempt = 2' : '0';
+            $att3Cond = $hasAttemptCol ? 'sg.attempt = 3' : '0';
+            $sgRows = $sgQuery
+                ->select('st.group_id', 'sg.subject_id', 'sg.semester_code',
+                    DB::raw("COUNT(DISTINCT CASE WHEN {$att1Cond} AND {$failedExpr} = 1 THEN sg.student_hemis_id END) as failed1"),
+                    DB::raw("COUNT(DISTINCT CASE WHEN {$att2Cond} AND {$failedExpr} = 1 THEN sg.student_hemis_id END) as failed2"),
+                    DB::raw("COUNT(DISTINCT CASE WHEN {$att2Cond} THEN sg.student_hemis_id END) as att2_explicit"),
+                    DB::raw("COUNT(DISTINCT CASE WHEN {$att3Cond} THEN sg.student_hemis_id END) as att3_explicit")
+                )
+                ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
+                ->get();
+            foreach ($sgRows as $r) {
+                $kBase = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                $failed1 = (int) $r->failed1;
+                $failed2 = (int) $r->failed2;
+                $att2 = (int) $r->att2_explicit;
+                $att3 = (int) $r->att3_explicit;
+                if ($failed1 > 0 || $att2 > 0) {
+                    $needsByKey[$kBase . '|2'] = max($needsByKey[$kBase . '|2'] ?? 0, max($failed1, $att2));
                 }
+                if ($failed2 > 0 || $att3 > 0) {
+                    $needsByKey[$kBase . '|3'] = max($needsByKey[$kBase . '|3'] ?? 0, max($failed2, $att3));
+                }
+                if ($att2 > 0) $attemptExistsByKey[$kBase . '|2'] = $att2;
+                if ($att3 > 0) $attemptExistsByKey[$kBase . '|3'] = $att3;
             }
 
-            if ($hasAttemptCol) {
-                foreach ([2, 3] as $att) {
-                    $rows = DB::table('student_grades as sg')
-                        ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                        ->when(!empty($groupHemisIds), fn($q) => $q->whereIn('st.group_id', $groupHemisIds))
-                        ->when(!empty($subjectIds), fn($q) => $q->whereIn('sg.subject_id', $subjectIds))
-                        ->when(!empty($semesterCodes), fn($q) => $q->whereIn('sg.semester_code', $semesterCodes))
-                        ->whereNull('sg.deleted_at')
-                        ->whereIn('sg.training_type_code', [101, 102])
-                        ->where('sg.attempt', $att)
-                        ->select('st.group_id', 'sg.subject_id', 'sg.semester_code', DB::raw('COUNT(DISTINCT sg.student_hemis_id) as c'))
-                        ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code')
-                        ->get();
-                    foreach ($rows as $r) {
-                        $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att;
-                        $needsByKey[$key] = max($needsByKey[$key] ?? 0, (int) $r->c);
-                        $attemptExistsByKey[$key] = (int) $r->c;
-                    }
-                }
-            }
-
+            // 2-so'rov: yn_submissions (qog'oz ariza) — attempt 2,3 ni bir
+            // martada olamiz va PHP'da ajratamiz.
             if (\Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'attempt')) {
-                foreach ([2, 3] as $att) {
-                    $rows = DB::table('yn_submissions as yns')
-                        ->when(!empty($groupHemisIds), fn($q) => $q->whereIn('yns.group_hemis_id', $groupHemisIds))
-                        ->when(!empty($subjectIds), fn($q) => $q->whereIn('yns.subject_id', $subjectIds))
-                        ->when(!empty($semesterCodes), fn($q) => $q->whereIn('yns.semester_code', $semesterCodes))
-                        ->where('yns.attempt', $att)
-                        ->select('yns.group_hemis_id as group_id', 'yns.subject_id', 'yns.semester_code', DB::raw('1 as c'))
-                        ->groupBy('yns.group_hemis_id', 'yns.subject_id', 'yns.semester_code')
-                        ->get();
-                    foreach ($rows as $r) {
-                        $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $att;
-                        if (!isset($needsByKey[$key])) {
-                            $needsByKey[$key] = 1;
-                        }
-                        $attemptExistsByKey[$key] = $attemptExistsByKey[$key] ?? 1;
-                    }
+                $ynRows = DB::table('yn_submissions as yns')
+                    ->when(!empty($groupHemisIds), fn($q) => $q->whereIn('yns.group_hemis_id', $groupHemisIds))
+                    ->when(!empty($subjectIds), fn($q) => $q->whereIn('yns.subject_id', $subjectIds))
+                    ->when(!empty($semesterCodes), fn($q) => $q->whereIn('yns.semester_code', $semesterCodes))
+                    ->whereIn('yns.attempt', [2, 3])
+                    ->select('yns.group_hemis_id as group_id', 'yns.subject_id', 'yns.semester_code', 'yns.attempt')
+                    ->distinct()
+                    ->get();
+                foreach ($ynRows as $r) {
+                    $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . ((int) $r->attempt);
+                    if (!isset($needsByKey[$key])) $needsByKey[$key] = 1;
+                    $attemptExistsByKey[$key] = $attemptExistsByKey[$key] ?? 1;
                 }
             }
 
-            // Per-student exam_schedules: agar talabaga shaxsiy resit sanasi
-            // belgilangan bo'lsa (oski_resit_date / test_resit_date), demak u
-            // qayta topshiruvchi. Bu admin yoki sababli ariza orqali qo'shilgan
-            // bo'lishi mumkin — student_grades hali kelmagan bo'lsa ham.
+            // 3-so'rov: per-student exam_schedules (shaxsiy resit sanalari) —
+            // attempt 2 va 3 ni bir martada hisoblaymiz.
             if (\Illuminate\Support\Facades\Schema::hasColumn('exam_schedules', 'student_hemis_id')) {
-                // 2-urinish — oski_resit_date yoki test_resit_date bor talabalar
-                $rows2 = DB::table('exam_schedules as es')
+                $esRows = DB::table('exam_schedules as es')
                     ->join('students as st', 'st.hemis_id', '=', 'es.student_hemis_id')
                     ->when(!empty($groupHemisIds), fn($q) => $q->whereIn('st.group_id', $groupHemisIds))
                     ->when(!empty($subjectIds), fn($q) => $q->whereIn('es.subject_id', $subjectIds))
@@ -8508,32 +8496,20 @@ class AcademicScheduleController extends Controller
                     ->whereNotNull('es.student_hemis_id')
                     ->where(function ($q) {
                         $q->whereNotNull('es.oski_resit_date')
-                          ->orWhereNotNull('es.test_resit_date');
-                    })
-                    ->select('st.group_id', 'es.subject_id', 'es.semester_code', DB::raw('COUNT(DISTINCT es.student_hemis_id) as c'))
-                    ->groupBy('st.group_id', 'es.subject_id', 'es.semester_code')
-                    ->get();
-                foreach ($rows2 as $r) {
-                    $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|2';
-                    $needsByKey[$key] = max($needsByKey[$key] ?? 0, (int) $r->c);
-                }
-                // 3-urinish — resit2 sanasi
-                $rows3 = DB::table('exam_schedules as es')
-                    ->join('students as st', 'st.hemis_id', '=', 'es.student_hemis_id')
-                    ->when(!empty($groupHemisIds), fn($q) => $q->whereIn('st.group_id', $groupHemisIds))
-                    ->when(!empty($subjectIds), fn($q) => $q->whereIn('es.subject_id', $subjectIds))
-                    ->when(!empty($semesterCodes), fn($q) => $q->whereIn('es.semester_code', $semesterCodes))
-                    ->whereNotNull('es.student_hemis_id')
-                    ->where(function ($q) {
-                        $q->whereNotNull('es.oski_resit2_date')
+                          ->orWhereNotNull('es.test_resit_date')
+                          ->orWhereNotNull('es.oski_resit2_date')
                           ->orWhereNotNull('es.test_resit2_date');
                     })
-                    ->select('st.group_id', 'es.subject_id', 'es.semester_code', DB::raw('COUNT(DISTINCT es.student_hemis_id) as c'))
+                    ->select('st.group_id', 'es.subject_id', 'es.semester_code',
+                        DB::raw("COUNT(DISTINCT CASE WHEN es.oski_resit_date IS NOT NULL OR es.test_resit_date IS NOT NULL THEN es.student_hemis_id END) as a2"),
+                        DB::raw("COUNT(DISTINCT CASE WHEN es.oski_resit2_date IS NOT NULL OR es.test_resit2_date IS NOT NULL THEN es.student_hemis_id END) as a3")
+                    )
                     ->groupBy('st.group_id', 'es.subject_id', 'es.semester_code')
                     ->get();
-                foreach ($rows3 as $r) {
-                    $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code . '|3';
-                    $needsByKey[$key] = max($needsByKey[$key] ?? 0, (int) $r->c);
+                foreach ($esRows as $r) {
+                    $kBase = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                    if ((int) $r->a2 > 0) $needsByKey[$kBase . '|2'] = max($needsByKey[$kBase . '|2'] ?? 0, (int) $r->a2);
+                    if ((int) $r->a3 > 0) $needsByKey[$kBase . '|3'] = max($needsByKey[$kBase . '|3'] ?? 0, (int) $r->a3);
                 }
             }
         } catch (\Throwable $e) {

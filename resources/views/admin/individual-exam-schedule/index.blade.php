@@ -70,6 +70,14 @@
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 
+        // YYYY-MM-DD → DD.MM.YYYY
+        const formatDate = (s) => {
+            if (!s || typeof s !== 'string') return '';
+            const m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+            if (!m) return s;
+            return `${m[3]}.${m[2]}.${m[1]}`;
+        };
+
         window.ies = {
             currentStudent: null,
             subjects: [],
@@ -359,7 +367,7 @@
                                 ${subjectCell}
                                 <td style="padding:6px 10px;text-align:center;">${urinishBadge}</td>
                                 <td style="padding:6px 10px;text-align:center;color:#475569;">
-                                    ${groupDate ? escapeHtml(groupDate) + (groupTime ? '<br><span style="font-size:11px;color:#94a3b8;">' + escapeHtml(groupTime.substring(0,5)) + '</span>' : '') : '<span style="color:#cbd5e1;">—</span>'}
+                                    ${groupDate ? escapeHtml(formatDate(groupDate)) + (groupTime ? '<br><span style="font-size:11px;color:#94a3b8;">' + escapeHtml(groupTime.substring(0,5)) + '</span>' : '') : '<span style="color:#cbd5e1;">—</span>'}
                                 </td>
                                 <td style="padding:6px 10px;text-align:center;">${statusBadge}</td>
                                 <td style="padding:6px 10px;text-align:center;">
@@ -412,10 +420,10 @@
                     const colorMap = { 'set': '#10b981', 'update': '#0284c7', 'clear': '#b91c1c' };
                     const c = colorMap[a.action] || '#475569';
                     const dateRow = a.action === 'clear'
-                        ? `<s style="color:#94a3b8;">${escapeHtml(a.old_date || '')} ${escapeHtml(a.old_time ? a.old_time.substring(0,5) : '')}</s>`
+                        ? `<s style="color:#94a3b8;">${escapeHtml(formatDate(a.old_date || ''))} ${escapeHtml(a.old_time ? a.old_time.substring(0,5) : '')}</s>`
                         : (a.old_date
-                            ? `<s style="color:#94a3b8;">${escapeHtml(a.old_date)} ${escapeHtml(a.old_time ? a.old_time.substring(0,5) : '')}</s> → <b>${escapeHtml(a.new_date || '')}</b> ${escapeHtml(a.new_time ? a.new_time.substring(0,5) : '')}`
-                            : `<b>${escapeHtml(a.new_date || '')}</b> ${escapeHtml(a.new_time ? a.new_time.substring(0,5) : '')}`);
+                            ? `<s style="color:#94a3b8;">${escapeHtml(formatDate(a.old_date))} ${escapeHtml(a.old_time ? a.old_time.substring(0,5) : '')}</s> → <b>${escapeHtml(formatDate(a.new_date || ''))}</b> ${escapeHtml(a.new_time ? a.new_time.substring(0,5) : '')}`
+                            : `<b>${escapeHtml(formatDate(a.new_date || ''))}</b> ${escapeHtml(a.new_time ? a.new_time.substring(0,5) : '')}`);
                     return `
                         <div style="padding:8px 10px;border-bottom:1px solid #f1f5f9;display:flex;gap:12px;">
                             <div style="min-width:130px;color:#64748b;font-size:11px;">${escapeHtml(a.created_at)}</div>

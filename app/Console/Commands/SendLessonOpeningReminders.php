@@ -55,18 +55,25 @@ class SendLessonOpeningReminders extends Command
 
             $scheduleHemisIds = $teacherSchedules->pluck('schedule_hemis_id')->unique()->toArray();
 
-            // Baho qo'yilganini tekshirish (1-usul: schedule_hemis_id orqali)
-            $gradeByScheduleId = DB::table('student_grades')
-                ->whereNull('deleted_at')
-                ->whereIn('subject_schedule_id', $scheduleHemisIds)
-                ->where(function ($q) {
-                    $q->where('grade', '>', 0)
-                      ->orWhere('retake_grade', '>', 0)
-                      ->orWhere('status', 'recorded');
-                })
-                ->pluck('subject_schedule_id')
-                ->unique()
-                ->flip();
+            // Baho qo'yilganini tekshirish (1-usul: schedule_hemis_id orqali).
+            // Chunk qilib so'raymiz, aks holda katta partiyalarda MySQL
+            // placeholder limitidan oshib ketadi.
+            $gradeByScheduleId = [];
+            foreach (array_chunk($scheduleHemisIds, 1000) as $chunk) {
+                $ids = DB::table('student_grades')
+                    ->whereNull('deleted_at')
+                    ->whereIn('subject_schedule_id', $chunk)
+                    ->where(function ($q) {
+                        $q->where('grade', '>', 0)
+                          ->orWhere('retake_grade', '>', 0)
+                          ->orWhere('status', 'recorded');
+                    })
+                    ->pluck('subject_schedule_id')
+                    ->all();
+                foreach ($ids as $id) {
+                    $gradeByScheduleId[$id] = true;
+                }
+            }
 
             // Baho qo'yilganini tekshirish (2-usul: guruh+fan+sana orqali)
             $gradeByKey = DB::table('student_grades as sg')
@@ -228,18 +235,28 @@ class SendLessonOpeningReminders extends Command
         $groupHemisIds = $schedules->pluck('group_id')->unique()->toArray();
         $subjectIds = $schedules->pluck('subject_id')->unique()->toArray();
 
-        // Baho qo'yilganlarni tekshirish (1-usul)
-        $gradeByScheduleId = DB::table('student_grades')
-            ->whereNull('deleted_at')
-            ->whereIn('subject_schedule_id', $scheduleHemisIds)
-            ->where(function ($q) {
-                $q->where('grade', '>', 0)
-                  ->orWhere('retake_grade', '>', 0)
-                  ->orWhere('status', 'recorded');
-            })
-            ->pluck('subject_schedule_id')
-            ->unique()
-            ->flip();
+        // Baho qo'yilganlarni tekshirish (1-usul).
+        // Katta universitetda $scheduleHemisIds 10k+ ga yetadi va bitta
+        // whereIn() MySQL'ning 65535 placeholder limitini buzadi ("Prepared
+        // statement contains too many placeholders"). Shuning uchun chunk
+        // bo'lib so'rab, natijalarni birlashtiramiz.
+        $gradedScheduleIds = [];
+        foreach (array_chunk($scheduleHemisIds, 1000) as $chunk) {
+            $ids = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereIn('subject_schedule_id', $chunk)
+                ->where(function ($q) {
+                    $q->where('grade', '>', 0)
+                      ->orWhere('retake_grade', '>', 0)
+                      ->orWhere('status', 'recorded');
+                })
+                ->pluck('subject_schedule_id')
+                ->all();
+            foreach ($ids as $id) {
+                $gradedScheduleIds[$id] = true;
+            }
+        }
+        $gradeByScheduleId = $gradedScheduleIds; // isset($gradeByScheduleId[$id]) bilan ishlatiladi
 
         // Baho qo'yilganlarni tekshirish (2-usul)
         $gradeRecords = DB::table('student_grades as sg')

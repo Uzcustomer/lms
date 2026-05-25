@@ -2348,27 +2348,33 @@ class AcademicScheduleController extends Controller
         $dateFrom = $request->get('date_from', $today);
         $dateTo = $request->get('date_to', $today);
         $currentSemesterToggle = $request->get('current_semester', '1');
-        $isSearched = true;
+        // Heavy data is built only after "Qidirish" — without filters the
+        // controller used to scan the whole curriculum × group × subject
+        // matrix and timed out at the nginx upstream (504).
+        $isSearched = $request->has('searched');
         $routePrefix = $this->routePrefix();
 
         $urinishFilter = $request->get('urinish');
         $showStudents = $request->get('show_students') === '1';
         $compFilter = $request->get('comp_filter');
 
-        try {
-            $result = $this->buildTestCenterData($request);
-            $scheduleData = $result['scheduleData'];
-            $currentEducationYear = $result['currentEducationYear'];
-            $urinishFilter = $result['urinishFilter'] ?? $urinishFilter;
-            $showStudents = $result['showStudents'] ?? $showStudents;
-            $compFilter = $result['compFilter'] ?? $compFilter;
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::error('testCenterView xatolik: ' . $e->getMessage(), [
-                'file' => $e->getFile() . ':' . $e->getLine(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            $scheduleData = collect();
-            $currentEducationYear = null;
+        $scheduleData = collect();
+        $currentEducationYear = Semester::where('current', true)->value('education_year');
+
+        if ($isSearched) {
+            try {
+                $result = $this->buildTestCenterData($request);
+                $scheduleData = $result['scheduleData'];
+                $currentEducationYear = $result['currentEducationYear'] ?? $currentEducationYear;
+                $urinishFilter = $result['urinishFilter'] ?? $urinishFilter;
+                $showStudents = $result['showStudents'] ?? $showStudents;
+                $compFilter = $result['compFilter'] ?? $compFilter;
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::error('testCenterView xatolik: ' . $e->getMessage(), [
+                    'file' => $e->getFile() . ':' . $e->getLine(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
+            }
         }
 
         $allow4PlusDebtorsRetake = ExamDateRoleService::allow4PlusDebtorsRetake();

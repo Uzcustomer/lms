@@ -2645,8 +2645,32 @@ class AcademicScheduleController extends Controller
         if ($selectedSpecialty) $scheduleQuery->where('specialty_hemis_id', $selectedSpecialty);
         if ($selectedGroup) $scheduleQuery->where('group_hemis_id', $selectedGroup);
         if ($semesterCodes->isNotEmpty()) $scheduleQuery->whereIn('semester_code', $semesterCodes);
+        // YN sanasi filtri SQL darajasida — aks holda BARCHA exam_schedules
+        // yozuvlari yuklanib, PHP'da collect()->filter() bilan kesib tashlanadi.
+        // Bir kunlik diapazonda ham tizim 15k+ qatorni xotiraga oladi va 504
+        // beradi. Sanalarning birortasi diapazonga tushishi shart (6 ta urinish
+        // ustuni: oski/test va resit/resit2 variantlari).
+        $dateRestricted = $filterByYnDate && ($dateFrom || $dateTo);
+        if ($dateRestricted) {
+            $dateCols = ['oski_date', 'test_date', 'oski_resit_date', 'test_resit_date',
+                         'oski_resit2_date', 'test_resit2_date'];
+            $scheduleQuery->where(function ($outer) use ($dateCols, $dateFrom, $dateTo) {
+                foreach ($dateCols as $col) {
+                    $outer->orWhere(function ($qq) use ($col, $dateFrom, $dateTo) {
+                        $qq->whereNotNull($col);
+                        if ($dateFrom) $qq->where($col, '>=', $dateFrom);
+                        if ($dateTo) $qq->where($col, '<=', $dateTo);
+                    });
+                }
+            });
+        }
         $existingSchedules = $scheduleQuery->get()
             ->keyBy(fn($item) => $item->group_hemis_id . '_' . $item->subject_id . '_' . $item->semester_code);
+
+        // Sana filtri qo'llanilsa — outer loopni faqat tegishli (group, subject,
+        // semester) triplelar bilan cheklaymiz. Bu O(groups × subjects) ni
+        // O(scheduled_rows_in_date_range) ga tushiradi.
+        $dateFilteredKeys = $dateRestricted ? $existingSchedules->keys()->flip()->all() : null;
 
         // Dars jadvalidan boshlanish/tugash sanalarini olish (schedules jadvalidan)
         $lessonDatesRaw = DB::table('schedules')
@@ -2669,6 +2693,12 @@ class AcademicScheduleController extends Controller
 
             foreach ($groupSubjects as $subject) {
                 $key = $group->group_hemis_id . '_' . $subject->subject_id . '_' . $subject->semester_code;
+                // Sana filtri faolligida — exam_schedules da yo'q triplelarni
+                // o'tkazib yuboramiz. Aks holda bo'sh placeholder qator yaratilib
+                // pastda PHP filtridan ko'tarilardi (16k+ qator vs ~50 qator).
+                if ($dateFilteredKeys !== null && !isset($dateFilteredKeys[$key])) {
+                    continue;
+                }
                 $existing = $existingSchedules->get($key);
 
                 // Dars sanalarini schedules jadvalidan olish

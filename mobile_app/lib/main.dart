@@ -9,6 +9,7 @@ import 'services/auth_service.dart';
 import 'services/student_service.dart';
 import 'services/student_data_cache.dart';
 import 'widgets/notification_bell.dart';
+import 'widgets/biometric_gate.dart';
 import 'services/teacher_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/student_provider.dart';
@@ -93,10 +94,11 @@ class LmsApp extends StatelessWidget {
                   case AuthState.initial:
                     return const SplashScreen();
                   case AuthState.authenticated:
-                    if (auth.isTeacher) {
-                      return const TeacherHomeScreen();
-                    }
-                    return const StudentHomeScreen();
+                    return BiometricGate(
+                      child: auth.isTeacher
+                          ? const TeacherHomeScreen()
+                          : const StudentHomeScreen(),
+                    );
                   case AuthState.profileIncomplete:
                     return const CompleteProfileScreen();
                   case AuthState.loading:

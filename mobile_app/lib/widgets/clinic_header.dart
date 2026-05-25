@@ -178,12 +178,12 @@ class _ShinySweepState extends State<ShinySweep>
                         children: [
                           Positioned(
                             left: dx,
-                            top: -90,
+                            top: -200,
                             child: Transform.rotate(
                               angle: 0.42,
                               child: Container(
                                 width: 58,
-                                height: 340,
+                                height: c.maxHeight + 400,
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     begin: Alignment.centerLeft,
@@ -280,4 +280,84 @@ class _ShineOverlayState extends State<ShineOverlay>
       ),
     );
   }
+}
+
+/// An avatar wrapped with a looping "shine" — expanding rings around it.
+class AvatarHalo extends StatefulWidget {
+  final Widget child;
+  final double size;
+  const AvatarHalo({super.key, required this.child, required this.size});
+
+  @override
+  State<AvatarHalo> createState() => _AvatarHaloState();
+}
+
+class _AvatarHaloState extends State<AvatarHalo>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final box = widget.size + 36;
+    return SizedBox(
+      width: box,
+      height: box,
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (_, __) => Stack(
+          alignment: Alignment.center,
+          children: [
+            CustomPaint(
+              size: Size(box, box),
+              painter: _HaloPainter(_controller.value, widget.size / 2),
+            ),
+            widget.child,
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _HaloPainter extends CustomPainter {
+  final double progress;
+  final double avatarRadius;
+  const _HaloPainter(this.progress, this.avatarRadius);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    const count = 3;
+    for (int i = 0; i < count; i++) {
+      final t = (progress + i / count) % 1.0;
+      final opacity = (1 - t) * 0.55;
+      if (opacity <= 0) continue;
+      canvas.drawCircle(
+        center,
+        avatarRadius + 3 + t * 15,
+        Paint()
+          ..color = Colors.white.withOpacity(opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_HaloPainter old) => old.progress != progress;
 }

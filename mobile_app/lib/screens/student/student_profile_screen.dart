@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
-import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/student_provider.dart';
@@ -10,7 +9,7 @@ import '../../l10n/app_localizations.dart';
 import '../../services/api_service.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/settings_sheet.dart';
-import '../../widgets/notification_bell.dart';
+import '../../widgets/clinic_header.dart';
 import 'student_home_screen.dart';
 
 class StudentProfileScreen extends StatefulWidget {
@@ -29,6 +28,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   bool _isCheckingVerification = false;
   Timer? _verificationTimer;
   String? _telegramError;
+
+  static const _telegramBlue = Color(0xFF0088CC);
 
   @override
   void initState() {
@@ -63,7 +64,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
             _verificationCode = null;
             _isCheckingVerification = false;
           });
-          await provider.loadProfile();
+          await provider.loadProfile(force: true);
         } else {
           setState(() => _isCheckingVerification = false);
         }
@@ -79,7 +80,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
     final formatted = username.startsWith('@') ? username : '@$username';
     if (!RegExp(r'^@[a-zA-Z0-9_]{5,32}$').hasMatch(formatted)) {
-      setState(() => _telegramError = 'Username @username formatida bo\'lishi kerak (kamida 5 belgi)');
+      setState(() => _telegramError =
+          'Username @username formatida bo\'lishi kerak (kamida 5 belgi)');
       return;
     }
 
@@ -114,202 +116,411 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     }
   }
 
+  Widget _card({required Widget child, EdgeInsets? padding}) {
+    return Container(
+      width: double.infinity,
+      padding: padding ?? const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: ClinicTheme.surfaceOf(context),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
+        boxShadow: ClinicTheme.cardShadow,
+      ),
+      child: child,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
-
-    final statusBarH = MediaQuery.of(context).padding.top;
 
     return Scaffold(
-      backgroundColor: bgColor,
+      backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
-          Container(
-            padding: EdgeInsets.only(top: statusBarH, left: 16, right: 4),
-            height: statusBarH + 64,
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
+          ClinicHeader(
+            overline: 'PROFIL · TALABA',
+            title: 'Mening hisobim',
+            onBack: () => StudentHomeScreen.switchToHome(context),
+            actions: [
+              ClinicIconButton(
+                icon: Icons.settings_outlined,
+                onTap: () => showSettingsSheet(context),
               ),
-            ),
-            child: Row(
-              children: [
-                GestureDetector(
-                  onTap: () => StudentHomeScreen.switchToHome(context),
-                  child: const Icon(Icons.account_balance, color: Colors.white, size: 24),
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: isDark
+                      ? const Color(0xFFDC2626).withOpacity(0.15)
+                      : const Color(0xFFFEE2E2),
+                  borderRadius: BorderRadius.circular(11),
                 ),
-                const Spacer(),
-                Text(l.profile, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
-                const Spacer(),
-                const NotificationBell(),
-                IconButton(
-                  icon: const Icon(Icons.settings_outlined, color: Colors.white, size: 22),
-                  onPressed: () => showSettingsSheet(context),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 22),
+                child: IconButton(
+                  padding: EdgeInsets.zero,
+                  icon: const Icon(Icons.logout_rounded,
+                      color: Color(0xFFDC2626), size: 18),
                   onPressed: () => _showLogoutDialog(context),
                 ),
-              ],
+              ),
+            ],
+          ),
+          Expanded(
+            child: Consumer<StudentProvider>(
+              builder: (context, provider, _) {
+                if (provider.isLoading && provider.profile == null) {
+                  return const LoadingWidget();
+                }
+                final profile = provider.profile;
+                if (profile == null) {
+                  return Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(provider.error ?? l.profileNotFound),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () => provider.loadProfile(),
+                          child: Text(l.reload),
+                        ),
+                      ],
+                    ),
+                  );
+                }
+
+                return RefreshIndicator(
+                  onRefresh: () => provider.refreshAll(),
+                  child: ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
+                    children: [
+                      _buildProfileCard(context, profile),
+                      const SizedBox(height: 12),
+                      _buildTelegramCard(context, profile),
+                      const SizedBox(height: 14),
+                      _buildPersonalInfo(context, profile),
+                    ],
+                  ),
+                );
+              },
             ),
           ),
-          Expanded(child: Consumer<StudentProvider>(
-        builder: (context, provider, _) {
-          if (provider.isLoading && provider.profile == null) {
-            return const LoadingWidget();
-          }
-
-          final profile = provider.profile;
-          if (profile == null) {
-            return Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(provider.error ?? l.profileNotFound),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () => provider.loadProfile(),
-                    child: Text(l.reload),
-                  ),
-                ],
-              ),
-            );
-          }
-
-          return RefreshIndicator(
-            onRefresh: () => provider.loadProfile(),
-            child: SingleChildScrollView(
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
-              child: Column(
-                children: [
-                  _buildProfileCard(context, profile),
-                  const SizedBox(height: 16),
-                  _buildTelegramCard(context, profile),
-                  const SizedBox(height: 16),
-                  _buildPersonalInfo(context, profile),
-                ],
-              ),
-            ),
-          );
-        },
-      )),
-      ],
+        ],
       ),
     );
   }
 
+  // ── Profile card ─────────────────────────────────────
+  Widget _buildProfileCard(BuildContext context, Map<String, dynamic> profile) {
+    final fullName = profile['full_name']?.toString() ?? '';
+    final studentId = profile['student_id_number']?.toString() ?? '';
+    final faculty = profile['department_name']?.toString() ?? '';
+    final major = profile['specialty_name']?.toString() ?? '';
+    final photoUrl = _buildImageUrl(profile['image']?.toString());
+    final year = profile['year_of_enter']?.toString() ?? '';
+    final course = profile['course']?.toString() ?? '';
+    final semester = profile['semester_name']?.toString() ?? '';
+    final payment = profile['payment_form_name']?.toString() ?? '';
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D9488).withOpacity(0.32),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: ShinySweep(
+        radius: 18,
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
+            ),
+          ),
+          padding: const EdgeInsets.all(18),
+          child: Column(
+            children: [
+              AvatarHalo(
+                size: 84,
+                child: _buildAvatar(photoUrl, fullName),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                fullName.toUpperCase(),
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white),
+              ),
+              const SizedBox(height: 7),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'ID · $studentId',
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white),
+                ),
+              ),
+              const SizedBox(height: 14),
+              Divider(height: 1, color: Colors.white.withOpacity(0.22)),
+              const SizedBox(height: 14),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _facultyCol(
+                        Icons.account_balance_rounded, 'FAKULTET', faculty),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _facultyCol(
+                        Icons.school_rounded, 'YO\'NALISH', major),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                alignment: WrapAlignment.center,
+                children: [
+                  if (year.isNotEmpty) _chip(year),
+                  if (course.isNotEmpty) _chip('$course-kurs'),
+                  if (semester.isNotEmpty) _chip(semester),
+                  if (payment.isNotEmpty) _chip(payment),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatar(String? photoUrl, String fullName) {
+    return SizedBox(
+      width: 84,
+      height: 84,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 84,
+            height: 84,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.18),
+              border: Border.all(color: Colors.white, width: 3),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: photoUrl != null && photoUrl.isNotEmpty
+                ? Image.network(photoUrl, fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => _avatarInitials(fullName))
+                : _avatarInitials(fullName),
+          ),
+          Positioned(
+            right: -2,
+            bottom: 0,
+            child: Container(
+              width: 24,
+              height: 24,
+              decoration: BoxDecoration(
+                color: ClinicTheme.green,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white, width: 2.5),
+              ),
+              child: const Icon(Icons.check, size: 12, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _avatarInitials(String name) {
+    return Center(
+      child: Text(
+        _getInitials(name).toUpperCase(),
+        style: const TextStyle(
+            fontSize: 30, fontWeight: FontWeight.w800, color: Colors.white),
+      ),
+    );
+  }
+
+  Widget _facultyCol(IconData icon, String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 12, color: Colors.white.withOpacity(0.75)),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+                color: Colors.white.withOpacity(0.75),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value.isEmpty ? '—' : value,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+              fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+        ),
+      ],
+    );
+  }
+
+  Widget _chip(String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 6),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.16),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: Colors.white.withOpacity(0.25), width: 1),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+            fontSize: 11.5,
+            fontWeight: FontWeight.w700,
+            color: Colors.white),
+      ),
+    );
+  }
+
+  // ── Telegram card ────────────────────────────────────
   Widget _buildTelegramCard(BuildContext context, Map<String, dynamic> profile) {
     final l = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
     final telegramVerified = profile['telegram_verified'] == true;
     final telegramUsername = profile['telegram_username']?.toString() ?? '';
-    final telegramDaysLeft = profile['telegram_days_left'];
 
-    // Already verified - show success badge
     if (telegramVerified && telegramUsername.isNotEmpty) {
-      return Card(
-        elevation: 0,
-        color: cardColor,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppTheme.successColor.withAlpha(25),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.telegram, color: AppTheme.successColor, size: 28),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      l.telegramVerified,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 14,
-                        color: AppTheme.successColor,
-                      ),
+      return Container(
+        decoration: BoxDecoration(
+          color: ClinicTheme.surfaceOf(context),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
+          boxShadow: ClinicTheme.cardShadow,
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(16),
+          child: IntrinsicHeight(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Container(width: 4, color: ClinicTheme.teal),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.all(13),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: _telegramBlue.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(11),
+                          ),
+                          child: const Icon(Icons.telegram,
+                              color: _telegramBlue, size: 24),
+                        ),
+                        const SizedBox(width: 11),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    l.telegramVerified,
+                                    style: TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800,
+                                        color: ink),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.verified_rounded,
+                                      size: 14, color: ClinicTheme.green),
+                                ],
+                              ),
+                              const SizedBox(height: 1),
+                              Text(
+                                telegramUsername,
+                                style: TextStyle(fontSize: 12, color: muted),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      telegramUsername,
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary,
-                      ),
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-              const Icon(Icons.verified, color: AppTheme.successColor, size: 24),
-            ],
+              ],
+            ),
           ),
         ),
       );
     }
 
-    // Not verified - show registration flow
-    return Card(
-      elevation: 0,
-      color: cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      clipBehavior: Clip.antiAlias,
+    // Not verified — registration flow.
+    return _card(
+      padding: EdgeInsets.zero,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
           Container(
             width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: const Color(0xFF0088CC),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: const BoxDecoration(
+              color: _telegramBlue,
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(15),
+                topRight: Radius.circular(15),
+              ),
+            ),
             child: Row(
               children: [
-                const Icon(Icons.telegram, color: Colors.white, size: 22),
+                const Icon(Icons.telegram, color: Colors.white, size: 20),
                 const SizedBox(width: 8),
                 Text(
                   l.connectTelegram,
                   style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                    color: Colors.white,
-                  ),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: Colors.white),
                 ),
-                const Spacer(),
-                if (telegramDaysLeft != null && telegramDaysLeft > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withAlpha(40),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Text(
-                      '$telegramDaysLeft ${l.telegramDaysLeft}',
-                      style: const TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ),
-
           Padding(
-            padding: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(14),
             child: _verificationCode != null
                 ? _buildVerificationStep(context)
                 : _buildUsernameStep(context),
@@ -321,7 +532,7 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
   Widget _buildUsernameStep(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ink = ClinicTheme.inkOf(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -329,41 +540,39 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
         Text(
           l.telegramUsername,
           style: TextStyle(
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            color: isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary,
-          ),
+              fontSize: 13, fontWeight: FontWeight.w700, color: ink),
         ),
         const SizedBox(height: 8),
         TextField(
           controller: _telegramController,
+          style: TextStyle(fontSize: 14, color: ink),
           decoration: InputDecoration(
             hintText: l.telegramUsernameHint,
             prefixIcon: const Icon(Icons.alternate_email, size: 20),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: isDark ? AppTheme.darkBorderColor : Colors.grey[300]!),
+              borderSide: BorderSide(color: ClinicTheme.dividerOf(context)),
             ),
             enabledBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: BorderSide(color: isDark ? AppTheme.darkBorderColor : Colors.grey[300]!),
+              borderSide: BorderSide(color: ClinicTheme.dividerOf(context)),
             ),
             focusedBorder: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
-              borderSide: const BorderSide(color: Color(0xFF0088CC), width: 2),
+              borderSide: const BorderSide(color: _telegramBlue, width: 2),
             ),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             filled: true,
-            fillColor: isDark ? AppTheme.darkSurface : Colors.grey[50],
+            fillColor: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white.withOpacity(0.04)
+                : const Color(0xFFF1F5F9),
           ),
-          style: const TextStyle(fontSize: 14),
         ),
         if (_telegramError != null) ...[
           const SizedBox(height: 6),
-          Text(
-            _telegramError!,
-            style: const TextStyle(color: AppTheme.errorColor, fontSize: 12),
-          ),
+          Text(_telegramError!,
+              style: const TextStyle(color: Color(0xFFDC2626), fontSize: 12)),
         ],
         const SizedBox(height: 12),
         SizedBox(
@@ -371,18 +580,21 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
           child: ElevatedButton(
             onPressed: _isSavingTelegram ? null : _saveTelegram,
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0088CC),
+              backgroundColor: _telegramBlue,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
             child: _isSavingTelegram
                 ? const SizedBox(
                     width: 20,
                     height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: Colors.white),
                   )
-                : Text(l.telegramSave, style: const TextStyle(fontWeight: FontWeight.w600)),
+                : Text(l.telegramSave,
+                    style: const TextStyle(fontWeight: FontWeight.w700)),
           ),
         ),
       ],
@@ -391,38 +603,35 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
   Widget _buildVerificationStep(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(
-          l.telegramVerificationCode,
-          style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor),
-        ),
+        Text(l.telegramVerificationCode,
+            style: TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w700, color: ink)),
         const SizedBox(height: 8),
-
-        // Code display
         Container(
           width: double.infinity,
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: isDark ? AppTheme.darkSurface : const Color(0xFFF5F5F5),
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white.withOpacity(0.04)
+                : const Color(0xFFF1F5F9),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: const Color(0xFF0088CC).withAlpha(50)),
+            border: Border.all(color: _telegramBlue.withOpacity(0.3)),
           ),
           child: Column(
             children: [
               SelectableText(
                 _verificationCode!,
                 style: TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 6,
-                  color: textColor,
-                ),
+                    fontSize: 28,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 6,
+                    color: ink),
               ),
               const SizedBox(height: 4),
               InkWell(
@@ -430,49 +639,37 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                   Clipboard.setData(ClipboardData(text: _verificationCode!));
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Kod nusxalandi'),
-                      duration: Duration(seconds: 1),
-                    ),
+                        content: Text('Kod nusxalandi'),
+                        duration: Duration(seconds: 1)),
                   );
                 },
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.copy, size: 14, color: subTextColor),
+                    Icon(Icons.copy, size: 14, color: muted),
                     const SizedBox(width: 4),
-                    Text(
-                      'Nusxalash',
-                      style: TextStyle(fontSize: 12, color: subTextColor),
-                    ),
+                    Text('Nusxalash',
+                        style: TextStyle(fontSize: 12, color: muted)),
                   ],
                 ),
               ),
             ],
           ),
         ),
-
         const SizedBox(height: 12),
-        Text(
-          l.telegramSendCodeToBot,
-          style: TextStyle(fontSize: 13, color: subTextColor),
-        ),
+        Text(l.telegramSendCodeToBot,
+            style: TextStyle(fontSize: 13, color: muted)),
         const SizedBox(height: 12),
-
-        // Open bot button
         SizedBox(
           width: double.infinity,
           child: ElevatedButton.icon(
             onPressed: _botLink != null
                 ? () {
-                    // Open Telegram bot link - use url_launcher or just show the link
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
                         content: Text('Telegram botga o\'ting: $_botLink'),
                         duration: const Duration(seconds: 5),
-                        action: SnackBarAction(
-                          label: 'OK',
-                          onPressed: () {},
-                        ),
+                        action: SnackBarAction(label: 'OK', onPressed: () {}),
                       ),
                     );
                   }
@@ -482,20 +679,18 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               _botUsername != null && _botUsername!.isNotEmpty
                   ? '${l.telegramOpenBot} (@$_botUsername)'
                   : l.telegramOpenBot,
-              style: const TextStyle(fontWeight: FontWeight.w600),
+              style: const TextStyle(fontWeight: FontWeight.w700),
             ),
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0088CC),
+              backgroundColor: _telegramBlue,
               foregroundColor: Colors.white,
               padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12)),
             ),
           ),
         ),
-
         const SizedBox(height: 12),
-
-        // Checking status
         if (_isCheckingVerification)
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
@@ -503,17 +698,14 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               const SizedBox(
                 width: 14,
                 height: 14,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0088CC)),
+                child: CircularProgressIndicator(
+                    strokeWidth: 2, color: _telegramBlue),
               ),
               const SizedBox(width: 8),
-              Text(
-                l.telegramChecking,
-                style: TextStyle(fontSize: 12, color: subTextColor),
-              ),
+              Text(l.telegramChecking,
+                  style: TextStyle(fontSize: 12, color: muted)),
             ],
           ),
-
-        // Back button to re-enter username
         const SizedBox(height: 8),
         Center(
           child: TextButton(
@@ -525,118 +717,18 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 _botLink = null;
               });
             },
-            child: Text(
-              'Username o\'zgartirish',
-              style: TextStyle(fontSize: 12, color: subTextColor),
-            ),
+            child: Text('Username o\'zgartirish',
+                style: TextStyle(fontSize: 12, color: muted)),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildProfileCard(BuildContext context, Map<String, dynamic> profile) {
-    final l = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fullName = profile['full_name']?.toString() ?? '';
-    final studentId = profile['student_id_number']?.toString() ?? '';
-    final faculty = profile['department_name']?.toString() ?? '';
-    final major = profile['specialty_name']?.toString() ?? '';
-    final rawImage = profile['image']?.toString();
-    final photoUrl = _buildImageUrl(rawImage);
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-
-    return Card(
-      elevation: 0,
-      color: cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
-        child: Column(
-          children: [
-            Container(
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: AppTheme.primaryColor.withAlpha(50), width: 3),
-              ),
-              child: CircleAvatar(
-                radius: 52,
-                backgroundColor: AppTheme.primaryColor.withAlpha(30),
-                backgroundImage:
-                    photoUrl != null && photoUrl.isNotEmpty ? NetworkImage(photoUrl) : null,
-                child: photoUrl == null || photoUrl.isEmpty
-                    ? Text(
-                        _getInitials(fullName),
-                        style: const TextStyle(
-                          fontSize: 32,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryColor,
-                        ),
-                      )
-                    : null,
-              ),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              fullName,
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: textColor,
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 6),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-              decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withAlpha(isDark ? 40 : 20),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Text(
-                studentId,
-                style: const TextStyle(
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.primaryColor,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            _buildInfoRow(Icons.account_balance, l.faculty, faculty, subTextColor, textColor),
-            const SizedBox(height: 8),
-            _buildInfoRow(Icons.school, l.direction, major, subTextColor, textColor),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(IconData icon, String label, String value, Color subColor, Color textColor) {
-    if (value.isEmpty) return const SizedBox.shrink();
-    return Row(
-      children: [
-        Icon(icon, size: 18, color: subColor),
-        const SizedBox(width: 8),
-        Text(
-          '$label: ',
-          style: TextStyle(fontSize: 13, color: subColor),
-        ),
-        Expanded(
-          child: Text(
-            value,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor),
-            overflow: TextOverflow.ellipsis,
-          ),
-        ),
-      ],
-    );
-  }
-
+  // ── Personal info ────────────────────────────────────
   Widget _buildPersonalInfo(BuildContext context, Map<String, dynamic> profile) {
     final l = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final ink = ClinicTheme.inkOf(context);
     final gender = profile['gender'];
     final province = profile['province_name']?.toString();
     final district = profile['district_name']?.toString();
@@ -646,92 +738,98 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     final phone = profile['phone']?.toString();
     final telegramUsername = profile['telegram_username']?.toString();
     final telegramVerified = profile['telegram_verified'] == true;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final subTextColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
 
-    final items = <MapEntry<String, String>>[];
-    if (phone != null && phone.isNotEmpty) {
-      items.add(MapEntry(l.get('phone'), phone));
-    }
-    if (telegramUsername != null && telegramUsername.isNotEmpty) {
-      items.add(MapEntry('Telegram', '$telegramUsername${telegramVerified ? ' \u2705' : ''}'));
-    }
-    if (groupName != null && groupName.isNotEmpty) {
-      items.add(MapEntry(l.group, groupName));
-    }
-    if (gender != null) {
-      items.add(MapEntry(l.gender, gender == 11 ? l.male : l.female));
-    }
-    if (educationType != null && educationType.isNotEmpty) {
-      items.add(MapEntry(l.educationType, educationType));
-    }
-    if (educationForm != null && educationForm.isNotEmpty) {
-      items.add(MapEntry(l.educationForm, educationForm));
-    }
-    if (province != null && province.isNotEmpty) {
-      items.add(MapEntry(l.province, province));
-    }
-    if (district != null && district.isNotEmpty) {
-      items.add(MapEntry(l.district, district));
+    final rows = <Widget>[];
+    void add(String label, String value, {bool copyable = false, bool verified = false}) {
+      if (value.isEmpty) return;
+      if (rows.isNotEmpty) {
+        rows.add(Divider(height: 1, color: ClinicTheme.dividerOf(context)));
+      }
+      rows.add(_infoRow(label, value, copyable: copyable, verified: verified));
     }
 
-    if (items.isEmpty) return const SizedBox.shrink();
+    add(l.get('phone'), phone ?? '', copyable: true);
+    add('Telegram', telegramUsername ?? '', verified: telegramVerified);
+    add(l.group, groupName ?? '');
+    if (gender != null) add(l.gender, gender == 11 ? l.male : l.female);
+    add(l.educationForm, educationForm ?? '');
+    add(l.educationType, educationType ?? '');
+    add(l.province, province ?? '');
+    add(l.district, district ?? '');
 
-    return Card(
-      elevation: 0,
-      color: cardColor,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            color: isDark ? AppTheme.darkSurface : AppTheme.primaryColor,
-            child: Text(
-              l.personalInfo,
-              style: const TextStyle(
-                fontWeight: FontWeight.bold,
-                fontSize: 14,
-                color: Colors.white,
-              ),
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
+          child: Text(
+            l.personalInfo.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+              color: ClinicTheme.mutedOf(context),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        ),
+        _card(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Column(children: rows),
+        ),
+      ],
+    );
+  }
+
+  Widget _infoRow(String label, String value,
+      {bool copyable = false, bool verified = false}) {
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 13),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 96,
+            child: Text(
+              label,
+              style: TextStyle(fontSize: 12.5, color: muted),
+            ),
+          ),
+          Expanded(
+            child: Row(
               children: [
-            ...items.map((item) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SizedBox(
-                        width: 120,
-                        child: Text(
-                          item.key,
-                          style: TextStyle(color: subTextColor, fontSize: 13),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          item.value,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w500,
-                            fontSize: 13,
-                            color: AppTheme.successColor,
-                          ),
-                        ),
-                      ),
-                    ],
+                Flexible(
+                  child: Text(
+                    value,
+                    style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w800,
+                        color: ink),
+                    overflow: TextOverflow.ellipsis,
                   ),
-                )),
+                ),
+                if (verified) ...[
+                  const SizedBox(width: 4),
+                  const Icon(Icons.verified_rounded,
+                      size: 14, color: ClinicTheme.green),
+                ],
               ],
             ),
           ),
+          if (copyable)
+            GestureDetector(
+              onTap: () {
+                Clipboard.setData(ClipboardData(text: value));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                      content: Text('Nusxalandi'),
+                      duration: Duration(seconds: 1)),
+                );
+              },
+              child: Icon(Icons.copy_rounded, size: 16, color: muted),
+            ),
         ],
       ),
     );
@@ -763,11 +861,10 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
 
   void _showLogoutDialog(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: isDark ? AppTheme.darkCard : Colors.white,
+        backgroundColor: ClinicTheme.surfaceOf(context),
         title: Text(l.logout),
         content: Text(l.logoutConfirm),
         actions: [
@@ -780,7 +877,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               Navigator.of(ctx).pop();
               context.read<AuthProvider>().logout();
             },
-            style: ElevatedButton.styleFrom(backgroundColor: AppTheme.errorColor),
+            style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFDC2626)),
             child: Text(l.logout),
           ),
         ],
@@ -788,3 +886,4 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     );
   }
 }
+

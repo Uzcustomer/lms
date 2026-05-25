@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../services/biometric_service.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/clinic_header.dart';
 import 'face_login_screen.dart';
@@ -29,6 +30,19 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool get _isStudent => _role == _Role.student;
 
+  final _bio = BiometricService();
+  bool _bioReady = false;
+  bool _bioBusy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = context.read<AuthProvider>();
+      _checkBiometric(autoPrompt: !auth.loggedOut);
+    });
+  }
+
   @override
   void dispose() {
     _idCtrl.dispose();
@@ -36,29 +50,86 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _checkBiometric({bool autoPrompt = false}) async {
+    final ready = await _bio.isEnabled() &&
+        await _bio.isAvailable() &&
+        await _bio.hasCredentials();
+    if (!mounted) return;
+    setState(() => _bioReady = ready);
+    if (ready && autoPrompt) _biometricLogin();
+  }
+
+  /// Re-logs in using the stored credentials behind a biometric check.
+  Future<void> _biometricLogin() async {
+    if (_bioBusy) return;
+    final creds = await _bio.getCredentials();
+    if (creds == null || !mounted) return;
+
+    _bioBusy = true;
+    final ok = await _bio.authenticate(
+      reason: 'Ilovaga kirish uchun barmoq izi yoki Face ID',
+    );
+    _bioBusy = false;
+    if (!ok || !mounted) return;
+
+    final auth = context.read<AuthProvider>();
+    auth.clearError();
+    final login = creds['login']!;
+    if (creds['role'] == 'staff') {
+      await auth.teacherLogin(login, creds['password']!);
+    } else {
+      await auth.studentLogin(login, creds['password']!);
+    }
+    if (!mounted) return;
+    if (auth.state == AuthState.requires2fa) {
+      Navigator.of(context).push(
+        SlideFadePageRoute(builder: (_) => Verify2faScreen(login: login)),
+      );
+    }
+  }
+
   Future<void> _submit() async {
     final auth = context.read<AuthProvider>();
     auth.clearError();
     if (!_formKey.currentState!.validate()) return;
 
+    final login = _idCtrl.text.trim();
+    final password = _pwCtrl.text;
+
     if (_isStudent) {
-      await auth.studentLogin(_idCtrl.text.trim(), _pwCtrl.text);
+      await auth.studentLogin(login, password);
     } else {
-      await auth.teacherLogin(_idCtrl.text.trim(), _pwCtrl.text);
+      await auth.teacherLogin(login, password);
     }
 
     if (!mounted) return;
 
+    // Stash the credentials so biometric re-login works after logout.
+    if (auth.state == AuthState.authenticated ||
+        auth.state == AuthState.profileIncomplete) {
+      await _bio.saveCredentials(
+        login: login,
+        password: password,
+        role: _isStudent ? 'student' : 'staff',
+      );
+    }
+
     if (auth.state == AuthState.requires2fa) {
       Navigator.of(context).push(
         SlideFadePageRoute(
-          builder: (_) => Verify2faScreen(login: _idCtrl.text.trim()),
+          builder: (_) => Verify2faScreen(login: login),
         ),
       );
     }
   }
 
   Future<void> _faceIdLogin() async {
+    // If device biometric login is set up, use it.
+    if (_bioReady) {
+      _biometricLogin();
+      return;
+    }
+
     if (!_isStudent) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Face ID faqat talabalar uchun')),

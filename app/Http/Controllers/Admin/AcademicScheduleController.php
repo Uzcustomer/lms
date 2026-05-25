@@ -824,6 +824,8 @@ class AcademicScheduleController extends Controller
         // topshirmagan (3 qarz + joriy 1-urinish fan = 3, bloklanmaydi).
         // currentDebtsByStudent[hemis_id] = [subject_id|semester_code => [...]]
         $currentDebtsByStudent = [];
+        // Pullik fanlarni har talaba uchun yig'amiz — badge tooltipida ko'rsatamiz.
+        $pullikSubjectsByStudent = [];
         $debtSubjMeta = [];
         if (!empty($fullTriples)) {
             $debtSubjIds = array_values(array_unique(array_map(fn($t) => $t[1], $fullTriples)));
@@ -853,6 +855,16 @@ class AcademicScheduleController extends Controller
             $statByStu = $studentStatus[$tk] ?? [];
             foreach ($studentsByGroup->get($g, collect()) as $st) {
                 $stat = $statByStu[$st->hemis_id] ?? null;
+
+                // Pullik fanlarni yig'amiz — pullik joriy debt mavjudligidan
+                // mustaqil, shuning uchun continue'dan oldin tekshiramiz.
+                if (!empty($stat) && !empty($stat['pullik'])) {
+                    $pSubjName = $debtSubjMeta[$s . '|' . $sem]['subject_name'] ?? '';
+                    if ($pSubjName !== '' && !in_array($pSubjName, $pullikSubjectsByStudent[$st->hemis_id] ?? [], true)) {
+                        $pullikSubjectsByStudent[$st->hemis_id][] = $pSubjName;
+                    }
+                }
+
                 $explicitK = $st->hemis_id . '|' . $s . '|' . $sem;
                 $hasA2 = !empty($explicitAttemptByStudent[$explicitK]['attempt2']);
                 // Fanni amalda o'tgan talaba — qarz emas (attempt=2 yozuvi
@@ -918,8 +930,8 @@ class AcademicScheduleController extends Controller
             }
         }
 
-        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache, $subgroupMembers) {
-            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $admissionService, &$admissionCache, $subgroupMembers) {
+        return $scheduleData->map(function ($items) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $pullikSubjectsByStudent, $admissionService, &$admissionCache, $subgroupMembers) {
+            return $items->map(function ($item) use ($studentsByGroup, $perStudentMap, $studentStatus, $pastDebtsMap, $explicitAttemptByStudent, $attempt1OskiByKey, $attempt1TestByKey, $today, $currentDebtsByStudent, $pullikSubjectsByStudent, $admissionService, &$admissionCache, $subgroupMembers) {
                 $gHid = $item['group']->group_hemis_id;
                 $subjectId = $item['subject']->subject_id ?? null;
                 $semCode = $item['subject']->semester_code ?? null;
@@ -1049,6 +1061,7 @@ class AcademicScheduleController extends Controller
                         'has_attempt2_grade' => $hasAttempt2,
                         'has_attempt3_grade' => $hasAttempt3,
                         'is_pullik' => $stat['pullik'],
+                        'pullik_subjects' => array_values($pullikSubjectsByStudent[$stu->hemis_id] ?? []),
                         'is_held_back' => $stat['held_back'] ?? false,
                         'past_debts' => $pastDebts,
                         'current_semester_debts' => $currentDebts,

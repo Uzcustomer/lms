@@ -83,6 +83,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> checkAuth() async {
+    _viaLogin = false;
     try {
       final isLoggedIn = await _apiService.isLoggedIn();
       if (isLoggedIn) {
@@ -105,7 +106,14 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// True when the session was opened via an explicit login this run
+  /// (as opposed to a cold start with a stored token). Used by the
+  /// biometric gate to skip locking right after a manual login.
+  bool _viaLogin = false;
+  bool get viaLogin => _viaLogin;
+
   void _handleLoginResponse(Map<String, dynamic> response, String guard) {
+    _viaLogin = true;
     _user = response['user'] as Map<String, dynamic>?;
     _guard = guard;
     _profileComplete = response['profile_complete'] == true;
@@ -304,8 +312,15 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// True after an explicit in-session logout — the login screen uses
+  /// this to avoid auto-prompting biometric right after the user chose
+  /// to sign out.
+  bool _loggedOut = false;
+  bool get loggedOut => _loggedOut;
+
   Future<void> logout() async {
     _state = AuthState.loading;
+    _loggedOut = true;
     notifyListeners();
 
     await _authService.logout();

@@ -694,7 +694,13 @@
                                                         @if($heldBackBlocked)
                                                             <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="4 tadan ortiq fandan qarz — kursdan qoldiriladi">4 tadan ortiq qarz</span>
                                                         @elseif($pullikBlocked)
-                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="JN/MT past yoki davomat ≥25% — qayta topshira olmaydi (pullik)">Pullik</span>
+                                                            @php
+                                                                $stuPullikSubjects = $stuRow['pullik_subjects'] ?? [];
+                                                                $pullikTooltip = !empty($stuPullikSubjects)
+                                                                    ? "Pullik fanlar:\n" . implode("\n", array_map(fn($s) => '• ' . $s, $stuPullikSubjects))
+                                                                    : "JN/MT past yoki davomat ≥25% — qayta topshira olmaydi (pullik)";
+                                                            @endphp
+                                                            <span style="margin-left:6px;padding:1px 5px;border-radius:6px;font-size:9px;font-weight:600;background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;" title="{{ $pullikTooltip }}">Pullik</span>
                                                         @endif
                                                     </td>
                                                     <td style="text-align:center;font-size:9px;color:#64748b;">

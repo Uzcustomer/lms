@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class BiometricService {
   static const String _enabledKey = 'biometric_enabled';
@@ -58,5 +59,53 @@ class BiometricService {
   Future<void> setEnabled(bool value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_enabledKey, value);
+  }
+
+  // ── Stored credentials for biometric re-login ────────
+  // Kept in the OS keystore/keychain so the student can log back in
+  // with a fingerprint / Face ID even after a logout or token expiry.
+  static const _secure = FlutterSecureStorage();
+  static const _kLogin = 'bio_cred_login';
+  static const _kPass = 'bio_cred_pass';
+  static const _kRole = 'bio_cred_role';
+
+  Future<void> saveCredentials({
+    required String login,
+    required String password,
+    required String role,
+  }) async {
+    try {
+      await _secure.write(key: _kLogin, value: login);
+      await _secure.write(key: _kPass, value: password);
+      await _secure.write(key: _kRole, value: role);
+    } catch (_) {}
+  }
+
+  Future<bool> hasCredentials() async {
+    try {
+      return (await _secure.read(key: _kLogin)) != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<Map<String, String>?> getCredentials() async {
+    try {
+      final login = await _secure.read(key: _kLogin);
+      final pass = await _secure.read(key: _kPass);
+      final role = await _secure.read(key: _kRole);
+      if (login != null && pass != null) {
+        return {'login': login, 'password': pass, 'role': role ?? 'student'};
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Future<void> clearCredentials() async {
+    try {
+      await _secure.delete(key: _kLogin);
+      await _secure.delete(key: _kPass);
+      await _secure.delete(key: _kRole);
+    } catch (_) {}
   }
 }

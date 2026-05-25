@@ -37,7 +37,7 @@ class DebugYnPullikTrace extends Command
         $this->line('Subject name: ' . ($subj ?? 'NOT FOUND'));
 
         $semInfo = DB::table('semesters')->where('code', $sem)
-            ->select('code', 'name', 'education_year', 'start_date', 'end_date', 'current', 'curriculum_id')
+            ->select('code', 'name', 'education_year', 'curriculum_hemis_id', 'current', 'level_code')
             ->get();
         $this->line('Semesters with code=' . $sem . ': ' . $semInfo->count() . ' rows');
         foreach ($semInfo as $r) {

@@ -113,25 +113,83 @@ class IndividualExamScheduleController extends Controller
             return response()->json(['error' => 'Talaba topilmadi'], 404);
         }
 
-        $currentSemesters = Semester::where('current', true)->get();
-        $semCodes = $currentSemesters->pluck('code')->unique()->values()->all();
-        $semYearMap = $currentSemesters->mapWithKeys(fn ($s) => [(string) $s->code => (string) $s->education_year])->all();
-
-        // Talabaning joriy semestrdagi fanlari — curriculum_subjects va
-        // student_subjects kesishmasi (agar student_subjects mavjud bo'lsa
-        // va talaba shu fan uchun ariza topshirgan bo'lsa).
         $group = DB::table('groups')->where('group_hemis_id', $student->group_id)->first();
         if (!$group) {
             return response()->json(['error' => 'Talabaning guruhi topilmadi'], 404);
         }
 
-        $subjects = DB::table('curriculum_subjects')
+        // Talabaning konkret kurikulumiga tegishli joriy semestr(lar).
+        // Global Semester::where('current', true)->get() barcha kurikulumlar
+        // bo'yicha qaytaradi va oldingi semestr fanlari ham aralashib chiqishi
+        // mumkin — shu sababli kurikulum bo'yicha filtr qo'yamiz.
+        $currentSemesters = Semester::where('current', true)
+            ->where('curriculum_hemis_id', $group->curriculum_hemis_id)
+            ->get();
+        $semCodes = $currentSemesters->pluck('code')->unique()->values()->all();
+
+        // Guruhga (yoki talabaga shaxsiy) allaqachon belgilangan imtihon
+        // jadvallari — har qanday semestr bo'lishi mumkin (masalan, o'tgan
+        // semestrdagi fan uchun joriy o'quv yilida resit qo'yilgan). Bularni
+        // ham ro'yxatda ko'rsatish kerak, hatto curriculum_subjects'da joriy
+        // semestrda bo'lmasa ham.
+        $existingScheduleRows = ExamSchedule::where(function ($q) use ($student) {
+                $q->where('group_hemis_id', $student->group_id)
+                  ->whereNull('student_hemis_id');
+            })
+            ->orWhere('student_hemis_id', $student->hemis_id)
+            ->select('subject_id', 'subject_name', 'semester_code')
+            ->distinct()
+            ->get();
+        $extraSubjectKeys = $existingScheduleRows
+            ->mapWithKeys(fn ($r) => [$r->subject_id . '|' . $r->semester_code => $r])
+            ->all();
+        $extraSubjectIds = array_values(array_unique(array_map(
+            fn ($r) => $r->subject_id,
+            $existingScheduleRows->all()
+        )));
+        $extraSemCodes = array_values(array_unique(array_map(
+            fn ($r) => $r->semester_code,
+            $existingScheduleRows->all()
+        )));
+
+        // curriculum_subjects'dan joriy semestr fanlari (asosiy ro'yxat)
+        $subjectsQuery = DB::table('curriculum_subjects')
             ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('is_active', true)
-            ->when(!empty($semCodes), fn ($q) => $q->whereIn('semester_code', $semCodes))
+            ->where('is_active', true);
+        if (!empty($semCodes) || !empty($extraSubjectIds)) {
+            $subjectsQuery->where(function ($q) use ($semCodes, $extraSubjectIds, $extraSemCodes) {
+                if (!empty($semCodes)) {
+                    $q->whereIn('semester_code', $semCodes);
+                }
+                if (!empty($extraSubjectIds) && !empty($extraSemCodes)) {
+                    $q->orWhere(function ($w) use ($extraSubjectIds, $extraSemCodes) {
+                        $w->whereIn('subject_id', $extraSubjectIds)
+                          ->whereIn('semester_code', $extraSemCodes);
+                    });
+                }
+            });
+        }
+        $subjects = $subjectsQuery
             ->select('subject_id', 'subject_name', 'semester_code', 'closing_form', 'curriculum_subject_hemis_id')
+            ->orderBy('semester_code')
             ->orderBy('subject_name')
             ->get();
+
+        // curriculum_subjects'da yo'q lekin exam_schedules'da bor fanlarni
+        // ham qo'shamiz (HEMIS rejasidan tushib qolgan eski fanlar uchun)
+        $subjectsByKey = $subjects->keyBy(fn ($s) => $s->subject_id . '|' . $s->semester_code);
+        foreach ($extraSubjectKeys as $key => $row) {
+            if (!isset($subjectsByKey[$key])) {
+                $subjectsByKey[$key] = (object) [
+                    'subject_id' => $row->subject_id,
+                    'subject_name' => $row->subject_name ?: $row->subject_id,
+                    'semester_code' => $row->semester_code,
+                    'closing_form' => null,
+                    'curriculum_subject_hemis_id' => null,
+                ];
+            }
+        }
+        $subjects = $subjectsByKey->values();
 
         if ($subjects->isEmpty()) {
             return response()->json([
@@ -143,22 +201,21 @@ class IndividualExamScheduleController extends Controller
 
         // exam_schedules: guruh sanalari + shu talabaning individual sanalari
         $subjectIds = $subjects->pluck('subject_id')->unique()->all();
+        $allSemCodes = $subjects->pluck('semester_code')->unique()->all();
         $groupSchedules = ExamSchedule::whereNull('student_hemis_id')
             ->where('group_hemis_id', $student->group_id)
             ->whereIn('subject_id', $subjectIds)
-            ->whereIn('semester_code', $semCodes)
+            ->whereIn('semester_code', $allSemCodes)
             ->get()
             ->keyBy(fn ($s) => $s->subject_id . '|' . $s->semester_code);
 
         $individualSchedules = ExamSchedule::where('student_hemis_id', $hemisId)
             ->whereIn('subject_id', $subjectIds)
-            ->whereIn('semester_code', $semCodes)
+            ->whereIn('semester_code', $allSemCodes)
             ->get()
             ->keyBy(fn ($s) => $s->subject_id . '|' . $s->semester_code);
 
-        // Eligibility: har fan uchun stage hisoblash. Hozircha minimal —
-        // student_grades dan attempt 1/2 V<60 yiqilganmi tekshiramiz, JN/MT
-        // bor-yo'qligi va pullik holatini ham qaytaramiz.
+        // Eligibility: har fan uchun stage hisoblash.
         $eligibility = $this->computeEligibilityForStudent($hemisId, $student->group_id, $subjects);
 
         $subjectsOut = [];

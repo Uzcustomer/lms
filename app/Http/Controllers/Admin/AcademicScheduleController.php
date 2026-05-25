@@ -1537,44 +1537,27 @@ class AcademicScheduleController extends Controller
         } catch (\Throwable $e) {}
 
         // 3) Davomat — har talaba/fan/semestr uchun absent_off summasi
-        // JURNAL bilan AYNI (JournalController:1025-1034): har triple uchun ALOHIDA
-        // education_year_code (schedules.education_year_code, eng so'nggi lesson_date)
-        // bo'yicha filtrlanadi. Kursdan kursga qolgan/transfer talabaning eski
-        // yildagi yo'qliklari joriy yil davomatiga aralashmasin.
-        $tripleYearMap = \App\Services\JournalGradeService::resolveEducationYearForTriples(array_values($triples));
         $davomatMap = []; // hemis_id|subj|sem => total_absent_off
         try {
-            $rows = DB::table('attendances')
+            $attendanceQuery = DB::table('attendances')
                 ->whereIn('student_hemis_id', $allStudentHids)
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
-                ->whereNotIn('training_type_code', [99, 100, 101, 102])
-                ->select('student_hemis_id', 'subject_id', 'semester_code',
-                    'education_year_code', 'absent_off')
-                ->get();
-            // Triple bo'yicha gruppa qilib, year mos bo'lganlarini hisoblaymiz.
-            // students[hemis] => group_id mavjud, har bir attendance row qaysi
-            // triple'ga tegishliligini (hemis → group, subj, sem) aniqlab,
-            // shu triple uchun resolved year bilan tekshiramiz.
-            $aggr = [];
-            foreach ($rows as $r) {
-                $gHid = $studentGroup[$r->student_hemis_id]
-                    ?? ($studentGroup[(int) $r->student_hemis_id] ?? null);
-                if ($gHid === null) continue;
-                $tKey = $gHid . '|' . $r->subject_id . '|' . $r->semester_code;
-                $tYear = $tripleYearMap[$tKey] ?? null;
-                if ($tYear !== null) {
-                    $rowYear = $r->education_year_code !== null ? (string) $r->education_year_code : null;
-                    // year aniqlangan: faqat shu year (yoki NULL) qabul.
-                    // Eski transfer yozuvlari education_year_code != joriy bo'lsa tashlanadi.
-                    if ($rowYear !== null && $rowYear !== $tYear) {
-                        continue;
-                    }
-                }
-                $sumKey = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
-                $aggr[$sumKey] = ($aggr[$sumKey] ?? 0) + (float) $r->absent_off;
+                ->whereNotIn('training_type_code', [99, 100, 101, 102]);
+            // Jurnal davomati joriy o'quv yiliga cheklangan (JournalController:1029).
+            // Qayta o'qigan/transfer talabalarning eski yillardagi yo'qliklari pullik
+            // hisobini noto'g'ri inflatsiya qilmasin.
+            if (!empty($relevantYears)) {
+                $attendanceQuery->whereIn('education_year_code', $relevantYears);
             }
-            $davomatMap = $aggr;
+            $rows = $attendanceQuery
+                ->selectRaw('student_hemis_id, subject_id, semester_code, SUM(absent_off) as total_off')
+                ->groupBy('student_hemis_id', 'subject_id', 'semester_code')
+                ->get();
+            foreach ($rows as $r) {
+                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                $davomatMap[$k] = (float) $r->total_off;
+            }
         } catch (\Throwable $e) {}
 
         // 4) Auditoriya soatlari — fan bo'yicha

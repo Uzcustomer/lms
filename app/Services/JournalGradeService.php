@@ -32,6 +32,16 @@ class JournalGradeService
     private const EXCLUDED_JB_CODES = [11, 99, 100, 101, 102, 103];
 
     /**
+     * JN ga kirmaydigan training_type nomlari — jurnal bilan AYNI
+     * (JournalController:435). HEMIS sync da ba'zi yozuvlarda kod NULL bo'lib,
+     * lekin nom mavjud bo'lishi mumkin, shuning uchun nom bo'yicha ham filter.
+     */
+    private const EXCLUDED_JB_NAMES = [
+        "Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat",
+        "Oski", "Yakuniy test", "Quiz test",
+    ];
+
+    /**
      * Bir nechta (guruh, fan, semestr) uchun JN/MT ni bitta martaga hisoblaydi.
      *
      * @param array<int,array{0:int|string,1:int|string,2:int|string}> $triples
@@ -212,7 +222,8 @@ class JournalGradeService
                 ->whereIn('semester_code', $semCodes)
                 ->whereNotNull('lesson_date')
                 ->select('group_id', 'subject_id', 'semester_code',
-                    'training_type_code', 'lesson_date', 'lesson_pair_code', 'education_year_code')
+                    'training_type_code', 'training_type_name', 'lesson_date',
+                    'lesson_pair_code', 'education_year_code')
                 ->get();
             foreach ($rows as $r) {
                 $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
@@ -230,9 +241,14 @@ class JournalGradeService
                 }
                 $dp = $d . '_' . $r->lesson_pair_code;
                 $tc = (int) $r->training_type_code;
+                $tn = (string) ($r->training_type_name ?? '');
                 if ($tc === 99) {
                     $mtDatePair[$key][$dp] = $d;
-                } elseif (!in_array($tc, self::EXCLUDED_JB_CODES, true)) {
+                } elseif (!in_array($tc, self::EXCLUDED_JB_CODES, true)
+                    && !in_array($tn, self::EXCLUDED_JB_NAMES, true)) {
+                    // Jurnal bilan AYNI: kod yoki nom ekslyuziya ro'yxatida bo'lsa
+                    // JB ga kirmaydi (sync xatosi tufayli kod NULL lekin nom
+                    // "Ma'ruza"/"Oski"/... bo'lgan yozuvlar uchun himoya).
                     $jbDatePair[$key][$dp] = $d;
                 }
             }

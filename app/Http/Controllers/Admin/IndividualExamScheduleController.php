@@ -39,7 +39,6 @@ class IndividualExamScheduleController extends Controller
         $activeRole = $sessionRole ?: $userRole;
         $allowed = array_merge(ExamDateRoleService::adminRoles(), [
             \App\Enums\ProjectRole::REGISTRAR_OFFICE->value,
-            \App\Enums\ProjectRole::TEST_CENTER->value,
         ]);
         if (!in_array($activeRole, $allowed, true)) {
             abort(403, 'Bu sahifaga kirish uchun ruxsat yo\'q.');

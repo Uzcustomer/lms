@@ -220,18 +220,40 @@
                         { ynType: 'oski', attempt: 3, label: 'OSKI', dateK: 'oski_resit2_date', timeK: 'oski_resit2_time' },
                         { ynType: 'test', attempt: 3, label: 'Test', dateK: 'test_resit2_date', timeK: 'test_resit2_time' },
                     ];
-                    // Yopilish shakli "oski" bo'lsa OSKI qatorlari, "test" bo'lsa Test
-                    // qatorlari ko'rsatiladi. "normativ", "sinov", "none" — barchasi
-                    // yashiriladi (admin individual qo'yishi mumkin emas; agar kerak
-                    // bo'lsa cf=null subject sifatida qaytariladi).
+                    // Filtrlash mantig'i:
+                    //  1) Yopilish shakli "oski" bo'lsa OSKI qatorlari, "test" bo'lsa
+                    //     Test qatorlari ko'rsatiladi.
+                    //  2) Talaba bu urinishni topshira oladigan qatorlargina qoladi:
+                    //       1-urinish: baho hali kelmagan bo'lsa
+                    //       2-urinish: 1-da yiqilgan VA 2-bahosi yo'q
+                    //       3-urinish: 2-da yiqilgan VA 3-bahosi yo'q
+                    //  3) Mavjud individual sana bo'lgan qatorlar har doim qoladi
+                    //     (admin tahrirlash yoki o'chirish uchun ko'rishi kerak).
                     const attempts = allAttempts.filter(a => {
-                        if (a.ynType === 'oski') return showOski;
-                        if (a.ynType === 'test') return showTest;
+                        if (a.ynType === 'oski' && !showOski) return false;
+                        if (a.ynType === 'test' && !showTest) return false;
+
+                        const hasIndividual = subj.individual && subj.individual[a.dateK];
+                        if (hasIndividual) return true;
+
+                        if (a.attempt === 1) {
+                            return !elig.has_attempt_1_grade;
+                        }
+                        if (a.attempt === 2) {
+                            return !!elig.failed_attempt_1 && !elig.has_attempt_2_grade;
+                        }
+                        if (a.attempt === 3) {
+                            return !!elig.failed_attempt_2 && !elig.has_attempt_3_grade;
+                        }
                         return true;
                     });
                     if (attempts.length === 0) {
-                        // Yopilish shakli normativ/sinov/none — bu fanga sana qo'yilmaydi
-                        const cfLabel = cfBadgeMeta ? cfBadgeMeta.label : '';
+                        // Yopilish shakli normativ/sinov/none — yoki talaba
+                        // barcha urinishlarini topshirib bo'lgan: sana qo'yib bo'lmaydi
+                        const cfBlocked = cf && ['normativ', 'sinov', 'none'].includes(cf);
+                        const msg = cfBlocked
+                            ? `Bu fan uchun YN sanasi qo'yilmaydi (${escapeHtml(cfBadgeMeta ? cfBadgeMeta.label : cf)}).`
+                            : `Talaba bu fan bo'yicha mavjud urinish(lar)ni topshirib bo'lgan — qo'shimcha sana kerak emas.`;
                         html += `
                             <tr style="border-bottom:1px solid #f1f5f9;border-top:2px solid #e2e8f0;">
                                 <td style="padding:8px 10px;vertical-align:top;">
@@ -240,7 +262,7 @@
                                     ${cfBadge}
                                 </td>
                                 <td colspan="7" style="padding:10px;text-align:center;color:#94a3b8;font-size:12px;font-style:italic;">
-                                    Bu fan uchun YN sanasi qo'yilmaydi (${escapeHtml(cfLabel)}).
+                                    ${msg}
                                 </td>
                             </tr>
                         `;

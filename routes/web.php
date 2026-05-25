@@ -330,6 +330,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/sync-schedule', [JournalController::class, 'syncSchedule'])->name('sync-schedule');
             Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');
             Route::post('/save-sinov-override', [JournalController::class, 'saveSinovOverride'])->name('save-sinov-override');
+            Route::post('/bulk-copy-sinov-from-jn', [JournalController::class, 'bulkCopySinovFromJn'])->name('bulk-copy-sinov-from-jn');
             Route::post('/transfer-to-next-attempt', [JournalController::class, 'transferToNextAttempt'])->name('transfer-to-next-attempt');
             Route::post('/finalize-attempt', [JournalController::class, 'finalizeAttempt'])->name('finalize-attempt');
             Route::post('/unfinalize-attempt', [JournalController::class, 'unfinalizeAttempt'])->name('unfinalize-attempt');

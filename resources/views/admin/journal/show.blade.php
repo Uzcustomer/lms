@@ -2427,18 +2427,29 @@
                 {{-- Sinov fani uchun YN test bahosi paneli (YN ga yuborishdan oldin) --}}
                 @if(!empty($isSinov) && empty($ynSubmission) && !empty($canSubmitYn))
                 <div class="mt-4 p-4 bg-amber-50 border border-amber-200 rounded-lg" id="sinov-test-panel">
-                    <div class="flex items-start mb-3">
-                        <svg class="w-5 h-5 text-amber-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
-                            <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
-                        </svg>
-                        <div>
-                            <h4 class="font-semibold text-amber-900">YN test bahosi — sinov fani</h4>
-                            <p class="text-sm text-amber-800 mt-1">
-                                Bu fan <strong>sinov bilan yopiladi</strong>. YN test qismi (vazni 30%) joriy JN o'rtachasidan avtomatik to'ldirilgan.
-                                Kerak bo'lsa, har talaba uchun <strong>"O'zgartirish kiritish"</strong> tugmasi orqali <strong>bir marta</strong> o'zgartirishingiz mumkin.
-                                YN ga yuborilgandan keyin baho qulflanadi.
-                            </p>
+                    <div class="flex items-start justify-between mb-3 gap-3 flex-wrap">
+                        <div class="flex items-start">
+                            <svg class="w-5 h-5 text-amber-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
+                            </svg>
+                            <div>
+                                <h4 class="font-semibold text-amber-900">YN test bahosi — sinov fani</h4>
+                                <p class="text-sm text-amber-800 mt-1">
+                                    Bu fan <strong>sinov bilan yopiladi</strong>. YN test qismi (vazni 30%) joriy JN o'rtachasidan avtomatik to'ldirilgan.
+                                    Kerak bo'lsa, har talaba uchun <strong>"O'zgartirish kiritish"</strong> tugmasi orqali <strong>bir marta</strong> o'zgartirishingiz mumkin.
+                                    YN ga yuborilgandan keyin baho qulflanadi.
+                                </p>
+                            </div>
                         </div>
+                        <button type="button" id="btn-bulk-copy-sinov"
+                            class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition shadow-sm flex-shrink-0"
+                            onclick="bulkCopySinovFromJn()"
+                            title="Guruhdagi barcha qulflanmagan talabalarga JN o'rtachasini YN test bahosi sifatida saqlaydi va qulflaydi">
+                            <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/>
+                            </svg>
+                            JN dan baholarni ko'chirish
+                        </button>
                     </div>
                     <div class="overflow-x-auto bg-white rounded-lg border border-amber-200">
                         <table class="min-w-full text-sm">
@@ -5577,6 +5588,74 @@
                 btn.disabled = false;
                 btn.textContent = 'Sababli baholarni YN ga yuborish';
                 btn.style.opacity = '1';
+            });
+        }
+
+        // Sinov fani — guruh bo'yicha JN o'rtachalarini ko'chirish
+        function bulkCopySinovFromJn() {
+            const btn = document.getElementById('btn-bulk-copy-sinov');
+            if (!btn) return;
+            if (!confirm("Guruhdagi barcha qulflanmagan talabalarga JN o'rtachasi YN test bahosi sifatida saqlanadi va qulflanadi. Davom etamizmi?")) {
+                return;
+            }
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+            btn.innerHTML = 'Yuklanmoqda...';
+
+            fetch('{{ route("admin.journal.bulk-copy-sinov-from-jn") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                })
+            })
+            .then(r => r.json().then(data => ({ok: r.ok, data})))
+            .then(({ok, data}) => {
+                if (ok && data.success) {
+                    Object.entries(data.results || {}).forEach(([stuId, info]) => {
+                        if (!info.applied) return;
+                        const row = document.getElementById('sinov-row-' + stuId);
+                        if (!row) return;
+                        row.dataset.current = info.grade;
+                        row.dataset.locked = '1';
+                        const valEl = document.getElementById('sinov-val-' + stuId);
+                        if (valEl) {
+                            valEl.textContent = info.grade;
+                            valEl.classList.remove('hidden', 'bg-gray-50', 'text-gray-800');
+                            valEl.classList.add('bg-emerald-50', 'text-emerald-800');
+                        }
+                        const input = document.getElementById('sinov-input-' + stuId);
+                        if (input) {
+                            input.value = info.grade;
+                            input.classList.add('hidden');
+                        }
+                        const editBtn = document.getElementById('sinov-edit-btn-' + stuId);
+                        if (editBtn) {
+                            const td = editBtn.parentElement;
+                            td.innerHTML = '<span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> O\'zgartirilgan (qulflangan)</span>';
+                        }
+                    });
+                    alert(data.message || 'Tugadi.');
+                    btn.remove();
+                } else {
+                    alert(data.message || 'Xatolik yuz berdi.');
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.innerHTML = originalText;
+                }
+            })
+            .catch(err => {
+                alert('Tarmoq xatoligi: ' + err.message);
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.innerHTML = originalText;
             });
         }
 

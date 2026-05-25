@@ -5752,6 +5752,233 @@ class JournalController extends Controller
     }
 
     /**
+     * Sinov fani uchun JN o'rtachasini guruh bo'yicha ommaviy ravishda
+     * YN test bahosi sifatida ko'chirish. Allaqachon qulflangan yozuvlar
+     * o'tkazib yuboriladi (ularga tegmaydi).
+     */
+    public function bulkCopySinovFromJn(Request $request)
+    {
+        $data = $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+        ]);
+
+        if (is_active_oqituvchi()) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if (!$teacherHemisId) {
+                return response()->json(['success' => false, 'message' => 'O\'qituvchi topilmadi.'], 403);
+            }
+            $isAssignedByCST = CurriculumSubjectTeacher::where('employee_id', $teacherHemisId)
+                ->where('subject_id', $data['subject_id'])
+                ->where('group_id', $data['group_hemis_id'])
+                ->exists();
+            $isAssignedBySchedule = DB::table('schedules')
+                ->where('employee_id', $teacherHemisId)
+                ->where('subject_id', $data['subject_id'])
+                ->where('group_id', $data['group_hemis_id'])
+                ->whereNull('deleted_at')
+                ->exists();
+            if (!($isAssignedByCST || $isAssignedBySchedule)) {
+                return response()->json(['success' => false, 'message' => 'Siz bu fan va guruhga biriktirilmagansiz.'], 403);
+            }
+        } elseif (!auth()->user()?->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['success' => false, 'message' => 'Huquq yo\'q.'], 403);
+        }
+
+        $group = Group::where('group_hemis_id', $data['group_hemis_id'])->first();
+        if (!$group) {
+            return response()->json(['success' => false, 'message' => 'Guruh topilmadi.'], 404);
+        }
+        $subject = CurriculumSubject::where('subject_id', $data['subject_id'])
+            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+            ->where('semester_code', $data['semester_code'])
+            ->first();
+        if (!$subject || ($subject->closing_form ?? null) !== 'sinov') {
+            return response()->json(['success' => false, 'message' => 'Bu funksiya faqat sinov bilan yopiladigan fanlarga tegishli.'], 422);
+        }
+
+        $ynSubmission = YnSubmission::where('subject_id', $data['subject_id'])
+            ->where('semester_code', $data['semester_code'])
+            ->where('group_hemis_id', $data['group_hemis_id'])
+            ->first();
+        if ($ynSubmission) {
+            return response()->json(['success' => false, 'message' => 'YN ga yuborilgandan keyin o\'zgartirib bo\'lmaydi.'], 422);
+        }
+
+        $jnAverages = $this->computeJnAveragesForGroup(
+            $data['subject_id'],
+            $data['semester_code'],
+            $data['group_hemis_id']
+        );
+
+        if (empty($jnAverages)) {
+            return response()->json(['success' => false, 'message' => 'Talabalar topilmadi.'], 404);
+        }
+
+        $userId = auth()->guard('teacher')->id() ?? auth()->guard('web')->id();
+        $now = now();
+        $applied = 0;
+        $skipped = 0;
+        $results = [];
+
+        foreach ($jnAverages as $hemisId => $jn) {
+            $existing = SinovTestGrade::where('subject_id', $data['subject_id'])
+                ->where('semester_code', $data['semester_code'])
+                ->where('group_hemis_id', $data['group_hemis_id'])
+                ->where('student_hemis_id', $hemisId)
+                ->first();
+
+            if ($existing && $existing->is_locked) {
+                $skipped++;
+                $results[$hemisId] = [
+                    'applied' => false,
+                    'grade' => (int) round((float) $existing->override_grade, 0, PHP_ROUND_HALF_UP),
+                ];
+                continue;
+            }
+
+            $grade = (int) round((float) $jn, 0, PHP_ROUND_HALF_UP);
+
+            SinovTestGrade::updateOrCreate(
+                [
+                    'subject_id' => $data['subject_id'],
+                    'semester_code' => $data['semester_code'],
+                    'group_hemis_id' => $data['group_hemis_id'],
+                    'student_hemis_id' => $hemisId,
+                ],
+                [
+                    'default_grade' => $grade,
+                    'override_grade' => $grade,
+                    'is_locked' => true,
+                    'overridden_by_user_id' => $userId,
+                    'overridden_at' => $now,
+                ]
+            );
+            $applied++;
+            $results[$hemisId] = ['applied' => true, 'grade' => $grade];
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$applied} ta talabaga JN o'rtachasi qo'llandi" . ($skipped > 0 ? ", {$skipped} ta talaba allaqachon qulflangan edi" : '') . '.',
+            'applied_count' => $applied,
+            'skipped_count' => $skipped,
+            'results' => $results,
+        ]);
+    }
+
+    /**
+     * Guruh bo'yicha har talaba uchun JN (amaliyot/joriy nazorat) o'rtachasini
+     * hisoblash. submitToYn va show() dagi mantiq bilan bir xil — faqat JN
+     * qismi ajratilgan. Qaytadi: [student_hemis_id => jn_avg_int].
+     */
+    private function computeJnAveragesForGroup(string $subjectId, string $semesterCode, string $groupHemisId): array
+    {
+        $studentHemisIds = DB::table('students')
+            ->where('group_id', $groupHemisId)
+            ->pluck('hemis_id')
+            ->toArray();
+
+        if (empty($studentHemisIds)) {
+            return [];
+        }
+
+        $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+
+        $jbScheduleRows = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereNotIn('training_type_code', $excludedTrainingCodes)
+            ->whereNotNull('lesson_date')
+            ->select('lesson_date', 'lesson_pair_code')
+            ->get();
+
+        $jbColumns = $jbScheduleRows->map(fn($s) => [
+            'date' => \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d'),
+            'pair' => $s->lesson_pair_code,
+        ])->unique(fn($item) => $item['date'] . '_' . $item['pair'])->values();
+
+        $jbLessonDates = $jbColumns->pluck('date')->unique()->sort()->values()->toArray();
+
+        $jbPairsPerDay = [];
+        foreach ($jbColumns as $col) {
+            $jbPairsPerDay[$col['date']] = ($jbPairsPerDay[$col['date']] ?? 0) + 1;
+        }
+
+        $jbDatePairSet = [];
+        foreach ($jbColumns as $col) {
+            $jbDatePairSet[$col['date'] . '_' . $col['pair']] = true;
+        }
+
+        $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
+        $jbLessonDatesForAverage = array_values(array_filter($jbLessonDates, function ($date) use ($gradingCutoffDate) {
+            return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
+        }));
+        $totalJbDaysForAverage = count($jbLessonDatesForAverage);
+
+        $allGradesRaw = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNotIn('training_type_code', [100, 101, 102, 103])
+            ->whereNotNull('lesson_date')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->orderBy('lesson_date')
+            ->orderBy('lesson_pair_code')
+            ->get();
+
+        $getEffectiveGrade = function ($row) {
+            if ($row->grade !== null && (float) $row->grade < 60 && $row->retake_grade !== null) {
+                return $row->retake_grade;
+            }
+            if ($row->status === 'pending') return null;
+            if ($row->reason === 'absent' && $row->grade === null) {
+                return $row->retake_grade !== null ? $row->retake_grade : null;
+            }
+            if ($row->status === 'closed' && $row->reason === 'teacher_victim' && $row->grade == 0 && $row->retake_grade === null) {
+                return null;
+            }
+            if ($row->status === 'recorded') return $row->grade;
+            if ($row->status === 'closed') return $row->grade;
+            if ($row->retake_grade !== null) return $row->retake_grade;
+            return null;
+        };
+
+        $jbGrades = [];
+        foreach ($allGradesRaw as $g) {
+            $effectiveGrade = $getEffectiveGrade($g);
+            if ($effectiveGrade === null) continue;
+            $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
+            $key = $normalizedDate . '_' . $g->lesson_pair_code;
+            if (isset($jbDatePairSet[$key])) {
+                $jbGrades[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effectiveGrade;
+            }
+        }
+
+        $result = [];
+        foreach ($studentHemisIds as $hemisId) {
+            $dailySum = 0;
+            $studentDayGrades = $jbGrades[$hemisId] ?? [];
+            foreach ($jbLessonDatesForAverage as $date) {
+                $dayGrades = $studentDayGrades[$date] ?? [];
+                $pairsInDay = $jbPairsPerDay[$date] ?? 1;
+                $gradeSum = array_sum($dayGrades);
+                $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                $dailySum += $dayAverage;
+            }
+            $result[$hemisId] = $totalJbDaysForAverage > 0
+                ? (int) round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                : 0;
+        }
+
+        return $result;
+    }
+
+    /**
      * O'qituvchi YN ga yuborish — barcha baholarni qulflaydi
      */
     public function submitToYn(Request $request)

@@ -1353,11 +1353,17 @@ class AcademicScheduleController extends Controller
         // tegishli har ikki semestrni filtr orqali yuklasa, hisob to'g'ri bo'ladi.
 
         // Talabalarning hemis_id va group_id xaritasi (faqat faol talabalar)
-        $studentGroup = DB::table('students')
+        $studentRows = DB::table('students')
             ->whereIn('group_id', $allGroupHids)
             ->where('student_status_code', 11)
-            ->pluck('group_id', 'hemis_id')
-            ->toArray();
+            ->select('hemis_id', 'group_id', 'curriculum_id')
+            ->get();
+        $studentGroup = [];
+        $studentCurriculum = []; // hemis_id => curricula_hemis_id (talabaning o'quv rejasi)
+        foreach ($studentRows as $sr) {
+            $studentGroup[$sr->hemis_id] = $sr->group_id;
+            $studentCurriculum[$sr->hemis_id] = $sr->curriculum_id;
+        }
         $allStudentHids = array_keys($studentGroup);
         if (empty($allStudentHids)) return $result;
 
@@ -1658,13 +1664,18 @@ class AcademicScheduleController extends Controller
             }
         } catch (\Throwable $e) {}
 
-        // 4) Auditoriya soatlari — fan bo'yicha
-        $audHoursMap = []; // subj|sem => hours
+        // 4) Auditoriya soatlari — talabaning O'QUV REJASI bo'yicha.
+        // Bitta (subject_id, semester_code) ko'p rejada turli aud_hours ga ega
+        // bo'lishi mumkin (28→45, 174→90, 31→105 va h.k.). Avval har reja uchun
+        // alohida saqlaymiz, talaba lookup'da o'z students.curriculum_id ni
+        // ishlatadi. Reja topilmasa fallback uchun "har qanday" map ham bor.
+        $audHoursByCurr = []; // curr_hemis_id|subj|sem => hours
+        $audHoursAny = []; // subj|sem => hours (eng birinchi, fallback)
         try {
             $subjectRows = DB::table('curriculum_subjects')
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
-                ->select('subject_id', 'semester_code', 'subject_details', 'total_acload')
+                ->select('curricula_hemis_id', 'subject_id', 'semester_code', 'subject_details', 'total_acload')
                 ->get();
             $nonAud = ['17'];
             foreach ($subjectRows as $sr) {
@@ -1679,7 +1690,11 @@ class AcademicScheduleController extends Controller
                     }
                 }
                 if ($aud <= 0) $aud = (float) ($sr->total_acload ?? 0);
-                $audHoursMap[$sr->subject_id . '|' . $sr->semester_code] = $aud;
+                $audHoursByCurr[$sr->curricula_hemis_id . '|' . $sr->subject_id . '|' . $sr->semester_code] = $aud;
+                $anyKey = $sr->subject_id . '|' . $sr->semester_code;
+                if (!isset($audHoursAny[$anyKey])) {
+                    $audHoursAny[$anyKey] = $aud;
+                }
             }
         } catch (\Throwable $e) {}
 
@@ -1706,7 +1721,18 @@ class AcademicScheduleController extends Controller
                 $test2 = $examMap2[$hid . '|' . $s . '|' . $sem . '|102'] ?? null;
 
                 $absentOff = $davomatMap[$hid . '|' . $s . '|' . $sem] ?? 0;
-                $audHours = $audHoursMap[$s . '|' . $sem] ?? 0;
+                // Auditoriya soatini talabaning o'z o'quv rejasidan olamiz —
+                // ko'p reja ichida ($subj, $sem) turli soatga ega bo'lishi
+                // mumkin. Rejaga aniq mos kelmasa, fan/semestr bo'yicha
+                // birinchi mavjudini fallback ishlatamiz.
+                $stuCurr = $studentCurriculum[$hid] ?? null;
+                $audHours = 0;
+                if ($stuCurr !== null) {
+                    $audHours = $audHoursByCurr[$stuCurr . '|' . $s . '|' . $sem] ?? 0;
+                }
+                if ($audHours <= 0) {
+                    $audHours = $audHoursAny[$s . '|' . $sem] ?? 0;
+                }
                 $davomatPct = $audHours > 0 ? round(($absentOff / $audHours) * 100, 2) : 0;
 
                 // Agar talaba haqida hech qanday ma'lumot yo'q bo'lsa (boshqa fanga

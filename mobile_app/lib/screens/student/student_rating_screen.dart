@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
-import '../../services/student_data_cache.dart';
 import '../../widgets/clinic_header.dart';
 
 class StudentRatingScreen extends StatefulWidget {
@@ -35,16 +34,8 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
   Future<void> _load({bool force = false}) async {
     setState(() => _loading = true);
     try {
-      Map<String, dynamic>? res;
-      if (_activeFilter == 'group') {
-        // Default rating is part of the shared 24h cache.
-        final cache = StudentDataCache();
-        await cache.ensureFresh(force: force);
-        res = cache.rating;
-      } else {
-        res = await StudentService(ApiService()).getRating(filter: _activeFilter);
-      }
-      if (mounted && res != null && res['success'] == true) {
+      final res = await StudentService(ApiService()).getRating(filter: _activeFilter);
+      if (mounted && res['success'] == true) {
         final data = res['data'] as Map<String, dynamic>;
         setState(() {
           _myRank = data['my_rank'] as int? ?? 0;

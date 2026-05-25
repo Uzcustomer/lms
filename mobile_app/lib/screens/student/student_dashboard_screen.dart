@@ -10,6 +10,7 @@ import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
 import '../../widgets/settings_sheet.dart';
 import '../../widgets/notification_bell.dart';
+import '../../widgets/clinic_header.dart';
 import 'student_home_screen.dart';
 
 class StudentDashboardScreen extends StatefulWidget {
@@ -408,126 +409,159 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final semesterName = profile?['semester_name']?.toString() ?? '';
     final paymentFormName = profile?['payment_form_name']?.toString() ?? '';
 
-    return _calmCard(
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 52,
-                height: 52,
-                decoration: const BoxDecoration(
-                  color: _calmTeal,
-                  shape: BoxShape.circle,
-                ),
-                clipBehavior: Clip.antiAlias,
-                child: imageUrl != null && imageUrl.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: imageUrl,
-                        width: 52,
-                        height: 52,
-                        fit: BoxFit.cover,
-                        placeholder: (_, __) => _avatarInitials(fullName),
-                        errorWidget: (_, __, ___) => _avatarInitials(fullName),
-                      )
-                    : _avatarInitials(fullName),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      fullName.toUpperCase(),
-                      style: TextStyle(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.2,
-                        color: _ink,
-                        height: 1.25,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Text.rich(
-                      TextSpan(
-                        children: [
-                          TextSpan(
-                            text: 'ID · ',
-                            style: TextStyle(
-                                fontSize: 11, color: _muted, fontWeight: FontWeight.w400),
-                          ),
-                          TextSpan(
-                            text: studentId,
-                            style: TextStyle(
-                                fontSize: 11, color: _ink, fontWeight: FontWeight.w800),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    if (paymentFormName.isNotEmpty)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0FDF4),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Container(
-                              width: 6,
-                              height: 6,
-                              decoration: const BoxDecoration(
-                                  color: Color(0xFF10B981), shape: BoxShape.circle),
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              paymentFormName,
-                              style: const TextStyle(
-                                fontSize: 10.5,
-                                fontWeight: FontWeight.w600,
-                                color: _calmGreen,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Divider(height: 1, color: _divider),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              _buildStatCell('YIL', yearOfEnter.isNotEmpty ? yearOfEnter : '—'),
-              _statDivider(),
-              _buildStatCell('KURS', course.isNotEmpty ? '$course-kurs' : '—'),
-              _statDivider(),
-              _buildStatCell('SEMESTR', semesterName.isNotEmpty ? semesterName : '—'),
-              _statDivider(),
-              _buildStatCell('O\'QUV YIL', educationYear.isNotEmpty ? educationYear : '—'),
-            ],
+    final avatar = Container(
+      width: 52,
+      height: 52,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: Colors.white.withOpacity(0.18),
+        border: Border.all(color: Colors.white, width: 2.5),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: imageUrl != null && imageUrl.isNotEmpty
+          ? CachedNetworkImage(
+              imageUrl: imageUrl,
+              width: 52,
+              height: 52,
+              fit: BoxFit.cover,
+              placeholder: (_, __) => _avatarInitials(fullName),
+              errorWidget: (_, __, ___) => _avatarInitials(fullName),
+            )
+          : _avatarInitials(fullName),
+    );
+
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D9488).withOpacity(0.30),
+            blurRadius: 16,
+            offset: const Offset(0, 7),
           ),
         ],
+      ),
+      child: ShinySweep(
+        radius: 16,
+        child: Container(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
+            ),
+          ),
+          padding: const EdgeInsets.all(14),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  AvatarHalo(size: 52, child: avatar),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          fullName.toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.2,
+                            color: Colors.white,
+                            height: 1.25,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text.rich(
+                          TextSpan(
+                            children: [
+                              TextSpan(
+                                text: 'ID · ',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white.withOpacity(0.7),
+                                    fontWeight: FontWeight.w500),
+                              ),
+                              TextSpan(
+                                text: studentId,
+                                style: const TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        if (paymentFormName.isNotEmpty)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 9, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: const BoxDecoration(
+                                      color: Color(0xFF7DF0C8),
+                                      shape: BoxShape.circle),
+                                ),
+                                const SizedBox(width: 5),
+                                Text(
+                                  paymentFormName,
+                                  style: const TextStyle(
+                                    fontSize: 10.5,
+                                    fontWeight: FontWeight.w700,
+                                    color: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Divider(height: 1, color: Colors.white.withOpacity(0.22)),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  _buildStatCell('YIL', yearOfEnter.isNotEmpty ? yearOfEnter : '—'),
+                  _statDivider(),
+                  _buildStatCell('KURS', course.isNotEmpty ? '$course-kurs' : '—'),
+                  _statDivider(),
+                  _buildStatCell(
+                      'SEMESTR', semesterName.isNotEmpty ? semesterName : '—'),
+                  _statDivider(),
+                  _buildStatCell('O\'QUV YIL',
+                      educationYear.isNotEmpty ? educationYear : '—'),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
 
   Widget _avatarInitials(String name) {
     return Container(
-      color: _calmTeal,
       alignment: Alignment.center,
       child: Text(
         _getInitials(name).toUpperCase(),
         style: const TextStyle(
           fontSize: 19,
-          fontWeight: FontWeight.w700,
+          fontWeight: FontWeight.w800,
           letterSpacing: 0.5,
           color: Colors.white,
         ),
@@ -535,7 +569,8 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     );
   }
 
-  Widget _statDivider() => Container(width: 1, height: 30, color: _divider);
+  Widget _statDivider() =>
+      Container(width: 1, height: 30, color: Colors.white.withOpacity(0.22));
 
   Widget _buildStatCell(String label, String value) {
     return Expanded(
@@ -545,15 +580,16 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             label,
             style: TextStyle(
               fontSize: 9,
-              fontWeight: FontWeight.w600,
+              fontWeight: FontWeight.w700,
               letterSpacing: 0.4,
-              color: _calmFaint,
+              color: Colors.white.withOpacity(0.7),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w900, color: _ink),
+            style: const TextStyle(
+                fontSize: 13, fontWeight: FontWeight.w900, color: Colors.white),
             textAlign: TextAlign.center,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,

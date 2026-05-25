@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../config/theme.dart';
 import '../l10n/app_localizations.dart';
 import '../providers/settings_provider.dart';
+import '../services/biometric_service.dart';
 
 /// Shared settings bottom sheet — theme + language.
 /// Used by the settings icon in every screen header.
@@ -90,6 +91,7 @@ void showSettingsSheet(BuildContext context) {
                     _buildLangOption(ctx, 'EN', l.english, 'en', settings),
                   ],
                 ),
+                const _BiometricTile(),
                 const SizedBox(height: 24),
               ],
             ),
@@ -189,4 +191,111 @@ Widget _buildLangOption(
       ),
     ),
   );
+}
+
+/// Settings row to enable/disable biometric (Face ID / fingerprint) login.
+/// Hidden entirely when the device has no biometrics.
+class _BiometricTile extends StatefulWidget {
+  const _BiometricTile();
+
+  @override
+  State<_BiometricTile> createState() => _BiometricTileState();
+}
+
+class _BiometricTileState extends State<_BiometricTile> {
+  final _bio = BiometricService();
+  bool? _available;
+  bool _enabled = false;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final available = await _bio.isAvailable();
+    final enabled = await _bio.isEnabled();
+    if (mounted) {
+      setState(() {
+        _available = available;
+        _enabled = enabled;
+      });
+    }
+  }
+
+  Future<void> _toggle(bool value) async {
+    if (_busy) return;
+    setState(() => _busy = true);
+    if (value) {
+      final ok = await _bio.authenticate(
+        reason: 'Tasdiqlash uchun barmoq izi yoki Face ID',
+      );
+      if (ok) {
+        await _bio.setEnabled(true);
+        if (mounted) setState(() => _enabled = true);
+      }
+    } else {
+      await _bio.setEnabled(false);
+      await _bio.clearCredentials();
+      if (mounted) setState(() => _enabled = false);
+    }
+    if (mounted) setState(() => _busy = false);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_available != true) return const SizedBox.shrink();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 20),
+        const Text(
+          'Xavfsizlik',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.05)
+                : const Color(0xFFF1F5F9),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.fingerprint_rounded,
+                  color: Color(0xFF0D9488), size: 24),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Barmoq izi / Face ID',
+                      style: TextStyle(
+                          fontSize: 13.5, fontWeight: FontWeight.w600),
+                    ),
+                    SizedBox(height: 1),
+                    Text(
+                      'Ilovaga tez va xavfsiz kirish',
+                      style: TextStyle(fontSize: 11.5, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              Switch(
+                value: _enabled,
+                onChanged: _busy ? null : _toggle,
+                activeColor: const Color(0xFF0D9488),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
 }

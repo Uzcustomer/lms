@@ -29,7 +29,7 @@ class DebugYnPullikTrace extends Command
         $this->line("hid={$hid}, group={$gid}, subject={$sid}, sem={$sem}");
 
         $student = DB::table('students')->where('hemis_id', $hid)
-            ->select('full_name', 'group_hemis_id', 'curriculum_id', 'semester_code', 'level_code', 'student_status_code')
+            ->select('full_name', 'group_id', 'curriculum_id', 'semester_code', 'level_code', 'student_status_code')
             ->first();
         $this->line('Student row: ' . json_encode($student, JSON_UNESCAPED_UNICODE));
 

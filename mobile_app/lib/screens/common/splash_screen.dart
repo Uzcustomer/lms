@@ -198,165 +198,199 @@ class _SplashScreenState extends State<SplashScreen>
   }
 }
 
-/// 3D molecule: central nucleus + hexagonal ring + outer satellites.
-/// The whole structure rotates around the Y axis; depth (z) is mapped to
-/// atom size + brightness so it really reads as a 3D model.
+/// Organic molecule (benzene ring + side chain + hydrogens), rotated
+/// around the Y axis. Built in 3D first, then projected — so the ring
+/// reads as an ellipse, not a flat horizontal line.
 class _MoleculePainter extends CustomPainter {
   final double spin;
   final double pulse;
   _MoleculePainter({required this.spin, required this.pulse});
 
-  static const _red = Color(0xFFEF4444);
-  static const _blue = Color(0xFF3B82F6);
-  static const _green = Color(0xFF22C55E);
-  static const _amber = Color(0xFFF59E0B);
-  static const _teal = Color(0xFF14B8A6);
-  static const _violet = Color(0xFFA78BFA);
+  static const _carbon = Color(0xFFEF4444); // red
+  static const _hydrogen = Color(0xFF3B82F6); // blue
+  static const _oxygen = Color(0xFF22C55E); // green
+  static const _nitrogen = Color(0xFFA78BFA); // violet
+  static const _bond = Color(0xFFE2E8F0);
 
   @override
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
     final cy = size.height / 2;
-    final radius = size.width * 0.30;
-    final outerR = size.width * 0.46;
-    final twoPi = math.pi * 2;
-    final phase = spin * twoPi;
+    final unit = size.width * 0.085;
 
     final atoms = <_Atom>[];
+    final bonds = <List<int>>[];
 
-    // Central nucleus
-    atoms.add(_Atom(
-      pos3: _V3(0, 0, 0),
-      color: _red,
-      radius: 14,
-      isCore: true,
+    int add(_Atom a) {
+      atoms.add(a);
+      return atoms.length - 1;
+    }
+
+    void bond(int i, int j) => bonds.add([i, j]);
+
+    // ── Benzene ring in the XY plane, centered around (-1.4*unit, 0, 0) ──
+    final ringCenter = _V3(-1.6 * unit, 0, 0);
+    const ringR = 1.0;
+    final ringIdx = <int>[];
+    for (int i = 0; i < 6; i++) {
+      final a = i * math.pi / 3 + math.pi / 6;
+      final x = ringCenter.x + ringR * unit * math.cos(a);
+      final y = ringCenter.y + ringR * unit * math.sin(a);
+      const z = 0.0;
+      ringIdx.add(add(_Atom(
+        pos3: _V3(x, y, z),
+        color: _carbon,
+        radius: 11,
+      )));
+    }
+    for (int i = 0; i < 6; i++) {
+      bond(ringIdx[i], ringIdx[(i + 1) % 6]);
+    }
+
+    // Hydrogens sticking out from each ring atom (radially outward)
+    for (int i = 0; i < 6; i++) {
+      final a = i * math.pi / 3 + math.pi / 6;
+      final hx = ringCenter.x + 1.9 * unit * math.cos(a);
+      final hy = ringCenter.y + 1.9 * unit * math.sin(a);
+      // skip the ring atom we'll attach the side chain to
+      if (i == 0) continue;
+      final hIdx = add(_Atom(
+        pos3: _V3(hx, hy, 0),
+        color: _hydrogen,
+        radius: 5.5,
+      ));
+      bond(ringIdx[i], hIdx);
+    }
+
+    // Two oxygens on the lower-left of the ring (catechol-like)
+    final o1 = add(_Atom(
+      pos3: _V3(ringCenter.x - 1.7 * unit, -1.5 * unit, 0.3 * unit),
+      color: _oxygen,
+      radius: 9,
     ));
+    bond(ringIdx[3], o1);
+    final o2 = add(_Atom(
+      pos3: _V3(ringCenter.x - 0.6 * unit, -2.0 * unit, -0.3 * unit),
+      color: _oxygen,
+      radius: 9,
+    ));
+    bond(ringIdx[4], o2);
 
-    // Inner hexagonal ring (tilted)
-    const ringCount = 6;
-    final ringColors = [_blue, _amber, _green, _violet, _teal, _amber];
-    for (int i = 0; i < ringCount; i++) {
-      final t = i / ringCount;
-      final a = t * twoPi + phase;
-      final x = radius * math.cos(a);
-      final z = radius * math.sin(a);
-      // Tilt ring slightly so it looks like a 3D plane
-      final y = radius * 0.18 * math.sin(t * twoPi);
-      atoms.add(_Atom(
-        pos3: _V3(x, y, z),
-        color: ringColors[i],
-        radius: 9,
-      ));
+    // ── Side chain extending to the right ──
+    // First carbon attached to ring atom 0 (rightmost)
+    final c1Pos = _V3(ringCenter.x + 2.0 * unit, 0.4 * unit, 0.4 * unit);
+    final c1 = add(_Atom(pos3: c1Pos, color: _carbon, radius: 11));
+    bond(ringIdx[0], c1);
+
+    // Second carbon
+    final c2Pos = _V3(c1Pos.x + 1.1 * unit, -0.3 * unit, -0.3 * unit);
+    final c2 = add(_Atom(pos3: c2Pos, color: _carbon, radius: 11));
+    bond(c1, c2);
+
+    // Nitrogen end group
+    final nPos = _V3(c2Pos.x + 1.2 * unit, 0.3 * unit, 0.4 * unit);
+    final n = add(_Atom(pos3: nPos, color: _nitrogen, radius: 11));
+    bond(c2, n);
+
+    // Hydrogens around side-chain carbons
+    void attachH(int parent, _V3 pos) {
+      final h = add(_Atom(pos3: pos, color: _hydrogen, radius: 5.5));
+      bond(parent, h);
     }
 
-    // Outer satellites — different orbit, opposite direction
-    const satCount = 5;
-    final satColors = [_green, _amber, _blue, _violet, _red];
-    for (int i = 0; i < satCount; i++) {
-      final t = i / satCount;
-      final a = t * twoPi - phase * 0.7 + 0.4;
-      final tilt = 0.45 * math.sin(a * 1.5);
-      final x = outerR * math.cos(a);
-      final z = outerR * math.sin(a) * math.cos(tilt);
-      final y = outerR * 0.55 * math.sin(tilt);
-      atoms.add(_Atom(
-        pos3: _V3(x, y, z),
-        color: satColors[i],
-        radius: 6.5,
-      ));
-    }
+    attachH(c1, _V3(c1Pos.x + 0.2 * unit, c1Pos.y + 1.0 * unit, c1Pos.z));
+    attachH(c1, _V3(c1Pos.x, c1Pos.y - 0.4 * unit, c1Pos.z - 1.0 * unit));
+    attachH(c2, _V3(c2Pos.x - 0.2 * unit, c2Pos.y + 1.0 * unit, c2Pos.z + 0.2 * unit));
+    attachH(c2, _V3(c2Pos.x + 0.1 * unit, c2Pos.y - 0.9 * unit, c2Pos.z - 0.3 * unit));
 
-    // Project to 2D (orthographic, z controls depth)
+    // Hydrogens around nitrogen
+    attachH(n, _V3(nPos.x + 1.0 * unit, nPos.y + 0.5 * unit, nPos.z));
+    attachH(n, _V3(nPos.x + 0.4 * unit, nPos.y - 0.6 * unit, nPos.z + 0.9 * unit));
+    attachH(n, _V3(nPos.x + 0.3 * unit, nPos.y - 0.5 * unit, nPos.z - 0.9 * unit));
+
+    // ── Rotate every atom around the Y axis ──
+    final phase = spin * math.pi * 2;
+    final cosP = math.cos(phase);
+    final sinP = math.sin(phase);
+
+    double maxAbsZ = 0.1;
     for (final a in atoms) {
-      a.screen = Offset(cx + a.pos3.x, cy + a.pos3.y);
-      // depth 0 = behind, 1 = in front
-      a.depth = 0.5 + 0.5 * (a.pos3.z / outerR);
+      final x = a.pos3.x * cosP + a.pos3.z * sinP;
+      final z = -a.pos3.x * sinP + a.pos3.z * cosP;
+      a.rot = _V3(x, a.pos3.y, z);
+      if (z.abs() > maxAbsZ) maxAbsZ = z.abs();
+    }
+    // Tilt slightly forward around X axis so the ring shows as an ellipse
+    const tilt = 0.32;
+    final cosT = math.cos(tilt);
+    final sinT = math.sin(tilt);
+    for (final a in atoms) {
+      final y = a.rot.y * cosT - a.rot.z * sinT;
+      final z = a.rot.y * sinT + a.rot.z * cosT;
+      a.rot = _V3(a.rot.x, y, z);
     }
 
-    // Bonds: nucleus → each ring atom; ring → adjacent ring; ring → nearest satellite.
-    final core = atoms[0];
-    final ringAtoms = atoms.sublist(1, 1 + ringCount);
-    final satellites = atoms.sublist(1 + ringCount);
-
-    final bonds = <_Bond>[];
-    for (final a in ringAtoms) {
-      bonds.add(_Bond(core, a, _teal));
-    }
-    for (int i = 0; i < ringAtoms.length; i++) {
-      bonds.add(_Bond(
-        ringAtoms[i],
-        ringAtoms[(i + 1) % ringAtoms.length],
-        _blue,
-      ));
-    }
-    for (final sat in satellites) {
-      // attach to nearest ring atom
-      _Atom? closest;
-      var bestDist = double.infinity;
-      for (final r in ringAtoms) {
-        final dx = sat.pos3.x - r.pos3.x;
-        final dy = sat.pos3.y - r.pos3.y;
-        final dz = sat.pos3.z - r.pos3.z;
-        final d = dx * dx + dy * dy + dz * dz;
-        if (d < bestDist) {
-          bestDist = d;
-          closest = r;
-        }
-      }
-      if (closest != null) {
-        bonds.add(_Bond(closest, sat, _violet));
-      }
+    // Perspective projection
+    const focal = 600.0;
+    for (final a in atoms) {
+      final dist = focal + a.rot.z;
+      final scale = focal / dist;
+      a.screen = Offset(cx + a.rot.x * scale, cy + a.rot.y * scale);
+      a.depth = (0.5 + 0.5 * (a.rot.z / (maxAbsZ + 1))).clamp(0.0, 1.0);
+      a.scale = scale;
     }
 
-    // Painter's algorithm — draw back-to-front
-    bonds.sort((a, b) =>
-        ((a.a.pos3.z + a.b.pos3.z) / 2).compareTo((b.a.pos3.z + b.b.pos3.z) / 2));
-    for (final b in bonds) {
-      final d = ((b.a.depth + b.b.depth) / 2);
-      final glow = 0.35 + 0.5 * d + 0.12 * pulse;
+    // Bonds, sorted by midpoint depth
+    final orderedBonds = List.of(bonds);
+    orderedBonds.sort((a, b) {
+      final za = (atoms[a[0]].rot.z + atoms[a[1]].rot.z) / 2;
+      final zb = (atoms[b[0]].rot.z + atoms[b[1]].rot.z) / 2;
+      return za.compareTo(zb);
+    });
+    for (final b in orderedBonds) {
+      final a1 = atoms[b[0]];
+      final a2 = atoms[b[1]];
+      final d = ((a1.depth + a2.depth) / 2);
       final paint = Paint()
-        ..color = b.color.withOpacity(glow.clamp(0.0, 0.9))
-        ..strokeWidth = 1.2 + 0.9 * d
+        ..color = _bond.withOpacity((0.18 + 0.55 * d).clamp(0.0, 0.85))
+        ..strokeWidth = 1.6 + 1.0 * d
         ..strokeCap = StrokeCap.round;
-      canvas.drawLine(b.a.screen, b.b.screen, paint);
+      canvas.drawLine(a1.screen, a2.screen, paint);
     }
 
-    atoms.sort((a, b) => a.pos3.z.compareTo(b.pos3.z));
-    for (final a in atoms) {
+    // Atoms, sorted back-to-front
+    final orderedAtoms = List.of(atoms);
+    orderedAtoms.sort((a, b) => a.rot.z.compareTo(b.rot.z));
+    for (final a in orderedAtoms) {
       _drawAtom(canvas, a, pulse);
     }
   }
 
   void _drawAtom(Canvas canvas, _Atom a, double pulse) {
-    final d = a.depth.clamp(0.0, 1.0);
-    final scale = 0.65 + 0.6 * d;
-    final r = a.radius * scale * (a.isCore ? (1.0 + 0.04 * pulse) : 1.0);
+    final d = a.depth;
+    final r = a.radius * a.scale * (a.isCore ? (1.0 + 0.04 * pulse) : 1.0);
 
-    // Outer glow
     canvas.drawCircle(
       a.screen,
       r + 6,
       Paint()
-        ..color = a.color.withOpacity(0.10 + 0.18 * d)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6),
+        ..color = a.color.withOpacity(0.08 + 0.14 * d)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
     );
-    // Soft halo
     canvas.drawCircle(
       a.screen,
-      r + 2,
-      Paint()..color = a.color.withOpacity(0.22 * d + 0.10),
+      r + 1.5,
+      Paint()..color = a.color.withOpacity(0.22 * d + 0.08),
     );
-    // Body
     canvas.drawCircle(
       a.screen,
       r,
-      Paint()..color = a.color.withOpacity(0.55 + 0.45 * d),
+      Paint()..color = a.color.withOpacity(0.65 + 0.35 * d),
     );
-    // Specular highlight
     canvas.drawCircle(
-      a.screen.translate(-r * 0.3, -r * 0.3),
-      r * 0.45,
-      Paint()..color = Colors.white.withOpacity(0.35 + 0.4 * d),
+      a.screen.translate(-r * 0.32, -r * 0.32),
+      r * 0.42,
+      Paint()..color = Colors.white.withOpacity(0.35 + 0.45 * d),
     );
   }
 
@@ -375,8 +409,10 @@ class _Atom {
   final Color color;
   final double radius;
   final bool isCore;
+  _V3 rot = const _V3(0, 0, 0);
   Offset screen = Offset.zero;
   double depth = 0.5;
+  double scale = 1.0;
   _Atom({
     required this.pos3,
     required this.color,
@@ -385,9 +421,3 @@ class _Atom {
   });
 }
 
-class _Bond {
-  final _Atom a;
-  final _Atom b;
-  final Color color;
-  _Bond(this.a, this.b, this.color);
-}

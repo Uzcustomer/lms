@@ -30,7 +30,7 @@ class _SplashScreenState extends State<SplashScreen>
     )..forward();
     _spin = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 9000),
+      duration: const Duration(milliseconds: 2400),
     )..repeat();
     _pulse = AnimationController(
       vsync: this,
@@ -101,13 +101,13 @@ class _SplashScreenState extends State<SplashScreen>
                 children: [
                   const Spacer(),
                   SizedBox(
-                    width: 320,
-                    height: 320,
+                    width: size.width * 0.95,
+                    height: size.width * 0.95,
                     child: AnimatedBuilder(
                       animation: Listenable.merge([_spin, _pulse]),
                       builder: (_, __) => CustomPaint(
                         painter: _MoleculePainter(
-                          spin: _spin.value,
+                          twinkle: _spin.value,
                           pulse: _pulse.value,
                         ),
                       ),
@@ -202,9 +202,9 @@ class _SplashScreenState extends State<SplashScreen>
 /// around the Y axis. Built in 3D first, then projected — so the ring
 /// reads as an ellipse, not a flat horizontal line.
 class _MoleculePainter extends CustomPainter {
-  final double spin;
+  final double twinkle;
   final double pulse;
-  _MoleculePainter({required this.spin, required this.pulse});
+  _MoleculePainter({required this.twinkle, required this.pulse});
 
   static const _carbon = Color(0xFFEF4444); // red
   static const _hydrogen = Color(0xFF3B82F6); // blue
@@ -216,7 +216,7 @@ class _MoleculePainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final cx = size.width / 2;
     final cy = size.height / 2;
-    final unit = size.width * 0.085;
+    final unit = size.width * 0.11;
 
     final atoms = <_Atom>[];
     final bonds = <List<int>>[];
@@ -308,26 +308,17 @@ class _MoleculePainter extends CustomPainter {
     attachH(n, _V3(nPos.x + 0.4 * unit, nPos.y - 0.6 * unit, nPos.z + 0.9 * unit));
     attachH(n, _V3(nPos.x + 0.3 * unit, nPos.y - 0.5 * unit, nPos.z - 0.9 * unit));
 
-    // ── Rotate every atom around the Y axis ──
-    final phase = spin * math.pi * 2;
-    final cosP = math.cos(phase);
-    final sinP = math.sin(phase);
-
+    // Fixed pose — molecule does not rotate. Just a slight forward tilt
+    // around the X axis so the benzene ring reads as an ellipse.
     double maxAbsZ = 0.1;
-    for (final a in atoms) {
-      final x = a.pos3.x * cosP + a.pos3.z * sinP;
-      final z = -a.pos3.x * sinP + a.pos3.z * cosP;
-      a.rot = _V3(x, a.pos3.y, z);
-      if (z.abs() > maxAbsZ) maxAbsZ = z.abs();
-    }
-    // Tilt slightly forward around X axis so the ring shows as an ellipse
     const tilt = 0.32;
     final cosT = math.cos(tilt);
     final sinT = math.sin(tilt);
     for (final a in atoms) {
-      final y = a.rot.y * cosT - a.rot.z * sinT;
-      final z = a.rot.y * sinT + a.rot.z * cosT;
-      a.rot = _V3(a.rot.x, y, z);
+      final y = a.pos3.y * cosT - a.pos3.z * sinT;
+      final z = a.pos3.y * sinT + a.pos3.z * cosT;
+      a.rot = _V3(a.pos3.x, y, z);
+      if (z.abs() > maxAbsZ) maxAbsZ = z.abs();
     }
 
     // Perspective projection
@@ -358,45 +349,63 @@ class _MoleculePainter extends CustomPainter {
       canvas.drawLine(a1.screen, a2.screen, paint);
     }
 
-    // Atoms, sorted back-to-front
+    // Atoms — assign a unique twinkle phase per atom so they don't all
+    // light up at once, then draw back-to-front.
+    for (int i = 0; i < atoms.length; i++) {
+      atoms[i].twinklePhase = (i * 0.137) % 1.0;
+    }
     final orderedAtoms = List.of(atoms);
     orderedAtoms.sort((a, b) => a.rot.z.compareTo(b.rot.z));
     for (final a in orderedAtoms) {
-      _drawAtom(canvas, a, pulse);
+      _drawAtom(canvas, a);
     }
   }
 
-  void _drawAtom(Canvas canvas, _Atom a, double pulse) {
+  void _drawAtom(Canvas canvas, _Atom a) {
     final d = a.depth;
-    final r = a.radius * a.scale * (a.isCore ? (1.0 + 0.04 * pulse) : 1.0);
 
+    // Per-atom twinkle in [0,1] — fast attack, slow decay, half the time dim.
+    final t = ((twinkle + a.twinklePhase) % 1.0);
+    final fire = t < 0.18
+        ? (t / 0.18) // attack
+        : t < 0.55
+            ? 1.0 - ((t - 0.18) / 0.37) * 0.85 // decay to 0.15
+            : 0.15; // resting glow
+
+    final basePulse = a.isCore ? (1.0 + 0.04 * pulse) : 1.0;
+    final r = a.radius * a.scale * basePulse * (0.88 + 0.18 * fire);
+
+    // Outer flare — much stronger when firing
     canvas.drawCircle(
       a.screen,
-      r + 6,
+      r + 4 + 10 * fire,
       Paint()
-        ..color = a.color.withOpacity(0.08 + 0.14 * d)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 5),
+        ..color = a.color.withOpacity(0.06 + 0.30 * fire * (0.5 + 0.5 * d))
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 6 + 6 * fire),
     );
+    // Mid halo
     canvas.drawCircle(
       a.screen,
       r + 1.5,
-      Paint()..color = a.color.withOpacity(0.22 * d + 0.08),
+      Paint()..color = a.color.withOpacity(0.18 * d + 0.10 + 0.22 * fire),
     );
+    // Body
     canvas.drawCircle(
       a.screen,
       r,
-      Paint()..color = a.color.withOpacity(0.65 + 0.35 * d),
+      Paint()..color = a.color.withOpacity(0.55 + 0.35 * d + 0.10 * fire),
     );
+    // Specular — brightens when firing
     canvas.drawCircle(
       a.screen.translate(-r * 0.32, -r * 0.32),
       r * 0.42,
-      Paint()..color = Colors.white.withOpacity(0.35 + 0.45 * d),
+      Paint()..color = Colors.white.withOpacity(0.25 + 0.35 * d + 0.40 * fire),
     );
   }
 
   @override
   bool shouldRepaint(_MoleculePainter old) =>
-      old.spin != spin || old.pulse != pulse;
+      old.twinkle != twinkle || old.pulse != pulse;
 }
 
 class _V3 {
@@ -413,6 +422,7 @@ class _Atom {
   Offset screen = Offset.zero;
   double depth = 0.5;
   double scale = 1.0;
+  double twinklePhase = 0.0;
   _Atom({
     required this.pos3,
     required this.color,

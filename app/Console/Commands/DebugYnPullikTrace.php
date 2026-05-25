@@ -135,7 +135,9 @@ class DebugYnPullikTrace extends Command
             ->select('curricula_hemis_id', 'subject_details', 'total_acload')
             ->get();
         $this->line("curriculum_subjects rows: " . $cs->count());
-        $aud = 0.0;
+        $stuCurr = $student->curriculum_id ?? null;
+        $audByCurr = [];
+        $audAny = null;
         foreach ($cs as $sr) {
             $details = is_string($sr->subject_details) ? json_decode($sr->subject_details, true) : $sr->subject_details;
             $rowAud = 0;
@@ -148,10 +150,15 @@ class DebugYnPullikTrace extends Command
                 }
             }
             if ($rowAud <= 0) $rowAud = (float) ($sr->total_acload ?? 0);
-            $this->line("  curr_hemis_id={$sr->curricula_hemis_id}, aud={$rowAud}, total_acload={$sr->total_acload}");
-            $aud = $rowAud;
+            $audByCurr[(string) $sr->curricula_hemis_id] = $rowAud;
+            if ($audAny === null) $audAny = $rowAud;
+            $marker = ((string) $sr->curricula_hemis_id === (string) $stuCurr) ? ' <-- STUDENT' : '';
+            $this->line("  curr_hemis_id={$sr->curricula_hemis_id}, aud={$rowAud}, total_acload={$sr->total_acload}{$marker}");
         }
-        $this->line("aud_hours = {$aud}");
+        $aud = ($stuCurr !== null ? ($audByCurr[(string) $stuCurr] ?? 0) : 0);
+        if ($aud <= 0) $aud = $audAny ?? 0;
+        $this->line("student.curriculum_id = " . var_export($stuCurr, true));
+        $this->line("aud_hours (talaba rejasidan) = {$aud}");
 
         $davomatPct = $aud > 0 ? round(($absentOff / $aud) * 100, 2) : 0.0;
         $this->line("davomat_pct = {$davomatPct}%");

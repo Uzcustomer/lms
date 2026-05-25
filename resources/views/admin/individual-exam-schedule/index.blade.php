@@ -215,7 +215,7 @@
                             statusBadge += ' <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-left:4px;">Individual</span>';
                         }
                         if (overrideWarn && indDate) {
-                            statusBadge += ' <span style="background:#fef3c7;color:#a16207;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-left:4px;" title="Eligibility yo\\'q edi, majburan qo\\'yilgan">⚠️</span>';
+                            statusBadge += ' <span style="background:#fef3c7;color:#a16207;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-left:4px;" title="Eligibility yo\'q edi, majburan qo\'yilgan">⚠️</span>';
                         }
 
                         const rowId = `r-${sIdx}-${aIdx}`;

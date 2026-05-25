@@ -178,15 +178,75 @@
                         </thead>
                         <tbody>
                 `;
+                // YN kunini belgilashdagi badge ranglari (1=yashil, 2=amber, 3=orange)
+                const attemptColors = { 1: '#16a34a', 2: '#d97706', 3: '#ea580c' };
+                const attemptBgs    = { 1: '#dcfce7', 2: '#fef3c7', 3: '#ffedd5' };
+                const attemptLabels = { 1: '1-urinish', 2: '2-urinish', 3: '3-urinish' };
+
+                // YN yopilish shakli — YN kunini belgilash sahifasidagi uslub.
+                const cfMeta = {
+                    'oski':      { label: 'Faqat OSKI',   bg: '#dbeafe', fg: '#1d4ed8', br: '#bfdbfe' },
+                    'test':      { label: 'Faqat Test',   bg: '#dcfce7', fg: '#15803d', br: '#bbf7d0' },
+                    'oski_test': { label: 'OSKI + Test',  bg: '#ede9fe', fg: '#6d28d9', br: '#ddd6fe' },
+                    'normativ':  { label: 'Normativ',     bg: '#fef3c7', fg: '#a16207', br: '#fde68a' },
+                    'sinov':     { label: 'Sinov (test)', bg: '#ffedd5', fg: '#c2410c', br: '#fed7aa' },
+                    'none':      { label: "Yo'q",         bg: '#f1f5f9', fg: '#475569', br: '#cbd5e1' },
+                };
+
                 subjects.forEach((subj, sIdx) => {
-                    const attempts = [
-                        { ynType: 'oski', attempt: 1, label: '1-OSKI', dateK: 'oski_date', timeK: 'oski_time' },
-                        { ynType: 'test', attempt: 1, label: '1-Test', dateK: 'test_date', timeK: 'test_time' },
-                        { ynType: 'oski', attempt: 2, label: '2-OSKI', dateK: 'oski_resit_date', timeK: 'oski_resit_time' },
-                        { ynType: 'test', attempt: 2, label: '2-Test', dateK: 'test_resit_date', timeK: 'test_resit_time' },
-                        { ynType: 'oski', attempt: 3, label: '3-OSKI', dateK: 'oski_resit2_date', timeK: 'oski_resit2_time' },
-                        { ynType: 'test', attempt: 3, label: '3-Test', dateK: 'test_resit2_date', timeK: 'test_resit2_time' },
+                    // Talabaning shu fan uchun "joriy urinishi" — eligibility'dan kelib chiqamiz.
+                    // 1-urinishda yiqilgan bo'lsa va attempt 2 baholari kelmagan bo'lsa → joriy = 2
+                    // 2-urinishda yiqilgan bo'lsa va attempt 3 baholari kelmagan bo'lsa → joriy = 3
+                    // Boshqa hollarda → joriy = 1 (boshlanish holati)
+                    const elig = subj.eligibility || {};
+                    let activeAttempt = 1;
+                    if (elig.failed_attempt_2 && !elig.has_attempt_3_grade) activeAttempt = 3;
+                    else if (elig.failed_attempt_1 && !elig.has_attempt_2_grade) activeAttempt = 2;
+
+                    // YN yopilish shakli — qaysi YN turi (OSKI/Test) qatorlari kerakligi
+                    const cf = subj.closing_form || null;
+                    const showOski = cf === null || cf === 'oski' || cf === 'oski_test';
+                    const showTest = cf === null || cf === 'test' || cf === 'oski_test';
+                    const cfBadgeMeta = cf && cfMeta[cf] ? cfMeta[cf] : null;
+                    const cfBadge = cfBadgeMeta
+                        ? `<div style="margin-top:4px;"><span style="display:inline-block;padding:2px 7px;border-radius:6px;font-size:10px;font-weight:700;background:${cfBadgeMeta.bg};color:${cfBadgeMeta.fg};border:1px solid ${cfBadgeMeta.br};">${cfBadgeMeta.label}</span></div>`
+                        : '';
+
+                    const allAttempts = [
+                        { ynType: 'oski', attempt: 1, label: 'OSKI', dateK: 'oski_date', timeK: 'oski_time' },
+                        { ynType: 'test', attempt: 1, label: 'Test', dateK: 'test_date', timeK: 'test_time' },
+                        { ynType: 'oski', attempt: 2, label: 'OSKI', dateK: 'oski_resit_date', timeK: 'oski_resit_time' },
+                        { ynType: 'test', attempt: 2, label: 'Test', dateK: 'test_resit_date', timeK: 'test_resit_time' },
+                        { ynType: 'oski', attempt: 3, label: 'OSKI', dateK: 'oski_resit2_date', timeK: 'oski_resit2_time' },
+                        { ynType: 'test', attempt: 3, label: 'Test', dateK: 'test_resit2_date', timeK: 'test_resit2_time' },
                     ];
+                    // Yopilish shakli "oski" bo'lsa OSKI qatorlari, "test" bo'lsa Test
+                    // qatorlari ko'rsatiladi. "normativ", "sinov", "none" — barchasi
+                    // yashiriladi (admin individual qo'yishi mumkin emas; agar kerak
+                    // bo'lsa cf=null subject sifatida qaytariladi).
+                    const attempts = allAttempts.filter(a => {
+                        if (a.ynType === 'oski') return showOski;
+                        if (a.ynType === 'test') return showTest;
+                        return true;
+                    });
+                    if (attempts.length === 0) {
+                        // Yopilish shakli normativ/sinov/none — bu fanga sana qo'yilmaydi
+                        const cfLabel = cfBadgeMeta ? cfBadgeMeta.label : '';
+                        html += `
+                            <tr style="border-bottom:1px solid #f1f5f9;border-top:2px solid #e2e8f0;">
+                                <td style="padding:8px 10px;vertical-align:top;">
+                                    <div style="font-weight:600;color:#1e293b;">${escapeHtml(subj.subject_name)}</div>
+                                    <div style="font-size:11px;color:#64748b;">${escapeHtml(subj.semester_code)}</div>
+                                    ${cfBadge}
+                                </td>
+                                <td colspan="7" style="padding:10px;text-align:center;color:#94a3b8;font-size:12px;font-style:italic;">
+                                    Bu fan uchun YN sanasi qo'yilmaydi (${escapeHtml(cfLabel)}).
+                                </td>
+                            </tr>
+                        `;
+                        return; // forEach next subject
+                    }
+                    const attemptCount = attempts.length;
                     attempts.forEach((a, aIdx) => {
                         const groupDate = subj.group ? (subj.group[a.dateK] || '') : '';
                         const groupTime = subj.group ? (subj.group[a.timeK] || '') : '';
@@ -195,21 +255,24 @@
                         const indNote = subj.individual ? (subj.individual.note || '') : '';
                         const overrideWarn = subj.individual ? !!subj.individual.override_warning : false;
                         const eligAllowKey = 'allow_' + a.attempt;
-                        const elig = subj.eligibility || {};
                         const allowed = !!elig[eligAllowKey];
                         const reasons = elig.reasons || {};
                         const reason = reasons[a.attempt] || '';
+                        const isActiveRow = a.attempt === activeAttempt;
+
+                        // Urinish badge — YN kunini belgilash uslubidagi rangli badge
+                        const urinishBadge = `<span style="display:inline-block;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700;background:${attemptBgs[a.attempt]};color:${attemptColors[a.attempt]};white-space:nowrap;">${attemptLabels[a.attempt]}</span>`
+                            + `<div style="font-size:10px;color:#64748b;margin-top:2px;font-weight:600;">${a.label}</div>`;
 
                         // Status badge
                         let statusBadge;
-                        if (a.attempt === 1) {
+                        if (allowed) {
                             statusBadge = '<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Ruxsat ✓</span>';
                         } else {
-                            if (allowed) {
-                                statusBadge = '<span style="background:#dcfce7;color:#15803d;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;">Ruxsat ✓</span>';
-                            } else {
-                                statusBadge = `<span style="background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;" title="${escapeHtml(reason)}">Ruxsat ❌</span>`;
-                            }
+                            statusBadge = `<span style="background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;" title="${escapeHtml(reason)}">Ruxsat ❌</span>`;
+                        }
+                        if (isActiveRow) {
+                            statusBadge += ' <span style="background:#fff7ed;color:#c2410c;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;margin-left:4px;border:1px solid #fed7aa;" title="Talabaning hozirgi urinishi">★ Faol</span>';
                         }
                         if (subj.individual && indDate) {
                             statusBadge += ' <span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600;margin-left:4px;">Individual</span>';
@@ -221,16 +284,20 @@
                         const rowId = `r-${sIdx}-${aIdx}`;
                         const isFirstOfSubject = aIdx === 0;
                         const subjectCell = isFirstOfSubject
-                            ? `<td style="padding:8px 10px;vertical-align:top;border-top:2px solid #e2e8f0;" rowspan="6">
+                            ? `<td style="padding:8px 10px;vertical-align:top;border-top:2px solid #e2e8f0;" rowspan="${attemptCount}">
                                 <div style="font-weight:600;color:#1e293b;">${escapeHtml(subj.subject_name)}</div>
                                 <div style="font-size:11px;color:#64748b;">${escapeHtml(subj.semester_code)}</div>
+                                ${cfBadge}
                                </td>`
                             : '';
 
+                        // Faol qator uchun nozik fon
+                        const rowBg = isActiveRow ? 'background:#fffbeb;' : '';
+
                         html += `
-                            <tr style="border-bottom:1px solid #f1f5f9;${isFirstOfSubject ? 'border-top:2px solid #e2e8f0;' : ''}" id="${rowId}">
+                            <tr style="border-bottom:1px solid #f1f5f9;${isFirstOfSubject ? 'border-top:2px solid #e2e8f0;' : ''}${rowBg}" id="${rowId}">
                                 ${subjectCell}
-                                <td style="padding:6px 10px;text-align:center;font-weight:600;color:#475569;">${a.label}</td>
+                                <td style="padding:6px 10px;text-align:center;">${urinishBadge}</td>
                                 <td style="padding:6px 10px;text-align:center;color:#475569;">
                                     ${groupDate ? escapeHtml(groupDate) + (groupTime ? '<br><span style="font-size:11px;color:#94a3b8;">' + escapeHtml(groupTime.substring(0,5)) + '</span>' : '') : '<span style="color:#cbd5e1;">—</span>'}
                                 </td>

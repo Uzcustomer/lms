@@ -14,10 +14,14 @@ return new class extends Migration
 
         Schema::create('sinov_test_grades', function (Blueprint $table) {
             $table->id();
-            $table->string('subject_id');
-            $table->string('semester_code');
-            $table->string('group_hemis_id');
-            $table->string('student_hemis_id');
+            // Aniq uzunliklar — utf8mb4 (4 byte/symbol) bilan unique
+            // (subject_id+semester_code+group_hemis_id+student_hemis_id)
+            // 3072 byte limitidan oshmaslik uchun: 64+32+32+32=160 char
+            // → 160*4=640 byte (chegara ichida).
+            $table->string('subject_id', 64);
+            $table->string('semester_code', 32);
+            $table->string('group_hemis_id', 32);
+            $table->string('student_hemis_id', 32);
             $table->decimal('default_grade', 5, 2)->nullable();
             $table->decimal('override_grade', 5, 2)->nullable();
             $table->boolean('is_locked')->default(false);

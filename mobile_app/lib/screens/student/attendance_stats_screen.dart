@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/student_provider.dart';
-import '../../services/student_data_cache.dart';
+import '../../services/api_service.dart';
+import '../../services/student_service.dart';
 import '../../widgets/clinic_header.dart';
 
 class AttendanceStatsScreen extends StatefulWidget {
@@ -56,11 +57,9 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
   Future<void> _loadGrades(int subjectId, {bool force = false}) async {
     setState(() => _loadingGrades = true);
     try {
-      final cache = StudentDataCache();
-      await cache.ensureFresh(force: force);
-      final res = cache.subjectGrades(subjectId);
+      final res = await StudentService(ApiService()).getSubjectGrades(subjectId);
       if (mounted) {
-        final data = res?['data'] as Map<String, dynamic>? ?? {};
+        final data = res['data'] as Map<String, dynamic>? ?? {};
         setState(() {
           _grades = (data['grades'] as List<dynamic>? ?? []);
           _loadingGrades = false;

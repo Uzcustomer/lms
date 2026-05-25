@@ -2592,6 +2592,29 @@ class AcademicScheduleController extends Controller
                 : $semesterCodes->intersect($levelSemCodes);
         }
 
+        // HEMIS data drift: bitta yo'nalish nomi (masalan "Xalq tabobati") uchun bir
+        // necha specialty_hemis_id mavjud bo'lishi mumkin (49 va 15). Curriculum jadvali
+        // bir variantni biladi, groups jadvali boshqasini. Filtrlashda barcha variantlar
+        // bo'yicha whereIn ishlatish kerak, aks holda guruhlar yo'qoladi.
+        $selectedSpecialtyIds = null;
+        if ($selectedSpecialty) {
+            $specName = Specialty::where('specialty_hemis_id', $selectedSpecialty)->value('name');
+            if ($specName) {
+                $idsFromSpecTable = Specialty::where('name', $specName)
+                    ->pluck('specialty_hemis_id')->toArray();
+                $idsFromGroups = Group::where('specialty_name', $specName)
+                    ->distinct()->pluck('specialty_hemis_id')->toArray();
+                $idsFromCurricula = Curriculum::whereIn('specialty_hemis_id',
+                    array_merge($idsFromSpecTable, $idsFromGroups, [$selectedSpecialty]))
+                    ->distinct()->pluck('specialty_hemis_id')->toArray();
+                $selectedSpecialtyIds = array_values(array_unique(array_filter(array_merge(
+                    [$selectedSpecialty], $idsFromSpecTable, $idsFromGroups, $idsFromCurricula
+                ))));
+            } else {
+                $selectedSpecialtyIds = [$selectedSpecialty];
+            }
+        }
+
         // O'quv rejalarini olish
         $curriculumQuery = Curriculum::where(function($q) use ($currentSemesterOnly, $currentEducationYear) {
             if ($currentSemesterOnly) {
@@ -2602,7 +2625,7 @@ class AcademicScheduleController extends Controller
             }
         });
         if ($selectedDepartment) $curriculumQuery->where('department_hemis_id', $selectedDepartment);
-        if ($selectedSpecialty) $curriculumQuery->where('specialty_hemis_id', $selectedSpecialty);
+        if ($selectedSpecialtyIds) $curriculumQuery->whereIn('specialty_hemis_id', $selectedSpecialtyIds);
         if ($selectedEducationType) $curriculumQuery->where('education_type_code', $selectedEducationType);
         // Kurs/semestr tanlangan bo'lsa — faqat o'sha level/code joriy bo'lgan curriculum'larni qoldirish.
         // Aks holda d2/20 (hozir 6-kurs) kabi eski rejalar 5-kurs filtridan ham chiqib qolyapti
@@ -2639,7 +2662,7 @@ class AcademicScheduleController extends Controller
                          'oski_resit2_date', 'test_resit2_date'];
             $preQuery = DB::table('exam_schedules')->whereNull('student_hemis_id');
             if ($selectedDepartment) $preQuery->where('department_hemis_id', $selectedDepartment);
-            if ($selectedSpecialty) $preQuery->where('specialty_hemis_id', $selectedSpecialty);
+            if ($selectedSpecialtyIds) $preQuery->whereIn('specialty_hemis_id', $selectedSpecialtyIds);
             if ($selectedGroup) $preQuery->where('group_hemis_id', $selectedGroup);
             if ($selectedSubject) $preQuery->where('subject_id', $selectedSubject);
             if ($semesterCodes->isNotEmpty()) $preQuery->whereIn('semester_code', $semesterCodes);
@@ -2709,7 +2732,7 @@ class AcademicScheduleController extends Controller
         $groupQuery = Group::where('active', true)
             ->whereIn('curriculum_hemis_id', $curriculumIds);
         if ($selectedDepartment) $groupQuery->where('department_hemis_id', $selectedDepartment);
-        if ($selectedSpecialty) $groupQuery->where('specialty_hemis_id', $selectedSpecialty);
+        if ($selectedSpecialtyIds) $groupQuery->whereIn('specialty_hemis_id', $selectedSpecialtyIds);
         if ($selectedGroup) $groupQuery->where('group_hemis_id', $selectedGroup);
         if ($preFilteredGroupHids !== null) {
             $groupQuery->whereIn('group_hemis_id', $preFilteredGroupHids);
@@ -2732,7 +2755,7 @@ class AcademicScheduleController extends Controller
         // qatori ustiga yozib yuboradi va sahifada noto'g'ri sana ko'rsatadi.
         $scheduleQuery = ExamSchedule::query()->whereNull('student_hemis_id');
         if ($selectedDepartment) $scheduleQuery->where('department_hemis_id', $selectedDepartment);
-        if ($selectedSpecialty) $scheduleQuery->where('specialty_hemis_id', $selectedSpecialty);
+        if ($selectedSpecialtyIds) $scheduleQuery->whereIn('specialty_hemis_id', $selectedSpecialtyIds);
         if ($selectedGroup) $scheduleQuery->where('group_hemis_id', $selectedGroup);
         if ($semesterCodes->isNotEmpty()) $scheduleQuery->whereIn('semester_code', $semesterCodes);
         // Date filter qo'llanilsa — preFilteredKeys orqali kichik to'plamga
@@ -3799,7 +3822,16 @@ class AcademicScheduleController extends Controller
                 $q->where('department_hemis_id', $departmentId);
             }
             if ($exclude !== 'specialty_id' && $specialtyId) {
-                $q->where('specialty_hemis_id', $specialtyId);
+                // HEMIS data drift: bir nom uchun bir necha specialty_hemis_id
+                // (masalan "Xalq tabobati" = 49 va 15). Shu nom ostidagi barcha
+                // ID lar bo'yicha cluster filter.
+                $name = Specialty::where('specialty_hemis_id', $specialtyId)->value('name');
+                if ($name) {
+                    $clusterIds = Specialty::where('name', $name)->pluck('specialty_hemis_id');
+                    $q->whereIn('specialty_hemis_id', $clusterIds);
+                } else {
+                    $q->where('specialty_hemis_id', $specialtyId);
+                }
             }
 
             $applyLevel = ($exclude !== 'level_code' && $levelCode);
@@ -3837,10 +3869,17 @@ class AcademicScheduleController extends Controller
             ->get(['department_hemis_id', 'name']);
 
         // 3. Yo'nalishlar (specialty filtrini tashlab)
-        $specHemisIds = $buildQuery('specialty_id')->pluck('specialty_hemis_id')->unique();
-        $specialties = Specialty::whereIn('specialty_hemis_id', $specHemisIds)
+        // HEMIS data drift'ni hisobga olgan holda: curricula'dagi specialty_hemis_id'lar +
+        // shu nom ostidagi BOSHQA specialty_hemis_id'lar (groups'da bo'lishi mumkin).
+        // Dropdown'da bir nom uchun bitta variant ko'rsatamiz (eng kichik ID — representative).
+        $curSpecIds = $buildQuery('specialty_id')->pluck('specialty_hemis_id')->unique();
+        $namesInCurricula = Specialty::whereIn('specialty_hemis_id', $curSpecIds)->pluck('name')->unique();
+        $specialties = Specialty::whereIn('name', $namesInCurricula)
             ->orderBy('name')
-            ->get(['specialty_hemis_id', 'name']);
+            ->get(['specialty_hemis_id', 'name'])
+            ->groupBy('name')
+            ->map(fn($g) => $g->sortBy('specialty_hemis_id')->first())
+            ->values();
 
         // 4. Kurslar (level filtrini tashlab) — barcha viewer rollar uchun
         // hech qanday cheklovsiz to'liq ro'yxat. Sana qo'yish huquqi store() da

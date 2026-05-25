@@ -32,16 +32,6 @@ class JournalGradeService
     private const EXCLUDED_JB_CODES = [11, 99, 100, 101, 102, 103];
 
     /**
-     * JN ga kirmaydigan training_type nomlari — jurnal bilan AYNI
-     * (JournalController:435). HEMIS sync da ba'zi yozuvlarda kod NULL bo'lib,
-     * lekin nom mavjud bo'lishi mumkin, shuning uchun nom bo'yicha ham filter.
-     */
-    private const EXCLUDED_JB_NAMES = [
-        "Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat",
-        "Oski", "Yakuniy test", "Quiz test",
-    ];
-
-    /**
      * Bir nechta (guruh, fan, semestr) uchun JN/MT ni bitta martaga hisoblaydi.
      *
      * @param array<int,array{0:int|string,1:int|string,2:int|string}> $triples
@@ -183,37 +173,10 @@ class JournalGradeService
             $studentsByGroup[(string) $gHid][] = (string) $hemis;
         }
 
-        // --- 0) Per-triple education_year_code (JournalController bilan AYNI):
-        // schedules.education_year_code dan ENG SO'NGGI lesson_date'li yozuv.
-        // Bu kursdan kursga qolgan/transfer talabalarning eski yillardagi
-        // yozuvlari joriy yil JN/MT hisobiga aralashib ketmasin uchun.
-        $tripleYear = []; // "group|subj|sem" => education_year_code|null
-        try {
-            $rows = DB::table('schedules')
-                ->whereNull('deleted_at')
-                ->whereIn('group_id', $groupHids)
-                ->whereIn('subject_id', $subjectIds)
-                ->whereIn('semester_code', $semCodes)
-                ->whereNotNull('education_year_code')
-                ->whereNotNull('lesson_date')
-                ->select('group_id', 'subject_id', 'semester_code', 'education_year_code', 'lesson_date')
-                ->orderBy('lesson_date', 'desc')
-                ->get();
-            foreach ($rows as $r) {
-                $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
-                if (!isset($tripleYear[$key])) {
-                    $tripleYear[$key] = (string) $r->education_year_code;
-                }
-            }
-        } catch (\Throwable $e) {
-            Log::warning('JournalGradeService education year lookup failed: ' . $e->getMessage());
-        }
-
         // --- 1) Schedules: JB va MT dars sana/para ustunlari ---
         // datePair[key] = [ "Y-m-d_pair" => "Y-m-d" ]
         $jbDatePair = [];
         $mtDatePair = [];
-        $minScheduleDateByKey = []; // null-year grades fallback uchun
         try {
             $rows = DB::table('schedules')
                 ->whereNull('deleted_at')
@@ -222,33 +185,16 @@ class JournalGradeService
                 ->whereIn('semester_code', $semCodes)
                 ->whereNotNull('lesson_date')
                 ->select('group_id', 'subject_id', 'semester_code',
-                    'training_type_code', 'training_type_name', 'lesson_date',
-                    'lesson_pair_code', 'education_year_code')
+                    'training_type_code', 'lesson_date', 'lesson_pair_code')
                 ->get();
             foreach ($rows as $r) {
                 $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
-                // Joriy education_year_code bilan filtr: agar triple uchun year
-                // aniqlangan bo'lsa, faqat shu year (yoki NULL — sync da
-                // tashlab qo'yilgan eski yozuvlar uchun) schedules qabul qilinadi.
-                $tYear = $tripleYear[$key] ?? null;
-                if ($tYear !== null && $r->education_year_code !== null
-                    && (string) $r->education_year_code !== $tYear) {
-                    continue;
-                }
                 $d = Carbon::parse($r->lesson_date)->format('Y-m-d');
-                if (!isset($minScheduleDateByKey[$key]) || $d < $minScheduleDateByKey[$key]) {
-                    $minScheduleDateByKey[$key] = $d;
-                }
                 $dp = $d . '_' . $r->lesson_pair_code;
                 $tc = (int) $r->training_type_code;
-                $tn = (string) ($r->training_type_name ?? '');
                 if ($tc === 99) {
                     $mtDatePair[$key][$dp] = $d;
-                } elseif (!in_array($tc, self::EXCLUDED_JB_CODES, true)
-                    && !in_array($tn, self::EXCLUDED_JB_NAMES, true)) {
-                    // Jurnal bilan AYNI: kod yoki nom ekslyuziya ro'yxatida bo'lsa
-                    // JB ga kirmaydi (sync xatosi tufayli kod NULL lekin nom
-                    // "Ma'ruza"/"Oski"/... bo'lgan yozuvlar uchun himoya).
+                } elseif (!in_array($tc, self::EXCLUDED_JB_CODES, true)) {
                     $jbDatePair[$key][$dp] = $d;
                 }
             }
@@ -276,8 +222,7 @@ class JournalGradeService
                 ->whereNotIn('training_type_code', [100, 101, 102, 103])
                 ->whereNotNull('lesson_date')
                 ->select('student_hemis_id', 'subject_id', 'semester_code',
-                    'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade',
-                    'status', 'reason', 'education_year_code')
+                    'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
                 ->get();
             foreach ($rows as $r) {
                 $hemis = (string) $r->student_hemis_id;
@@ -292,21 +237,6 @@ class JournalGradeService
                     continue;
                 }
                 $key = $gHid . '|' . $r->subject_id . '|' . $r->semester_code;
-                // education_year_code filtri — jurnal bilan AYNI:
-                // year mos bo'lsa qabul qilinadi; year NULL bo'lsa va lesson_date
-                // joriy yil schedules eng erta sanasidan keyin bo'lsa qabul
-                // qilinadi (JournalController:513).
-                $tYear = $tripleYear[$key] ?? null;
-                if ($tYear !== null) {
-                    $rowYear = $r->education_year_code !== null ? (string) $r->education_year_code : null;
-                    if ($rowYear !== null) {
-                        if ($rowYear !== $tYear) continue;
-                    } else {
-                        $minDate = $minScheduleDateByKey[$key] ?? null;
-                        $gradeDate = Carbon::parse($r->lesson_date)->format('Y-m-d');
-                        if ($minDate !== null && $gradeDate < $minDate) continue;
-                    }
-                }
                 $eff = self::effectiveGrade($r);
                 if ($eff === null) {
                     continue;
@@ -374,46 +304,6 @@ class JournalGradeService
         }
 
         return $result;
-    }
-
-    /**
-     * Triplelar (guruh|fan|semestr) uchun joriy o'quv yili kodini qaytaradi —
-     * schedules.education_year_code dan eng so'nggi lesson_date'li yozuv.
-     * Davomat va boshqa hisoblovlarda jurnal bilan AYNI yilni ishlatish uchun.
-     *
-     * @param array<int,array{0:int|string,1:int|string,2:int|string}> $triples
-     * @return array<string,string|null> ["groupHid|subjectId|semesterCode" => education_year_code|null]
-     */
-    public static function resolveEducationYearForTriples(array $triples): array
-    {
-        $out = [];
-        if (empty($triples)) {
-            return $out;
-        }
-        $groupHids   = array_values(array_unique(array_map(fn ($t) => (string) $t[0], $triples)));
-        $subjectIds  = array_values(array_unique(array_map(fn ($t) => (string) $t[1], $triples)));
-        $semCodes    = array_values(array_unique(array_map(fn ($t) => (string) $t[2], $triples)));
-        try {
-            $rows = DB::table('schedules')
-                ->whereNull('deleted_at')
-                ->whereIn('group_id', $groupHids)
-                ->whereIn('subject_id', $subjectIds)
-                ->whereIn('semester_code', $semCodes)
-                ->whereNotNull('education_year_code')
-                ->whereNotNull('lesson_date')
-                ->select('group_id', 'subject_id', 'semester_code', 'education_year_code', 'lesson_date')
-                ->orderBy('lesson_date', 'desc')
-                ->get();
-            foreach ($rows as $r) {
-                $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
-                if (!isset($out[$key])) {
-                    $out[$key] = (string) $r->education_year_code;
-                }
-            }
-        } catch (\Throwable $e) {
-            Log::warning('JournalGradeService::resolveEducationYearForTriples failed: ' . $e->getMessage());
-        }
-        return $out;
     }
 
     /**

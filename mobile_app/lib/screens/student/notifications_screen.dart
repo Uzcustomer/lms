@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../config/theme.dart';
-import '../../config/aurora_themes.dart';
-import '../../providers/settings_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
+import '../../widgets/clinic_header.dart';
 import '../../widgets/notification_bell.dart';
 
 class NotificationsScreen extends StatefulWidget {
@@ -100,48 +97,43 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final aurora = context.watch<SettingsProvider>().auroraTheme;
-    final statusBarH = MediaQuery.of(context).padding.top;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
+    final textColor = ClinicTheme.inkOf(context);
+    final subColor = ClinicTheme.mutedOf(context);
+    final cardColor = ClinicTheme.surfaceOf(context);
+    final hasUnread = _items.any((n) => n['read_at'] == null);
 
     return Scaffold(
-      backgroundColor: auroraBase(aurora, isDark),
+      backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
-          Container(
-            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
-            height: statusBarH + 64,
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
-              borderRadius: const BorderRadius.only(
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-              ),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                const Expanded(
-                  child: Text(
-                    'Bildirishnomalar',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
-                    textAlign: TextAlign.center,
+          ClinicHeader(
+            overline: 'XABARLAR',
+            title: 'Bildirishnomalar',
+            onBack: () => Navigator.pop(context),
+            actions: [
+              if (hasUnread)
+                Material(
+                  color: ClinicTheme.teal,
+                  borderRadius: BorderRadius.circular(11),
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(11),
+                    onTap: _markAll,
+                    child: Container(
+                      height: 38,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      alignment: Alignment.center,
+                      child: const Text(
+                        'Hammasi',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                TextButton(
-                  onPressed: _markAll,
-                  child: const Text(
-                    'Hammasi',
-                    style: TextStyle(fontSize: 12, color: Colors.white, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ],
-            ),
+            ],
           ),
           Expanded(
             child: _loading
@@ -153,7 +145,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                         child: _items.isEmpty
                             ? _buildEmpty(subColor)
                             : ListView.separated(
-                                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
+                                padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
                                 itemCount: _items.length,
                                 separatorBuilder: (_, __) => const SizedBox(height: 10),
                                 itemBuilder: (_, i) => _buildTile(_items[i], cardColor, textColor, subColor, isDark),
@@ -220,20 +212,24 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final dotColor = _typeColor(n['type']?.toString() ?? 'sms');
 
     return Material(
-      color: Colors.transparent,
+      color: cardColor,
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         onTap: () async {
           if (unread) await _markRead(id);
           if (link != null && link.isNotEmpty) await _openLink(link);
         },
         child: Container(
-          padding: const EdgeInsets.all(14),
+          padding: const EdgeInsets.all(13),
           decoration: BoxDecoration(
-            color: unread
-                ? (isDark ? dotColor.withOpacity(0.10) : dotColor.withOpacity(0.06))
-                : cardColor,
-            borderRadius: BorderRadius.circular(16),
+            color: cardColor,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: unread ? dotColor.withOpacity(0.5) : ClinicTheme.dividerOf(context),
+              width: unread ? 1.5 : 1,
+            ),
+            boxShadow: ClinicTheme.cardShadow,
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -298,16 +294,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   Color _typeColor(String type) {
     switch (type) {
       case 'grade':
-        return const Color(0xFF43A047);
+        return ClinicTheme.green;
       case 'excuse':
       case 'appeal':
-        return const Color(0xFF7C4DFF);
+        return const Color(0xFF6D28D9);
       case 'warning':
-        return const Color(0xFFE53935);
+        return const Color(0xFFBE123C);
       case 'sms':
-        return const Color(0xFF1565C0);
+        return ClinicTheme.blue;
       default:
-        return const Color(0xFF6366F1);
+        return ClinicTheme.teal;
     }
   }
 

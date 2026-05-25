@@ -1379,12 +1379,53 @@ class AcademicScheduleController extends Controller
             }
         } catch (\Throwable $e) {}
 
-        // 1) JN/MT olish — JURNAL bilan bir xil formulani ishlatamiz
-        // (App\Services\JournalGradeService). Snapshot (yn_student_grades)
-        // ataylab ishlatilmaydi: pullik flag jurnal sahifasidagi JORIY JN/MT
-        // qiymatlariga asoslanadi (eskirgan snapshot tufayli otrabotka/qayta
-        // baholashdan keyin ham talaba noto'g'ri "pullik" bo'lib qolmasin).
+        // 1) JN/MT olish — snapshot va tirik AVG ni birlashtirib ishlatamiz.
         $jnMtMap = []; // hemis_id|subj|sem => [jn, mt]
+
+        // 1a) Snapshot (yn_student_grades) — defolt
+        try {
+            $hasYnSubEduYearCol = \Illuminate\Support\Facades\Schema::hasColumn('yn_submissions', 'education_year');
+            $ynQuery = DB::table('yn_student_grades as ysg')
+                ->join('yn_submissions as yns', 'yns.id', '=', 'ysg.yn_submission_id')
+                ->whereIn('yns.subject_id', $allSubjectIds)
+                ->whereIn('yns.semester_code', $allSemCodes)
+                ->whereIn('yns.group_hemis_id', $allGroupHids);
+            if ($hasYnSubEduYearCol && !empty($relevantYears)) {
+                $ynQuery->whereIn('yns.education_year', $relevantYears);
+            }
+            // Muhim: bu yerda attempt=1 bilan cheklamaymiz.
+            // Sababli/tuzatishlardan keyin (2/3-urinish) yangilangan JN/MT ham
+            // aynan shu snapshotlarda turadi va pullik holatini to'g'ri aniqlash
+            // uchun eng so'nggi yozuvni olish kerak.
+            $ynRows = $ynQuery
+                ->orderBy('ysg.created_at', 'desc')
+                ->select('ysg.student_hemis_id', 'yns.subject_id', 'yns.semester_code', 'ysg.jn', 'ysg.mt')
+                ->get();
+            foreach ($ynRows as $r) {
+                $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code;
+                if (!isset($jnMtMap[$k])) {
+                    // Default 0 in snapshot = "not yet graded", treat as null
+                    $jnInt = (int) $r->jn;
+                    $mtInt = (int) $r->mt;
+                    $jnMtMap[$k] = [
+                        'jn' => $jnInt > 0 ? $jnInt : null,
+                        'mt' => $mtInt > 0 ? $mtInt : null,
+                    ];
+                }
+            }
+        } catch (\Throwable $e) {}
+
+        // 1b) Tirik manbalar — snapshot yo'q yoki 0 bo'lgan talabalar uchun.
+        // Tartib: snapshot (1a) eng birinchi va eng kuchli — YN topshirilganida
+        // qulflangan qiymat kanonik. Snapshot null bo'lsa, tirik qiymat bilan
+        // to'ldiramiz.
+        //
+        // JN/MT jurnal sahifasidagi formula bilan AYNAN bir xil hisoblanadi
+        // (App\Services\JournalGradeService): har bir dars kuni uchun kunlik
+        // o'rtacha (baho qo'yilmagan "NB" kun 0 sifatida), maxraj = jadvaldagi
+        // dars kunlari soni. Tekis AVG() ishlatilsa ko'p parali kunlar ortiqcha
+        // og'irlik olib, NB kunlar e'tibordan chetda qolardi — talaba noto'g'ri
+        // "pullik" yoki noto'g'ri "2-urinish" bo'lib qolardi.
         try {
             $jnMtLive = \App\Services\JournalGradeService::computeJnMtBulk(
                 array_values($triples),
@@ -1396,10 +1437,13 @@ class AcademicScheduleController extends Controller
                 [$g, $s, $sem] = $parts;
                 foreach ($perStudent as $hid => $vals) {
                     $k = $hid . '|' . $s . '|' . $sem;
-                    $jnMtMap[$k] = [
-                        'jn' => $vals['jn'] ?? null,
-                        'mt' => $vals['mt'] ?? null,
-                    ];
+                    if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
+                    if ($jnMtMap[$k]['jn'] === null && $vals['jn'] !== null) {
+                        $jnMtMap[$k]['jn'] = $vals['jn'];
+                    }
+                    if ($jnMtMap[$k]['mt'] === null && $vals['mt'] !== null) {
+                        $jnMtMap[$k]['mt'] = $vals['mt'];
+                    }
                 }
             }
         } catch (\Throwable $e) {
@@ -1539,18 +1583,11 @@ class AcademicScheduleController extends Controller
         // 3) Davomat — har talaba/fan/semestr uchun absent_off summasi
         $davomatMap = []; // hemis_id|subj|sem => total_absent_off
         try {
-            $attendanceQuery = DB::table('attendances')
+            $rows = DB::table('attendances')
                 ->whereIn('student_hemis_id', $allStudentHids)
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
-                ->whereNotIn('training_type_code', [99, 100, 101, 102]);
-            // Jurnal davomati joriy o'quv yiliga cheklangan (JournalController:1029).
-            // Qayta o'qigan/transfer talabalarning eski yillardagi yo'qliklari pullik
-            // hisobini noto'g'ri inflatsiya qilmasin.
-            if (!empty($relevantYears)) {
-                $attendanceQuery->whereIn('education_year_code', $relevantYears);
-            }
-            $rows = $attendanceQuery
+                ->whereNotIn('training_type_code', [99, 100, 101, 102])
                 ->selectRaw('student_hemis_id, subject_id, semester_code, SUM(absent_off) as total_off')
                 ->groupBy('student_hemis_id', 'subject_id', 'semester_code')
                 ->get();
@@ -1659,12 +1696,10 @@ class AcademicScheduleController extends Controller
                 }
                 $today = now()->format('Y-m-d');
 
-                // Jurnal bilan AYNAN teng pullik shartisi
-                // (YnAttemptStatusService::determineStage ichidagi $isPullikCondition):
-                // JN/MT < 60 (null = 0) yoki davomat ≥ 25%.
-                $jnInt = $jn !== null ? (int) $jn : 0;
-                $mtInt = $mt !== null ? (int) $mt : 0;
-                $isPullik = ($jnInt < $minLimit) || ($mtInt < $minLimit) || ($davomatPct >= 25);
+                // Pullik faqat haqiqatda past bo'lsa: null/yo'q ma'lumotni "past" deb sanamaymiz
+                $jnLow = ($jn !== null) && ($jn < $minLimit);
+                $mtLow = ($mt !== null) && ($mt < $minLimit);
+                $isPullik = $jnLow || $mtLow || ($davomatPct >= 25);
 
                 // "Tasdiqlangan yiqilish" mantiqi:
                 //  - Imtihon sanasi belgilanmagan yoki hali kelmagan bo'lsa → imtihon

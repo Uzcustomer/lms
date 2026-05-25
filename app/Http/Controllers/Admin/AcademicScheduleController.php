@@ -1600,11 +1600,18 @@ class AcademicScheduleController extends Controller
         // 3) Davomat — har talaba/fan/semestr uchun absent_off summasi
         $davomatMap = []; // hemis_id|subj|sem => total_absent_off
         try {
-            $rows = DB::table('attendances')
+            $attendanceQuery = DB::table('attendances')
                 ->whereIn('student_hemis_id', $allStudentHids)
                 ->whereIn('subject_id', $allSubjectIds)
                 ->whereIn('semester_code', $allSemCodes)
-                ->whereNotIn('training_type_code', [99, 100, 101, 102])
+                ->whereNotIn('training_type_code', [99, 100, 101, 102]);
+            // Jurnal davomati joriy o'quv yiliga cheklangan (JournalController:1029).
+            // Qayta o'qigan/transfer talabalarning eski yillardagi yo'qliklari pullik
+            // hisobini noto'g'ri inflatsiya qilmasin.
+            if (!empty($relevantYears)) {
+                $attendanceQuery->whereIn('education_year_code', $relevantYears);
+            }
+            $rows = $attendanceQuery
                 ->selectRaw('student_hemis_id, subject_id, semester_code, SUM(absent_off) as total_off')
                 ->groupBy('student_hemis_id', 'subject_id', 'semester_code')
                 ->get();
@@ -1713,10 +1720,12 @@ class AcademicScheduleController extends Controller
                 }
                 $today = now()->format('Y-m-d');
 
-                // Pullik faqat haqiqatda past bo'lsa: null/yo'q ma'lumotni "past" deb sanamaymiz
-                $jnLow = ($jn !== null) && ($jn < $minLimit);
-                $mtLow = ($mt !== null) && ($mt < $minLimit);
-                $isPullik = $jnLow || $mtLow || ($davomatPct >= 25);
+                // Jurnal bilan AYNAN teng pullik shartisi
+                // (YnAttemptStatusService::determineStage ichidagi $isPullikCondition):
+                // JN/MT < 60 (null = 0) yoki davomat ≥ 25%.
+                $jnInt = $jn !== null ? (int) $jn : 0;
+                $mtInt = $mt !== null ? (int) $mt : 0;
+                $isPullik = ($jnInt < $minLimit) || ($mtInt < $minLimit) || ($davomatPct >= 25);
 
                 // "Tasdiqlangan yiqilish" mantiqi:
                 //  - Imtihon sanasi belgilanmagan yoki hali kelmagan bo'lsa → imtihon

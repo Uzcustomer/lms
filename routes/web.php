@@ -877,6 +877,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/student-subjects', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'studentSubjects'])->name('student-subjects');
             Route::post('/save', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'save'])->name('save');
             Route::post('/clear', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'clear'])->name('clear');
+            Route::post('/attachments', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'uploadAttachment'])->name('attachments.upload');
+            Route::get('/attachments/{id}/download', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'downloadAttachment'])->name('attachments.download');
+            Route::post('/attachments/{id}/delete', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'deleteAttachment'])->name('attachments.delete');
         });
 
         // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
@@ -1490,6 +1493,9 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/student-subjects', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'studentSubjects'])->name('student-subjects');
             Route::post('/save', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'save'])->name('save');
             Route::post('/clear', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'clear'])->name('clear');
+            Route::post('/attachments', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'uploadAttachment'])->name('attachments.upload');
+            Route::get('/attachments/{id}/download', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'downloadAttachment'])->name('attachments.download');
+            Route::post('/attachments/{id}/delete', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'deleteAttachment'])->name('attachments.delete');
         });
     });
 });

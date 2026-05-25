@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\ExamSchedule;
+use App\Models\IndividualScheduleAttachment;
 use App\Models\IndividualScheduleAudit;
 use App\Models\Semester;
 use App\Models\Student;
@@ -13,6 +14,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 /**
  * Individual imtihon sanasi sahifasi — pullik/erta imtihon ruxsati uchun.
@@ -215,6 +218,26 @@ class IndividualExamScheduleController extends Controller
             ->get()
             ->keyBy(fn ($s) => $s->subject_id . '|' . $s->semester_code);
 
+        // Asoslovchi hujjatlar — individual yozuvga ilova qilinganlar
+        $individualIds = $individualSchedules->pluck('id')->all();
+        $attachments = [];
+        if (!empty($individualIds)) {
+            $attachmentRows = IndividualScheduleAttachment::whereIn('exam_schedule_id', $individualIds)
+                ->orderByDesc('created_at')
+                ->get();
+            foreach ($attachmentRows as $row) {
+                $attachments[$row->exam_schedule_id][] = [
+                    'id' => $row->id,
+                    'filename' => $row->original_filename,
+                    'mime_type' => $row->mime_type,
+                    'size_bytes' => $row->size_bytes,
+                    'note' => $row->note,
+                    'uploaded_by_name' => $row->uploaded_by_name,
+                    'uploaded_at' => $row->created_at?->format('Y-m-d H:i'),
+                ];
+            }
+        }
+
         // Eligibility: har fan uchun stage hisoblash.
         $eligibility = $this->computeEligibilityForStudent($hemisId, $student->group_id, $subjects);
 
@@ -262,6 +285,7 @@ class IndividualExamScheduleController extends Controller
                     'test_resit2_time' => $i->test_resit2_time,
                     'note' => $i->individual_note ?? null,
                     'override_warning' => (bool) ($i->override_warning ?? false),
+                    'attachments' => $attachments[$i->id] ?? [],
                 ] : null,
                 'eligibility' => $elig,
             ];
@@ -527,6 +551,156 @@ class IndividualExamScheduleController extends Controller
         ]);
 
         return response()->json(['ok' => true, 'message' => 'Individual sana o\'chirildi.']);
+    }
+
+    /**
+     * POST: Individual exam_schedule yozuviga asoslovchi hujjat ilova qilish.
+     * Payload (multipart/form-data):
+     *  - student_hemis_id, subject_id, semester_code (required)
+     *  - file (required, max 10MB)
+     *  - note (optional, fayl haqida qisqa izoh)
+     */
+    public function uploadAttachment(Request $request)
+    {
+        if ($deny = $this->ensureAccess()) return $deny;
+
+        $data = $request->validate([
+            'student_hemis_id' => 'required|string',
+            'subject_id' => 'required|string',
+            'semester_code' => 'required|string',
+            'file' => 'required|file|max:10240', // 10MB
+            'note' => 'nullable|string|max:300',
+        ]);
+
+        $individual = ExamSchedule::where('student_hemis_id', $data['student_hemis_id'])
+            ->where('subject_id', $data['subject_id'])
+            ->where('semester_code', $data['semester_code'])
+            ->first();
+
+        if (!$individual) {
+            return response()->json([
+                'error' => 'Avval shu fan uchun individual sana qo\'ying, keyin hujjat ilova qilishingiz mumkin.',
+            ], 422);
+        }
+
+        $file = $request->file('file');
+        $originalName = $file->getClientOriginalName();
+        $ext = $file->getClientOriginalExtension();
+        $stored = $file->store(
+            'individual-schedule-attachments/' . date('Y/m'),
+            'local'
+        );
+
+        $user = auth()->user() ?? auth('teacher')->user();
+        $uploaderName = is_object($user)
+            ? ($user->full_name ?? $user->name ?? '—')
+            : '—';
+
+        $att = IndividualScheduleAttachment::create([
+            'exam_schedule_id' => $individual->id,
+            'student_hemis_id' => $data['student_hemis_id'],
+            'subject_id' => $data['subject_id'],
+            'semester_code' => $data['semester_code'],
+            'original_filename' => $originalName,
+            'storage_path' => $stored,
+            'mime_type' => $file->getMimeType(),
+            'size_bytes' => $file->getSize(),
+            'uploaded_by_user_id' => $user?->getKey(),
+            'uploaded_by_guard' => auth('teacher')->check() ? 'teacher' : 'web',
+            'uploaded_by_name' => $uploaderName,
+            'note' => trim((string) ($data['note'] ?? '')) ?: null,
+        ]);
+
+        // Audit
+        $this->writeAudit([
+            'student_hemis_id' => $data['student_hemis_id'],
+            'student_name' => DB::table('students')->where('hemis_id', $data['student_hemis_id'])->value('full_name'),
+            'group_hemis_id' => (string) $individual->group_hemis_id,
+            'subject_id' => (string) $data['subject_id'],
+            'subject_name' => $individual->subject_name,
+            'semester_code' => (string) $data['semester_code'],
+            'attempt' => 1,
+            'yn_type' => 'attach',
+            'action' => 'set',
+            'old_date' => null, 'old_time' => null, 'new_date' => null, 'new_time' => null,
+            'note' => 'Hujjat ilova qilindi: ' . $originalName . ($att->note ? ' — ' . $att->note : ''),
+            'override_warning' => false,
+            'eligibility_snapshot' => null,
+        ]);
+
+        return response()->json([
+            'ok' => true,
+            'message' => 'Hujjat ilova qilindi.',
+            'attachment' => [
+                'id' => $att->id,
+                'filename' => $att->original_filename,
+                'mime_type' => $att->mime_type,
+                'size_bytes' => $att->size_bytes,
+                'note' => $att->note,
+                'uploaded_by_name' => $att->uploaded_by_name,
+                'uploaded_at' => $att->created_at?->format('Y-m-d H:i'),
+            ],
+        ]);
+    }
+
+    /**
+     * GET: Asoslovchi hujjatni yuklab olish.
+     */
+    public function downloadAttachment(Request $request, int $id)
+    {
+        if ($deny = $this->ensureAccess()) return $deny;
+
+        $att = IndividualScheduleAttachment::find($id);
+        if (!$att) {
+            abort(404, 'Hujjat topilmadi.');
+        }
+        if (!Storage::disk('local')->exists($att->storage_path)) {
+            abort(404, 'Fayl serverda mavjud emas.');
+        }
+        return Storage::disk('local')->download($att->storage_path, $att->original_filename);
+    }
+
+    /**
+     * POST: Asoslovchi hujjatni o'chirish (soft delete + faylni saqlash).
+     */
+    public function deleteAttachment(Request $request, int $id)
+    {
+        if ($deny = $this->ensureAccess()) return $deny;
+
+        $att = IndividualScheduleAttachment::find($id);
+        if (!$att) {
+            return response()->json(['error' => 'Hujjat topilmadi.'], 404);
+        }
+
+        $filename = $att->original_filename;
+        $studentHid = $att->student_hemis_id;
+        $subjectId = $att->subject_id;
+        $semCode = $att->semester_code;
+
+        // Faylni fizik o'chirmaymiz (soft delete) — kelajakda restore qilish mumkin
+        $att->delete();
+
+        // Audit
+        $student = DB::table('students')->where('hemis_id', $studentHid)->first();
+        $subject = DB::table('curriculum_subjects')
+            ->where('subject_id', $subjectId)->where('semester_code', $semCode)->first();
+        $this->writeAudit([
+            'student_hemis_id' => (string) $studentHid,
+            'student_name' => $student?->full_name,
+            'group_hemis_id' => (string) ($student?->group_id ?? ''),
+            'subject_id' => (string) $subjectId,
+            'subject_name' => $subject?->subject_name ?? $subjectId,
+            'semester_code' => (string) $semCode,
+            'attempt' => 1,
+            'yn_type' => 'attach',
+            'action' => 'clear',
+            'old_date' => null, 'old_time' => null, 'new_date' => null, 'new_time' => null,
+            'note' => 'Hujjat o\'chirildi: ' . $filename,
+            'override_warning' => false,
+            'eligibility_snapshot' => null,
+        ]);
+
+        return response()->json(['ok' => true, 'message' => 'Hujjat o\'chirildi.']);
     }
 
     private function columnFor(string $ynType, int $attempt, string $kind): ?string

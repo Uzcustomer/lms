@@ -132,7 +132,7 @@ class DebugYnPullikTrace extends Command
         $cs = DB::table('curriculum_subjects')
             ->where('subject_id', $sid)
             ->where('semester_code', $sem)
-            ->select('curriculum_id', 'subject_details', 'total_acload')
+            ->select('curricula_hemis_id', 'subject_details', 'total_acload')
             ->get();
         $this->line("curriculum_subjects rows: " . $cs->count());
         $aud = 0.0;
@@ -148,7 +148,7 @@ class DebugYnPullikTrace extends Command
                 }
             }
             if ($rowAud <= 0) $rowAud = (float) ($sr->total_acload ?? 0);
-            $this->line("  curr_id={$sr->curriculum_id}, aud={$rowAud}, total_acload={$sr->total_acload}");
+            $this->line("  curr_hemis_id={$sr->curricula_hemis_id}, aud={$rowAud}, total_acload={$sr->total_acload}");
             $aud = $rowAud;
         }
         $this->line("aud_hours = {$aud}");

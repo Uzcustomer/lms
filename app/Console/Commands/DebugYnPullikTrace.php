@@ -33,7 +33,7 @@ class DebugYnPullikTrace extends Command
             ->first();
         $this->line('Student row: ' . json_encode($student, JSON_UNESCAPED_UNICODE));
 
-        $subj = DB::table('subjects')->where('id', $sid)->value('name');
+        $subj = DB::table('curriculum_subjects')->where('subject_id', $sid)->value('subject_name');
         $this->line('Subject name: ' . ($subj ?? 'NOT FOUND'));
 
         $semInfo = DB::table('semesters')->where('code', $sem)

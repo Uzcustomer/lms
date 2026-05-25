@@ -868,6 +868,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/bandlik-kursatkichi/{date}', [AcademicScheduleController::class, 'bandlikKursatkichiShow'])->name('bandlik-kursatkichi.show')->where('date', '\d{4}-\d{2}-\d{2}');
         });
 
+        // Individual imtihon sanasi (pullik/erta imtihon) — admin sahifasi
+        Route::prefix('individual-exam-schedule')->name('individual-exam-schedule.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'index'])->name('index');
+            Route::get('/search', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'searchStudents'])->name('search');
+            Route::get('/student-subjects', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'studentSubjects'])->name('student-subjects');
+            Route::post('/save', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'save'])->name('save');
+            Route::post('/clear', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'clear'])->name('clear');
+        });
+
         // Superadmin: boshqa foydalanuvchi sifatida kirish (impersonate)
         Route::post('/impersonate/student/{student}', [ImpersonateController::class, 'impersonateStudent'])->name('impersonate.student');
         Route::post('/impersonate/teacher/{teacher}', [ImpersonateController::class, 'impersonateTeacher'])->name('impersonate.teacher');
@@ -1470,6 +1479,15 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/test-center/bulk-recheck-moodle/status', [AcademicScheduleController::class, 'bulkRecheckMoodleStatus'])->name('test-center.bulk-recheck-moodle.status');
             Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');
             Route::get('/bandlik-kursatkichi/{date}', [AcademicScheduleController::class, 'bandlikKursatkichiShow'])->name('bandlik-kursatkichi.show')->where('date', '\d{4}-\d{2}-\d{2}');
+        });
+
+        // Individual imtihon sanasi (pullik/erta imtihon) — teacher guard sahifasi
+        Route::prefix('individual-exam-schedule')->name('individual-exam-schedule.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'index'])->name('index');
+            Route::get('/search', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'searchStudents'])->name('search');
+            Route::get('/student-subjects', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'studentSubjects'])->name('student-subjects');
+            Route::post('/save', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'save'])->name('save');
+            Route::post('/clear', [\App\Http\Controllers\Admin\IndividualExamScheduleController::class, 'clear'])->name('clear');
         });
     });
 });

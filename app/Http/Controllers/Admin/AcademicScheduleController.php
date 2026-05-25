@@ -1870,6 +1870,13 @@ class AcademicScheduleController extends Controller
     private function buildTestCenterData(Request $request): array
     {
         $today = now()->format('Y-m-d');
+        $perfLog = function (string $step) {
+            static $start = null;
+            if ($start === null) $start = microtime(true);
+            $elapsed = round((microtime(true) - $start) * 1000, 1);
+            \Illuminate\Support\Facades\Log::info("[testCenterPerf] {$step} t+{$elapsed}ms");
+        };
+        $perfLog('boshlandi');
 
         $selectedEducationType = $request->get('education_type');
         $selectedDepartment = $request->get('department_id');
@@ -1887,6 +1894,7 @@ class AcademicScheduleController extends Controller
 
         $currentSemesters = Semester::where('current', true)->get();
         $currentEducationYear = $currentSemesters->first()?->education_year;
+        $perfLog('currentSemesters yuklandi');
 
         $scheduleData = $this->loadScheduleData(
             $currentSemesters, $selectedDepartment, $selectedSpecialty,
@@ -1894,10 +1902,12 @@ class AcademicScheduleController extends Controller
             $selectedLevelCode, $selectedSubject, $selectedStatus,
             $currentSemesterToggle, true, $dateFrom, $dateTo, true
         );
+        $perfLog('loadScheduleData yakunlandi, qator soni=' . ($scheduleData ? $scheduleData->flatten(1)->count() : 0));
 
         // Talabalarni ko'rsatish toggle yoqilgan bo'lsa — har item ga "students" massivi qo'shiladi
         if ($showStudents) {
             $scheduleData = $this->attachStudentsToSchedule($scheduleData);
+            $perfLog('attachStudentsToSchedule yakunlandi');
         }
 
         $semesterMap = $currentSemesters->keyBy('code');
@@ -1909,6 +1919,7 @@ class AcademicScheduleController extends Controller
         }
         $curriculumFormMap = Curriculum::whereIn('curricula_hemis_id', $curriculumHemisIds->unique())
             ->pluck('education_form_name', 'curricula_hemis_id');
+        $perfLog('curriculumFormMap');
 
         $transformedData = collect();
         foreach ($scheduleData as $groupHemisId => $items) {
@@ -1970,12 +1981,14 @@ class AcademicScheduleController extends Controller
         }
 
         $groupHemisIds = $transformedData->pluck('group')->pluck('group_hemis_id')->unique()->toArray();
+        $perfLog('transformedData tayyorlandi, qator=' . $transformedData->count() . ', guruh=' . count($groupHemisIds));
         $studentCounts = DB::table('students')
             ->whereIn('group_id', $groupHemisIds)
             ->where('student_status_code', 11)
             ->groupBy('group_id')
             ->select('group_id', DB::raw('COUNT(*) as cnt'))
             ->pluck('cnt', 'group_id');
+        $perfLog('studentCounts');
 
         $subjectIds = $transformedData->pluck('subject')->pluck('subject_id')->unique()->toArray();
         $ynSubmissions = [];
@@ -1988,6 +2001,7 @@ class AcademicScheduleController extends Controller
                 $ynSubmissions[$row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code] = $row->submitted_at;
             }
         }
+        $perfLog('ynSubmissions');
 
         // Topshirgan (quiz) statistikasi sahifa yuklanganda hisoblanmaydi —
         // hemis_quiz_results bo'yicha guruh+fan+shakl bo'yicha agregat
@@ -2005,6 +2019,7 @@ class AcademicScheduleController extends Controller
         $needSubjectIds = $transformedData->pluck('subject')->pluck('subject_id')->unique()->filter()->values()->toArray();
         $needSemCodes = $transformedData->pluck('subject')->pluck('semester_code')->unique()->filter()->values()->toArray();
         $attemptNeedsMap = $this->computeAttemptNeedsMap($groupHemisIds, $needSubjectIds, $needSemCodes)['needs'];
+        $perfLog('computeAttemptNeedsMap');
 
         $transformedData = $transformedData->map(function ($item) use ($studentCounts, $quizCounts, $ynSubmissions, $attemptNeedsMap) {
             $attempt = (int) ($item['attempt'] ?? 1);
@@ -2062,12 +2077,14 @@ class AcademicScheduleController extends Controller
                 $excuseCounts[$row->group_id . '|' . $row->subject_id] = $row->cnt;
             }
         }
+        $perfLog('excuseCounts');
 
         $transformedData = $transformedData->map(function ($item) use ($excuseCounts) {
             $excuseKey = $item['group']->group_hemis_id . '|' . ($item['subject']->subject_id ?? '');
             $item['excuse_student_count'] = $excuseCounts[$excuseKey] ?? 0;
             return $item;
         });
+        $perfLog('yakuniy transformedData');
 
         // Kompyuter raqami filtri: 'missing' (qo'yilmagan), 'assigned' (qo'yilgan)
         // yoki bo'sh (barchasi). computer_assignments'da computer_number IS NOT NULL
@@ -2535,6 +2552,11 @@ class AcademicScheduleController extends Controller
         $currentSemesterToggle, $includeCarbon = false,
         $dateFrom = null, $dateTo = null, $filterByYnDate = false
     ) {
+        $lsStart = microtime(true);
+        $lsLog = function (string $step) use ($lsStart) {
+            $ms = round((microtime(true) - $lsStart) * 1000, 1);
+            \Illuminate\Support\Facades\Log::info("[loadScheduleData] {$step} t+{$ms}ms");
+        };
         $currentSemesterOnly = $currentSemesterToggle === '1';
         $currentEducationYear = $currentSemesters->first()?->education_year;
 
@@ -2626,6 +2648,7 @@ class AcademicScheduleController extends Controller
                 }
             });
             $preRows = $preQuery->select('group_hemis_id', 'subject_id', 'semester_code')->get();
+            $lsLog('preQuery, rows=' . $preRows->count());
             if ($preRows->isEmpty()) return collect();
             $preFilteredKeys = [];
             $gids = []; $sids = []; $secs = [];
@@ -2673,6 +2696,7 @@ class AcademicScheduleController extends Controller
             $subjectQuery->where('subject_id', $selectedSubject);
         }
         $subjects = $subjectQuery->get();
+        $lsLog('subjects, count=' . $subjects->count());
 
         if ($subjects->isEmpty()) return collect();
 
@@ -2686,6 +2710,7 @@ class AcademicScheduleController extends Controller
             $groupQuery->whereIn('group_hemis_id', $preFilteredGroupHids);
         }
         $filteredGroups = $groupQuery->orderBy('name')->get();
+        $lsLog('filteredGroups, count=' . $filteredGroups->count());
 
         if ($filteredGroups->isEmpty()) return collect();
 
@@ -2718,6 +2743,7 @@ class AcademicScheduleController extends Controller
         }
         $existingSchedules = $scheduleQuery->get()
             ->keyBy(fn($item) => $item->group_hemis_id . '_' . $item->subject_id . '_' . $item->semester_code);
+        $lsLog('existingSchedules, count=' . $existingSchedules->count());
 
         // Sana filtri qo'llanilsa — outer loopni faqat tegishli (group, subject,
         // semester) triplelar bilan cheklaymiz.
@@ -2745,6 +2771,7 @@ class AcademicScheduleController extends Controller
         $lessonDatesRaw = $lessonDatesQuery
             ->groupBy('group_id', 'subject_id', 'subject_name')
             ->get();
+        $lsLog('lessonDatesRaw, count=' . $lessonDatesRaw->count());
 
         // Ikki xil key bilan map qilish (HEMIS subject_id yoki curriculum_subject_hemis_id bo'lishi mumkin)
         $lessonDatesMap = [];

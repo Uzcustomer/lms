@@ -2445,6 +2445,35 @@
                                                 YN ga yuborish
                                             </button>
                                         @endif
+                                    @else
+                                        {{-- Sinov (test) fani uchun "Qaydnomani yakunlash" tugmasi --}}
+                                        @php
+                                            $finalizeReady = !empty($sinovInJournal) && ($allLessonsCompleted ?? true);
+                                            $finalizeTooltip = $finalizeReady
+                                                ? "Qaydnomani yakunlab, barcha baholarni qulflash"
+                                                : (!($allLessonsCompleted ?? true)
+                                                    ? "Avval barcha darslarni yakunlang"
+                                                    : "Avval pastdagi panelda 'JN dan baholarni jurnalga ko'chirish' tugmasini bosing");
+                                        @endphp
+                                        <div class="flex flex-col items-end">
+                                            <button type="button" id="btn-finalize-qaydnoma"
+                                                @if(!$finalizeReady) disabled @endif
+                                                onclick="finalizeQaydnoma()"
+                                                title="{{ $finalizeTooltip }}"
+                                                style="padding:12px 24px;color:#fff;font-weight:700;border-radius:10px;border:none;font-size:15px;display:inline-flex;align-items:center;gap:8px;box-shadow:0 4px 12px rgba(0,0,0,0.15);{{ $finalizeReady ? 'background:linear-gradient(135deg,#059669,#047857);cursor:pointer;' : 'background:#94a3b8;cursor:not-allowed;opacity:0.7;' }}"
+                                                @if($finalizeReady)
+                                                    onmouseover="this.style.background='linear-gradient(135deg,#047857,#065f46)'"
+                                                    onmouseout="this.style.background='linear-gradient(135deg,#059669,#047857)'"
+                                                @endif>
+                                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+                                                </svg>
+                                                Qaydnomani yakunlash
+                                            </button>
+                                            @if(!$finalizeReady)
+                                                <div class="text-xs text-gray-500 mt-2 font-medium">{{ $finalizeTooltip }}</div>
+                                            @endif
+                                        </div>
                                     @endif
                                 </div>
                             @endif
@@ -5522,6 +5551,71 @@
                 btn.style.opacity = '1';
             });
         }
+        // Sinov (test) fani uchun qaydnomani yakunlash — submitToYn bilan bir xil
+        // backendni chaqiradi, lekin sinov-ga moslashtirilgan ogohlantirish bilan.
+        function finalizeQaydnoma() {
+            const warn = confirm(
+                'DIQQAT!\n\n' +
+                'Qaydnomani yakunlash bilan quyidagi o\'zgarishlar amalga oshiriladi:\n\n' +
+                '1. Barcha talabalarning JN (joriy nazorat) baholari qulflanadi\n' +
+                '2. Barcha talabalarning MT (mustaqil ta\'lim) baholari qulflanadi\n' +
+                '3. Sinov (test) baholari yakuniy holatda qulflanadi\n' +
+                '4. Talabalar MT uchun fayl yuklashi taqiqlanadi\n\n' +
+                'Bu amalni bekor qilib bo\'lmaydi!\n\n' +
+                'Qaydnomani yakunlaysizmi?'
+            );
+            if (!warn) return;
+
+            const finalConfirm = confirm(
+                'YAKUNIY TASDIQLASH\n\n' +
+                'Qaydnoma yakunlanadi va barcha baholar qulflanadi.\n' +
+                'Baholarni qayta o\'zgartirish MUMKIN BO\'LMAYDI.\n\n' +
+                'Roziman — yakunlansin!'
+            );
+            if (!finalConfirm) return;
+
+            const btn = document.getElementById('btn-finalize-qaydnoma');
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = 'Yakunlanmoqda...';
+            btn.style.opacity = '0.6';
+
+            fetch('{{ route("admin.journal.submit-to-yn") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                })
+            })
+            .then(r => r.json().then(data => ({ok: r.ok, data})))
+            .then(({ok, data}) => {
+                if (ok && data.success) {
+                    const notif = document.createElement('div');
+                    notif.style.cssText = 'position:fixed; top:20px; left:50%; transform:translateX(-50%); z-index:99999; background:#10b981; color:#fff; padding:16px 32px; border-radius:12px; box-shadow:0 8px 32px rgba(0,0,0,0.25); font-size:16px; font-weight:600;';
+                    notif.textContent = 'Qaydnoma yakunlandi!';
+                    document.body.appendChild(notif);
+                    setTimeout(() => location.reload(), 1500);
+                } else {
+                    alert(data.message || 'Xatolik yuz berdi');
+                    btn.disabled = false;
+                    btn.innerHTML = originalHTML;
+                    btn.style.opacity = '1';
+                }
+            })
+            .catch(err => {
+                alert('Xatolik: ' + err.message);
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+                btn.style.opacity = '1';
+            });
+        }
+
         // === SABABLI BAHO MODAL ===
         function openExcuseModal(studentHemisId, studentName, gradeId, excuseId, existingGrade) {
             document.getElementById('excuse-modal-student-name').textContent = studentName;

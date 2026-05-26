@@ -158,6 +158,7 @@ class JournalController extends Controller
                 'cs.id',
                 'cs.subject_id',
                 'cs.subject_name',
+                'cs.closing_form',
                 'cs.semester_code',
                 'cs.semester_name',
                 'c.education_type_name',
@@ -263,6 +264,7 @@ class JournalController extends Controller
             'level' => 's.level_name',
             'semester' => 'cs.semester_name',
             'subject' => 'cs.subject_name',
+            'closing_form' => 'cs.closing_form',
             'group_name' => 'g.name',
         ];
 

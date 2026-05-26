@@ -212,7 +212,16 @@
                                             'level' => 'Kurs',
                                             'semester' => 'Semestr',
                                             'subject' => 'Fan',
+                                            'closing_form' => 'Yopilish shakli',
                                             'group_name' => 'Guruh',
+                                        ];
+                                        $closingFormBadges = [
+                                            'oski' => ['label' => 'OSKI', 'bg' => '#dbeafe', 'fg' => '#1d4ed8'],
+                                            'test' => ['label' => 'Test', 'bg' => '#dcfce7', 'fg' => '#15803d'],
+                                            'oski_test' => ['label' => 'OSKI + Test', 'bg' => '#ede9fe', 'fg' => '#6d28d9'],
+                                            'normativ' => ['label' => 'Normativ', 'bg' => '#fef3c7', 'fg' => '#a16207'],
+                                            'sinov' => ['label' => 'Sinov (test)', 'bg' => '#ffedd5', 'fg' => '#c2410c'],
+                                            'none' => ['label' => "Yo'q", 'bg' => '#f1f5f9', 'fg' => '#475569'],
                                         ];
                                     @endphp
                                     @foreach($columns as $column => $label)
@@ -248,6 +257,15 @@
                                         <td><span class="badge badge-violet">{{ $journal->level_name ?? '-' }}</span></td>
                                         <td><span class="badge badge-teal">{{ $journal->semester_name ?? '-' }}</span></td>
                                         <td><span class="text-cell text-subject">{{ $journal->subject_name ?? '-' }}</span></td>
+                                        <td style="text-align:center;">
+                                            @php $cf = $journal->closing_form ?? null; @endphp
+                                            @if($cf && isset($closingFormBadges[$cf]))
+                                                @php $b = $closingFormBadges[$cf]; @endphp
+                                                <span class="badge" style="background:{{ $b['bg'] }};color:{{ $b['fg'] }};font-size:11px;padding:2px 8px;border-radius:6px;">{{ $b['label'] }}</span>
+                                            @else
+                                                <span style="color:#94a3b8;font-size:11px;">-</span>
+                                            @endif
+                                        </td>
                                         <td><span class="badge badge-indigo">{{ $journal->group_name ?? '-' }}</span></td>
                                     </tr>
                                 @endforeach

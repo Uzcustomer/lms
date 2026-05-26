@@ -488,13 +488,40 @@ class StudentController extends Controller
         }
         foreach ($citizenshipByEdu as $k => $arr) { arsort($arr); $citizenshipByEdu[$k] = $arr; }
 
+        // ── Professor-o'qituvchilar (xodimlar) statistikasi ──
+        // Faqat asosiy ish joyiga ega xodimlar bo'yicha employee_type kesimi
+        // (jinsga ham split). "Turi" inner tabidagi kartalar va bar chart uchun.
+        $teacherTypeRows = DB::table('teachers')
+            ->whereRaw('LOWER(employment_form) = ?', ['asosiy ish joy'])
+            ->selectRaw('employee_type, gender, COUNT(*) as total')
+            ->groupBy('employee_type', 'gender')
+            ->get();
+        $teacherTypeStats = []; // [employee_type => ['total'=>n,'male'=>n,'female'=>n]]
+        foreach ($teacherTypeRows as $r) {
+            $type = trim((string) $r->employee_type);
+            if ($type === '') continue;
+            if (!isset($teacherTypeStats[$type])) {
+                $teacherTypeStats[$type] = ['total' => 0, 'male' => 0, 'female' => 0];
+            }
+            $g = mb_strtolower(trim((string) $r->gender));
+            $isMale   = str_starts_with($g, 'erkak') || $g === 'male' || $g === 'm';
+            $isFemale = str_starts_with($g, 'ayol') || str_starts_with($g, 'xotin')
+                     || $g === 'female' || $g === 'f';
+            $cnt = (int) $r->total;
+            $teacherTypeStats[$type]['total']  += $cnt;
+            if ($isMale)   $teacherTypeStats[$type]['male']   += $cnt;
+            if ($isFemale) $teacherTypeStats[$type]['female'] += $cnt;
+        }
+        uasort($teacherTypeStats, fn($a, $b) => $b['total'] <=> $a['total']);
+
         return view('admin.students.statistics', compact(
             'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals',
             'socialStats', 'socialHasCategory',
             'citizenshipStats', 'countryStats',
             'accomStats', 'provinceStats',
             'ageByEdu', 'payByEdu', 'socialByEdu', 'socialHasCategoryByEdu',
-            'countryByEdu', 'citizenshipByEdu', 'provinceByEdu'
+            'countryByEdu', 'citizenshipByEdu', 'provinceByEdu',
+            'teacherTypeStats'
         ));
     }
 

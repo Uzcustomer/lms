@@ -1084,8 +1084,52 @@
             </div>
         </div>
 
-        {{-- Boshqa inner tablar — hozircha tayyor emas --}}
-        @foreach(['jins','kafedra','lavozim','ilmiy_daraja','ilmiy_unvon'] as $tk)
+        {{-- Jins --}}
+        <div x-show="inner.oqituvchilar === 'jins'" x-cloak>
+            @php
+                $tgTotal  = (int) ($teacherGenderStats['total']  ?? 0);
+                $tgMale   = (int) ($teacherGenderStats['male']   ?? 0);
+                $tgFemale = (int) ($teacherGenderStats['female'] ?? 0);
+                $tgMalePct   = $tgTotal > 0 ? round($tgMale   * 100 / $tgTotal, 2) : 0;
+                $tgFemalePct = $tgTotal > 0 ? round($tgFemale * 100 / $tgTotal, 2) : 0;
+            @endphp
+            <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:18px 22px; margin-bottom:18px;">
+                <h3 style="font-size:18px; font-weight:700; color:#1e293b; margin:0 0 14px;">Xodimlar jinsi</h3>
+                <div style="display:flex; flex-wrap:wrap; gap:28px;">
+                    <div>
+                        <div style="font-size:13px; color:#3b82f6; font-weight:600;">Erkaklar</div>
+                        <div style="font-size:28px; font-weight:700; color:#0f172a;" data-count="{{ $tgMale }}">{{ number_format($tgMale, 0, '.', ' ') }}</div>
+                        <div style="font-size:12px; color:#64748b;" data-count="{{ $tgMalePct }}" data-count-decimals="2">{{ number_format($tgMalePct, 2) }}%</div>
+                    </div>
+                    <div>
+                        <div style="font-size:13px; color:#ec4899; font-weight:600;">Ayollar</div>
+                        <div style="font-size:28px; font-weight:700; color:#0f172a;" data-count="{{ $tgFemale }}">{{ number_format($tgFemale, 0, '.', ' ') }}</div>
+                        <div style="font-size:12px; color:#64748b;" data-count="{{ $tgFemalePct }}" data-count-decimals="2">{{ number_format($tgFemalePct, 2) }}%</div>
+                    </div>
+                    <div style="padding-left:18px; border-left:2px solid #cbd5e1;">
+                        <div style="font-size:13px; color:#4f46e5; font-weight:600;">Jami</div>
+                        <div style="font-size:28px; font-weight:700; color:#4f46e5;" data-count="{{ $tgTotal }}">{{ number_format($tgTotal, 0, '.', ' ') }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:18px 22px; max-width:520px;">
+                <div style="position:relative; height: 320px;">
+                    <canvas id="teacherGenderChart" data-male="{{ $tgMale }}" data-female="{{ $tgFemale }}"></canvas>
+                </div>
+                <div style="display:flex; justify-content:center; gap:24px; margin-top:14px; font-size:13px;">
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="display:inline-block; width:10px; height:10px; background:#3b82f6; border-radius:50%;"></span> Erkaklar
+                    </div>
+                    <div style="display:flex; align-items:center; gap:6px;">
+                        <span style="display:inline-block; width:10px; height:10px; background:#ec4899; border-radius:50%;"></span> Ayollar
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {{-- Qolgan inner tablar — hozircha tayyor emas --}}
+        @foreach(['kafedra','lavozim','ilmiy_daraja','ilmiy_unvon'] as $tk)
             <div x-show="inner.oqituvchilar === '{{ $tk }}'" x-cloak>
                 <div class="stats-empty">
                     <strong>{{ $teacherInnerTabs[$tk] }}</strong> — statistika hali tayyor emas.
@@ -1666,7 +1710,17 @@
         });
     }
 
-    // Xodimlar turi — employee_type bo'yicha umumiy son (gorizontal bar)
+    // Xodimlar turi — employee_type bo'yicha umumiy son (gorizontal bar, har biri har xil rang)
+    const TEACHER_BAR_PALETTE = [
+        '#6366f1', // indigo
+        '#10b981', // emerald
+        '#f59e0b', // amber
+        '#ec4899', // pink
+        '#06b6d4', // cyan
+        '#8b5cf6', // violet
+        '#ef4444', // red
+        '#14b8a6', // teal
+    ];
     function renderTeacherTypeChart(id) {
         const canvas = document.getElementById(id);
         if (!canvas || canvas.offsetParent === null) return;
@@ -1675,6 +1729,7 @@
         catch (e) { return; }
         const labels = data.labels || [];
         const values = data.data   || [];
+        const colors = labels.map((_, i) => TEACHER_BAR_PALETTE[i % TEACHER_BAR_PALETTE.length]);
         if (canvas._chart) { canvas._chart.destroy(); }
         canvas._chart = new Chart(canvas, {
             type: 'bar',
@@ -1683,7 +1738,7 @@
                 datasets: [{
                     label: 'Xodimlar soni',
                     data: values,
-                    backgroundColor: '#6366f1',
+                    backgroundColor: colors,
                     borderRadius: 4,
                 }],
             },
@@ -1703,6 +1758,29 @@
                     },
                 },
             },
+        });
+    }
+
+    // Xodimlar jinsi — Erkak/Ayol pie chart
+    function renderTeacherGenderChart(id) {
+        const canvas = document.getElementById(id);
+        if (!canvas || canvas.offsetParent === null) return;
+        const male   = parseInt(canvas.dataset.male   || '0', 10);
+        const female = parseInt(canvas.dataset.female || '0', 10);
+        if (canvas._chart) { canvas._chart.destroy(); }
+        canvas._chart = new Chart(canvas, {
+            type: 'doughnut',
+            data: {
+                labels: ['Erkaklar', 'Ayollar'],
+                datasets: [{
+                    data: [male, female],
+                    backgroundColor: ['#3b82f6', '#ec4899'],
+                    borderWidth: 0,
+                }],
+            },
+            options: Object.assign({}, pieOpts, {
+                cutout: '58%',
+            }),
         });
     }
 
@@ -1726,6 +1804,7 @@
         renderProvinceChart('provinceChartUmumiy');
         renderProvinceChart('provinceChartTab');
         renderTeacherTypeChart('teacherTypeChart');
+        renderTeacherGenderChart('teacherGenderChart');
     };
 
     // Edu-tab click handler — har chart kartasidagi Hammasi/Bakalavr/Magistr/Ordinatura

@@ -6513,6 +6513,91 @@ class AcademicScheduleController extends Controller
     }
 
     /**
+     * Bandlik ko'rsatkichi sahifasidagi "Yetishmaganlarni biriktirish"
+     * tugmasi. pendingDetails dagi (schedule_id, yn_type, attempt) qatorlari
+     * uchun komp raqamlarini biriktiradi — ham guruh-level, ham per-student
+     * schedule_id'larni to'g'ridan-to'g'ri ComputerAssignmentService orqali
+     * ishlaydi (processYnOldiWord pipeline'idan tashqari).
+     */
+    public function assignMissingComputers(Request $request)
+    {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
+        $user = auth()->user() ?? auth('teacher')->user();
+        $activeRole = session('active_role', $user?->getRoleNames()->first());
+        $allowedBulkRoles = array_merge(
+            ExamDateRoleService::adminRoles(),
+            [\App\Enums\ProjectRole::TEST_CENTER->value]
+        );
+        if (!in_array($activeRole, $allowedBulkRoles, true)) {
+            return response()->json([
+                'success' => false,
+                'message' => "Bu amal faqat Test markazi va admin rollari uchun ochiq.",
+            ], 403);
+        }
+
+        $request->validate([
+            'items' => 'required|array|min:1',
+            'items.*.schedule_id' => 'required|integer',
+            'items.*.yn_type' => 'required|string|in:OSKI,Test,oski,test',
+            'items.*.attempt' => 'nullable|integer|min:1|max:3',
+        ]);
+
+        $items = [];
+        $seen = [];
+        foreach ((array) $request->input('items') as $it) {
+            $sid = (int) ($it['schedule_id'] ?? 0);
+            $yn = strtolower((string) ($it['yn_type'] ?? ''));
+            $att = (int) ($it['attempt'] ?? 1);
+            if ($sid <= 0 || !in_array($yn, ['oski', 'test'], true)) {
+                continue;
+            }
+            $key = $sid . '|' . $yn . '|' . $att;
+            if (isset($seen[$key])) continue;
+            $seen[$key] = true;
+            $items[] = ['schedule_id' => $sid, 'yn_type' => $yn, 'attempt' => $att];
+        }
+
+        if (empty($items)) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Yaroqli qator topilmadi.',
+            ], 422);
+        }
+
+        $token = (string) \Illuminate\Support\Str::uuid();
+        cache()->put('assign_missing_computers:' . $token, [
+            'status' => 'queued',
+            'requested' => count($items),
+        ], 1800);
+
+        \App\Jobs\AssignMissingComputersJob::dispatch($items, $token);
+
+        return response()->json([
+            'success' => true,
+            'token' => $token,
+            'message' => count($items) . ' ta qator navbatga qo\'yildi.',
+        ]);
+    }
+
+    /**
+     * AssignMissingComputersJob holatini qaytaradi — polling uchun.
+     */
+    public function assignMissingComputersStatus(Request $request)
+    {
+        if ($deny = $this->ensureTestCenterAccess()) {
+            return $deny;
+        }
+        $token = trim((string) $request->query('token', ''));
+        $state = $token !== '' ? cache()->get('assign_missing_computers:' . $token) : null;
+        if (!is_array($state)) {
+            return response()->json(['status' => 'unknown']);
+        }
+        return response()->json($state);
+    }
+
+    /**
      * Word yuklab olish uchun: $subjectGroups ichidagi har talabaning
      * oldindan taqsimlangan kompyuter raqamini ComputerAssignment jadvalidan
      * o'qiydi. Word endi raqam taqsimlamaydi — bu faqat ko'rsatish uchun.
@@ -7208,6 +7293,21 @@ class AcademicScheduleController extends Controller
                 (string) $request->student_hemis_id,
                 $stPlannedStart
             );
+            // assignSingleStudent ok=false qaytarsa (masalan, "no free
+            // computer at this slot") — exception otmaydi, lekin yozuv
+            // yaratilmaydi. Bandlik ko'rsatkichi keyinchalik bu talabani
+            // "komp raqamisiz" deb ko'rsatadi va sabab noma'lum qoladi.
+            // Endi sabab log'da qoladi va bandlik sahifasidagi
+            // "Yetishmaganlarni biriktirish" tugmasi qayta urinishi mumkin.
+            if (empty($compResult['ok'])) {
+                \Log::warning('saveStudentTime: komp avtomatik biriktirilmadi', [
+                    'schedule_id' => $perStudent->id,
+                    'student_hemis_id' => $request->student_hemis_id,
+                    'yn_type' => $request->yn_type,
+                    'attempt' => (int) $request->attempt,
+                    'reason' => $compResult['reason'] ?? 'unknown',
+                ]);
+            }
         } catch (\Throwable $e) {
             \Log::warning('saveStudentTime: komp avtomatik biriktirish xatosi: ' . $e->getMessage());
         }
@@ -8209,95 +8309,73 @@ class AcademicScheduleController extends Controller
             ->sortBy(fn($r) => $r['time'] === null ? 'zz' : $r['time'])
             ->values();
 
-        // Kompyuter raqami qo'yilmagan talabalar soni: vaqti belgilangan
-        // (no_time = false) slotlardagi jami talabalardan, shu schedule_id'lar
-        // bo'yicha computer_assignments'da computer_number IS NOT NULL bo'lgan
-        // qatorlar soni ayriladi. Agar bironta ham assignment yo'q bo'lsa,
-        // hammasi "qo'yilmagan" deb hisoblanadi.
-        $scheduledScheduleIds = $slots
-            ->where('no_time', false)
-            ->flatMap(fn ($r) => collect($r['groups'])->pluck('schedule_id'))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
-        $scheduledStudents = (int) $slots->where('no_time', false)->sum('occupied');
-        $assignedComputerCount = 0;
-        if (!empty($scheduledScheduleIds)) {
-            try {
-                $assignedComputerCount = (int) DB::table('computer_assignments')
-                    ->whereIn('exam_schedule_id', $scheduledScheduleIds)
-                    ->whereNotNull('computer_number')
-                    ->count();
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: computer_number hisobi xatolik berdi: ' . $e->getMessage());
-            }
-        }
-        $pendingComputerStudents = max(0, $scheduledStudents - $assignedComputerCount);
-
-        // Diagnostika: agar pendingComputerStudents > 0 bo'lsa, qaysi slot/guruh
-        // qatorida nechta talaba sanab qolinayotganini per-row hisoblab beramiz.
-        // Guruh-level qator uchun ham merged per-student schedule_id'lar
-        // ($mergedQuizByCombo'dan) hisobga olinadi — chunki ularning komp
-        // raqamlari o'z per-student exam_schedule_id ostida saqlanadi, guruh
-        // schedule_id ostida emas.
+        // Kompyuter raqami qo'yilmagan talabalar soni: per-slot, per-(yn_type,
+        // attempt) hisoblash — guruh-level qator uchun merged per-student
+        // schedule_id'lar ham hisobga olinadi (chunki ularning komp raqami o'z
+        // per-student exam_schedule_id ostida saqlanadi, guruh schedule_id
+        // ostida emas). Avvalgi flat hisoblash (faqat exam_schedule_id IN ...)
+        // (yn_type, attempt) filtri bo'lmagani uchun boshqa kun/urinish CA
+        // qatorlarini ham qo'shib hisoblardi va son haqiqiy holatdan kam
+        // ko'rinardi. Endi hisob diagnostika jadvali bilan bir xil.
         $pendingDetails = [];
-        if ($pendingComputerStudents > 0) {
-            try {
-                foreach ($slots as $row) {
-                    if (!empty($row['no_time'])) continue;
-                    foreach ($row['groups'] as $grp) {
-                        $sid = (int) ($grp['schedule_id'] ?? 0);
-                        if ($sid <= 0) continue;
-                        $ynLower = strtolower((string) ($grp['yn_type'] ?? ''));
-                        $attempt = (int) ($grp['attempt'] ?? 1);
-                        $expected = (int) ($grp['student_count'] ?? 0);
-                        if ($expected <= 0) continue;
+        try {
+            foreach ($slots as $row) {
+                if (!empty($row['no_time'])) continue;
+                foreach ($row['groups'] as $grp) {
+                    $sid = (int) ($grp['schedule_id'] ?? 0);
+                    if ($sid <= 0) continue;
+                    $ynLower = strtolower((string) ($grp['yn_type'] ?? ''));
+                    $attempt = (int) ($grp['attempt'] ?? 1);
+                    $expected = (int) ($grp['student_count'] ?? 0);
+                    if ($expected <= 0) continue;
 
-                        // Bu (schedule, yn_type, attempt) bilan birga sanaladigan
-                        // schedule_id'lar to'plami — guruh qatori bo'lsa merged
-                        // per-student qatorlarining schedule_id'lari ham qo'shiladi.
-                        $sidSet = [$sid];
-                        if (empty($grp['is_individual'])) {
-                            $comboKey = ($grp['group_hemis_id'] ?? '') . '|' . ($grp['subject_id'] ?? '')
-                                . '|' . ($grp['semester_code'] ?? '') . '|' . $ynLower . '|' . $attempt;
-                            foreach ($mergedQuizByCombo[$comboKey] ?? [] as $m) {
-                                if (!empty($m['schedule_id'])) {
-                                    $sidSet[] = (int) $m['schedule_id'];
-                                }
+                    // Bu (schedule, yn_type, attempt) bilan birga sanaladigan
+                    // schedule_id'lar to'plami — guruh qatori bo'lsa merged
+                    // per-student qatorlarining schedule_id'lari ham qo'shiladi.
+                    $sidSet = [$sid];
+                    if (empty($grp['is_individual'])) {
+                        $comboKey = ($grp['group_hemis_id'] ?? '') . '|' . ($grp['subject_id'] ?? '')
+                            . '|' . ($grp['semester_code'] ?? '') . '|' . $ynLower . '|' . $attempt;
+                        foreach ($mergedQuizByCombo[$comboKey] ?? [] as $m) {
+                            if (!empty($m['schedule_id'])) {
+                                $sidSet[] = (int) $m['schedule_id'];
                             }
                         }
-                        $sidSet = array_values(array_unique($sidSet));
-
-                        $assigned = (int) DB::table('computer_assignments')
-                            ->whereIn('exam_schedule_id', $sidSet)
-                            ->where('yn_type', $ynLower)
-                            ->where('attempt', $attempt)
-                            ->whereNotNull('computer_number')
-                            ->count();
-                        $missing = max(0, $expected - $assigned);
-                        if ($missing <= 0) continue;
-
-                        $pendingDetails[] = [
-                            'time' => $row['time'],
-                            'group_name' => $grp['group_name'] ?? '',
-                            'subject_name' => $grp['subject_name'] ?? '',
-                            'yn_type' => $grp['yn_type'] ?? '',
-                            'attempt' => $attempt,
-                            'is_individual' => !empty($grp['is_individual']),
-                            'schedule_ids' => $sidSet,
-                            'expected' => $expected,
-                            'assigned' => $assigned,
-                            'missing' => $missing,
-                        ];
                     }
+                    $sidSet = array_values(array_unique($sidSet));
+
+                    $assigned = (int) DB::table('computer_assignments')
+                        ->whereIn('exam_schedule_id', $sidSet)
+                        ->where('yn_type', $ynLower)
+                        ->where('attempt', $attempt)
+                        ->whereNotNull('computer_number')
+                        ->count();
+                    $missing = max(0, $expected - $assigned);
+                    if ($missing <= 0) continue;
+
+                    $pendingDetails[] = [
+                        'time' => $row['time'],
+                        'group_name' => $grp['group_name'] ?? '',
+                        'subject_name' => $grp['subject_name'] ?? '',
+                        'yn_type' => $grp['yn_type'] ?? '',
+                        'attempt' => $attempt,
+                        'is_individual' => !empty($grp['is_individual']),
+                        // "Yetishmaganlarni biriktirish" tugmasi shu schedule_id'larni
+                        // server tomonga to'g'ridan-to'g'ri yuboradi.
+                        'schedule_id' => $sid,
+                        'schedule_ids' => $sidSet,
+                        'expected' => $expected,
+                        'assigned' => $assigned,
+                        'missing' => $missing,
+                    ];
                 }
-                // Eng ko'p qolgan qatorlar tepada chiqsin.
-                usort($pendingDetails, fn($a, $b) => $b['missing'] <=> $a['missing']);
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: pendingDetails xatolik: ' . $e->getMessage());
             }
+            // Eng ko'p qolgan qatorlar tepada chiqsin.
+            usort($pendingDetails, fn($a, $b) => $b['missing'] <=> $a['missing']);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: pendingDetails xatolik: ' . $e->getMessage());
         }
+        $pendingComputerStudents = array_sum(array_column($pendingDetails, 'missing'));
 
         return view('admin.academic-schedule.bandlik-kursatkichi-show', [
             'date' => $carbonDate,

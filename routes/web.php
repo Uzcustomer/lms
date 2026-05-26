@@ -871,6 +871,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/test-center/bulk-recheck-moodle/status', [AcademicScheduleController::class, 'bulkRecheckMoodleStatus'])->name('test-center.bulk-recheck-moodle.status');
             Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');
             Route::get('/bandlik-kursatkichi/{date}', [AcademicScheduleController::class, 'bandlikKursatkichiShow'])->name('bandlik-kursatkichi.show')->where('date', '\d{4}-\d{2}-\d{2}');
+            Route::post('/bandlik-kursatkichi/assign-missing', [AcademicScheduleController::class, 'assignMissingComputers'])->name('bandlik-kursatkichi.assign-missing');
+            Route::get('/bandlik-kursatkichi/assign-missing/status', [AcademicScheduleController::class, 'assignMissingComputersStatus'])->name('bandlik-kursatkichi.assign-missing.status');
         });
 
         // Individual imtihon sanasi (pullik/erta imtihon) — admin sahifasi
@@ -1488,6 +1490,8 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::get('/test-center/bulk-recheck-moodle/status', [AcademicScheduleController::class, 'bulkRecheckMoodleStatus'])->name('test-center.bulk-recheck-moodle.status');
             Route::get('/bandlik-kursatkichi', [AcademicScheduleController::class, 'bandlikKursatkichi'])->name('bandlik-kursatkichi');
             Route::get('/bandlik-kursatkichi/{date}', [AcademicScheduleController::class, 'bandlikKursatkichiShow'])->name('bandlik-kursatkichi.show')->where('date', '\d{4}-\d{2}-\d{2}');
+            Route::post('/bandlik-kursatkichi/assign-missing', [AcademicScheduleController::class, 'assignMissingComputers'])->name('bandlik-kursatkichi.assign-missing');
+            Route::get('/bandlik-kursatkichi/assign-missing/status', [AcademicScheduleController::class, 'assignMissingComputersStatus'])->name('bandlik-kursatkichi.assign-missing.status');
         });
 
         // Individual imtihon sanasi (pullik/erta imtihon) — teacher guard sahifasi

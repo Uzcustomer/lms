@@ -6,6 +6,12 @@
     $ynOldiWordRoute = $isAdminPrefix
         ? 'admin.academic-schedule.test-center.generate-yn-oldi-word'
         : 'teacher.academic-schedule.test-center.generate-yn-oldi-word';
+    $assignMissingRoute = $isAdminPrefix
+        ? 'admin.academic-schedule.bandlik-kursatkichi.assign-missing'
+        : 'teacher.academic-schedule.bandlik-kursatkichi.assign-missing';
+    $assignMissingStatusRoute = $isAdminPrefix
+        ? 'admin.academic-schedule.bandlik-kursatkichi.assign-missing.status'
+        : 'teacher.academic-schedule.bandlik-kursatkichi.assign-missing.status';
 @endphp
 
 <x-app-layout>
@@ -206,6 +212,11 @@
                                     — YN jadvalidan kompyuter raqamlarini taqsimlash kerak.
                                 </div>
                                 @if(!empty($pendingDetails))
+                                    <button type="button" id="bk-assign-missing-btn"
+                                            onclick="bkAssignMissing()"
+                                            class="text-xs font-semibold text-white bg-amber-600 hover:bg-amber-700 rounded px-2 py-1 whitespace-nowrap shadow">
+                                        ⚙ Yetishmaganlarni biriktirish
+                                    </button>
                                     <button type="button"
                                             onclick="document.getElementById('pending-comp-details').classList.toggle('hidden')"
                                             class="text-xs font-semibold text-amber-900 underline hover:text-amber-700 whitespace-nowrap">
@@ -1000,6 +1011,100 @@
                             }
 
                             refreshState();
+                        })();
+                    </script>
+                @endif
+
+                @if(!empty($pendingDetails))
+                    <script>
+                        (function () {
+                            // pendingDetails dan items ro'yxati — serverga shu yuboriladi.
+                            var PENDING_ITEMS = @json(array_map(fn($d) => [
+                                'schedule_id' => $d['schedule_id'],
+                                'yn_type' => $d['yn_type'],
+                                'attempt' => $d['attempt'],
+                            ], $pendingDetails));
+                            var ASSIGN_URL = @json(route($assignMissingRoute));
+                            var STATUS_URL = @json(route($assignMissingStatusRoute));
+
+                            window.bkAssignMissing = function () {
+                                if (!PENDING_ITEMS.length) return;
+                                if (!confirm(PENDING_ITEMS.length + ' ta qatorga kompyuter raqamlarini biriktirish boshlansinmi? Bu qoldiq talabalarga raqam tayinlaydi.')) {
+                                    return;
+                                }
+                                var btn = document.getElementById('bk-assign-missing-btn');
+                                var originalHTML = btn.innerHTML;
+                                btn.disabled = true;
+                                btn.textContent = 'Yuborilmoqda...';
+                                fetch(ASSIGN_URL, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Accept': 'application/json',
+                                        'X-Requested-With': 'XMLHttpRequest',
+                                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                                    },
+                                    body: JSON.stringify({ items: PENDING_ITEMS }),
+                                })
+                                .then(function (r) { return r.json().then(function (j) { return { ok: r.ok, body: j }; }); })
+                                .then(function (res) {
+                                    if (!res.ok || !res.body || !res.body.success) {
+                                        alert((res.body && (res.body.message || res.body.error)) || 'Xatolik yuz berdi');
+                                        btn.disabled = false; btn.innerHTML = originalHTML;
+                                        return;
+                                    }
+                                    if (!res.body.token) {
+                                        alert(res.body.message || 'Navbatga qo\'yildi');
+                                        btn.disabled = false; btn.innerHTML = originalHTML;
+                                        return;
+                                    }
+                                    btn.textContent = 'Biriktirilmoqda…';
+                                    bkPollMissing(res.body.token, btn, originalHTML, 0);
+                                })
+                                .catch(function (e) {
+                                    alert('Xatolik: ' + e.message);
+                                    btn.disabled = false; btn.innerHTML = originalHTML;
+                                });
+                            };
+
+                            function bkPollMissing(token, btn, originalHTML, attempts) {
+                                if (attempts > 120) {
+                                    alert('Biriktirish kutilganidan uzoq davom etmoqda. Sahifani qayta yuklab natijani tekshiring.');
+                                    btn.disabled = false; btn.innerHTML = originalHTML;
+                                    return;
+                                }
+                                setTimeout(function () {
+                                    fetch(STATUS_URL + '?token=' + encodeURIComponent(token), {
+                                        headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                                    })
+                                    .then(function (r) { return r.json(); })
+                                    .then(function (st) {
+                                        if (st && st.status === 'done') {
+                                            var msg = '✅ Tayyor! ' + (st.assigned || 0) + ' ta talabaga kompyuter raqami biriktirildi.';
+                                            if (st.skipped) msg += '\n⊝ O\'tkazib yuborildi: ' + st.skipped;
+                                            if (st.failed_total) {
+                                                msg += '\n❗ Muvaffaqiyatsiz: ' + st.failed_total + ' ta qator.';
+                                                if (Array.isArray(st.failures) && st.failures.length) {
+                                                    msg += '\nMisol sabablari (birinchi ' + st.failures.length + '):';
+                                                    st.failures.slice(0, 10).forEach(function (f) {
+                                                        msg += '\n  • #' + f.sid + ' ' + f.ynType + '/' + f.attempt + ' — ' + f.reason;
+                                                    });
+                                                }
+                                            }
+                                            alert(msg);
+                                            window.location.reload();
+                                        } else if (st && st.status === 'failed') {
+                                            alert('❌ Biriktirishda xatolik yuz berdi: ' + (st.message || 'noma\'lum'));
+                                            btn.disabled = false; btn.innerHTML = originalHTML;
+                                        } else {
+                                            bkPollMissing(token, btn, originalHTML, attempts + 1);
+                                        }
+                                    })
+                                    .catch(function () {
+                                        bkPollMissing(token, btn, originalHTML, attempts + 1);
+                                    });
+                                }, 3000);
+                            }
                         })();
                     </script>
                 @endif

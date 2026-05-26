@@ -2494,10 +2494,14 @@
                                 Sinov (test) baholari
                             </button>
                             @if(empty($sinovInJournal))
+                                @php
+                                    $hasSinovOverrides = isset($sinovOverrides) && $sinovOverrides->contains(fn($r) => $r->override_grade !== null);
+                                @endphp
                                 <button type="button" id="btn-copy-sinov-to-journal"
-                                    class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition shadow-sm flex-shrink-0"
+                                    class="px-4 py-2 text-white text-sm font-semibold rounded-lg transition shadow-sm flex-shrink-0 {{ $hasSinovOverrides ? 'bg-blue-600 hover:bg-blue-700 cursor-pointer' : 'bg-gray-300 cursor-not-allowed' }}"
                                     onclick="copySinovToJournal()"
-                                    title="2-ustundagi baholarni tepada jurnalning 'Sinov (test)' ustuniga ko'chiradi va qulflaydi">
+                                    @if(!$hasSinovOverrides) disabled @endif
+                                    title="{{ $hasSinovOverrides ? '2-ustundagi baholarni tepada jurnalning \'Sinov (test)\' ustuniga ko\'chiradi va qulflaydi' : 'Avval \'Sinov (test) baholari\' tugmasini bosib baholarni 2-ustunga ko\'chiring' }}">
                                     <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 4h5a2 2 0 012 2v12a2 2 0 01-2 2h-5"/>
@@ -2519,7 +2523,7 @@
                                     <th class="px-3 py-2 text-left font-semibold text-amber-900">#</th>
                                     <th class="px-3 py-2 text-left font-semibold text-amber-900">Talaba</th>
                                     <th class="px-3 py-2 text-center font-semibold text-amber-900">JN o'rtachasi (sukut)</th>
-                                    <th class="px-3 py-2 text-center font-semibold text-amber-900">Joriy YN test bahosi</th>
+                                    <th class="px-3 py-2 text-center font-semibold text-amber-900">Sinov (test) bahosi</th>
                                     <th class="px-3 py-2 text-center font-semibold text-amber-900">Amal</th>
                                 </tr>
                             </thead>

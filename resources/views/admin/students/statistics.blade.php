@@ -1036,11 +1036,16 @@
             $teacherChartLabels = array_keys($teacherTypeStats);
             $teacherChartMale   = array_map(fn($v) => (int) $v['male'],   $teacherTypeStats);
             $teacherChartFemale = array_map(fn($v) => (int) $v['female'], $teacherTypeStats);
+            // JSON_HEX_APOS: ' → ' (string ichidagilar); JSON_HEX_TAG/AMP —
+            // HTML xavfsizligi uchun. JSON_HEX_QUOT QO'YILMAYDI — chunki u
+            // strukturali " ni ham kodlab, JSON.parse'ni buzadi. " ni Blade
+            // {{ }} o'zi &quot; ga aylantiradi, HTML parser tiklaydi.
             $teacherTypeJson = json_encode([
                 'labels' => $teacherChartLabels,
                 'male'   => $teacherChartMale,
                 'female' => $teacherChartFemale,
-            ], JSON_UNESCAPED_UNICODE);
+            ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_TAG | JSON_HEX_AMP);
+            $teacherTotalCount = array_sum(array_column($teacherTypeStats, 'total'));
         @endphp
 
         <div class="stats-inner-tabs">
@@ -1061,15 +1066,19 @@
                     @foreach($teacherTypeStats as $type => $st)
                         <div>
                             <div style="font-size:13px; color:#64748b;">{{ $type }}</div>
-                            <div style="font-size:28px; font-weight:700; color:#0f172a;">{{ number_format((int) $st['total'], 0, '.', ' ') }}</div>
+                            <div style="font-size:28px; font-weight:700; color:#0f172a;" data-count="{{ (int) $st['total'] }}">{{ number_format((int) $st['total'], 0, '.', ' ') }}</div>
                         </div>
                     @endforeach
+                    <div style="padding-left:18px; border-left:2px solid #cbd5e1;">
+                        <div style="font-size:13px; color:#4f46e5; font-weight:600;">Jami</div>
+                        <div style="font-size:28px; font-weight:700; color:#4f46e5;" data-count="{{ (int) $teacherTotalCount }}">{{ number_format((int) $teacherTotalCount, 0, '.', ' ') }}</div>
+                    </div>
                 </div>
             </div>
 
             <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:18px 22px;">
                 <div style="position:relative; height: {{ max(260, count($teacherTypeStats) * 60 + 80) }}px;">
-                    <canvas id="teacherTypeChart" data-teacher-type='{!! $teacherTypeJson !!}'></canvas>
+                    <canvas id="teacherTypeChart" data-teacher-type="{{ $teacherTypeJson }}"></canvas>
                 </div>
             </div>
         </div>

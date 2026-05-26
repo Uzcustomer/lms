@@ -2671,7 +2671,7 @@
                                 </button>
                             @endif
 
-                            @if(!is_active_oqituvchi())
+                            @if(is_active_registrator() || auth()->user()?->hasAnyRole(['admin', 'superadmin']))
                                 <button type="button" id="btn-export-yn-qaydnoma"
                                     class="relative px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
                                     onclick="openYnWeightsModal()"

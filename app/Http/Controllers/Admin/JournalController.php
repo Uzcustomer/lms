@@ -5868,10 +5868,26 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Talabalar topilmadi.'], 404);
         }
 
+        // YN testga ko'chirish uchun eligibility tekshirish:
+        //   - JN < minimum_limit (sukut 60) → 0
+        //   - MT < minimum_limit              → 0
+        //   - Sababsiz davomat (absent_off) ≥ 25% (auditoriya soatlaridan) → 0
+        $mtAverages = $this->computeMtAveragesForGroup(
+            $data['subject_id'],
+            $data['semester_code'],
+            $data['group_hemis_id']
+        );
+        $davomatPct = $this->computeAbsenceForGroup(
+            $data['subject_id'],
+            $data['semester_code'],
+            $data['group_hemis_id']
+        );
+
         $userId = auth()->guard('teacher')->id() ?? auth()->guard('web')->id();
         $now = now();
         $applied = 0;
         $skipped = 0;
+        $zeroed = 0;
         $results = [];
 
         foreach ($jnAverages as $hemisId => $jn) {
@@ -5890,7 +5906,14 @@ class JournalController extends Controller
                 continue;
             }
 
-            $grade = (int) round((float) $jn, 0, PHP_ROUND_HALF_UP);
+            $jnInt = (int) round((float) $jn, 0, PHP_ROUND_HALF_UP);
+            $mtInt = (int) round((float) ($mtAverages[$hemisId] ?? 0), 0, PHP_ROUND_HALF_UP);
+            $absPct = (float) ($davomatPct[$hemisId] ?? 0);
+            $minLimit = (int) (MarkingSystemScore::getByStudentHemisId($hemisId)->minimum_limit ?? 60);
+
+            $eligible = ($jnInt >= $minLimit) && ($mtInt >= $minLimit) && ($absPct < 25);
+            $grade = $eligible ? $jnInt : 0;
+            if (!$eligible) $zeroed++;
 
             SinovTestGrade::updateOrCreate(
                 [
@@ -5911,11 +5934,21 @@ class JournalController extends Controller
             $results[$hemisId] = ['applied' => true, 'grade' => $grade];
         }
 
+        $message = "{$applied} ta talabaga JN o'rtachasi qo'llandi";
+        if ($zeroed > 0) {
+            $message .= " (shundan {$zeroed} ta talaba JN<60, MT<60 yoki sababsiz davomat ≥25% bo'lgani uchun 0 baho qo'yildi)";
+        }
+        if ($skipped > 0) {
+            $message .= ", {$skipped} ta talaba allaqachon jurnalga ko'chirilgan (qulflangan) edi";
+        }
+        $message .= '.';
+
         return response()->json([
             'success' => true,
-            'message' => "{$applied} ta talabaga JN o'rtachasi qo'llandi" . ($skipped > 0 ? ", {$skipped} ta talaba allaqachon jurnalga ko'chirilgan (qulflangan) edi" : '') . '.',
+            'message' => $message,
             'applied_count' => $applied,
             'skipped_count' => $skipped,
+            'zeroed_count' => $zeroed,
             'results' => $results,
         ]);
     }
@@ -6096,6 +6129,143 @@ class JournalController extends Controller
             $result[$hemisId] = $totalJbDaysForAverage > 0
                 ? (int) round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
                 : 0;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Guruh + fan bo'yicha har talaba uchun MT (mustaqil ta'lim) o'rtachasini
+     * hisoblash. Schedules.training_type_code=99 — MT darslari.
+     * Qaytadi: [student_hemis_id => mt_avg_int].
+     */
+    private function computeMtAveragesForGroup(string $subjectId, string $semesterCode, string $groupHemisId): array
+    {
+        $studentHemisIds = DB::table('students')
+            ->where('group_id', $groupHemisId)
+            ->pluck('hemis_id')
+            ->toArray();
+
+        if (empty($studentHemisIds)) {
+            return [];
+        }
+
+        $mtScheduleRows = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->where('training_type_code', 99)
+            ->whereNotNull('lesson_date')
+            ->select('lesson_date', 'lesson_pair_code')
+            ->get();
+
+        $mtDatePairSet = [];
+        $mtPairsPerDay = [];
+        $mtLessonDates = [];
+        foreach ($mtScheduleRows as $s) {
+            $date = \Carbon\Carbon::parse($s->lesson_date)->format('Y-m-d');
+            $key = $date . '_' . $s->lesson_pair_code;
+            if (isset($mtDatePairSet[$key])) continue;
+            $mtDatePairSet[$key] = true;
+            $mtPairsPerDay[$date] = ($mtPairsPerDay[$date] ?? 0) + 1;
+            $mtLessonDates[$date] = true;
+        }
+        $mtLessonDates = array_keys($mtLessonDates);
+        sort($mtLessonDates);
+
+        $gradingCutoffDate = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
+        $mtDatesForAvg = array_values(array_filter($mtLessonDates, function ($date) use ($gradingCutoffDate) {
+            return \Carbon\Carbon::parse($date, 'Asia/Tashkent')->startOfDay()->lte($gradingCutoffDate);
+        }));
+        $totalMtForAvg = count($mtDatesForAvg);
+
+        $allGrades = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 99)
+            ->whereNotNull('lesson_date')
+            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+            ->get();
+
+        $mtGrades = [];
+        foreach ($allGrades as $g) {
+            $effective = null;
+            if ($g->grade !== null && (float) $g->grade < 60 && $g->retake_grade !== null) {
+                $effective = $g->retake_grade;
+            } elseif ($g->status === 'recorded' || $g->status === 'closed') {
+                $effective = $g->grade;
+            } elseif ($g->retake_grade !== null) {
+                $effective = $g->retake_grade;
+            }
+            if ($effective === null) continue;
+            $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
+            $key = $normalizedDate . '_' . $g->lesson_pair_code;
+            if (isset($mtDatePairSet[$key])) {
+                $mtGrades[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effective;
+            }
+        }
+
+        $result = [];
+        foreach ($studentHemisIds as $hemisId) {
+            $dailySum = 0;
+            foreach ($mtDatesForAvg as $date) {
+                $dayGrades = $mtGrades[$hemisId][$date] ?? [];
+                $pairs = $mtPairsPerDay[$date] ?? 1;
+                $values = array_map(fn($v) => (float) $v, $dayGrades);
+                $dailySum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
+            }
+            $result[$hemisId] = $totalMtForAvg > 0
+                ? (int) round($dailySum / $totalMtForAvg, 0, PHP_ROUND_HALF_UP)
+                : 0;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Guruh + fan bo'yicha har talaba uchun sababsiz davomat foizini hisoblash.
+     * davomat_pct = SUM(absent_off) / total_acload * 100.
+     * Qaytadi: [student_hemis_id => float_pct].
+     */
+    private function computeAbsenceForGroup(string $subjectId, string $semesterCode, string $groupHemisId): array
+    {
+        $studentHemisIds = DB::table('students')
+            ->where('group_id', $groupHemisId)
+            ->pluck('hemis_id')
+            ->toArray();
+
+        if (empty($studentHemisIds)) {
+            return [];
+        }
+
+        $group = Group::where('group_hemis_id', $groupHemisId)->first();
+        $auditoriumHours = 0.0;
+        if ($group) {
+            $subj = CurriculumSubject::where('subject_id', $subjectId)
+                ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->where('semester_code', $semesterCode)
+                ->first();
+            $auditoriumHours = (float) ($subj->total_acload ?? 0);
+        }
+
+        $absences = DB::table('attendances')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->selectRaw('student_hemis_id, SUM(absent_off) as total_absent_off')
+            ->groupBy('student_hemis_id')
+            ->pluck('total_absent_off', 'student_hemis_id')
+            ->toArray();
+
+        $result = [];
+        foreach ($studentHemisIds as $hemisId) {
+            $absent = (float) ($absences[$hemisId] ?? 0);
+            $result[$hemisId] = $auditoriumHours > 0
+                ? round(($absent / $auditoriumHours) * 100, 2)
+                : 0.0;
         }
 
         return $result;

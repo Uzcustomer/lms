@@ -8235,6 +8235,70 @@ class AcademicScheduleController extends Controller
         }
         $pendingComputerStudents = max(0, $scheduledStudents - $assignedComputerCount);
 
+        // Diagnostika: agar pendingComputerStudents > 0 bo'lsa, qaysi slot/guruh
+        // qatorida nechta talaba sanab qolinayotganini per-row hisoblab beramiz.
+        // Guruh-level qator uchun ham merged per-student schedule_id'lar
+        // ($mergedQuizByCombo'dan) hisobga olinadi — chunki ularning komp
+        // raqamlari o'z per-student exam_schedule_id ostida saqlanadi, guruh
+        // schedule_id ostida emas.
+        $pendingDetails = [];
+        if ($pendingComputerStudents > 0) {
+            try {
+                foreach ($slots as $row) {
+                    if (!empty($row['no_time'])) continue;
+                    foreach ($row['groups'] as $grp) {
+                        $sid = (int) ($grp['schedule_id'] ?? 0);
+                        if ($sid <= 0) continue;
+                        $ynLower = strtolower((string) ($grp['yn_type'] ?? ''));
+                        $attempt = (int) ($grp['attempt'] ?? 1);
+                        $expected = (int) ($grp['student_count'] ?? 0);
+                        if ($expected <= 0) continue;
+
+                        // Bu (schedule, yn_type, attempt) bilan birga sanaladigan
+                        // schedule_id'lar to'plami — guruh qatori bo'lsa merged
+                        // per-student qatorlarining schedule_id'lari ham qo'shiladi.
+                        $sidSet = [$sid];
+                        if (empty($grp['is_individual'])) {
+                            $comboKey = ($grp['group_hemis_id'] ?? '') . '|' . ($grp['subject_id'] ?? '')
+                                . '|' . ($grp['semester_code'] ?? '') . '|' . $ynLower . '|' . $attempt;
+                            foreach ($mergedQuizByCombo[$comboKey] ?? [] as $m) {
+                                if (!empty($m['schedule_id'])) {
+                                    $sidSet[] = (int) $m['schedule_id'];
+                                }
+                            }
+                        }
+                        $sidSet = array_values(array_unique($sidSet));
+
+                        $assigned = (int) DB::table('computer_assignments')
+                            ->whereIn('exam_schedule_id', $sidSet)
+                            ->where('yn_type', $ynLower)
+                            ->where('attempt', $attempt)
+                            ->whereNotNull('computer_number')
+                            ->count();
+                        $missing = max(0, $expected - $assigned);
+                        if ($missing <= 0) continue;
+
+                        $pendingDetails[] = [
+                            'time' => $row['time'],
+                            'group_name' => $grp['group_name'] ?? '',
+                            'subject_name' => $grp['subject_name'] ?? '',
+                            'yn_type' => $grp['yn_type'] ?? '',
+                            'attempt' => $attempt,
+                            'is_individual' => !empty($grp['is_individual']),
+                            'schedule_ids' => $sidSet,
+                            'expected' => $expected,
+                            'assigned' => $assigned,
+                            'missing' => $missing,
+                        ];
+                    }
+                }
+                // Eng ko'p qolgan qatorlar tepada chiqsin.
+                usort($pendingDetails, fn($a, $b) => $b['missing'] <=> $a['missing']);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('bandlikKursatkichiShow: pendingDetails xatolik: ' . $e->getMessage());
+            }
+        }
+
         return view('admin.academic-schedule.bandlik-kursatkichi-show', [
             'date' => $carbonDate,
             'slots' => $slots,
@@ -8242,6 +8306,7 @@ class AcademicScheduleController extends Controller
             'settings' => $settings,
             'dailyCapacity' => $dailyCapacity,
             'pendingComputerStudents' => $pendingComputerStudents,
+            'pendingDetails' => $pendingDetails,
         ]);
     }
 

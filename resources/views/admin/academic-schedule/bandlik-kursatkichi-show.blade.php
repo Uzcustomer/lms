@@ -195,15 +195,74 @@
                     @endif
 
                     @if(($pendingComputerStudents ?? 0) > 0)
-                        <div class="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-3">
-                            <svg class="w-5 h-5 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                            </svg>
-                            <div class="text-sm text-amber-900">
-                                <span class="font-semibold">Kompyuter raqami qo'yilmagan:</span>
-                                {{ $pendingComputerStudents }} talaba
-                                — YN jadvalidan kompyuter raqamlarini taqsimlash kerak.
+                        <div class="mb-5 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                            <div class="flex items-center gap-3">
+                                <svg class="w-5 h-5 text-amber-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                                </svg>
+                                <div class="text-sm text-amber-900 flex-1">
+                                    <span class="font-semibold">Kompyuter raqami qo'yilmagan:</span>
+                                    {{ $pendingComputerStudents }} talaba
+                                    — YN jadvalidan kompyuter raqamlarini taqsimlash kerak.
+                                </div>
+                                @if(!empty($pendingDetails))
+                                    <button type="button"
+                                            onclick="document.getElementById('pending-comp-details').classList.toggle('hidden')"
+                                            class="text-xs font-semibold text-amber-900 underline hover:text-amber-700 whitespace-nowrap">
+                                        Tafsilot ({{ count($pendingDetails) }} qator)
+                                    </button>
+                                @endif
                             </div>
+                            @if(!empty($pendingDetails))
+                                <div id="pending-comp-details" class="hidden mt-3 pt-3 border-t border-amber-200">
+                                    <div class="text-xs text-amber-900 mb-2">
+                                        Diagnostika: har qatorda kutilgan (talabalar soni) va biriktirilgan (computer_assignments) solishtirildi
+                                        — <code class="font-mono">qoldi = kutilgan − biriktirilgan</code>.
+                                        Guruh qatorlari uchun merged per-student schedule_id'lar ham hisobga olingan.
+                                    </div>
+                                    <div class="overflow-x-auto">
+                                        <table class="w-full text-xs border-collapse">
+                                            <thead>
+                                                <tr class="bg-amber-100/60 text-amber-900">
+                                                    <th class="px-2 py-1 text-left border border-amber-200">Vaqt</th>
+                                                    <th class="px-2 py-1 text-left border border-amber-200">Guruh</th>
+                                                    <th class="px-2 py-1 text-left border border-amber-200">Fan</th>
+                                                    <th class="px-2 py-1 text-left border border-amber-200">YN</th>
+                                                    <th class="px-2 py-1 text-center border border-amber-200">Urin.</th>
+                                                    <th class="px-2 py-1 text-center border border-amber-200">Ind.</th>
+                                                    <th class="px-2 py-1 text-right border border-amber-200">Kutilgan</th>
+                                                    <th class="px-2 py-1 text-right border border-amber-200">Biriktirilgan</th>
+                                                    <th class="px-2 py-1 text-right border border-amber-200 font-bold">Qoldi</th>
+                                                    <th class="px-2 py-1 text-left border border-amber-200">schedule_id</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                @foreach($pendingDetails as $pd)
+                                                    <tr class="bg-white/40">
+                                                        <td class="px-2 py-1 border border-amber-200 font-mono">{{ $pd['time'] ?? '—' }}</td>
+                                                        <td class="px-2 py-1 border border-amber-200">{{ $pd['group_name'] }}</td>
+                                                        <td class="px-2 py-1 border border-amber-200">{{ $pd['subject_name'] }}</td>
+                                                        <td class="px-2 py-1 border border-amber-200">{{ $pd['yn_type'] }}</td>
+                                                        <td class="px-2 py-1 border border-amber-200 text-center">{{ $pd['attempt'] }}</td>
+                                                        <td class="px-2 py-1 border border-amber-200 text-center">{{ $pd['is_individual'] ? '✓' : '' }}</td>
+                                                        <td class="px-2 py-1 border border-amber-200 text-right font-mono">{{ $pd['expected'] }}</td>
+                                                        <td class="px-2 py-1 border border-amber-200 text-right font-mono">{{ $pd['assigned'] }}</td>
+                                                        <td class="px-2 py-1 border border-amber-200 text-right font-mono font-bold text-red-700">{{ $pd['missing'] }}</td>
+                                                        <td class="px-2 py-1 border border-amber-200 font-mono text-[10px]">{{ implode(',', $pd['schedule_ids']) }}</td>
+                                                    </tr>
+                                                @endforeach
+                                                <tr class="bg-amber-100/60 font-bold">
+                                                    <td class="px-2 py-1 border border-amber-200" colspan="8">JAMI qoldi (qatorlar bo'yicha):</td>
+                                                    <td class="px-2 py-1 border border-amber-200 text-right font-mono text-red-700">
+                                                        {{ array_sum(array_column($pendingDetails, 'missing')) }}
+                                                    </td>
+                                                    <td class="px-2 py-1 border border-amber-200"></td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            @endif
                         </div>
                     @endif
 

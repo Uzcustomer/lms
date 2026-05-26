@@ -52,6 +52,9 @@ class SettingsController extends Controller
         $data['examCapacity'] = ExamCapacityService::getSettings();
         $data['examDailyCapacity'] = ExamCapacityService::dailyCapacity();
 
+        // Sinov (test) baholarini admin tomonidan o'zgartirish ruxsati
+        $data['sinovTestGradesEditable'] = (bool) Setting::get('sinov_test_grades_editable', false);
+
         // Kontrakt to'lov muddatlari
         $defaultCutoffs = json_encode([
             ['deadline' => '2025-10-01', 'percent' => 25],
@@ -276,6 +279,17 @@ class SettingsController extends Controller
 
         return redirect()->route('admin.settings', ['tab' => 'exam-date-policy'])
             ->with('success', 'YN sanasi siyosati yangilandi.');
+    }
+
+    public function updateSinovTestPermissions(Request $request)
+    {
+        $request->validate([
+            'sinov_test_grades_editable' => 'nullable|in:0,1',
+        ]);
+        Setting::set('sinov_test_grades_editable', (bool) $request->input('sinov_test_grades_editable', 0));
+
+        return redirect()->route('admin.settings', ['tab' => 'sinov-test-permissions'])
+            ->with('success', 'Sinov (test) baholari ruxsati yangilandi.');
     }
 
     public function updateContractCutoffs(Request $request)

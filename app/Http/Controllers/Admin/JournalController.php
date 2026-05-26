@@ -1896,6 +1896,7 @@ class JournalController extends Controller
         $isSinov = ($subject->closing_form ?? null) === 'sinov';
         $sinovDefaults = [];
         $sinovOverrides = [];
+        $sinovInJournal = false;
         if ($isSinov) {
             foreach ($students as $stuRow) {
                 $sinovDefaults[$stuRow->hemis_id] = (int) ($sinovJnMap[$stuRow->hemis_id] ?? 0);
@@ -1906,11 +1907,13 @@ class JournalController extends Controller
                     ->where('group_hemis_id', $group->group_hemis_id)
                     ->get()
                     ->keyBy('student_hemis_id');
+                $sinovInJournal = $sinovOverrides->where('is_locked', true)->isNotEmpty();
             } catch (\Throwable $e) {
                 Log::warning('SinovTestGrade load failed: ' . $e->getMessage());
                 $sinovOverrides = collect();
             }
         }
+        $canEditLockedSinov = $this->canEditLockedSinov();
 
         $absFlat = collect($jbAbsences)->flatten(2);
         $retakeGraderIds = $absFlat->pluck('graded_by_user_id')->filter()->unique()->values()->toArray();
@@ -2013,7 +2016,9 @@ class JournalController extends Controller
             'testAttempt3DateMap',
             'isSinov',
             'sinovDefaults',
-            'sinovOverrides'
+            'sinovOverrides',
+            'sinovInJournal',
+            'canEditLockedSinov'
         ));
     }
 
@@ -5718,18 +5723,29 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Talaba guruhda topilmadi.'], 404);
         }
 
-        // Mavjud override — qulflangan bo'lsa, qayta o'zgartirib bo'lmaydi
+        // Mavjud override — jurnalga ko'chirilgan (qulflangan) bo'lsa, faqat
+        // admin + sozlamada toggle yoqilgan bo'lsa o'zgartirish mumkin.
         $existing = SinovTestGrade::where('subject_id', $data['subject_id'])
             ->where('semester_code', $data['semester_code'])
             ->where('group_hemis_id', $data['group_hemis_id'])
             ->where('student_hemis_id', $data['student_hemis_id'])
             ->first();
-        if ($existing && $existing->is_locked) {
-            return response()->json(['success' => false, 'message' => 'Bu talaba uchun bahoni faqat bir marta o\'zgartirish mumkin edi.'], 422);
+        if ($existing && $existing->is_locked && !$this->canEditLockedSinov()) {
+            return response()->json(['success' => false, 'message' => 'Bu baho jurnalga ko\'chirilgan va qulflangan. Adminda Sinov (test) baholarini o\'zgartirish toggle\'i yoqilmagan.'], 422);
         }
 
         $userId = auth()->guard('teacher')->id() ?? auth()->guard('web')->id();
         $grade = round((float) $data['grade'], 2);
+
+        // is_locked oldingi holatini saqlash (jurnalga ko'chirilgan bo'lsa, qulflangan qoladi).
+        $payload = [
+            'override_grade' => $grade,
+            'overridden_by_user_id' => $userId,
+            'overridden_at' => now(),
+        ];
+        if (!$existing) {
+            $payload['is_locked'] = false;
+        }
 
         SinovTestGrade::updateOrCreate(
             [
@@ -5738,12 +5754,7 @@ class JournalController extends Controller
                 'group_hemis_id' => $data['group_hemis_id'],
                 'student_hemis_id' => $data['student_hemis_id'],
             ],
-            [
-                'override_grade' => $grade,
-                'is_locked' => true,
-                'overridden_by_user_id' => $userId,
-                'overridden_at' => now(),
-            ]
+            $payload
         );
 
         return response()->json([
@@ -5754,9 +5765,25 @@ class JournalController extends Controller
     }
 
     /**
-     * Sinov fani uchun JN o'rtachasini guruh bo'yicha ommaviy ravishda
-     * YN test bahosi sifatida ko'chirish. Allaqachon qulflangan yozuvlar
-     * o'tkazib yuboriladi (ularga tegmaydi).
+     * Sinov (test) baholarini admin tomonidan o'zgartirish ruxsati bormi?
+     * - admin/superadmin rol bo'lishi shart;
+     * - sozlamada `sinov_test_grades_editable` yoqilgan bo'lishi shart.
+     */
+    public function canEditLockedSinov(): bool
+    {
+        $user = auth()->user();
+        if (!$user || !$user->hasAnyRole(['admin', 'superadmin'])) {
+            return false;
+        }
+        return (bool) \App\Models\Setting::get('sinov_test_grades_editable', false);
+    }
+
+    /**
+     * Sinov fani uchun JN o'rtachasini "Joriy YN test bahosi" ustuniga ommaviy
+     * ravishda ko'chirish. Qulflanmaydi — keyin har talabani edit pencil orqali
+     * o'zgartirish va shundan keyin "JN dan baholarni jurnalga ko'chirish" tugmasi
+     * bilan jurnalga (qulflab) o'tkazish mumkin. Allaqachon qulflangan yozuvlarga
+     * tegmaydi.
      */
     public function bulkCopySinovFromJn(Request $request)
     {
@@ -5852,7 +5879,7 @@ class JournalController extends Controller
                 [
                     'default_grade' => $grade,
                     'override_grade' => $grade,
-                    'is_locked' => true,
+                    'is_locked' => false,
                     'overridden_by_user_id' => $userId,
                     'overridden_at' => $now,
                 ]
@@ -5863,10 +5890,81 @@ class JournalController extends Controller
 
         return response()->json([
             'success' => true,
-            'message' => "{$applied} ta talabaga JN o'rtachasi qo'llandi" . ($skipped > 0 ? ", {$skipped} ta talaba allaqachon qulflangan edi" : '') . '.',
+            'message' => "{$applied} ta talabaga JN o'rtachasi qo'llandi" . ($skipped > 0 ? ", {$skipped} ta talaba allaqachon jurnalga ko'chirilgan (qulflangan) edi" : '') . '.',
             'applied_count' => $applied,
             'skipped_count' => $skipped,
             'results' => $results,
+        ]);
+    }
+
+    /**
+     * "JN dan baholarni jurnalga ko'chirish" — guruhdagi barcha SinovTestGrade
+     * yozuvlarini is_locked=true qilib belgilaydi. Shundan keyin tepadagi
+     * jurnal jadvalida "Sinov (test)" ustunida ko'rinadi va o'qituvchi rolidan
+     * o'zgartirib bo'lmaydi (admin esa sozlamalar toggle'i orqali tahrirlay
+     * oladi).
+     */
+    public function copySinovToJournal(Request $request)
+    {
+        $data = $request->validate([
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'group_hemis_id' => 'required',
+        ]);
+
+        if (is_active_oqituvchi()) {
+            $teacherHemisId = get_teacher_hemis_id();
+            if (!$teacherHemisId) {
+                return response()->json(['success' => false, 'message' => 'O\'qituvchi topilmadi.'], 403);
+            }
+            $isAssignedByCST = CurriculumSubjectTeacher::where('employee_id', $teacherHemisId)
+                ->where('subject_id', $data['subject_id'])
+                ->where('group_id', $data['group_hemis_id'])
+                ->exists();
+            $isAssignedBySchedule = DB::table('schedules')
+                ->where('employee_id', $teacherHemisId)
+                ->where('subject_id', $data['subject_id'])
+                ->where('group_id', $data['group_hemis_id'])
+                ->whereNull('deleted_at')
+                ->exists();
+            if (!($isAssignedByCST || $isAssignedBySchedule)) {
+                return response()->json(['success' => false, 'message' => 'Siz bu fan va guruhga biriktirilmagansiz.'], 403);
+            }
+        } elseif (!auth()->user()?->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['success' => false, 'message' => 'Huquq yo\'q.'], 403);
+        }
+
+        $group = Group::where('group_hemis_id', $data['group_hemis_id'])->first();
+        if (!$group) {
+            return response()->json(['success' => false, 'message' => 'Guruh topilmadi.'], 404);
+        }
+        $subject = CurriculumSubject::where('subject_id', $data['subject_id'])
+            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+            ->where('semester_code', $data['semester_code'])
+            ->first();
+        if (!$subject || ($subject->closing_form ?? null) !== 'sinov') {
+            return response()->json(['success' => false, 'message' => 'Bu funksiya faqat sinov bilan yopiladigan fanlarga tegishli.'], 422);
+        }
+
+        $rowsCount = SinovTestGrade::where('subject_id', $data['subject_id'])
+            ->where('semester_code', $data['semester_code'])
+            ->where('group_hemis_id', $data['group_hemis_id'])
+            ->whereNotNull('override_grade')
+            ->count();
+        if ($rowsCount === 0) {
+            return response()->json(['success' => false, 'message' => 'Avval "Sinov (test) baholari" tugmasi bilan baholarni 2-ustunga ko\'chiring.'], 422);
+        }
+
+        $locked = SinovTestGrade::where('subject_id', $data['subject_id'])
+            ->where('semester_code', $data['semester_code'])
+            ->where('group_hemis_id', $data['group_hemis_id'])
+            ->whereNotNull('override_grade')
+            ->update(['is_locked' => true]);
+
+        return response()->json([
+            'success' => true,
+            'message' => "{$locked} ta talabaning Sinov (test) bahosi jurnalga ko'chirildi va qulflandi.",
+            'locked_count' => $locked,
         ]);
     }
 

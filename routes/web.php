@@ -331,6 +331,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/submit-to-yn', [JournalController::class, 'submitToYn'])->name('submit-to-yn');
             Route::post('/save-sinov-override', [JournalController::class, 'saveSinovOverride'])->name('save-sinov-override');
             Route::post('/bulk-copy-sinov-from-jn', [JournalController::class, 'bulkCopySinovFromJn'])->name('bulk-copy-sinov-from-jn');
+            Route::post('/copy-sinov-to-journal', [JournalController::class, 'copySinovToJournal'])->name('copy-sinov-to-journal');
             Route::post('/transfer-to-next-attempt', [JournalController::class, 'transferToNextAttempt'])->name('transfer-to-next-attempt');
             Route::post('/finalize-attempt', [JournalController::class, 'finalizeAttempt'])->name('finalize-attempt');
             Route::post('/unfinalize-attempt', [JournalController::class, 'unfinalizeAttempt'])->name('unfinalize-attempt');
@@ -551,6 +552,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/settings/test-center-permissions', [SettingsController::class, 'updateTestCenterPermissions'])->name('settings.update.test-center-permissions');
         Route::post('/settings/exam-date-policy', [SettingsController::class, 'updateExamDatePolicy'])->name('settings.update.exam-date-policy');
         Route::post('/settings/exam-capacity', [SettingsController::class, 'updateExamCapacity'])->name('settings.update.exam-capacity');
+        Route::post('/settings/sinov-test-permissions', [SettingsController::class, 'updateSinovTestPermissions'])->name('settings.update.sinov-test-permissions');
 
         // Old routes — redirect to unified settings
         Route::get('/deadlines', fn () => redirect()->route('admin.settings', ['tab' => 'deadlines']))->name('deadlines');

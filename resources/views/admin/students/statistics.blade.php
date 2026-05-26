@@ -137,6 +137,8 @@
         color: #475569;
         font-size: 13px;
     }
+    .dept-row:hover { background: rgba(15, 23, 42, 0.04); }
+    .dept-row-open  { background: rgba(99, 102, 241, 0.08) !important; }
     .stats-empty strong {
         color: #1e293b;
     }
@@ -1129,16 +1131,12 @@
         </div>
 
         {{-- Kafedra/bo'lim --}}
-        <div x-show="inner.oqituvchilar === 'kafedra'" x-cloak>
+        <div x-show="inner.oqituvchilar === 'kafedra'" x-cloak
+             x-data="{ openDept: null }">
             @php
-                $teacherDeptStats = $teacherDeptStats ?? [];
-                $teacherDeptLabels = array_values(array_keys($teacherDeptStats));
-                $teacherDeptValues = array_values(array_map(fn($v) => (int) $v['total'], $teacherDeptStats));
-                $teacherDeptJson = json_encode([
-                    'labels' => $teacherDeptLabels,
-                    'data'   => $teacherDeptValues,
-                ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_TAG | JSON_HEX_AMP);
-                $teacherDeptTotal = array_sum($teacherDeptValues);
+                $teacherDeptStats   = $teacherDeptStats   ?? [];
+                $teacherDeptMembers = $teacherDeptMembers ?? [];
+                $teacherDeptTotal   = array_sum(array_column($teacherDeptStats, 'total'));
             @endphp
             <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:18px 22px; margin-bottom:18px;">
                 <h3 style="font-size:18px; font-weight:700; color:#1e293b; margin:0 0 8px;">Kafedra/bo'lim bo'yicha xodimlar</h3>
@@ -1154,10 +1152,72 @@
                 </div>
             </div>
 
-            <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:18px 22px;">
-                <div style="position:relative; height: {{ max(320, count($teacherDeptStats) * 28 + 80) }}px;">
-                    <canvas id="teacherDeptChart" data-teacher-dept="{{ $teacherDeptJson }}"></canvas>
-                </div>
+            <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:6px;">
+                <table style="width:100%; border-collapse: collapse; font-size:13px;">
+                    <thead>
+                        <tr style="background: rgba(99,102,241,0.08); color:#1e293b;">
+                            <th style="text-align:left; padding:10px 14px; font-weight:600; width:50px;">#</th>
+                            <th style="text-align:left; padding:10px 14px; font-weight:600;">Kafedra/bo'lim</th>
+                            <th style="text-align:right; padding:10px 14px; font-weight:600; width:120px;">Xodim soni</th>
+                            <th style="width:36px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($teacherDeptStats as $dept => $st)
+                            @php
+                                $deptKey = md5($dept);
+                                $members = $teacherDeptMembers[$dept] ?? [];
+                            @endphp
+                            <tr class="dept-row" :class="openDept === '{{ $deptKey }}' ? 'dept-row-open' : ''"
+                                style="cursor:pointer; border-top:1px solid rgba(15,23,42,0.06); transition:background .15s;"
+                                @click="openDept = (openDept === '{{ $deptKey }}' ? null : '{{ $deptKey }}')">
+                                <td style="padding:10px 14px; color:#64748b;">{{ $loop->iteration }}</td>
+                                <td style="padding:10px 14px; color:#0f172a;">{{ $dept }}</td>
+                                <td style="padding:10px 14px; text-align:right; font-weight:600; color:#4f46e5;">{{ number_format((int) $st['total'], 0, '.', ' ') }}</td>
+                                <td style="padding:10px 14px; text-align:center; color:#94a3b8;">
+                                    <span x-text="openDept === '{{ $deptKey }}' ? '▾' : '▸'"></span>
+                                </td>
+                            </tr>
+                            <tr x-show="openDept === '{{ $deptKey }}'" x-cloak>
+                                <td colspan="4" style="padding:0; background: rgba(255,255,255,0.45); border-top:1px dashed rgba(15,23,42,0.1);">
+                                    <div style="padding:14px 22px;">
+                                        @if(empty($members))
+                                            <div style="padding:14px; color:#64748b; font-style:italic;">Xodim topilmadi.</div>
+                                        @else
+                                            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:10px;">
+                                                @foreach($members as $m)
+                                                    <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:#fff; border:1px solid rgba(15,23,42,0.08); border-radius:10px;">
+                                                        @if(!empty($m['image']))
+                                                            <img src="{{ $m['image'] }}" alt=""
+                                                                 style="width:42px; height:42px; border-radius:50%; object-fit:cover; flex-shrink:0; background:#e2e8f0;"
+                                                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                                            <div style="display:none; width:42px; height:42px; border-radius:50%; background:#6366f1; color:#fff; align-items:center; justify-content:center; font-weight:600; flex-shrink:0;">
+                                                                {{ mb_substr($m['full_name'], 0, 1) }}
+                                                            </div>
+                                                        @else
+                                                            <div style="display:flex; width:42px; height:42px; border-radius:50%; background:#6366f1; color:#fff; align-items:center; justify-content:center; font-weight:600; flex-shrink:0;">
+                                                                {{ mb_substr($m['full_name'], 0, 1) }}
+                                                            </div>
+                                                        @endif
+                                                        <div style="min-width:0; flex:1;">
+                                                            <div style="font-weight:600; color:#0f172a; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ $m['full_name'] }}">{{ $m['full_name'] }}</div>
+                                                            <div style="color:#64748b; font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ $m['staff_position'] }}">{{ $m['staff_position'] ?: '—' }}</div>
+                                                            @if(!empty($m['phone']))
+                                                                <a href="tel:{{ $m['phone'] }}" style="color:#4f46e5; font-size:11.5px; text-decoration:none;">{{ $m['phone'] }}</a>
+                                                            @else
+                                                                <span style="color:#94a3b8; font-size:11.5px;">Telefon yo'q</span>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -1880,7 +1940,6 @@
         renderProvinceChart('provinceChartTab');
         renderTeacherTypeChart('teacherTypeChart');
         renderTeacherGenderChart('teacherGenderChart');
-        renderTeacherDeptChart('teacherDeptChart');
     };
 
     // Edu-tab click handler — har chart kartasidagi Hammasi/Bakalavr/Magistr/Ordinatura

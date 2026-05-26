@@ -1033,8 +1033,11 @@
                 'ilmiy_unvon'   => 'Ilmiy unvon',
             ];
             $teacherTypeStats = $teacherTypeStats ?? [];
-            $teacherChartLabels = array_keys($teacherTypeStats);
-            $teacherChartData   = array_map(fn($v) => (int) $v['total'], $teacherTypeStats);
+            $teacherChartLabels = array_values(array_keys($teacherTypeStats));
+            // array_values() — array_map string keylarni saqlab qoladi,
+            // natijada JSON da array o'rniga object chiqib Chart.js bars
+            // chizmaydi. Sequential indices uchun array_values() shart.
+            $teacherChartData   = array_values(array_map(fn($v) => (int) $v['total'], $teacherTypeStats));
             // JSON_HEX_APOS: ' → ' (string ichidagilar); JSON_HEX_TAG/AMP —
             // HTML xavfsizligi uchun. JSON_HEX_QUOT QO'YILMAYDI — chunki u
             // strukturali " ni ham kodlab, JSON.parse'ni buzadi. " ni Blade

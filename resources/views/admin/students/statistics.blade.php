@@ -1034,18 +1034,16 @@
             ];
             $teacherTypeStats = $teacherTypeStats ?? [];
             $teacherChartLabels = array_keys($teacherTypeStats);
-            $teacherChartMale   = array_map(fn($v) => (int) $v['male'],   $teacherTypeStats);
-            $teacherChartFemale = array_map(fn($v) => (int) $v['female'], $teacherTypeStats);
+            $teacherChartData   = array_map(fn($v) => (int) $v['total'], $teacherTypeStats);
             // JSON_HEX_APOS: ' → ' (string ichidagilar); JSON_HEX_TAG/AMP —
             // HTML xavfsizligi uchun. JSON_HEX_QUOT QO'YILMAYDI — chunki u
             // strukturali " ni ham kodlab, JSON.parse'ni buzadi. " ni Blade
             // {{ }} o'zi &quot; ga aylantiradi, HTML parser tiklaydi.
             $teacherTypeJson = json_encode([
                 'labels' => $teacherChartLabels,
-                'male'   => $teacherChartMale,
-                'female' => $teacherChartFemale,
+                'data'   => $teacherChartData,
             ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_TAG | JSON_HEX_AMP);
-            $teacherTotalCount = array_sum(array_column($teacherTypeStats, 'total'));
+            $teacherTotalCount = array_sum($teacherChartData);
         @endphp
 
         <div class="stats-inner-tabs">
@@ -1665,7 +1663,7 @@
         });
     }
 
-    // Xodimlar turi — gorizontal stacked bar chart (Erkak/Ayol)
+    // Xodimlar turi — employee_type bo'yicha umumiy son (gorizontal bar)
     function renderTeacherTypeChart(id) {
         const canvas = document.getElementById(id);
         if (!canvas || canvas.offsetParent === null) return;
@@ -1673,29 +1671,33 @@
         try { data = JSON.parse(canvas.dataset.teacherType || '{}'); }
         catch (e) { return; }
         const labels = data.labels || [];
-        const male   = data.male   || [];
-        const female = data.female || [];
+        const values = data.data   || [];
         if (canvas._chart) { canvas._chart.destroy(); }
         canvas._chart = new Chart(canvas, {
             type: 'bar',
             data: {
                 labels: labels,
-                datasets: [
-                    { label: 'Erkak', data: male,   backgroundColor: '#3b82f6', borderRadius: 4 },
-                    { label: 'Ayol',  data: female, backgroundColor: '#ec4899', borderRadius: 4 },
-                ],
+                datasets: [{
+                    label: 'Xodimlar soni',
+                    data: values,
+                    backgroundColor: '#6366f1',
+                    borderRadius: 4,
+                }],
             },
             options: {
                 indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
                 scales: {
-                    x: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
-                    y: { stacked: true },
+                    x: { beginAtZero: true, ticks: { precision: 0 } },
                 },
                 plugins: {
-                    legend: { position: 'bottom', labels: { usePointStyle: true } },
-                    tooltip: { mode: 'index', intersect: false },
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => ` ${ctx.parsed.x.toLocaleString('uz-UZ').replace(/,/g, ' ')} ta`,
+                        },
+                    },
                 },
             },
         });

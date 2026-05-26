@@ -1016,14 +1016,17 @@
                 @endif
 
                 @if(!empty($pendingDetails))
+                    @php
+                        $pendingItemsForJs = array_map(fn($d) => [
+                            'schedule_id' => $d['schedule_id'],
+                            'yn_type' => $d['yn_type'],
+                            'attempt' => $d['attempt'],
+                        ], $pendingDetails);
+                    @endphp
                     <script>
                         (function () {
                             // pendingDetails dan items ro'yxati — serverga shu yuboriladi.
-                            var PENDING_ITEMS = @json(array_map(fn($d) => [
-                                'schedule_id' => $d['schedule_id'],
-                                'yn_type' => $d['yn_type'],
-                                'attempt' => $d['attempt'],
-                            ], $pendingDetails));
+                            var PENDING_ITEMS = @json($pendingItemsForJs);
                             var ASSIGN_URL = @json(route($assignMissingRoute));
                             var STATUS_URL = @json(route($assignMissingStatusRoute));
 

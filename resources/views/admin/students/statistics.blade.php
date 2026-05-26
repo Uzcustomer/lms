@@ -1190,7 +1190,7 @@
                                 style="cursor:pointer; border-top:1px solid rgba(15,23,42,0.06); transition:background .15s;"
                                 @click="openDept = (openDept === '{{ $deptKey }}' ? null : '{{ $deptKey }}')">
                                 <td style="padding:14px 14px; color:#64748b; font-size:14px;">{{ $loop->iteration }}</td>
-                                <td style="padding:14px 14px; color:#0f172a; font-size:20px; font-weight:600;">{{ $dept }}</td>
+                                <td style="padding:14px 14px; color:#0f172a; font-size:18px; font-weight:600;">{{ $dept }}</td>
                                 <td style="padding:14px 14px; text-align:right; font-weight:700; color:#4f46e5; font-size:18px;">{{ number_format((int) $st['total'], 0, '.', ' ') }}</td>
                                 <td style="padding:14px 14px; text-align:center; color:#94a3b8; font-size:18px;">
                                     <span x-text="openDept === '{{ $deptKey }}' ? '▾' : '▸'"></span>
@@ -1239,8 +1239,117 @@
             </div>
         </div>
 
+        {{-- Lavozim --}}
+        <div x-show="inner.oqituvchilar === 'lavozim'" x-cloak
+             x-data="{ openPos: null, posSearch: '' }">
+            @php
+                $teacherPositionStats   = $teacherPositionStats   ?? [];
+                $teacherPositionMembers = $teacherPositionMembers ?? [];
+                $teacherPositionTotal   = array_sum(array_column($teacherPositionStats, 'total'));
+            @endphp
+            <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:18px 22px; margin-bottom:18px;">
+                <h3 style="font-size:18px; font-weight:700; color:#1e293b; margin:0 0 8px;">Lavozim bo'yicha xodimlar</h3>
+                <div style="display:flex; flex-wrap:wrap; gap:28px;">
+                    <div>
+                        <div style="font-size:13px; color:#64748b;">Lavozim soni</div>
+                        <div style="font-size:28px; font-weight:700; color:#0f172a;" data-count="{{ count($teacherPositionStats) }}">{{ number_format(count($teacherPositionStats), 0, '.', ' ') }}</div>
+                    </div>
+                    <div style="padding-left:18px; border-left:2px solid #cbd5e1;">
+                        <div style="font-size:13px; color:#4f46e5; font-weight:600;">Jami xodim</div>
+                        <div style="font-size:28px; font-weight:700; color:#4f46e5;" data-count="{{ (int) $teacherPositionTotal }}">{{ number_format((int) $teacherPositionTotal, 0, '.', ' ') }}</div>
+                    </div>
+                </div>
+            </div>
+
+            {{-- Qidirish input --}}
+            <div style="margin-bottom:14px; position:relative;">
+                <svg width="18" height="18" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24"
+                     style="position:absolute; left:14px; top:50%; transform:translateY(-50%); pointer-events:none;">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="m21 21-4.3-4.3" stroke-linecap="round"/>
+                </svg>
+                <input type="search" x-model="posSearch"
+                       placeholder="Lavozim yoki xodim ismi bo'yicha qidirish..."
+                       style="width:100%; padding:12px 14px 12px 42px; border:1px solid rgba(15,23,42,0.12); border-radius:12px; background:rgba(255,255,255,0.7); font-size:14px; outline:none; transition:border-color .15s, box-shadow .15s;"
+                       onfocus="this.style.borderColor='#6366f1'; this.style.boxShadow='0 0 0 3px rgba(99,102,241,0.15)';"
+                       onblur="this.style.borderColor='rgba(15,23,42,0.12)'; this.style.boxShadow='none';">
+            </div>
+
+            <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:6px;">
+                <table style="width:100%; border-collapse: collapse; font-size:13px;">
+                    <thead>
+                        <tr style="background: rgba(99,102,241,0.08); color:#1e293b;">
+                            <th style="text-align:left; padding:10px 14px; font-weight:600; width:50px;">#</th>
+                            <th style="text-align:left; padding:10px 14px; font-weight:600;">Lavozim</th>
+                            <th style="text-align:right; padding:10px 14px; font-weight:600; width:140px;">Xodim soni</th>
+                            <th style="width:36px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach($teacherPositionStats as $pos => $st)
+                            @php
+                                $posKey = md5($pos);
+                                $members = $teacherPositionMembers[$pos] ?? [];
+                                $posLow = mb_strtolower($pos);
+                                $memberNamesLow = mb_strtolower(implode(' ', array_column($members, 'full_name')));
+                                $haystack = $posLow . ' ' . $memberNamesLow;
+                            @endphp
+                            <tr class="dept-row" :class="openPos === '{{ $posKey }}' ? 'dept-row-open' : ''"
+                                x-show="posSearch.trim() === '' || {{ json_encode($haystack) }}.includes(posSearch.toLowerCase().trim())"
+                                style="cursor:pointer; border-top:1px solid rgba(15,23,42,0.06); transition:background .15s;"
+                                @click="openPos = (openPos === '{{ $posKey }}' ? null : '{{ $posKey }}')">
+                                <td style="padding:14px 14px; color:#64748b; font-size:14px;">{{ $loop->iteration }}</td>
+                                <td style="padding:14px 14px; color:#0f172a; font-size:18px; font-weight:600;">{{ $pos }}</td>
+                                <td style="padding:14px 14px; text-align:right; font-weight:700; color:#4f46e5; font-size:18px;">{{ number_format((int) $st['total'], 0, '.', ' ') }}</td>
+                                <td style="padding:14px 14px; text-align:center; color:#94a3b8; font-size:18px;">
+                                    <span x-text="openPos === '{{ $posKey }}' ? '▾' : '▸'"></span>
+                                </td>
+                            </tr>
+                            <tr x-show="openPos === '{{ $posKey }}' && (posSearch.trim() === '' || {{ json_encode($haystack) }}.includes(posSearch.toLowerCase().trim()))" x-cloak>
+                                <td colspan="4" style="padding:0; background: rgba(255,255,255,0.45); border-top:1px dashed rgba(15,23,42,0.1);">
+                                    <div style="padding:14px 22px;">
+                                        @if(empty($members))
+                                            <div style="padding:14px; color:#64748b; font-style:italic;">Xodim topilmadi.</div>
+                                        @else
+                                            <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:10px;">
+                                                @foreach($members as $m)
+                                                    <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:#fff; border:1px solid rgba(15,23,42,0.08); border-radius:10px;">
+                                                        @if(!empty($m['image']))
+                                                            <img src="{{ $m['image'] }}" alt=""
+                                                                 style="width:42px; height:42px; border-radius:50%; object-fit:cover; flex-shrink:0; background:#e2e8f0;"
+                                                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                                            <div style="display:none; width:42px; height:42px; border-radius:50%; background:#6366f1; color:#fff; align-items:center; justify-content:center; font-weight:600; flex-shrink:0;">
+                                                                {{ mb_substr($m['full_name'], 0, 1) }}
+                                                            </div>
+                                                        @else
+                                                            <div style="display:flex; width:42px; height:42px; border-radius:50%; background:#6366f1; color:#fff; align-items:center; justify-content:center; font-weight:600; flex-shrink:0;">
+                                                                {{ mb_substr($m['full_name'], 0, 1) }}
+                                                            </div>
+                                                        @endif
+                                                        <div style="min-width:0; flex:1;">
+                                                            <div style="font-weight:600; color:#0f172a; font-size:12.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ $m['full_name'] }}">{{ $m['full_name'] }}</div>
+                                                            <div style="color:#64748b; font-size:11.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="{{ $m['department'] }}">{{ $m['department'] ?: '—' }}</div>
+                                                            @if(!empty($m['phone']))
+                                                                <a href="tel:{{ $m['phone'] }}" style="color:#4f46e5; font-size:11.5px; text-decoration:none;">{{ $m['phone'] }}</a>
+                                                            @else
+                                                                <span style="color:#94a3b8; font-size:11.5px;">Telefon yo'q</span>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         {{-- Qolgan inner tablar — hozircha tayyor emas --}}
-        @foreach(['lavozim','ilmiy_daraja','ilmiy_unvon'] as $tk)
+        @foreach(['ilmiy_daraja','ilmiy_unvon'] as $tk)
             <div x-show="inner.oqituvchilar === '{{ $tk }}'" x-cloak>
                 <div class="stats-empty">
                     <strong>{{ $teacherInnerTabs[$tk] }}</strong> — statistika hali tayyor emas.

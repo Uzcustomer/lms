@@ -489,38 +489,19 @@ class StudentController extends Controller
         foreach ($citizenshipByEdu as $k => $arr) { arsort($arr); $citizenshipByEdu[$k] = $arr; }
 
         // ── Professor-o'qituvchilar (xodimlar) statistikasi ──
-        // Faqat asosiy ish joyiga ega xodimlar bo'yicha employee_type kesimi
-        // (jinsga ham split). Jins/Erkak/Ayol matchini bevosita SQL'da bajaramiz —
-        // shunda gender ustunidagi turli yozuvlar (Erkak/erkak/Male/...) ham
-        // chiroyli ushlanadi va PHP tarafida string check qilinmaydi.
+        // Faqat asosiy ish joyiga ega xodimlar bo'yicha employee_type kesimi.
+        // "Turi" inner tabidagi kartalar va bar chart uchun (jinsga split QILINMAYDI —
+        // u keyinroq alohida "Jins" tabida bo'ladi).
         $teacherTypeRows = DB::table('teachers')
             ->whereRaw('LOWER(TRIM(employment_form)) = ?', ['asosiy ish joy'])
-            ->selectRaw("
-                employee_type,
-                COUNT(*) as total,
-                SUM(CASE
-                    WHEN LOWER(TRIM(gender)) LIKE 'erkak%'
-                      OR LOWER(TRIM(gender)) IN ('male','m')
-                    THEN 1 ELSE 0
-                END) as male,
-                SUM(CASE
-                    WHEN LOWER(TRIM(gender)) LIKE 'ayol%'
-                      OR LOWER(TRIM(gender)) LIKE 'xotin%'
-                      OR LOWER(TRIM(gender)) IN ('female','f')
-                    THEN 1 ELSE 0
-                END) as female
-            ")
+            ->selectRaw('employee_type, COUNT(*) as total')
             ->groupBy('employee_type')
             ->get();
-        $teacherTypeStats = []; // [employee_type => ['total'=>n,'male'=>n,'female'=>n]]
+        $teacherTypeStats = []; // [employee_type => ['total'=>n]]
         foreach ($teacherTypeRows as $r) {
             $type = trim((string) $r->employee_type);
             if ($type === '') continue;
-            $teacherTypeStats[$type] = [
-                'total'  => (int) $r->total,
-                'male'   => (int) $r->male,
-                'female' => (int) $r->female,
-            ];
+            $teacherTypeStats[$type] = ['total' => (int) $r->total];
         }
         uasort($teacherTypeStats, fn($a, $b) => $b['total'] <=> $a['total']);
 

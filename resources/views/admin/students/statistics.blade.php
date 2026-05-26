@@ -1128,8 +1128,41 @@
             </div>
         </div>
 
+        {{-- Kafedra/bo'lim --}}
+        <div x-show="inner.oqituvchilar === 'kafedra'" x-cloak>
+            @php
+                $teacherDeptStats = $teacherDeptStats ?? [];
+                $teacherDeptLabels = array_values(array_keys($teacherDeptStats));
+                $teacherDeptValues = array_values(array_map(fn($v) => (int) $v['total'], $teacherDeptStats));
+                $teacherDeptJson = json_encode([
+                    'labels' => $teacherDeptLabels,
+                    'data'   => $teacherDeptValues,
+                ], JSON_UNESCAPED_UNICODE | JSON_HEX_APOS | JSON_HEX_TAG | JSON_HEX_AMP);
+                $teacherDeptTotal = array_sum($teacherDeptValues);
+            @endphp
+            <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:18px 22px; margin-bottom:18px;">
+                <h3 style="font-size:18px; font-weight:700; color:#1e293b; margin:0 0 8px;">Kafedra/bo'lim bo'yicha xodimlar</h3>
+                <div style="display:flex; flex-wrap:wrap; gap:28px;">
+                    <div>
+                        <div style="font-size:13px; color:#64748b;">Kafedra/bo'lim soni</div>
+                        <div style="font-size:28px; font-weight:700; color:#0f172a;" data-count="{{ count($teacherDeptStats) }}">{{ number_format(count($teacherDeptStats), 0, '.', ' ') }}</div>
+                    </div>
+                    <div style="padding-left:18px; border-left:2px solid #cbd5e1;">
+                        <div style="font-size:13px; color:#4f46e5; font-weight:600;">Jami xodim</div>
+                        <div style="font-size:28px; font-weight:700; color:#4f46e5;" data-count="{{ (int) $teacherDeptTotal }}">{{ number_format((int) $teacherDeptTotal, 0, '.', ' ') }}</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:18px 22px;">
+                <div style="position:relative; height: {{ max(320, count($teacherDeptStats) * 28 + 80) }}px;">
+                    <canvas id="teacherDeptChart" data-teacher-dept="{{ $teacherDeptJson }}"></canvas>
+                </div>
+            </div>
+        </div>
+
         {{-- Qolgan inner tablar — hozircha tayyor emas --}}
-        @foreach(['kafedra','lavozim','ilmiy_daraja','ilmiy_unvon'] as $tk)
+        @foreach(['lavozim','ilmiy_daraja','ilmiy_unvon'] as $tk)
             <div x-show="inner.oqituvchilar === '{{ $tk }}'" x-cloak>
                 <div class="stats-empty">
                     <strong>{{ $teacherInnerTabs[$tk] }}</strong> — statistika hali tayyor emas.
@@ -1761,6 +1794,48 @@
         });
     }
 
+    // Kafedra/bo'lim — har department uchun rang-barang gorizontal bar
+    function renderTeacherDeptChart(id) {
+        const canvas = document.getElementById(id);
+        if (!canvas || canvas.offsetParent === null) return;
+        let data;
+        try { data = JSON.parse(canvas.dataset.teacherDept || '{}'); }
+        catch (e) { return; }
+        const labels = data.labels || [];
+        const values = data.data   || [];
+        const colors = labels.map((_, i) => TEACHER_BAR_PALETTE[i % TEACHER_BAR_PALETTE.length]);
+        if (canvas._chart) { canvas._chart.destroy(); }
+        canvas._chart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Xodimlar soni',
+                    data: values,
+                    backgroundColor: colors,
+                    borderRadius: 4,
+                }],
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { beginAtZero: true, ticks: { precision: 0 } },
+                    y: { ticks: { autoSkip: false, font: { size: 11 } } },
+                },
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => ` ${ctx.parsed.x.toLocaleString('uz-UZ').replace(/,/g, ' ')} ta`,
+                        },
+                    },
+                },
+            },
+        });
+    }
+
     // Xodimlar jinsi — Erkak/Ayol pie chart
     function renderTeacherGenderChart(id) {
         const canvas = document.getElementById(id);
@@ -1805,6 +1880,7 @@
         renderProvinceChart('provinceChartTab');
         renderTeacherTypeChart('teacherTypeChart');
         renderTeacherGenderChart('teacherGenderChart');
+        renderTeacherDeptChart('teacherDeptChart');
     };
 
     // Edu-tab click handler — har chart kartasidagi Hammasi/Bakalavr/Magistr/Ordinatura

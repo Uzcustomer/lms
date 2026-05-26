@@ -529,6 +529,21 @@ class StudentController extends Controller
             'female' => (int) ($teacherGenderRow->female ?? 0),
         ];
 
+        // Xodimlar kafedra/bo'lim — asosiy ish joyiga ega xodimlar bo'yicha
+        // department ustuni kesimi (Kafedra/bo'lim inner tabi).
+        $teacherDeptRows = DB::table('teachers')
+            ->whereRaw('LOWER(TRIM(employment_form)) = ?', ['asosiy ish joy'])
+            ->selectRaw('department, COUNT(*) as total')
+            ->groupBy('department')
+            ->orderByDesc('total')
+            ->get();
+        $teacherDeptStats = []; // [department => ['total'=>n]]
+        foreach ($teacherDeptRows as $r) {
+            $dept = trim((string) $r->department);
+            if ($dept === '') continue;
+            $teacherDeptStats[$dept] = ['total' => (int) $r->total];
+        }
+
         return view('admin.students.statistics', compact(
             'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals',
             'socialStats', 'socialHasCategory',
@@ -536,7 +551,7 @@ class StudentController extends Controller
             'accomStats', 'provinceStats',
             'ageByEdu', 'payByEdu', 'socialByEdu', 'socialHasCategoryByEdu',
             'countryByEdu', 'citizenshipByEdu', 'provinceByEdu',
-            'teacherTypeStats', 'teacherGenderStats'
+            'teacherTypeStats', 'teacherGenderStats', 'teacherDeptStats'
         ));
     }
 

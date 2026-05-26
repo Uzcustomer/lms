@@ -6141,7 +6141,9 @@ class JournalController extends Controller
 
     /**
      * Guruh + fan bo'yicha har talaba uchun MT (mustaqil ta'lim) o'rtachasini
-     * hisoblash. Schedules.training_type_code=99 — MT darslari.
+     * hisoblash. Manual MT grade mavjud bo'lsa (training_type_code=99,
+     * lesson_date IS NULL) — uni ustun deb oladi. Aks holda schedule-asoslangan
+     * o'rtachani hisoblaydi.
      * Qaytadi: [student_hemis_id => mt_avg_int].
      */
     private function computeMtAveragesForGroup(string $subjectId, string $semesterCode, string $groupHemisId): array
@@ -6155,6 +6157,20 @@ class JournalController extends Controller
             return [];
         }
 
+        // 1) Manual MT grade (lesson_date IS NULL) — show()'da o'qiladigan asosiy manba
+        $manualMt = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 99)
+            ->whereNull('lesson_date')
+            ->whereNotNull('grade')
+            ->select('student_hemis_id', 'grade')
+            ->get()
+            ->keyBy('student_hemis_id');
+
+        // 2) Schedule-asoslangan MT (kunlik MT darslari bo'yicha)
         $mtScheduleRows = DB::table('schedules')
             ->where('group_id', $groupHemisId)
             ->where('subject_id', $subjectId)
@@ -6185,36 +6201,47 @@ class JournalController extends Controller
         }));
         $totalMtForAvg = count($mtDatesForAvg);
 
-        $allGrades = DB::table('student_grades')
-            ->whereNull('deleted_at')
-            ->whereIn('student_hemis_id', $studentHemisIds)
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->where('training_type_code', 99)
-            ->whereNotNull('lesson_date')
-            ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
-            ->get();
-
         $mtGrades = [];
-        foreach ($allGrades as $g) {
-            $effective = null;
-            if ($g->grade !== null && (float) $g->grade < 60 && $g->retake_grade !== null) {
-                $effective = $g->retake_grade;
-            } elseif ($g->status === 'recorded' || $g->status === 'closed') {
-                $effective = $g->grade;
-            } elseif ($g->retake_grade !== null) {
-                $effective = $g->retake_grade;
-            }
-            if ($effective === null) continue;
-            $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
-            $key = $normalizedDate . '_' . $g->lesson_pair_code;
-            if (isset($mtDatePairSet[$key])) {
-                $mtGrades[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effective;
+        if ($totalMtForAvg > 0) {
+            $allGrades = DB::table('student_grades')
+                ->whereNull('deleted_at')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('training_type_code', 99)
+                ->whereNotNull('lesson_date')
+                ->select('student_hemis_id', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'status', 'reason')
+                ->get();
+            foreach ($allGrades as $g) {
+                $effective = null;
+                if ($g->grade !== null && (float) $g->grade < 60 && $g->retake_grade !== null) {
+                    $effective = $g->retake_grade;
+                } elseif ($g->status === 'recorded' || $g->status === 'closed') {
+                    $effective = $g->grade;
+                } elseif ($g->retake_grade !== null) {
+                    $effective = $g->retake_grade;
+                }
+                if ($effective === null) continue;
+                $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
+                $key = $normalizedDate . '_' . $g->lesson_pair_code;
+                if (isset($mtDatePairSet[$key])) {
+                    $mtGrades[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effective;
+                }
             }
         }
 
         $result = [];
         foreach ($studentHemisIds as $hemisId) {
+            // Manual MT ustunlik beradi (show() bilan bir xil mantiq)
+            if (isset($manualMt[$hemisId])) {
+                $result[$hemisId] = (int) round((float) $manualMt[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
+                continue;
+            }
+            // Schedule-asoslangan o'rtacha
+            if ($totalMtForAvg === 0) {
+                $result[$hemisId] = 0;
+                continue;
+            }
             $dailySum = 0;
             foreach ($mtDatesForAvg as $date) {
                 $dayGrades = $mtGrades[$hemisId][$date] ?? [];
@@ -6222,9 +6249,7 @@ class JournalController extends Controller
                 $values = array_map(fn($v) => (float) $v, $dayGrades);
                 $dailySum += round(array_sum($values) / $pairs, 0, PHP_ROUND_HALF_UP);
             }
-            $result[$hemisId] = $totalMtForAvg > 0
-                ? (int) round($dailySum / $totalMtForAvg, 0, PHP_ROUND_HALF_UP)
-                : 0;
+            $result[$hemisId] = (int) round($dailySum / $totalMtForAvg, 0, PHP_ROUND_HALF_UP);
         }
 
         return $result;

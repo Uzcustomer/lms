@@ -5721,7 +5721,7 @@
         function copySinovToJournal() {
             const btn = document.getElementById('btn-copy-sinov-to-journal');
             if (!btn) return;
-            if (!confirm("2-ustundagi Sinov (test) baholari tepada jurnalning 'Sinov (test)' ustuniga ko'chiriladi va qulflanadi. Shundan keyin baholarni faqat admin (sozlamada toggle yoqilgan bo'lsa) o'zgartira oladi. Davom etamizmi?")) {
+            if (!confirm("2-ustundagi Sinov (test) baholari tepada jurnalning 'Sinov (test)' ustuniga ko'chiriladi va qulflanadi. Davom etamizmi?")) {
                 return;
             }
             const originalText = btn.innerHTML;

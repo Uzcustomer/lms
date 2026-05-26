@@ -1907,7 +1907,12 @@ class JournalController extends Controller
                     ->where('group_hemis_id', $group->group_hemis_id)
                     ->get()
                     ->keyBy('student_hemis_id');
-                $sinovInJournal = $sinovOverrides->where('is_locked', true)->isNotEmpty();
+                // $sinovInJournal = qaydnoma yopilgan deb hisoblash uchun is_locked
+                // VA ynSubmission mavjudligi shart. Aks holda (partial failure: lock
+                // bor lekin submitToYn xatolik bilan tugagan) tugma yana paydo bo'lib,
+                // foydalanuvchi qaytadan bosib oqimni yakunlay oladi.
+                $sinovInJournal = $sinovOverrides->where('is_locked', true)->isNotEmpty()
+                    && !empty($ynSubmission);
             } catch (\Throwable $e) {
                 Log::warning('SinovTestGrade load failed: ' . $e->getMessage());
                 $sinovOverrides = collect();

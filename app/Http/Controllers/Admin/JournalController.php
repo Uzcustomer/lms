@@ -5952,20 +5952,20 @@ class JournalController extends Controller
             ->whereNotNull('override_grade')
             ->count();
         if ($rowsCount === 0) {
-            return response()->json(['success' => false, 'message' => 'Avval "Sinov (test) baholari" tugmasi bilan baholarni 2-ustunga ko\'chiring.'], 422);
+            return response()->json(['success' => false, 'message' => 'Avval "Baholarni ko\'chirish" tugmasi bilan baholarni 2-ustunga ko\'chiring.'], 422);
         }
 
-        $locked = SinovTestGrade::where('subject_id', $data['subject_id'])
+        // 1) SinovTestGrade yozuvlarini qulflash (panel UI uchun belgi)
+        SinovTestGrade::where('subject_id', $data['subject_id'])
             ->where('semester_code', $data['semester_code'])
             ->where('group_hemis_id', $data['group_hemis_id'])
             ->whereNotNull('override_grade')
             ->update(['is_locked' => true]);
 
-        return response()->json([
-            'success' => true,
-            'message' => "{$locked} ta talabaning Sinov (test) bahosi jurnalga ko'chirildi va qulflandi.",
-            'locked_count' => $locked,
-        ]);
+        // 2) Qaydnomani yakunlash — submitToYn'ni ichkaridan chaqirish.
+        // U JN/MT snapshot saqlaydi, YnSubmission yaratadi va sinov fani uchun
+        // student_grades ga test (training_type_code=102) yozuvlarini kiritadi.
+        return $this->submitToYn($request);
     }
 
     /**

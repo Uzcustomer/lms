@@ -82,6 +82,10 @@
                                 </div>
                             </div>
 
+                            <div class="col-12 mb-2" style="padding:10px 14px;background:linear-gradient(135deg,#fff7ed,#ffedd5);border:1px solid #fed7aa;border-radius:8px;font-size:13px;color:#7c2d12;display:flex;align-items:center;gap:10px;">
+                                <svg width="18" height="18" fill="none" stroke="currentColor" viewBox="0 0 24 24" style="flex-shrink:0;"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                <span><strong>Tavsiya:</strong> Sinov (test) bilan yopiladigan fanlar uchun foizlar — <strong>Joriy 50, M ta'lim 20, OSKI 0, Test 30</strong>. Boshqa fanlar uchun: 50 / 20 / 15 / 15 yoki o'zingiz tanlang.</span>
+                            </div>
                             <div class="col-12 col-md-1">
                                 <label class="block mb-2">Joriy foiz</label>
                                 <input style="width:100%;" type="text" name="jn_percend" id="jn_percend" class="rounded-lg" required />

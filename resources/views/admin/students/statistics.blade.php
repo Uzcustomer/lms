@@ -1132,7 +1132,10 @@
 
         {{-- Kafedra/bo'lim --}}
         <div x-show="inner.oqituvchilar === 'kafedra'" x-cloak
-             x-data="{ openDept: null, deptSearch: '' }">
+             x-data="{ openDept: null, deptSearch: '',
+                       q() { return this.deptSearch.toLowerCase().trim(); },
+                       isOpen(key, matches) { return this.q() !== '' ? matches : this.openDept === key; }
+                     }">
             @php
                 $teacherDeptStats   = $teacherDeptStats   ?? [];
                 $teacherDeptMembers = $teacherDeptMembers ?? [];
@@ -1160,7 +1163,7 @@
                     <path d="m21 21-4.3-4.3" stroke-linecap="round"/>
                 </svg>
                 <input type="search" x-model="deptSearch"
-                       placeholder="Kafedra yoki xodim ismi bo'yicha qidirish..."
+                       placeholder="Kafedra yoki xodim to'liq ismi bo'yicha qidirish..."
                        style="width:100%; padding:12px 14px 12px 42px; border:1px solid rgba(15,23,42,0.12); border-radius:12px; background:rgba(255,255,255,0.7); font-size:14px; outline:none; transition:border-color .15s, box-shadow .15s;"
                        onfocus="this.style.borderColor='#6366f1'; this.style.boxShadow='0 0 0 3px rgba(99,102,241,0.15)';"
                        onblur="this.style.borderColor='rgba(15,23,42,0.12)'; this.style.boxShadow='none';">
@@ -1182,21 +1185,25 @@
                                 $deptKey = md5($dept);
                                 $members = $teacherDeptMembers[$dept] ?? [];
                                 $deptLow = mb_strtolower($dept);
-                                $memberNamesLow = mb_strtolower(implode(' ', array_column($members, 'full_name')));
-                                $haystack = $deptLow . ' ' . $memberNamesLow;
+                                $memberNamesLow = array_map(fn($m) => mb_strtolower($m['full_name']), $members);
+                                $deptMatchJs    = 'q === "" || ' . json_encode($deptLow) . '.includes(q)';
+                                $namesMatchJs   = 'q !== "" && ' . json_encode($memberNamesLow) . '.some(n => n.includes(q))';
+                                $rowMatchJs     = '(function(){ const q = deptSearch.toLowerCase().trim(); return ' . $deptMatchJs . ' || ' . $namesMatchJs . '; })()';
+                                // Akkordeon ochilishi: search bo'sh bo'lsa manual click,
+                                // search bor bo'lsa rowMatch true bo'lganda avtomatik ochiq.
                             @endphp
-                            <tr class="dept-row" :class="openDept === '{{ $deptKey }}' ? 'dept-row-open' : ''"
-                                x-show="deptSearch.trim() === '' || {{ json_encode($haystack) }}.includes(deptSearch.toLowerCase().trim())"
+                            <tr class="dept-row" :class="(q() !== '' ? {{ $rowMatchJs }} : openDept === '{{ $deptKey }}') ? 'dept-row-open' : ''"
+                                x-show="{{ $rowMatchJs }}"
                                 style="cursor:pointer; border-top:1px solid rgba(15,23,42,0.06); transition:background .15s;"
                                 @click="openDept = (openDept === '{{ $deptKey }}' ? null : '{{ $deptKey }}')">
                                 <td style="padding:14px 14px; color:#64748b; font-size:14px;">{{ $loop->iteration }}</td>
                                 <td style="padding:14px 14px; color:#0f172a; font-size:18px; font-weight:600;">{{ $dept }}</td>
                                 <td style="padding:14px 14px; text-align:right; font-weight:700; color:#4f46e5; font-size:18px;">{{ number_format((int) $st['total'], 0, '.', ' ') }}</td>
                                 <td style="padding:14px 14px; text-align:center; color:#94a3b8; font-size:18px;">
-                                    <span x-text="openDept === '{{ $deptKey }}' ? '▾' : '▸'"></span>
+                                    <span x-text="(q() !== '' ? {{ $rowMatchJs }} : openDept === '{{ $deptKey }}') ? '▾' : '▸'"></span>
                                 </td>
                             </tr>
-                            <tr x-show="openDept === '{{ $deptKey }}' && (deptSearch.trim() === '' || {{ json_encode($haystack) }}.includes(deptSearch.toLowerCase().trim()))" x-cloak>
+                            <tr x-show="(q() !== '' ? {{ $rowMatchJs }} : openDept === '{{ $deptKey }}')" x-cloak>
                                 <td colspan="4" style="padding:0; background: rgba(255,255,255,0.45); border-top:1px dashed rgba(15,23,42,0.1);">
                                     <div style="padding:14px 22px;">
                                         @if(empty($members))
@@ -1204,7 +1211,9 @@
                                         @else
                                             <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:10px;">
                                                 @foreach($members as $m)
-                                                    <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:#fff; border:1px solid rgba(15,23,42,0.08); border-radius:10px;">
+                                                    @php $nameLow = mb_strtolower($m['full_name']); @endphp
+                                                    <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:#fff; border:1px solid rgba(15,23,42,0.08); border-radius:10px;"
+                                                         x-show="(function(){ const q = deptSearch.toLowerCase().trim(); return q === '' || {{ json_encode($deptLow) }}.includes(q) || {{ json_encode($nameLow) }}.includes(q); })()">
                                                         @if(!empty($m['image']))
                                                             <img src="{{ $m['image'] }}" alt=""
                                                                  style="width:42px; height:42px; border-radius:50%; object-fit:cover; flex-shrink:0; background:#e2e8f0;"
@@ -1241,7 +1250,9 @@
 
         {{-- Lavozim --}}
         <div x-show="inner.oqituvchilar === 'lavozim'" x-cloak
-             x-data="{ openPos: null, posSearch: '' }">
+             x-data="{ openPos: null, posSearch: '',
+                       q() { return this.posSearch.toLowerCase().trim(); }
+                     }">
             @php
                 $teacherPositionStats   = $teacherPositionStats   ?? [];
                 $teacherPositionMembers = $teacherPositionMembers ?? [];
@@ -1269,7 +1280,7 @@
                     <path d="m21 21-4.3-4.3" stroke-linecap="round"/>
                 </svg>
                 <input type="search" x-model="posSearch"
-                       placeholder="Lavozim yoki xodim ismi bo'yicha qidirish..."
+                       placeholder="Lavozim yoki xodim to'liq ismi bo'yicha qidirish..."
                        style="width:100%; padding:12px 14px 12px 42px; border:1px solid rgba(15,23,42,0.12); border-radius:12px; background:rgba(255,255,255,0.7); font-size:14px; outline:none; transition:border-color .15s, box-shadow .15s;"
                        onfocus="this.style.borderColor='#6366f1'; this.style.boxShadow='0 0 0 3px rgba(99,102,241,0.15)';"
                        onblur="this.style.borderColor='rgba(15,23,42,0.12)'; this.style.boxShadow='none';">
@@ -1291,21 +1302,23 @@
                                 $posKey = md5($pos);
                                 $members = $teacherPositionMembers[$pos] ?? [];
                                 $posLow = mb_strtolower($pos);
-                                $memberNamesLow = mb_strtolower(implode(' ', array_column($members, 'full_name')));
-                                $haystack = $posLow . ' ' . $memberNamesLow;
+                                $memberNamesLow = array_map(fn($m) => mb_strtolower($m['full_name']), $members);
+                                $posMatchJs   = 'q === "" || ' . json_encode($posLow) . '.includes(q)';
+                                $namesMatchJs = 'q !== "" && ' . json_encode($memberNamesLow) . '.some(n => n.includes(q))';
+                                $rowMatchJs   = '(function(){ const q = posSearch.toLowerCase().trim(); return ' . $posMatchJs . ' || ' . $namesMatchJs . '; })()';
                             @endphp
-                            <tr class="dept-row" :class="openPos === '{{ $posKey }}' ? 'dept-row-open' : ''"
-                                x-show="posSearch.trim() === '' || {{ json_encode($haystack) }}.includes(posSearch.toLowerCase().trim())"
+                            <tr class="dept-row" :class="(q() !== '' ? {{ $rowMatchJs }} : openPos === '{{ $posKey }}') ? 'dept-row-open' : ''"
+                                x-show="{{ $rowMatchJs }}"
                                 style="cursor:pointer; border-top:1px solid rgba(15,23,42,0.06); transition:background .15s;"
                                 @click="openPos = (openPos === '{{ $posKey }}' ? null : '{{ $posKey }}')">
                                 <td style="padding:14px 14px; color:#64748b; font-size:14px;">{{ $loop->iteration }}</td>
                                 <td style="padding:14px 14px; color:#0f172a; font-size:18px; font-weight:600;">{{ $pos }}</td>
                                 <td style="padding:14px 14px; text-align:right; font-weight:700; color:#4f46e5; font-size:18px;">{{ number_format((int) $st['total'], 0, '.', ' ') }}</td>
                                 <td style="padding:14px 14px; text-align:center; color:#94a3b8; font-size:18px;">
-                                    <span x-text="openPos === '{{ $posKey }}' ? '▾' : '▸'"></span>
+                                    <span x-text="(q() !== '' ? {{ $rowMatchJs }} : openPos === '{{ $posKey }}') ? '▾' : '▸'"></span>
                                 </td>
                             </tr>
-                            <tr x-show="openPos === '{{ $posKey }}' && (posSearch.trim() === '' || {{ json_encode($haystack) }}.includes(posSearch.toLowerCase().trim()))" x-cloak>
+                            <tr x-show="(q() !== '' ? {{ $rowMatchJs }} : openPos === '{{ $posKey }}')" x-cloak>
                                 <td colspan="4" style="padding:0; background: rgba(255,255,255,0.45); border-top:1px dashed rgba(15,23,42,0.1);">
                                     <div style="padding:14px 22px;">
                                         @if(empty($members))
@@ -1313,7 +1326,9 @@
                                         @else
                                             <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:10px;">
                                                 @foreach($members as $m)
-                                                    <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:#fff; border:1px solid rgba(15,23,42,0.08); border-radius:10px;">
+                                                    @php $nameLow = mb_strtolower($m['full_name']); @endphp
+                                                    <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:#fff; border:1px solid rgba(15,23,42,0.08); border-radius:10px;"
+                                                         x-show="(function(){ const q = posSearch.toLowerCase().trim(); return q === '' || {{ json_encode($posLow) }}.includes(q) || {{ json_encode($nameLow) }}.includes(q); })()">
                                                         @if(!empty($m['image']))
                                                             <img src="{{ $m['image'] }}" alt=""
                                                                  style="width:42px; height:42px; border-radius:50%; object-fit:cover; flex-shrink:0; background:#e2e8f0;"

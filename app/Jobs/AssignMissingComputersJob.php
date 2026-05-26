@@ -42,12 +42,14 @@ class AssignMissingComputersJob implements ShouldQueue
 
     public function handle(): void
     {
-        $this->setStatus('running');
+        $this->setStatus('running', ['processed' => 0, 'total' => count($this->items)]);
 
         $service = app(ComputerAssignmentService::class);
         $okCount = 0;
         $skipCount = 0;
         $failures = [];
+        $processed = 0;
+        $total = count($this->items);
 
         foreach ($this->items as $it) {
             $sid = (int) ($it['schedule_id'] ?? 0);
@@ -57,12 +59,14 @@ class AssignMissingComputersJob implements ShouldQueue
             if ($sid <= 0 || !in_array($ynType, ['oski', 'test'], true)
                 || !in_array($attempt, [1, 2, 3], true)) {
                 $skipCount++;
+                $processed++;
                 continue;
             }
 
             $schedule = ExamSchedule::find($sid);
             if (!$schedule) {
                 $failures[] = compact('sid', 'ynType', 'attempt') + ['reason' => 'schedule not found'];
+                $processed++;
                 continue;
             }
 
@@ -74,6 +78,7 @@ class AssignMissingComputersJob implements ShouldQueue
                     $timeVal = $schedule->{$cols['time']};
                     if (empty($dateVal) || empty($timeVal)) {
                         $failures[] = compact('sid', 'ynType', 'attempt') + ['reason' => 'date/time missing'];
+                        $processed++;
                         continue;
                     }
                     $dateStr = $dateVal instanceof Carbon
@@ -117,6 +122,19 @@ class AssignMissingComputersJob implements ShouldQueue
                     'error' => $e->getMessage(),
                 ]);
             }
+
+            $processed++;
+            // Har 2 itemdan keyin progress'ni cache'ga yangilaymiz —
+            // frontend polling shuni ko'rsatadi (foydalanuvchi 588 talaba
+            // qatorlari uchun uzoq kutib turishi kerak emas, jarayon
+            // ko'rinib turadi).
+            if ($processed % 2 === 0 || $processed === $total) {
+                $this->setStatus('running', [
+                    'processed' => $processed,
+                    'total' => $total,
+                    'assigned' => $okCount,
+                ]);
+            }
         }
 
         Log::info('AssignMissingComputersJob: completed', [
@@ -129,6 +147,8 @@ class AssignMissingComputersJob implements ShouldQueue
         $this->setStatus('done', [
             'assigned' => $okCount,
             'skipped' => $skipCount,
+            'processed' => $processed,
+            'total' => $total,
             // Foydalanuvchiga ko'rsatish uchun birinchi 20 ta failure
             // (UI'ni ko'p ma'lumotdan bo'g'masdan), qolganlar log'da.
             'failures' => array_slice($failures, 0, 20),

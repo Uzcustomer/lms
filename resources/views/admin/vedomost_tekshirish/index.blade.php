@@ -542,17 +542,22 @@
         function openWeightModal() {
             if($('.row-cb:checked').length===0) return;
 
-            // Tanlangan qatorlarda oski_date va test_date borligini aniqlash
-            var hasOski = false, hasTest = false;
+            // Tanlangan qatorlarda oski_date, test_date va sinov fani borligini aniqlash
+            var hasOski = false, hasTest = false, hasSinov = false;
             $('.row-cb:checked').each(function(){
                 var idx = parseInt($(this).data('idx'));
                 var r = searchData[idx];
                 if(r && r.oski_date) hasOski = true;
                 if(r && r.test_date) hasTest = true;
+                if(r && r.closing_form === 'sinov') hasSinov = true;
             });
 
             // Default vaznlarni belgilash
-            if(hasOski && hasTest){
+            if(hasSinov){
+                // Sinov (test) fani: JN=50, MT=20, OSKI=0, Test=30
+                $('#m_jn').val(50); $('#m_mt').val(20); $('#m_on').val(0);
+                $('#m_oski').val(0); $('#m_test').val(30);
+            } else if(hasOski && hasTest){
                 // Ikkalasi ham bor: JN=50, MT=20, OSKI=15, Test=15
                 $('#m_jn').val(50); $('#m_mt').val(20); $('#m_on').val(0);
                 $('#m_oski').val(15); $('#m_test').val(15);

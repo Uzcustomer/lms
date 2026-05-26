@@ -142,7 +142,8 @@ class VedomostTekshirishController extends Controller
         $rows = $query
             ->select('g.id as group_pk', 'g.group_hemis_id', 'g.name as group_name',
                      'sp.name as specialty_name', 'cs.subject_id', 'cs.subject_name',
-                     'cs.credit', 'cs.semester_code', 'cs.semester_name', 's.level_code', 's.level_name',
+                     'cs.credit', 'cs.semester_code', 'cs.semester_name', 'cs.closing_form',
+                     's.level_code', 's.level_name',
                      'dep.name as faculty_name')
             ->orderBy('g.name')->orderBy('cs.subject_name')
             ->distinct()->get();
@@ -270,6 +271,7 @@ class VedomostTekshirishController extends Controller
                 'date_end'       => $dateEnd,
                 'oski_date'      => $oskiDate,
                 'test_date'      => $testDate,
+                'closing_form'   => $row->closing_form ?? null,
             ];
         }
 

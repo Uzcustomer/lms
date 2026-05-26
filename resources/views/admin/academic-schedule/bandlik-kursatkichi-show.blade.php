@@ -1071,7 +1071,10 @@
                             };
 
                             function bkPollMissing(token, btn, originalHTML, attempts) {
-                                if (attempts > 120) {
+                                // 600 × 3s = 30 daqiqa. AssignComputersForRangeJob ham
+                                // shunaqa cheklov bilan ishlaydi. Queue worker zudlik
+                                // bilan ishlamasa yoki ko'p item bo'lsa shuncha kerak.
+                                if (attempts > 600) {
                                     alert('Biriktirish kutilganidan uzoq davom etmoqda. Sahifani qayta yuklab natijani tekshiring.');
                                     btn.disabled = false; btn.innerHTML = originalHTML;
                                     return;
@@ -1100,6 +1103,12 @@
                                             alert('❌ Biriktirishda xatolik yuz berdi: ' + (st.message || 'noma\'lum'));
                                             btn.disabled = false; btn.innerHTML = originalHTML;
                                         } else {
+                                            // Tugma matnida progress ko'rsatamiz.
+                                            if (st && st.status === 'running' && typeof st.processed === 'number') {
+                                                btn.textContent = 'Biriktirilmoqda… ' + st.processed + '/' + (st.total || PENDING_ITEMS.length);
+                                            } else if (st && st.status === 'queued') {
+                                                btn.textContent = 'Navbatda…';
+                                            }
                                             bkPollMissing(token, btn, originalHTML, attempts + 1);
                                         }
                                     })

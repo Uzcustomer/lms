@@ -294,6 +294,52 @@
                 </div>
             </div>
 
+            {{-- SECTION: SINOV (TEST) BAHOLARINI O'ZGARTIRISH HUQUQI --}}
+            <div x-data="{ open: {{ request('tab') === 'sinov-test-permissions' ? 'true' : 'false' }} }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
+                <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #ffedd5, #fed7aa); border: none; cursor: pointer; border-bottom: 1px solid #fb923c;">
+                    <div style="display: flex; align-items: center; gap: 14px;">
+                        <div style="width: 44px; height: 44px; min-width: 44px; background: linear-gradient(135deg, #f97316, #ea580c); border-radius: 12px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(249,115,22,0.3);">
+                            <svg width="22" height="22" style="width: 22px; height: 22px; color: #fff;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                        </div>
+                        <div style="text-align: left;">
+                            <div style="font-size: 17px; font-weight: 700; color: #7c2d12;">Sinov (test) baholari huquqi</div>
+                            <div style="font-size: 13px; color: #9a3412; margin-top: 2px;">Jurnalga ko'chirilgan Sinov (test) baholarini admin tomonidan o'zgartirish ruxsati</div>
+                        </div>
+                    </div>
+                    <svg width="20" height="20" :style="open ? 'transform: rotate(180deg)' : ''" style="width: 20px; height: 20px; min-width: 20px; color: #9a3412; transition: transform 0.2s;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+
+                <div x-show="open" x-transition style="padding: 24px;">
+                    <form method="POST" action="{{ route('admin.settings.update.sinov-test-permissions') }}">
+                        @csrf
+                        <div style="background: #fff7ed; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; border: 1px solid #fed7aa; font-size: 13px; color: #7c2d12; display: flex; align-items: flex-start; gap: 10px;">
+                            <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px; margin-top: 1px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <div>
+                                Sinov bilan yopiladigan fanlarda o'qituvchi <strong>"JN dan baholarni jurnalga ko'chirish"</strong> tugmasini bosgandan keyin Sinov (test) baholari qulflanadi.
+                                Bu toggle yoqilsa, admin rolidagi foydalanuvchi qulflangan Sinov (test) baholarini o'zgartira oladi.
+                                Sukut bo'yicha o'chirilgan — ehtiyot uchun ish tugagach o'chirib qo'ying.
+                            </div>
+                        </div>
+
+                        <input type="hidden" name="sinov_test_grades_editable" value="0">
+                        <label style="display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-radius: 10px; border: 1px solid {{ $sinovTestGradesEditable ? '#f97316' : '#e5e7eb' }}; background: {{ $sinovTestGradesEditable ? '#fff7ed' : '#fff' }}; cursor: pointer; margin-bottom: 16px;">
+                            <input type="checkbox" name="sinov_test_grades_editable" value="1" {{ $sinovTestGradesEditable ? 'checked' : '' }} style="width: 18px; height: 18px; accent-color: #f97316;">
+                            <div>
+                                <div style="font-size: 14px; font-weight: 600; color: #0f172a;">Sinov (test) baholarini o'zgartirish</div>
+                                <div style="font-size: 12px; color: #64748b; margin-top: 2px;">Yoqilsa, admin rol jurnalga ko'chirilgan (qulflangan) Sinov (test) baholarini qayta o'zgartira oladi. O'qituvchi roli baribir o'zgartira olmaydi.</div>
+                            </div>
+                        </label>
+
+                        <div style="display: flex; justify-content: flex-end;">
+                            <button type="submit" style="display: inline-flex; align-items: center; gap: 8px; padding: 10px 28px; background: linear-gradient(135deg, #f97316, #ea580c); color: #fff; font-size: 14px; font-weight: 600; border-radius: 10px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(249,115,22,0.3);">
+                                <svg width="18" height="18" style="width: 18px; height: 18px; min-width: 18px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Saqlash
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
             {{-- SECTION: YN SANASI SIYOSATI (eski/past sanalarga ruxsat) --}}
             <div x-data="{ open: {{ request('tab') === 'exam-date-policy' ? 'true' : 'false' }} }" style="background: #fff; border-radius: 16px; border: 1px solid #e5e7eb; margin-bottom: 20px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,0.06);">
                 <button @click="open = !open" type="button" style="width: 100%; display: flex; align-items: center; justify-content: space-between; padding: 20px 24px; background: linear-gradient(135deg, #fee2e2, #fecaca); border: none; cursor: pointer; border-bottom: 1px solid #fca5a5;">

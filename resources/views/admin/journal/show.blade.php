@@ -1128,7 +1128,11 @@
                                         @if(!empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">3-urinish</span></th>
                                         @endif
-                                        <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) Test bahosi">Test<br><span class="text-[9px] font-normal">1-urinish</span></th>
+                                        @if(!empty($isSinov))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 70px;" title="Sinov (test) bahosi — JN o'rtachasidan ko'chirilgan">Sinov<br><span class="text-[9px] font-normal">(test)</span></th>
+                                        @else
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) Test bahosi">Test<br><span class="text-[9px] font-normal">1-urinish</span></th>
+                                        @endif
                                         @if(array_filter($testQosh1Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan Test">Test<br><span class="text-[9px] font-normal">qo'shimcha<br>farmoyish</span></th>
                                         @endif
@@ -1428,28 +1432,45 @@
                                                     @if($oskiA3 !== null)<span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $oskiA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
-                                            {{-- Asosiy Test (1-urinish) — sababli yoki superadmin orqali tahrirlash --}}
-                                            @php
-                                                $testClickable = $isTestSababli || $isSuperAdmin;
-                                                $testClickHandler = $isTestSababli
-                                                    ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
-                                                    : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
-                                                $test1DateStr = $testAttempt1DateMap[$student->hemis_id] ?? null;
-                                                $testBaseTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
-                                                    : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish'
-                                                        : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
-                                                $testDatePart = ($canSeeExamDateTooltip && $testRounded !== null && $test1DateStr) ? "Topshirilgan: {$test1DateStr}" : '';
-                                                $testTitle = trim($testDatePart && $testBaseTitle ? "{$testDatePart} | {$testBaseTitle}" : ($testDatePart ?: $testBaseTitle));
-                                            @endphp
-                                            <td class="px-1 py-1 text-center {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
-                                                @if($testClickable) onclick="{{ $testClickHandler }}" @endif
-                                                @if($testTitle) title="{{ $testTitle }}" @endif>
-                                                @if($testRounded !== null)
-                                                    <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
-                                                @elseif($isSuperAdmin)
-                                                    <span class="text-gray-300 text-xs">+</span>
-                                                @endif
-                                            </td>
+                                            {{-- Asosiy Test (1-urinish) yoki Sinov (test) bahosi --}}
+                                            @if(!empty($isSinov))
+                                                @php
+                                                    $sinovRow = $sinovOverrides[$student->hemis_id] ?? null;
+                                                    $sinovLocked = $sinovRow && $sinovRow->is_locked;
+                                                    $sinovVal = ($sinovLocked && $sinovRow->override_grade !== null)
+                                                        ? (int) round((float) $sinovRow->override_grade)
+                                                        : null;
+                                                @endphp
+                                                <td class="px-1 py-1 text-center bg-amber-50" title="{{ $sinovLocked ? 'Sinov (test) bahosi — jurnalga ko\'chirilgan va qulflangan' : 'Sinov (test) — pastki paneldan jurnalga ko\'chirilgandan keyin chiqadi' }}">
+                                                    @if($sinovVal !== null)
+                                                        <span class="font-bold {{ $sinovVal < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-800' }}">{{ $sinovVal }}</span>
+                                                    @else
+                                                        <span class="text-gray-300 text-xs">—</span>
+                                                    @endif
+                                                </td>
+                                            @else
+                                                @php
+                                                    $testClickable = $isTestSababli || $isSuperAdmin;
+                                                    $testClickHandler = $isTestSababli
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
+                                                    $test1DateStr = $testAttempt1DateMap[$student->hemis_id] ?? null;
+                                                    $testBaseTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
+                                                        : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish'
+                                                            : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
+                                                    $testDatePart = ($canSeeExamDateTooltip && $testRounded !== null && $test1DateStr) ? "Topshirilgan: {$test1DateStr}" : '';
+                                                    $testTitle = trim($testDatePart && $testBaseTitle ? "{$testDatePart} | {$testBaseTitle}" : ($testDatePart ?: $testBaseTitle));
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
+                                                    @if($testClickable) onclick="{{ $testClickHandler }}" @endif
+                                                    @if($testTitle) title="{{ $testTitle }}" @endif>
+                                                    @if($testRounded !== null)
+                                                        <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
+                                                    @elseif($isSuperAdmin)
+                                                        <span class="text-gray-300 text-xs">+</span>
+                                                    @endif
+                                                </td>
+                                            @endif
                                             {{-- Qo'shimcha Test ustuni (sababli farmoyish) --}}
                                             @if($showTestQ1Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish)">
@@ -1554,7 +1575,11 @@
                                         @if(!empty($ynSubmission12b) || array_filter($oskiAttempt3Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-orange-700 text-center align-middle bg-orange-50" style="width: 50px;" title="3-urinish (12b-shakl) OSKI bahosi">OSKI<br><span class="text-[9px] font-normal">3-urinish</span></th>
                                         @endif
-                                        <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) Test bahosi">Test<br><span class="text-[9px] font-normal">1-urinish</span></th>
+                                        @if(!empty($isSinov))
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-amber-700 text-center align-middle bg-amber-50" style="width: 70px;" title="Sinov (test) bahosi — JN o'rtachasidan ko'chirilgan">Sinov<br><span class="text-[9px] font-normal">(test)</span></th>
+                                        @else
+                                            <th rowspan="2" class="px-1 py-1 font-bold text-gray-700 text-center align-middle" style="width: 50px;" title="1-urinish (asosiy) Test bahosi">Test<br><span class="text-[9px] font-normal">1-urinish</span></th>
+                                        @endif
                                         @if(array_filter($testQosh1Map ?? []))
                                             <th rowspan="2" class="px-1 py-1 font-bold text-emerald-700 text-center align-middle bg-emerald-50" style="width: 55px;" title="Qo'shimcha farmoyish bilan topshirilgan Test">Test<br><span class="text-[9px] font-normal">qo'shimcha<br>farmoyish</span></th>
                                         @endif
@@ -2090,28 +2115,45 @@
                                                     @if($oskiA3 !== null)<span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $oskiA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
-                                            {{-- Asosiy Test (1-urinish) — sababli yoki superadmin orqali tahrirlash --}}
-                                            @php
-                                                $testClickable = $isTestSababli || $isSuperAdmin;
-                                                $testClickHandler = $isTestSababli
-                                                    ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
-                                                    : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
-                                                $test1DateStr = $testAttempt1DateMap[$student->hemis_id] ?? null;
-                                                $testBaseTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
-                                                    : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish'
-                                                        : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
-                                                $testDatePart = ($canSeeExamDateTooltip && $testRounded !== null && $test1DateStr) ? "Topshirilgan: {$test1DateStr}" : '';
-                                                $testTitle = trim($testDatePart && $testBaseTitle ? "{$testDatePart} | {$testBaseTitle}" : ($testDatePart ?: $testBaseTitle));
-                                            @endphp
-                                            <td class="px-1 py-1 text-center {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
-                                                @if($testClickable) onclick="{{ $testClickHandler }}" @endif
-                                                @if($testTitle) title="{{ $testTitle }}" @endif>
-                                                @if($testRounded !== null)
-                                                    <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
-                                                @elseif($isSuperAdmin)
-                                                    <span class="text-gray-300 text-xs">+</span>
-                                                @endif
-                                            </td>
+                                            {{-- Asosiy Test (1-urinish) yoki Sinov (test) bahosi --}}
+                                            @if(!empty($isSinov))
+                                                @php
+                                                    $sinovRow = $sinovOverrides[$student->hemis_id] ?? null;
+                                                    $sinovLocked = $sinovRow && $sinovRow->is_locked;
+                                                    $sinovVal = ($sinovLocked && $sinovRow->override_grade !== null)
+                                                        ? (int) round((float) $sinovRow->override_grade)
+                                                        : null;
+                                                @endphp
+                                                <td class="px-1 py-1 text-center bg-amber-50" title="{{ $sinovLocked ? 'Sinov (test) bahosi — jurnalga ko\'chirilgan va qulflangan' : 'Sinov (test) — pastki paneldan jurnalga ko\'chirilgandan keyin chiqadi' }}">
+                                                    @if($sinovVal !== null)
+                                                        <span class="font-bold {{ $sinovVal < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-800' }}">{{ $sinovVal }}</span>
+                                                    @else
+                                                        <span class="text-gray-300 text-xs">—</span>
+                                                    @endif
+                                                </td>
+                                            @else
+                                                @php
+                                                    $testClickable = $isTestSababli || $isSuperAdmin;
+                                                    $testClickHandler = $isTestSababli
+                                                        ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
+                                                        : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
+                                                    $test1DateStr = $testAttempt1DateMap[$student->hemis_id] ?? null;
+                                                    $testBaseTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
+                                                        : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish'
+                                                            : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
+                                                    $testDatePart = ($canSeeExamDateTooltip && $testRounded !== null && $test1DateStr) ? "Topshirilgan: {$test1DateStr}" : '';
+                                                    $testTitle = trim($testDatePart && $testBaseTitle ? "{$testDatePart} | {$testBaseTitle}" : ($testDatePart ?: $testBaseTitle));
+                                                @endphp
+                                                <td class="px-1 py-1 text-center {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
+                                                    @if($testClickable) onclick="{{ $testClickHandler }}" @endif
+                                                    @if($testTitle) title="{{ $testTitle }}" @endif>
+                                                    @if($testRounded !== null)
+                                                        <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
+                                                    @elseif($isSuperAdmin)
+                                                        <span class="text-gray-300 text-xs">+</span>
+                                                    @endif
+                                                </td>
+                                            @endif
                                             {{-- Qo'shimcha Test ustuni (sababli farmoyish) --}}
                                             @if($showTestQ1Col)
                                                 <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish)">
@@ -2441,15 +2483,27 @@
                                 </p>
                             </div>
                         </div>
-                        <button type="button" id="btn-bulk-copy-sinov"
-                            class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition shadow-sm flex-shrink-0"
-                            onclick="bulkCopySinovFromJn()"
-                            title="Guruhdagi barcha qulflanmagan talabalarga JN o'rtachasini YN test bahosi sifatida saqlaydi va qulflaydi">
-                            <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7v8a2 2 0 002 2h6M8 7V5a2 2 0 012-2h4.586a1 1 0 01.707.293l4.414 4.414a1 1 0 01.293.707V15a2 2 0 01-2 2h-2M8 7H6a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2v-2"/>
-                            </svg>
-                            JN dan baholarni ko'chirish
-                        </button>
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <button type="button" id="btn-bulk-copy-sinov"
+                                class="px-4 py-2 bg-amber-500 text-white text-sm font-semibold rounded-lg hover:bg-amber-600 transition shadow-sm flex-shrink-0"
+                                onclick="bulkCopySinovFromJn()"
+                                title="Guruhdagi barcha qulflanmagan talabalarga JN o'rtachasini 'Joriy YN test bahosi' ustuniga ko'chiradi (jurnalga o'tkazmaydi)">
+                                <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                                </svg>
+                                Sinov (test) baholari
+                            </button>
+                            <button type="button" id="btn-copy-sinov-to-journal"
+                                class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition shadow-sm flex-shrink-0"
+                                onclick="copySinovToJournal()"
+                                title="2-ustundagi baholarni tepada jurnalning 'Sinov (test)' ustuniga ko'chiradi va qulflaydi">
+                                <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 4h5a2 2 0 012 2v12a2 2 0 01-2 2h-5"/>
+                                </svg>
+                                JN dan baholarni jurnalga ko'chirish
+                            </button>
+                        </div>
                     </div>
                     <div class="overflow-x-auto bg-white rounded-lg border border-amber-200">
                         <table class="min-w-full text-sm">
@@ -2469,33 +2523,43 @@
                                         $stuDefault = (int) ($sinovDefaults[$stuId] ?? 0);
                                         $stuOverride = $sinovOverrides[$stuId] ?? null;
                                         $isLocked = $stuOverride && $stuOverride->is_locked;
-                                        $currentVal = $stuOverride && $stuOverride->override_grade !== null
+                                        $hasOverride = $stuOverride && $stuOverride->override_grade !== null;
+                                        $currentVal = $hasOverride
                                             ? (int) round((float) $stuOverride->override_grade)
-                                            : $stuDefault;
+                                            : null;
+                                        // Tahrirlash huquqi:
+                                        //  - hech qanday override yo'q yoki override bor lekin qulflanmagan → tahrirlash mumkin
+                                        //    (lekin avval "Sinov (test) baholari" tugmasi bosilishi kerak — override yaratsin)
+                                        //  - qulflangan AND admin AND toggle yoqilgan → tahrirlash mumkin
+                                        $editable = $hasOverride && (!$isLocked || $canEditLockedSinov);
                                     @endphp
-                                    <tr id="sinov-row-{{ $stuId }}" data-default="{{ $stuDefault }}" data-current="{{ $currentVal }}" data-locked="{{ $isLocked ? '1' : '0' }}">
+                                    <tr id="sinov-row-{{ $stuId }}" data-default="{{ $stuDefault }}" data-current="{{ $currentVal ?? '' }}" data-locked="{{ $isLocked ? '1' : '0' }}">
                                         <td class="px-3 py-2 text-gray-700">{{ $i + 1 }}</td>
                                         <td class="px-3 py-2 text-gray-900">{{ $student->full_name }}</td>
                                         <td class="px-3 py-2 text-center text-gray-700">{{ $stuDefault }}</td>
                                         <td class="px-3 py-2 text-center">
-                                            <span id="sinov-val-{{ $stuId }}" class="inline-block min-w-[3rem] px-2 py-1 rounded font-semibold {{ $isLocked ? 'bg-emerald-50 text-emerald-800' : 'bg-gray-50 text-gray-800' }}">
-                                                {{ $currentVal }}
+                                            <span id="sinov-val-{{ $stuId }}" class="inline-block min-w-[3rem] px-2 py-1 rounded font-semibold {{ $isLocked ? 'bg-emerald-50 text-emerald-800' : ($hasOverride ? 'bg-amber-50 text-amber-900' : 'bg-gray-50 text-gray-400') }}">
+                                                {{ $hasOverride ? $currentVal : '—' }}
                                             </span>
-                                            <input type="number" min="0" max="100" id="sinov-input-{{ $stuId }}" value="{{ $currentVal }}"
+                                            <input type="number" min="0" max="100" id="sinov-input-{{ $stuId }}" value="{{ $currentVal ?? $stuDefault }}"
                                                 class="hidden w-20 px-2 py-1 border border-amber-400 rounded text-center text-sm font-medium focus:ring-2 focus:ring-amber-500"
                                                 inputmode="numeric">
                                         </td>
                                         <td class="px-3 py-2 text-center">
-                                            @if($isLocked)
-                                                <span id="sinov-status-{{ $stuId }}" class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700">
-                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                                                    O'zgartirilgan (qulflangan)
+                                            @if($isLocked && !$canEditLockedSinov)
+                                                <span id="sinov-status-{{ $stuId }}" class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700" title="Jurnalga ko'chirilgan va qulflangan">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+                                                    Qulflangan
                                                 </span>
+                                            @elseif(!$hasOverride)
+                                                <span class="text-xs text-gray-400 italic" title="Avval 'Sinov (test) baholari' tugmasini bosing">—</span>
                                             @else
+                                                {{-- Edit pencil + save/cancel actions --}}
                                                 <button type="button" id="sinov-edit-btn-{{ $stuId }}"
-                                                    class="px-3 py-1 text-xs font-semibold rounded-md bg-amber-500 text-white hover:bg-amber-600 transition"
-                                                    onclick="enableSinovEdit('{{ $stuId }}')">
-                                                    O'zgartirish kiritish
+                                                    class="p-1.5 rounded-md hover:bg-amber-100 transition text-amber-700"
+                                                    onclick="enableSinovEdit('{{ $stuId }}')"
+                                                    title="{{ $isLocked ? 'Admin: qulflangan bahoni tahrirlash' : 'Bahoni o\'zgartirish' }}">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                                 </button>
                                                 <div id="sinov-edit-actions-{{ $stuId }}" class="hidden inline-flex gap-1">
                                                     <button type="button"
@@ -5595,7 +5659,7 @@
         function bulkCopySinovFromJn() {
             const btn = document.getElementById('btn-bulk-copy-sinov');
             if (!btn) return;
-            if (!confirm("Guruhdagi barcha qulflanmagan talabalarga JN o'rtachasi YN test bahosi sifatida saqlanadi va qulflanadi. Davom etamizmi?")) {
+            if (!confirm("Guruhdagi barcha talabalarga JN o'rtachasi 'Joriy YN test bahosi' ustuniga ko'chiriladi (qulflanmaydi — keyin har talabani edit pencil bilan o'zgartirib yuborib, 'JN dan baholarni jurnalga ko'chirish' bilan jurnalga o'tkazasiz). Davom etamizmi?")) {
                 return;
             }
             const originalText = btn.innerHTML;
@@ -5619,31 +5683,9 @@
             .then(r => r.json().then(data => ({ok: r.ok, data})))
             .then(({ok, data}) => {
                 if (ok && data.success) {
-                    Object.entries(data.results || {}).forEach(([stuId, info]) => {
-                        if (!info.applied) return;
-                        const row = document.getElementById('sinov-row-' + stuId);
-                        if (!row) return;
-                        row.dataset.current = info.grade;
-                        row.dataset.locked = '1';
-                        const valEl = document.getElementById('sinov-val-' + stuId);
-                        if (valEl) {
-                            valEl.textContent = info.grade;
-                            valEl.classList.remove('hidden', 'bg-gray-50', 'text-gray-800');
-                            valEl.classList.add('bg-emerald-50', 'text-emerald-800');
-                        }
-                        const input = document.getElementById('sinov-input-' + stuId);
-                        if (input) {
-                            input.value = info.grade;
-                            input.classList.add('hidden');
-                        }
-                        const editBtn = document.getElementById('sinov-edit-btn-' + stuId);
-                        if (editBtn) {
-                            const td = editBtn.parentElement;
-                            td.innerHTML = '<span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> O\'zgartirilgan (qulflangan)</span>';
-                        }
-                    });
                     alert(data.message || 'Tugadi.');
-                    btn.remove();
+                    // Sahifani yangilab oddiy holatdagi UI (override + edit pencil) ni qaytadan render qilamiz.
+                    window.location.reload();
                 } else {
                     alert(data.message || 'Xatolik yuz berdi.');
                     btn.disabled = false;
@@ -5659,10 +5701,59 @@
             });
         }
 
-        // Sinov fani — YN test bahosini o'zgartirish
+        // "JN dan baholarni jurnalga ko'chirish" — 2-ustundagi baholarni tepada jurnalning "Sinov (test)"
+        // ustuniga o'tkazadi va qulflaydi. Bundan keyin baholar o'qituvchi rolidan o'zgarmaydi
+        // (admin sozlamada Sinov (test) baholarini o'zgartirish toggle'i orqali tahrirlay oladi).
+        function copySinovToJournal() {
+            const btn = document.getElementById('btn-copy-sinov-to-journal');
+            if (!btn) return;
+            if (!confirm("2-ustundagi Sinov (test) baholari tepada jurnalning 'Sinov (test)' ustuniga ko'chiriladi va qulflanadi. Shundan keyin baholarni faqat admin (sozlamada toggle yoqilgan bo'lsa) o'zgartira oladi. Davom etamizmi?")) {
+                return;
+            }
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.style.opacity = '0.6';
+            btn.innerHTML = 'Yuklanmoqda...';
+
+            fetch('{{ route("admin.journal.copy-sinov-to-journal") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                })
+            })
+            .then(r => r.json().then(data => ({ok: r.ok, data})))
+            .then(({ok, data}) => {
+                if (ok && data.success) {
+                    alert(data.message || 'Tugadi.');
+                    window.location.reload();
+                } else {
+                    alert(data.message || 'Xatolik yuz berdi.');
+                    btn.disabled = false;
+                    btn.style.opacity = '1';
+                    btn.innerHTML = originalText;
+                }
+            })
+            .catch(err => {
+                alert('Tarmoq xatoligi: ' + err.message);
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.innerHTML = originalText;
+            });
+        }
+
+        // Sinov fani — YN test bahosini o'zgartirish (edit pencil)
         function enableSinovEdit(stuId) {
             const row = document.getElementById('sinov-row-' + stuId);
-            if (!row || row.dataset.locked === '1') return;
+            if (!row) return;
+            // Qulflangan AND admin override yo'q bo'lsa — edit pencil ko'rinmaydi (blade'da blok qilingan).
+            // Lekin admin uchun pencil ko'rinadi — bu yerda blokirovka qilmaymiz.
             document.getElementById('sinov-val-' + stuId).classList.add('hidden');
             document.getElementById('sinov-input-' + stuId).classList.remove('hidden');
             document.getElementById('sinov-edit-btn-' + stuId).classList.add('hidden');
@@ -5673,7 +5764,7 @@
         function cancelSinovEdit(stuId) {
             const row = document.getElementById('sinov-row-' + stuId);
             const input = document.getElementById('sinov-input-' + stuId);
-            input.value = row.dataset.current;
+            input.value = row.dataset.current || '';
             document.getElementById('sinov-val-' + stuId).classList.remove('hidden');
             input.classList.add('hidden');
             document.getElementById('sinov-edit-btn-' + stuId).classList.remove('hidden');
@@ -5687,9 +5778,6 @@
             const grade = parseFloat(input.value);
             if (isNaN(grade) || grade < 0 || grade > 100) {
                 alert("Baho 0 dan 100 gacha bo'lishi kerak.");
-                return;
-            }
-            if (!confirm("Bahoni saqlaysizmi? Sinov fani uchun YN test bahosi faqat bir marta o'zgartiriladi va saqlanganidan keyin qulflanadi.")) {
                 return;
             }
             const actions = document.getElementById('sinov-edit-actions-' + stuId);
@@ -5716,18 +5804,19 @@
                 if (ok && data.success) {
                     const row = document.getElementById('sinov-row-' + stuId);
                     row.dataset.current = data.grade;
-                    row.dataset.locked = '1';
                     const valEl = document.getElementById('sinov-val-' + stuId);
                     valEl.textContent = Math.round(parseFloat(data.grade));
-                    valEl.classList.remove('hidden', 'bg-gray-50', 'text-gray-800');
-                    valEl.classList.add('bg-emerald-50', 'text-emerald-800');
+                    valEl.classList.remove('hidden', 'bg-gray-50', 'text-gray-400');
+                    // Qulflangan bo'lsa emerald, aks holda amber.
+                    if (row.dataset.locked === '1') {
+                        valEl.classList.add('bg-emerald-50', 'text-emerald-800');
+                    } else {
+                        valEl.classList.add('bg-amber-50', 'text-amber-900');
+                    }
                     input.classList.add('hidden');
                     actions.classList.add('hidden');
                     actions.classList.remove('inline-flex');
-                    const editBtn = document.getElementById('sinov-edit-btn-' + stuId);
-                    if (editBtn) editBtn.remove();
-                    const td = actions.parentElement;
-                    td.innerHTML = '<span class="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700"><svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg> O\'zgartirilgan (qulflangan)</span>';
+                    document.getElementById('sinov-edit-btn-' + stuId).classList.remove('hidden');
                 } else {
                     alert(data.message || 'Saqlashda xatolik yuz berdi.');
                     buttons.forEach(b => b.disabled = false);

@@ -1132,7 +1132,7 @@
 
         {{-- Kafedra/bo'lim --}}
         <div x-show="inner.oqituvchilar === 'kafedra'" x-cloak
-             x-data="{ openDept: null }">
+             x-data="{ openDept: null, deptSearch: '' }">
             @php
                 $teacherDeptStats   = $teacherDeptStats   ?? [];
                 $teacherDeptMembers = $teacherDeptMembers ?? [];
@@ -1152,13 +1152,27 @@
                 </div>
             </div>
 
+            {{-- Qidirish input --}}
+            <div style="margin-bottom:14px; position:relative;">
+                <svg width="18" height="18" fill="none" stroke="#94a3b8" stroke-width="2" viewBox="0 0 24 24"
+                     style="position:absolute; left:14px; top:50%; transform:translateY(-50%); pointer-events:none;">
+                    <circle cx="11" cy="11" r="7"/>
+                    <path d="m21 21-4.3-4.3" stroke-linecap="round"/>
+                </svg>
+                <input type="search" x-model="deptSearch"
+                       placeholder="Kafedra yoki xodim ismi bo'yicha qidirish..."
+                       style="width:100%; padding:12px 14px 12px 42px; border:1px solid rgba(15,23,42,0.12); border-radius:12px; background:rgba(255,255,255,0.7); font-size:14px; outline:none; transition:border-color .15s, box-shadow .15s;"
+                       onfocus="this.style.borderColor='#6366f1'; this.style.boxShadow='0 0 0 3px rgba(99,102,241,0.15)';"
+                       onblur="this.style.borderColor='rgba(15,23,42,0.12)'; this.style.boxShadow='none';">
+            </div>
+
             <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:6px;">
                 <table style="width:100%; border-collapse: collapse; font-size:13px;">
                     <thead>
                         <tr style="background: rgba(99,102,241,0.08); color:#1e293b;">
                             <th style="text-align:left; padding:10px 14px; font-weight:600; width:50px;">#</th>
                             <th style="text-align:left; padding:10px 14px; font-weight:600;">Kafedra/bo'lim</th>
-                            <th style="text-align:right; padding:10px 14px; font-weight:600; width:120px;">Xodim soni</th>
+                            <th style="text-align:right; padding:10px 14px; font-weight:600; width:140px;">Xodim soni</th>
                             <th style="width:36px;"></th>
                         </tr>
                     </thead>
@@ -1167,24 +1181,28 @@
                             @php
                                 $deptKey = md5($dept);
                                 $members = $teacherDeptMembers[$dept] ?? [];
+                                $deptLow = mb_strtolower($dept);
+                                $memberNamesLow = mb_strtolower(implode(' ', array_column($members, 'full_name')));
+                                $haystack = $deptLow . ' ' . $memberNamesLow;
                             @endphp
                             <tr class="dept-row" :class="openDept === '{{ $deptKey }}' ? 'dept-row-open' : ''"
+                                x-show="deptSearch.trim() === '' || {{ json_encode($haystack) }}.includes(deptSearch.toLowerCase().trim())"
                                 style="cursor:pointer; border-top:1px solid rgba(15,23,42,0.06); transition:background .15s;"
                                 @click="openDept = (openDept === '{{ $deptKey }}' ? null : '{{ $deptKey }}')">
-                                <td style="padding:10px 14px; color:#64748b;">{{ $loop->iteration }}</td>
-                                <td style="padding:10px 14px; color:#0f172a;">{{ $dept }}</td>
-                                <td style="padding:10px 14px; text-align:right; font-weight:600; color:#4f46e5;">{{ number_format((int) $st['total'], 0, '.', ' ') }}</td>
-                                <td style="padding:10px 14px; text-align:center; color:#94a3b8;">
+                                <td style="padding:14px 14px; color:#64748b; font-size:14px;">{{ $loop->iteration }}</td>
+                                <td style="padding:14px 14px; color:#0f172a; font-size:20px; font-weight:600;">{{ $dept }}</td>
+                                <td style="padding:14px 14px; text-align:right; font-weight:700; color:#4f46e5; font-size:18px;">{{ number_format((int) $st['total'], 0, '.', ' ') }}</td>
+                                <td style="padding:14px 14px; text-align:center; color:#94a3b8; font-size:18px;">
                                     <span x-text="openDept === '{{ $deptKey }}' ? '▾' : '▸'"></span>
                                 </td>
                             </tr>
-                            <tr x-show="openDept === '{{ $deptKey }}'" x-cloak>
+                            <tr x-show="openDept === '{{ $deptKey }}' && (deptSearch.trim() === '' || {{ json_encode($haystack) }}.includes(deptSearch.toLowerCase().trim()))" x-cloak>
                                 <td colspan="4" style="padding:0; background: rgba(255,255,255,0.45); border-top:1px dashed rgba(15,23,42,0.1);">
                                     <div style="padding:14px 22px;">
                                         @if(empty($members))
                                             <div style="padding:14px; color:#64748b; font-style:italic;">Xodim topilmadi.</div>
                                         @else
-                                            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:10px;">
+                                            <div style="display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:10px;">
                                                 @foreach($members as $m)
                                                     <div style="display:flex; align-items:center; gap:10px; padding:8px 10px; background:#fff; border:1px solid rgba(15,23,42,0.08); border-radius:10px;">
                                                         @if(!empty($m['image']))

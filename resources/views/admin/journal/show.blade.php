@@ -2493,16 +2493,23 @@
                                 </svg>
                                 Sinov (test) baholari
                             </button>
-                            <button type="button" id="btn-copy-sinov-to-journal"
-                                class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition shadow-sm flex-shrink-0"
-                                onclick="copySinovToJournal()"
-                                title="2-ustundagi baholarni tepada jurnalning 'Sinov (test)' ustuniga ko'chiradi va qulflaydi">
-                                <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 4h5a2 2 0 012 2v12a2 2 0 01-2 2h-5"/>
-                                </svg>
-                                JN dan baholarni jurnalga ko'chirish
-                            </button>
+                            @if(empty($sinovInJournal))
+                                <button type="button" id="btn-copy-sinov-to-journal"
+                                    class="px-4 py-2 bg-blue-600 text-white text-sm font-semibold rounded-lg hover:bg-blue-700 transition shadow-sm flex-shrink-0"
+                                    onclick="copySinovToJournal()"
+                                    title="2-ustundagi baholarni tepada jurnalning 'Sinov (test)' ustuniga ko'chiradi va qulflaydi">
+                                    <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16l-4-4m0 0l4-4m-4 4h18"/>
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 4h5a2 2 0 012 2v12a2 2 0 01-2 2h-5"/>
+                                    </svg>
+                                    JN dan baholarni jurnalga ko'chirish
+                                </button>
+                            @else
+                                <span class="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-50 border border-emerald-300 text-emerald-800 text-sm font-semibold rounded-lg flex-shrink-0" title="Baholar jurnalga ko'chirilgan va qulflangan">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                    Jurnalga ko'chirilgan
+                                </span>
+                            @endif
                         </div>
                     </div>
                     <div class="overflow-x-auto bg-white rounded-lg border border-amber-200">

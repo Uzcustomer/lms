@@ -489,11 +489,14 @@ class StudentController extends Controller
         foreach ($citizenshipByEdu as $k => $arr) { arsort($arr); $citizenshipByEdu[$k] = $arr; }
 
         // ── Professor-o'qituvchilar (xodimlar) statistikasi ──
-        // Faqat asosiy ish joyiga ega xodimlar bo'yicha employee_type kesimi.
-        // "Turi" inner tabidagi kartalar va bar chart uchun (jinsga split QILINMAYDI —
-        // u keyinroq alohida "Jins" tabida bo'ladi).
-        $teacherTypeRows = DB::table('teachers')
-            ->whereRaw('LOWER(TRIM(employment_form)) = ?', ['asosiy ish joy'])
+        // FAQAT faol (is_active=1) va asosiy ish joyiga ega xodimlar.
+        // Yagona base query — qayta foydalanish uchun closure'da.
+        $activeMainQuery = fn() => DB::table('teachers')
+            ->where('is_active', 1)
+            ->whereRaw('LOWER(TRIM(employment_form)) = ?', ['asosiy ish joy']);
+
+        // "Turi" inner tabi — employee_type bo'yicha kesim.
+        $teacherTypeRows = $activeMainQuery()
             ->selectRaw('employee_type, COUNT(*) as total')
             ->groupBy('employee_type')
             ->get();
@@ -505,9 +508,8 @@ class StudentController extends Controller
         }
         uasort($teacherTypeStats, fn($a, $b) => $b['total'] <=> $a['total']);
 
-        // Xodimlar jinsi — asosiy ish joyiga ega xodimlar bo'yicha (Jins tabi).
-        $teacherGenderRow = DB::table('teachers')
-            ->whereRaw('LOWER(TRIM(employment_form)) = ?', ['asosiy ish joy'])
+        // "Jins" inner tabi — Erkak/Ayol kesimi.
+        $teacherGenderRow = $activeMainQuery()
             ->selectRaw("
                 COUNT(*) as total,
                 SUM(CASE
@@ -529,34 +531,46 @@ class StudentController extends Controller
             'female' => (int) ($teacherGenderRow->female ?? 0),
         ];
 
-        // Xodimlar kafedra/bo'lim — asosiy ish joyiga ega xodimlar bo'yicha
-        // department ustuni kesimi (Kafedra/bo'lim inner tabi).
-        // Jadval ko'rinishi: har qator kafedra/bo'lim; bosilganda shu yerdagi
-        // xodimlar (full_name, image, phone) ro'yxati ochiladi.
-        $teacherDeptMembersRaw = DB::table('teachers')
-            ->whereRaw('LOWER(TRIM(employment_form)) = ?', ['asosiy ish joy'])
+        // "Kafedra/bo'lim" va "Lavozim" tablari uchun xodimlar ro'yxati —
+        // bitta so'rovda barcha kerakli ustunlar olinadi, keyin PHP'da
+        // department va staff_position bo'yicha alohida indekslanadi.
+        $teacherMembersRaw = $activeMainQuery()
             ->select('hemis_id', 'full_name', 'image', 'phone',
                 'department', 'staff_position', 'employee_type')
             ->orderBy('full_name')
             ->get();
-        $teacherDeptMembers = []; // [department => [{hemis_id, full_name, image, phone, staff_position}, ...]]
-        foreach ($teacherDeptMembersRaw as $t) {
-            $dept = trim((string) $t->department);
-            if ($dept === '') continue;
-            $teacherDeptMembers[$dept][] = [
+
+        $teacherDeptMembers = []; // [department => [...]]
+        $teacherPositionMembers = []; // [staff_position => [...]]
+        foreach ($teacherMembersRaw as $t) {
+            $member = [
                 'hemis_id'       => (string) $t->hemis_id,
                 'full_name'      => (string) $t->full_name,
                 'image'          => (string) ($t->image ?? ''),
                 'phone'          => (string) ($t->phone ?? ''),
                 'staff_position' => (string) ($t->staff_position ?? ''),
+                'department'     => (string) ($t->department ?? ''),
             ];
+            $dept = trim((string) $t->department);
+            if ($dept !== '') {
+                $teacherDeptMembers[$dept][] = $member;
+            }
+            $pos = trim((string) $t->staff_position);
+            if ($pos !== '') {
+                $teacherPositionMembers[$pos][] = $member;
+            }
         }
-        // Aggregat: har kafedra/bo'limdagi xodimlar soni, ko'p soniga ko'ra sort
         $teacherDeptStats = [];
         foreach ($teacherDeptMembers as $dept => $list) {
             $teacherDeptStats[$dept] = ['total' => count($list)];
         }
         uasort($teacherDeptStats, fn($a, $b) => $b['total'] <=> $a['total']);
+
+        $teacherPositionStats = [];
+        foreach ($teacherPositionMembers as $pos => $list) {
+            $teacherPositionStats[$pos] = ['total' => count($list)];
+        }
+        uasort($teacherPositionStats, fn($a, $b) => $b['total'] <=> $a['total']);
 
         return view('admin.students.statistics', compact(
             'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals',
@@ -566,7 +580,8 @@ class StudentController extends Controller
             'ageByEdu', 'payByEdu', 'socialByEdu', 'socialHasCategoryByEdu',
             'countryByEdu', 'citizenshipByEdu', 'provinceByEdu',
             'teacherTypeStats', 'teacherGenderStats',
-            'teacherDeptStats', 'teacherDeptMembers'
+            'teacherDeptStats', 'teacherDeptMembers',
+            'teacherPositionStats', 'teacherPositionMembers'
         ));
     }
 

@@ -2485,10 +2485,13 @@
                         </div>
                         <div class="flex flex-wrap gap-2 items-center">
                             <button type="button" id="btn-bulk-copy-sinov"
-                                class="px-4 py-2 bg-amber-500 text-white text-sm font-semibold rounded-lg hover:bg-amber-600 transition shadow-sm flex-shrink-0"
+                                class="text-white text-sm font-semibold rounded-lg transition shadow-sm flex-shrink-0"
+                                style="padding:8px 16px;background:linear-gradient(135deg,#f59e0b,#d97706);color:#fff;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:6px;"
+                                onmouseover="this.style.background='linear-gradient(135deg,#d97706,#b45309)'"
+                                onmouseout="this.style.background='linear-gradient(135deg,#f59e0b,#d97706)'"
                                 onclick="bulkCopySinovFromJn()"
-                                title="Guruhdagi barcha qulflanmagan talabalarga JN o'rtachasini 'Joriy YN test bahosi' ustuniga ko'chiradi (jurnalga o'tkazmaydi)">
-                                <svg class="w-4 h-4 inline-block mr-1 -mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                title="Guruhdagi barcha qulflanmagan talabalarga JN o'rtachasini 'Sinov (test) bahosi' ustuniga ko'chiradi (jurnalga o'tkazmaydi)">
+                                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                                 </svg>
                                 Baholarni ko'chirish

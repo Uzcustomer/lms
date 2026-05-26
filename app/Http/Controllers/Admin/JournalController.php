@@ -5757,6 +5757,29 @@ class JournalController extends Controller
             $payload
         );
 
+        // Agar qaydnoma yopilgan bo'lsa (YnSubmission mavjud) — student_grades
+        // jadvalidagi yakuniy sinov test yozuvini ham yangilash. Aks holda
+        // vedomost va boshqa hisobotlar eski qiymatni ko'rsatadi.
+        if ($ynSubmission) {
+            $finalGradeInt = (int) round($grade, 0, PHP_ROUND_HALF_UP);
+            $updated = DB::table('student_grades')
+                ->where('student_hemis_id', $data['student_hemis_id'])
+                ->where('subject_id', $data['subject_id'])
+                ->where('semester_code', $data['semester_code'])
+                ->where('training_type_code', 102)
+                ->where('reason', 'sinov_yn_test')
+                ->update([
+                    'grade' => $finalGradeInt,
+                    'updated_at' => now(),
+                ]);
+            if ($updated === 0) {
+                \Log::warning('saveSinovOverride: student_grades sinov_yn_test yozuvi topilmadi', [
+                    'student_hemis_id' => $data['student_hemis_id'],
+                    'subject_id' => $data['subject_id'],
+                ]);
+            }
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Baho saqlandi.',

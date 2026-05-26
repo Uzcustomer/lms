@@ -1441,8 +1441,12 @@
                                                     $sinovVal = ($sinovLocked && $sinovRow && $sinovRow->override_grade !== null)
                                                         ? (int) round((float) $sinovRow->override_grade)
                                                         : null;
+                                                    // Admin sozlamada toggle yoqilgan bo'lsa — qulflangan bahoni o'zgartira oladi.
+                                                    $sinovAdminEditable = !empty($canEditLockedSinov) && $sinovVal !== null;
                                                 @endphp
-                                                <td class="px-1 py-1 text-center bg-amber-50" title="{{ $sinovLocked ? 'Sinov (test) bahosi — qaydnoma yopilgan va qulflangan' : 'Sinov (test) — pastki paneldan jurnalga ko\'chirilgandan keyin chiqadi' }}">
+                                                <td class="px-1 py-1 text-center bg-amber-50 {{ $sinovAdminEditable ? 'cursor-pointer hover:bg-amber-100' : '' }}"
+                                                    @if($sinovAdminEditable) onclick="adminEditSinovGrade('{{ $student->hemis_id }}', {{ $sinovVal }})" @endif
+                                                    title="{{ $sinovAdminEditable ? 'Admin: bosib Sinov (test) bahosini o\'zgartirish' : ($sinovLocked ? 'Sinov (test) bahosi — qaydnoma yopilgan va qulflangan' : 'Sinov (test) — pastki paneldan jurnalga ko\'chirilgandan keyin chiqadi') }}">
                                                     @if($sinovVal !== null)
                                                         <span class="font-bold {{ $sinovVal < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-800' }}">{{ $sinovVal }}</span>
                                                     @else
@@ -2125,8 +2129,12 @@
                                                     $sinovVal = ($sinovLocked && $sinovRow && $sinovRow->override_grade !== null)
                                                         ? (int) round((float) $sinovRow->override_grade)
                                                         : null;
+                                                    // Admin sozlamada toggle yoqilgan bo'lsa — qulflangan bahoni o'zgartira oladi.
+                                                    $sinovAdminEditable = !empty($canEditLockedSinov) && $sinovVal !== null;
                                                 @endphp
-                                                <td class="px-1 py-1 text-center bg-amber-50" title="{{ $sinovLocked ? 'Sinov (test) bahosi — qaydnoma yopilgan va qulflangan' : 'Sinov (test) — pastki paneldan jurnalga ko\'chirilgandan keyin chiqadi' }}">
+                                                <td class="px-1 py-1 text-center bg-amber-50 {{ $sinovAdminEditable ? 'cursor-pointer hover:bg-amber-100' : '' }}"
+                                                    @if($sinovAdminEditable) onclick="adminEditSinovGrade('{{ $student->hemis_id }}', {{ $sinovVal }})" @endif
+                                                    title="{{ $sinovAdminEditable ? 'Admin: bosib Sinov (test) bahosini o\'zgartirish' : ($sinovLocked ? 'Sinov (test) bahosi — qaydnoma yopilgan va qulflangan' : 'Sinov (test) — pastki paneldan jurnalga ko\'chirilgandan keyin chiqadi') }}">
                                                     @if($sinovVal !== null)
                                                         <span class="font-bold {{ $sinovVal < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-800' }}">{{ $sinovVal }}</span>
                                                     @else
@@ -5524,6 +5532,43 @@
                 btn.style.opacity = '1';
             });
         }
+        // Admin uchun qulflangan Sinov (test) bahosini tepa jurnal katakchasidan
+        // o'zgartirish — sozlamalarda "Sinov (test) baholarini o'zgartirish" toggle
+        // yoqilgan bo'lishi shart (kontrollerda ham tekshiriladi).
+        function adminEditSinovGrade(stuId, currentVal) {
+            const newVal = prompt("Sinov (test) bahosini o'zgartirish (0-100):", currentVal);
+            if (newVal === null) return;
+            const grade = parseFloat(newVal);
+            if (isNaN(grade) || grade < 0 || grade > 100) {
+                alert("Baho 0 dan 100 gacha bo'lishi kerak.");
+                return;
+            }
+            fetch('{{ route("admin.journal.save-sinov-override") }}', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'Accept': 'application/json',
+                },
+                body: JSON.stringify({
+                    subject_id: '{{ $subjectId }}',
+                    semester_code: '{{ $semesterCode }}',
+                    group_hemis_id: '{{ $group->group_hemis_id }}',
+                    student_hemis_id: stuId,
+                    grade: grade,
+                })
+            })
+            .then(r => r.json().then(data => ({ok: r.ok, data})))
+            .then(({ok, data}) => {
+                if (ok && data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message || 'Saqlashda xatolik yuz berdi.');
+                }
+            })
+            .catch(err => alert('Tarmoq xatoligi: ' + err.message));
+        }
+
         // === SABABLI BAHO MODAL ===
         function openExcuseModal(studentHemisId, studentName, gradeId, excuseId, existingGrade) {
             document.getElementById('excuse-modal-student-name').textContent = studentName;

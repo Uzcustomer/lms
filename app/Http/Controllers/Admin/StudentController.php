@@ -490,27 +490,37 @@ class StudentController extends Controller
 
         // ── Professor-o'qituvchilar (xodimlar) statistikasi ──
         // Faqat asosiy ish joyiga ega xodimlar bo'yicha employee_type kesimi
-        // (jinsga ham split). "Turi" inner tabidagi kartalar va bar chart uchun.
+        // (jinsga ham split). Jins/Erkak/Ayol matchini bevosita SQL'da bajaramiz —
+        // shunda gender ustunidagi turli yozuvlar (Erkak/erkak/Male/...) ham
+        // chiroyli ushlanadi va PHP tarafida string check qilinmaydi.
         $teacherTypeRows = DB::table('teachers')
-            ->whereRaw('LOWER(employment_form) = ?', ['asosiy ish joy'])
-            ->selectRaw('employee_type, gender, COUNT(*) as total')
-            ->groupBy('employee_type', 'gender')
+            ->whereRaw('LOWER(TRIM(employment_form)) = ?', ['asosiy ish joy'])
+            ->selectRaw("
+                employee_type,
+                COUNT(*) as total,
+                SUM(CASE
+                    WHEN LOWER(TRIM(gender)) LIKE 'erkak%'
+                      OR LOWER(TRIM(gender)) IN ('male','m')
+                    THEN 1 ELSE 0
+                END) as male,
+                SUM(CASE
+                    WHEN LOWER(TRIM(gender)) LIKE 'ayol%'
+                      OR LOWER(TRIM(gender)) LIKE 'xotin%'
+                      OR LOWER(TRIM(gender)) IN ('female','f')
+                    THEN 1 ELSE 0
+                END) as female
+            ")
+            ->groupBy('employee_type')
             ->get();
         $teacherTypeStats = []; // [employee_type => ['total'=>n,'male'=>n,'female'=>n]]
         foreach ($teacherTypeRows as $r) {
             $type = trim((string) $r->employee_type);
             if ($type === '') continue;
-            if (!isset($teacherTypeStats[$type])) {
-                $teacherTypeStats[$type] = ['total' => 0, 'male' => 0, 'female' => 0];
-            }
-            $g = mb_strtolower(trim((string) $r->gender));
-            $isMale   = str_starts_with($g, 'erkak') || $g === 'male' || $g === 'm';
-            $isFemale = str_starts_with($g, 'ayol') || str_starts_with($g, 'xotin')
-                     || $g === 'female' || $g === 'f';
-            $cnt = (int) $r->total;
-            $teacherTypeStats[$type]['total']  += $cnt;
-            if ($isMale)   $teacherTypeStats[$type]['male']   += $cnt;
-            if ($isFemale) $teacherTypeStats[$type]['female'] += $cnt;
+            $teacherTypeStats[$type] = [
+                'total'  => (int) $r->total,
+                'male'   => (int) $r->male,
+                'female' => (int) $r->female,
+            ];
         }
         uasort($teacherTypeStats, fn($a, $b) => $b['total'] <=> $a['total']);
 

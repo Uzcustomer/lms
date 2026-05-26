@@ -5954,11 +5954,20 @@
             @php
                 $hasOskiJs = !($examSchedule && $examSchedule->oski_na) ? 'true' : 'false';
                 $hasTestJs  = !($examSchedule && $examSchedule->test_na)  ? 'true' : 'false';
+                $isSinovJs = !empty($isSinov) ? 'true' : 'false';
             @endphp
             var hasOski = {{ $hasOskiJs }};
             var hasTest  = {{ $hasTestJs }};
+            var isSinov  = {{ $isSinovJs }};
 
-            if (hasOski && hasTest) {
+            if (isSinov) {
+                // Sinov (test) bilan yopiladigan fan — OSKI yo'q, Test 30
+                document.getElementById('yn-weight-jn').value   = 50;
+                document.getElementById('yn-weight-mt').value   = 20;
+                document.getElementById('yn-weight-on').value   = 0;
+                document.getElementById('yn-weight-oski').value = 0;
+                document.getElementById('yn-weight-test').value = 30;
+            } else if (hasOski && hasTest) {
                 document.getElementById('yn-weight-jn').value   = 50;
                 document.getElementById('yn-weight-mt').value   = 20;
                 document.getElementById('yn-weight-on').value   = 0;

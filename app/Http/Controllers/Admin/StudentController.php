@@ -531,18 +531,32 @@ class StudentController extends Controller
 
         // Xodimlar kafedra/bo'lim — asosiy ish joyiga ega xodimlar bo'yicha
         // department ustuni kesimi (Kafedra/bo'lim inner tabi).
-        $teacherDeptRows = DB::table('teachers')
+        // Jadval ko'rinishi: har qator kafedra/bo'lim; bosilganda shu yerdagi
+        // xodimlar (full_name, image, phone) ro'yxati ochiladi.
+        $teacherDeptMembersRaw = DB::table('teachers')
             ->whereRaw('LOWER(TRIM(employment_form)) = ?', ['asosiy ish joy'])
-            ->selectRaw('department, COUNT(*) as total')
-            ->groupBy('department')
-            ->orderByDesc('total')
+            ->select('hemis_id', 'full_name', 'image', 'phone',
+                'department', 'staff_position', 'employee_type')
+            ->orderBy('full_name')
             ->get();
-        $teacherDeptStats = []; // [department => ['total'=>n]]
-        foreach ($teacherDeptRows as $r) {
-            $dept = trim((string) $r->department);
+        $teacherDeptMembers = []; // [department => [{hemis_id, full_name, image, phone, staff_position}, ...]]
+        foreach ($teacherDeptMembersRaw as $t) {
+            $dept = trim((string) $t->department);
             if ($dept === '') continue;
-            $teacherDeptStats[$dept] = ['total' => (int) $r->total];
+            $teacherDeptMembers[$dept][] = [
+                'hemis_id'       => (string) $t->hemis_id,
+                'full_name'      => (string) $t->full_name,
+                'image'          => (string) ($t->image ?? ''),
+                'phone'          => (string) ($t->phone ?? ''),
+                'staff_position' => (string) ($t->staff_position ?? ''),
+            ];
         }
+        // Aggregat: har kafedra/bo'limdagi xodimlar soni, ko'p soniga ko'ra sort
+        $teacherDeptStats = [];
+        foreach ($teacherDeptMembers as $dept => $list) {
+            $teacherDeptStats[$dept] = ['total' => count($list)];
+        }
+        uasort($teacherDeptStats, fn($a, $b) => $b['total'] <=> $a['total']);
 
         return view('admin.students.statistics', compact(
             'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals',
@@ -551,7 +565,8 @@ class StudentController extends Controller
             'accomStats', 'provinceStats',
             'ageByEdu', 'payByEdu', 'socialByEdu', 'socialHasCategoryByEdu',
             'countryByEdu', 'citizenshipByEdu', 'provinceByEdu',
-            'teacherTypeStats', 'teacherGenderStats', 'teacherDeptStats'
+            'teacherTypeStats', 'teacherGenderStats',
+            'teacherDeptStats', 'teacherDeptMembers'
         ));
     }
 

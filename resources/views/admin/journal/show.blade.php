@@ -1436,12 +1436,13 @@
                                             @if(!empty($isSinov))
                                                 @php
                                                     $sinovRow = $sinovOverrides[$student->hemis_id] ?? null;
-                                                    $sinovLocked = $sinovRow && $sinovRow->is_locked;
-                                                    $sinovVal = ($sinovLocked && $sinovRow->override_grade !== null)
+                                                    // Qaydnoma yopilgan (YnSubmission yaratilgan) yoki SinovTestGrade.is_locked — har ikkalasi qulflangan deb hisoblanadi
+                                                    $sinovLocked = ($sinovRow && $sinovRow->is_locked) || !empty($ynSubmission);
+                                                    $sinovVal = ($sinovLocked && $sinovRow && $sinovRow->override_grade !== null)
                                                         ? (int) round((float) $sinovRow->override_grade)
                                                         : null;
                                                 @endphp
-                                                <td class="px-1 py-1 text-center bg-amber-50" title="{{ $sinovLocked ? 'Sinov (test) bahosi — jurnalga ko\'chirilgan va qulflangan' : 'Sinov (test) — pastki paneldan jurnalga ko\'chirilgandan keyin chiqadi' }}">
+                                                <td class="px-1 py-1 text-center bg-amber-50" title="{{ $sinovLocked ? 'Sinov (test) bahosi — qaydnoma yopilgan va qulflangan' : 'Sinov (test) — pastki paneldan jurnalga ko\'chirilgandan keyin chiqadi' }}">
                                                     @if($sinovVal !== null)
                                                         <span class="font-bold {{ $sinovVal < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-800' }}">{{ $sinovVal }}</span>
                                                     @else
@@ -2119,12 +2120,13 @@
                                             @if(!empty($isSinov))
                                                 @php
                                                     $sinovRow = $sinovOverrides[$student->hemis_id] ?? null;
-                                                    $sinovLocked = $sinovRow && $sinovRow->is_locked;
-                                                    $sinovVal = ($sinovLocked && $sinovRow->override_grade !== null)
+                                                    // Qaydnoma yopilgan (YnSubmission yaratilgan) yoki SinovTestGrade.is_locked — har ikkalasi qulflangan deb hisoblanadi
+                                                    $sinovLocked = ($sinovRow && $sinovRow->is_locked) || !empty($ynSubmission);
+                                                    $sinovVal = ($sinovLocked && $sinovRow && $sinovRow->override_grade !== null)
                                                         ? (int) round((float) $sinovRow->override_grade)
                                                         : null;
                                                 @endphp
-                                                <td class="px-1 py-1 text-center bg-amber-50" title="{{ $sinovLocked ? 'Sinov (test) bahosi — jurnalga ko\'chirilgan va qulflangan' : 'Sinov (test) — pastki paneldan jurnalga ko\'chirilgandan keyin chiqadi' }}">
+                                                <td class="px-1 py-1 text-center bg-amber-50" title="{{ $sinovLocked ? 'Sinov (test) bahosi — qaydnoma yopilgan va qulflangan' : 'Sinov (test) — pastki paneldan jurnalga ko\'chirilgandan keyin chiqadi' }}">
                                                     @if($sinovVal !== null)
                                                         <span class="font-bold {{ $sinovVal < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-800' }}">{{ $sinovVal }}</span>
                                                     @else
@@ -2421,28 +2423,30 @@
                                             @endif
                                         </div>
                                     @endif
-                                    @if(!($allLessonsCompleted ?? true))
-                                        <div class="flex flex-column items-end">
-                                            <button type="button" id="btn-submit-yn"
-                                                class="px-6 py-3 bg-red-700 text-white font-bold rounded-lg cursor-not-allowed shadow-md border-2 border-red-800 opacity-100"
-                                                disabled
-                                                title="Barcha darslar tugagandan keyin YN ga yuborish mumkin"
-                                                style="background-color: #b91c1c !important; color: #fff !important;">
-                                                YN ga yuborish (nofaol)
-                                            </button>
-                                            <div class="text-sm text-red-600 mt-2 font-medium">
-                                                Hali {{ $remainingLessonsCount ?? 0 }} ta dars qolgan
-                                                @if($lastLessonDate ?? false)
-                                                    (oxirgi dars: {{ \Carbon\Carbon::parse($lastLessonDate)->format('d.m.Y') }})
-                                                @endif
+                                    @if(empty($isSinov))
+                                        @if(!($allLessonsCompleted ?? true))
+                                            <div class="flex flex-column items-end">
+                                                <button type="button" id="btn-submit-yn"
+                                                    class="px-6 py-3 bg-red-700 text-white font-bold rounded-lg cursor-not-allowed shadow-md border-2 border-red-800 opacity-100"
+                                                    disabled
+                                                    title="Barcha darslar tugagandan keyin YN ga yuborish mumkin"
+                                                    style="background-color: #b91c1c !important; color: #fff !important;">
+                                                    YN ga yuborish (nofaol)
+                                                </button>
+                                                <div class="text-sm text-red-600 mt-2 font-medium">
+                                                    Hali {{ $remainingLessonsCount ?? 0 }} ta dars qolgan
+                                                    @if($lastLessonDate ?? false)
+                                                        (oxirgi dars: {{ \Carbon\Carbon::parse($lastLessonDate)->format('d.m.Y') }})
+                                                    @endif
+                                                </div>
                                             </div>
-                                        </div>
-                                    @else
-                                        <button type="button" id="btn-submit-yn"
-                                            class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"
-                                            onclick="submitToYn()">
-                                            YN ga yuborish
-                                        </button>
+                                        @else
+                                            <button type="button" id="btn-submit-yn"
+                                                class="px-6 py-3 bg-indigo-600 text-white font-semibold rounded-lg hover:bg-indigo-700 transition shadow-sm"
+                                                onclick="submitToYn()">
+                                                YN ga yuborish
+                                            </button>
+                                        @endif
                                     @endif
                                 </div>
                             @endif
@@ -5721,7 +5725,16 @@
         function copySinovToJournal() {
             const btn = document.getElementById('btn-copy-sinov-to-journal');
             if (!btn) return;
-            if (!confirm("2-ustundagi Sinov (test) baholari tepada jurnalning 'Sinov (test)' ustuniga ko'chiriladi va qulflanadi. Shundan keyin baholarni faqat admin (sozlamada toggle yoqilgan bo'lsa) o'zgartira oladi. Davom etamizmi?")) {
+            if (!confirm(
+                "DIQQAT!\n\n" +
+                "2-ustundagi Sinov (test) baholari tepada jurnalning 'Sinov (test)' ustuniga ko'chiriladi va shu bilan QAYDNOMA YAKUNLANADI.\n\n" +
+                "Quyidagi baholar barchasi qulflanadi:\n" +
+                "  • Joriy nazorat (JN)\n" +
+                "  • Mustaqil ta'lim (MT)\n" +
+                "  • Sinov (test)\n\n" +
+                "Bu amalni bekor qilib bo'lmaydi!\n\n" +
+                "Davom etamizmi?"
+            )) {
                 return;
             }
             const originalText = btn.innerHTML;

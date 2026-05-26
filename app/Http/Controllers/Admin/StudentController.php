@@ -505,6 +505,30 @@ class StudentController extends Controller
         }
         uasort($teacherTypeStats, fn($a, $b) => $b['total'] <=> $a['total']);
 
+        // Xodimlar jinsi — asosiy ish joyiga ega xodimlar bo'yicha (Jins tabi).
+        $teacherGenderRow = DB::table('teachers')
+            ->whereRaw('LOWER(TRIM(employment_form)) = ?', ['asosiy ish joy'])
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE
+                    WHEN LOWER(TRIM(gender)) LIKE 'erkak%'
+                      OR LOWER(TRIM(gender)) IN ('male','m')
+                    THEN 1 ELSE 0
+                END) as male,
+                SUM(CASE
+                    WHEN LOWER(TRIM(gender)) LIKE 'ayol%'
+                      OR LOWER(TRIM(gender)) LIKE 'xotin%'
+                      OR LOWER(TRIM(gender)) IN ('female','f')
+                    THEN 1 ELSE 0
+                END) as female
+            ")
+            ->first();
+        $teacherGenderStats = [
+            'total'  => (int) ($teacherGenderRow->total ?? 0),
+            'male'   => (int) ($teacherGenderRow->male ?? 0),
+            'female' => (int) ($teacherGenderRow->female ?? 0),
+        ];
+
         return view('admin.students.statistics', compact(
             'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals',
             'socialStats', 'socialHasCategory',
@@ -512,7 +536,7 @@ class StudentController extends Controller
             'accomStats', 'provinceStats',
             'ageByEdu', 'payByEdu', 'socialByEdu', 'socialHasCategoryByEdu',
             'countryByEdu', 'citizenshipByEdu', 'provinceByEdu',
-            'teacherTypeStats'
+            'teacherTypeStats', 'teacherGenderStats'
         ));
     }
 

@@ -2671,18 +2671,20 @@
                                 </button>
                             @endif
 
-                            <button type="button" id="btn-export-yn-qaydnoma"
-                                class="relative px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
-                                onclick="openYnWeightsModal()"
-                                title="Vaznlarni taqsimlab YN qaydnoma (Excel) yaratish{{ $sababliStudentsCount > 0 ? ' — ' . $sababliStudentsCount . ' ta talaba uchun 12-qo\'shimcha shakl ham chiqadi' : '' }}">
-                                <svg style="width:14px;height:14px;display:inline-block;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-                                </svg>
-                                YN qaydnoma yaratish
-                                @if($sababliStudentsCount > 0)
-                                    <span class="absolute -top-2 -right-2 bg-violet-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md" title="12-qo'shimcha shaklga {{ $sababliStudentsCount }} ta talaba tushadi">{{ $sababliStudentsCount }}</span>
-                                @endif
-                            </button>
+                            @if(!is_active_oqituvchi())
+                                <button type="button" id="btn-export-yn-qaydnoma"
+                                    class="relative px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
+                                    onclick="openYnWeightsModal()"
+                                    title="Vaznlarni taqsimlab YN qaydnoma (Excel) yaratish{{ $sababliStudentsCount > 0 ? ' — ' . $sababliStudentsCount . ' ta talaba uchun 12-qo\'shimcha shakl ham chiqadi' : '' }}">
+                                    <svg style="width:14px;height:14px;display:inline-block;margin-right:4px;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+                                    </svg>
+                                    YN qaydnoma yaratish
+                                    @if($sababliStudentsCount > 0)
+                                        <span class="absolute -top-2 -right-2 bg-violet-600 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center shadow-md" title="12-qo'shimcha shaklga {{ $sababliStudentsCount }} ta talaba tushadi">{{ $sababliStudentsCount }}</span>
+                                    @endif
+                                </button>
+                            @endif
                         </div>
                     </div>
                 </div>

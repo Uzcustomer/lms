@@ -323,11 +323,12 @@
 <div class="w-full px-4 py-6 stats-root"
      x-data="{
         outer: 'talabalar',
-        inner: { talabalar: 'umumiy' }
+        inner: { talabalar: 'umumiy', oqituvchilar: 'turi' }
      }"
      x-init="
         $watch('outer', () => $nextTick(() => { window.statsAnimateVisible(); window.statsRenderCharts && window.statsRenderCharts(); }));
         $watch('inner.talabalar', () => $nextTick(() => { window.statsAnimateVisible(); window.statsRenderCharts && window.statsRenderCharts(); }));
+        $watch('inner.oqituvchilar', () => $nextTick(() => { window.statsAnimateVisible(); window.statsRenderCharts && window.statsRenderCharts(); }));
         $nextTick(() => window.statsAnimateVisible());
      ">
 
@@ -1022,9 +1023,65 @@
 
     {{-- ───── Professor - o'qituvchilar ───── --}}
     <div x-show="outer === 'oqituvchilar'" x-cloak class="stats-card">
-        <div class="stats-empty">
-            <strong>Professor - o'qituvchilar</strong> — statistika hali tayyor emas.
+        @php
+            $teacherInnerTabs = [
+                'turi'          => 'Turi',
+                'jins'          => 'Jins',
+                'kafedra'       => "Kafedra/bo'lim",
+                'lavozim'       => 'Lavozim',
+                'ilmiy_daraja'  => 'Ilmiy daraja',
+                'ilmiy_unvon'   => 'Ilmiy unvon',
+            ];
+            $teacherTypeStats = $teacherTypeStats ?? [];
+            $teacherChartLabels = array_keys($teacherTypeStats);
+            $teacherChartMale   = array_map(fn($v) => (int) $v['male'],   $teacherTypeStats);
+            $teacherChartFemale = array_map(fn($v) => (int) $v['female'], $teacherTypeStats);
+            $teacherTypeJson = json_encode([
+                'labels' => $teacherChartLabels,
+                'male'   => $teacherChartMale,
+                'female' => $teacherChartFemale,
+            ], JSON_UNESCAPED_UNICODE);
+        @endphp
+
+        <div class="stats-inner-tabs">
+            @foreach($teacherInnerTabs as $key => $label)
+                <button type="button" @click="inner.oqituvchilar = '{{ $key }}'"
+                        :class="inner.oqituvchilar === '{{ $key }}' ? 'active' : ''"
+                        class="stats-inner-btn">
+                    {{ $label }}
+                </button>
+            @endforeach
         </div>
+
+        {{-- Turi --}}
+        <div x-show="inner.oqituvchilar === 'turi'" x-cloak>
+            <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:18px 22px; margin-bottom:18px;">
+                <h3 style="font-size:18px; font-weight:700; color:#1e293b; margin:0 0 14px;">Xodimlar turi</h3>
+                <div style="display:flex; flex-wrap:wrap; gap:28px;">
+                    @foreach($teacherTypeStats as $type => $st)
+                        <div>
+                            <div style="font-size:13px; color:#64748b;">{{ $type }}</div>
+                            <div style="font-size:28px; font-weight:700; color:#0f172a;">{{ number_format((int) $st['total'], 0, '.', ' ') }}</div>
+                        </div>
+                    @endforeach
+                </div>
+            </div>
+
+            <div style="background: rgba(255,255,255,0.55); border:1px solid rgba(255,255,255,0.6); border-radius:14px; padding:18px 22px;">
+                <div style="position:relative; height: {{ max(260, count($teacherTypeStats) * 60 + 80) }}px;">
+                    <canvas id="teacherTypeChart" data-teacher-type='{!! $teacherTypeJson !!}'></canvas>
+                </div>
+            </div>
+        </div>
+
+        {{-- Boshqa inner tablar — hozircha tayyor emas --}}
+        @foreach(['jins','kafedra','lavozim','ilmiy_daraja','ilmiy_unvon'] as $tk)
+            <div x-show="inner.oqituvchilar === '{{ $tk }}'" x-cloak>
+                <div class="stats-empty">
+                    <strong>{{ $teacherInnerTabs[$tk] }}</strong> — statistika hali tayyor emas.
+                </div>
+            </div>
+        @endforeach
     </div>
 
     {{-- ───── Yo'nalishlar bo'yicha jadvallar ───── --}}
@@ -1599,6 +1656,42 @@
         });
     }
 
+    // Xodimlar turi — gorizontal stacked bar chart (Erkak/Ayol)
+    function renderTeacherTypeChart(id) {
+        const canvas = document.getElementById(id);
+        if (!canvas || canvas.offsetParent === null) return;
+        let data;
+        try { data = JSON.parse(canvas.dataset.teacherType || '{}'); }
+        catch (e) { return; }
+        const labels = data.labels || [];
+        const male   = data.male   || [];
+        const female = data.female || [];
+        if (canvas._chart) { canvas._chart.destroy(); }
+        canvas._chart = new Chart(canvas, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [
+                    { label: 'Erkak', data: male,   backgroundColor: '#3b82f6', borderRadius: 4 },
+                    { label: 'Ayol',  data: female, backgroundColor: '#ec4899', borderRadius: 4 },
+                ],
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { stacked: true, beginAtZero: true, ticks: { precision: 0 } },
+                    y: { stacked: true },
+                },
+                plugins: {
+                    legend: { position: 'bottom', labels: { usePointStyle: true } },
+                    tooltip: { mode: 'index', intersect: false },
+                },
+            },
+        });
+    }
+
     // Chart.js canvas yashirin (display:none) bo'lsa o'lcham 0 bo'lib chiqadi —
     // shuning uchun tab ko'ringanda render qilamiz.
     window.statsRenderCharts = function () {
@@ -1618,6 +1711,7 @@
         renderAccomChart('accomChartTab');
         renderProvinceChart('provinceChartUmumiy');
         renderProvinceChart('provinceChartTab');
+        renderTeacherTypeChart('teacherTypeChart');
     };
 
     // Edu-tab click handler — har chart kartasidagi Hammasi/Bakalavr/Magistr/Ordinatura

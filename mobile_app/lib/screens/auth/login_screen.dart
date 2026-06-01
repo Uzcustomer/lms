@@ -187,7 +187,30 @@ class _LoginScreenState extends State<LoginScreen> {
                     _buildIdField(),
                     const SizedBox(height: 10),
                     _buildPasswordField(),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: GestureDetector(
+                        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                                "Parolni tiklash uchun universitet IT-bo'limiga murojaat qiling."),
+                          ),
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                          child: Text(
+                            'Parolni unutdingizmi?',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: _accent,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                     _buildRememberCheckbox(),
                     Consumer<AuthProvider>(
                       builder: (context, auth, _) {
@@ -334,22 +357,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildPasswordField() {
     return _FieldShell(
       icon: Icons.lock_outline_rounded,
-      labelTrailing: GestureDetector(
-        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                "Parolni tiklash uchun universitet IT-bo'limiga murojaat qiling."),
-          ),
-        ),
-        child: const Text(
-          'Unutdingizmi?',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: _accent,
-          ),
-        ),
-      ),
       trailing: GestureDetector(
         onTap: () => setState(() => _showPw = !_showPw),
         child: Icon(

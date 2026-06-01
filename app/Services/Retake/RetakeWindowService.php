@@ -2,10 +2,13 @@
 
 namespace App\Services\Retake;
 
+use App\Models\RetakeApplication;
 use App\Models\RetakeApplicationWindow;
+use App\Models\RetakeGroup;
 use App\Models\Student;
 use App\Models\Teacher;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
 
 class RetakeWindowService
@@ -107,6 +110,64 @@ class RetakeWindowService
         }
 
         $window->update($update);
+
+        // Window ostidagi o'qish guruhlarining tugash sanasini ham uzaytiramiz
+        // (faqat uzaytirish — qisqartirmaymiz). Shunda guruhda mustaqil ta'lim
+        // yuklash va baho qo'yish ham yangi tugash sanasigacha ochiq turadi.
+        $this->extendLinkedGroupEndDates([$window->id], $endDate);
+    }
+
+    /**
+     * Berilgan oyna(lar) ostidagi o'qish guruhlarining (RetakeGroup) tugash
+     * sanasini yangi sanagacha uzaytiradi — faqat hozirgi tugash sanasi
+     * yangidan oldin bo'lsa (uzaytirish), va guruh tugamagan bo'lsa.
+     *
+     * Sana uzayishi bilan birga **qulflangan guruhlar ham ochiladi** —
+     * mustaqil ta'lim yuklash va baho qo'yish yangi tugash sanasigacha
+     * mavjud bo'lishi uchun.
+     *
+     * Zanjir: window → retake_application_groups (window_id)
+     *         → retake_applications (group_id) → retake_group_id.
+     *
+     * @return int Yangilangan guruhlar soni
+     */
+    public function extendLinkedGroupEndDates(array $windowIds, string $newEndDate): int
+    {
+        $windowIds = array_values(array_filter($windowIds));
+        if (empty($windowIds)) {
+            return 0;
+        }
+
+        $newEnd = Carbon::parse($newEndDate)->startOfDay();
+
+        $groupIds = RetakeApplication::query()
+            ->whereNotNull('retake_group_id')
+            ->whereIn('group_id', function ($q) use ($windowIds) {
+                $q->select('id')
+                    ->from('retake_application_groups')
+                    ->whereIn('window_id', $windowIds);
+            })
+            ->distinct()
+            ->pluck('retake_group_id')
+            ->all();
+
+        if (empty($groupIds)) {
+            return 0;
+        }
+
+        return RetakeGroup::query()
+            ->whereIn('id', $groupIds)
+            ->where('status', '!=', RetakeGroup::STATUS_COMPLETED)
+            ->whereDate('end_date', '<', $newEnd)
+            ->update([
+                'end_date' => $newEnd->toDateString(),
+                // Sana uzayishi qulfni ham ochadi — baho qo'yish va mustaqil
+                // ta'lim yuklash qayta ishlasin uchun
+                'is_locked' => false,
+                'locked_at' => null,
+                'locked_by_user_id' => null,
+                'locked_by_name' => null,
+            ]);
     }
 
     /**

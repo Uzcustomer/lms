@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../config/theme.dart';
-import '../../config/aurora_themes.dart';
-import '../../providers/settings_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
+import '../../widgets/clinic_header.dart';
 
 class ClubsScreen extends StatefulWidget {
   const ClubsScreen({super.key});
@@ -74,19 +71,19 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(res['message'] ?? "Ariza yuborildi!"),
-          backgroundColor: const Color(0xFF16A34A),
+          backgroundColor: const Color(0xFF047857),
         ),
       );
       await _loadData();
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: const Color(0xFFDC2626)),
+        SnackBar(content: Text(e.message), backgroundColor: const Color(0xFFBE123C)),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Xatolik yuz berdi'), backgroundColor: Color(0xFFDC2626)),
+        const SnackBar(content: Text('Xatolik yuz berdi'), backgroundColor: Color(0xFFBE123C)),
       );
     } finally {
       if (mounted) setState(() => _joiningClub = null);
@@ -101,19 +98,19 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(res['message'] ?? "Ariza bekor qilindi!"),
-          backgroundColor: const Color(0xFFF59E0B),
+          backgroundColor: const Color(0xFFB45309),
         ),
       );
       await _loadData();
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: const Color(0xFFDC2626)),
+        SnackBar(content: Text(e.message), backgroundColor: const Color(0xFFBE123C)),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Xatolik yuz berdi'), backgroundColor: Color(0xFFDC2626)),
+        const SnackBar(content: Text('Xatolik yuz berdi'), backgroundColor: Color(0xFFBE123C)),
       );
     } finally {
       if (mounted) setState(() => _cancellingClub = null);
@@ -123,60 +120,32 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final aurora = context.watch<SettingsProvider>().auroraTheme;
-    final statusBarH = MediaQuery.of(context).padding.top;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final cardColor = ClinicTheme.surfaceOf(context);
+    final textColor = ClinicTheme.inkOf(context);
+    final subColor = ClinicTheme.mutedOf(context);
 
     return Scaffold(
-      backgroundColor: auroraBase(aurora, isDark),
+      backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
+          ClinicHeader(
+            overline: 'XIZMATLAR',
+            title: "To'garaklar",
+            onBack: () => Navigator.pop(context),
+          ),
           Container(
-            padding: EdgeInsets.only(top: statusBarH),
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-              ),
-            ),
-            child: Column(
-              children: [
-                SizedBox(
-                  height: 56,
-                  child: Row(
-                    children: [
-                      const SizedBox(width: 4),
-                      IconButton(
-                        icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                        onPressed: () => Navigator.pop(context),
-                      ),
-                      const Expanded(
-                        child: Text(
-                          "To'garaklar",
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                      const SizedBox(width: 48),
-                    ],
-                  ),
-                ),
-                TabBar(
-                  controller: _tabCtrl,
-                  indicatorColor: Colors.white,
-                  indicatorWeight: 3,
-                  labelColor: Colors.white,
-                  unselectedLabelColor: Colors.white60,
-                  labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
-                  unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
-                  tabs: [
-                    const Tab(text: "Barcha to'garaklar"),
-                    Tab(text: "Arizalarim (${_myClubs.length})"),
-                  ],
-                ),
+            color: ClinicTheme.surfaceOf(context),
+            child: TabBar(
+              controller: _tabCtrl,
+              indicatorColor: ClinicTheme.teal,
+              indicatorWeight: 3,
+              labelColor: ClinicTheme.teal,
+              unselectedLabelColor: subColor,
+              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+              unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+              tabs: [
+                const Tab(text: "Barcha to'garaklar"),
+                Tab(text: "Arizalarim (${_myClubs.length})"),
               ],
             ),
           ),
@@ -252,28 +221,16 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   margin: const EdgeInsets.only(bottom: 10),
                   decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: isDark
-                          ? const [Color(0xFF1E3A5F), Color(0xFF274468)]
-                          : const [Color(0xFFC2DEF9), Color(0xFFD9EAFB)],
-                    ),
+                    color: ClinicTheme.teal.withOpacity(isDark ? 0.18 : 0.10),
                     borderRadius: BorderRadius.circular(14),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF4F46E5).withAlpha(isDark ? 30 : 18),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+                    border: Border.all(color: ClinicTheme.teal.withOpacity(0.25)),
                   ),
                   child: Text(
                     title,
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w700,
-                      color: isDark ? Colors.white : const Color(0xFF1E3A5F),
+                      color: isDark ? Colors.white : ClinicTheme.blue,
                       height: 1.4,
                     ),
                     textAlign: TextAlign.center,
@@ -310,21 +267,11 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: applied
-              ? const Color(0xFF16A34A).withAlpha(70)
-              : isDark
-                  ? Colors.white12
-                  : const Color(0xFFE2E8F0),
+              ? const Color(0xFF047857).withAlpha(80)
+              : ClinicTheme.dividerOf(context),
           width: applied ? 1.4 : 1,
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark
-                ? Colors.black.withAlpha(60)
-                : const Color(0xFF0F1B3D).withAlpha(applied ? 18 : 10),
-            blurRadius: applied ? 14 : 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: ClinicTheme.cardShadow,
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -354,8 +301,8 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                 padding: const EdgeInsets.symmetric(vertical: 7),
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFDC2626).withAlpha(15),
-                  border: Border.all(color: const Color(0xFFDC2626).withAlpha(60)),
+                  color: const Color(0xFFBE123C).withAlpha(15),
+                  border: Border.all(color: const Color(0xFFBE123C).withAlpha(60)),
                   borderRadius: BorderRadius.circular(9),
                 ),
                 child: isCancelling
@@ -364,7 +311,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                         height: 14,
                         child: CircularProgressIndicator(
                           strokeWidth: 2,
-                          valueColor: AlwaysStoppedAnimation(Color(0xFFDC2626)),
+                          valueColor: AlwaysStoppedAnimation(Color(0xFFBE123C)),
                         ),
                       )
                     : const Text(
@@ -372,7 +319,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: FontWeight.w700,
-                          color: Color(0xFFDC2626),
+                          color: Color(0xFFBE123C),
                         ),
                       ),
               ),
@@ -388,16 +335,9 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                     gradient: const LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                      colors: [ClinicTheme.teal, ClinicTheme.blue],
                     ),
                     borderRadius: BorderRadius.circular(9),
-                    boxShadow: [
-                      BoxShadow(
-                        color: const Color(0xFF4F46E5).withAlpha(70),
-                        blurRadius: 10,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
                   ),
                   child: Container(
                     width: double.infinity,
@@ -465,15 +405,15 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
           String statusLabel;
           switch (status) {
             case 'approved':
-              statusColor = const Color(0xFF16A34A);
+              statusColor = const Color(0xFF047857);
               statusLabel = 'Tasdiqlangan';
               break;
             case 'rejected':
-              statusColor = const Color(0xFFDC2626);
+              statusColor = const Color(0xFFBE123C);
               statusLabel = 'Rad etilgan';
               break;
             default:
-              statusColor = const Color(0xFFF59E0B);
+              statusColor = const Color(0xFFB45309);
               statusLabel = 'Kutilmoqda';
           }
 
@@ -483,6 +423,8 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
             decoration: BoxDecoration(
               color: cardColor,
               borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
+              boxShadow: ClinicTheme.cardShadow,
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -541,13 +483,13 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                     width: double.infinity,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFFDC2626).withAlpha(15),
+                      color: const Color(0xFFBE123C).withAlpha(15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFFDC2626).withAlpha(40)),
+                      border: Border.all(color: const Color(0xFFBE123C).withAlpha(40)),
                     ),
                     child: Text(
                       'Sabab: ${club['reject_reason']}',
-                      style: const TextStyle(fontSize: 11, color: Color(0xFFDC2626)),
+                      style: const TextStyle(fontSize: 11, color: Color(0xFFBE123C)),
                     ),
                   ),
                 ],
@@ -567,8 +509,8 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         decoration: BoxDecoration(
-                          color: const Color(0xFFDC2626).withAlpha(15),
-                          border: Border.all(color: const Color(0xFFDC2626).withAlpha(60)),
+                          color: const Color(0xFFBE123C).withAlpha(15),
+                          border: Border.all(color: const Color(0xFFBE123C).withAlpha(60)),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: _cancellingClub == club['club_name']
@@ -577,7 +519,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                                 height: 14,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
-                                  valueColor: AlwaysStoppedAnimation(Color(0xFFDC2626)),
+                                  valueColor: AlwaysStoppedAnimation(Color(0xFFBE123C)),
                                 ),
                               )
                             : const Text(
@@ -585,7 +527,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                                 style: TextStyle(
                                   fontSize: 11,
                                   fontWeight: FontWeight.w700,
-                                  color: Color(0xFFDC2626),
+                                  color: Color(0xFFBE123C),
                                 ),
                               ),
                       ),

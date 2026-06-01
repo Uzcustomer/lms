@@ -4,10 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
-import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/student_provider.dart';
 import '../../services/api_service.dart';
+import '../../widgets/clinic_header.dart';
 
 class AbsenceExcuseCreateScreen extends StatefulWidget {
   const AbsenceExcuseCreateScreen({super.key});
@@ -76,7 +76,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
           context: context,
           builder: (ctx) => AlertDialog(
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            icon: const Icon(Icons.warning_amber_rounded, color: AppTheme.errorColor, size: 48),
+            icon: const Icon(Icons.warning_amber_rounded, color: Color(0xFFBE123C), size: 48),
             title: const Text(
               'Muddat tugagan',
               style: TextStyle(fontWeight: FontWeight.w700, fontSize: 18),
@@ -92,7 +92,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                 child: ElevatedButton(
                   onPressed: () => Navigator.pop(ctx),
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryColor,
+                    backgroundColor: ClinicTheme.teal,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                   ),
@@ -229,7 +229,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(AppLocalizations.of(context).excuseSubmitted),
-            backgroundColor: AppTheme.successColor,
+            backgroundColor: const Color(0xFF047857),
           ),
         );
         Navigator.pop(context, true);
@@ -419,7 +419,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
   Color _assessmentColor(String type) {
     switch (type) {
       case 'jn':
-        return AppTheme.primaryColor;
+        return ClinicTheme.teal;
       case 'mt':
         return Colors.orange;
       case 'oski':
@@ -427,7 +427,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
       case 'test':
         return Colors.teal;
       default:
-        return AppTheme.primaryColor;
+        return ClinicTheme.teal;
     }
   }
 
@@ -442,27 +442,27 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
-    final cardColor = isDark ? AppTheme.darkCard : AppTheme.surfaceColor;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final cardColor = ClinicTheme.surfaceOf(context);
+    final textColor = ClinicTheme.inkOf(context);
+    final subColor = ClinicTheme.mutedOf(context);
+    final fieldFill = isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF1F5F9);
     final dateFormat = DateFormat('dd.MM.yyyy');
 
     return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        title: Text(l.newExcuse),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-      ),
+      backgroundColor: ClinicTheme.bgOf(context),
       body: Form(
         key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
+        child: Column(
           children: [
+            ClinicHeader(
+              overline: 'XIZMATLAR',
+              title: l.newExcuse,
+              onBack: () => Navigator.pop(context),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
             // Reason dropdown
             Container(
               decoration: BoxDecoration(
@@ -480,7 +480,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                     isExpanded: true,
                     decoration: InputDecoration(
                       filled: true,
-                      fillColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
+                      fillColor: fieldFill,
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                       contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                     ),
@@ -505,18 +505,18 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                     Container(
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: AppTheme.primaryColor.withAlpha(15),
+                        color: ClinicTheme.teal.withAlpha(15),
                         borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppTheme.primaryColor.withAlpha(50)),
+                        border: Border.all(color: ClinicTheme.teal.withAlpha(50)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
                             children: [
-                              Icon(Icons.info_outline, size: 16, color: AppTheme.primaryColor),
+                              Icon(Icons.info_outline, size: 16, color: ClinicTheme.teal),
                               const SizedBox(width: 6),
-                              Text(l.requiredDocument, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.primaryColor)),
+                              Text(l.requiredDocument, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ClinicTheme.teal)),
                             ],
                           ),
                           const SizedBox(height: 4),
@@ -560,7 +560,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                   labelStyle: TextStyle(color: subColor),
                   prefixIcon: Icon(Icons.numbers, color: subColor),
                   filled: true,
-                  fillColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
+                  fillColor: fieldFill,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
                 validator: (val) => val == null || val.isEmpty ? l.docNumber : null,
@@ -580,7 +580,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     border: Border.all(
-                      color: _fileName != null ? AppTheme.successColor : (isDark ? AppTheme.darkDivider : AppTheme.dividerColor),
+                      color: _fileName != null ? const Color(0xFF047857) : ClinicTheme.dividerOf(context),
                       width: _fileName != null ? 2 : 1,
                     ),
                     borderRadius: BorderRadius.circular(12),
@@ -590,7 +590,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                     children: [
                       Icon(
                         _fileName != null ? Icons.check_circle : Icons.upload_file,
-                        color: _fileName != null ? AppTheme.successColor : subColor,
+                        color: _fileName != null ? const Color(0xFF047857) : subColor,
                       ),
                       const SizedBox(width: 8),
                       Flexible(
@@ -621,7 +621,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                 child: _startDate != null && _endDate != null
                     ? Row(
                         children: [
-                          Icon(Icons.calendar_today, size: 18, color: AppTheme.primaryColor),
+                          Icon(Icons.calendar_today, size: 18, color: ClinicTheme.teal),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
@@ -640,10 +640,10 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                                 _excuseDays = 0;
                               });
                             },
-                            child: Text(l.clear, style: TextStyle(fontSize: 12, color: AppTheme.primaryColor)),
+                            child: Text(l.clear, style: TextStyle(fontSize: 12, color: ClinicTheme.teal)),
                           ),
                           const SizedBox(width: 8),
-                          Icon(Icons.edit_calendar, size: 18, color: AppTheme.primaryColor),
+                          Icon(Icons.edit_calendar, size: 18, color: ClinicTheme.teal),
                         ],
                       )
                     : Row(
@@ -675,7 +675,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                       height: 20,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        color: AppTheme.primaryColor,
+                        color: ClinicTheme.teal,
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -689,19 +689,19 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               const SizedBox(height: 12),
               Container(
                 decoration: BoxDecoration(
-                  color: AppTheme.successColor.withAlpha(15),
+                  color: const Color(0xFF047857).withAlpha(15),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppTheme.successColor.withAlpha(50)),
+                  border: Border.all(color: const Color(0xFF047857).withAlpha(50)),
                 ),
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    Icon(Icons.check_circle_outline, size: 20, color: AppTheme.successColor),
+                    Icon(Icons.check_circle_outline, size: 20, color: const Color(0xFF047857)),
                     const SizedBox(width: 10),
                     Expanded(
                       child: Text(
                         l.noMissedAssessments,
-                        style: TextStyle(fontSize: 13, color: AppTheme.successColor),
+                        style: TextStyle(fontSize: 13, color: const Color(0xFF047857)),
                       ),
                     ),
                   ],
@@ -730,7 +730,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                   labelStyle: TextStyle(color: subColor),
                   alignLabelWithHint: true,
                   filled: true,
-                  fillColor: isDark ? AppTheme.darkBackground : AppTheme.backgroundColor,
+                  fillColor: fieldFill,
                   border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
                 ),
               ),
@@ -741,14 +741,14 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.errorColor.withAlpha(20),
+                  color: const Color(0xFFBE123C).withAlpha(20),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline, color: AppTheme.errorColor, size: 20),
+                    const Icon(Icons.error_outline, color: Color(0xFFBE123C), size: 20),
                     const SizedBox(width: 8),
-                    Expanded(child: Text(_submitError!, style: const TextStyle(color: AppTheme.errorColor, fontSize: 13))),
+                    Expanded(child: Text(_submitError!, style: const TextStyle(color: const Color(0xFFBE123C), fontSize: 13))),
                   ],
                 ),
               ),
@@ -762,7 +762,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               child: ElevatedButton(
                 onPressed: _isSubmitting ? null : _submit,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: AppTheme.primaryColor,
+                  backgroundColor: ClinicTheme.teal,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                 ),
@@ -772,7 +772,10 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               ),
             ),
 
-            const SizedBox(height: 30),
+                  const SizedBox(height: 30),
+                ],
+              ),
+            ),
           ],
         ),
       ),
@@ -796,7 +799,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
         children: [
           Row(
             children: [
-              Icon(Icons.assignment_late, size: 20, color: AppTheme.warningColor),
+              Icon(Icons.assignment_late, size: 20, color: const Color(0xFFB45309)),
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
@@ -806,7 +809,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               ),
               Text(
                 '${_selectedCount()}/${_missedAssessments.length}',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: AppTheme.primaryColor),
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w700, color: ClinicTheme.teal),
               ),
               const SizedBox(width: 4),
               Text(l.selected, style: TextStyle(fontSize: 12, color: subColor)),
@@ -830,8 +833,8 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                     children: [
                       Container(
                         width: 22, height: 22,
-                        decoration: BoxDecoration(color: AppTheme.primaryColor.withAlpha(20), borderRadius: BorderRadius.circular(6)),
-                        child: Center(child: Text('${subjectIndex + 1}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.primaryColor))),
+                        decoration: BoxDecoration(color: ClinicTheme.teal.withAlpha(20), borderRadius: BorderRadius.circular(6)),
+                        child: Center(child: Text('${subjectIndex + 1}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: ClinicTheme.teal))),
                       ),
                       const SizedBox(width: 8),
                       Expanded(child: Text(entry.key, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: textColor))),
@@ -885,7 +888,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
       decoration: BoxDecoration(
         color: color.withAlpha(10),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: isSelected ? AppTheme.successColor.withAlpha(80) : color.withAlpha(40)),
+        border: Border.all(color: isSelected ? const Color(0xFF047857).withAlpha(80) : color.withAlpha(40)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -901,7 +904,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               Text(originalDate, style: TextStyle(fontSize: 12, color: subColor)),
               if (isFuture) ...[
                 const SizedBox(width: 6),
-                Icon(Icons.info_outline, size: 13, color: AppTheme.warningColor),
+                Icon(Icons.info_outline, size: 13, color: const Color(0xFFB45309)),
               ],
             ],
           ),
@@ -910,7 +913,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 'Joriy nazoratdan keyingi test kunlari',
-                style: TextStyle(fontSize: 11, color: AppTheme.warningColor),
+                style: TextStyle(fontSize: 11, color: const Color(0xFFB45309)),
               ),
             ),
           const SizedBox(height: 8),
@@ -931,7 +934,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
             label: l.submitted,
             icon: Icons.check_circle,
             isActive: status == 'submitted',
-            activeColor: AppTheme.successColor,
+            activeColor: const Color(0xFF047857),
             onTap: () {
               if (status == 'submitted') {
                 setState(() => _makeupSelections.remove(index));
@@ -949,14 +952,14 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               decoration: BoxDecoration(
-                color: status == 'retake' ? AppTheme.primaryColor.withAlpha(15) : Colors.transparent,
+                color: status == 'retake' ? ClinicTheme.teal.withAlpha(15) : Colors.transparent,
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: status == 'retake' ? AppTheme.primaryColor.withAlpha(60) : subColor.withAlpha(40)),
+                border: Border.all(color: status == 'retake' ? ClinicTheme.teal.withAlpha(60) : subColor.withAlpha(40)),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.calendar_today, size: 14, color: status == 'retake' ? AppTheme.primaryColor : subColor),
+                  Icon(Icons.calendar_today, size: 14, color: status == 'retake' ? ClinicTheme.teal : subColor),
                   const SizedBox(width: 4),
                   Flexible(
                     child: Text(
@@ -982,7 +985,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
             label: l.onTime,
             icon: Icons.access_time,
             isActive: status == 'on_time',
-            activeColor: AppTheme.successColor,
+            activeColor: const Color(0xFF047857),
             onTap: () {
               if (status == 'on_time') {
                 setState(() => _makeupSelections.remove(index));
@@ -998,7 +1001,7 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
             label: l.retake,
             icon: Icons.calendar_today,
             isActive: status == 'retake',
-            activeColor: AppTheme.primaryColor,
+            activeColor: ClinicTheme.teal,
             onTap: () => _pickMakeupDate(index),
           ),
         ),
@@ -1024,8 +1027,7 @@ class _ActionChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final subColor = ClinicTheme.mutedOf(context);
 
     return InkWell(
       onTap: onTap,
@@ -1114,14 +1116,12 @@ class _CalendarPickerState extends State<_CalendarPicker> {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final textColor = ClinicTheme.inkOf(context);
+    final subColor = ClinicTheme.mutedOf(context);
 
     return Container(
       decoration: BoxDecoration(
-        color: bgColor,
+        color: ClinicTheme.surfaceOf(context),
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
       child: Column(
@@ -1223,27 +1223,27 @@ class _CalendarPickerState extends State<_CalendarPicker> {
             calendarStyle: CalendarStyle(
               outsideDaysVisible: false,
               cellMargin: const EdgeInsets.all(4),
-              rangeHighlightColor: AppTheme.primaryColor.withAlpha(30),
+              rangeHighlightColor: ClinicTheme.teal.withAlpha(30),
               rangeStartDecoration: const BoxDecoration(
-                color: AppTheme.primaryColor,
+                color: ClinicTheme.teal,
                 shape: BoxShape.circle,
               ),
               rangeEndDecoration: const BoxDecoration(
-                color: AppTheme.primaryColor,
+                color: ClinicTheme.teal,
                 shape: BoxShape.circle,
               ),
               withinRangeTextStyle: TextStyle(color: textColor),
               selectedDecoration: const BoxDecoration(
-                color: AppTheme.primaryColor,
+                color: ClinicTheme.teal,
                 shape: BoxShape.circle,
               ),
               todayDecoration: BoxDecoration(
                 color: Colors.transparent,
                 shape: BoxShape.circle,
-                border: Border.all(color: AppTheme.primaryColor, width: 1.5),
+                border: Border.all(color: ClinicTheme.teal, width: 1.5),
               ),
               todayTextStyle: TextStyle(
-                color: AppTheme.primaryColor,
+                color: ClinicTheme.teal,
                 fontWeight: FontWeight.w600,
               ),
               defaultTextStyle: TextStyle(color: textColor, fontSize: 14),
@@ -1287,9 +1287,9 @@ class _CalendarPickerState extends State<_CalendarPicker> {
                 child: ElevatedButton(
                   onPressed: _canConfirm ? _confirm : null,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: AppTheme.primaryColor,
+                    backgroundColor: ClinicTheme.teal,
                     foregroundColor: Colors.white,
-                    disabledBackgroundColor: AppTheme.primaryColor.withAlpha(60),
+                    disabledBackgroundColor: ClinicTheme.teal.withAlpha(60),
                     disabledForegroundColor: Colors.white54,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),

@@ -1,12 +1,9 @@
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../config/theme.dart';
-import '../../config/aurora_themes.dart';
-import '../../providers/settings_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
+import '../../widgets/clinic_header.dart';
 
 class AppealDetailScreen extends StatefulWidget {
   final int appealId;
@@ -98,12 +95,12 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
     } on ApiException catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.message), backgroundColor: const Color(0xFFDC2626)),
+        SnackBar(content: Text(e.message), backgroundColor: const Color(0xFFBE123C)),
       );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Xatolik yuz berdi'), backgroundColor: Color(0xFFDC2626)),
+        const SnackBar(content: Text('Xatolik yuz berdi'), backgroundColor: Color(0xFFBE123C)),
       );
     } finally {
       if (mounted) setState(() => _submittingComment = false);
@@ -113,62 +110,38 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
   Color _statusColor(String status) {
     switch (status) {
       case 'approved':
-        return const Color(0xFF16A34A);
+        return const Color(0xFF047857);
       case 'rejected':
-        return const Color(0xFFDC2626);
+        return const Color(0xFFBE123C);
       case 'reviewing':
-        return const Color(0xFF2563EB);
+        return ClinicTheme.blue;
       default:
-        return const Color(0xFFF59E0B);
+        return const Color(0xFFB45309);
     }
   }
 
   Color _gradeColor(num grade) {
-    if (grade >= 86) return const Color(0xFF16A34A);
-    if (grade >= 71) return const Color(0xFF2563EB);
-    if (grade >= 60) return const Color(0xFFF59E0B);
-    return const Color(0xFFDC2626);
+    if (grade >= 86) return const Color(0xFF047857);
+    if (grade >= 71) return ClinicTheme.blue;
+    if (grade >= 60) return const Color(0xFFB45309);
+    return const Color(0xFFBE123C);
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final aurora = context.watch<SettingsProvider>().auroraTheme;
-    final statusBarH = MediaQuery.of(context).padding.top;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final cardColor = ClinicTheme.surfaceOf(context);
+    final textColor = ClinicTheme.inkOf(context);
+    final subColor = ClinicTheme.mutedOf(context);
 
     return Scaffold(
-      backgroundColor: auroraBase(aurora, isDark),
+      backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
-          Container(
-            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
-            height: statusBarH + 64,
-            decoration: BoxDecoration(
-              color: isDark ? AppTheme.darkHeaderColor : const Color(0xFF1E3A8A),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-              ),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                  onPressed: () => Navigator.pop(context, true),
-                ),
-                const Expanded(
-                  child: Text(
-                    'Apellyatsiya tafsilotlari',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(width: 48),
-              ],
-            ),
+          ClinicHeader(
+            overline: 'XIZMATLAR',
+            title: 'Apellyatsiya tafsilotlari',
+            onBack: () => Navigator.pop(context, true),
           ),
           Expanded(
             child: _loading
@@ -321,13 +294,13 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF7C3AED).withAlpha(15),
+                      color: ClinicTheme.teal.withAlpha(15),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: const Color(0xFF7C3AED).withAlpha(40)),
+                      border: Border.all(color: ClinicTheme.teal.withAlpha(40)),
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.attach_file, size: 16, color: Color(0xFF7C3AED)),
+                        const Icon(Icons.attach_file, size: 16, color: ClinicTheme.teal),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -335,7 +308,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.w600,
-                              color: Color(0xFF7C3AED),
+                              color: ClinicTheme.teal,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -396,7 +369,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
 
   Widget _buildComment(Map<String, dynamic> comment, Color cardColor, Color textColor, Color subColor, bool isDark) {
     final isAdmin = comment['user_type'] == 'admin';
-    final accent = isAdmin ? const Color(0xFF2563EB) : const Color(0xFF7C3AED);
+    final accent = isAdmin ? ClinicTheme.blue : ClinicTheme.teal;
 
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
@@ -484,13 +457,9 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
       padding: EdgeInsets.fromLTRB(12, 8, 12, 8 + MediaQuery.of(context).padding.bottom),
       decoration: BoxDecoration(
         color: cardColor,
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black.withAlpha(60) : const Color(0xFF0F1B3D).withAlpha(15),
-            blurRadius: 12,
-            offset: const Offset(0, -3),
-          ),
-        ],
+        border: Border(
+          top: BorderSide(color: ClinicTheme.dividerOf(context), width: 1),
+        ),
       ),
       child: Column(
         children: [
@@ -499,18 +468,18 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
               margin: const EdgeInsets.only(bottom: 6),
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF7C3AED).withAlpha(15),
+                color: ClinicTheme.teal.withAlpha(15),
                 borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: const Color(0xFF7C3AED).withAlpha(40)),
+                border: Border.all(color: ClinicTheme.teal.withAlpha(40)),
               ),
               child: Row(
                 children: [
-                  const Icon(Icons.attach_file, size: 14, color: Color(0xFF7C3AED)),
+                  const Icon(Icons.attach_file, size: 14, color: ClinicTheme.teal),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       _fileName!,
-                      style: const TextStyle(fontSize: 11, color: Color(0xFF7C3AED), fontWeight: FontWeight.w600),
+                      style: const TextStyle(fontSize: 11, color: ClinicTheme.teal, fontWeight: FontWeight.w600),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -563,7 +532,7 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
                     gradient: const LinearGradient(
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
-                      colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
+                      colors: [ClinicTheme.teal, ClinicTheme.blue],
                     ),
                     borderRadius: BorderRadius.circular(20),
                   ),
@@ -596,17 +565,9 @@ class _AppealDetailScreenState extends State<AppealDetailScreen> {
         border: Border.all(
           color: accentColor != null
               ? accentColor.withAlpha(60)
-              : isDark
-                  ? Colors.white10
-                  : const Color(0xFFE2E8F0),
+              : ClinicTheme.dividerOf(context),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: isDark ? Colors.black.withAlpha(40) : const Color(0xFF0F1B3D).withAlpha(8),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        boxShadow: ClinicTheme.cardShadow,
       ),
       child: child,
     );

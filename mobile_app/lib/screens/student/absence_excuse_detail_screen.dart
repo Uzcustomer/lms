@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../config/api_config.dart';
-import '../../config/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../providers/student_provider.dart';
 import '../../services/api_service.dart';
+import '../../widgets/clinic_header.dart';
 import '../../widgets/loading_widget.dart';
 
 class AbsenceExcuseDetailScreen extends StatefulWidget {
@@ -50,7 +50,6 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
   }
 
   Future<void> _downloadPdf() async {
-    final token = await context.read<StudentProvider>().toString();
     final url = '${ApiConfig.baseUrl}${ApiConfig.studentExcuses}/${widget.excuseId}/download-pdf';
     final apiService = ApiService();
     final authToken = await apiService.getToken();
@@ -63,11 +62,11 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
   Color _statusColor(String status) {
     switch (status) {
       case 'approved':
-        return AppTheme.successColor;
+        return const Color(0xFF047857);
       case 'rejected':
-        return AppTheme.errorColor;
+        return const Color(0xFFBE123C);
       default:
-        return AppTheme.warningColor;
+        return const Color(0xFFB45309);
     }
   }
 
@@ -85,59 +84,51 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bgColor = isDark ? AppTheme.darkBackground : AppTheme.backgroundColor;
-    final cardColor = isDark ? AppTheme.darkCard : AppTheme.surfaceColor;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final cardColor = ClinicTheme.surfaceOf(context);
+    final textColor = ClinicTheme.inkOf(context);
+    final subColor = ClinicTheme.mutedOf(context);
 
     return Scaffold(
-      backgroundColor: bgColor,
-      appBar: AppBar(
-        title: Text(l.absenceExcuse),
-        centerTitle: true,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
+      backgroundColor: ClinicTheme.bgOf(context),
+      body: Column(
+        children: [
+          ClinicHeader(
+            overline: 'XIZMATLAR',
+            title: l.absenceExcuse,
+            onBack: () => Navigator.pop(context),
+          ),
+          Expanded(
+            child: _isLoading
+                ? const LoadingWidget()
+                : _error != null
+                    ? Center(child: Text(_error!, style: const TextStyle(color: Color(0xFFBE123C))))
+                    : _excuse == null
+                        ? Center(child: Text(l.noData))
+                        : RefreshIndicator(
+                            onRefresh: _loadDetail,
+                            child: ListView(
+                              padding: const EdgeInsets.all(14),
+                              children: [
+                                _buildStatusCard(cardColor, textColor, subColor, l),
+                                const SizedBox(height: 12),
+                                _buildInfoCard(cardColor, textColor, subColor, l),
+                                const SizedBox(height: 12),
+                                if (_excuse!['status'] == 'rejected' && _excuse!['rejection_reason'] != null)
+                                  _buildRejectionCard(cardColor, l),
+                                if (_excuse!['has_approved_pdf'] == true) ...[
+                                  const SizedBox(height: 12),
+                                  _buildPdfDownloadCard(cardColor, l),
+                                ],
+                                if (_excuse!['makeups'] != null && (_excuse!['makeups'] as List).isNotEmpty) ...[
+                                  const SizedBox(height: 12),
+                                  _buildMakeupsCard(cardColor, textColor, subColor, l),
+                                ],
+                              ],
+                            ),
+                          ),
+          ),
+        ],
       ),
-      body: _isLoading
-          ? const LoadingWidget()
-          : _error != null
-              ? Center(child: Text(_error!, style: TextStyle(color: AppTheme.errorColor)))
-              : _excuse == null
-                  ? Center(child: Text(l.noData))
-                  : RefreshIndicator(
-                      onRefresh: _loadDetail,
-                      child: ListView(
-                        padding: const EdgeInsets.all(16),
-                        children: [
-                          // Status header
-                          _buildStatusCard(cardColor, textColor, subColor, l),
-                          const SizedBox(height: 12),
-
-                          // Details
-                          _buildInfoCard(cardColor, textColor, subColor, l),
-                          const SizedBox(height: 12),
-
-                          // Rejection reason
-                          if (_excuse!['status'] == 'rejected' && _excuse!['rejection_reason'] != null)
-                            _buildRejectionCard(cardColor, l),
-
-                          // Approved PDF
-                          if (_excuse!['has_approved_pdf'] == true) ...[
-                            const SizedBox(height: 12),
-                            _buildPdfDownloadCard(cardColor, l),
-                          ],
-
-                          // Missed assessments
-                          if (_excuse!['makeups'] != null && (_excuse!['makeups'] as List).isNotEmpty) ...[
-                            const SizedBox(height: 12),
-                            _buildMakeupsCard(cardColor, textColor, subColor, l),
-                          ],
-                        ],
-                      ),
-                    ),
     );
   }
 
@@ -148,9 +139,9 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
 
     return Container(
       decoration: BoxDecoration(
-        color: color.withAlpha(15),
+        color: color.withOpacity(0.08),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: color.withAlpha(60)),
+        border: Border.all(color: color.withOpacity(0.25)),
       ),
       padding: const EdgeInsets.all(20),
       child: Row(
@@ -187,22 +178,27 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
 
   Widget _buildInfoCard(Color cardColor, Color textColor, Color subColor, AppLocalizations l) {
     return Container(
-      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
+        boxShadow: ClinicTheme.cardShadow,
+      ),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _infoRow(Icons.description, l.selectReason, _excuse!['reason_label'] ?? '', textColor, subColor),
-          const Divider(height: 20),
+          Divider(height: 20, color: ClinicTheme.dividerOf(context)),
           _infoRow(Icons.numbers, l.docNumber, '#${_excuse!['doc_number'] ?? ''}', textColor, subColor),
-          const Divider(height: 20),
+          Divider(height: 20, color: ClinicTheme.dividerOf(context)),
           _infoRow(Icons.calendar_today, '${l.startDate} — ${l.endDate}',
               '${_excuse!['start_date']} — ${_excuse!['end_date']}', textColor, subColor),
           if (_excuse!['description'] != null && _excuse!['description'].toString().isNotEmpty) ...[
-            const Divider(height: 20),
+            Divider(height: 20, color: ClinicTheme.dividerOf(context)),
             _infoRow(Icons.notes, l.description, _excuse!['description'], textColor, subColor),
           ],
-          const Divider(height: 20),
+          Divider(height: 20, color: ClinicTheme.dividerOf(context)),
           _infoRow(Icons.attach_file, l.file, _excuse!['file_original_name'] ?? '', textColor, subColor),
         ],
       ),
@@ -230,12 +226,13 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
   }
 
   Widget _buildRejectionCard(Color cardColor, AppLocalizations l) {
+    const rose = Color(0xFFBE123C);
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: AppTheme.errorColor.withAlpha(15),
+        color: rose.withOpacity(0.06),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: AppTheme.errorColor.withAlpha(50)),
+        border: Border.all(color: rose.withOpacity(0.25)),
       ),
       padding: const EdgeInsets.all(16),
       child: Column(
@@ -243,13 +240,16 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
         children: [
           Row(
             children: [
-              const Icon(Icons.cancel, size: 18, color: AppTheme.errorColor),
+              const Icon(Icons.cancel, size: 18, color: rose),
               const SizedBox(width: 8),
-              Text(l.rejectionReason, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppTheme.errorColor)),
+              Text(l.rejectionReason, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: rose)),
             ],
           ),
           const SizedBox(height: 8),
-          Text(_excuse!['rejection_reason'], style: const TextStyle(fontSize: 14)),
+          Text(
+            _excuse!['rejection_reason'],
+            style: TextStyle(fontSize: 14, color: ClinicTheme.inkOf(context)),
+          ),
         ],
       ),
     );
@@ -263,7 +263,7 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
         icon: const Icon(Icons.picture_as_pdf),
         label: Text(l.downloadPdf, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppTheme.successColor,
+          backgroundColor: ClinicTheme.teal,
           foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
         ),
@@ -273,16 +273,22 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
 
   Widget _buildMakeupsCard(Color cardColor, Color textColor, Color subColor, AppLocalizations l) {
     final makeups = _excuse!['makeups'] as List;
+    final accent = ClinicTheme.teal;
 
     return Container(
-      decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
+      decoration: BoxDecoration(
+        color: cardColor,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
+        boxShadow: ClinicTheme.cardShadow,
+      ),
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(Icons.assignment_late, size: 20, color: AppTheme.primaryColor),
+              Icon(Icons.assignment_late, size: 20, color: accent),
               const SizedBox(width: 8),
               Text(l.missedAssessments, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor)),
             ],
@@ -294,21 +300,21 @@ class _AbsenceExcuseDetailScreenState extends State<AbsenceExcuseDetailScreen> {
               margin: const EdgeInsets.only(bottom: 8),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: AppTheme.primaryColor.withAlpha(8),
+                color: accent.withOpacity(0.05),
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppTheme.primaryColor.withAlpha(30)),
+                border: Border.all(color: accent.withOpacity(0.18)),
               ),
               child: Row(
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: AppTheme.primaryColor.withAlpha(25),
+                      color: accent.withOpacity(0.12),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: Text(
                       (makeup['assessment_type'] ?? '').toString().toUpperCase(),
-                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppTheme.primaryColor),
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: accent),
                     ),
                   ),
                   const SizedBox(width: 10),

@@ -129,16 +129,18 @@ class RetakeWindowService
      * Berilgan oyna(lar) ostidagi o'qish guruhlarining (RetakeGroup):
      *  1) tugash sanasini yangi sanagacha uzaytiradi (faqat sanasi yangidan
      *     oldin bo'lganlarni — qisqartirmaydi);
-     *  2) QULFINI ochadi (yakuniy qilingan bo'lsa ham) — bog'liq barcha
-     *     tugamagan guruhlar uchun.
+     *  2) QULFINI ochadi (yakuniy qilingan bo'lsa ham);
+     *  3) status `completed` bo'lib qolgan guruhlarni qayta faollashtiradi
+     *     (auto-cron muddat o'tganda completed qilib qo'ygan bo'lishi mumkin) —
+     *     yangi end_date >= bugun bo'lsa `in_progress`/`scheduled`'ga qaytaradi.
      *
      * Shu orqali muddat uzaytirilganda mustaqil ta'lim yuklash va baho qo'yish
-     * yangi tugash sanasigacha qayta ochiladi.
+     * yangi tugash sanasigacha to'liq qayta ochiladi.
      *
      * Zanjir: window → retake_application_groups (window_id)
      *         → retake_applications (group_id) → retake_group_id.
      *
-     * @return int Yangilangan (uzaytirilgan) guruhlar soni
+     * @return int Sana uzaytirilgan guruhlar soni
      */
     public function extendLinkedGroupEndDates(array $windowIds, string $newEndDate): int
     {
@@ -148,6 +150,7 @@ class RetakeWindowService
         }
 
         $newEnd = Carbon::parse($newEndDate)->startOfDay();
+        $today = Carbon::today();
 
         $groupIds = RetakeApplication::query()
             ->whereNotNull('retake_group_id')
@@ -165,18 +168,17 @@ class RetakeWindowService
         }
 
         // 1) Tugash sanasini uzaytirish — faqat yangidan oldin bo'lganlarni
+        //    (completed bo'lsa ham — auto-cron tugagan deb belgilab qo'ygan
+        //    bo'lishi mumkin, baribir uzaytiramiz).
         $extended = RetakeGroup::query()
             ->whereIn('id', $groupIds)
-            ->where('status', '!=', RetakeGroup::STATUS_COMPLETED)
             ->whereDate('end_date', '<', $newEnd)
             ->update(['end_date' => $newEnd->toDateString()]);
 
-        // 2) Qulfni ochish — bog'liq barcha tugamagan guruhlar uchun (sana
-        //    o'zgargan-o'zgarmaganidan qat'i nazar). Muddat uzaytirilgani
-        //    uchun yakuniy holatni bekor qilamiz.
+        // 2) Qulfni ochish — bog'liq barcha guruhlar uchun (status'dan qat'i
+        //    nazar). Muddat uzaytirilgani uchun yakuniy holatni bekor qilamiz.
         RetakeGroup::query()
             ->whereIn('id', $groupIds)
-            ->where('status', '!=', RetakeGroup::STATUS_COMPLETED)
             ->where('is_locked', true)
             ->update([
                 'is_locked' => false,
@@ -184,6 +186,24 @@ class RetakeWindowService
                 'locked_by_user_id' => null,
                 'locked_by_name' => null,
             ]);
+
+        // 3) Completed guruhlarni qayta faollashtirish — agar yangi end_date
+        //    bugun yoki keyin bo'lsa (cron oldin "tugagan" deb belgilab qo'ygan
+        //    bo'lishi mumkin). start_date kelajakdami yoki o'tganmiga qarab
+        //    scheduled/in_progress'ga qaytaramiz.
+        if ($newEnd->gte($today)) {
+            RetakeGroup::query()
+                ->whereIn('id', $groupIds)
+                ->where('status', RetakeGroup::STATUS_COMPLETED)
+                ->whereDate('start_date', '<=', $today)
+                ->update(['status' => RetakeGroup::STATUS_IN_PROGRESS]);
+
+            RetakeGroup::query()
+                ->whereIn('id', $groupIds)
+                ->where('status', RetakeGroup::STATUS_COMPLETED)
+                ->whereDate('start_date', '>', $today)
+                ->update(['status' => RetakeGroup::STATUS_SCHEDULED]);
+        }
 
         return $extended;
     }

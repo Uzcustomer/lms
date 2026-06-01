@@ -122,6 +122,10 @@ class RetakeWindowService
      * sanasini yangi sanagacha uzaytiradi — faqat hozirgi tugash sanasi
      * yangidan oldin bo'lsa (uzaytirish), va guruh tugamagan bo'lsa.
      *
+     * Sana uzayishi bilan birga **qulflangan guruhlar ham ochiladi** —
+     * mustaqil ta'lim yuklash va baho qo'yish yangi tugash sanasigacha
+     * mavjud bo'lishi uchun.
+     *
      * Zanjir: window → retake_application_groups (window_id)
      *         → retake_applications (group_id) → retake_group_id.
      *
@@ -155,7 +159,15 @@ class RetakeWindowService
             ->whereIn('id', $groupIds)
             ->where('status', '!=', RetakeGroup::STATUS_COMPLETED)
             ->whereDate('end_date', '<', $newEnd)
-            ->update(['end_date' => $newEnd->toDateString()]);
+            ->update([
+                'end_date' => $newEnd->toDateString(),
+                // Sana uzayishi qulfni ham ochadi — baho qo'yish va mustaqil
+                // ta'lim yuklash qayta ishlasin uchun
+                'is_locked' => false,
+                'locked_at' => null,
+                'locked_by_user_id' => null,
+                'locked_by_name' => null,
+            ]);
     }
 
     /**

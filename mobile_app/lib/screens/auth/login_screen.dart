@@ -181,24 +181,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
-                      'Xush kelibsiz',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: -0.6,
-                        color: _ink,
-                      ),
-                    ),
                     const SizedBox(height: 4),
-                    Text(
-                      'Hisobingizga kirib davom eting',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 13, color: _ink.withOpacity(0.55)),
-                    ),
-                    const SizedBox(height: 18),
                     _buildRoleTabs(),
                     const SizedBox(height: 14),
                     _buildIdField(),
@@ -241,8 +224,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     _buildOrDivider(),
                     const SizedBox(height: 16),
                     _buildFaceIdButton(),
-                    const SizedBox(height: 18),
-                    _buildFooter(),
                     SizedBox(height: 16 + safeBottom),
                   ],
                 ),
@@ -318,7 +299,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildIdField() {
     return _FieldShell(
       icon: Icons.person_outline_rounded,
-      label: 'LOGIN · ID RAQAM',
       trailing: _idCtrl.text.trim().isNotEmpty
           ? Container(
               width: 20,
@@ -338,7 +318,7 @@ class _LoginScreenState extends State<LoginScreen> {
         cursorColor: _accent,
         onChanged: (_) => setState(() {}),
         style: const TextStyle(
-          fontSize: 15,
+          fontSize: 16,
           fontWeight: FontWeight.w700,
           color: _ink,
         ),
@@ -346,7 +326,7 @@ class _LoginScreenState extends State<LoginScreen> {
           if (v == null || v.trim().isEmpty) return 'Login kiriting';
           return null;
         },
-        decoration: _inputDecoration,
+        decoration: _inputDecoration.copyWith(hintText: 'ID raqam'),
       ),
     );
   }
@@ -354,7 +334,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildPasswordField() {
     return _FieldShell(
       icon: Icons.lock_outline_rounded,
-      label: 'PAROL',
       labelTrailing: GestureDetector(
         onTap: () => ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -388,7 +367,7 @@ class _LoginScreenState extends State<LoginScreen> {
         enableSuggestions: false,
         cursorColor: _accent,
         style: const TextStyle(
-          fontSize: 15,
+          fontSize: 16,
           fontWeight: FontWeight.w700,
           color: _ink,
         ),
@@ -396,12 +375,12 @@ class _LoginScreenState extends State<LoginScreen> {
           if (v == null || v.isEmpty) return 'Parol kiriting';
           return null;
         },
-        decoration: _inputDecoration,
+        decoration: _inputDecoration.copyWith(hintText: 'Parol'),
       ),
     );
   }
 
-  static const _inputDecoration = InputDecoration(
+  static final _inputDecoration = InputDecoration(
     isDense: true,
     filled: true,
     fillColor: Colors.white,
@@ -411,7 +390,12 @@ class _LoginScreenState extends State<LoginScreen> {
     focusedBorder: InputBorder.none,
     errorBorder: InputBorder.none,
     focusedErrorBorder: InputBorder.none,
-    errorStyle: TextStyle(
+    hintStyle: TextStyle(
+      fontSize: 15,
+      fontWeight: FontWeight.w500,
+      color: const Color(0xFF0F1B3D).withOpacity(0.35),
+    ),
+    errorStyle: const TextStyle(
       fontSize: 11,
       color: Color(0xFFB91C1C),
       height: 1.2,
@@ -600,47 +584,6 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildFooter() {
-    return Column(
-      children: [
-        Text(
-          "v2.4.1 · 256-bit SSL · Maxfiy ma'lumotlar himoyalangan",
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontSize: 10,
-            fontWeight: FontWeight.w500,
-            color: _ink.withOpacity(0.35),
-          ),
-        ),
-        const SizedBox(height: 8),
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            _footerLink('Yordam'),
-            _footerDot(),
-            _footerLink('Foydalanish shartlari'),
-            _footerDot(),
-            _footerLink('Maxfiylik'),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _footerLink(String text) => Text(
-        text,
-        style: const TextStyle(
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          color: _accent,
-        ),
-      );
-
-  Widget _footerDot() => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: Text('·',
-            style: TextStyle(fontSize: 11, color: _ink.withOpacity(0.35))),
-      );
 }
 
 // ─────────────────────────────────────────────────────
@@ -996,14 +939,14 @@ class _BuildingPainter extends CustomPainter {
 
 class _FieldShell extends StatelessWidget {
   final IconData icon;
-  final String label;
+  final String? label;
   final Widget? labelTrailing;
   final Widget child;
   final Widget? trailing;
   const _FieldShell({
     required this.icon,
-    required this.label,
     required this.child,
+    this.label,
     this.labelTrailing,
     this.trailing,
   });
@@ -1012,7 +955,7 @@ class _FieldShell extends StatelessWidget {
   Widget build(BuildContext context) {
     const ink = Color(0xFF0F1B3D);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: ink.withOpacity(0.10)),
@@ -1020,30 +963,18 @@ class _FieldShell extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, size: 19, color: ink.withOpacity(0.4)),
-          const SizedBox(width: 11),
+          Icon(icon, size: 26, color: ink.withOpacity(0.5)),
+          const SizedBox(width: 13),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Row(
-                  children: [
-                    Text(
-                      label,
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800,
-                        color: ink.withOpacity(0.45),
-                        letterSpacing: 0.8,
-                      ),
-                    ),
-                    if (labelTrailing != null) ...[
-                      const Spacer(),
-                      labelTrailing!,
-                    ],
-                  ],
-                ),
-                const SizedBox(height: 1),
+                if (labelTrailing != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: labelTrailing!,
+                  ),
                 child,
               ],
             ),

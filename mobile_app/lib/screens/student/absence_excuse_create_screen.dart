@@ -445,7 +445,8 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
     final cardColor = ClinicTheme.surfaceOf(context);
     final textColor = ClinicTheme.inkOf(context);
     final subColor = ClinicTheme.mutedOf(context);
-    final fieldFill = isDark ? Colors.white.withOpacity(0.04) : const Color(0xFFF1F5F9);
+    final fieldFill = isDark ? Colors.white.withOpacity(0.04) : Colors.white;
+    final fieldBorder = isDark ? Colors.white24 : const Color(0xFFCBD5E1);
     final dateFormat = DateFormat('dd.MM.yyyy');
 
     return Scaffold(
@@ -461,150 +462,155 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
             ),
             Expanded(
               child: ListView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
                 children: [
             // Reason dropdown
-            Container(
-              decoration: BoxDecoration(
-                color: cardColor,
-                borderRadius: BorderRadius.circular(14),
+            _SectionLabel(l.selectReason, color: textColor),
+            DropdownButtonFormField<String>(
+              value: _selectedReason,
+              isExpanded: true,
+              icon: Icon(Icons.expand_more_rounded, color: ClinicTheme.teal),
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: fieldFill,
+                prefixIcon: Icon(Icons.list_alt_rounded, color: ClinicTheme.teal, size: 22),
+                hintText: l.selectReason,
+                hintStyle: TextStyle(color: subColor, fontWeight: FontWeight.w500),
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: fieldBorder, width: 1.2),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: ClinicTheme.teal, width: 1.8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               ),
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l.selectReason, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: textColor)),
-                  const SizedBox(height: 8),
-                  DropdownButtonFormField<String>(
-                    value: _selectedReason,
-                    isExpanded: true,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: fieldFill,
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    ),
-                    hint: Text(l.selectReason, style: TextStyle(color: subColor)),
-                    items: _reasons.map((r) {
-                      final reason = r as Map<String, dynamic>;
-                      return DropdownMenuItem<String>(
-                        value: reason['key'] as String,
-                        child: Text(reason['label'] as String, style: TextStyle(fontSize: 13, color: textColor)),
-                      );
-                    }).toList(),
-                    onChanged: (val) {
-                      setState(() {
-                        _selectedReason = val;
-                        _selectedReasonData = _reasons.firstWhere((r) => r['key'] == val) as Map<String, dynamic>?;
-                      });
-                    },
-                    validator: (val) => val == null ? l.selectReason : null,
-                  ),
-                  if (_selectedReasonData != null) ...[
-                    const SizedBox(height: 12),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: ClinicTheme.teal.withAlpha(15),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: ClinicTheme.teal.withAlpha(50)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Icon(Icons.info_outline, size: 16, color: ClinicTheme.teal),
-                              const SizedBox(width: 6),
-                              Text(l.requiredDocument, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: ClinicTheme.teal)),
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            _selectedReasonData!['document'] ?? '',
-                            style: TextStyle(fontSize: 12, color: textColor),
-                          ),
-                          if (_selectedReasonData!['max_days'] != null) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              '${l.maxDays}: ${_selectedReasonData!['max_days']}',
-                              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500, color: subColor),
-                            ),
-                          ],
-                          if (_selectedReasonData!['note'] != null) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              _selectedReasonData!['note'],
-                              style: TextStyle(fontSize: 11, color: subColor, fontStyle: FontStyle.italic),
-                            ),
-                          ],
-                        ],
-                      ),
-                    ),
-                  ],
-                ],
-              ),
+              items: _reasons.map((r) {
+                final reason = r as Map<String, dynamic>;
+                return DropdownMenuItem<String>(
+                  value: reason['key'] as String,
+                  child: Text(reason['label'] as String,
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: textColor)),
+                );
+              }).toList(),
+              onChanged: (val) {
+                setState(() {
+                  _selectedReason = val;
+                  _selectedReasonData = _reasons.firstWhere((r) => r['key'] == val) as Map<String, dynamic>?;
+                });
+              },
+              validator: (val) => val == null ? l.selectReason : null,
             ),
+            if (_selectedReasonData != null) ...[
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: ClinicTheme.teal.withAlpha(20),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: ClinicTheme.teal.withAlpha(80)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.info_outline, size: 16, color: ClinicTheme.teal),
+                        const SizedBox(width: 6),
+                        Text(l.requiredDocument, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: ClinicTheme.teal)),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      _selectedReasonData!['document'] ?? '',
+                      style: TextStyle(fontSize: 12.5, color: textColor, fontWeight: FontWeight.w500),
+                    ),
+                    if (_selectedReasonData!['max_days'] != null) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        '${l.maxDays}: ${_selectedReasonData!['max_days']}',
+                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: subColor),
+                      ),
+                    ],
+                    if (_selectedReasonData!['note'] != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        _selectedReasonData!['note'],
+                        style: TextStyle(fontSize: 11, color: subColor, fontStyle: FontStyle.italic),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
 
             const SizedBox(height: 12),
 
             // Doc number
-            Container(
-              decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
-              padding: const EdgeInsets.all(16),
-              child: TextFormField(
-                controller: _docNumberController,
-                style: TextStyle(color: textColor),
-                decoration: InputDecoration(
-                  labelText: l.docNumber,
-                  labelStyle: TextStyle(color: subColor),
-                  prefixIcon: Icon(Icons.numbers, color: subColor),
-                  filled: true,
-                  fillColor: fieldFill,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            _SectionLabel(l.docNumber, color: textColor),
+            TextFormField(
+              controller: _docNumberController,
+              style: TextStyle(color: textColor, fontWeight: FontWeight.w600, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: l.docNumber,
+                hintStyle: TextStyle(color: subColor, fontWeight: FontWeight.w500),
+                prefixIcon: Icon(Icons.tag_rounded, color: ClinicTheme.teal, size: 22),
+                filled: true,
+                fillColor: fieldFill,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: fieldBorder, width: 1.2),
                 ),
-                validator: (val) => val == null || val.isEmpty ? l.docNumber : null,
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: ClinicTheme.teal, width: 1.8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               ),
+              validator: (val) => val == null || val.isEmpty ? l.docNumber : null,
             ),
 
             const SizedBox(height: 12),
 
             // File picker
-            Container(
-              decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
-              padding: const EdgeInsets.all(16),
-              child: InkWell(
-                onTap: _pickFile,
-                borderRadius: BorderRadius.circular(12),
-                child: Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: _fileName != null ? const Color(0xFF047857) : ClinicTheme.dividerOf(context),
-                      width: _fileName != null ? 2 : 1,
+            _SectionLabel(l.selectFile, color: textColor),
+            InkWell(
+              onTap: _pickFile,
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+                decoration: BoxDecoration(
+                  color: _fileName != null
+                      ? const Color(0xFF047857).withAlpha(20)
+                      : fieldFill,
+                  border: Border.all(
+                    color: _fileName != null ? const Color(0xFF047857) : fieldBorder,
+                    width: _fileName != null ? 1.8 : 1.2,
+                  ),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      _fileName != null ? Icons.check_circle_rounded : Icons.upload_file_rounded,
+                      color: _fileName != null ? const Color(0xFF047857) : ClinicTheme.teal,
+                      size: 22,
                     ),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        _fileName != null ? Icons.check_circle : Icons.upload_file,
-                        color: _fileName != null ? const Color(0xFF047857) : subColor,
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        child: Text(
-                          _fileName ?? l.selectFile,
-                          style: TextStyle(
-                            color: _fileName != null ? textColor : subColor,
-                            fontWeight: _fileName != null ? FontWeight.w500 : FontWeight.normal,
-                          ),
-                          overflow: TextOverflow.ellipsis,
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        _fileName ?? l.selectFile,
+                        style: TextStyle(
+                          color: _fileName != null ? const Color(0xFF047857) : textColor,
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w600,
                         ),
+                        overflow: TextOverflow.ellipsis,
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -612,21 +618,26 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
             const SizedBox(height: 12),
 
             // Date range
+            _SectionLabel(l.startDate + ' — ' + l.endDate, color: textColor),
             InkWell(
               onTap: _pickDateRange,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(12),
               child: Container(
-                decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                decoration: BoxDecoration(
+                  color: fieldFill,
+                  border: Border.all(color: fieldBorder, width: 1.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 child: _startDate != null && _endDate != null
                     ? Row(
                         children: [
-                          Icon(Icons.calendar_today, size: 18, color: ClinicTheme.teal),
+                          Icon(Icons.calendar_today_rounded, size: 20, color: ClinicTheme.teal),
                           const SizedBox(width: 10),
                           Expanded(
                             child: Text(
                               '${dateFormat.format(_startDate!)} — ${dateFormat.format(_endDate!)} ($_excuseDays kun)',
-                              style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: textColor),
+                              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: textColor),
                             ),
                           ),
                           GestureDetector(
@@ -640,22 +651,22 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
                                 _excuseDays = 0;
                               });
                             },
-                            child: Text(l.clear, style: TextStyle(fontSize: 12, color: ClinicTheme.teal)),
+                            child: Text(l.clear, style: TextStyle(fontSize: 12, color: ClinicTheme.teal, fontWeight: FontWeight.w700)),
                           ),
                           const SizedBox(width: 8),
-                          Icon(Icons.edit_calendar, size: 18, color: ClinicTheme.teal),
+                          Icon(Icons.edit_calendar_rounded, size: 20, color: ClinicTheme.teal),
                         ],
                       )
                     : Row(
                         children: [
-                          Icon(Icons.calendar_today, size: 18, color: subColor),
+                          Icon(Icons.calendar_today_rounded, size: 20, color: ClinicTheme.teal),
                           const SizedBox(width: 10),
                           Text(
                             '${l.startDate} — ${l.endDate}',
-                            style: TextStyle(fontSize: 14, color: subColor),
+                            style: TextStyle(fontSize: 13.5, color: subColor, fontWeight: FontWeight.w500),
                           ),
                           const Spacer(),
-                          Icon(Icons.edit_calendar, size: 18, color: subColor),
+                          Icon(Icons.edit_calendar_rounded, size: 20, color: ClinicTheme.teal),
                         ],
                       ),
               ),
@@ -717,62 +728,95 @@ class _AbsenceExcuseCreateScreenState extends State<AbsenceExcuseCreateScreen> {
             const SizedBox(height: 12),
 
             // Description
-            Container(
-              decoration: BoxDecoration(color: cardColor, borderRadius: BorderRadius.circular(14)),
-              padding: const EdgeInsets.all(16),
-              child: TextFormField(
-                controller: _descriptionController,
-                style: TextStyle(color: textColor),
-                maxLines: 3,
-                maxLength: 1000,
-                decoration: InputDecoration(
-                  labelText: l.description,
-                  labelStyle: TextStyle(color: subColor),
-                  alignLabelWithHint: true,
-                  filled: true,
-                  fillColor: fieldFill,
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+            _SectionLabel(l.description, color: textColor),
+            TextFormField(
+              controller: _descriptionController,
+              style: TextStyle(color: textColor, fontSize: 14),
+              maxLines: 3,
+              maxLength: 1000,
+              decoration: InputDecoration(
+                hintText: l.description,
+                hintStyle: TextStyle(color: subColor, fontWeight: FontWeight.w500),
+                alignLabelWithHint: true,
+                filled: true,
+                fillColor: fieldFill,
+                enabledBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: fieldBorder, width: 1.2),
                 ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: BorderSide(color: ClinicTheme.teal, width: 1.8),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               ),
             ),
 
             if (_submitError != null) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFBE123C).withAlpha(20),
+                  color: const Color(0xFFBE123C).withAlpha(25),
                   borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: const Color(0xFFBE123C).withAlpha(80)),
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.error_outline, color: Color(0xFFBE123C), size: 20),
+                    const Icon(Icons.error_outline_rounded, color: Color(0xFFBE123C), size: 20),
                     const SizedBox(width: 8),
-                    Expanded(child: Text(_submitError!, style: const TextStyle(color: const Color(0xFFBE123C), fontSize: 13))),
+                    Expanded(child: Text(_submitError!, style: const TextStyle(color: Color(0xFFBE123C), fontSize: 13, fontWeight: FontWeight.w600))),
                   ],
                 ),
               ),
             ],
 
-            const SizedBox(height: 20),
+            const SizedBox(height: 16),
 
-            // Submit button
-            SizedBox(
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _isSubmitting ? null : _submit,
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: ClinicTheme.teal,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+            // Submit button — teal→blue gradient with shadow
+            Material(
+              color: Colors.transparent,
+              child: InkWell(
+                onTap: _isSubmitting ? null : _submit,
+                borderRadius: BorderRadius.circular(14),
+                child: Ink(
+                  height: 52,
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(
+                      begin: Alignment.centerLeft,
+                      end: Alignment.centerRight,
+                      colors: [ClinicTheme.teal, ClinicTheme.blue],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    boxShadow: [
+                      BoxShadow(
+                        color: ClinicTheme.teal.withOpacity(0.30),
+                        blurRadius: 10,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: _isSubmitting
+                        ? const SizedBox(
+                            width: 22, height: 22,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2.4),
+                          )
+                        : Text(
+                            l.submitExcuse,
+                            style: const TextStyle(
+                              fontSize: 15.5,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                              letterSpacing: 0.2,
+                            ),
+                          ),
+                  ),
                 ),
-                child: _isSubmitting
-                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                    : Text(l.submitExcuse, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
             ),
 
-                  const SizedBox(height: 30),
+                  const SizedBox(height: 24),
                 ],
               ),
             ),
@@ -1314,5 +1358,28 @@ class _CalendarPickerState extends State<_CalendarPicker> {
     } else if (!widget.isRange && _selectedDay != null) {
       Navigator.pop(context, _selectedDay);
     }
+  }
+}
+
+/// Compact section label rendered above each form input.
+class _SectionLabel extends StatelessWidget {
+  final String text;
+  final Color color;
+  const _SectionLabel(this.text, {required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(left: 4, bottom: 6, top: 2),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: FontWeight.w700,
+          color: color,
+          letterSpacing: 0.1,
+        ),
+      ),
+    );
   }
 }

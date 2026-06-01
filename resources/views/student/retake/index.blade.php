@@ -17,6 +17,8 @@
                      'semester_id' => $d->semester_id,
                      'semester_name' => $d->semester_name,
                      'credit' => (float) $d->credit,
+                     'is_current_year' => in_array((int) $d->semester_name, $currentYearSemesters ?? [], true)
+                         || in_array((int) $d->semester_id, $currentYearSemesters ?? [], true),
                      'active_status' => optional($app)->studentDisplayStatus(),
                      'is_active' => $activeApplications->has($key),
                      'final_status' => optional($app)->final_status,
@@ -47,9 +49,9 @@
             </div>
             <div class="text-xs text-amber-900 leading-relaxed">
                 <span class="font-semibold">{{ __("Hurmatli talaba!") }}</span>
-                {{ __("Siz bitta arizada eng ko'pi") }}
-                <span class="font-bold">{{ $maxSubjectsPerApplication }} ta</span>
-                {{ __("fanga ariza yubora olasiz. Aktiv (kutilayotgan + tasdiqlangan) arizalaringiz bilan birga jami 3 dan oshmasligi kerak. Rad etilgan arizalar bu hisobga kirmaydi va qaytadan yuborish mumkin.") }}
+                {{ __("Joriy o'quv yili (joriy kursingiz semestrlari) fanlaridan aktiv (kutilayotgan + tasdiqlangan) arizalaringiz bilan birga jami") }}
+                <span class="font-bold">3 ta</span>dan
+                {{ __("ko'p ariza topshira olmaysiz. Oldingi semestrlardagi qarzlaringizga limit yo'q — barchasiga ariza topshirishingiz mumkin. Rad etilgan arizalar bu hisobga kirmaydi.") }}
             </div>
         </div>
 
@@ -277,7 +279,9 @@
                 <div class="flex items-center justify-between flex-wrap gap-3">
                     <div class="text-sm">
                         <span class="text-gray-500">{{ __("Tanlangan") }}:</span>
-                        <span class="font-semibold text-gray-900" x-text="selected.length + '/' + maxPerApplication"></span>
+                        <span class="font-semibold text-gray-900" x-text="selected.length"></span>
+                        <span class="text-gray-400 text-xs" x-show="selectedCurrentYearCount > 0"
+                              x-text="'(' + '{{ __('joriy yil') }}' + ': ' + selectedCurrentYearCount + '/3)'"></span>
                         <span class="text-gray-400 mx-2">·</span>
                         <span class="text-gray-500">{{ __("Jami") }}:</span>
                         <span class="font-semibold text-gray-900" x-text="totalCredits.toFixed(1) + ' ' + '{{ __('kredit') }}'"></span>
@@ -293,10 +297,10 @@
                         {{ __("Ariza yuborish") }}
                     </button>
                 </div>
-                <p class="text-[11px] text-gray-500 mt-2" x-show="remainingSlots < maxPerApplication">
-                    {{ __("Ogohlantirish") }}:
+                <p class="text-[11px] text-gray-500 mt-2">
+                    {{ __("Joriy o'quv yili fanlaridan") }}
                     <span x-text="remainingSlots"></span>
-                    {{ __("ta bo'sh slot qoldi (aktiv arizalar bilan jami 3 dan oshmasligi kerak)") }}
+                    {{ __("ta bo'sh slot qoldi (aktiv arizalar bilan jami 3 dan oshmasligi kerak). Eski semestr qarzlariga limit yo'q.") }}
                 </p>
             </div>
         @endif
@@ -434,12 +438,19 @@
                         return this.selected.some(s => s.subject_id === d.subject_id && s.semester_id === d.semester_id);
                     },
 
+                    // Tanlangan JORIY o'quv yili fanlari soni (limit faqat shularga)
+                    get selectedCurrentYearCount() {
+                        return this.selected.filter(s => s.is_current_year).length;
+                    },
+
                     canCheck(d) {
                         if (!this.windowOpen) return false;
                         if (d.is_active) return false;
                         if (this.isSelected(d)) return true;
-                        if (this.selected.length >= this.maxPerApplication) return false;
-                        if (this.selected.length >= this.remainingSlots) return false;
+                        // Limit faqat joriy o'quv yili fanlariga. Eski qarzlar — cheksiz.
+                        if (d.is_current_year && this.selectedCurrentYearCount >= this.remainingSlots) {
+                            return false;
+                        }
                         return true;
                     },
 
@@ -449,8 +460,9 @@
                         if (idx >= 0) {
                             this.selected.splice(idx, 1);
                         } else {
-                            if (this.selected.length >= this.maxPerApplication) {
-                                alert("{{ __('Maksimal 3 ta fan tanlash mumkin') }}");
+                            // Limit faqat joriy o'quv yili fanlariga
+                            if (d.is_current_year && this.selectedCurrentYearCount >= this.remainingSlots) {
+                                alert("{{ __('Joriy o\'quv yili fanlaridan jami 3 tadan ko\'p tanlab bo\'lmaydi') }}");
                                 return;
                             }
                             this.selected.push(d);

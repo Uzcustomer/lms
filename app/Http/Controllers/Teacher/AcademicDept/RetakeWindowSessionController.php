@@ -146,6 +146,13 @@ class RetakeWindowSessionController extends Controller
             $count++;
         }
 
+        // Window ostidagi o'qish guruhlarining tugash sanasini ham uzaytiramiz
+        // — guruhda mustaqil ta'lim yuklash va baho qo'yish ham yangi tugash
+        // sanasigacha ochiq turishi uchun (faqat uzaytirish, qisqartirmaydi).
+        if ($windowIds->isNotEmpty()) {
+            $windowService->extendLinkedGroupEndDates($windowIds->all(), $data['end_date']);
+        }
+
         // Telegram xabar JAVOBDAN KEYIN — sahifa muzlamasligi uchun.
         if ($windowIds->isNotEmpty()) {
             $idsArr = $windowIds->all();

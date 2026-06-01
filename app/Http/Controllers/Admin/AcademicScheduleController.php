@@ -2168,9 +2168,16 @@ class AcademicScheduleController extends Controller
         // (student_hemis_id IS NULL). Bu yerda esa Individual imtihon sanasi
         // tabida belgilangan talabaning shaxsiy yozuvlari (student_hemis_id NOT NULL)
         // sana oralig'iga mos kelganlari alohida rowlar sifatida qo'shiladi.
+        // semesterCodes loadScheduleData lokal o'zgaruvchisi — bu yerda qayta hisoblaymiz.
+        $localSemesterCodes = collect();
+        if ($selectedSemester) {
+            $localSemesterCodes = collect([$selectedSemester]);
+        } elseif (($currentSemesterToggle ?? '1') === '1') {
+            $localSemesterCodes = $currentSemesters->pluck('code')->unique();
+        }
         $individualItems = $this->buildIndividualScheduleItems(
             $dateFrom, $dateTo, $urinishFilter,
-            $selectedGroup, $selectedSubject, $semesterCodes
+            $selectedGroup, $selectedSubject, $localSemesterCodes
         );
         foreach ($individualItems as $indItem) {
             $transformedData->push($indItem);

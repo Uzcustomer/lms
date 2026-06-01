@@ -3933,17 +3933,29 @@ class JournalController extends Controller
             }
 
             // YN ga yuborilganligini tekshirish
+            // YN ga yuborilganligini tekshirish — Superadmin override mavjud
+            // (feature_superadmin_grade_edit toggle ON bo'lsa, superadmin YN locked
+            // bo'lsa ham bahoni o'zgartira oladi).
             if ($studentGrade->is_yn_locked) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
-                    'yn_locked' => true,
-                ], 403);
+                $isSuper = auth()->user()?->hasRole('superadmin') ?? false;
+                $superToggleOn = Setting::get('feature_superadmin_grade_edit', '0') === '1';
+                if (!($isSuper && $superToggleOn)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
+                        'yn_locked' => true,
+                    ], 403);
+                }
             }
 
             // Retake bahosi allaqachon qo'yilgan bo'lsa — o'zgartirishga ruxsat berilmagan
+            // (Superadmin toggle yoqilgan bo'lsa, superadmin baribir o'zgartira oladi.)
             if ($studentGrade->retake_grade !== null) {
-                return response()->json(['success' => false, 'message' => 'Retake bahosi allaqachon qo\'yilgan. O\'zgartirishga ruxsat berilmagan.'], 400);
+                $isSuper = auth()->user()?->hasRole('superadmin') ?? false;
+                $superToggleOn = Setting::get('feature_superadmin_grade_edit', '0') === '1';
+                if (!($isSuper && $superToggleOn)) {
+                    return response()->json(['success' => false, 'message' => 'Retake bahosi allaqachon qo\'yilgan. O\'zgartirishga ruxsat berilmagan.'], 400);
+                }
             }
 
             // Muddat tekshirish: deadline o'tgan bo'lsa, baho qo'yishga ruxsat bermash (admin uchun cheklov yo'q)

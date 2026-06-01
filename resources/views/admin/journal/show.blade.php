@@ -1724,8 +1724,11 @@
                                                         $isAdminRole = auth()->user()?->hasAnyRole(['admin', 'superadmin']) ?? false;
                                                         $isYnSubmitted = isset($ynSubmission) && $ynSubmission;
                                                         $isTeacherEditable = $isOqituvchi && isset($teacherEditableDatesLookup[$colDateStr]);
-                                                        $canRateAdmin = !$isDekan && $isAdminRole && !$isYnSubmitted;
-                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && !$isYnSubmitted;
+                                                        // Superadmin override: feature_superadmin_grade_edit toggle yoqilgan bo'lsa,
+                                                        // YN locked holatida ham bahoni o'zgartira oladi.
+                                                        $superOverride = $isSuperAdmin; // declared above at line ~885
+                                                        $canRateAdmin = !$isDekan && $isAdminRole && (!$isYnSubmitted || $superOverride);
+                                                        $canRate = !$isDekan && ($isAdminRole || $isTeacherEditable) && (!$isYnSubmitted || $superOverride);
                                                         $isOpenedDate = isset($activeOpenedDatesLookup[$colDateStr]);
                                                         $isExcuseOpenedForStudent = isset(($excuseOpenedDatesPerStudent ?? [])[$student->hemis_id][$colDateStr]);
                                                         $canEditOpened = $isOpenedDate && $grade === null && !$isAbsent && $isOqituvchi && !$isYnSubmitted;

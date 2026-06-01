@@ -346,7 +346,7 @@
                                                            inputmode="numeric"
                                                            maxlength="3"
                                                            value="{{ $sub->grade !== null ? rtrim(rtrim(number_format($sub->grade, 2, '.', ''), '0'), '.') : '' }}"
-                                                           @if(!$canEdit || $group->is_locked) readonly @endif
+                                                           @if(!$canEdit) readonly @endif
                                                            @change="saveMustaqilCell($event, {{ $app->id }})"
                                                            data-mustaqil-grade="{{ $app->id }}"
                                                            class="w-16 px-2 py-1 text-xs text-center border border-gray-300 rounded focus:ring-2 focus:ring-blue-300 outline-none"
@@ -359,7 +359,7 @@
                                                 @if($sub && $sub->file_path)
                                                     <input type="text"
                                                            value="{{ $sub->teacher_comment ?? '' }}"
-                                                           @if(!$canEdit || $group->is_locked) readonly @endif
+                                                           @if(!$canEdit) readonly @endif
                                                            @change="saveMustaqilComment($event, {{ $app->id }})"
                                                            data-mustaqil-comment="{{ $app->id }}"
                                                            placeholder="{{ __('Izoh') }}"

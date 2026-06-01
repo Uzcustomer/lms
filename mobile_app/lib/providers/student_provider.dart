@@ -1,23 +1,11 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import '../services/student_service.dart';
-import '../services/student_data_cache.dart';
 import '../services/api_service.dart';
 
-/// Student data provider — reads from the shared [StudentDataCache] and
-/// only hits the network on a cache miss (or when the screen explicitly
-/// asks to force a refresh, e.g. pull-to-refresh).
-///
-/// Pattern per load* method:
-///   1. Sync cached value into provider fields and notify immediately.
-///   2. Ask the cache to fetch the endpoint if missing/stale (or forced).
-///   3. Re-sync, surface any error, notify again.
-///
-/// Screens see instant data on warm starts, and a single quick fetch
-/// only when something is genuinely missing.
+/// Student data provider — direct API calls per screen.
 class StudentProvider extends ChangeNotifier {
   final StudentService _service;
-  final StudentDataCache _cache = StudentDataCache();
 
   bool _isLoading = false;
   String? _error;
@@ -30,12 +18,6 @@ class StudentProvider extends ChangeNotifier {
   List<dynamic>? _pendingLessons;
   Map<String, dynamic>? _contract;
   List<dynamic>? _contractList;
-  List<dynamic>? _excuses;
-  List<dynamic>? _excuseReasons;
-
-  /// True while a specific (non-default) week or semester is shown, so a
-  /// cache sync doesn't reset the schedule back to the default week.
-  bool _customSchedule = false;
 
   StudentProvider(this._service);
 
@@ -49,139 +31,35 @@ class StudentProvider extends ChangeNotifier {
   List<dynamic>? get pendingLessons => _pendingLessons;
   Map<String, dynamic>? get contract => _contract;
   List<dynamic>? get contractList => _contractList;
-  List<dynamic>? get excuses => _excuses;
-  List<dynamic>? get excuseReasons => _excuseReasons;
 
-  // ── Sync helpers ───────────────────────────────────────
-
-  void _syncDashboard() => _dashboard = _cache.dataOf<Map<String, dynamic>>(StudentDataCache.kDashboard);
-  void _syncProfile() => _profile = _cache.dataOf<Map<String, dynamic>>(StudentDataCache.kProfile);
-  void _syncSubjects() => _subjects = _cache.dataOf<List<dynamic>>(StudentDataCache.kSubjects);
-  void _syncAttendance() => _attendance = _cache.dataOf<Map<String, dynamic>>(StudentDataCache.kAttendance);
-  void _syncPendingLessons() => _pendingLessons = _cache.dataOf<List<dynamic>>(StudentDataCache.kPendingLessons);
-  void _syncContract() {
-    _contract = _cache.dataOf<Map<String, dynamic>>(StudentDataCache.kContract);
-    _contractList = _contract?['contracts'] as List<dynamic>?;
-  }
-  void _syncExcuses() => _excuses = _cache.dataOf<List<dynamic>>(StudentDataCache.kExcuses);
-  void _syncSchedule() {
-    if (_customSchedule) return;
-    _schedule = _cache.dataOf<Map<String, dynamic>>(StudentDataCache.kSchedule);
-  }
-
-  /// Generic load: hydrate from cache, optionally trigger a fetch, surface
-  /// errors. The [syncer] copies cache → provider fields.
-  Future<void> _loadEndpoint({
-    required String key,
-    required Future<Map<String, dynamic>> Function() fetcher,
-    required VoidCallback syncer,
-    bool force = false,
-  }) async {
-    await _cache.loadFromDisk();
-
-    final hadCached = _cache.hasEndpoint(key);
-    syncer();
-    if (!hadCached) {
-      _isLoading = true;
-    }
-    notifyListeners();
-
-    try {
-      await _cache.getOrFetch(key: key, fetcher: fetcher, force: force);
-    } catch (_) {/* cache stored the error */}
-
-    syncer();
-    final err = _cache.errorFor(key);
-    if (err != null && !_cache.hasEndpoint(key)) {
-      _error = _humanizeError(err);
-    } else {
-      _error = null;
-    }
-    _isLoading = false;
-    notifyListeners();
-  }
-
-  String _humanizeError(String raw) {
-    if (raw.contains('SocketException') ||
-        raw.contains('TimeoutException') ||
-        raw.contains('Tarmoq')) {
-      return 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
-    }
-    return raw.replaceFirst('Exception: ', '');
-  }
-
-  // ── Public load methods ────────────────────────────────
-
-  Future<void> loadDashboard({bool force = false}) => _loadEndpoint(
-        key: StudentDataCache.kDashboard,
-        fetcher: _service.getDashboard,
-        syncer: _syncDashboard,
-        force: force,
-      );
-
-  Future<void> loadProfile({bool force = false}) => _loadEndpoint(
-        key: StudentDataCache.kProfile,
-        fetcher: _service.getProfile,
-        syncer: _syncProfile,
-        force: force,
-      );
-
-  Future<void> loadContract({bool force = false}) => _loadEndpoint(
-        key: StudentDataCache.kContract,
-        fetcher: _service.getContract,
-        syncer: _syncContract,
-        force: force,
-      );
-
-  Future<void> loadPendingLessons({bool force = false}) => _loadEndpoint(
-        key: StudentDataCache.kPendingLessons,
-        fetcher: _service.getPendingLessons,
-        syncer: _syncPendingLessons,
-        force: force,
-      );
-
-  Future<void> loadSubjects({String? semesterCode, bool force = false}) async {
-    if (semesterCode == null) {
-      return _loadEndpoint(
-        key: StudentDataCache.kSubjects,
-        fetcher: _service.getSubjects,
-        syncer: _syncSubjects,
-        force: force,
-      );
-    }
-    // Specific semester — bypass cache (cache only holds the default).
+  Future<void> loadDashboard({bool force = false}) async {
+    if (_dashboard != null && !force) return;
     _isLoading = true;
     _error = null;
     notifyListeners();
     try {
-      final response = await _service.getSubjects(semesterCode: semesterCode);
-      _subjects = response['data'] as List<dynamic>?;
+      final response = await _service.getDashboard();
+      _dashboard = response['data'] as Map<String, dynamic>?;
     } on ApiException catch (e) {
       _error = e.message;
-    } catch (_) {
+    } catch (e) {
       _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
     }
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> loadAttendance({String? semesterCode}) async {
-    if (semesterCode == null) {
-      return _loadEndpoint(
-        key: StudentDataCache.kAttendance,
-        fetcher: _service.getAttendance,
-        syncer: _syncAttendance,
-      );
-    }
+  Future<void> loadProfile({bool force = false}) async {
+    if (_profile != null && !force) return;
     _isLoading = true;
     _error = null;
     notifyListeners();
     try {
-      final response = await _service.getAttendance(semesterCode: semesterCode);
-      _attendance = response['data'] as Map<String, dynamic>?;
+      final response = await _service.getProfile();
+      _profile = response['data'] as Map<String, dynamic>?;
     } on ApiException catch (e) {
       _error = e.message;
-    } catch (_) {
+    } catch (e) {
       _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
     }
     _isLoading = false;
@@ -189,16 +67,6 @@ class StudentProvider extends ChangeNotifier {
   }
 
   Future<void> loadSchedule({String? semesterId, String? weekId}) async {
-    if (semesterId == null && weekId == null) {
-      _customSchedule = false;
-      return _loadEndpoint(
-        key: StudentDataCache.kSchedule,
-        fetcher: _service.getSchedule,
-        syncer: _syncSchedule,
-      );
-    }
-    // Week / semester navigation — always a fresh call, never cached.
-    _customSchedule = true;
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -210,23 +78,110 @@ class StudentProvider extends ChangeNotifier {
       _schedule = response['data'] as Map<String, dynamic>?;
     } on ApiException catch (e) {
       _error = e.message;
-    } catch (_) {
+    } catch (e) {
       _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
     }
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> loadExcuses({bool force = false}) => _loadEndpoint(
-        key: StudentDataCache.kExcuses,
-        fetcher: _service.getExcuses,
-        syncer: _syncExcuses,
-        force: force,
-      );
+  Future<void> loadSubjects({String? semesterCode, bool force = false}) async {
+    if (_subjects != null && semesterCode == null && !force) return;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final response = await _service.getSubjects(semesterCode: semesterCode);
+      _subjects = response['data'] as List<dynamic>?;
+    } on ApiException catch (e) {
+      _error = e.message;
+    } catch (e) {
+      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+    }
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> loadAttendance({String? semesterCode}) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final response = await _service.getAttendance(semesterCode: semesterCode);
+      _attendance = response['data'] as Map<String, dynamic>?;
+    } on ApiException catch (e) {
+      _error = e.message;
+    } catch (e) {
+      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+    }
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> loadPendingLessons({bool force = false}) async {
+    if (_pendingLessons != null && !force) return;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final response = await _service.getPendingLessons();
+      _pendingLessons = response['data'] as List<dynamic>?;
+    } on ApiException catch (e) {
+      _error = e.message;
+    } catch (e) {
+      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+    }
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  Future<void> loadContract({bool force = false}) async {
+    if (_contract != null && !force) return;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      final response = await _service.getContract();
+      _contract = response['data'] as Map<String, dynamic>?;
+      _contractList = _contract?['contracts'] as List<dynamic>?;
+    } on ApiException catch (e) {
+      _error = e.message;
+    } catch (e) {
+      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
+    }
+    _isLoading = false;
+    notifyListeners();
+  }
+
+  /// Pull-to-refresh — re-fetches the screens' essentials.
+  Future<void> refreshAll() async {
+    await Future.wait([
+      loadDashboard(force: true),
+      loadProfile(force: true),
+      loadSubjects(force: true),
+      loadPendingLessons(force: true),
+      loadContract(force: true),
+    ]);
+  }
+
+  Future<Map<String, dynamic>> saveTelegram(String telegramUsername) async {
+    final response = await _service.saveTelegram(telegramUsername);
+    return response;
+  }
+
+  Future<Map<String, dynamic>> checkTelegramVerification() async {
+    final response = await _service.checkTelegramVerification();
+    return response;
+  }
+
+  // Absence excuse methods
+  List<dynamic>? _excuses;
+  List<dynamic>? _excuseReasons;
+
+  List<dynamic>? get excuses => _excuses;
+  List<dynamic>? get excuseReasons => _excuseReasons;
 
   Future<void> loadExcuseReasons() async {
-    // Small reference list — fetch once per app launch, no disk cache.
-    if (_excuseReasons != null) return;
     try {
       final response = await _service.getExcuseReasons();
       _excuseReasons = response['data'] as List<dynamic>?;
@@ -236,36 +191,15 @@ class StudentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Pull-to-refresh — forces a full re-fetch of every bulk endpoint.
-  Future<void> refreshAll() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
+  Future<void> loadExcuses({bool force = false}) async {
+    if (_excuses != null && !force) return;
     try {
-      await _cache.refresh(force: true);
-    } catch (_) {}
-    _syncDashboard();
-    _syncProfile();
-    _syncSubjects();
-    _syncAttendance();
-    _syncPendingLessons();
-    _syncContract();
-    _syncExcuses();
-    _syncSchedule();
-    _isLoading = false;
+      final response = await _service.getExcuses();
+      _excuses = response['data'] as List<dynamic>?;
+    } on ApiException catch (e) {
+      _error = e.message;
+    }
     notifyListeners();
-  }
-
-  // ── Mutations ──────────────────────────────────────────
-
-  Future<Map<String, dynamic>> saveTelegram(String telegramUsername) async {
-    final response = await _service.saveTelegram(telegramUsername);
-    await _cache.invalidate([StudentDataCache.kProfile]);
-    return response;
-  }
-
-  Future<Map<String, dynamic>> checkTelegramVerification() async {
-    return await _service.checkTelegramVerification();
   }
 
   Future<Map<String, dynamic>> getExcuseDetail(int id) async {
@@ -287,7 +221,7 @@ class StudentProvider extends ChangeNotifier {
     required String fileName,
     List<Map<String, dynamic>>? makeupDates,
   }) async {
-    final res = await _service.submitExcuse(
+    return await _service.submitExcuse(
       reason: reason,
       docNumber: docNumber,
       startDate: startDate,
@@ -297,8 +231,6 @@ class StudentProvider extends ChangeNotifier {
       fileName: fileName,
       makeupDates: makeupDates,
     );
-    await _cache.invalidate([StudentDataCache.kExcuses]);
-    return res;
   }
 
   void clearData() {
@@ -312,7 +244,6 @@ class StudentProvider extends ChangeNotifier {
     _contractList = null;
     _excuses = null;
     _excuseReasons = null;
-    _customSchedule = false;
     notifyListeners();
   }
 }

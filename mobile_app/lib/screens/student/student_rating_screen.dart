@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import '../../services/api_service.dart';
-import '../../services/student_data_cache.dart';
 import '../../services/student_service.dart';
 import '../../widgets/clinic_header.dart';
 
@@ -35,17 +34,8 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
   Future<void> _load({bool force = false}) async {
     setState(() => _loading = true);
     try {
-      Map<String, dynamic>? res;
-      if (_activeFilter == 'group') {
-        res = await StudentDataCache().getOrFetch(
-          key: StudentDataCache.kRating,
-          fetcher: () => StudentService(ApiService()).getRating(),
-          force: force,
-        );
-      } else {
-        res = await StudentService(ApiService()).getRating(filter: _activeFilter);
-      }
-      if (mounted && res != null && res['success'] == true) {
+      final res = await StudentService(ApiService()).getRating(filter: _activeFilter);
+      if (mounted && res['success'] == true) {
         final data = res['data'] as Map<String, dynamic>;
         setState(() {
           _myRank = data['my_rank'] as int? ?? 0;
@@ -54,8 +44,8 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
           _students = data['students'] as List<dynamic>? ?? [];
           _loading = false;
         });
-      } else if (mounted) {
-        setState(() => _loading = false);
+      } else {
+        if (mounted) setState(() => _loading = false);
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/student_provider.dart';
 import '../../services/api_service.dart';
-import '../../services/student_data_cache.dart';
 import '../../services/student_service.dart';
 import '../../widgets/clinic_header.dart';
 
@@ -58,13 +57,9 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
   Future<void> _loadGrades(int subjectId, {bool force = false}) async {
     setState(() => _loadingGrades = true);
     try {
-      final res = await StudentDataCache().getOrFetch(
-        key: '${StudentDataCache.kSubjectGradesPrefix}$subjectId',
-        fetcher: () => StudentService(ApiService()).getSubjectGrades(subjectId),
-        force: force,
-      );
+      final res = await StudentService(ApiService()).getSubjectGrades(subjectId);
       if (mounted) {
-        final data = res?['data'] as Map<String, dynamic>? ?? {};
+        final data = res['data'] as Map<String, dynamic>? ?? {};
         setState(() {
           _grades = (data['grades'] as List<dynamic>? ?? []);
           _loadingGrades = false;

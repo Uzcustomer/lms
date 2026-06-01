@@ -235,18 +235,25 @@
                     // Filtrlash mantig'i:
                     //  1) Yopilish shakli "oski" bo'lsa OSKI qatorlari, "test" bo'lsa
                     //     Test qatorlari ko'rsatiladi.
-                    //  2) Talaba bu urinishni topshira oladigan qatorlargina qoladi:
+                    //  2) Mavjud individual sana bo'lgan qatorlar har doim qoladi
+                    //     (admin tahrirlash yoki o'chirish uchun ko'rishi kerak).
+                    //  3) Guruhda sana belgilangan qatorlar ham doim qoladi —
+                    //     admin xohlasa shu talaba uchun alohida sana qo'yishi mumkin
+                    //     (eligibilitydan qat'iy nazar). Bu ariza/pullik/maxsus sabab
+                    //     stsenariylarida kerak bo'ladi.
+                    //  4) Aks holda — talaba urinishni topshira oladigan qatorlargina:
                     //       1-urinish: baho hali kelmagan bo'lsa
                     //       2-urinish: 1-da yiqilgan VA 2-bahosi yo'q
                     //       3-urinish: 2-da yiqilgan VA 3-bahosi yo'q
-                    //  3) Mavjud individual sana bo'lgan qatorlar har doim qoladi
-                    //     (admin tahrirlash yoki o'chirish uchun ko'rishi kerak).
                     const attempts = allAttempts.filter(a => {
                         if (a.ynType === 'oski' && !showOski) return false;
                         if (a.ynType === 'test' && !showTest) return false;
 
                         const hasIndividual = subj.individual && subj.individual[a.dateK];
                         if (hasIndividual) return true;
+
+                        const hasGroupDate = subj.group && subj.group[a.dateK];
+                        if (hasGroupDate) return true;
 
                         if (a.attempt === 1) {
                             return !elig.has_attempt_1_grade;

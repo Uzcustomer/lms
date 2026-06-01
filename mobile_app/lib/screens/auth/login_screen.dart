@@ -260,7 +260,7 @@ class _LoginScreenState extends State<LoginScreen> {
         onTap: () => _onRoleChanged(r),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: on ? Colors.white : Colors.transparent,
@@ -279,12 +279,12 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               Icon(icon,
-                  size: 16, color: on ? _accent : _ink.withOpacity(0.5)),
-              const SizedBox(width: 6),
+                  size: 20, color: on ? _accent : _ink.withOpacity(0.5)),
+              const SizedBox(width: 8),
               Text(
                 label,
                 style: TextStyle(
-                  fontSize: 13,
+                  fontSize: 15,
                   fontWeight: FontWeight.w700,
                   color: on ? _accent : _ink.withOpacity(0.55),
                 ),
@@ -318,7 +318,7 @@ class _LoginScreenState extends State<LoginScreen> {
         cursorColor: _accent,
         onChanged: (_) => setState(() {}),
         style: const TextStyle(
-          fontSize: 16,
+          fontSize: 14,
           fontWeight: FontWeight.w700,
           color: _ink,
         ),
@@ -367,7 +367,7 @@ class _LoginScreenState extends State<LoginScreen> {
         enableSuggestions: false,
         cursorColor: _accent,
         style: const TextStyle(
-          fontSize: 16,
+          fontSize: 14,
           fontWeight: FontWeight.w700,
           color: _ink,
         ),
@@ -391,7 +391,7 @@ class _LoginScreenState extends State<LoginScreen> {
     errorBorder: InputBorder.none,
     focusedErrorBorder: InputBorder.none,
     hintStyle: TextStyle(
-      fontSize: 15,
+      fontSize: 13.5,
       fontWeight: FontWeight.w500,
       color: const Color(0xFF0F1B3D).withOpacity(0.35),
     ),
@@ -955,7 +955,7 @@ class _FieldShell extends StatelessWidget {
   Widget build(BuildContext context) {
     const ink = Color(0xFF0F1B3D);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: ink.withOpacity(0.10)),
@@ -963,8 +963,8 @@ class _FieldShell extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(icon, size: 26, color: ink.withOpacity(0.5)),
-          const SizedBox(width: 13),
+          Icon(icon, size: 22, color: ink.withOpacity(0.5)),
+          const SizedBox(width: 11),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,

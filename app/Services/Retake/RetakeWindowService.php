@@ -94,6 +94,11 @@ class RetakeWindowService
     {
         $this->validateDateRange($startDate, $endDate);
 
+        // Uzaytirishmi? (yangi tugash sanasi eskisidan keyinmi)
+        $oldEnd = $window->end_date ? Carbon::parse($window->end_date)->startOfDay() : null;
+        $newEnd = Carbon::parse($endDate)->startOfDay();
+        $isExtension = $oldEnd === null || $newEnd->gt($oldEnd);
+
         $update = [
             'start_date' => $startDate,
             'end_date' => $endDate,
@@ -111,25 +116,29 @@ class RetakeWindowService
 
         $window->update($update);
 
-        // Window ostidagi o'qish guruhlarining tugash sanasini ham uzaytiramiz
-        // (faqat uzaytirish — qisqartirmaymiz). Shunda guruhda mustaqil ta'lim
-        // yuklash va baho qo'yish ham yangi tugash sanasigacha ochiq turadi.
-        $this->extendLinkedGroupEndDates([$window->id], $endDate);
+        // Window UZAYTIRILSA — ostidagi o'qish guruhlarining tugash sanasi ham
+        // uzayadi va qulfi ochiladi. Shunda guruhda mustaqil ta'lim yuklash va
+        // baho qo'yish yangi tugash sanasigacha ochiq turadi (yakuniy qilingan
+        // bo'lsa ham). Qisqartirishda guruhlar tegmaydi.
+        if ($isExtension) {
+            $this->extendLinkedGroupEndDates([$window->id], $endDate);
+        }
     }
 
     /**
-     * Berilgan oyna(lar) ostidagi o'qish guruhlarining (RetakeGroup) tugash
-     * sanasini yangi sanagacha uzaytiradi — faqat hozirgi tugash sanasi
-     * yangidan oldin bo'lsa (uzaytirish), va guruh tugamagan bo'lsa.
+     * Berilgan oyna(lar) ostidagi o'qish guruhlarining (RetakeGroup):
+     *  1) tugash sanasini yangi sanagacha uzaytiradi (faqat sanasi yangidan
+     *     oldin bo'lganlarni — qisqartirmaydi);
+     *  2) QULFINI ochadi (yakuniy qilingan bo'lsa ham) — bog'liq barcha
+     *     tugamagan guruhlar uchun.
      *
-     * Sana uzayishi bilan birga **qulflangan guruhlar ham ochiladi** —
-     * mustaqil ta'lim yuklash va baho qo'yish yangi tugash sanasigacha
-     * mavjud bo'lishi uchun.
+     * Shu orqali muddat uzaytirilganda mustaqil ta'lim yuklash va baho qo'yish
+     * yangi tugash sanasigacha qayta ochiladi.
      *
      * Zanjir: window → retake_application_groups (window_id)
      *         → retake_applications (group_id) → retake_group_id.
      *
-     * @return int Yangilangan guruhlar soni
+     * @return int Yangilangan (uzaytirilgan) guruhlar soni
      */
     public function extendLinkedGroupEndDates(array $windowIds, string $newEndDate): int
     {
@@ -155,19 +164,28 @@ class RetakeWindowService
             return 0;
         }
 
-        return RetakeGroup::query()
+        // 1) Tugash sanasini uzaytirish — faqat yangidan oldin bo'lganlarni
+        $extended = RetakeGroup::query()
             ->whereIn('id', $groupIds)
             ->where('status', '!=', RetakeGroup::STATUS_COMPLETED)
             ->whereDate('end_date', '<', $newEnd)
+            ->update(['end_date' => $newEnd->toDateString()]);
+
+        // 2) Qulfni ochish — bog'liq barcha tugamagan guruhlar uchun (sana
+        //    o'zgargan-o'zgarmaganidan qat'i nazar). Muddat uzaytirilgani
+        //    uchun yakuniy holatni bekor qilamiz.
+        RetakeGroup::query()
+            ->whereIn('id', $groupIds)
+            ->where('status', '!=', RetakeGroup::STATUS_COMPLETED)
+            ->where('is_locked', true)
             ->update([
-                'end_date' => $newEnd->toDateString(),
-                // Sana uzayishi qulfni ham ochadi — baho qo'yish va mustaqil
-                // ta'lim yuklash qayta ishlasin uchun
                 'is_locked' => false,
                 'locked_at' => null,
                 'locked_by_user_id' => null,
                 'locked_by_name' => null,
             ]);
+
+        return $extended;
     }
 
     /**

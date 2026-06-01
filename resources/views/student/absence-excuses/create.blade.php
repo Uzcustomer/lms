@@ -522,7 +522,7 @@
                                         <div style="margin-bottom:6px;" class="flex items-center gap-2 flex-wrap">
                                             <span class="px-2.5 py-1 text-sm font-bold rounded-lg inline-block"
                                                   :class="'badge-' + item.assessment_type"
-                                                  x-text="getLabel(item.assessment_type)"></span>
+                                                  x-text="getLabel(item.assessment_type) + (item.attempt && item.attempt > 1 ? ' (' + item.attempt + '-urinish)' : '')"></span>
                                             <span class="text-xs text-gray-400" x-text="fmtDate(item.original_date)"></span>
                                             <template x-if="item.is_makeup_period">
                                                 <span class="px-2 py-0.5 text-[10px] font-bold rounded-lg inline-flex items-center gap-1 bg-emerald-50 text-emerald-700 border border-emerald-200">

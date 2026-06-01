@@ -32,6 +32,95 @@ class RetakeApplicationService
     public const MAX_COMMENT_LENGTH = 500;
 
     /**
+     * Semestr nomidan ("6-semestr") yoki kodidan raqamni ajratadi.
+     */
+    public static function semesterNumber($semesterNameOrCode): ?int
+    {
+        if ($semesterNameOrCode === null) {
+            return null;
+        }
+        if (preg_match('/(\d+)/', (string) $semesterNameOrCode, $m)) {
+            return (int) $m[1];
+        }
+        return null;
+    }
+
+    /**
+     * Talabaning JORIY o'quv yili semestrlari (raqamlar).
+     * Har o'quv yili 2 semestrdan iborat: kurs N → [2N-1, 2N].
+     * Masalan, 3-kurs → [5, 6].
+     *
+     * Eng ishonchli manba — `level_name` ("3-kurs"), chunki kurs→semestr
+     * deterministik. Fallback — joriy `semester_name` ("6-semestr") raqamidan
+     * juftlik hisoblanadi. HEMIS kodlari (level_code/semester_code) ishonchsiz
+     * bo'lishi mumkin, shuning uchun nomlardan raqam ajratamiz.
+     */
+    public function currentYearSemesterNumbers(Student $student): array
+    {
+        // 1) Kurs (level) nomidan: "3-kurs" → 3 → [5, 6]
+        $course = self::semesterNumber($student->level_name);
+        if ($course !== null && $course >= 1 && $course <= 7) {
+            return [2 * $course - 1, 2 * $course];
+        }
+
+        // 2) Fallback: joriy semestr nomidan juftlik
+        $cur = self::semesterNumber($student->semester_name ?: $student->semester_code);
+        if ($cur === null || $cur < 1) {
+            return [];
+        }
+        $start = ($cur % 2 === 1) ? $cur : $cur - 1;
+        return [$start, $start + 1];
+    }
+
+    /**
+     * Berilgan semestr (nomi yoki kodi) talabaning joriy o'quv yiliga tegishlimi?
+     */
+    public function isCurrentYearSemester(Student $student, $semesterNameOrCode): bool
+    {
+        $num = self::semesterNumber($semesterNameOrCode);
+        if ($num === null) {
+            return false;
+        }
+        return in_array($num, $this->currentYearSemesterNumbers($student), true);
+    }
+
+    /**
+     * Talabaning JORIY o'quv yili fanlari bo'yicha aktiv (pending + approved)
+     * arizalari soni. Faqat shu semestrlar limitga kiradi — eski qarzlar emas.
+     */
+    public function currentYearActiveCount(Student $student, ?int $windowId = null): int
+    {
+        $sems = $this->currentYearSemesterNumbers($student);
+        if (empty($sems)) {
+            return 0;
+        }
+
+        $query = RetakeApplication::query()
+            ->forStudent((int) $student->hemis_id)
+            ->active();
+
+        if ($windowId !== null) {
+            $query->whereHas('group', fn ($q) => $q->where('window_id', $windowId));
+        }
+
+        return $query->get(['semester_id', 'semester_name'])
+            ->filter(fn ($a) => in_array(
+                self::semesterNumber($a->semester_name ?: $a->semester_id),
+                $sems,
+                true
+            ))
+            ->count();
+    }
+
+    /**
+     * Joriy o'quv yili fanlari uchun nechta slot qoldi (3 dan).
+     * Eski semestr qarzlariga limit yo'q.
+     */
+    public function currentYearRemainingSlots(Student $student, ?int $windowId = null): int
+    {
+        return max(0, self::MAX_ACTIVE_SUBJECTS - $this->currentYearActiveCount($student, $windowId));
+    }
+    /**
      * To'lov cheki uchun maksimal hajm (MB).
      * Bu qiymatni sozlamalarga ko'chirish o'rniga konstant qoldirildi —
      * mahsulot talabida aniq 5 MB belgilangan.
@@ -109,19 +198,13 @@ class RetakeApplicationService
             ]);
         }
 
-        // 2. Soni tekshirish (1..3)
+        // 2. Soni tekshirish — kamida 1 ta fan (yuqori chegara joriy o'quv yili
+        //    fanlari uchun 6-bosqichda alohida tekshiriladi; eski qarzlarga
+        //    limit yo'q).
         $count = count($selectedSubjects);
-        if ($count < self::MIN_SUBJECTS_PER_APPLICATION || $count > self::MAX_SUBJECTS_PER_APPLICATION) {
+        if ($count < self::MIN_SUBJECTS_PER_APPLICATION) {
             throw ValidationException::withMessages([
-                'subjects' => 'Eng kamida 1 ta, eng ko\'pi 3 ta fan tanlash mumkin',
-            ]);
-        }
-
-        // 3. Slot tekshirish (joriy oyna ichida aktiv + yangi <= 3)
-        $remaining = $this->remainingSlots((int) $student->hemis_id, $window->id);
-        if ($count > $remaining) {
-            throw ValidationException::withMessages([
-                'subjects' => "Bo'sh slot yetarli emas. Joriy oynada aktiv arizalaringiz bilan birga jami 3 tadan oshmasligi kerak (qolgan: {$remaining})",
+                'subjects' => 'Eng kamida 1 ta fan tanlash kerak',
             ]);
         }
 
@@ -168,6 +251,25 @@ class RetakeApplicationService
                 ]);
             }
             $resolved[] = $debt;
+        }
+
+        // 6.1. JORIY O'QUV YILI fanlari limiti: joriy yil (masalan 5-6 semestr)
+        //      fanlaridan aktiv arizalar bilan birga jami 3 tadan oshmasin.
+        //      Eski semestr (1-2-3-4 ...) qarzlariga limit YO'Q.
+        $selectedCurrentYear = collect($resolved)
+            ->filter(fn ($d) => $this->isCurrentYearSemester($student, $d->semester_name ?: $d->semester_id))
+            ->count();
+
+        if ($selectedCurrentYear > 0) {
+            $activeCurrentYear = $this->currentYearActiveCount($student, $window->id);
+            if ($selectedCurrentYear + $activeCurrentYear > self::MAX_ACTIVE_SUBJECTS) {
+                $remaining = max(0, self::MAX_ACTIVE_SUBJECTS - $activeCurrentYear);
+                throw ValidationException::withMessages([
+                    'subjects' => "Joriy o'quv yili fanlaridan jami "
+                        . self::MAX_ACTIVE_SUBJECTS
+                        . " tadan oshmasligi kerak (qolgan: {$remaining}). Eski semestr qarzlariga limit yo'q.",
+                ]);
+            }
         }
 
         // 7. Hisob-kitob (kreditlar va summa)

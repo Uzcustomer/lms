@@ -54,7 +54,10 @@ class RetakeApplicationController extends Controller
             ->limit(50)
             ->get();
 
-        $remainingSlots = $this->applicationService->remainingSlots((int) $student->hemis_id, $window?->id);
+        // Limit FAQAT joriy o'quv yili (masalan 5-6 semestr) fanlariga: jami 3 ta.
+        // Eski semestr qarzlariga limit yo'q.
+        $remainingSlots = $this->applicationService->currentYearRemainingSlots($student, $window?->id);
+        $currentYearSemesters = $this->applicationService->currentYearSemesterNumbers($student);
         $creditPrice = RetakeSetting::creditPrice();
         $receiptMaxMb = RetakeSetting::receiptMaxMb();
 
@@ -76,6 +79,7 @@ class RetakeApplicationController extends Controller
             'activeApplications' => $activeApplications,
             'history' => $history,
             'remainingSlots' => $remainingSlots,
+            'currentYearSemesters' => $currentYearSemesters,
             'creditPrice' => $creditPrice,
             'receiptMaxMb' => $receiptMaxMb,
             'maxSubjectsPerApplication' => RetakeApplicationService::MAX_SUBJECTS_PER_APPLICATION,
@@ -127,7 +131,9 @@ class RetakeApplicationController extends Controller
         $maxMb = RetakeSetting::receiptMaxMb();
 
         $data = $request->validate([
-            'subjects' => 'required|array|min:1|max:' . RetakeApplicationService::MAX_SUBJECTS_PER_APPLICATION,
+            // Yuqori chegara yo'q — eski semestr qarzlari uchun limit yo'q.
+            // Joriy o'quv yili fanlari uchun 3 ta limit servisda tekshiriladi.
+            'subjects' => 'required|array|min:1',
             'subjects.*.subject_id' => 'required|string',
             'subjects.*.semester_id' => 'required|string',
             'receipt' => "required|file|mimes:pdf,doc,docx,jpg,jpeg,png|max:" . ($maxMb * 1024),

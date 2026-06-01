@@ -5,6 +5,7 @@ import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/student_provider.dart';
 import '../../services/api_service.dart';
+import '../../services/student_data_cache.dart';
 import '../../services/student_service.dart';
 import '../../l10n/app_localizations.dart';
 import '../../widgets/loading_widget.dart';
@@ -1289,12 +1290,15 @@ class _JnGradesPageState extends State<_JnGradesPage> {
 
   Future<void> _loadGrades() async {
     try {
-      final response =
-          await StudentService(ApiService()).getSubjectGrades(widget.subjectId);
+      final response = await StudentDataCache().getOrFetch(
+        key: '${StudentDataCache.kSubjectGradesPrefix}${widget.subjectId}',
+        fetcher: () =>
+            StudentService(ApiService()).getSubjectGrades(widget.subjectId),
+      );
 
       List<dynamic> grades = [];
       List<dynamic> scheduleDates = [];
-      final data = response['data'];
+      final data = response?['data'];
       if (data is Map<String, dynamic>) {
         grades = (data['grades'] as List<dynamic>?) ?? [];
         scheduleDates = (data['schedule_dates'] as List<dynamic>?) ?? [];

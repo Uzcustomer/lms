@@ -48,7 +48,7 @@ class LmsApp extends StatelessWidget {
     final studentService = StudentService(apiService);
     final teacherService = TeacherService(apiService);
 
-    StudentDataCache().attachService(studentService);
+    StudentDataCache().attachService(studentService, apiService);
 
     return MultiProvider(
       providers: [

@@ -2,6 +2,7 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/api_service.dart';
+import '../../services/student_data_cache.dart';
 import '../../services/student_service.dart';
 import '../../widgets/clinic_header.dart';
 
@@ -38,18 +39,17 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
 
   Future<void> _loadExams({bool force = false}) async {
     try {
-      final response = await StudentService(ApiService()).getExamSchedule();
-      if (mounted && response['success'] == true) {
+      final res = await StudentDataCache().getOrFetch(
+        key: StudentDataCache.kExamSchedule,
+        fetcher: () => StudentService(ApiService()).getExamSchedule(),
+        force: force,
+      );
+      if (mounted) {
         setState(() {
-          _exams = response['data'] as List<dynamic>? ?? [];
+          _exams = (res?['data'] as List<dynamic>?) ?? [];
           _loading = false;
         });
         _showHintBanner();
-      } else {
-        if (mounted) {
-          setState(() => _loading = false);
-          _showHintBanner();
-        }
       }
     } catch (_) {
       if (mounted) {

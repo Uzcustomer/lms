@@ -3,6 +3,7 @@ import '../../config/api_config.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../utils/page_transitions.dart';
+import '../../services/student_data_cache.dart';
 import '../../widgets/clinic_header.dart';
 import '../../widgets/notification_bell.dart';
 import 'chat_conversation_screen.dart';
@@ -34,18 +35,18 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool force = false}) async {
     try {
-      final api = ApiService();
-      final service = StudentService(api);
-      final res = await service.getChatContacts();
-      if (mounted && res['success'] == true) {
+      final res = await StudentDataCache().getOrFetch(
+        key: StudentDataCache.kChatContacts,
+        fetcher: () => StudentService(ApiService()).getChatContacts(),
+        force: force,
+      );
+      if (mounted) {
         setState(() {
-          _contacts = res['data'] as List<dynamic>? ?? [];
+          _contacts = res?['data'] as List<dynamic>? ?? [];
           _loading = false;
         });
-      } else {
-        if (mounted) setState(() => _loading = false);
       }
     } catch (_) {
       if (mounted) setState(() => _loading = false);
@@ -131,7 +132,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
       );
     }
     return RefreshIndicator(
-      onRefresh: _load,
+      onRefresh: () => _load(force: true),
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(14, 12, 14, 24),
         itemCount: _contacts.length,
@@ -188,7 +189,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
                 ),
               ),
             );
-            _load();
+            _load(force: true);
           },
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),

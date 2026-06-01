@@ -42,7 +42,12 @@
                             <p class="text-xs text-red-100 mt-0.5">{{ $group->name }}</p>
                         </div>
                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white text-red-700 flex-shrink-0">
-                            {{ $group->statusLabel() ?? $group->status }}
+                            {{-- Muddat hali amal qilsa "Davom etmoqda", aks holda guruh status nomi --}}
+                            @if($isEditable)
+                                {{ __("Davom etmoqda") }}
+                            @else
+                                {{ $group->statusLabel() ?? $group->status }}
+                            @endif
                         </span>
                     </div>
                 </div>

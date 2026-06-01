@@ -37,18 +37,35 @@
 
         {{-- Status banner --}}
         @if($group->is_locked)
-            <div class="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-3 flex items-start gap-2 text-sm text-amber-900">
-                <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                </svg>
-                <div>
-                    <strong>{{ __("Baholar qulflangan!") }}</strong>
-                    {{ __("Yakuniy qilingan. Baholarni o'zgartirish mumkin emas.") }}
-                    @if($group->locked_by_name)
-                        <span class="block text-xs text-amber-700 mt-0.5">{{ $group->locked_by_name }} · {{ $group->locked_at?->format('d.m.Y H:i') }}</span>
-                    @endif
+            @if($canEdit)
+                {{-- Yakuniy qilingan, ammo muddat hali amal qiladi (uzaytirilgan) —
+                     baho qo'yish va mustaqil ta'lim qayta ochiq. --}}
+                <div class="bg-blue-50 border border-blue-300 rounded-lg p-3 mb-3 flex items-start gap-2 text-sm text-blue-900">
+                    <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 11V7a4 4 0 018 0m-4 8v2M5 11h14a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2z"/>
+                    </svg>
+                    <div>
+                        <strong>{{ __("Yakuniy qilingan edi — muddat uzaytirildi") }}</strong>
+                        {{ __("Muddat") }} ({{ $group->end_date?->format('d.m.Y') }}) {{ __("gacha baho qo'yish va mustaqil ta'lim qayta ochiq.") }}
+                        @if($group->locked_by_name)
+                            <span class="block text-xs text-blue-700 mt-0.5">{{ $group->locked_by_name }} · {{ $group->locked_at?->format('d.m.Y H:i') }}</span>
+                        @endif
+                    </div>
                 </div>
-            </div>
+            @else
+                <div class="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-3 flex items-start gap-2 text-sm text-amber-900">
+                    <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                    </svg>
+                    <div>
+                        <strong>{{ __("Baholar qulflangan!") }}</strong>
+                        {{ __("Yakuniy qilingan. Baholarni o'zgartirish mumkin emas.") }}
+                        @if($group->locked_by_name)
+                            <span class="block text-xs text-amber-700 mt-0.5">{{ $group->locked_by_name }} · {{ $group->locked_at?->format('d.m.Y H:i') }}</span>
+                        @endif
+                    </div>
+                </div>
+            @endif
         @endif
 
         {{-- Asosiy + sidebar layout --}}

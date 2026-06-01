@@ -89,26 +89,19 @@ class RetakeJournalService
 
     /**
      * Guruh hozir tahrir qilinishi mumkinmi?
-     * (start_date <= bugun <= end_date) yoki status `forming`/`scheduled`/`in_progress`,
-     * va guruh `is_locked` emas.
+     *
+     * YAGONA mezon — tugash sanasi (end_date) hali tugamaganmi (bugun <= end_date).
+     * Qulf (is_locked / yakuniy qilingan) yoki avto-cron qo'yib qo'ygan
+     * `completed` status BLOKLAMAYDI — agar muddat hali amal qilsa, baho qo'yish
+     * va mustaqil ta'lim ochiq turadi. Muddat uzaytirilsa (end_date kelajakka
+     * surilsa) — avtomatik qayta ochiladi.
      */
     public function isEditable(RetakeGroup $group): bool
     {
-        if ($group->is_locked) {
-            return false;
-        }
         if (!$group->start_date || !$group->end_date) {
             return false;
         }
-        $today = Carbon::today();
-        if ($group->end_date->lt($today)) {
-            return false;
-        }
-        return in_array($group->status, [
-            RetakeGroup::STATUS_FORMING,
-            RetakeGroup::STATUS_SCHEDULED,
-            RetakeGroup::STATUS_IN_PROGRESS,
-        ], true);
+        return $group->end_date->gte(Carbon::today());
     }
 
     /**

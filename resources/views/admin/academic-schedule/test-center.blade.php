@@ -426,35 +426,13 @@
                                 @endphp
                                 @foreach($scheduleData as $groupHemisId => $items)
                                     @foreach($items as $item)
-                                        @php
-                                            $attempt = (int) ($item['attempt'] ?? 1);
-                                            $isIndividual = !empty($item['is_individual_student']);
-                                            $rowBgStyle = $isIndividual ? 'background:#eef2ff;' : '';
-                                        @endphp
-                                        <tr class="data-row {{ $isIndividual ? 'individual-row' : '' }}" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-attempt="{{ $attempt }}" data-schedule-id="{{ $item['schedule_id'] ?? '' }}" data-is-individual="{{ $isIndividual ? '1' : '0' }}" style="{{ $rowBgStyle }}">
+                                        @php $attempt = (int) ($item['attempt'] ?? 1); @endphp
+                                        <tr class="data-row" data-group-id="{{ $item['group']->group_hemis_id }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" data-yn-type="{{ $item['yn_type'] ?? '' }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-attempt="{{ $attempt }}" data-schedule-id="{{ $item['schedule_id'] ?? '' }}">
                                             <td style="text-align:center;">
                                                 <input type="checkbox" class="tc-row-checkbox" data-group-hemis-id="{{ $item['group']->group_hemis_id }}" data-semester-code="{{ $item['subject']->semester_code ?? '' }}" data-subject-id="{{ $item['subject']->subject_id ?? '' }}" onchange="tcUpdateSelection()" style="accent-color:#2b5ea7;width:16px;height:16px;cursor:pointer;">
                                             </td>
                                             <td class="row-num" style="color:#94a3b8;font-weight:500;padding-left:16px;">{{ ++$rowIndex }}</td>
-                                            <td data-sort-value="{{ $isIndividual ? ($item['individual_student']->full_name ?? '') : $item['group']->name }}" style="font-weight:600;color:#0f172a;">
-                                                @if($isIndividual)
-                                                    <div style="display:flex;flex-direction:column;gap:2px;">
-                                                        <span style="display:inline-flex;align-items:center;gap:4px;">
-                                                            <span style="display:inline-block;padding:1px 6px;background:#4f46e5;color:#fff;border-radius:6px;font-size:9px;font-weight:700;letter-spacing:0.3px;">👤 INDIVIDUAL</span>
-                                                            <span style="color:#1e1b4b;">{{ $item['individual_student']->full_name ?? '—' }}</span>
-                                                        </span>
-                                                        <span style="font-size:10px;color:#64748b;font-weight:400;">{{ $item['group']->name }}</span>
-                                                        @if(!empty($item['individual_note']))
-                                                            <span style="font-size:10px;color:#7c3aed;font-style:italic;" title="Sabab">📝 {{ \Illuminate\Support\Str::limit($item['individual_note'], 60) }}</span>
-                                                        @endif
-                                                        @if(!empty($item['override_warning']))
-                                                            <span style="display:inline-block;padding:1px 5px;background:#fef3c7;color:#92400e;border:1px solid #fcd34d;border-radius:6px;font-size:9px;font-weight:600;width:fit-content;" title="Eligibility'ga zid sana">⚠ Override</span>
-                                                        @endif
-                                                    </div>
-                                                @else
-                                                    {{ $item['group']->name }}
-                                                @endif
-                                            </td>
+                                            <td data-sort-value="{{ $item['group']->name }}" style="font-weight:600;color:#0f172a;">{{ $item['group']->name }}</td>
                                             <td data-sort-value="{{ $item['specialty_name'] }}" style="color:#64748b;font-size:12px;">{{ $item['specialty_name'] }}</td>
                                             <td data-sort-value="{{ $item['subject_code'] }}" style="color:#64748b;font-size:12px;">{{ $item['subject_code'] }}</td>
                                             <td data-sort-value="{{ $item['subject']->subject_name }}" style="font-weight:500;color:#1e293b;">{{ $item['subject']->subject_name }}</td>

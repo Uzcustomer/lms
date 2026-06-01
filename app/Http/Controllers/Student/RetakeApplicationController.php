@@ -54,10 +54,10 @@ class RetakeApplicationController extends Controller
             ->limit(50)
             ->get();
 
-        // Limit FAQAT joriy o'quv yili (masalan 5-6 semestr) fanlariga: jami 3 ta.
-        // Eski semestr qarzlariga limit yo'q.
-        $remainingSlots = $this->applicationService->currentYearRemainingSlots($student, $window?->id);
-        $currentYearSemesters = $this->applicationService->currentYearSemesterNumbers($student);
+        // Limit FAQAT joriy semestr (masalan 6-semestr) fanlariga: jami 3 ta.
+        // Boshqa semestr qarzlariga limit yo'q.
+        $remainingSlots = $this->applicationService->currentSemesterRemainingSlots($student, $window?->id);
+        $currentSemester = $this->applicationService->currentSemesterNumber($student);
         $creditPrice = RetakeSetting::creditPrice();
         $receiptMaxMb = RetakeSetting::receiptMaxMb();
 
@@ -79,7 +79,7 @@ class RetakeApplicationController extends Controller
             'activeApplications' => $activeApplications,
             'history' => $history,
             'remainingSlots' => $remainingSlots,
-            'currentYearSemesters' => $currentYearSemesters,
+            'currentSemester' => $currentSemester,
             'creditPrice' => $creditPrice,
             'receiptMaxMb' => $receiptMaxMb,
             'maxSubjectsPerApplication' => RetakeApplicationService::MAX_SUBJECTS_PER_APPLICATION,
@@ -131,8 +131,8 @@ class RetakeApplicationController extends Controller
         $maxMb = RetakeSetting::receiptMaxMb();
 
         $data = $request->validate([
-            // Yuqori chegara yo'q — eski semestr qarzlari uchun limit yo'q.
-            // Joriy o'quv yili fanlari uchun 3 ta limit servisda tekshiriladi.
+            // Yuqori chegara yo'q — boshqa semestr qarzlari uchun limit yo'q.
+            // Joriy semestr fanlari uchun 3 ta limit servisda tekshiriladi.
             'subjects' => 'required|array|min:1',
             'subjects.*.subject_id' => 'required|string',
             'subjects.*.semester_id' => 'required|string',

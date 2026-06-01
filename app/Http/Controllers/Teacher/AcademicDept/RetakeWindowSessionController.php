@@ -130,6 +130,8 @@ class RetakeWindowSessionController extends Controller
         // ochiladi (oynalarning eski tugash sanasi har xil bo'lishi mumkin).
         $windowService = app(\App\Services\Retake\RetakeWindowService::class);
         $supportsReopen = \App\Models\RetakeApplicationWindow::supportsReopen();
+        $newEndC = \Illuminate\Support\Carbon::parse($data['end_date'])->startOfDay();
+        $extendedWindowIds = [];
         $count = 0;
         foreach ($windows as $w) {
             $update = [
@@ -142,15 +144,21 @@ class RetakeWindowSessionController extends Controller
                     $update['application_reopen_until'] = $reopen;
                 }
             }
+            // Bu oyna uzaytirildimi? (yangi tugash sanasi eskisidan keyinmi)
+            $oldEnd = $w->end_date ? \Illuminate\Support\Carbon::parse($w->end_date)->startOfDay() : null;
+            if ($oldEnd === null || $newEndC->gt($oldEnd)) {
+                $extendedWindowIds[] = $w->id;
+            }
             \App\Models\RetakeApplicationWindow::whereKey($w->id)->update($update);
             $count++;
         }
 
-        // Window ostidagi o'qish guruhlarining tugash sanasini ham uzaytiramiz
-        // — guruhda mustaqil ta'lim yuklash va baho qo'yish ham yangi tugash
-        // sanasigacha ochiq turishi uchun (faqat uzaytirish, qisqartirmaydi).
-        if ($windowIds->isNotEmpty()) {
-            $windowService->extendLinkedGroupEndDates($windowIds->all(), $data['end_date']);
+        // Faqat UZAYTIRILGAN window'lar ostidagi o'qish guruhlarining tugash
+        // sanasi uzayadi va qulfi ochiladi — guruhda mustaqil ta'lim yuklash va
+        // baho qo'yish yangi tugash sanasigacha ochiq turishi uchun (yakuniy
+        // qilingan bo'lsa ham). Qisqartirishda guruhlar tegmaydi.
+        if (!empty($extendedWindowIds)) {
+            $windowService->extendLinkedGroupEndDates($extendedWindowIds, $data['end_date']);
         }
 
         // Telegram xabar JAVOBDAN KEYIN — sahifa muzlamasligi uchun.

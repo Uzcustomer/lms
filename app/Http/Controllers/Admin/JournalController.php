@@ -1907,6 +1907,41 @@ class JournalController extends Controller
                     ->where('group_hemis_id', $group->group_hemis_id)
                     ->get()
                     ->keyBy('student_hemis_id');
+
+                // Fallback: agar YN allaqachon yuborilgan lekin SinovTestGrade yozuvi
+                // yo'q bo'lsa (o'qituvchi yangi oqimdan oldin to'g'ridan-to'g'ri
+                // submitToYn qilgan holat) — student_grades sinov_yn_test yozuvidan
+                // yoki joriy JN o'rtachasidan sintetik yozuv yaratamiz. Bu tepa
+                // jurnal "Sinov (test)" ustunining bo'sh ko'rinishini oldini oladi.
+                if (!empty($ynSubmission)) {
+                    $sgRows = DB::table('student_grades')
+                        ->whereNull('deleted_at')
+                        ->where('subject_id', $subjectId)
+                        ->where('semester_code', $semesterCode)
+                        ->where('training_type_code', 102)
+                        ->where('reason', 'sinov_yn_test')
+                        ->whereIn('student_hemis_id', $students->pluck('hemis_id')->all())
+                        ->select('student_hemis_id', 'grade')
+                        ->get()
+                        ->keyBy('student_hemis_id');
+
+                    foreach ($students as $stuRow) {
+                        $h = $stuRow->hemis_id;
+                        if ($sinovOverrides->has($h)) continue;
+                        $fallback = $sgRows->get($h)?->grade ?? ($sinovJnMap[$h] ?? null);
+                        if ($fallback === null) continue;
+                        $synth = new SinovTestGrade();
+                        $synth->subject_id = $subjectId;
+                        $synth->semester_code = $semesterCode;
+                        $synth->group_hemis_id = $group->group_hemis_id;
+                        $synth->student_hemis_id = $h;
+                        $synth->override_grade = (float) $fallback;
+                        $synth->default_grade = (float) ($sinovJnMap[$h] ?? $fallback);
+                        $synth->is_locked = true;
+                        $sinovOverrides->put($h, $synth);
+                    }
+                }
+
                 // $sinovInJournal = qaydnoma yopilgan deb hisoblash uchun is_locked
                 // VA ynSubmission mavjudligi shart. Aks holda (partial failure: lock
                 // bor lekin submitToYn xatolik bilan tugagan) tugma yana paydo bo'lib,

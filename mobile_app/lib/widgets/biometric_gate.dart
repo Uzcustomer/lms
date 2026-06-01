@@ -67,7 +67,7 @@ class _BiometricGateState extends State<BiometricGate>
     if (_authing) return;
     _authing = true;
     final ok = await _bio.authenticate(
-      reason: 'Ilovaga kirish uchun barmoq izi yoki Face ID',
+      reason: 'Ilovaga kirish uchun qurilma himoyasini tasdiqlang',
     );
     _authing = false;
     if (ok && mounted) setState(() => _locked = false);
@@ -80,7 +80,7 @@ class _BiometricGateState extends State<BiometricGate>
       builder: (ctx) => AlertDialog(
         title: const Text('Tezkor kirish'),
         content: const Text(
-            'Keyingi safar ilovaga barmoq izi yoki Face ID bilan kirishni xohlaysizmi?'),
+            'Keyingi safar ilovaga barmoq izi, Face ID yoki qurilma paroli bilan kirishni xohlaysizmi?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
@@ -95,7 +95,7 @@ class _BiometricGateState extends State<BiometricGate>
     );
     if (yes == true) {
       final ok = await _bio.authenticate(
-        reason: 'Tasdiqlash uchun barmoq izi yoki Face ID',
+        reason: 'Tasdiqlash uchun qurilma himoyasini tekshiring',
       );
       if (ok) {
         await _bio.setEnabled(true);
@@ -158,7 +158,7 @@ class _LockScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Davom etish uchun barmoq izi yoki\nFace ID bilan tasdiqlang',
+                  'Davom etish uchun barmoq izi, Face ID\nyoki qurilma paroli bilan tasdiqlang',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.85),

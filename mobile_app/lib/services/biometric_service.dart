@@ -8,11 +8,26 @@ class BiometricService {
   static const String _enabledKey = 'biometric_enabled';
   final LocalAuthentication _auth = LocalAuthentication();
 
+  /// True if the device has *any* lock screen — biometric, PIN, pattern,
+  /// or password. We accept the device PIN as a fallback for users whose
+  /// fingerprint/Face ID isn't recognising them.
   Future<bool> isAvailable() async {
     if (kIsWeb) return false;
     try {
-      final supported = await _auth.isDeviceSupported();
-      if (!supported) return false;
+      // isDeviceSupported() is true whenever the OS lock screen is set up
+      // (PIN/pattern/password OR biometrics). canCheckBiometrics narrows it
+      // to biometric sensors only — we don't require it.
+      return await _auth.isDeviceSupported();
+    } on PlatformException {
+      return false;
+    }
+  }
+
+  /// True only when there is at least one enrolled biometric — used for the
+  /// settings tile that asks "Yoqamizmi?"
+  Future<bool> hasBiometric() async {
+    if (kIsWeb) return false;
+    try {
       final canCheck = await _auth.canCheckBiometrics;
       if (!canCheck) return false;
       final list = await _auth.getAvailableBiometrics();
@@ -33,15 +48,18 @@ class BiometricService {
     }
   }
 
+  /// Prompt the user for their biometric. If the sensor fails, isn't
+  /// enrolled, or doesn't recognise them, the OS automatically falls back
+  /// to the device PIN / pattern / password.
   Future<bool> authenticate({
-    String reason = 'Tizimga kirish uchun yuzingizni tasdiqlang',
+    String reason = 'Tizimga kirish uchun qurilma himoyasini tasdiqlang',
   }) async {
     if (kIsWeb) return false;
     try {
       return await _auth.authenticate(
         localizedReason: reason,
         options: const AuthenticationOptions(
-          biometricOnly: true,
+          biometricOnly: false,
           stickyAuth: true,
           useErrorDialogs: true,
         ),

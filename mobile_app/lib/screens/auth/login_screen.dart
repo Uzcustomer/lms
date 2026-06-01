@@ -67,7 +67,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     _bioBusy = true;
     final ok = await _bio.authenticate(
-      reason: 'Ilovaga kirish uchun barmoq izi yoki Face ID',
+      reason: 'Ilovaga kirish uchun qurilma himoyasini tasdiqlang',
     );
     _bioBusy = false;
     if (!ok || !mounted) return;
@@ -132,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!_isStudent) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Face ID faqat talabalar uchun')),
+        const SnackBar(content: Text('Tezkor kirish faqat talabalar uchun')),
       );
       return;
     }
@@ -571,7 +571,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(width: 10),
             const Text(
-              'Face ID orqali kirish',
+              'Tezkor kirish',
               style: TextStyle(
                 color: _ink,
                 fontSize: 13.5,

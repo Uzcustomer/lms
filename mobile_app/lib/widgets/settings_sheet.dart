@@ -230,7 +230,7 @@ class _BiometricTileState extends State<_BiometricTile> {
     setState(() => _busy = true);
     if (value) {
       final ok = await _bio.authenticate(
-        reason: 'Tasdiqlash uchun barmoq izi yoki Face ID',
+        reason: 'Tasdiqlash uchun qurilma himoyasini tekshiring',
       );
       if (ok) {
         await _bio.setEnabled(true);
@@ -275,13 +275,13 @@ class _BiometricTileState extends State<_BiometricTile> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Barmoq izi / Face ID',
+                      'Tezkor kirish',
                       style: TextStyle(
                           fontSize: 13.5, fontWeight: FontWeight.w600),
                     ),
                     SizedBox(height: 1),
                     Text(
-                      'Ilovaga tez va xavfsiz kirish',
+                      'Barmoq izi, Face ID yoki qurilma paroli',
                       style: TextStyle(fontSize: 11.5, color: Colors.grey),
                     ),
                   ],

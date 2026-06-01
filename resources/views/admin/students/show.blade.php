@@ -387,7 +387,9 @@
                                         <button type="button" class="qstep-btn" onclick="goStep(2)"><span class="qstep-num">3</span><span class="qstep-label">Ta'lim</span></button>
                                         <button type="button" class="qstep-btn" onclick="goStep(3)"><span class="qstep-num">4</span><span class="qstep-label">Sertifikatlar</span></button>
                                         <button type="button" class="qstep-btn" onclick="goStep(4)"><span class="qstep-num">5</span><span class="qstep-label">Ota-ona</span></button>
-                                        <button type="button" class="qstep-btn" onclick="goStep(5)"><span class="qstep-num">6</span><span class="qstep-label">Yakun</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(5)"><span class="qstep-num">6</span><span class="qstep-label">Imtiyozlar</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(6)"><span class="qstep-num">7</span><span class="qstep-label">Qobiliyat</span></button>
+                                        <button type="button" class="qstep-btn" onclick="goStep(7)"><span class="qstep-num">8</span><span class="qstep-label">Yakun</span></button>
                                     </div>
 
                                     {{-- Step content panels --}}
@@ -456,9 +458,17 @@
                                                 </div>
                                                 <div id="qabul_otm_nomi_wrap" style="{{ old('oliy_malumot', $admissionData?->oliy_malumot) === 'Ha' ? '' : 'display:none;' }}">
                                                     <label class="qabul-label">Avval tugatgan OTM nomi</label>
-                                                    <input type="text" name="otm_nomi"
-                                                           value="{{ old('otm_nomi', $admissionData?->otm_nomi ?? '') }}"
+                                                    <input type="text" name="prev_otm_nomi"
+                                                           value="{{ old('prev_otm_nomi', $admissionData?->prev_otm_nomi ?? '') }}"
                                                            class="qabul-input" placeholder="OTM nomini kiriting">
+                                                </div>
+                                            </div>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                                <div>
+                                                    <label class="qabul-label">Boshqa millat (agar yuqorida ko'rsatilmagan bo'lsa)</label>
+                                                    <input type="text" name="millat_other"
+                                                           value="{{ old('millat_other', $admissionData?->millat_other ?? '') }}"
+                                                           class="qabul-input" placeholder="Millatni kiriting">
                                                 </div>
                                             </div>
                                         </div>
@@ -607,6 +617,20 @@
                                                        value="{{ old('vaqtinchalik_manzil', $admissionData?->vaqtinchalik_manzil ?? '') }}"
                                                        class="qabul-input" placeholder="Masalan: Termiz sh., Talabalar turar joyi, 3-bino, 215-xona">
                                             </div>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-slate-100">
+                                                <div>
+                                                    <label class="qabul-label">Kenglik (latitude)</label>
+                                                    <input type="text" name="kenglik"
+                                                           value="{{ old('kenglik', $admissionData?->kenglik ?? '') }}"
+                                                           class="qabul-input" placeholder="37.220000">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Uzunlik (longitude)</label>
+                                                    <input type="text" name="uzunlik"
+                                                           value="{{ old('uzunlik', $admissionData?->uzunlik ?? '') }}"
+                                                           class="qabul-input" placeholder="67.283462">
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -661,6 +685,15 @@
                                                     <label class="qabul-label">Ta'lim muassasasi nomi</label>
                                                     <input type="text" name="muassasa_nomi" value="{{ old('muassasa_nomi', $admissionData?->muassasa_nomi ?? '') }}"
                                                            class="qabul-input" placeholder="Muassasa nomini kiriting">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Muassasa turi</label>
+                                                    <select name="muassasa_turi" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(["O'rta maktab","Akademik litsey","Kasb-hunar kolleji","Texnikum","Boshqa"] as $mt)
+                                                        <option value="{{ $mt }}" {{ old('muassasa_turi', $admissionData?->muassasa_turi) === $mt ? 'selected' : '' }}>{{ $mt }}</option>
+                                                        @endforeach
+                                                    </select>
                                                 </div>
                                                 <div>
                                                     <label class="qabul-label">O'qigan yillari (boshi)</label>
@@ -918,6 +951,26 @@
                                                     </div>
                                                 </div>
                                             </div>
+                                            {{-- Chet tillari (massiv) --}}
+                                            @php $chetTillariSelected = old('chet_tillari', is_array($admissionData?->chet_tillari) ? $admissionData->chet_tillari : []); @endphp
+                                            <div class="mt-3 pt-3 border-t border-slate-100">
+                                                <label class="qabul-label">Biladigan chet tillari</label>
+                                                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                                    @foreach(['Ingliz','Rus','Nemis','Fransuz','Koreys','Yapon','Arab','Turk','Xitoy'] as $ct)
+                                                    <label class="flex items-center gap-2 text-sm">
+                                                        <input type="checkbox" name="chet_tillari[]" value="{{ $ct }}"
+                                                               {{ in_array($ct, $chetTillariSelected) ? 'checked' : '' }}>
+                                                        <span>{{ $ct }}</span>
+                                                    </label>
+                                                    @endforeach
+                                                </div>
+                                                <div class="mt-2">
+                                                    <label class="qabul-label">Boshqa til</label>
+                                                    <input type="text" name="chet_til_boshqa"
+                                                           value="{{ old('chet_til_boshqa', $admissionData?->chet_til_boshqa ?? '') }}"
+                                                           class="qabul-input" placeholder="Boshqa biladigan tilingiz">
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -996,8 +1049,182 @@
                                     <div class="flex justify-between mt-3"><button type="button" class="qstep-prev-btn" onclick="goStep(3)">&larr; Oldingi</button><button type="button" class="qstep-next-btn" onclick="goStep(5)">Keyingisi &rarr;</button></div>
                                     </div>{{-- /STEP 5 --}}
 
-                                    {{-- STEP 6: Yakun --}}
+                                    {{-- STEP 6: Imtiyozlar va mukofotlar (YANGI) --}}
                                     <div class="qstep-panel" data-step="5" style="display:none;">
+                                    @php
+                                        $imtiyozGroups = [
+                                            'd_kiritilgan' => ['label' => 'Davlatga kiritilganmi?', 'desc' => 'd_kiritilgan_turi', 'desc_label' => 'Turi'],
+                                            'd_oila_azosi' => ['label' => 'Davlatga kiritilgan oila a\'zosi bormi?', 'desc' => 'd_oila_turi', 'desc_label' => 'Oila turi'],
+                                            'kam_taminlangan' => ['label' => 'Kam ta\'minlangan oiladan?'],
+                                            'harbiy_qaytgan' => ['label' => 'Harbiy xizmatdan qaytganmi?'],
+                                            'nafaqa_oluvchi' => ['label' => 'Nafaqa oluvchi oiladan?'],
+                                            'yetim_talaba' => ['label' => 'Yetim talabami?', 'desc' => 'yetim_turi', 'desc_label' => 'Yetim turi'],
+                                            'davlat_mukofoti' => ['label' => 'Davlat mukofotiga ega?', 'desc' => 'davlat_mukofoti_desc', 'desc_label' => 'Mukofot tavsifi'],
+                                            'kokrak_nishoni' => ['label' => 'Ko\'krak nishoni bormi?', 'desc' => 'kokrak_nishoni_desc', 'desc_label' => 'Nishon tavsifi'],
+                                            'prezident_stip' => ['label' => 'Prezident stipendiyasi olganmi?', 'desc' => 'prezident_stip_desc', 'desc_label' => 'Tavsif'],
+                                            'davlat_stip' => ['label' => 'Davlat stipendiyasi olganmi?', 'desc' => 'davlat_stip_desc', 'desc_label' => 'Tavsif'],
+                                            'xalqaro_stip' => ['label' => 'Xalqaro stipendiya olganmi?', 'desc' => 'xalqaro_stip_desc', 'desc_label' => 'Tavsif'],
+                                            'resp_sport' => ['label' => 'Respublika sport yutuqlari bormi?', 'desc' => 'resp_sport_desc', 'desc_label' => 'Yutuq tavsifi'],
+                                            'xal_sport' => ['label' => 'Xalqaro sport yutuqlari bormi?', 'desc' => 'xal_sport_desc', 'desc_label' => 'Yutuq tavsifi'],
+                                            'resp_fan_olimp' => ['label' => 'Respublika fan olimpiadasida qatnashganmi?', 'desc' => 'resp_fan_olimp_desc', 'desc_label' => 'Tavsif'],
+                                            'xal_fan_olimp' => ['label' => 'Xalqaro fan olimpiadasida qatnashganmi?', 'desc' => 'xal_fan_olimp_desc', 'desc_label' => 'Tavsif'],
+                                            'boshqa_yutuq' => ['label' => 'Boshqa yutuqlari bormi?', 'desc' => 'boshqa_yutuq_desc', 'desc_label' => 'Yutuq tavsifi'],
+                                        ];
+                                    @endphp
+
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#f59e0b;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Imtiyozlar va mukofotlar</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                                                @foreach($imtiyozGroups as $key => $cfg)
+                                                @php $val = old($key, $admissionData?->{$key} ?? '0'); @endphp
+                                                <details class="rounded-lg border border-slate-200 bg-slate-50/40 p-3" {{ $val === '1' ? 'open' : '' }}>
+                                                    <summary class="cursor-pointer text-sm font-semibold text-slate-700 flex items-center justify-between gap-2">
+                                                        <span>{{ $cfg['label'] }}</span>
+                                                        <span class="text-[10px] px-2 py-0.5 rounded {{ $val === '1' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">{{ $val === '1' ? 'Ha' : "Yo'q" }}</span>
+                                                    </summary>
+                                                    <div class="mt-3 space-y-2">
+                                                        <div>
+                                                            <label class="qabul-label">Holati</label>
+                                                            <select name="{{ $key }}" class="qabul-input">
+                                                                <option value="0" {{ $val !== '1' ? 'selected' : '' }}>Yo'q</option>
+                                                                <option value="1" {{ $val === '1' ? 'selected' : '' }}>Ha</option>
+                                                            </select>
+                                                        </div>
+                                                        @if(!empty($cfg['desc']))
+                                                        <div>
+                                                            <label class="qabul-label">{{ $cfg['desc_label'] }}</label>
+                                                            @if(in_array($cfg['desc'], ['davlat_mukofoti_desc','kokrak_nishoni_desc','prezident_stip_desc','davlat_stip_desc','xalqaro_stip_desc','resp_sport_desc','xal_sport_desc','resp_fan_olimp_desc','xal_fan_olimp_desc','boshqa_yutuq_desc']))
+                                                            <textarea name="{{ $cfg['desc'] }}" rows="2" class="qabul-input" placeholder="Batafsil tavsif kiriting">{{ old($cfg['desc'], $admissionData?->{$cfg['desc']} ?? '') }}</textarea>
+                                                            @else
+                                                            <input type="text" name="{{ $cfg['desc'] }}"
+                                                                   value="{{ old($cfg['desc'], $admissionData?->{$cfg['desc']} ?? '') }}"
+                                                                   class="qabul-input" placeholder="Tavsif">
+                                                            @endif
+                                                        </div>
+                                                        @endif
+                                                    </div>
+                                                </details>
+                                                @endforeach
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {{-- Nogironlik card alohida (3-4 ta field bilan) --}}
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#dc2626;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Nogironlik ma'lumotlari</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                                                <div>
+                                                    <label class="qabul-label">Nogironligi bormi?</label>
+                                                    <select name="nogironligi" class="qabul-input">
+                                                        <option value="0" {{ old('nogironligi', $admissionData?->nogironligi) !== '1' ? 'selected' : '' }}>Yo'q</option>
+                                                        <option value="1" {{ old('nogironligi', $admissionData?->nogironligi) === '1' ? 'selected' : '' }}>Ha</option>
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Nogironlik guruhi</label>
+                                                    <select name="nogiron_guruh" class="qabul-input">
+                                                        <option value="">Tanlang...</option>
+                                                        @foreach(['I','II','III'] as $ng)
+                                                        <option value="{{ $ng }}" {{ old('nogiron_guruh', $admissionData?->nogiron_guruh) === $ng ? 'selected' : '' }}>{{ $ng }} guruh</option>
+                                                        @endforeach
+                                                    </select>
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Nogironlik toifasi</label>
+                                                    <input type="text" name="nogiron_toifa"
+                                                           value="{{ old('nogiron_toifa', $admissionData?->nogiron_toifa ?? '') }}"
+                                                           class="qabul-input" placeholder="Toifani kiriting">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Boshqa toifa</label>
+                                                    <input type="text" name="nogiron_toifa_boshqa"
+                                                           value="{{ old('nogiron_toifa_boshqa', $admissionData?->nogiron_toifa_boshqa ?? '') }}"
+                                                           class="qabul-input" placeholder="Agar boshqa bo'lsa">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex justify-between mt-3"><button type="button" class="qstep-prev-btn" onclick="goStep(4)">&larr; Oldingi</button><button type="button" class="qstep-next-btn" onclick="goStep(6)">Keyingisi &rarr;</button></div>
+                                    </div>{{-- /STEP 6 (Imtiyozlar) --}}
+
+                                    {{-- STEP 7: Qobiliyat va qiziqish (YANGI) --}}
+                                    <div class="qstep-panel" data-step="6" style="display:none;">
+                                    @php
+                                        $iqtidoriSelected = old('iqtidori', is_array($admissionData?->iqtidori) ? $admissionData->iqtidori : []);
+                                        $sportSelected = old('sport_qobiliyat', is_array($admissionData?->sport_qobiliyat) ? $admissionData->sport_qobiliyat : []);
+                                    @endphp
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#a855f7;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Iqtidor va qobiliyatlar</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <label class="qabul-label">Iqtidor turlari</label>
+                                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                                                @foreach(['Jamoada ishlash','Ijodkorlik','Tashabbuskorlik','Yetakchilik','Tahliliy fikrlash','Notiqlik','Tashkilotchilik','Tanqidiy fikrlash'] as $iq)
+                                                <label class="flex items-center gap-2 text-sm">
+                                                    <input type="checkbox" name="iqtidori[]" value="{{ $iq }}"
+                                                           {{ in_array($iq, $iqtidoriSelected) ? 'checked' : '' }}>
+                                                    <span>{{ $iq }}</span>
+                                                </label>
+                                                @endforeach
+                                            </div>
+                                            <div class="mt-3">
+                                                <label class="qabul-label">Boshqa iqtidor</label>
+                                                <input type="text" name="iqtidori_boshqa"
+                                                       value="{{ old('iqtidori_boshqa', $admissionData?->iqtidori_boshqa ?? '') }}"
+                                                       class="qabul-input" placeholder="Boshqa iqtidoringizni kiriting">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="qabul-card">
+                                        <div class="qabul-card-header" style="--accent:#0ea5e9;">
+                                            <span class="qabul-dot"></span>
+                                            <h5 class="qabul-card-title">Sport qobiliyati</h5>
+                                        </div>
+                                        <div class="qabul-card-body">
+                                            <label class="qabul-label">Sport turlari</label>
+                                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+                                                @foreach(['Voleybol','Futbol','Basketbol','Tennis','Suzish','Yengil atletika','Kurash','Boks','Shaxmat','Stol tennisi','Karate','Taekvondo'] as $sp)
+                                                <label class="flex items-center gap-2 text-sm">
+                                                    <input type="checkbox" name="sport_qobiliyat[]" value="{{ $sp }}"
+                                                           {{ in_array($sp, $sportSelected) ? 'checked' : '' }}>
+                                                    <span>{{ $sp }}</span>
+                                                </label>
+                                                @endforeach
+                                            </div>
+                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                                                <div>
+                                                    <label class="qabul-label">Boshqa sport turi</label>
+                                                    <input type="text" name="sport_qobiliyat_boshqa"
+                                                           value="{{ old('sport_qobiliyat_boshqa', $admissionData?->sport_qobiliyat_boshqa ?? '') }}"
+                                                           class="qabul-input" placeholder="Boshqa sport turi">
+                                                </div>
+                                                <div>
+                                                    <label class="qabul-label">Sport haqida qo'shimcha</label>
+                                                    <input type="text" name="sport_boshqa"
+                                                           value="{{ old('sport_boshqa', $admissionData?->sport_boshqa ?? '') }}"
+                                                           class="qabul-input" placeholder="Qo'shimcha ma'lumot">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="flex justify-between mt-3"><button type="button" class="qstep-prev-btn" onclick="goStep(5)">&larr; Oldingi</button><button type="button" class="qstep-next-btn" onclick="goStep(7)">Keyingisi &rarr;</button></div>
+                                    </div>{{-- /STEP 7 (Qobiliyat) --}}
+
+                                    {{-- STEP 8: Yakun --}}
+                                    <div class="qstep-panel" data-step="7" style="display:none;">
 
                                     {{-- Boshqa hujjatlar --}}
                                     @php $obyektivkaFile = $studentFiles->firstWhere('name', 'Obyektivka'); @endphp
@@ -1024,7 +1251,7 @@
                                     </div>
 
                                     <div class="flex justify-between mt-3">
-                                        <button type="button" class="qstep-prev-btn" onclick="goStep(4)">&larr; Oldingi</button>
+                                        <button type="button" class="qstep-prev-btn" onclick="goStep(6)">&larr; Oldingi</button>
                                         <div class="flex items-center gap-3">
                                             <button type="submit" style="background:#059669;" class="inline-flex items-center gap-2 px-6 py-2.5 text-white text-sm font-bold rounded-lg hover:opacity-90 transition-opacity shadow-md">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/></svg>
@@ -1035,7 +1262,7 @@
                                             @endif
                                         </div>
                                     </div>
-                                    </div>{{-- /STEP 6 --}}
+                                    </div>{{-- /STEP 8 (Yakun) --}}
 
                                     </div>{{-- /flex-1 step content --}}
                                 </div>{{-- /flex gap-5 container --}}
@@ -1167,42 +1394,8 @@
 
     // Vertical stepper
     var currentStep = 0;
-    var totalSteps = 6;
+    var totalSteps = 8;
     function goStep(n, skipValidation) {
-        if (n > currentStep && !skipValidation) {
-            var panel = document.querySelector('.qstep-panel[data-step="'+currentStep+'"]');
-            if (panel) {
-                var hasError = false;
-                panel.querySelectorAll('.qabul-error').forEach(function(el) { el.classList.remove('qabul-error'); });
-                panel.querySelectorAll('.qabul-error-msg').forEach(function(el) { el.remove(); });
-                panel.querySelectorAll('input.qabul-input, select.qabul-input, input[type="file"][name^="files["]').forEach(function(el) {
-                    if (el.disabled || el.readOnly) return;
-                    if (el.closest('[style*="display:none"]') || el.closest('[style*="display: none"]')) return;
-                    if (el.type === 'file') {
-                        if (!el.files || !el.files.length) {
-                            el.classList.add('qabul-error');
-                            var msg = document.createElement('p'); msg.className = 'qabul-error-msg'; msg.textContent = 'Fayl yuklash majburiy';
-                            el.parentNode.appendChild(msg); hasError = true;
-                        }
-                        return;
-                    }
-                    var val = (el.value || '').trim();
-                    if (!val || (el.tagName === 'SELECT' && (val === '' || val === 'Tanlang...'))) {
-                        el.classList.add('qabul-error');
-                        var msg = document.createElement('p');
-                        msg.className = 'qabul-error-msg';
-                        msg.textContent = 'Bu maydon majburiy';
-                        el.parentNode.appendChild(msg);
-                        hasError = true;
-                    }
-                });
-                if (hasError) {
-                    var firstErr = panel.querySelector('.qabul-error');
-                    if (firstErr) { firstErr.scrollIntoView({behavior:'smooth',block:'center'}); firstErr.focus(); }
-                    return;
-                }
-            }
-        }
         currentStep = n;
         document.querySelectorAll('.qstep-panel').forEach(function(p) { p.style.display = 'none'; });
         var target = document.querySelector('.qstep-panel[data-step="'+n+'"]');

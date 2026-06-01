@@ -2163,6 +2163,19 @@ class AcademicScheduleController extends Controller
             })->values();
         }
 
+        // Individual (per-student) exam_schedules yozuvlarini qo'shish.
+        // YN kunini belgilash tabidagi standart guruh yozuvlari yuqorida tuzildi
+        // (student_hemis_id IS NULL). Bu yerda esa Individual imtihon sanasi
+        // tabida belgilangan talabaning shaxsiy yozuvlari (student_hemis_id NOT NULL)
+        // sana oralig'iga mos kelganlari alohida rowlar sifatida qo'shiladi.
+        $individualItems = $this->buildIndividualScheduleItems(
+            $dateFrom, $dateTo, $urinishFilter,
+            $selectedGroup, $selectedSubject, $semesterCodes
+        );
+        foreach ($individualItems as $indItem) {
+            $transformedData->push($indItem);
+        }
+
         $scheduleData = $transformedData->groupBy(fn($item) => $item['group']->group_hemis_id);
 
         return [
@@ -2172,6 +2185,124 @@ class AcademicScheduleController extends Controller
             'showStudents' => $showStudents,
             'compFilter' => $compFilter,
         ];
+    }
+
+    /**
+     * Sana oralig'idagi individual imtihon yozuvlarini test-center jadvalidagi
+     * itemga aylantirish. Har bir yozuv N ta urinish × YN turi qatori beradi.
+     * Natija — `is_individual_student=true` belgisi bilan, ko'rinishda alohida
+     * fon va talaba ismi bilan render qilinadi.
+     *
+     * @return \Illuminate\Support\Collection
+     */
+    private function buildIndividualScheduleItems(
+        $dateFrom, $dateTo, $urinishFilter,
+        $selectedGroup, $selectedSubject, $semesterCodes
+    ) {
+        $items = collect();
+
+        $query = ExamSchedule::whereNotNull('student_hemis_id');
+        if ($selectedGroup) {
+            $query->where('group_hemis_id', $selectedGroup);
+        }
+        if ($selectedSubject) {
+            $query->where('subject_id', $selectedSubject);
+        }
+        if ($semesterCodes && $semesterCodes->isNotEmpty()) {
+            $query->whereIn('semester_code', $semesterCodes->all());
+        }
+        $dateCols = ['oski_date', 'test_date', 'oski_resit_date', 'test_resit_date',
+                     'oski_resit2_date', 'test_resit2_date'];
+        $query->where(function ($outer) use ($dateCols, $dateFrom, $dateTo) {
+            foreach ($dateCols as $col) {
+                $outer->orWhere(function ($qq) use ($col, $dateFrom, $dateTo) {
+                    $qq->whereNotNull($col);
+                    if ($dateFrom) $qq->where($col, '>=', $dateFrom);
+                    if ($dateTo) $qq->where($col, '<=', $dateTo);
+                });
+            }
+        });
+        $individualRows = $query->get();
+        if ($individualRows->isEmpty()) {
+            return $items;
+        }
+
+        // Tegishli talabalarni yuklash
+        $hemisIds = $individualRows->pluck('student_hemis_id')->unique()->values()->all();
+        $students = Student::whereIn('hemis_id', $hemisIds)->get()->keyBy('hemis_id');
+
+        // Tegishli guruhlarni yuklash
+        $groupHids = $individualRows->pluck('group_hemis_id')->unique()->values()->all();
+        $groups = Group::whereIn('group_hemis_id', $groupHids)->get()->keyBy('group_hemis_id');
+
+        // Tegishli fanlarni yuklash (CurriculumSubject)
+        $subjectIds = $individualRows->pluck('subject_id')->unique()->values()->all();
+        $semCodes = $individualRows->pluck('semester_code')->unique()->values()->all();
+        $subjects = CurriculumSubject::whereIn('subject_id', $subjectIds)
+            ->whereIn('semester_code', $semCodes)
+            ->get()
+            ->keyBy(fn($s) => $s->subject_id . '|' . $s->semester_code);
+
+        // Semester level/name xaritasi
+        $semesterRows = Semester::whereIn('code', $semCodes)->get();
+        $semesterByCode = $semesterRows->keyBy('code');
+
+        foreach ($individualRows as $row) {
+            $student = $students->get($row->student_hemis_id);
+            $group = $groups->get($row->group_hemis_id);
+            $subject = $subjects->get($row->subject_id . '|' . $row->semester_code);
+            $sem = $semesterByCode->get($row->semester_code);
+            if (!$student || !$group || !$subject) {
+                continue;
+            }
+
+            $attemptDefs = [
+                ['yn_type' => 'OSKI', 'attempt' => 1, 'date' => $row->oski_date,        'time' => $row->oski_time],
+                ['yn_type' => 'OSKI', 'attempt' => 2, 'date' => $row->oski_resit_date,  'time' => $row->oski_resit_time],
+                ['yn_type' => 'OSKI', 'attempt' => 3, 'date' => $row->oski_resit2_date, 'time' => $row->oski_resit2_time],
+                ['yn_type' => 'Test', 'attempt' => 1, 'date' => $row->test_date,        'time' => $row->test_time],
+                ['yn_type' => 'Test', 'attempt' => 2, 'date' => $row->test_resit_date,  'time' => $row->test_resit_time],
+                ['yn_type' => 'Test', 'attempt' => 3, 'date' => $row->test_resit2_date, 'time' => $row->test_resit2_time],
+            ];
+
+            foreach ($attemptDefs as $def) {
+                if ($urinishFilter !== null && $urinishFilter !== '' && (int) $urinishFilter !== $def['attempt']) {
+                    continue;
+                }
+                $d = $def['date'] ? \Carbon\Carbon::parse($def['date'])->format('Y-m-d') : null;
+                $inRange = $d && (!$dateFrom || $d >= $dateFrom) && (!$dateTo || $d <= $dateTo);
+                if (!$inRange) {
+                    continue;
+                }
+
+                $items->push([
+                    'is_individual_student' => true,
+                    'individual_student'    => $student,
+                    'group'                 => $group,
+                    'subject'               => $subject,
+                    'specialty_name'        => $group->specialty_name ?? '',
+                    'subject_code'          => $subject->subject_id ?? '',
+                    'level_name'            => $sem?->level_name ?? '',
+                    'semester_name'         => $subject->semester_name ?? ($sem?->name ?? ''),
+                    'education_form_name'   => '',
+                    'schedule_id'           => $row->id,
+                    'yn_type'               => $def['yn_type'],
+                    'attempt'               => $def['attempt'],
+                    'yn_date'               => $d,
+                    'yn_date_carbon'        => $def['date'] ? \Carbon\Carbon::parse($def['date']) : null,
+                    'yn_na'                 => false,
+                    'test_time'             => $def['time'],
+                    'moodle_status'         => 'na',
+                    'student_count'         => 1,
+                    'quiz_count'            => 0,
+                    'yn_submitted'          => false,
+                    'individual_note'       => $row->individual_note ?? null,
+                    'override_warning'      => (bool) ($row->override_warning ?? false),
+                ]);
+            }
+        }
+
+        return $items;
     }
 
     /**

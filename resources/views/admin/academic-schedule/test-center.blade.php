@@ -440,7 +440,7 @@
                                                 @if($isIndividual)
                                                     <div style="display:flex;flex-direction:column;gap:2px;">
                                                         <span style="display:inline-flex;align-items:center;gap:4px;">
-                                                            <span style="display:inline-block;padding:1px 6px;background:#4f46e5;color:#fff;border-radius:6px;font-size:9px;font-weight:700;letter-spacing:0.3px;">👤 INDIVIDUAL</span>
+                                                            <span style="display:inline-block;padding:1px 6px;background:#4f46e5;color:#fff;border-radius:6px;font-size:9px;font-weight:700;letter-spacing:0.3px;">INDIVIDUAL</span>
                                                             <span style="color:#1e1b4b;">{{ $item['individual_student']->full_name ?? '—' }}</span>
                                                         </span>
                                                         <span style="font-size:10px;color:#64748b;font-weight:400;">{{ $item['group']->name }}</span>

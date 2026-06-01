@@ -6,6 +6,7 @@ import '../../services/gemini_service.dart';
 import '../../services/student_context_builder.dart';
 import '../../services/student_data_cache.dart';
 import '../../widgets/clinic_header.dart';
+import '../../widgets/notification_bell.dart';
 
 class AiChatScreen extends StatefulWidget {
   const AiChatScreen({super.key});
@@ -507,6 +508,8 @@ class _AiChatScreenState extends State<AiChatScreen>
               ],
             ),
           ),
+          const SizedBox(width: 8),
+          const NotificationBell(),
           const SizedBox(width: 8),
           ClinicIconButton(
             icon: Icons.refresh_rounded,

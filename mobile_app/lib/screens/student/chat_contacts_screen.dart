@@ -4,6 +4,7 @@ import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../utils/page_transitions.dart';
 import '../../widgets/clinic_header.dart';
+import '../../widgets/notification_bell.dart';
 import 'chat_conversation_screen.dart';
 import 'chat_group_screen.dart';
 
@@ -61,6 +62,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
             overline: 'FOYDALI',
             title: 'Xabarlar',
             onBack: () => Navigator.pop(context),
+            actions: const [NotificationBell()],
           ),
           Container(
             decoration: BoxDecoration(

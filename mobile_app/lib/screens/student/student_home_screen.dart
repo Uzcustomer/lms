@@ -7,6 +7,9 @@ import 'student_schedule_screen.dart';
 import 'student_profile_screen.dart';
 import 'student_useful_screen.dart';
 
+/// Tab shell with a fixed bottom nav and a separate [Navigator] per tab.
+/// Sub-pages pushed from a tab stay inside that tab, so the nav bar is
+/// visible across the whole student app.
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
 
@@ -37,22 +40,60 @@ class StudentHomeScreen extends StatefulWidget {
 
 class _StudentHomeScreenState extends State<StudentHomeScreen> {
   int _currentIndex = 2;
-  int _previousIndex = 2;
 
-  final _screens = const [
-    StudentGradesScreen(),
-    StudentScheduleScreen(),
-    StudentDashboardScreen(),
-    StudentUsefulScreen(),
-    StudentProfileScreen(),
-  ];
+  static const _tabCount = 5;
+  final List<GlobalKey<NavigatorState>> _navKeys =
+      List.generate(_tabCount, (_) => GlobalKey<NavigatorState>());
+
+  Widget _rootForTab(int i) {
+    switch (i) {
+      case 0:
+        return const StudentGradesScreen();
+      case 1:
+        return const StudentScheduleScreen();
+      case 2:
+        return const StudentDashboardScreen();
+      case 3:
+        return const StudentUsefulScreen();
+      case 4:
+        return const StudentProfileScreen();
+      default:
+        return const StudentDashboardScreen();
+    }
+  }
 
   void _onTabTapped(int index) {
-    if (index == _currentIndex) return;
-    setState(() {
-      _previousIndex = _currentIndex;
-      _currentIndex = index;
-    });
+    if (index == _currentIndex) {
+      // Re-tapping the active tab pops back to its root.
+      _navKeys[index].currentState?.popUntil((r) => r.isFirst);
+      return;
+    }
+    setState(() => _currentIndex = index);
+  }
+
+  Future<bool> _onWillPop() async {
+    final nav = _navKeys[_currentIndex].currentState;
+    if (nav != null && nav.canPop()) {
+      nav.pop();
+      return false;
+    }
+    // If we're on the root of a non-home tab, jump back to the home tab
+    // before letting the OS leave the app — feels more natural.
+    if (_currentIndex != 2) {
+      setState(() => _currentIndex = 2);
+      return false;
+    }
+    return true;
+  }
+
+  Widget _buildTabNavigator(int index) {
+    return Navigator(
+      key: _navKeys[index],
+      onGenerateRoute: (settings) => MaterialPageRoute(
+        settings: settings,
+        builder: (_) => _rootForTab(index),
+      ),
+    );
   }
 
   @override
@@ -67,64 +108,47 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       _NavItem(Icons.person_outline, Icons.person, l.profile),
     ];
 
-    final goingRight = _currentIndex > _previousIndex;
-    final slideBegin = Offset(goingRight ? 0.08 : -0.08, 0);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final navBg = isDark ? AppTheme.darkCard : Colors.white;
     final navBorder = isDark ? Colors.white12 : const Color(0xFFE2E8F0);
 
-    return Scaffold(
-      extendBody: true,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 380),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: slideBegin,
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
-            ),
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey<int>(_currentIndex),
-          child: _screens[_currentIndex],
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        body: IndexedStack(
+          index: _currentIndex,
+          children: List.generate(_tabCount, _buildTabNavigator),
         ),
-      ),
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          color: navBg,
-          border: Border(top: BorderSide(color: navBorder, width: 1)),
-          boxShadow: [
-            BoxShadow(
-              color: const Color(0xFF0F172A).withOpacity(0.06),
-              blurRadius: 8,
-              offset: const Offset(0, -2),
-            ),
-          ],
-        ),
-        child: SafeArea(
-          top: false,
-          child: Row(
-            children: List.generate(navItems.length, (index) {
-              final item = navItems[index];
-              final isActive = _currentIndex == index;
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => _onTabTapped(index),
-                  behavior: HitTestBehavior.opaque,
-                  child: _NavItemWidget(
-                    isActive: isActive,
-                    item: item,
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: navBg,
+            border: Border(top: BorderSide(color: navBorder, width: 1)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withOpacity(0.06),
+                blurRadius: 8,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: SafeArea(
+            top: false,
+            child: Row(
+              children: List.generate(navItems.length, (index) {
+                final item = navItems[index];
+                final isActive = _currentIndex == index;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => _onTabTapped(index),
+                    behavior: HitTestBehavior.opaque,
+                    child: _NavItemWidget(
+                      isActive: isActive,
+                      item: item,
+                    ),
                   ),
-                ),
-              );
-            }),
+                );
+              }),
+            ),
           ),
         ),
       ),
@@ -241,4 +265,3 @@ class _NavItemWidgetState extends State<_NavItemWidget>
     );
   }
 }
-

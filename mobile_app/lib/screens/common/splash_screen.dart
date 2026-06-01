@@ -1,6 +1,6 @@
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../config/theme.dart';
 import '../../providers/auth_provider.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -10,25 +10,34 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _fadeAnimation;
+class _SplashScreenState extends State<SplashScreen>
+    with TickerProviderStateMixin {
+  static const _bgTop = Color(0xFF0A1426);
+  static const _bgBottom = Color(0xFF050C1A);
+  static const _faint = Color(0xFF94A3B8);
+  static const _green = Color(0xFF22C55E);
+
+  late final AnimationController _fade;
+  late final AnimationController _spin;
+  late final AnimationController _pulse;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
+    _fade = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1500),
-    );
-    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
-      CurvedAnimation(parent: _controller, curve: Curves.easeIn),
-    );
-    _controller.forward();
+      duration: const Duration(milliseconds: 1100),
+    )..forward();
+    _spin = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2400),
+    )..repeat();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _checkAuth();
-    });
+    WidgetsBinding.instance.addPostFrameCallback((_) => _checkAuth());
   }
 
   Future<void> _checkAuth() async {
@@ -36,70 +45,389 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     if (!mounted) return;
     try {
       await context.read<AuthProvider>().checkAuth();
-    } catch (_) {
-      // Falls through to login screen
-    }
+    } catch (_) {}
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _fade.dispose();
+    _spin.dispose();
+    _pulse.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
     return Scaffold(
-      backgroundColor: AppTheme.primaryColor,
-      body: Center(
-        child: FadeTransition(
-          opacity: _fadeAnimation,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Container(
-                width: 100,
-                height: 100,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: const Icon(
-                  Icons.school_rounded,
-                  size: 60,
-                  color: AppTheme.primaryColor,
-                ),
+      backgroundColor: _bgBottom,
+      body: Stack(
+        children: [
+          Container(
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [_bgTop, _bgBottom],
               ),
-              const SizedBox(height: 24),
-              const Text(
-                'TDTU LMS',
-                style: TextStyle(
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Ta\'lim boshqaruv tizimi',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.white.withAlpha(178),
-                ),
-              ),
-              const SizedBox(height: 48),
-              const SizedBox(
-                width: 32,
-                height: 32,
-                child: CircularProgressIndicator(
-                  strokeWidth: 3,
-                  color: Colors.white,
-                ),
-              ),
-            ],
+            ),
           ),
-        ),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Center(
+                child: Container(
+                  width: size.width * 0.85,
+                  height: size.height * 0.55,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: RadialGradient(
+                      colors: [
+                        Color(0x550D9488),
+                        Color(0x1A0D9488),
+                        Colors.transparent,
+                      ],
+                      stops: [0.0, 0.45, 1.0],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+          FadeTransition(
+            opacity: _fade,
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Spacer(),
+                  SizedBox(
+                    width: size.width * 0.95,
+                    height: size.width * 0.95,
+                    child: AnimatedBuilder(
+                      animation: Listenable.merge([_spin, _pulse]),
+                      builder: (_, __) => CustomPaint(
+                        painter: _MoleculePainter(
+                          twinkle: _spin.value,
+                          pulse: _pulse.value,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 36),
+                  const Text(
+                    'TASHMEDUNI·TF',
+                    style: TextStyle(
+                      fontSize: 26,
+                      fontWeight: FontWeight.w800,
+                      color: Colors.white,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    "TA'LIM BOSHQARUV TIZIMI",
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                      color: _faint,
+                      letterSpacing: 3.6,
+                    ),
+                  ),
+                  const Spacer(flex: 2),
+                  _buildFooter(),
+                  const SizedBox(height: 22),
+                ],
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
+
+  Widget _buildFooter() {
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            AnimatedBuilder(
+              animation: _pulse,
+              builder: (_, __) {
+                final t = _pulse.value;
+                return Container(
+                  width: 6,
+                  height: 6,
+                  decoration: BoxDecoration(
+                    color: _green,
+                    shape: BoxShape.circle,
+                    boxShadow: [
+                      BoxShadow(
+                        color: _green.withOpacity(0.4 + 0.4 * t),
+                        blurRadius: 4 + 4 * t,
+                        spreadRadius: 0.5 + 1.5 * t,
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+            const SizedBox(width: 8),
+            const Text(
+              'TASHKENT MEDICAL UNIVERSITY · TERMEZ BRANCH · 2018',
+              style: TextStyle(
+                fontSize: 9,
+                fontWeight: FontWeight.w600,
+                color: _faint,
+                letterSpacing: 1.3,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'v 2.4.1 · build 26.05.2026',
+          style: TextStyle(
+            fontSize: 9,
+            color: _faint.withOpacity(0.55),
+            letterSpacing: 1.1,
+          ),
+        ),
+      ],
+    );
+  }
 }
+
+/// Organic molecule (benzene ring + side chain + hydrogens), rotated
+/// around the Y axis. Built in 3D first, then projected — so the ring
+/// reads as an ellipse, not a flat horizontal line.
+class _MoleculePainter extends CustomPainter {
+  final double twinkle;
+  final double pulse;
+  _MoleculePainter({required this.twinkle, required this.pulse});
+
+  static const _carbon = Color(0xFFEF4444); // red
+  static const _hydrogen = Color(0xFF3B82F6); // blue
+  static const _oxygen = Color(0xFF22C55E); // green
+  static const _nitrogen = Color(0xFFA78BFA); // violet
+  static const _bond = Color(0xFFE2E8F0);
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final cx = size.width / 2;
+    final cy = size.height / 2;
+    final unit = size.width * 0.11;
+
+    final atoms = <_Atom>[];
+    final bonds = <List<int>>[];
+
+    int add(_Atom a) {
+      atoms.add(a);
+      return atoms.length - 1;
+    }
+
+    void bond(int i, int j) => bonds.add([i, j]);
+
+    // ── Benzene ring in the XY plane, centered around (-1.4*unit, 0, 0) ──
+    final ringCenter = _V3(-1.6 * unit, 0, 0);
+    const ringR = 1.0;
+    final ringIdx = <int>[];
+    for (int i = 0; i < 6; i++) {
+      final a = i * math.pi / 3 + math.pi / 6;
+      final x = ringCenter.x + ringR * unit * math.cos(a);
+      final y = ringCenter.y + ringR * unit * math.sin(a);
+      const z = 0.0;
+      ringIdx.add(add(_Atom(
+        pos3: _V3(x, y, z),
+        color: _carbon,
+        radius: 11,
+      )));
+    }
+    for (int i = 0; i < 6; i++) {
+      bond(ringIdx[i], ringIdx[(i + 1) % 6]);
+    }
+
+    // Hydrogens sticking out from each ring atom (radially outward)
+    for (int i = 0; i < 6; i++) {
+      final a = i * math.pi / 3 + math.pi / 6;
+      final hx = ringCenter.x + 1.9 * unit * math.cos(a);
+      final hy = ringCenter.y + 1.9 * unit * math.sin(a);
+      // skip the ring atom we'll attach the side chain to
+      if (i == 0) continue;
+      final hIdx = add(_Atom(
+        pos3: _V3(hx, hy, 0),
+        color: _hydrogen,
+        radius: 5.5,
+      ));
+      bond(ringIdx[i], hIdx);
+    }
+
+    // Two oxygens on the lower-left of the ring (catechol-like)
+    final o1 = add(_Atom(
+      pos3: _V3(ringCenter.x - 1.7 * unit, -1.5 * unit, 0.3 * unit),
+      color: _oxygen,
+      radius: 9,
+    ));
+    bond(ringIdx[3], o1);
+    final o2 = add(_Atom(
+      pos3: _V3(ringCenter.x - 0.6 * unit, -2.0 * unit, -0.3 * unit),
+      color: _oxygen,
+      radius: 9,
+    ));
+    bond(ringIdx[4], o2);
+
+    // ── Side chain extending to the right ──
+    // First carbon attached to ring atom 0 (rightmost)
+    final c1Pos = _V3(ringCenter.x + 2.0 * unit, 0.4 * unit, 0.4 * unit);
+    final c1 = add(_Atom(pos3: c1Pos, color: _carbon, radius: 11));
+    bond(ringIdx[0], c1);
+
+    // Second carbon
+    final c2Pos = _V3(c1Pos.x + 1.1 * unit, -0.3 * unit, -0.3 * unit);
+    final c2 = add(_Atom(pos3: c2Pos, color: _carbon, radius: 11));
+    bond(c1, c2);
+
+    // Nitrogen end group
+    final nPos = _V3(c2Pos.x + 1.2 * unit, 0.3 * unit, 0.4 * unit);
+    final n = add(_Atom(pos3: nPos, color: _nitrogen, radius: 11));
+    bond(c2, n);
+
+    // Hydrogens around side-chain carbons
+    void attachH(int parent, _V3 pos) {
+      final h = add(_Atom(pos3: pos, color: _hydrogen, radius: 5.5));
+      bond(parent, h);
+    }
+
+    attachH(c1, _V3(c1Pos.x + 0.2 * unit, c1Pos.y + 1.0 * unit, c1Pos.z));
+    attachH(c1, _V3(c1Pos.x, c1Pos.y - 0.4 * unit, c1Pos.z - 1.0 * unit));
+    attachH(c2, _V3(c2Pos.x - 0.2 * unit, c2Pos.y + 1.0 * unit, c2Pos.z + 0.2 * unit));
+    attachH(c2, _V3(c2Pos.x + 0.1 * unit, c2Pos.y - 0.9 * unit, c2Pos.z - 0.3 * unit));
+
+    // Hydrogens around nitrogen
+    attachH(n, _V3(nPos.x + 1.0 * unit, nPos.y + 0.5 * unit, nPos.z));
+    attachH(n, _V3(nPos.x + 0.4 * unit, nPos.y - 0.6 * unit, nPos.z + 0.9 * unit));
+    attachH(n, _V3(nPos.x + 0.3 * unit, nPos.y - 0.5 * unit, nPos.z - 0.9 * unit));
+
+    // Fixed pose — molecule does not rotate. Just a slight forward tilt
+    // around the X axis so the benzene ring reads as an ellipse.
+    double maxAbsZ = 0.1;
+    const tilt = 0.32;
+    final cosT = math.cos(tilt);
+    final sinT = math.sin(tilt);
+    for (final a in atoms) {
+      final y = a.pos3.y * cosT - a.pos3.z * sinT;
+      final z = a.pos3.y * sinT + a.pos3.z * cosT;
+      a.rot = _V3(a.pos3.x, y, z);
+      if (z.abs() > maxAbsZ) maxAbsZ = z.abs();
+    }
+
+    // Perspective projection
+    const focal = 600.0;
+    for (final a in atoms) {
+      final dist = focal + a.rot.z;
+      final scale = focal / dist;
+      a.screen = Offset(cx + a.rot.x * scale, cy + a.rot.y * scale);
+      a.depth = (0.5 + 0.5 * (a.rot.z / (maxAbsZ + 1))).clamp(0.0, 1.0);
+      a.scale = scale;
+    }
+
+    // Bonds, sorted by midpoint depth
+    final orderedBonds = List.of(bonds);
+    orderedBonds.sort((a, b) {
+      final za = (atoms[a[0]].rot.z + atoms[a[1]].rot.z) / 2;
+      final zb = (atoms[b[0]].rot.z + atoms[b[1]].rot.z) / 2;
+      return za.compareTo(zb);
+    });
+    for (final b in orderedBonds) {
+      final a1 = atoms[b[0]];
+      final a2 = atoms[b[1]];
+      final d = ((a1.depth + a2.depth) / 2);
+      final paint = Paint()
+        ..color = _bond.withOpacity((0.18 + 0.55 * d).clamp(0.0, 0.85))
+        ..strokeWidth = 1.6 + 1.0 * d
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(a1.screen, a2.screen, paint);
+    }
+
+    // Atoms — assign a unique twinkle phase per atom so they don't all
+    // light up at once, then draw back-to-front.
+    for (int i = 0; i < atoms.length; i++) {
+      atoms[i].twinklePhase = (i * 0.137) % 1.0;
+    }
+    final orderedAtoms = List.of(atoms);
+    orderedAtoms.sort((a, b) => a.rot.z.compareTo(b.rot.z));
+    for (final a in orderedAtoms) {
+      _drawAtom(canvas, a);
+    }
+  }
+
+  void _drawAtom(Canvas canvas, _Atom a) {
+    final d = a.depth;
+
+    // Per-atom twinkle in [0,1] — fast attack, slow decay, half the time dim.
+    final t = ((twinkle + a.twinklePhase) % 1.0);
+    final fire = t < 0.18
+        ? (t / 0.18) // attack
+        : t < 0.55
+            ? 1.0 - ((t - 0.18) / 0.37) * 0.85 // decay to 0.15
+            : 0.15; // resting glow
+
+    final basePulse = a.isCore ? (1.0 + 0.04 * pulse) : 1.0;
+    final r = a.radius * a.scale * basePulse * (0.88 + 0.18 * fire);
+
+    // Outer flare — much stronger when firing
+    canvas.drawCircle(
+      a.screen,
+      r + 4 + 10 * fire,
+      Paint()
+        ..color = a.color.withOpacity(0.06 + 0.30 * fire * (0.5 + 0.5 * d))
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, 6 + 6 * fire),
+    );
+    // Mid halo
+    canvas.drawCircle(
+      a.screen,
+      r + 1.5,
+      Paint()..color = a.color.withOpacity(0.18 * d + 0.10 + 0.22 * fire),
+    );
+    // Body
+    canvas.drawCircle(
+      a.screen,
+      r,
+      Paint()..color = a.color.withOpacity(0.55 + 0.35 * d + 0.10 * fire),
+    );
+    // Specular — brightens when firing
+    canvas.drawCircle(
+      a.screen.translate(-r * 0.32, -r * 0.32),
+      r * 0.42,
+      Paint()..color = Colors.white.withOpacity(0.25 + 0.35 * d + 0.40 * fire),
+    );
+  }
+
+  @override
+  bool shouldRepaint(_MoleculePainter old) =>
+      old.twinkle != twinkle || old.pulse != pulse;
+}
+
+class _V3 {
+  final double x, y, z;
+  const _V3(this.x, this.y, this.z);
+}
+
+class _Atom {
+  final _V3 pos3;
+  final Color color;
+  final double radius;
+  final bool isCore;
+  _V3 rot = const _V3(0, 0, 0);
+  Offset screen = Offset.zero;
+  double depth = 0.5;
+  double scale = 1.0;
+  double twinklePhase = 0.0;
+  _Atom({
+    required this.pos3,
+    required this.color,
+    required this.radius,
+    this.isCore = false,
+  });
+}
+

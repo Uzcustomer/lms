@@ -208,10 +208,10 @@
                             ['rasm_pdf', 'Rasm 3.5x4.5 (JPG)', 'image/jpeg'],
                         ] as $f)
                             <div class="col-md-6">
-                                <label class="form-label">{{ $f[1] }}</label>
-                                <input class="form-control" type="file" name="{{ $f[0] }}" accept="{{ $f[2] }}">
+                                <label class="form-label required">{{ $f[1] }}</label>
+                                <input class="form-control" type="file" name="{{ $f[0] }}" accept="{{ $f[2] }}" @if(!isset($existingFiles[$f[0]])) required @endif>
                                 @if(isset($existingFiles[$f[0]]))
-                                    <a href="{{ asset('storage/'.$existingFiles[$f[0]]) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>
+                                    <a href="{{ route('admin.students.admission-files.view', [$student, $f[0]]) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>
                                 @endif
                             </div>
                         @endforeach
@@ -376,9 +376,9 @@
                         <div class="col-md-6"><label class="form-label required">Hujjat seriya va raqami</label><input class="form-control text-uppercase" name="hujjat_seriya" value="{{ $val('hujjat_seriya') }}" placeholder="KT777111" required></div>
                         <div class="col-md-6"><label class="form-label required">O'rtacha attestat/diplom bali</label><input type="number" step="0.01" min="0" max="100" class="form-control" name="ortalacha_ball" value="{{ $val('ortalacha_ball') }}" required></div>
                         <div class="col-12">
-                            <label class="form-label">Attestat/diplom skan (PDF)</label>
-                            <input class="form-control" type="file" name="attestat_pdf" accept="application/pdf">
-                            @if(isset($existingFiles['attestat_pdf']))<a href="{{ asset('storage/'.$existingFiles['attestat_pdf']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
+                            <label class="form-label required">Attestat/diplom skan (PDF)</label>
+                            <input class="form-control" type="file" name="attestat_pdf" accept="application/pdf" @if(!isset($existingFiles['attestat_pdf'])) required @endif>
+                            @if(isset($existingFiles['attestat_pdf']))<a href="{{ route('admin.students.admission-files.view', [$student, 'attestat_pdf']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
                         </div>
                     </div>
 
@@ -394,9 +394,9 @@
                             </select>
                         </div>
                         <div class="col-md-6 {{ ($a?->milliy_sertifikat === 'ha') ? '' : 'd-none' }}" id="qw_milliy_sert_pdf_wrap">
-                            <label class="form-label">Milliy sertifikat fayli (PDF)</label>
-                            <input class="form-control" type="file" name="milliy_sertifikat_pdf" accept="application/pdf">
-                            @if(isset($existingFiles['milliy_sertifikat_pdf']))<a href="{{ asset('storage/'.$existingFiles['milliy_sertifikat_pdf']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
+                            <label class="form-label required">Milliy sertifikat fayli (PDF)</label>
+                            <input class="form-control" type="file" name="milliy_sertifikat_pdf" accept="application/pdf" @if(!isset($existingFiles['milliy_sertifikat_pdf'])) required @endif>
+                            @if(isset($existingFiles['milliy_sertifikat_pdf']))<a href="{{ route('admin.students.admission-files.view', [$student, 'milliy_sertifikat_pdf']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
                         </div>
 
                         <div class="col-12">
@@ -428,14 +428,14 @@
                         </div>
 
                         <div class="col-md-6">
-                            <label class="form-label">Abituriyent ruxsatnomasi (PDF)</label>
-                            <input class="form-control" type="file" name="ruxsatnoma_pdf" accept="application/pdf">
-                            @if(isset($existingFiles['ruxsatnoma_pdf']))<a href="{{ asset('storage/'.$existingFiles['ruxsatnoma_pdf']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
+                            <label class="form-label required">Abituriyent ruxsatnomasi (PDF)</label>
+                            <input class="form-control" type="file" name="ruxsatnoma_pdf" accept="application/pdf" @if(!isset($existingFiles['ruxsatnoma_pdf'])) required @endif>
+                            @if(isset($existingFiles['ruxsatnoma_pdf']))<a href="{{ route('admin.students.admission-files.view', [$student, 'ruxsatnoma_pdf']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label">DTM javob varaqasi (PDF)</label>
-                            <input class="form-control" type="file" name="dtm_varaqa_pdf" accept="application/pdf">
-                            @if(isset($existingFiles['dtm_varaqa_pdf']))<a href="{{ asset('storage/'.$existingFiles['dtm_varaqa_pdf']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
+                            <label class="form-label required">DTM javob varaqasi (PDF)</label>
+                            <input class="form-control" type="file" name="dtm_varaqa_pdf" accept="application/pdf" @if(!isset($existingFiles['dtm_varaqa_pdf'])) required @endif>
+                            @if(isset($existingFiles['dtm_varaqa_pdf']))<a href="{{ route('admin.students.admission-files.view', [$student, 'dtm_varaqa_pdf']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
                         </div>
                     </div>
 
@@ -516,9 +516,9 @@
                                 <div class="col-md-6"><label class="form-label required">Ish joyi</label><input class="form-control qw-upper" name="ota_ish_joyi" value="{{ $val('ota_ish_joyi') }}" required></div>
                                 <div class="col-md-6"><label class="form-label required">Lavozimi</label><input class="form-control qw-upper" name="ota_lavozimi" value="{{ $val('ota_lavozimi') }}" required></div>
                                 <div class="col-12">
-                                    <label class="form-label">Otaning pasport nusxasi (PDF)</label>
-                                    <input class="form-control" type="file" name="ota_passport_pdf" accept="application/pdf">
-                                    @if(isset($existingFiles['ota_passport_pdf']))<a href="{{ asset('storage/'.$existingFiles['ota_passport_pdf']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
+                                    <label class="form-label required">Otaning pasport nusxasi (PDF)</label>
+                                    <input class="form-control" type="file" name="ota_passport_pdf" accept="application/pdf" @if(!isset($existingFiles['ota_passport_pdf'])) required @endif>
+                                    @if(isset($existingFiles['ota_passport_pdf']))<a href="{{ route('admin.students.admission-files.view', [$student, 'ota_passport_pdf']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
                                 </div>
                             </div>
                         </div>
@@ -532,18 +532,18 @@
                                 <div class="col-md-6"><label class="form-label required">Ish joyi</label><input class="form-control qw-upper" name="ona_ish_joyi" value="{{ $val('ona_ish_joyi') }}" required></div>
                                 <div class="col-md-6"><label class="form-label required">Lavozimi</label><input class="form-control qw-upper" name="ona_lavozimi" value="{{ $val('ona_lavozimi') }}" required></div>
                                 <div class="col-12">
-                                    <label class="form-label">Onaning pasport nusxasi (PDF)</label>
-                                    <input class="form-control" type="file" name="ona_passport_pdf" accept="application/pdf">
-                                    @if(isset($existingFiles['ona_passport_pdf']))<a href="{{ asset('storage/'.$existingFiles['ona_passport_pdf']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
+                                    <label class="form-label required">Onaning pasport nusxasi (PDF)</label>
+                                    <input class="form-control" type="file" name="ona_passport_pdf" accept="application/pdf" @if(!isset($existingFiles['ona_passport_pdf'])) required @endif>
+                                    @if(isset($existingFiles['ona_passport_pdf']))<a href="{{ route('admin.students.admission-files.view', [$student, 'ona_passport_pdf']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
                                 </div>
                             </div>
                         </div>
                     </div>
 
                     <div class="col-12 mt-3">
-                        <label class="form-label">Shaxsiy ma'lumotnoma (Obyektivka, Word fayl)</label>
-                        <input class="form-control" type="file" name="obyektivka" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
-                        @if(isset($existingFiles['obyektivka']))<a href="{{ asset('storage/'.$existingFiles['obyektivka']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
+                        <label class="form-label required">Shaxsiy ma'lumotnoma (Obyektivka, Word fayl)</label>
+                        <input class="form-control" type="file" name="obyektivka" accept=".doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" @if(!isset($existingFiles['obyektivka'])) required @endif>
+                        @if(isset($existingFiles['obyektivka']))<a href="{{ route('admin.students.admission-files.view', [$student, 'obyektivka']) }}" target="_blank" class="existing-file">Yuklangan faylni ko'rish</a>@endif
                     </div>
 
                     <div class="floating-actions mt-4">

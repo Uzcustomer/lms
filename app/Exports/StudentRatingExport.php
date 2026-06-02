@@ -26,7 +26,6 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
     protected ?string $search;
     protected ?string $subjectId;
     protected ?string $groupName;
-    private array $groupSeparatorRows = [];
     private int $totalRows = 0;
 
     public function __construct(
@@ -47,7 +46,22 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
 
     public function headings(): array
     {
-        return ['#', 'F.I.O', 'Guruh', 'Fan nomi', 'Kunlar', 'JN bali', 'MT bali', 'OSKI', 'Test', 'YN'];
+        return [
+            '#',
+            'F.I.O',
+            'Fakultet',
+            'Yo\'nalish',
+            'Kurs',
+            'Guruh',
+            'Semestr',
+            'Fan nomi',
+            'Kunlar',
+            'JN bali',
+            'MT bali',
+            'OSKI',
+            'Test',
+            'YN',
+        ];
     }
 
     public function array(): array
@@ -78,31 +92,34 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             $query->whereIn('student_hemis_id', $studentIdsWithSubject);
         }
 
-        // Guruh nomi bo'yicha → keyin jn_average desc → har guruh ichida reyting
         $query->orderBy('group_name')->orderByDesc('jn_average');
         $ratings = $query->get();
+
+        // Kurs kodi → matn (level_code mapping)
+        $levelLabels = [
+            '11' => '1-kurs', '12' => '2-kurs', '13' => '3-kurs',
+            '14' => '4-kurs', '15' => '5-kurs', '16' => '6-kurs',
+        ];
 
         $excludeTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
         $rows = [];
         $rank = 0;
-        $currentRow = 2; // row 1 is heading
-        $prevGroup = null;
+        $currentRow = 2;
 
         foreach ($ratings as $rating) {
             $rank++;
 
-            // Guruh o'zgarsa — ajratuvchi sarlavha qatori qo'shish
-            if ($rating->group_name !== $prevGroup) {
-                $rows[] = ['', "📚 Guruh: " . ($rating->group_name ?? '—'), '', '', '', '', '', '', '', ''];
-                $this->groupSeparatorRows[] = $currentRow;
-                $currentRow++;
-                $prevGroup = $rating->group_name;
-            }
+            $deptName = $rating->department_name ?? '';
+            $specName = $rating->specialty_name ?? '';
+            $levelName = $levelLabels[(string) $rating->level_code] ?? ($rating->level_code ?? '');
+            $groupName = $rating->group_name ?? '';
+            $semCode = $rating->semester_code ?? '';
 
             $student = Student::where('hemis_id', $rating->student_hemis_id)->first();
             if (!$student) {
                 $rows[] = [
-                    $rank, $rating->full_name, $rating->group_name,
+                    $rank, $rating->full_name, $deptName, $specName, $levelName,
+                    $groupName, $semCode,
                     '-', '-', $rating->jn_average, '-', '-', '-', '-',
                 ];
                 $currentRow++;
@@ -111,7 +128,6 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
 
             $subjects = $this->getSubjects($student, $excludeTypes);
 
-            // Subject filter ON bo'lsa — faqat o'sha fanni qoldirish
             if ($this->subjectId) {
                 $subjects = array_values(array_filter(
                     $subjects,
@@ -121,17 +137,18 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
 
             if (empty($subjects)) {
                 $rows[] = [
-                    $rank, $rating->full_name, $rating->group_name,
+                    $rank, $rating->full_name, $deptName, $specName, $levelName,
+                    $groupName, $semCode,
                     '-', '-', $rating->jn_average, '-', '-', '-', '-',
                 ];
                 $currentRow++;
                 continue;
             }
 
-            // Har fan uchun ALOHIDA qator — har birida talaba ismi va guruhi to'liq
             foreach ($subjects as $s) {
                 $rows[] = [
-                    $rank, $rating->full_name, $rating->group_name,
+                    $rank, $rating->full_name, $deptName, $specName, $levelName,
+                    $groupName, $semCode,
                     $s['name'], $s['days'], $s['average'],
                     $s['mt'], $s['oski'], $s['test'], $s['yn'],
                 ];
@@ -280,18 +297,9 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ];
 
-        // Guruh ajratuvchi qatorlar — to'q sariq fon
-        foreach ($this->groupSeparatorRows as $row) {
-            $styles[$row] = [
-                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F59E0B']],
-                'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
-            ];
-        }
-
         // Borders for all data
         if ($this->totalRows > 0) {
-            $range = 'A1:J' . ($this->totalRows + 1);
+            $range = 'A1:N' . ($this->totalRows + 1);
             $sheet->getStyle($range)->applyFromArray([
                 'borders' => [
                     'allBorders' => [
@@ -300,6 +308,9 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
                     ],
                 ],
             ]);
+
+            // Excel auto-filter — har ustun bo'yicha filtrlash imkoni
+            $sheet->setAutoFilter('A1:N' . ($this->totalRows + 1));
         }
 
         return $styles;

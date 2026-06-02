@@ -17,6 +17,17 @@
             'oski' => 'Faqat OSKI', 'test' => 'Faqat Test', 'oski_test' => 'OSKI + Test',
             'normativ' => 'Normativ', 'sinov' => 'Sinov (test)',
         ];
+
+        $curSort = request('sort');
+        $curDir = request('dir') === 'desc' ? 'desc' : 'asc';
+        $sortUrl = function ($col) use ($curSort, $curDir) {
+            $dir = ($curSort === $col && $curDir === 'asc') ? 'desc' : 'asc';
+            return request()->fullUrlWithQuery(['sort' => $col, 'dir' => $dir, 'page' => 1]);
+        };
+        $arrow = function ($col) use ($curSort, $curDir) {
+            if ($curSort !== $col) return '<span style="color:#cbd5e1;">⇅</span>';
+            return $curDir === 'asc' ? '▲' : '▼';
+        };
     @endphp
 
     <div class="py-4">
@@ -42,129 +53,248 @@
                 @endforeach
             </div>
 
-            <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="padding:16px;">
-                {{-- Filtrlar --}}
-                <form method="GET" action="{{ route('admin.vedomost-submission.index') }}"
-                      style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;margin-bottom:14px;">
-                    <div style="min-width:220px;">
-                        <label style="font-size:12px;color:#64748b;">Fakultet</label>
-                        <select name="faculty" class="select2" style="width:100%;">
-                            <option value="">Barchasi</option>
-                            @foreach($faculties as $f)
-                                <option value="{{ $f->id }}" {{ request('faculty') == $f->id ? 'selected' : '' }}>{{ $f->name }}</option>
-                            @endforeach
-                        </select>
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="overflow:visible;">
+                {{-- Filtrlar (yopilish shakli sahifasi uslubida) --}}
+                <form id="filter-form" method="GET" action="{{ route('admin.vedomost-submission.index') }}">
+                    <div class="filter-container">
+                        <div class="filter-row">
+                            <div class="filter-item" style="min-width:160px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi</label>
+                                <select name="education_type" id="education_type" class="select2" style="width:100%;">
+                                    <option value="">Barchasi</option>
+                                    @foreach($educationTypes as $type)
+                                        <option value="{{ $type->education_type_code }}" {{ ($selectedEducationType ?? request('education_type')) == $type->education_type_code ? 'selected' : '' }}>
+                                            {{ $type->education_type_name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="filter-item" style="flex:1;min-width:200px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
+                                <select name="faculty" id="faculty" class="select2" style="width:100%;">
+                                    <option value="">Barchasi</option>
+                                    @foreach($faculties as $faculty)
+                                        <option value="{{ $faculty->id }}" {{ request('faculty') == $faculty->id ? 'selected' : '' }}>{{ $faculty->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="filter-item" style="flex:1;min-width:220px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
+                                <select name="specialty" id="specialty" class="select2" style="width:100%;">
+                                    <option value="">Barchasi</option>
+                                </select>
+                            </div>
+                            <div class="filter-item" style="min-width:120px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
+                                <select name="level_code" id="level_code" class="select2" style="width:100%;">
+                                    <option value="">Barchasi</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="filter-row">
+                            <div class="filter-item" style="min-width:130px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Semestr</label>
+                                <select name="semester_code" id="semester_code" class="select2" style="width:100%;">
+                                    <option value="">Barchasi</option>
+                                </select>
+                            </div>
+                            <div class="filter-item" style="flex:1;min-width:180px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#ea580c;"></span> Fan</label>
+                                <input type="text" name="subject_name" id="subject_name" value="{{ request('subject_name') }}" placeholder="Fan nomini kiriting..." class="filter-input">
+                            </div>
+                            <div class="filter-item" style="min-width:160px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#059669;"></span> Yopilish shakli</label>
+                                <select name="closing_form_filter" id="closing_form_filter" class="select2" style="width:100%;">
+                                    <option value="">Barchasi</option>
+                                    @foreach($closingForms as $k => $label)
+                                        <option value="{{ $k }}" {{ request('closing_form_filter') === $k ? 'selected' : '' }}>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="filter-item" style="min-width:150px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#64748b;"></span> Status</label>
+                                <select name="status" id="status" class="select2" style="width:100%;">
+                                    <option value="">Barchasi</option>
+                                    @foreach(\App\Models\VedomostSubmission::statusLabels() as $k => $label)
+                                        <option value="{{ $k }}" {{ request('status') === $k ? 'selected' : '' }}>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="filter-item" style="min-width:90px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
+                                <select name="per_page" class="select2" style="width:100%;">
+                                    @foreach([25, 50, 100, 200] as $pageSize)
+                                        <option value="{{ $pageSize }}" {{ request('per_page', 50) == $pageSize ? 'selected' : '' }}>{{ $pageSize }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div class="filter-item" style="min-width:150px;">
+                                <label class="filter-label">&nbsp;</label>
+                                <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#334155;height:36px;">
+                                    <input type="checkbox" name="overdue" value="1" {{ request('overdue') ? 'checked' : '' }}>
+                                    Faqat kechikkanlar
+                                </label>
+                            </div>
+                            <div class="filter-item" style="min-width:130px;">
+                                <label class="filter-label">&nbsp;</label>
+                                <button type="submit" class="btn-search">
+                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                                    Qidirish
+                                </button>
+                            </div>
+                        </div>
                     </div>
-                    <div style="min-width:160px;">
-                        <label style="font-size:12px;color:#64748b;">Status</label>
-                        <select name="status" class="select2" style="width:100%;">
-                            <option value="">Barchasi</option>
-                            @foreach(\App\Models\VedomostSubmission::statusLabels() as $k => $label)
-                                <option value="{{ $k }}" {{ request('status') === $k ? 'selected' : '' }}>{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div style="min-width:160px;">
-                        <label style="font-size:12px;color:#64748b;">Yopilish shakli</label>
-                        <select name="closing_form" class="select2" style="width:100%;">
-                            <option value="">Barchasi</option>
-                            @foreach($closingForms as $k => $label)
-                                <option value="{{ $k }}" {{ request('closing_form') === $k ? 'selected' : '' }}>{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-                    <div style="min-width:220px;">
-                        <label style="font-size:12px;color:#64748b;">Qidirish (fan/guruh/o'qituvchi)</label>
-                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Qidirish..."
-                               style="width:100%;padding:7px 10px;border:1px solid #e2e8f0;border-radius:8px;">
-                    </div>
-                    <label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#334155;padding-bottom:8px;">
-                        <input type="checkbox" name="overdue" value="1" {{ request('overdue') ? 'checked' : '' }}>
-                        Faqat kechikkanlar
-                    </label>
-                    <button type="submit" class="btn-search"
-                            style="background:#1a3268;color:#fff;border:none;padding:8px 18px;border-radius:8px;cursor:pointer;">
-                        Qidirish
-                    </button>
                 </form>
 
-                {{-- Generatsiya --}}
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                {{-- Generatsiya + Excel --}}
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;flex-wrap:wrap;gap:8px;">
                     <span style="font-size:13px;color:#64748b;">Jami: {{ $submissions->total() }} ta</span>
-                    <form method="POST" action="{{ route('admin.vedomost-submission.sync', request()->query()) }}"
-                          onsubmit="return confirm('Joriy semestr bo\'yicha vedomost yozuvlari yangilansinmi?');">
-                        @csrf
-                        <button type="submit"
-                                style="background:#1d6f42;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;">
-                            ↻ Joriy semestr bo'yicha yangilash
-                        </button>
-                    </form>
+                    <div style="display:flex;gap:8px;">
+                        <a href="{{ route('admin.vedomost-submission.export', request()->query()) }}"
+                           style="background:#1d6f42;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+                            <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                            Excel
+                        </a>
+                        <form method="POST" action="{{ route('admin.vedomost-submission.sync', request()->query()) }}"
+                              onsubmit="return confirm('Joriy semestr bo\'yicha vedomost yozuvlari yangilansinmi?');">
+                            @csrf
+                            <button type="submit" style="background:#1a3268;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;">
+                                ↻ Joriy semestr bo'yicha yangilash
+                            </button>
+                        </form>
+                    </div>
                 </div>
 
                 <div style="overflow-x:auto;">
-                    <table class="journal-table" style="width:100%;border-collapse:collapse;font-size:13px;">
+                    <table class="vd-table">
                         <thead>
-                            <tr style="background:#f8fafc;text-align:left;">
-                                <th style="padding:8px;">#</th>
-                                <th style="padding:8px;">Guruh</th>
-                                <th style="padding:8px;">Fan</th>
-                                <th style="padding:8px;">Kafedra</th>
-                                <th style="padding:8px;">O'qituvchi</th>
-                                <th style="padding:8px;">Yopilish</th>
-                                <th style="padding:8px;">Asos sana</th>
-                                <th style="padding:8px;">Muddat (deadline)</th>
-                                <th style="padding:8px;">Status</th>
+                            <tr>
+                                <th>#</th>
+                                <th><a href="{{ $sortUrl('group') }}">Guruh {!! $arrow('group') !!}</a></th>
+                                <th>Yo'nalish</th>
+                                <th><a href="{{ $sortUrl('subject') }}">Fan {!! $arrow('subject') !!}</a></th>
+                                <th><a href="{{ $sortUrl('department') }}">Kafedra {!! $arrow('department') !!}</a></th>
+                                <th><a href="{{ $sortUrl('teacher') }}">O'qituvchi {!! $arrow('teacher') !!}</a></th>
+                                <th>Fan mas'uli</th>
+                                <th>Kafedra mudiri</th>
+                                <th><a href="{{ $sortUrl('closing_form') }}">Yopilish {!! $arrow('closing_form') !!}</a></th>
+                                <th><a href="{{ $sortUrl('base_date') }}">Asos sana {!! $arrow('base_date') !!}</a></th>
+                                <th><a href="{{ $sortUrl('deadline') }}">Muddat {!! $arrow('deadline') !!}</a></th>
+                                <th><a href="{{ $sortUrl('status') }}">Status {!! $arrow('status') !!}</a></th>
                             </tr>
                         </thead>
                         <tbody>
                             @forelse($submissions as $i => $v)
-                                <tr style="border-top:1px solid #f1f5f9;">
-                                    <td style="padding:8px;color:#94a3b8;">{{ $submissions->firstItem() + $i }}</td>
-                                    <td style="padding:8px;font-weight:600;">{{ $v->group_name }}</td>
-                                    <td style="padding:8px;">{{ $v->subject_name }}</td>
-                                    <td style="padding:8px;color:#64748b;">{{ $v->department_name }}</td>
-                                    <td style="padding:8px;color:#64748b;">{{ $v->teacher_name ?? '—' }}</td>
-                                    <td style="padding:8px;">{{ $closingFormLabels[$v->closing_form] ?? $v->closing_form }}</td>
-                                    <td style="padding:8px;">
-                                        {{ $v->base_date ? $v->base_date->format('d.m.Y') : '—' }}
-                                        <div style="font-size:10px;color:#94a3b8;">
-                                            {{ $v->base_type === 'lesson' ? 'oxirgi dars' : ($v->base_type === 'exam' ? 'YN sanasi' : '') }}
-                                        </div>
+                                @php $overdue = $v->deadline && \Carbon\Carbon::parse($v->deadline)->isPast() && !\Carbon\Carbon::parse($v->deadline)->isToday() && $v->status !== 'approved'; @endphp
+                                <tr>
+                                    <td style="color:#94a3b8;">{{ $submissions->firstItem() + $i }}</td>
+                                    <td style="font-weight:600;">{{ $v->group_name }}</td>
+                                    <td style="color:#64748b;">{{ $v->specialty_name }}</td>
+                                    <td>{{ $v->subject_name }}</td>
+                                    <td style="color:#64748b;">{{ $v->department_name }}</td>
+                                    <td class="vd-person" title="Tel: {{ $v->teacher_phone ?: '—' }}">{{ $v->teacher_name ?? '—' }}</td>
+                                    <td class="vd-person" title="Tel: {{ $v->fan_masuli_phone ?: '—' }}">{{ $v->fan_masuli_name ?? '—' }}</td>
+                                    <td class="vd-person" title="Tel: {{ $v->kafedra_mudiri_phone ?: '—' }}">{{ $v->kafedra_mudiri_name ?? '—' }}</td>
+                                    <td>{{ $closingFormLabels[$v->closing_form] ?? $v->closing_form }}</td>
+                                    <td>
+                                        {{ $v->base_date ? \Carbon\Carbon::parse($v->base_date)->format('d.m.Y') : '—' }}
+                                        <div style="font-size:10px;color:#94a3b8;">{{ $v->base_type === 'lesson' ? 'oxirgi dars' : ($v->base_type === 'exam' ? 'YN sanasi' : '') }}</div>
                                     </td>
-                                    <td style="padding:8px;">
+                                    <td>
                                         @if($v->deadline)
-                                            <span style="{{ $v->is_overdue ? 'color:#b91c1c;font-weight:700;' : 'color:#334155;' }}">
-                                                {{ $v->deadline->format('d.m.Y') }}
-                                            </span>
-                                            @if($v->is_overdue)
-                                                <div style="font-size:10px;color:#b91c1c;">kechikkan</div>
-                                            @endif
-                                        @else
-                                            —
-                                        @endif
+                                            <span style="{{ $overdue ? 'color:#b91c1c;font-weight:700;' : 'color:#334155;' }}">{{ \Carbon\Carbon::parse($v->deadline)->format('d.m.Y') }}</span>
+                                            @if($overdue)<div style="font-size:10px;color:#b91c1c;">kechikkan</div>@endif
+                                        @else — @endif
                                     </td>
-                                    <td style="padding:8px;">
+                                    <td>
                                         @php $b = $statusBadge[$v->status] ?? ['—','#475569','#f1f5f9']; @endphp
-                                        <span style="background:{{ $b[2] }};color:{{ $b[1] }};padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;">
-                                            {{ $b[0] }}
-                                        </span>
+                                        <span style="background:{{ $b[2] }};color:{{ $b[1] }};padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;">{{ $b[0] }}</span>
                                     </td>
                                 </tr>
                             @empty
-                                <tr>
-                                    <td colspan="9" style="padding:40px;text-align:center;color:#94a3b8;">
-                                        Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.
-                                    </td>
-                                </tr>
+                                <tr><td colspan="12" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
                 </div>
 
-                <div style="margin-top:14px;">
-                    {{ $submissions->links() }}
-                </div>
+                <div style="padding:14px 16px;">{{ $submissions->links() }}</div>
             </div>
         </div>
     </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function () {
+            $('.select2').each(function () {
+                $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text() });
+            });
+
+            const selSpec = @json(request('specialty'));
+            const selLevel = @json(request('level_code'));
+            const selSem = @json(request('semester_code'));
+
+            function reset(el, ph) { $(el).empty().append('<option value="">' + ph + '</option>'); }
+            function populate(url, params, el, cb) {
+                $.ajax({ url: url, type: 'GET', data: params, success: function (data) {
+                    $.each(data, function (k, v) { $(el).append('<option value="' + k + '">' + v + '</option>'); });
+                    if (cb) cb();
+                }});
+            }
+            function loadSpecialties(preselect) {
+                reset('#specialty', 'Barchasi');
+                populate('{{ route('admin.closing-form.get-specialties') }}', {
+                    education_type: $('#education_type').val(),
+                    faculty_id: $('#faculty').val(),
+                    current_semester: '1'
+                }, '#specialty', function () {
+                    if (preselect) $('#specialty').val(preselect);
+                    $('#specialty').trigger('change.select2');
+                });
+            }
+            function loadLevels(preselect) {
+                reset('#level_code', 'Barchasi');
+                populate('{{ route('admin.closing-form.get-level-codes') }}', {}, '#level_code', function () {
+                    if (preselect) $('#level_code').val(preselect);
+                    $('#level_code').trigger('change.select2');
+                });
+            }
+            function loadSemesters(preselect) {
+                reset('#semester_code', 'Barchasi');
+                populate('{{ route('admin.closing-form.get-semesters') }}', { level_code: $('#level_code').val() }, '#semester_code', function () {
+                    if (preselect) $('#semester_code').val(preselect);
+                    $('#semester_code').trigger('change.select2');
+                });
+            }
+            loadSpecialties(selSpec);
+            loadLevels(selLevel);
+            loadSemesters(selSem);
+            $('#education_type, #faculty').on('change', function () { loadSpecialties(); });
+            $('#level_code').on('change', function () { loadSemesters(); });
+        });
+    </script>
+
+    <style>
+        .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; border-radius: 12px 12px 0 0; }
+        .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end; }
+        .filter-row:last-child { margin-bottom: 0; }
+        .filter-item { display: flex; flex-direction: column; }
+        .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
+        .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+        .filter-input { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 0 12px; font-size: 0.8rem; color: #1e293b; background: #fff; width: 100%; outline: none; }
+        .filter-input:hover { border-color: #2b5ea7; }
+        .btn-search { height: 36px; display: inline-flex; align-items: center; gap: 6px; background: #1a3268; color: #fff; border: none; padding: 0 18px; border-radius: 8px; cursor: pointer; font-size: 0.85rem; }
+        .btn-search:hover { background: #15264f; }
+
+        .vd-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .vd-table thead th { background: #f1f5f9; text-align: left; padding: 9px 10px; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #475569; white-space: nowrap; }
+        .vd-table thead th a { color: #475569; text-decoration: none; display: inline-flex; align-items: center; gap: 4px; }
+        .vd-table thead th a:hover { color: #1a3268; }
+        .vd-table tbody td { padding: 8px 10px; border-top: 1px solid #f1f5f9; vertical-align: top; }
+        .vd-table tbody tr:hover { background: #f8fafc; }
+        .vd-person { cursor: help; }
+    </style>
 </x-app-layout>

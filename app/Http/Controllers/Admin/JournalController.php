@@ -1909,37 +1909,15 @@ class JournalController extends Controller
                     ->keyBy('student_hemis_id');
 
                 // Fallback: agar YN allaqachon yuborilgan lekin SinovTestGrade yozuvi
-                // yo'q bo'lsa (o'qituvchi yangi oqimdan oldin to'g'ridan-to'g'ri
-                // submitToYn qilgan holat) — student_grades sinov_yn_test yozuvidan
-                // yoki joriy JN o'rtachasidan sintetik yozuv yaratamiz. Bu tepa
-                // jurnal "Sinov (test)" ustunining bo'sh ko'rinishini oldini oladi.
+                // yoki student_grades sinov_yn_test yozuvi yo'q bo'lsa (eski oqimda
+                // submitToYn xatolik bilan tugagan, yoki lesson_pair_code bug'i
+                // sababli student_grades insert yiqilgan) — backfill qilamiz va
+                // sintetik xotira obyektini ham qaytaramiz.
                 if (!empty($ynSubmission)) {
-                    $sgRows = DB::table('student_grades')
-                        ->whereNull('deleted_at')
-                        ->where('subject_id', $subjectId)
-                        ->where('semester_code', $semesterCode)
-                        ->where('training_type_code', 102)
-                        ->where('reason', 'sinov_yn_test')
-                        ->whereIn('student_hemis_id', $students->pluck('hemis_id')->all())
-                        ->select('student_hemis_id', 'grade')
-                        ->get()
-                        ->keyBy('student_hemis_id');
-
-                    foreach ($students as $stuRow) {
-                        $h = $stuRow->hemis_id;
-                        if ($sinovOverrides->has($h)) continue;
-                        $fallback = $sgRows->get($h)?->grade ?? ($sinovJnMap[$h] ?? null);
-                        if ($fallback === null) continue;
-                        $synth = new SinovTestGrade();
-                        $synth->subject_id = $subjectId;
-                        $synth->semester_code = $semesterCode;
-                        $synth->group_hemis_id = $group->group_hemis_id;
-                        $synth->student_hemis_id = $h;
-                        $synth->override_grade = (float) $fallback;
-                        $synth->default_grade = (float) ($sinovJnMap[$h] ?? $fallback);
-                        $synth->is_locked = true;
-                        $sinovOverrides->put($h, $synth);
-                    }
+                    $this->backfillSinovDataIfMissing(
+                        $subjectId, $semesterCode, $group->group_hemis_id,
+                        $subject, $students, $sinovJnMap, $sinovOverrides
+                    );
                 }
 
                 // $sinovInJournal = qaydnoma yopilgan deb hisoblash uchun is_locked
@@ -6172,6 +6150,131 @@ class JournalController extends Controller
         }
 
         return $result;
+    }
+
+    /**
+     * Sinov fanida YN yuborilgan lekin SinovTestGrade va/yoki student_grades
+     * sinov_yn_test yozuvlari yo'q bo'lsa, ularni JN o'rtachasidan backfill
+     * qilish. Eski oqim/eski bug sababli yo'qolgan ma'lumotlarni tiklash uchun.
+     * $sinovOverrides collectionga ham qo'shib qaytaradi (xotira ichida).
+     */
+    private function backfillSinovDataIfMissing(
+        string $subjectId,
+        string $semesterCode,
+        string $groupHemisId,
+        $subject,
+        $students,
+        array $sinovJnMap,
+        $sinovOverrides
+    ): void {
+        $studentHemisIds = $students->pluck('hemis_id')->all();
+        if (empty($studentHemisIds)) return;
+
+        $sgRows = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 102)
+            ->where('reason', 'sinov_yn_test')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->select('student_hemis_id', 'grade')
+            ->get()
+            ->keyBy('student_hemis_id');
+
+        // student_grades insert uchun zarur ma'lumotlar
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+        $eduYearCode = null;
+        $eduYearName = null;
+        $lessonDateForRow = now()->toDateString();
+        $latestSched = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->orderBy('lesson_date', 'desc')
+            ->select('education_year_code', 'education_year_name', 'lesson_date')
+            ->first();
+        if ($latestSched) {
+            $eduYearCode = $latestSched->education_year_code ?? null;
+            $eduYearName = $latestSched->education_year_name ?? null;
+            if (!empty($latestSched->lesson_date)) {
+                $lessonDateForRow = $latestSched->lesson_date;
+            }
+        }
+        $teacherEmployeeId = is_active_oqituvchi() ? (get_teacher_hemis_id() ?? 0) : 0;
+        $now = now();
+        $studentRecords = DB::table('students')
+            ->whereIn('hemis_id', $studentHemisIds)
+            ->select('hemis_id', 'id')
+            ->get()
+            ->keyBy('hemis_id');
+
+        foreach ($students as $stuRow) {
+            $h = $stuRow->hemis_id;
+            if ($sinovOverrides->has($h)) continue;
+
+            $fallback = $sgRows->get($h)?->grade ?? ($sinovJnMap[$h] ?? null);
+            if ($fallback === null) continue;
+            $finalGrade = (int) round((float) $fallback, 0, PHP_ROUND_HALF_UP);
+
+            // 1) SinovTestGrade backfill (DB)
+            $stg = SinovTestGrade::updateOrCreate(
+                [
+                    'subject_id' => $subjectId,
+                    'semester_code' => $semesterCode,
+                    'group_hemis_id' => $groupHemisId,
+                    'student_hemis_id' => $h,
+                ],
+                [
+                    'default_grade' => (float) ($sinovJnMap[$h] ?? $finalGrade),
+                    'override_grade' => (float) $finalGrade,
+                    'is_locked' => true,
+                    'overridden_at' => $now,
+                ]
+            );
+            $sinovOverrides->put($h, $stg);
+
+            // 2) student_grades sinov_yn_test backfill (agar yo'q bo'lsa)
+            if ($sgRows->has($h)) continue;
+            try {
+                DB::table('student_grades')->insert(array_merge([
+                    'hemis_id' => 0,
+                    'student_id' => $studentRecords->get($h)?->id ?? 0,
+                    'student_hemis_id' => $h,
+                    'semester_code' => $semesterCode,
+                    'semester_name' => $subject->semester_name ?? '',
+                    'education_year_code' => $eduYearCode,
+                    'education_year_name' => $eduYearName,
+                    'subject_schedule_id' => 0,
+                    'subject_id' => $subjectId,
+                    'subject_name' => $subject->subject_name ?? '',
+                    'subject_code' => $subject->subject_code ?? '',
+                    'training_type_code' => 102,
+                    'training_type_name' => 'YN test',
+                    'employee_id' => $teacherEmployeeId,
+                    'employee_name' => '',
+                    'graded_by_user_id' => null,
+                    'lesson_date' => $lessonDateForRow,
+                    'lesson_pair_code' => '1',
+                    'lesson_pair_name' => 'YN test',
+                    'lesson_pair_start_time' => '00:00',
+                    'lesson_pair_end_time' => '00:00',
+                    'created_at_api' => $now,
+                    'grade' => $finalGrade,
+                    'status' => 'closed',
+                    'reason' => 'sinov_yn_test',
+                    'is_yn_locked' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ], $hasAttemptCol ? ['attempt' => 1] : []));
+            } catch (\Throwable $e) {
+                Log::warning('backfillSinovDataIfMissing: student_grades insert failed', [
+                    'student_hemis_id' => $h,
+                    'subject_id' => $subjectId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
     }
 
     /**

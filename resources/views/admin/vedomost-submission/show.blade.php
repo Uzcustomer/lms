@@ -58,13 +58,10 @@
                     <div><span style="color:#94a3b8;">Muddat:</span> <b style="{{ $overdue ? 'color:#b91c1c;' : '' }}">{{ $v->deadline ? \Carbon\Carbon::parse($v->deadline)->format('d.m.Y') : '—' }}</b> {{ $overdue ? '(kechikkan)' : '' }}</div>
                 </div>
 
-                @if($v->pdf_path || $v->excel_path)
+                @if($v->pdf_path)
                     <div style="margin-top:14px;padding-top:14px;border-top:1px solid #f1f5f9;display:flex;gap:10px;flex-wrap:wrap;">
                         @if($v->pdf_path)
                             <a href="{{ route('admin.vedomost-submission.file', [$v->id, 'pdf']) }}" style="background:#fee2e2;color:#b91c1c;padding:8px 14px;border-radius:8px;text-decoration:none;font-size:13px;">📄 PDF yuklab olish</a>
-                        @endif
-                        @if($v->excel_path)
-                            <a href="{{ route('admin.vedomost-submission.file', [$v->id, 'excel']) }}" style="background:#dcfce7;color:#166534;padding:8px 14px;border-radius:8px;text-decoration:none;font-size:13px;">📊 Excel yuklab olish</a>
                         @endif
                         @if($v->uploaded_at)
                             <span style="color:#94a3b8;font-size:12px;align-self:center;">Yuklagan: {{ $v->uploaded_by_name }} · {{ \Carbon\Carbon::parse($v->uploaded_at)->format('d.m.Y H:i') }}</span>
@@ -91,10 +88,6 @@
                         <div>
                             <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px;">Skaner (PDF)</label>
                             <input type="file" name="pdf" accept="application/pdf" required>
-                        </div>
-                        <div>
-                            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px;">Excel (.xlsx/.xls)</label>
-                            <input type="file" name="excel" accept=".xlsx,.xls" required>
                         </div>
                         <button type="submit" style="background:#1a3268;color:#fff;border:none;padding:9px 18px;border-radius:8px;cursor:pointer;">
                             {{ $v->status === 'rejected' ? 'Qayta yuklash' : 'Yuklash va qabul qilish' }}

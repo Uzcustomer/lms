@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\VedomostSubmission;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
-use PhpOffice\PhpSpreadsheet\IOFactory as SpreadsheetIOFactory;
 use RuntimeException;
 
 /**
@@ -47,7 +46,6 @@ class VedomostAiChecker
         }
 
         $pdfBase64 = base64_encode(Storage::disk('public')->get($v->pdf_path));
-        $excelText = $this->extractExcelText($v->excel_path);
 
         $content = [
             [
@@ -55,24 +53,18 @@ class VedomostAiChecker
                 'text' => "TIZIMDAGI (kutilgan) YN QAYDNOMA MA'LUMOTI (JSON):\n"
                     . json_encode($expected, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
             ],
-        ];
-        if ($excelText !== null) {
-            $content[] = [
-                'type' => 'text',
-                'text' => "MENEJER KIRITGAN EXCEL VERSIYASI (matn):\n" . $excelText,
-            ];
-        }
-        $content[] = [
-            'type' => 'document',
-            'source' => [
-                'type' => 'base64',
-                'media_type' => 'application/pdf',
-                'data' => $pdfBase64,
+            [
+                'type' => 'document',
+                'source' => [
+                    'type' => 'base64',
+                    'media_type' => 'application/pdf',
+                    'data' => $pdfBase64,
+                ],
             ],
-        ];
-        $content[] = [
-            'type' => 'text',
-            'text' => "Yuqoridagi SKANER (PDF) ni tizim ma'lumoti bilan solishtiring va sxema bo'yicha natija qaytaring.",
+            [
+                'type' => 'text',
+                'text' => "Yuqoridagi SKANER (PDF) ni tizim ma'lumoti bilan solishtiring va sxema bo'yicha natija qaytaring.",
+            ],
         ];
 
         $payload = [
@@ -136,38 +128,12 @@ class VedomostAiChecker
         ];
     }
 
-    private function extractExcelText(?string $path): ?string
-    {
-        if (!$path || !Storage::disk('public')->exists($path)) {
-            return null;
-        }
-        try {
-            $spreadsheet = SpreadsheetIOFactory::load(Storage::disk('public')->path($path));
-            $lines = [];
-            foreach ($spreadsheet->getAllSheets() as $sheet) {
-                foreach ($sheet->toArray(null, true, false, false) as $row) {
-                    $cells = array_map(fn($c) => trim((string) $c), $row);
-                    if (implode('', $cells) === '') {
-                        continue;
-                    }
-                    $lines[] = implode(' | ', $cells);
-                }
-            }
-            $text = implode("\n", $lines);
-            // Juda uzun bo'lsa cheklaymiz
-            return mb_substr($text, 0, 40000);
-        } catch (\Throwable $e) {
-            return null;
-        }
-    }
-
     private function systemPrompt(): string
     {
         return <<<'TXT'
 Siz universitet o'quv bo'limining vedomost (YN qaydnoma) tekshiruvchi yordamchisisiz.
 Vazifa: o'qituvchi taqdim etgan skaner qilingan vedomostni (PDF) tizimdagi rasmiy
-YN qaydnoma ma'lumoti bilan solishtirib, nomuvofiqliklarni aniqlash. Menejer kiritgan
-Excel versiyasi ham beriladi — uni ham hisobga oling (skaner ↔ Excel ↔ tizim).
+YN qaydnoma ma'lumoti bilan solishtirib, nomuvofiqliklarni aniqlash.
 
 Quyidagilarni tekshiring:
 1) Sarlavha maydonlari tizim ma'lumotiga mos kelishi: fakultet nomi, o'quv yili, yo'nalish,

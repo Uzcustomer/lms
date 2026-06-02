@@ -301,7 +301,7 @@ class VedomostSubmissionController extends Controller
     }
 
     /**
-     * Skaner qilingan vedomostni yuklash (PDF + Excel). Status -> qabul qilindi.
+     * Skaner qilingan vedomostni yuklash (faqat PDF). Status -> qabul qilindi.
      */
     public function uploadFiles(Request $request, $id)
     {
@@ -314,26 +314,20 @@ class VedomostSubmissionController extends Controller
 
         $request->validate([
             'pdf' => 'required|file|mimes:pdf|max:20480',
-            'excel' => 'required|file|mimes:xlsx,xls|max:20480',
         ], [
             'pdf.required' => 'Skaner qilingan PDF faylni yuklang.',
             'pdf.mimes' => 'PDF fayl PDF formatida bo\'lishi kerak.',
-            'excel.required' => 'Excel faylни yuklang.',
-            'excel.mimes' => 'Excel fayl .xlsx yoki .xls formatida bo\'lishi kerak.',
         ]);
 
         $dir = "vedomost-submissions/{$v->id}";
-        // Eski fayllar bo'lsa (qayta yuklash) — o'chiramiz
-        foreach ([$v->pdf_path, $v->excel_path] as $old) {
-            if ($old && Storage::disk('public')->exists($old)) {
-                Storage::disk('public')->delete($old);
-            }
+        // Eski fayl bo'lsa (qayta yuklash) — o'chiramiz
+        if ($v->pdf_path && Storage::disk('public')->exists($v->pdf_path)) {
+            Storage::disk('public')->delete($v->pdf_path);
         }
 
         $from = $v->status;
         $v->update([
             'pdf_path' => $request->file('pdf')->store($dir, 'public'),
-            'excel_path' => $request->file('excel')->store($dir, 'public'),
             'uploaded_by' => auth()->id(),
             'uploaded_by_name' => $this->userName(),
             'uploaded_at' => now(),

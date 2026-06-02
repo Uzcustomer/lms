@@ -38,8 +38,8 @@
                     <div class="flex items-start justify-between gap-3 flex-wrap">
                         <div class="min-w-0 flex-1">
                             <p class="text-[10px] uppercase tracking-wider text-red-100 font-semibold">{{ __("Qayta o'qish jurnali") }}</p>
-                            <h3 class="text-lg sm:text-xl font-bold mt-1">{{ $group->subject_name }}</h3>
-                            <p class="text-xs text-red-100 mt-0.5">{{ $group->name }}</p>
+                            <h3 class="text-lg sm:text-xl font-bold mt-1">{{ $application->subject_name }}</h3>
+                            <p class="text-xs text-red-100 mt-0.5">{{ $application->semester_name }} · {{ $group->name }}</p>
                         </div>
                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white text-red-700 flex-shrink-0">
                             {{-- Muddat hali amal qilsa "Davom etmoqda", aks holda guruh status nomi --}}
@@ -169,7 +169,7 @@
                                     </svg>
                                 </div>
                                 <div class="min-w-0">
-                                    <a href="{{ route('student.retake-journal.mustaqil-download', $group->id) }}"
+                                    <a href="{{ route('student.retake-journal.mustaqil-download', $application->id) }}"
                                        class="text-sm font-medium text-red-700 hover:underline truncate block">
                                         {{ $mustaqil->original_filename ?? __("Fayl") }}
                                     </a>
@@ -236,7 +236,7 @@
                         </div>
                     @else
                         <form method="POST"
-                              action="{{ route('student.retake-journal.mustaqil-upload', $group->id) }}"
+                              action="{{ route('student.retake-journal.mustaqil-upload', $application->id) }}"
                               enctype="multipart/form-data"
                               class="space-y-3 pt-3 border-t border-gray-100">
                             @csrf

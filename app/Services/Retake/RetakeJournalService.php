@@ -223,19 +223,28 @@ class RetakeJournalService
 
     /**
      * Talaba mustaqil ta'lim faylini yuklaydi.
+     *
+     * `$applicationId` ixtiyoriy — agar berilgan bo'lsa, aynan shu ariza
+     * uchun yuklanadi (bitta guruhda talabaning bir nechta arizasi bo'lsa
+     * kerak). Berilmasa, talabaning shu guruhdagi birinchi arizasi olinadi
+     * (orqaga moslik).
      */
     public function submitMustaqil(
         RetakeGroup $group,
         Student $student,
         UploadedFile $file,
         ?string $comment = null,
+        ?int $applicationId = null,
     ): RetakeMustaqilSubmission {
-        // Talaba shu guruhda?
-        $app = RetakeApplication::query()
+        // Talaba shu guruhda? (ixtiyoriy applicationId orqali aniqlanadi)
+        $query = RetakeApplication::query()
             ->where('student_hemis_id', $student->hemis_id)
             ->where('retake_group_id', $group->id)
-            ->where('final_status', RetakeApplication::STATUS_APPROVED)
-            ->first();
+            ->where('final_status', RetakeApplication::STATUS_APPROVED);
+        if ($applicationId !== null) {
+            $query->where('id', $applicationId);
+        }
+        $app = $query->first();
         if (!$app) {
             throw ValidationException::withMessages([
                 'group' => 'Siz bu guruhga biriktirilmagansiz',

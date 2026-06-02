@@ -1049,9 +1049,9 @@ Route::prefix('student')->name('student.')->group(function () {
         // Talaba qayta o'qish jurnali — read-only + mustaqil ta'lim upload
         Route::prefix('retake-journal')->name('retake-journal.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\RetakeJournalController::class, 'index'])->name('index');
-            Route::get('/{groupId}', [\App\Http\Controllers\Student\RetakeJournalController::class, 'show'])->name('show');
-            Route::post('/{groupId}/mustaqil', [\App\Http\Controllers\Student\RetakeJournalController::class, 'uploadMustaqil'])->name('mustaqil-upload');
-            Route::get('/{groupId}/mustaqil/download', [\App\Http\Controllers\Student\RetakeJournalController::class, 'downloadMustaqil'])->name('mustaqil-download');
+            Route::get('/{applicationId}', [\App\Http\Controllers\Student\RetakeJournalController::class, 'show'])->name('show');
+            Route::post('/{applicationId}/mustaqil', [\App\Http\Controllers\Student\RetakeJournalController::class, 'uploadMustaqil'])->name('mustaqil-upload');
+            Route::get('/{applicationId}/mustaqil/download', [\App\Http\Controllers\Student\RetakeJournalController::class, 'downloadMustaqil'])->name('mustaqil-download');
         });
 
         // Imtihon natijalari bo'yicha apellyatsiya

@@ -37,16 +37,22 @@ class StudentRatingController extends Controller
                 ->get();
         }
 
+        // Asosiy scope (filterlar ostidagi reyting qatorlari) — klonlash uchun
+        $scopedRatings = StudentRating::query();
+        if ($selectedDepartment) $scopedRatings->where('department_code', $selectedDepartment);
+        if ($selectedSpecialty) $scopedRatings->where('specialty_code', $selectedSpecialty);
+        if ($selectedLevel) $scopedRatings->where('level_code', $selectedLevel);
+
         // Guruh dropdown — joriy filtrlar ostida mavjud guruhlar
-        $groupsQuery = StudentRating::whereNotNull('group_name');
-        if ($selectedDepartment) $groupsQuery->where('department_code', $selectedDepartment);
-        if ($selectedSpecialty) $groupsQuery->where('specialty_code', $selectedSpecialty);
-        if ($selectedLevel) $groupsQuery->where('level_code', $selectedLevel);
-        $groups = $groupsQuery->select('group_name')->distinct()->orderBy('group_name')->pluck('group_name');
+        $groups = (clone $scopedRatings)
+            ->whereNotNull('group_name')
+            ->distinct()
+            ->orderBy('group_name')
+            ->pluck('group_name');
 
         // Fan dropdown — joriy filtrlar ostidagi talabalar baholaridan fanlar
         $subjects = collect();
-        $studentHemisIds = (clone $groupsQuery)->pluck('student_hemis_id');
+        $studentHemisIds = (clone $scopedRatings)->pluck('student_hemis_id');
         if ($studentHemisIds->isNotEmpty()) {
             $subjects = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
                 ->whereNotNull('subject_name')

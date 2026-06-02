@@ -37,30 +37,23 @@ class StudentRatingController extends Controller
                 ->get();
         }
 
-        // Asosiy scope (filterlar ostidagi reyting qatorlari) — klonlash uchun
-        $scopedRatings = StudentRating::query();
-        if ($selectedDepartment) $scopedRatings->where('department_code', $selectedDepartment);
-        if ($selectedSpecialty) $scopedRatings->where('specialty_code', $selectedSpecialty);
-        if ($selectedLevel) $scopedRatings->where('level_code', $selectedLevel);
-
         // Guruh dropdown — joriy filtrlar ostida mavjud guruhlar
-        $groups = (clone $scopedRatings)
-            ->whereNotNull('group_name')
-            ->distinct()
-            ->orderBy('group_name')
-            ->pluck('group_name');
+        $groupsQuery = StudentRating::whereNotNull('group_name');
+        if ($selectedDepartment) $groupsQuery->where('department_code', $selectedDepartment);
+        if ($selectedSpecialty) $groupsQuery->where('specialty_code', $selectedSpecialty);
+        if ($selectedLevel) $groupsQuery->where('level_code', $selectedLevel);
+        $groups = $groupsQuery->distinct()->orderBy('group_name')->pluck('group_name');
 
-        // Fan dropdown — joriy filtrlar ostidagi talabalar baholaridan fanlar
-        $subjects = collect();
-        $studentHemisIds = (clone $scopedRatings)->pluck('student_hemis_id');
-        if ($studentHemisIds->isNotEmpty()) {
-            $subjects = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
-                ->whereNotNull('subject_name')
-                ->select('subject_id', 'subject_name')
-                ->distinct()
-                ->orderBy('subject_name')
-                ->get();
-        }
+        // Fan dropdown — student_grades dan to'g'ridan-to'g'ri distinct fanlar.
+        // Eslatma: pre-filter "ostidagi talabalar fanlari" ni hisoblash 10K+ ID
+        // bo'yicha whereIn ga olib keladi va 504 timeout chiqaradi. Buning o'rniga
+        // hamma fanlarni ko'rsatamiz — fan tanlanganda Excel/sahifa qaytadan
+        // filtrlanadi.
+        $subjects = StudentGrade::whereNotNull('subject_name')
+            ->select('subject_id', 'subject_name')
+            ->distinct()
+            ->orderBy('subject_name')
+            ->get();
 
         $query = StudentRating::query();
 

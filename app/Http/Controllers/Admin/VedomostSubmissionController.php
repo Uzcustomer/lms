@@ -301,7 +301,7 @@ class VedomostSubmissionController extends Controller
     }
 
     /**
-     * Skaner qilingan vedomostni yuklash (faqat PDF). Status -> qabul qilindi.
+     * Skaner qilingan vedomostni yuklash (PDF majburiy, Excel ixtiyoriy). Status -> qabul qilindi.
      */
     public function uploadFiles(Request $request, $id)
     {
@@ -314,19 +314,20 @@ class VedomostSubmissionController extends Controller
 
         $request->validate([
             'pdf' => 'required|file|mimes:pdf|max:20480',
+            'excel' => 'nullable|file|mimes:xlsx,xls|max:20480',
         ], [
             'pdf.required' => 'Skaner qilingan PDF faylni yuklang.',
             'pdf.mimes' => 'PDF fayl PDF formatida bo\'lishi kerak.',
+            'excel.mimes' => 'Excel fayl .xlsx yoki .xls formatida bo\'lishi kerak.',
         ]);
 
         $dir = "vedomost-submissions/{$v->id}";
-        // Eski fayl bo'lsa (qayta yuklash) — o'chiramiz
+        // Eski PDF bo'lsa (qayta yuklash) — o'chiramiz
         if ($v->pdf_path && Storage::disk('public')->exists($v->pdf_path)) {
             Storage::disk('public')->delete($v->pdf_path);
         }
 
-        $from = $v->status;
-        $v->update([
+        $update = [
             'pdf_path' => $request->file('pdf')->store($dir, 'public'),
             'uploaded_by' => auth()->id(),
             'uploaded_by_name' => $this->userName(),
@@ -336,7 +337,18 @@ class VedomostSubmissionController extends Controller
             'reviewed_by' => null,
             'reviewed_by_name' => null,
             'reviewed_at' => null,
-        ]);
+        ];
+
+        // Excel ixtiyoriy — yuklansa, eskisini almashtiramiz
+        if ($request->hasFile('excel')) {
+            if ($v->excel_path && Storage::disk('public')->exists($v->excel_path)) {
+                Storage::disk('public')->delete($v->excel_path);
+            }
+            $update['excel_path'] = $request->file('excel')->store($dir, 'public');
+        }
+
+        $from = $v->status;
+        $v->update($update);
 
         $this->log($v, 'upload', $from, $v->status);
         $this->notifier->notifyStatusChange($v);

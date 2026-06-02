@@ -6,6 +6,7 @@ use App\Exports\VedomostSubmissionExport;
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\Department;
+use App\Models\Setting;
 use App\Models\VedomostSubmission;
 use App\Models\VedomostSubmissionLog;
 use App\Services\VedomostSubmissionNotifier;
@@ -17,6 +18,9 @@ use Illuminate\Support\Facades\Storage;
 class VedomostSubmissionController extends Controller
 {
     private const ALLOWED_ROLES = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
+
+    /** Telegram/bildirishnoma toggle'ini boshqara oladigan rollar (admin). */
+    private const NOTIFY_TOGGLE_ROLES = ['superadmin', 'admin', 'kichik_admin'];
 
     /** Saralash mumkin bo'lgan ustunlar. */
     private const SORTABLE = [
@@ -169,6 +173,9 @@ class VedomostSubmissionController extends Controller
         $perPage = (int) $request->get('per_page', 50);
         $submissions = $query->paginate($perPage)->appends($request->query());
 
+        $notifyEnabled = VedomostSubmissionNotifier::enabled();
+        $canToggleNotify = in_array(session('active_role', ''), self::NOTIFY_TOGGLE_ROLES, true);
+
         return view('admin.vedomost-submission.index', compact(
             'submissions',
             'faculties',
@@ -176,7 +183,9 @@ class VedomostSubmissionController extends Controller
             'educationTypes',
             'selectedEducationType',
             'closingForms',
-            'stats'
+            'stats',
+            'notifyEnabled',
+            'canToggleNotify'
         ));
     }
 
@@ -235,6 +244,26 @@ class VedomostSubmissionController extends Controller
         return redirect()
             ->route('admin.vedomost-submission.index', $request->query())
             ->with('success', "Joriy semestr bo'yicha {$count} ta vedomost yozuvi yangilandi.");
+    }
+
+    /**
+     * Telegram/bildirishnoma yuborishni yoqish/o'chirish (faqat admin).
+     */
+    public function toggleNotify(Request $request)
+    {
+        $this->checkAccess();
+        if (!in_array(session('active_role', ''), self::NOTIFY_TOGGLE_ROLES, true)) {
+            abort(403, 'Bu sozlamani faqat admin o\'zgartira oladi.');
+        }
+
+        $enabled = $request->boolean('enabled');
+        Setting::set('vedomost_notify_enabled', $enabled ? '1' : '0');
+
+        return redirect()
+            ->route('admin.vedomost-submission.index', $request->except(['enabled', '_token']))
+            ->with('success', $enabled
+                ? 'Telegram/bildirishnoma yuborish YOQILDI.'
+                : "Telegram/bildirishnoma yuborish O'CHIRILDI (test rejimi).");
     }
 
     public function show($id)

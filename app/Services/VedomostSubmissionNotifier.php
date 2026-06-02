@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Notification;
+use App\Models\Setting;
 use App\Models\Teacher;
 use App\Models\TeacherNotification;
 use App\Models\User;
@@ -19,8 +20,19 @@ class VedomostSubmissionNotifier
      * Status o'zgarganda o'qituvchi, fan mas'uli va kafedra mudiriga xabar.
      * Rad etilganda — qo'shimcha o'quv prorektoriga bildirgi.
      */
+    /** Bildirishnomalar yoqilganmi (admin toggle orqali boshqariladi). */
+    public static function enabled(): bool
+    {
+        return Setting::get('vedomost_notify_enabled', '0') === '1';
+    }
+
     public function notifyStatusChange(VedomostSubmission $v): void
     {
+        // Test davrida o'chirib qo'yilgan bo'lsa — hech qanday xabar yuborilmaydi
+        if (!self::enabled()) {
+            return;
+        }
+
         [$title, $body] = $this->statusText($v);
 
         $recipients = array_values(array_unique(array_filter([

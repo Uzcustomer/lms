@@ -201,6 +201,12 @@
         </div>
 
         {{-- Talabalar ro'yxati --}}
+        @php
+            // Talaba qo'shish/chiqarish — muddat hali amal qilsa (end_date >= bugun)
+            // mumkin, status 'completed' bo'lsa ham. Faqat sana butunlay o'tgan
+            // bo'lsa cheklanadi.
+            $canModifyMembers = !$group->end_date || $group->end_date->gte(\Illuminate\Support\Carbon::today());
+        @endphp
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden"
              x-data="addStudentsModal({
                 eligibleUrl: '{{ route('admin.retake-groups.eligible-applications', $group->id) }}',
@@ -209,7 +215,7 @@
              })">
             <div class="px-5 py-4 border-b border-gray-100 flex items-center justify-between flex-wrap gap-2">
                 <h3 class="text-sm font-semibold text-gray-900">{{ __("Talabalar") }} ({{ $group->applications->count() }})</h3>
-                @if($group->status !== 'completed')
+                @if($canModifyMembers)
                     <button type="button" @click="openModal()"
                             class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium bg-blue-600 text-white rounded-lg hover:bg-blue-700">
                         <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
@@ -290,7 +296,7 @@
                         <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Yo'nalish") }}</th>
                         <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase">{{ __("Kredit") }}</th>
                         <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Holat") }}</th>
-                        @if($group->status !== 'completed')
+                        @if($canModifyMembers)
                             <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase">{{ __("Amal") }}</th>
                         @endif
                     </tr>
@@ -315,7 +321,7 @@
                                     {{ $app->final_status }}
                                 </span>
                             </td>
-                            @if($group->status !== 'completed')
+                            @if($canModifyMembers)
                                 <td class="px-3 py-2 text-right">
                                     <form method="POST" action="{{ route('admin.retake-groups.students.remove', [$group->id, $app->id]) }}"
                                           onsubmit="return confirm('{{ __('Bu talabani guruhdan chiqarishni tasdiqlaysizmi? U qayta guruhlash ro\'yxatiga qaytadi.') }}')"

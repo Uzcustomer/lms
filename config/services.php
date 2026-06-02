@@ -192,4 +192,12 @@ return [
         'enforce_computer_binding' => env('EXAM_ENFORCE_COMPUTER_BINDING', false),
     ],
 
+    'anthropic' => [
+        // Claude API kaliti (api.anthropic.com). Bo'sh bo'lsa AI tekshiruv o'chiq.
+        'api_key' => env('ANTHROPIC_API_KEY'),
+        'model' => env('ANTHROPIC_MODEL', 'claude-opus-4-8'),
+        'version' => env('ANTHROPIC_VERSION', '2023-06-01'),
+        'timeout' => (int) env('ANTHROPIC_TIMEOUT', 180),
+    ],
+
 ];

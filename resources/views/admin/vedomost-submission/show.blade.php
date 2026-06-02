@@ -93,8 +93,8 @@
                             <input type="file" name="pdf" accept="application/pdf" required>
                         </div>
                         <div>
-                            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px;">Excel (.xlsx/.xls)</label>
-                            <input type="file" name="excel" accept=".xlsx,.xls" required>
+                            <label style="font-size:12px;color:#64748b;display:block;margin-bottom:4px;">Excel (ixtiyoriy)</label>
+                            <input type="file" name="excel" accept=".xlsx,.xls">
                         </div>
                         <button type="submit" style="background:#1a3268;color:#fff;border:none;padding:9px 18px;border-radius:8px;cursor:pointer;">
                             {{ $v->status === 'rejected' ? 'Qayta yuklash' : 'Yuklash va qabul qilish' }}
@@ -129,6 +129,83 @@
 
                 @if($v->status === 'approved')
                     <div style="color:#166534;font-size:14px;">Bu vedomost tasdiqlangan. Tasdiqlagan: <b>{{ $v->reviewed_by_name }}</b> · {{ $v->reviewed_at ? \Carbon\Carbon::parse($v->reviewed_at)->format('d.m.Y H:i') : '' }}</div>
+                @endif
+            </div>
+
+            {{-- AI tekshiruv (tavsiya) --}}
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="padding:18px;margin-top:14px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <h3 style="font-size:16px;font-weight:700;color:#1e293b;">🤖 AI tekshiruv <span style="font-weight:400;color:#94a3b8;font-size:13px;">(tavsiya — yakuniy qaror registratorda)</span></h3>
+                    @if($v->pdf_path && $aiConfigured && !in_array($v->ai_check_status, ['queued','running']))
+                        <form method="POST" action="{{ route('admin.vedomost-submission.ai-check', $v->id) }}">
+                            @csrf
+                            <button type="submit" style="background:#6d28d9;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;">
+                                {{ $v->ai_check_status === 'done' || $v->ai_check_status === 'error' ? 'Qayta tekshirish' : 'AI tekshirish' }}
+                            </button>
+                        </form>
+                    @endif
+                </div>
+
+                @if(!$aiConfigured)
+                    <div style="color:#b45309;font-size:13px;">AI tekshiruv sozlanmagan (ANTHROPIC_API_KEY yo'q).</div>
+                @elseif(!$v->pdf_path)
+                    <div style="color:#94a3b8;font-size:13px;">Avval skaner (PDF) yuklang.</div>
+                @elseif(in_array($v->ai_check_status, ['queued','running']))
+                    <div style="color:#b45309;font-size:14px;">⏳ Tekshirilmoqda... Natija bir necha daqiqada tayyor bo'ladi. Sahifani yangilang.</div>
+                @elseif($v->ai_check_status === 'error')
+                    <div style="background:#fee2e2;color:#b91c1c;padding:10px;border-radius:8px;font-size:13px;">Xatolik: {{ $v->ai_error }}</div>
+                @elseif($v->ai_check_status === 'done')
+                    @php $r = $v->ai_result ?? []; $disc = $r['discrepancies'] ?? []; $sig = $r['signatures'] ?? []; @endphp
+                    <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                        @if(($v->ai_verdict ?? '') === 'ok')
+                            <span style="background:#dcfce7;color:#166534;padding:5px 14px;border-radius:999px;font-weight:700;">✅ Nomuvofiqlik topilmadi</span>
+                        @else
+                            <span style="background:#fee2e2;color:#b91c1c;padding:5px 14px;border-radius:999px;font-weight:700;">⚠️ {{ count($disc) }} ta nomuvofiqlik</span>
+                        @endif
+                        <span style="color:#94a3b8;font-size:12px;">{{ $v->ai_checked_at ? \Carbon\Carbon::parse($v->ai_checked_at)->format('d.m.Y H:i') : '' }}</span>
+                    </div>
+                    @if($v->ai_summary)
+                        <div style="font-size:14px;color:#334155;margin-bottom:10px;">{{ $v->ai_summary }}</div>
+                    @endif
+
+                    @if(!empty($sig))
+                        <div style="font-size:13px;margin-bottom:10px;">
+                            Imzolar:
+                            <span style="margin-left:6px;">O'qituvchi: {!! ($sig['oqituvchi'] ?? false) ? '✅' : '❌' !!}</span>
+                            <span style="margin-left:10px;">Dekan: {!! ($sig['dekan'] ?? false) ? '✅' : '❌' !!}</span>
+                            <span style="margin-left:10px;">Kafedra mudiri: {!! ($sig['kafedra_mudiri'] ?? false) ? '✅' : '❌' !!}</span>
+                        </div>
+                    @endif
+
+                    @if(!empty($disc))
+                        <div style="overflow-x:auto;">
+                            <table style="width:100%;border-collapse:collapse;font-size:13px;">
+                                <thead>
+                                    <tr style="background:#f8fafc;text-align:left;">
+                                        <th style="padding:6px;">Maydon</th>
+                                        <th style="padding:6px;">Jiddiylik</th>
+                                        <th style="padding:6px;">Tizimda</th>
+                                        <th style="padding:6px;">Skanerda</th>
+                                        <th style="padding:6px;">Izoh</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach($disc as $d)
+                                        @php $sev = $d['severity'] ?? 'low'; $sc = $sev==='high'?'#b91c1c':($sev==='medium'?'#b45309':'#64748b'); @endphp
+                                        <tr style="border-top:1px solid #f1f5f9;">
+                                            <td style="padding:6px;font-weight:600;">{{ $d['field'] ?? '' }}</td>
+                                            <td style="padding:6px;color:{{ $sc }};font-weight:600;">{{ $sev }}</td>
+                                            <td style="padding:6px;">{{ $d['expected'] ?? '' }}</td>
+                                            <td style="padding:6px;">{{ $d['found'] ?? '' }}</td>
+                                            <td style="padding:6px;color:#475569;">{{ $d['note'] ?? '' }}</td>
+                                        </tr>
+                                    @endforeach
+                                </tbody>
+                            </table>
+                        </div>
+                    @endif
+                @else
+                    <div style="color:#94a3b8;font-size:13px;">Hali tekshirilmagan. "AI tekshirish" tugmasini bosing.</div>
                 @endif
             </div>
 

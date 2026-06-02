@@ -185,6 +185,7 @@
                                 <th><a href="{{ $sortUrl('base_date') }}">Asos sana {!! $arrow('base_date') !!}</a></th>
                                 <th><a href="{{ $sortUrl('deadline') }}">Muddat {!! $arrow('deadline') !!}</a></th>
                                 <th><a href="{{ $sortUrl('status') }}">Status {!! $arrow('status') !!}</a></th>
+                                <th>Amal</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -214,9 +215,13 @@
                                         @php $b = $statusBadge[$v->status] ?? ['—','#475569','#f1f5f9']; @endphp
                                         <span style="background:{{ $b[2] }};color:{{ $b[1] }};padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;">{{ $b[0] }}</span>
                                     </td>
+                                    <td>
+                                        <a href="{{ route('admin.vedomost-submission.show', $v->id) }}"
+                                           style="color:#1a3268;font-weight:600;text-decoration:none;white-space:nowrap;">Batafsil →</a>
+                                    </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="12" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
+                                <tr><td colspan="13" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
                             @endforelse
                         </tbody>
                     </table>

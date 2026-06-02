@@ -72,17 +72,52 @@ class ClosingFormController extends Controller
             ->groupBy('education_type_code', 'education_type_name')
             ->get();
 
-        $selectedEducationType = $request->get('education_type');
-        if (!$request->has('education_type')) {
-            $selectedEducationType = $educationTypes
-                ->first(fn($t) => str_contains(mb_strtolower($t->education_type_name ?? ''), 'bakalavr'))
-                ?->education_type_code;
-        }
+        $selectedEducationType = $this->resolveSelectedEducationType($request, $educationTypes);
 
         $faculties = Department::where('structure_type_code', 11)
             ->where('active', true)
             ->orderBy('name')
             ->get();
+
+        $perPage = (int) $request->get('per_page', 50);
+        $subjects = $this->filteredSubjectsQuery($request)
+            ->paginate($perPage)
+            ->appends($request->query());
+
+        return view('admin.closing-form.index', compact(
+            'subjects',
+            'educationTypes',
+            'selectedEducationType',
+            'faculties'
+        ));
+    }
+
+    /**
+     * Tanlangan ta'lim turi kodi. So'rovda berilmagan bo'lsa, default — bakalavr.
+     */
+    private function resolveSelectedEducationType(Request $request, $educationTypes = null)
+    {
+        if ($request->has('education_type')) {
+            return $request->get('education_type');
+        }
+
+        $educationTypes = $educationTypes ?: Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        return $educationTypes
+            ->first(fn($t) => str_contains(mb_strtolower($t->education_type_name ?? ''), 'bakalavr'))
+            ?->education_type_code;
+    }
+
+    /**
+     * Yopilish shakli ro'yxati uchun filtrlangan (saralangan) so'rovni quradi.
+     * Sahifa va Excel eksporti shu bitta mantiqdan foydalanadi.
+     */
+    private function filteredSubjectsQuery(Request $request)
+    {
+        $selectedEducationType = $this->resolveSelectedEducationType($request);
 
         $query = DB::table('curriculum_subjects as cs')
             ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
@@ -136,21 +171,46 @@ class ClosingFormController extends Controller
             $query->whereIn('s.semester_hemis_id', $this->currentSemesterHemisIds());
         }
 
-        $query->orderBy('f.name')
+        return $query->orderBy('f.name')
             ->orderBy('sp.name')
             ->orderBy('s.level_code')
             ->orderBy('cs.semester_code')
             ->orderBy('cs.subject_name');
+    }
 
-        $perPage = (int) $request->get('per_page', 50);
-        $subjects = $query->paginate($perPage)->appends($request->query());
+    /**
+     * Filtr natijalarini Excel (.xlsx) faylga eksport qiladi.
+     */
+    public function export(Request $request)
+    {
+        $this->checkAccess();
 
-        return view('admin.closing-form.index', compact(
-            'subjects',
-            'educationTypes',
-            'selectedEducationType',
-            'faculties'
-        ));
+        $labels = [
+            'oski' => 'Faqat OSKI',
+            'test' => 'Faqat Test',
+            'oski_test' => 'OSKI + Test',
+            'normativ' => 'Normativ',
+            'sinov' => 'Sinov (test)',
+            'none' => "Yo'q",
+        ];
+
+        $rows = [];
+        $i = 1;
+        foreach ($this->filteredSubjectsQuery($request)->get() as $s) {
+            $rows[] = [
+                $i++,
+                $s->faculty_name,
+                $s->specialty_name,
+                $s->level_name,
+                $s->semester_name,
+                $s->subject_name,
+                $s->closing_form ? ($labels[$s->closing_form] ?? $s->closing_form) : 'Belgilanmagan',
+            ];
+        }
+
+        $fileName = 'yopilish-shakli-' . now()->format('Y-m-d_His') . '.xlsx';
+
+        return (new \App\Exports\ClosingFormExport($rows))->download($fileName);
     }
 
     public function bulkUpdate(Request $request)

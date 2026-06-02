@@ -590,6 +590,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Fanning yopilish shakli (Closing form)
         Route::prefix('closing-form')->name('closing-form.')->group(function () {
             Route::get('/', [ClosingFormController::class, 'index'])->name('index');
+            Route::get('/export', [ClosingFormController::class, 'export'])->name('export');
             Route::post('/bulk-update', [ClosingFormController::class, 'bulkUpdate'])->name('bulk-update');
             Route::get('/get-specialties', [ClosingFormController::class, 'getSpecialties'])->name('get-specialties');
             Route::get('/get-level-codes', [ClosingFormController::class, 'getLevelCodes'])->name('get-level-codes');

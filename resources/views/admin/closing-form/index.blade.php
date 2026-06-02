@@ -153,10 +153,16 @@
                                 Qo'llash
                             </button>
                         </div>
-                        <button type="submit" class="btn-save">
-                            <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                            Saqlash
-                        </button>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <a href="{{ route('admin.closing-form.export', request()->query()) }}" class="btn-save" style="background:#1d6f42; text-decoration:none;">
+                                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
+                                Excel
+                            </a>
+                            <button type="submit" class="btn-save">
+                                <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                                Saqlash
+                            </button>
+                        </div>
                     </div>
 
                     <div style="max-height: calc(100vh - 360px); overflow-y: auto; overflow-x: auto;">

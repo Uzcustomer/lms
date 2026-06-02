@@ -83,6 +83,13 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
         }
         if ($this->semesterCode) {
             $query->where('semester_code', $this->semesterCode);
+        } elseif (!$this->level && !$this->groupName) {
+            // Hech qanday semester/level/group tanlanmagan → joriy semestrlar
+            // bo'yicha filter qilamiz, aks holda million qator skanlash 504 beradi.
+            $currentCodes = Semester::where('current', true)->distinct()->pluck('code')->all();
+            if (!empty($currentCodes)) {
+                $query->whereIn('semester_code', $currentCodes);
+            }
         }
         if ($this->groupName) {
             $query->where('group_name', $this->groupName);
@@ -102,21 +109,58 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
         $query->orderBy('group_name')->orderByDesc('jn_average');
         $ratings = $query->get();
 
-        // Kurs kodi → matn (level_code mapping)
         $levelLabels = [
             '11' => '1-kurs', '12' => '2-kurs', '13' => '3-kurs',
             '14' => '4-kurs', '15' => '5-kurs', '16' => '6-kurs',
         ];
 
-        // Semester kodi → nom xaritasi (12 → "1-semestr" kabi)
-        $semesterCodes = $ratings->pluck('semester_code')->filter()->unique()->all();
-        $semesterNames = Semester::whereIn('code', $semesterCodes)
+        $semesterCodesOfRatings = $ratings->pluck('semester_code')->filter()->unique()->all();
+        $semesterNames = Semester::whereIn('code', $semesterCodesOfRatings)
             ->get(['code', 'name'])
             ->unique('code')
             ->pluck('name', 'code')
             ->all();
 
+        // ─── BULK-LOAD: barcha kerakli ma'lumotlar bir necha query bilan ───
+        $hemisIds = $ratings->pluck('student_hemis_id')->filter()->unique()->values()->all();
         $excludeTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+
+        // 1) Students (hemis_id => Student)
+        $studentsMap = Student::whereIn('hemis_id', $hemisIds)
+            ->get()
+            ->keyBy('hemis_id');
+
+        // 2) JN baholari (lesson_date bilan) — bulk
+        $jnGradesByHemis = StudentGrade::whereIn('student_hemis_id', $hemisIds)
+            ->whereIn('semester_code', $semesterCodesOfRatings)
+            ->whereNotIn('training_type_code', $excludeTypes)
+            ->whereNotNull('lesson_date')
+            ->select([
+                'student_hemis_id', 'semester_code', 'education_year_code',
+                'subject_id', 'subject_name', 'lesson_date', 'grade',
+                'retake_grade', 'status', 'reason',
+            ])
+            ->get()
+            ->groupBy('student_hemis_id');
+
+        // 3) MT/OSKI/Test baholari — bulk
+        $otherGradesByHemis = StudentGrade::whereIn('student_hemis_id', $hemisIds)
+            ->whereIn('semester_code', $semesterCodesOfRatings)
+            ->whereIn('training_type_code', [99, 101, 102])
+            ->select([
+                'student_hemis_id', 'semester_code', 'education_year_code',
+                'subject_id', 'subject_name', 'grade', 'retake_grade', 'training_type_code',
+            ])
+            ->get()
+            ->groupBy('student_hemis_id');
+
+        // 4) YN consent — bulk
+        $ynConsentsByHemis = YnConsent::whereIn('student_hemis_id', $hemisIds)
+            ->whereIn('semester_code', $semesterCodesOfRatings)
+            ->select(['student_hemis_id', 'subject_id', 'status'])
+            ->get()
+            ->groupBy('student_hemis_id');
+
         $rows = [];
         $rank = 0;
         $currentRow = 2;
@@ -131,7 +175,7 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             $semCode = $rating->semester_code ?? '';
             $semLabel = $semesterNames[$semCode] ?? $semCode;
 
-            $student = Student::where('hemis_id', $rating->student_hemis_id)->first();
+            $student = $studentsMap->get($rating->student_hemis_id);
             if (!$student) {
                 $rows[] = [
                     $rank, $rating->full_name, $deptName, $specName, $levelName,
@@ -142,7 +186,12 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
                 continue;
             }
 
-            $subjects = $this->getSubjects($student, $excludeTypes);
+            $subjects = $this->buildSubjects(
+                $student,
+                $jnGradesByHemis->get($student->hemis_id, collect()),
+                $otherGradesByHemis->get($student->hemis_id, collect()),
+                $ynConsentsByHemis->get($student->hemis_id, collect()),
+            );
 
             if ($this->subjectId) {
                 $subjects = array_values(array_filter(
@@ -176,31 +225,21 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
         return $rows;
     }
 
-    private function getSubjects(Student $student, array $excludeTypes): array
+    /**
+     * Talaba uchun fanlar to'plamini tuzish — pre-loaded collectionlar asosida
+     * (bulk-load yondashuvi N+1 muammosini olib tashlaydi).
+     */
+    private function buildSubjects($student, $jnGrades, $otherGrades, $ynConsents): array
     {
-        $grades = StudentGrade::where('student_hemis_id', $student->hemis_id)
-            ->where('semester_code', $student->semester_code)
-            ->when($student->education_year_code, fn($q) => $q->where(function ($q2) use ($student) {
-                $q2->where('education_year_code', $student->education_year_code)
-                    ->orWhereNull('education_year_code');
-            }))
-            ->whereNotIn('training_type_code', $excludeTypes)
-            ->whereNotNull('lesson_date')
-            ->get();
+        $semFilter = fn($g) => (string) $g->semester_code === (string) $student->semester_code;
 
-        $otherGrades = StudentGrade::where('student_hemis_id', $student->hemis_id)
-            ->where('semester_code', $student->semester_code)
-            ->when($student->education_year_code, fn($q) => $q->where(function ($q2) use ($student) {
-                $q2->where('education_year_code', $student->education_year_code)
-                    ->orWhereNull('education_year_code');
-            }))
-            ->whereIn('training_type_code', [99, 101, 102])
-            ->get();
+        $grades = $jnGrades->filter($semFilter);
+        $otherGradesFiltered = $otherGrades->filter($semFilter);
 
         $mtBySubject = [];
         $oskiBySubject = [];
         $testBySubject = [];
-        foreach ($otherGrades as $g) {
+        foreach ($otherGradesFiltered as $g) {
             $val = $g->retake_grade ?? $g->grade;
             if ($val === null) continue;
             $code = (int) $g->training_type_code;
@@ -224,19 +263,15 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
         }
 
         $bySubject = $grades->groupBy('subject_id');
-        $subjects = [];
-
-        $allSubjectIds = $bySubject->keys()->merge(array_keys($mtBySubject))
+        $allSubjectIds = $bySubject->keys()
+            ->merge(array_keys($mtBySubject))
             ->merge(array_keys($oskiBySubject))
             ->merge(array_keys($testBySubject))
             ->unique();
 
-        $ynConsents = YnConsent::where('student_hemis_id', $student->hemis_id)
-            ->where('semester_code', $student->semester_code)
-            ->whereIn('subject_id', $allSubjectIds->all())
-            ->get()
-            ->keyBy('subject_id');
+        $consentBySubject = $ynConsents->keyBy('subject_id');
 
+        $subjects = [];
         foreach ($allSubjectIds as $subjectId) {
             $subjectGrades = $bySubject->get($subjectId, collect());
             $subjectName = $subjectGrades->first()->subject_name ?? null;
@@ -244,12 +279,10 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             $byDate = $subjectGrades->groupBy(fn($g) => substr($g->lesson_date, 0, 10));
             $totalDaily = 0;
             $daysCount = 0;
-
             foreach ($byDate as $dailyGrades) {
                 $dayTotal = 0;
                 $dayCount = 0;
                 $absentCount = 0;
-
                 foreach ($dailyGrades as $g) {
                     if ($g->status === 'retake') {
                         $dayTotal += $g->retake_grade ?? 0;
@@ -260,26 +293,23 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
                     }
                     $dayCount++;
                 }
-
                 if ($dayCount === 0) continue;
                 $totalDaily += ($absentCount === $dayCount) ? 0 : round($dayTotal / $dayCount);
                 $daysCount++;
             }
 
             $avg = $daysCount > 0 ? round($totalDaily / $daysCount, 1) : 0;
-
             $mtValues = $mtBySubject[$subjectId] ?? [];
             $mt = count($mtValues) > 0 ? round(array_sum($mtValues) / count($mtValues), 1) : '';
-
             $oski = $oskiBySubject[$subjectId] ?? '';
             $test = $testBySubject[$subjectId] ?? '';
 
             if (!$subjectName) {
-                $otherForSubject = $otherGrades->where('subject_id', $subjectId)->first();
+                $otherForSubject = $otherGradesFiltered->where('subject_id', $subjectId)->first();
                 $subjectName = $otherForSubject->subject_name ?? $subjectId;
             }
 
-            $consent = $ynConsents->get($subjectId);
+            $consent = $consentBySubject->get($subjectId);
             $yn = match ($consent?->status) {
                 'approved' => 'Tayyor',
                 'rejected' => 'Rad etilgan',
@@ -301,6 +331,7 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
         usort($subjects, fn($a, $b) => $b['average'] <=> $a['average']);
         return $subjects;
     }
+
 
     public function styles(Worksheet $sheet): array
     {

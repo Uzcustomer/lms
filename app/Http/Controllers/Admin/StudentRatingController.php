@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Exports\StudentRatingExport;
+use App\Models\CurriculumSubject;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\StudentRating;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Maatwebsite\Excel\Facades\Excel;
 
 class StudentRatingController extends Controller
@@ -37,23 +39,28 @@ class StudentRatingController extends Controller
                 ->get();
         }
 
-        // Guruh dropdown — joriy filtrlar ostida mavjud guruhlar
-        $groupsQuery = StudentRating::whereNotNull('group_name');
-        if ($selectedDepartment) $groupsQuery->where('department_code', $selectedDepartment);
-        if ($selectedSpecialty) $groupsQuery->where('specialty_code', $selectedSpecialty);
-        if ($selectedLevel) $groupsQuery->where('level_code', $selectedLevel);
-        $groups = $groupsQuery->distinct()->orderBy('group_name')->pluck('group_name');
+        // Guruh dropdown — joriy filtrlar ostida mavjud guruhlar (10 daqiqa cache)
+        $groupsCacheKey = 'student_rating.groups.' . md5(($selectedDepartment ?? '') . '|' . ($selectedSpecialty ?? '') . '|' . ($selectedLevel ?? ''));
+        $groups = Cache::remember($groupsCacheKey, 600, function () use ($selectedDepartment, $selectedSpecialty, $selectedLevel) {
+            $q = StudentRating::whereNotNull('group_name');
+            if ($selectedDepartment) $q->where('department_code', $selectedDepartment);
+            if ($selectedSpecialty) $q->where('specialty_code', $selectedSpecialty);
+            if ($selectedLevel) $q->where('level_code', $selectedLevel);
+            return $q->distinct()->orderBy('group_name')->pluck('group_name');
+        });
 
-        // Fan dropdown — student_grades dan to'g'ridan-to'g'ri distinct fanlar.
-        // Eslatma: pre-filter "ostidagi talabalar fanlari" ni hisoblash 10K+ ID
-        // bo'yicha whereIn ga olib keladi va 504 timeout chiqaradi. Buning o'rniga
-        // hamma fanlarni ko'rsatamiz — fan tanlanganda Excel/sahifa qaytadan
-        // filtrlanadi.
-        $subjects = StudentGrade::whereNotNull('subject_name')
-            ->select('subject_id', 'subject_name')
-            ->distinct()
-            ->orderBy('subject_name')
-            ->get();
+        // Fan dropdown — curriculum_subjects dan (kichik jadval, tez). Student_grades
+        // DISTINCT bilan millionlab qator skani ~30 sek davom etadi. Curriculum
+        // jadvalida har fan bir necha marta (curriculum × semestr) takrorlanadi
+        // shuning uchun subject_id bo'yicha unique qilamiz. 30 daqiqa cache.
+        $subjects = Cache::remember('student_rating.subjects.v2', 1800, function () {
+            return CurriculumSubject::whereNotNull('subject_name')
+                ->select('subject_id', 'subject_name')
+                ->orderBy('subject_name')
+                ->get()
+                ->unique('subject_id')
+                ->values();
+        });
 
         $query = StudentRating::query();
 

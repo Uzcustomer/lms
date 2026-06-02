@@ -35,22 +35,57 @@ class VedomostSubmissionNotifier
 
         [$title, $body] = $this->statusText($v);
 
-        $recipients = array_values(array_unique(array_filter([
-            $v->teacher_hemis_id,
-            $v->fan_masuli_hemis_id,
-            $v->kafedra_mudiri_hemis_id,
-        ])));
-
-        if (!empty($recipients)) {
-            $teachers = Teacher::whereIn('hemis_id', $recipients)->get();
-            foreach ($teachers as $teacher) {
-                $this->sendToTeacher($teacher, $title, $body, $v);
-            }
+        foreach ($this->recipientTeachers($v) as $teacher) {
+            $this->sendToTeacher($teacher, $title, $body, $v);
         }
 
         if ($v->status === VedomostSubmission::STATUS_REJECTED) {
             $this->notifyProrektor($v);
         }
+    }
+
+    /**
+     * Deadline ogohlantirishi (oz qoldi / kechikdi) —
+     * o'qituvchi, fan mas'uli va kafedra mudiriga.
+     */
+    public function notifyDeadlineWarning(VedomostSubmission $v, string $stage): void
+    {
+        if (!self::enabled()) {
+            return;
+        }
+
+        $ctx = "{$v->group_name} — {$v->subject_name}";
+        $deadline = $v->deadline ? \Carbon\Carbon::parse($v->deadline)->format('d.m.Y') : '—';
+
+        if ($stage === 'overdue') {
+            $title = "Vedomost muddati o'tib ketdi";
+            $body = "⚠️ {$ctx} vedomosti {$deadline} gacha topshirilishi kerak edi. Muddat o'tdi — zudlik bilan topshiring.";
+        } else { // soon
+            $title = 'Vedomost muddati yaqinlashdi';
+            $body = "⏳ {$ctx} vedomostini topshirish muddati: {$deadline}. Iltimos, o'z vaqtida topshiring.";
+        }
+
+        foreach ($this->recipientTeachers($v) as $teacher) {
+            $this->sendToTeacher($teacher, $title, $body, $v);
+        }
+    }
+
+    /**
+     * Xabar oluvchi o'qituvchilar: o'qituvchi + fan mas'uli + kafedra mudiri.
+     */
+    private function recipientTeachers(VedomostSubmission $v)
+    {
+        $ids = array_values(array_unique(array_filter([
+            $v->teacher_hemis_id,
+            $v->fan_masuli_hemis_id,
+            $v->kafedra_mudiri_hemis_id,
+        ])));
+
+        if (empty($ids)) {
+            return collect();
+        }
+
+        return Teacher::whereIn('hemis_id', $ids)->get();
     }
 
     private function statusText(VedomostSubmission $v): array

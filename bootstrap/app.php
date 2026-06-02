@@ -81,6 +81,9 @@ return Application::configure(basePath: dirname(__DIR__))
 //        $schedule->command('grades:close-expired')->everyMinute();
         $schedule->command('grades:close-expired')->everyThirtyMinutes()->withoutOverlapping(30);
 
+        // Vedomost topshirish muddati ogohlantirishlari (oz qoldi / kechikdi) — har kuni 09:00
+        $schedule->command('vedomost:deadline-warnings')->dailyAt('09:00')->withoutOverlapping();
+
         // YN test markazi: har minutda — kompyuter raqamini ochish, "tayyorlaning",
         // "kirsangiz bo'ladi", overflow → zahira, no-show holatlari.
         $schedule->job(new \App\Jobs\ExamScheduleTickJob())->everyMinute()->withoutOverlapping(2);

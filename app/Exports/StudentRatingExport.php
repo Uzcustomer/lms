@@ -5,6 +5,7 @@ namespace App\Exports;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\StudentRating;
+use App\Models\YnConsent;
 use Maatwebsite\Excel\Concerns\FromArray;
 use Maatwebsite\Excel\Concerns\Exportable;
 use Maatwebsite\Excel\Concerns\ShouldAutoSize;
@@ -37,7 +38,7 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
 
     public function headings(): array
     {
-        return ['#', 'F.I.O', 'Guruh', 'Fan nomi', 'Kunlar', 'JN bali', 'MT bali', 'OSKI', 'Test'];
+        return ['#', 'F.I.O', 'Guruh', 'Fan nomi', 'Kunlar', 'JN bali', 'MT bali', 'OSKI', 'Test', 'YN'];
     }
 
     public function array(): array
@@ -80,7 +81,7 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             $subjects = $this->getSubjects($student, $excludeTypes);
 
             if (empty($subjects)) {
-                $rows[] = [$rank, $rating->full_name, $rating->group_name, '-', '-', $rating->jn_average, '-', '-', '-'];
+                $rows[] = [$rank, $rating->full_name, $rating->group_name, '-', '-', $rating->jn_average, '-', '-', '-', '-'];
                 $this->studentHeaderRows[] = $currentRow;
                 $this->averageRows[] = $currentRow;
                 $currentRow++;
@@ -89,18 +90,18 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
 
             // Student header row (first subject)
             $first = array_shift($subjects);
-            $rows[] = [$rank, $rating->full_name, $rating->group_name, $first['name'], $first['days'], $first['average'], $first['mt'], $first['oski'], $first['test']];
+            $rows[] = [$rank, $rating->full_name, $rating->group_name, $first['name'], $first['days'], $first['average'], $first['mt'], $first['oski'], $first['test'], $first['yn']];
             $this->studentHeaderRows[] = $currentRow;
             $currentRow++;
 
             // Remaining subjects
             foreach ($subjects as $s) {
-                $rows[] = ['', '', '', $s['name'], $s['days'], $s['average'], $s['mt'], $s['oski'], $s['test']];
+                $rows[] = ['', '', '', $s['name'], $s['days'], $s['average'], $s['mt'], $s['oski'], $s['test'], $s['yn']];
                 $currentRow++;
             }
 
             // Average row — JN o'rtachasi (boshqa ustunlar bo'sh)
-            $rows[] = ['', '', '', "O'rtacha", '', $rating->jn_average, '', '', ''];
+            $rows[] = ['', '', '', "O'rtacha", '', $rating->jn_average, '', '', '', ''];
             $this->averageRows[] = $currentRow;
             $currentRow++;
         }
@@ -171,6 +172,13 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             ->merge(array_keys($testBySubject))
             ->unique();
 
+        // YN consent (talaba YN topshirishga roziligi) — har fan uchun bir status
+        $ynConsents = YnConsent::where('student_hemis_id', $student->hemis_id)
+            ->where('semester_code', $student->semester_code)
+            ->whereIn('subject_id', $allSubjectIds->all())
+            ->get()
+            ->keyBy('subject_id');
+
         foreach ($allSubjectIds as $subjectId) {
             $subjectGrades = $bySubject->get($subjectId, collect());
             $subjectName = $subjectGrades->first()->subject_name ?? null;
@@ -217,6 +225,14 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
                 $subjectName = $otherForSubject->subject_name ?? $subjectId;
             }
 
+            // YN consent statusini matnga aylantirish
+            $consent = $ynConsents->get($subjectId);
+            $yn = match ($consent?->status) {
+                'approved' => 'Tayyor',
+                'rejected' => 'Rad etilgan',
+                default    => 'Kutilmoqda',
+            };
+
             $subjects[] = [
                 'name'    => $subjectName,
                 'days'    => $daysCount,
@@ -224,6 +240,7 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
                 'mt'      => $mt,
                 'oski'    => $oski !== '' ? round((float) $oski, 1) : '',
                 'test'    => $test !== '' ? round((float) $test, 1) : '',
+                'yn'      => $yn,
             ];
         }
 
@@ -260,7 +277,7 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
 
         // Borders for all data
         if ($this->totalRows > 0) {
-            $range = 'A1:I' . ($this->totalRows + 1);
+            $range = 'A1:J' . ($this->totalRows + 1);
             $sheet->getStyle($range)->applyFromArray([
                 'borders' => [
                     'allBorders' => [

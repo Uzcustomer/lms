@@ -94,7 +94,15 @@
         <div class="card" id="qwCard1">
             <div class="card-body p-4">
                 <div id="qwStep1" class="step-section">
-                    <h2 class="h5 fw-bold mb-3">Shaxsiy ma'lumotlar</h2>
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h2 class="h5 fw-bold mb-0">Shaxsiy ma'lumotlar</h2>
+                        @if($a || count($existingFiles))
+                        <button type="button" id="qwClearBtn" class="btn btn-outline-danger btn-sm"
+                                data-url="{{ route('admin.students.admission-data.clear', $student) }}">
+                            🗑 Barcha ma'lumotlarni tozalash
+                        </button>
+                        @endif
+                    </div>
                     <div class="row g-3">
                         <div class="col-md-4"><label class="form-label required">Familiya</label><input type="text" class="form-control" name="familya" value="{{ $val('familya') }}" required></div>
                         <div class="col-md-4"><label class="form-label required">Ism</label><input type="text" class="form-control" name="ism" value="{{ $val('ism') }}" required></div>
@@ -112,8 +120,8 @@
                         </div>
 
                         <div class="col-md-4"><label class="form-label required">Telefon raqam</label><input class="form-control qw-phone" name="tel1" value="{{ $val('tel1') }}" required></div>
-                        <div class="col-md-4"><label class="form-label required">Qo'shimcha telefon</label><input class="form-control qw-phone" name="tel2" value="{{ $val('tel2') }}"></div>
-                        <div class="col-md-4"><label class="form-label required">Email</label><input type="email" class="form-control" name="email" value="{{ $val('email') }}"></div>
+                        <div class="col-md-4"><label class="form-label required">Qo'shimcha telefon</label><input class="form-control qw-phone" name="tel2" value="{{ $val('tel2') }}" required></div>
+                        <div class="col-md-4"><label class="form-label required">Email</label><input type="email" class="form-control" name="email" value="{{ $val('email') }}" required></div>
 
                         <div class="col-md-4">
                             <label class="form-label required">Millat</label>
@@ -142,7 +150,7 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label required">Tug'ilgan viloyat</label>
-                            <select class="form-select qw-viloyat" data-target="qw_tugilgan_tuman" name="tugilgan_viloyat">
+                            <select class="form-select qw-viloyat" data-target="qw_tugilgan_tuman" name="tugilgan_viloyat" required>
                                 <option value="">Tanlang…</option>
                                 @foreach(['Andijon viloyati','Buxoro viloyati',"Farg'ona viloyati",'Jizzax viloyati','Namangan viloyati','Navoiy viloyati','Qashqadaryo viloyati',"Qoraqalpog'iston Respublikasi",'Samarqand viloyati','Sirdaryo viloyati','Surxondaryo viloyati','Toshkent viloyati','Toshkent shahri','Xorazm viloyati'] as $v)
                                     <option {{ $sel('tugilgan_viloyat', $v) }}>{{ $v }}</option>
@@ -151,7 +159,7 @@
                         </div>
                         <div class="col-md-4">
                             <label class="form-label required">Tug'ilgan tuman</label>
-                            <select class="form-select" id="qw_tugilgan_tuman" name="tugulgan_tuman" data-current="{{ $val('tugulgan_tuman') }}">
+                            <select class="form-select" id="qw_tugilgan_tuman" name="tugulgan_tuman" data-current="{{ $val('tugulgan_tuman') }}" required>
                                 <option value="">Tanlang…</option>
                             </select>
                         </div>
@@ -168,10 +176,10 @@
                     <hr class="my-4">
                     <h2 class="h5 fw-bold mb-3">Passport ma'lumotlari</h2>
                     <div class="row g-3">
-                        <div class="col-md-3"><label class="form-label required">Passport seriyasi</label><input class="form-control text-uppercase" name="passport_seriya" value="{{ $val('passport_seriya') }}" maxlength="3"></div>
-                        <div class="col-md-3"><label class="form-label required">Passport raqami</label><input class="form-control" name="passport_raqam" value="{{ $val('passport_raqam') }}" maxlength="10"></div>
-                        <div class="col-md-3"><label class="form-label required">Berilgan sana</label><input class="form-control qw-date" name="passport_sana" value="{{ $passportSana }}" maxlength="10"></div>
-                        <div class="col-md-3"><label class="form-label required">Berilgan joy</label><input class="form-control" name="passport_joy" value="{{ $val('passport_joy') }}"></div>
+                        <div class="col-md-3"><label class="form-label required">Passport seriyasi</label><input class="form-control text-uppercase" name="passport_seriya" value="{{ $val('passport_seriya') }}" maxlength="3" required></div>
+                        <div class="col-md-3"><label class="form-label required">Passport raqami</label><input class="form-control" name="passport_raqam" value="{{ $val('passport_raqam') }}" maxlength="10" required></div>
+                        <div class="col-md-3"><label class="form-label required">Berilgan sana</label><input class="form-control qw-date" name="passport_sana" value="{{ $passportSana }}" maxlength="10" required></div>
+                        <div class="col-md-3"><label class="form-label required">Berilgan joy</label><input class="form-control" name="passport_joy" value="{{ $val('passport_joy') }}" required></div>
                     </div>
 
                     <hr class="my-4">
@@ -179,7 +187,7 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label required">Oliy ma'lumoti mavjudligi</label>
-                            <select class="form-select" id="qw_oliy_malumot" name="oliy_malumot">
+                            <select class="form-select" id="qw_oliy_malumot" name="oliy_malumot" required>
                                 <option value="">Tanlang…</option>
                                 <option value="ha" {{ $sel('oliy_malumot', 'ha') }}>Ha</option>
                                 <option value="yoq" {{ $sel('oliy_malumot', 'yoq') }}>Yo'q</option>
@@ -224,25 +232,25 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label required">OTM nomi</label>
-                            <input class="form-control" name="otm_nomi" value="{{ $val('otm_nomi', 'Toshkent davlat tibbiyot universiteti Termiz filiali') }}">
+                            <input class="form-control" name="otm_nomi" value="{{ $val('otm_nomi', 'Toshkent davlat tibbiyot universiteti Termiz filiali') }}" required>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label required">Ta'lim turi</label>
-                            <select class="form-select" name="talim_turi">
+                            <select class="form-select" name="talim_turi" required>
                                 <option value="">Tanlang…</option>
                                 @foreach(['Bakalavr','Magistr'] as $v)<option {{ $sel('talim_turi', $v) }}>{{ $v }}</option>@endforeach
                             </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label required">Ta'lim shakli</label>
-                            <select class="form-select" name="talim_shakli">
+                            <select class="form-select" name="talim_shakli" required>
                                 <option value="">Tanlang…</option>
                                 @foreach(['Kunduzgi','Kechki','Sirtqi','Onlayn'] as $v)<option {{ $sel('talim_shakli', $v) }}>{{ $v }}</option>@endforeach
                             </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label required">Mutaxassislik</label>
-                            <select class="form-select" name="mutaxassislik">
+                            <select class="form-select" name="mutaxassislik" required>
                                 <option value="">Tanlang…</option>
                                 @foreach([
                                     'Davolash ishi','Farmatsiya','Fundamental tibbiyot','Pediatriya ishi','Stomatologiya','Tibbiy profilaktika ishi',
@@ -278,26 +286,26 @@
                 <div id="qwStep3" class="step-section">
                     <h2 class="h5 fw-bold mb-3">DTM ma'lumotlari</h2>
                     <div class="row g-3">
-                        <div class="col-md-6"><label class="form-label required">Abituriyent ID raqami</label><input class="form-control" name="abituriyent_id" value="{{ $val('abituriyent_id') }}" inputmode="numeric"></div>
-                        <div class="col-md-6"><label class="form-label required">Javoblar varaqasi raqami</label><input class="form-control" name="javoblar_varaqasi" value="{{ $val('javoblar_varaqasi') }}"></div>
+                        <div class="col-md-6"><label class="form-label required">Abituriyent ID raqami</label><input class="form-control" name="abituriyent_id" value="{{ $val('abituriyent_id') }}" inputmode="numeric" required></div>
+                        <div class="col-md-6"><label class="form-label required">Javoblar varaqasi raqami</label><input class="form-control" name="javoblar_varaqasi" value="{{ $val('javoblar_varaqasi') }}" required></div>
                         <div class="col-md-6">
                             <label class="form-label required">Ta'lim tili</label>
-                            <select class="form-select" name="talim_tili">
+                            <select class="form-select" name="talim_tili" required>
                                 <option value="">Tanlang…</option>
                                 @foreach(["O'zbekcha",'Ruscha','Inglizcha'] as $v)<option {{ $sel('talim_tili', $v) }}>{{ $v }}</option>@endforeach
                             </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label required">Imtihon alifbosi</label>
-                            <select class="form-select" name="imtihon_alifbosi">
+                            <select class="form-select" name="imtihon_alifbosi" required>
                                 <option value="">Tanlang…</option>
                                 @foreach(['Lotin','Kiril'] as $v)<option {{ $sel('imtihon_alifbosi', $v) }}>{{ $v }}</option>@endforeach
                             </select>
                         </div>
-                        <div class="col-md-6"><label class="form-label required">To'plagan ball</label><input type="number" class="form-control" name="toplagan_ball" value="{{ $val('toplagan_ball') }}" step="0.01" min="0" max="200"></div>
+                        <div class="col-md-6"><label class="form-label required">To'plagan ball</label><input type="number" class="form-control" name="toplagan_ball" value="{{ $val('toplagan_ball') }}" step="0.01" min="0" max="200" required></div>
                         <div class="col-md-6">
                             <label class="form-label required">Tavsiya turi</label>
-                            <select class="form-select" name="tolov_shakli">
+                            <select class="form-select" name="tolov_shakli" required>
                                 <option value="">Tanlang…</option>
                                 @foreach([
                                     "To'lov-kontrakti asosida talabalikka tavsiya etildi",
@@ -325,14 +333,14 @@
                     <div class="row g-3">
                         <div class="col-md-6">
                             <label class="form-label required">Davlat</label>
-                            <select class="form-select" name="talim_davlat">
+                            <select class="form-select" name="talim_davlat" required>
                                 <option value="O`zbekiston Respublikasi" {{ $sel('talim_davlat', 'O`zbekiston Respublikasi') }}>O'zbekiston Respublikasi</option>
                                 <option value="Boshqa" {{ $sel('talim_davlat', 'Boshqa') }}>Boshqa</option>
                             </select>
                         </div>
                         <div class="col-md-6">
                             <label class="form-label required">Ta'lim olgan viloyati</label>
-                            <select class="form-select qw-viloyat" data-target="qw_talim_tuman" name="talim_viloyat">
+                            <select class="form-select qw-viloyat" data-target="qw_talim_tuman" name="talim_viloyat" required>
                                 <option value="">Tanlang…</option>
                                 @foreach(['Andijon viloyati','Buxoro viloyati',"Farg'ona viloyati",'Jizzax viloyati','Namangan viloyati','Navoiy viloyati','Qashqadaryo viloyati',"Qoraqalpog'iston Respublikasi",'Samarqand viloyati','Sirdaryo viloyati','Surxondaryo viloyati','Toshkent viloyati','Toshkent shahri','Xorazm viloyati'] as $v)
                                     <option {{ $sel('talim_viloyat', $v) }}>{{ $v }}</option>
@@ -341,24 +349,32 @@
                         </div>
                         <div class="col-md-6">
                             <label class="form-label required">Ta'lim olgan tumani</label>
-                            <select class="form-select" id="qw_talim_tuman" name="talim_tuman" data-current="{{ $val('talim_tuman') }}">
+                            <select class="form-select" id="qw_talim_tuman" name="talim_tuman" data-current="{{ $val('talim_tuman') }}" required>
                                 <option value="">Tanlang…</option>
                             </select>
                         </div>
+                        <div class="col-md-6 d-none">
+                            <label class="form-label">Viloyat (matn)</label>
+                            <input type="text" class="form-control" name="talim_viloyat_text" value="{{ $val('talim_viloyat_text') }}">
+                        </div>
+                        <div class="col-md-6 d-none">
+                            <label class="form-label">Tuman (matn)</label>
+                            <input type="text" class="form-control" name="talim_tuman_text" value="{{ $val('talim_tuman_text') }}">
+                        </div>
                         <div class="col-md-6">
                             <label class="form-label required">Muassasa turi</label>
-                            <select class="form-select" name="muassasa_turi">
+                            <select class="form-select" name="muassasa_turi" required>
                                 <option value="">Tanlang…</option>
                                 @foreach(["O'rta maktab",'Akademik litsey, kasb-hunar maktab','Texnikum, kasb-hunar kollej',"Boshqa o'quv yurti"] as $v)
                                     <option {{ $sel('muassasa_turi', $v) }}>{{ $v }}</option>
                                 @endforeach
                             </select>
                         </div>
-                        <div class="col-md-6"><label class="form-label required">Muassasa nomi</label><input class="form-control" name="muassasa_nomi" value="{{ $val('muassasa_nomi') }}"></div>
-                        <div class="col-md-3"><label class="form-label required">O'qigan yili (boshi)</label><input class="form-control qw-year" name="oqigan_yili_boshi" value="{{ $val('oqigan_yili_boshi') }}"></div>
-                        <div class="col-md-3"><label class="form-label required">O'qigan yili (tugashi)</label><input class="form-control qw-year" name="oqigan_yili_tugashi" value="{{ $val('oqigan_yili_tugashi') }}"></div>
-                        <div class="col-md-6"><label class="form-label required">Hujjat seriya va raqami</label><input class="form-control text-uppercase" name="hujjat_seriya" value="{{ $val('hujjat_seriya') }}" placeholder="KT777111"></div>
-                        <div class="col-md-6"><label class="form-label required">O'rtacha attestat/diplom bali</label><input type="number" step="0.01" min="0" max="100" class="form-control" name="ortalacha_ball" value="{{ $val('ortalacha_ball') }}"></div>
+                        <div class="col-md-6"><label class="form-label required">Muassasa nomi</label><input class="form-control" name="muassasa_nomi" value="{{ $val('muassasa_nomi') }}" required></div>
+                        <div class="col-md-3"><label class="form-label required">O'qigan yili (boshi)</label><input class="form-control qw-year" name="oqigan_yili_boshi" value="{{ $val('oqigan_yili_boshi') }}" required></div>
+                        <div class="col-md-3"><label class="form-label required">O'qigan yili (tugashi)</label><input class="form-control qw-year" name="oqigan_yili_tugashi" value="{{ $val('oqigan_yili_tugashi') }}" required></div>
+                        <div class="col-md-6"><label class="form-label required">Hujjat seriya va raqami</label><input class="form-control text-uppercase" name="hujjat_seriya" value="{{ $val('hujjat_seriya') }}" placeholder="KT777111" required></div>
+                        <div class="col-md-6"><label class="form-label required">O'rtacha attestat/diplom bali</label><input type="number" step="0.01" min="0" max="100" class="form-control" name="ortalacha_ball" value="{{ $val('ortalacha_ball') }}" required></div>
                         <div class="col-12">
                             <label class="form-label">Attestat/diplom skan (PDF)</label>
                             <input class="form-control" type="file" name="attestat_pdf" accept="application/pdf">
@@ -439,14 +455,14 @@
                     <div class="row g-3">
                         <div class="col-12 col-lg-4">
                             <label class="form-label required">Davlat</label>
-                            <select class="form-select" name="yashash_davlat">
+                            <select class="form-select" name="yashash_davlat" required>
                                 <option value="O`zbekiston Respublikasi" {{ $sel('yashash_davlat', 'O`zbekiston Respublikasi') }}>O'zbekiston Respublikasi</option>
                                 <option value="Boshqa" {{ $sel('yashash_davlat', 'Boshqa') }}>Boshqa</option>
                             </select>
                         </div>
                         <div class="col-12 col-lg-4">
                             <label class="form-label required">Viloyat</label>
-                            <select class="form-select qw-viloyat" data-target="qw_yashash_tuman" name="yashash_viloyat">
+                            <select class="form-select qw-viloyat" data-target="qw_yashash_tuman" name="yashash_viloyat" required>
                                 <option value="">Tanlang…</option>
                                 @foreach(['Andijon viloyati','Buxoro viloyati',"Farg'ona viloyati",'Jizzax viloyati','Namangan viloyati','Navoiy viloyati','Qashqadaryo viloyati',"Qoraqalpog'iston Respublikasi",'Samarqand viloyati','Sirdaryo viloyati','Surxondaryo viloyati','Toshkent viloyati','Toshkent shahri','Xorazm viloyati'] as $v)
                                     <option {{ $sel('yashash_viloyat', $v) }}>{{ $v }}</option>
@@ -455,13 +471,21 @@
                         </div>
                         <div class="col-12 col-lg-4">
                             <label class="form-label required">Tuman</label>
-                            <select class="form-select" id="qw_yashash_tuman" name="yashash_tuman" data-current="{{ $val('yashash_tuman') }}">
+                            <select class="form-select" id="qw_yashash_tuman" name="yashash_tuman" data-current="{{ $val('yashash_tuman') }}" required>
                                 <option value="">Tanlang…</option>
                             </select>
                         </div>
+                        <div class="col-12 col-lg-4 d-none">
+                            <label class="form-label">Viloyat (matn)</label>
+                            <input type="text" class="form-control" name="yashash_viloyat_text" value="{{ $val('yashash_viloyat_text') }}">
+                        </div>
+                        <div class="col-12 col-lg-4 d-none">
+                            <label class="form-label">Tuman (matn)</label>
+                            <input type="text" class="form-control" name="yashash_tuman_text" value="{{ $val('yashash_tuman_text') }}">
+                        </div>
                         <div class="col-12 col-lg-12">
                             <label class="form-label required">Doimiy manzil</label>
-                            <input class="form-control" name="doimiy_manzil" value="{{ $val('doimiy_manzil') }}" placeholder="Yangi hayot MFY, Navoiy ko'chasi, 9-uy">
+                            <input class="form-control" name="doimiy_manzil" value="{{ $val('doimiy_manzil') }}" placeholder="Yangi hayot MFY, Navoiy ko'chasi, 9-uy" required>
                         </div>
 
                         <div class="col-12">
@@ -472,9 +496,9 @@
                                 <div id="qwMap" class="dy-map"></div>
                                 <div class="marsshtab">
                                     <span>Kenglik</span>
-                                    <input id="qw_lat" name="kenglik" value="{{ $val('kenglik') }}">
+                                    <input id="qw_lat" name="kenglik" value="{{ $val('kenglik') }}" required>
                                     <span>Uzunlik</span>
-                                    <input id="qw_lon" name="uzunlik" value="{{ $val('uzunlik') }}">
+                                    <input id="qw_lon" name="uzunlik" value="{{ $val('uzunlik') }}" required>
                                 </div>
                             </div>
                         </div>
@@ -485,12 +509,12 @@
                         <div class="col-12 col-lg-6">
                             <h3 class="h5 fw-bold mb-3">Otaning ma'lumotlari</h3>
                             <div class="row g-3">
-                                <div class="col-md-6"><label class="form-label required">Familiyasi</label><input class="form-control qw-upper" name="ota_familiya" value="{{ $val('ota_familiya') }}"></div>
-                                <div class="col-md-6"><label class="form-label required">Ismi</label><input class="form-control qw-upper" name="ota_ismi" value="{{ $val('ota_ismi') }}"></div>
-                                <div class="col-md-6"><label class="form-label required">Sharifi</label><input class="form-control qw-upper" name="ota_sharifi" value="{{ $val('ota_sharifi') }}"></div>
-                                <div class="col-md-6"><label class="form-label required">Telefon raqami</label><input class="form-control qw-phone" name="ota_tel" value="{{ $val('ota_tel') }}"></div>
-                                <div class="col-md-6"><label class="form-label required">Ish joyi</label><input class="form-control qw-upper" name="ota_ish_joyi" value="{{ $val('ota_ish_joyi') }}"></div>
-                                <div class="col-md-6"><label class="form-label required">Lavozimi</label><input class="form-control qw-upper" name="ota_lavozimi" value="{{ $val('ota_lavozimi') }}"></div>
+                                <div class="col-md-6"><label class="form-label required">Familiyasi</label><input class="form-control qw-upper" name="ota_familiya" value="{{ $val('ota_familiya') }}" required></div>
+                                <div class="col-md-6"><label class="form-label required">Ismi</label><input class="form-control qw-upper" name="ota_ismi" value="{{ $val('ota_ismi') }}" required></div>
+                                <div class="col-md-6"><label class="form-label required">Sharifi</label><input class="form-control qw-upper" name="ota_sharifi" value="{{ $val('ota_sharifi') }}" required></div>
+                                <div class="col-md-6"><label class="form-label required">Telefon raqami</label><input class="form-control qw-phone" name="ota_tel" value="{{ $val('ota_tel') }}" required></div>
+                                <div class="col-md-6"><label class="form-label required">Ish joyi</label><input class="form-control qw-upper" name="ota_ish_joyi" value="{{ $val('ota_ish_joyi') }}" required></div>
+                                <div class="col-md-6"><label class="form-label required">Lavozimi</label><input class="form-control qw-upper" name="ota_lavozimi" value="{{ $val('ota_lavozimi') }}" required></div>
                                 <div class="col-12">
                                     <label class="form-label">Otaning pasport nusxasi (PDF)</label>
                                     <input class="form-control" type="file" name="ota_passport_pdf" accept="application/pdf">
@@ -501,12 +525,12 @@
                         <div class="col-12 col-lg-6">
                             <h3 class="h5 fw-bold mb-3">Onaning ma'lumotlari</h3>
                             <div class="row g-3">
-                                <div class="col-md-6"><label class="form-label required">Familiyasi</label><input class="form-control qw-upper" name="ona_familiya" value="{{ $val('ona_familiya') }}"></div>
-                                <div class="col-md-6"><label class="form-label required">Ismi</label><input class="form-control qw-upper" name="ona_ismi" value="{{ $val('ona_ismi') }}"></div>
-                                <div class="col-md-6"><label class="form-label required">Sharifi</label><input class="form-control qw-upper" name="ona_sharifi" value="{{ $val('ona_sharifi') }}"></div>
-                                <div class="col-md-6"><label class="form-label required">Telefon raqami</label><input class="form-control qw-phone" name="ona_tel" value="{{ $val('ona_tel') }}"></div>
-                                <div class="col-md-6"><label class="form-label required">Ish joyi</label><input class="form-control qw-upper" name="ona_ish_joyi" value="{{ $val('ona_ish_joyi') }}"></div>
-                                <div class="col-md-6"><label class="form-label required">Lavozimi</label><input class="form-control qw-upper" name="ona_lavozimi" value="{{ $val('ona_lavozimi') }}"></div>
+                                <div class="col-md-6"><label class="form-label required">Familiyasi</label><input class="form-control qw-upper" name="ona_familiya" value="{{ $val('ona_familiya') }}" required></div>
+                                <div class="col-md-6"><label class="form-label required">Ismi</label><input class="form-control qw-upper" name="ona_ismi" value="{{ $val('ona_ismi') }}" required></div>
+                                <div class="col-md-6"><label class="form-label required">Sharifi</label><input class="form-control qw-upper" name="ona_sharifi" value="{{ $val('ona_sharifi') }}" required></div>
+                                <div class="col-md-6"><label class="form-label required">Telefon raqami</label><input class="form-control qw-phone" name="ona_tel" value="{{ $val('ona_tel') }}" required></div>
+                                <div class="col-md-6"><label class="form-label required">Ish joyi</label><input class="form-control qw-upper" name="ona_ish_joyi" value="{{ $val('ona_ish_joyi') }}" required></div>
+                                <div class="col-md-6"><label class="form-label required">Lavozimi</label><input class="form-control qw-upper" name="ona_lavozimi" value="{{ $val('ona_lavozimi') }}" required></div>
                                 <div class="col-12">
                                     <label class="form-label">Onaning pasport nusxasi (PDF)</label>
                                     <input class="form-control" type="file" name="ona_passport_pdf" accept="application/pdf">
@@ -733,8 +757,71 @@
             const $sec = $('#qwStep'+n);
             if($sec.length){ $('html, body').animate({scrollTop: Math.max($sec.offset().top - 120, 0)}, 200); }
         }
-        $(document).on('click', '.qw-next', function(){ goStep(+$(this).data('next')); });
+
+        // ===== Step validation =====
+        function setRequired($el, isReq){
+            if (isReq) $el.prop('required', true);
+            else { $el.prop('required', false).removeClass('is-invalid'); }
+        }
+        function validateStep(stepNum){
+            const $section = $('#qwStep' + stepNum);
+            if (!$section.length) return true;
+            const $required = $section.find('[required]').filter(function(){
+                return $(this).closest('.d-none').length === 0 && $(this).is(':visible');
+            });
+            let firstInvalid = null;
+            $required.each(function(){
+                const $el = $(this);
+                const type = (this.type || '').toLowerCase();
+                let empty = false;
+                if (type === 'file') {
+                    const hasExisting = $el.siblings('.existing-file').length > 0;
+                    empty = (!this.files || this.files.length === 0) && !hasExisting;
+                } else if (this.multiple) {
+                    const v = $el.val();
+                    empty = !v || (Array.isArray(v) && v.length === 0);
+                } else {
+                    const v = ($el.val() || '').toString().trim();
+                    empty = !v;
+                }
+                if (empty) {
+                    $el.addClass('is-invalid');
+                    if (!firstInvalid) firstInvalid = this;
+                } else {
+                    $el.removeClass('is-invalid');
+                }
+            });
+            if (firstInvalid) {
+                try { firstInvalid.focus({preventScroll: true}); } catch(_) { $(firstInvalid).trigger('focus'); }
+                const off = $(firstInvalid).offset();
+                if (off) $('html, body').animate({scrollTop: Math.max(off.top - 120, 0)}, 250);
+                setTimeout(()=> alert("Iltimos, barcha majburiy maydonlarni to'ldiring."), 100);
+                return false;
+            }
+            return true;
+        }
+        $(document).on('click', '.qw-next', function(){
+            const next = +$(this).data('next');
+            if (!validateStep(next - 1)) return;
+            goStep(next);
+        });
         $(document).on('click', '.qw-back', function(){ goStep(+$(this).data('back')); });
+        $(document).on('input change', '.qw-wrap input, .qw-wrap select, .qw-wrap textarea', function(){
+            $(this).removeClass('is-invalid');
+        });
+
+        // ===== Clear all data button =====
+        $('#qwClearBtn').on('click', function(){
+            const url = $(this).data('url');
+            if (!confirm("Diqqat! Barcha qabul ma'lumotlari va yuklangan fayllar to'liq o'chiriladi. Davom etasizmi?")) return;
+            if (!confirm("Rostan ham o'chirmoqchimisiz? Bu amalni qaytarib bo'lmaydi.")) return;
+            const csrf = $('input[name="_token"]').first().val();
+            const $f = $('<form>').attr({method:'POST', action:url}).css('display','none');
+            $f.append($('<input>').attr({type:'hidden', name:'_token', value:csrf}));
+            $f.append($('<input>').attr({type:'hidden', name:'_method', value:'DELETE'}));
+            $('body').append($f);
+            $f.submit();
+        });
 
         // Conditional toggles (checkbox)
         $(document).on('change', '.qw-toggle', function(){
@@ -743,20 +830,54 @@
             $('#'+wrap).toggleClass('d-none', !this.checked);
         });
 
-        // Millat → millat_other
+        // Millat → millat_other (conditional required)
         $('#qw_millat').on('change', function(){
-            $('#qw_millat_other_wrap').toggleClass('d-none', this.value !== 'boshqa');
-        });
+            const isOther = this.value === 'boshqa';
+            $('#qw_millat_other_wrap').toggleClass('d-none', !isOther);
+            setRequired($('input[name="millat_other"]'), isOther);
+        }).trigger('change');
 
-        // Oliy ma'lumot → prev_otm_nomi
+        // Oliy ma'lumot → prev_otm_nomi (conditional required)
         $('#qw_oliy_malumot').on('change', function(){
-            $('#qw_prev_otm_wrap').toggleClass('d-none', this.value !== 'ha');
+            const isHa = this.value === 'ha';
+            $('#qw_prev_otm_wrap').toggleClass('d-none', !isHa);
+            setRequired($('input[name="prev_otm_nomi"]'), isHa);
+        }).trigger('change');
+
+        // Milliy sertifikat (conditional required for file)
+        $('#qw_milliy_sertifikat').on('change', function(){
+            const isHa = this.value === 'ha';
+            $('#qw_milliy_sert_pdf_wrap').toggleClass('d-none', !isHa);
+            const $file = $('input[name="milliy_sertifikat_pdf"]');
+            const hasExisting = $file.siblings('.existing-file').length > 0;
+            setRequired($file, isHa && !hasExisting);
         });
 
-        // Milliy sertifikat
-        $('#qw_milliy_sertifikat').on('change', function(){
-            $('#qw_milliy_sert_pdf_wrap').toggleClass('d-none', this.value !== 'ha');
-        });
+        // Davlat (country) → toggle viloyat/tuman vs text inputs and their required
+        function bindCountryToggle(countryName, selectViloyat, selectTuman, textViloyat, textTuman){
+            const $country = $('select[name="' + countryName + '"]');
+            if (!$country.length) return;
+            const $sv = $('select[name="' + selectViloyat + '"]');
+            const $st = $('select[name="' + selectTuman + '"]');
+            const $tv = $('input[name="' + textViloyat + '"]');
+            const $tt = $('input[name="' + textTuman + '"]');
+            function apply(){
+                const isUz = ($country.val() || '').indexOf('zbekiston') !== -1;
+                $sv.closest('.col-md-4, .col-md-6, .col-lg-4, .col-lg-6').toggleClass('d-none', !isUz);
+                $st.closest('.col-md-4, .col-md-6, .col-lg-4, .col-lg-6').toggleClass('d-none', !isUz);
+                $tv.closest('.col-md-4, .col-md-6, .col-lg-4, .col-lg-6').toggleClass('d-none', isUz);
+                $tt.closest('.col-md-4, .col-md-6, .col-lg-4, .col-lg-6').toggleClass('d-none', isUz);
+                setRequired($sv, isUz);
+                setRequired($st, isUz);
+                setRequired($tv, !isUz);
+                setRequired($tt, !isUz);
+            }
+            $country.on('change', apply);
+            apply();
+        }
+        bindCountryToggle('tugilgan_davlat', 'tugilgan_viloyat', 'tugulgan_tuman', 'tugilgan_viloyat_text', 'tugilgan_tuman_text');
+        bindCountryToggle('talim_davlat',    'talim_viloyat',    'talim_tuman',     'talim_viloyat_text',    'talim_tuman_text');
+        bindCountryToggle('yashash_davlat',  'yashash_viloyat',  'yashash_tuman',   'yashash_viloyat_text',  'yashash_tuman_text');
 
         // Sertifikat turi → ball
         $('#qw_sertifikat_turi').on('change', function(){

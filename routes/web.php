@@ -600,6 +600,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Vedomost topshirilish holati (submission tracking)
         Route::prefix('vedomost-submission')->name('vedomost-submission.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'index'])->name('index');
+            Route::get('/export', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'export'])->name('export');
             Route::post('/sync', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'sync'])->name('sync');
         });
 

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\CurriculumSubject;
 use App\Models\ExamSchedule;
 use App\Models\Group;
+use App\Models\Teacher;
 use App\Models\VedomostSubmission;
 use App\Support\WorkdayCalculator;
 use Carbon\Carbon;
@@ -18,6 +19,10 @@ class VedomostSubmissionService
 
     /** Deadline: base sanadan necha ish kuni keyin. */
     public const DEADLINE_WORKDAYS = 3;
+
+    /** Sync davomida takroriy so'rovlarni kamaytirish uchun kesh. */
+    private array $teacherCache = [];
+    private array $mudiriCache = [];
 
     /**
      * Joriy o'quv yili kodi (HEMIS "current" bayrog'idan).
@@ -104,6 +109,11 @@ class VedomostSubmissionService
                     ? WorkdayCalculator::addWorkdays(Carbon::parse($base['date']), self::DEADLINE_WORKDAYS)->toDateString()
                     : null;
                 $teacher = $this->primaryTeacher((int) $group->group_hemis_id, $subject);
+                $deptHemisId = $subject->department_id ?: $group->department_hemis_id;
+
+                $teacherInfo = $teacher ? $this->teacherInfo($teacher->employee_id) : null;
+                $fanMasuli = $this->fanMasuli($subject->id);
+                $kafedraMudiri = $this->kafedraMudiri($deptHemisId);
 
                 VedomostSubmission::updateOrCreate(
                     [
@@ -117,12 +127,19 @@ class VedomostSubmissionService
                         'curriculum_hemis_id' => $group->curriculum_hemis_id,
                         'curriculum_subject_id' => $subject->id,
                         'subject_name' => $subject->subject_name,
-                        'department_hemis_id' => $subject->department_id ?: $group->department_hemis_id,
+                        'department_hemis_id' => $deptHemisId,
                         'department_name' => $subject->department_name ?: $group->department_name,
                         'specialty_name' => $group->specialty_name,
                         'closing_form' => $subject->closing_form,
                         'teacher_hemis_id' => $teacher?->employee_id,
                         'teacher_name' => $teacher?->employee_name,
+                        'teacher_phone' => $teacherInfo?->phone,
+                        'fan_masuli_hemis_id' => $fanMasuli?->hemis_id,
+                        'fan_masuli_name' => $fanMasuli?->full_name,
+                        'fan_masuli_phone' => $fanMasuli?->phone,
+                        'kafedra_mudiri_hemis_id' => $kafedraMudiri?->hemis_id,
+                        'kafedra_mudiri_name' => $kafedraMudiri?->full_name,
+                        'kafedra_mudiri_phone' => $kafedraMudiri?->phone,
                         'base_type' => $base['type'],
                         'base_date' => $base['date'],
                         'deadline' => $deadline,
@@ -184,6 +201,73 @@ class VedomostSubmissionService
         }
 
         return ['type' => null, 'date' => null];
+    }
+
+    /**
+     * O'qituvchi ma'lumoti (telefon) — hemis_id bo'yicha, keshlanadi.
+     */
+    private function teacherInfo($hemisId): ?object
+    {
+        if (!$hemisId) {
+            return null;
+        }
+        if (!array_key_exists($hemisId, $this->teacherCache)) {
+            $this->teacherCache[$hemisId] = DB::table('teachers')
+                ->where('hemis_id', $hemisId)
+                ->select('hemis_id', 'full_name', 'phone')
+                ->first();
+        }
+
+        return $this->teacherCache[$hemisId];
+    }
+
+    /**
+     * Fan mas'uli — teacher_responsible_subjects pivot orqali (curriculum_subjects.id).
+     */
+    private function fanMasuli($curriculumSubjectId): ?object
+    {
+        if (!$curriculumSubjectId) {
+            return null;
+        }
+
+        return DB::table('teacher_responsible_subjects as trs')
+            ->join('teachers as t', 't.id', '=', 'trs.teacher_id')
+            ->where('trs.curriculum_subject_id', $curriculumSubjectId)
+            ->select('t.hemis_id', 't.full_name', 't.phone')
+            ->first();
+    }
+
+    /**
+     * Kafedra mudiri — kafedra (department_hemis_id) bo'yicha, keshlanadi.
+     * JournalController bilan bir xil mantiq (rol → role ustuni → staff_position).
+     */
+    private function kafedraMudiri($departmentHemisId): ?object
+    {
+        if (!$departmentHemisId) {
+            return null;
+        }
+        if (array_key_exists($departmentHemisId, $this->mudiriCache)) {
+            return $this->mudiriCache[$departmentHemisId];
+        }
+
+        $mudiri = Teacher::whereHas('roles', fn($q) => $q->where('name', 'kafedra_mudiri'))
+            ->where('department_hemis_id', $departmentHemisId)
+            ->where('is_active', true)
+            ->first();
+        if (!$mudiri) {
+            $mudiri = Teacher::where('role', 'kafedra_mudiri')
+                ->where('department_hemis_id', $departmentHemisId)
+                ->where('is_active', true)
+                ->first();
+        }
+        if (!$mudiri) {
+            $mudiri = Teacher::where('staff_position', 'LIKE', '%mudiri%')
+                ->where('department_hemis_id', $departmentHemisId)
+                ->where('is_active', true)
+                ->first();
+        }
+
+        return $this->mudiriCache[$departmentHemisId] = $mudiri;
     }
 
     /**

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Exports\StudentRatingExport;
 use App\Models\CurriculumSubject;
+use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\StudentRating;
@@ -26,9 +27,33 @@ class StudentRatingController extends Controller
         $selectedDepartment = $request->input('department');
         $selectedSpecialty = $request->input('specialty');
         $selectedLevel = $request->input('level');
+        $selectedSemester = $request->input('semester');
         $selectedSubject = $request->input('subject_id');
         $selectedGroup = $request->input('group_name');
         $search = $request->input('search');
+
+        // Semestrlar — Semester jadvalidan (kod → nom). Level tanlanganida shu
+        // levelning semesterlari ko'rsatiladi; aks holda barchasi.
+        $semesterQuery = Semester::query();
+        if ($selectedLevel) {
+            $semesterQuery->where('level_code', $selectedLevel);
+        }
+        $semesterRows = $semesterQuery->orderBy('level_code')->orderBy('code')
+            ->get(['code', 'name', 'level_code', 'current'])
+            ->unique('code')
+            ->values();
+
+        // Kurs tanlangan, lekin Semestr request'da yo'q bo'lsa — current semestrni
+        // default qilib tanlash. Foydalanuvchi "Barchasi" ni tanlasa, request'da
+        // 'semester' key bilan '' qiymat keladi, shuning uchun input() null
+        // qaytaradi → bu yerda level current semestr default sifatida tanlanadi.
+        if ($selectedLevel && $selectedSemester === null) {
+            $currentSem = $semesterRows->where('level_code', $selectedLevel)
+                ->firstWhere('current', true);
+            if ($currentSem) {
+                $selectedSemester = $currentSem->code;
+            }
+        }
 
         if ($selectedDepartment) {
             $specialties = StudentRating::where('department_code', $selectedDepartment)
@@ -73,6 +98,9 @@ class StudentRatingController extends Controller
         if ($selectedLevel) {
             $query->where('level_code', $selectedLevel);
         }
+        if ($selectedSemester) {
+            $query->where('semester_code', $selectedSemester);
+        }
         if ($selectedGroup) {
             $query->where('group_name', $selectedGroup);
         }
@@ -104,9 +132,9 @@ class StudentRatingController extends Controller
         $lastUpdated = StudentRating::max('calculated_at');
 
         return view('admin.student-ratings.index', compact(
-            'departments', 'specialties', 'groups', 'subjects',
+            'departments', 'specialties', 'groups', 'subjects', 'semesterRows',
             'top10', 'others', 'totalStudents',
-            'selectedDepartment', 'selectedSpecialty', 'selectedLevel',
+            'selectedDepartment', 'selectedSpecialty', 'selectedLevel', 'selectedSemester',
             'selectedSubject', 'selectedGroup', 'search', 'lastUpdated'
         ));
     }
@@ -120,7 +148,8 @@ class StudentRatingController extends Controller
                 $request->input('level'),
                 $request->input('search'),
                 $request->input('subject_id'),
-                $request->input('group_name')
+                $request->input('group_name'),
+                $request->input('semester')
             ),
             'talabalar_reytingi_' . date('Y-m-d') . '.xlsx'
         );

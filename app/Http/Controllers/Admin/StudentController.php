@@ -1070,26 +1070,87 @@ class StudentController extends Controller
             return back()->with('error', "Sizda bu ma'lumotlarni saqlash huquqi yo'q.");
         }
 
+        $aliasMap = [
+            'talim_country'         => 'talim_davlat',
+            'yashash_country'       => 'yashash_davlat',
+            'talim_tili_dtm'        => 'talim_tili',
+            'javob_varaqa_raqami'   => 'javoblar_varaqasi',
+            'yil_boshi'             => 'oqigan_yili_boshi',
+            'yil_tugashi'           => 'oqigan_yili_tugashi',
+        ];
+        foreach ($aliasMap as $formName => $dbName) {
+            if ($request->filled($formName) && !$request->filled($dbName)) {
+                $request->merge([$dbName => $request->input($formName)]);
+            }
+        }
+
         $data = $request->only([
             'familya', 'ism', 'otasining_ismi', 'tugilgan_sana', 'jshshir', 'jinsi',
-            'tel1', 'tel2', 'email', 'millat',
+            'tel1', 'tel2', 'email', 'millat', 'millat_other',
             'tugilgan_davlat', 'tugilgan_viloyat', 'tugulgan_tuman',
+            'tugilgan_viloyat_text', 'tugilgan_tuman_text',
+            'doimiy_manzil',
             'yashash_davlat', 'yashash_viloyat', 'yashash_tuman', 'yashash_manzil',
+            'yashash_viloyat_text', 'yashash_tuman_text',
             'vaqtinchalik_manzil',
+            'kenglik', 'uzunlik',
             'passport_seriya', 'passport_raqam', 'passport_sana', 'passport_joy',
             'abituriyent_id', 'javoblar_varaqasi', 'talim_tili', 'imtihon_alifbosi',
-            'oliy_malumot', 'otm_nomi', 'talim_turi', 'talim_shakli', 'mutaxassislik', 'hozirgi_talim_turi',
-            'toplagan_ball', 'tavsiya_turi', 'tolov_shakli', 'muassasa_nomi', 'hujjat_seriya', 'ortalacha_ball',
-            'talim_davlat', 'talim_viloyat', 'talim_tuman', 'oqigan_yili_boshi', 'oqigan_yili_tugashi',
-            'sertifikat_turi', 'sertifikat_ball', 'milliy_sertifikat', 'chet_til_sertifikat', 'chet_til_ball',
+            'oliy_malumot', 'otm_nomi', 'prev_otm_nomi',
+            'talim_turi', 'talim_shakli', 'mutaxassislik', 'hozirgi_talim_turi',
+            'toplagan_ball', 'tavsiya_turi', 'tolov_shakli',
+            'muassasa_nomi', 'muassasa_turi', 'hujjat_seriya', 'ortalacha_ball',
+            'talim_davlat', 'talim_viloyat', 'talim_tuman', 'talim_viloyat_text', 'talim_tuman_text',
+            'oqigan_yili_boshi', 'oqigan_yili_tugashi',
+            'sertifikat_turi', 'sertifikat_ball', 'milliy_sertifikat',
+            'chet_til_sertifikat', 'chet_til_ball', 'chet_til_boshqa',
             'ota_familiya', 'ota_ismi', 'ota_sharifi', 'ota_tel', 'ota_ish_joyi', 'ota_lavozimi',
             'ona_familiya', 'ona_ismi', 'ona_sharifi', 'ona_tel', 'ona_ish_joyi', 'ona_lavozimi',
+            'd_kiritilgan_turi', 'd_oila_turi',
+            'nogiron_guruh', 'nogiron_toifa', 'nogiron_toifa_boshqa', 'yetim_turi',
+            'davlat_mukofoti_desc', 'kokrak_nishoni_desc', 'prezident_stip_desc',
+            'davlat_stip_desc', 'xalqaro_stip_desc', 'resp_sport_desc', 'xal_sport_desc',
+            'resp_fan_olimp_desc', 'xal_fan_olimp_desc', 'boshqa_yutuq_desc',
+            'iqtidori_boshqa', 'sport_boshqa',
         ]);
 
         foreach (['tugilgan_sana', 'passport_sana'] as $df) {
-            if (empty($data[$df])) {
+            if (!empty($data[$df])) {
+                $val = $data[$df];
+                if (preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/', $val, $m)) {
+                    $data[$df] = sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+                }
+            } else {
                 $data[$df] = null;
             }
+        }
+
+        $boolFields = [
+            'd_kiritilgan', 'd_oila_azosi', 'kam_taminlangan', 'harbiy_qaytgan',
+            'nafaqa_oluvchi', 'nogironligi', 'yetim_talaba',
+            'davlat_mukofoti', 'kokrak_nishoni', 'prezident_stip', 'davlat_stip',
+            'xalqaro_stip', 'resp_sport', 'xal_sport', 'resp_fan_olimp',
+            'xal_fan_olimp', 'boshqa_yutuq',
+        ];
+        foreach ($boolFields as $b) {
+            $data[$b] = $request->boolean($b);
+        }
+
+        foreach (['chet_tillari', 'iqtidori', 'sport_qobiliyat'] as $arr) {
+            $val = $request->input($arr);
+            if (is_array($val)) {
+                $val = array_values(array_filter($val, fn($v) => $v !== null && $v !== ''));
+                $data[$arr] = $val;
+            } elseif ($val !== null && $val !== '') {
+                $data[$arr] = [$val];
+            } else {
+                $data[$arr] = [];
+            }
+        }
+
+        foreach (['kenglik', 'uzunlik'] as $coord) {
+            $v = $request->input($coord);
+            $data[$coord] = ($v === '' || $v === null) ? null : (float) $v;
         }
 
         $skipUpper = ['tugilgan_sana', 'passport_sana', 'email'];
@@ -1098,9 +1159,6 @@ class StudentController extends Controller
                 $data[$key] = mb_strtoupper($val, 'UTF-8');
             }
         }
-
-        $data['otm_nomi'] = 'Toshkent davlat tibbiyot universiteti Termiz filiali';
-        unset($data['doimiy_manzil'], $data['updated_by']);
 
         try {
             $columns = \Illuminate\Support\Facades\Schema::getColumnListing('student_admission_data');
@@ -1113,6 +1171,36 @@ class StudentController extends Controller
         } catch (\Exception $e) {
             \Log::error('Admission data save error: ' . $e->getMessage());
             return back()->withInput()->with('error', "Ma'lumotlarni saqlashda xatolik: " . $e->getMessage())->with('active_tab', 'qabul');
+        }
+
+        $directFileFields = [
+            'passport_pdf', 'propiska_pdf', 'rasm_pdf',
+            'attestat_pdf', 'milliy_sertifikat_pdf', 'ruxsatnoma_pdf', 'dtm_varaqa_pdf',
+            'ota_passport_pdf', 'ona_passport_pdf', 'obyektivka',
+        ];
+        foreach ($directFileFields as $name) {
+            if (!$request->hasFile($name)) continue;
+            $file = $request->file($name);
+            if (!$file || !$file->isValid()) continue;
+            try {
+                $oldFile = \App\Models\StudentFile::where('student_id', $student->id)->where('name', $name)->first();
+                if ($oldFile) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($oldFile->path);
+                }
+                $path = $file->store('student-files/' . $student->id, 'public');
+                \App\Models\StudentFile::updateOrCreate(
+                    ['student_id' => $student->id, 'name' => $name],
+                    [
+                        'original_name' => $file->getClientOriginalName(),
+                        'path' => $path,
+                        'mime_type' => $file->getClientMimeType(),
+                        'size' => $file->getSize(),
+                        'uploaded_by' => $user?->id,
+                    ]
+                );
+            } catch (\Exception $e) {
+                \Log::error("File upload error [{$name}]: " . $e->getMessage());
+            }
         }
 
         if ($request->hasFile('files')) {

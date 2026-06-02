@@ -270,8 +270,34 @@ class VedomostSubmissionController extends Controller
     {
         $this->checkAccess();
         $submission = VedomostSubmission::with('logs')->findOrFail($id);
+        $aiConfigured = \App\Services\VedomostAiChecker::isConfigured();
 
-        return view('admin.vedomost-submission.show', compact('submission'));
+        return view('admin.vedomost-submission.show', compact('submission', 'aiConfigured'));
+    }
+
+    /**
+     * Yuklangan vedomostni Claude API orqali tizim ma'lumotiga solishtirib tekshirish.
+     * Faqat tavsiya — yakuniy qarorni registrator qiladi. Async (Job).
+     */
+    public function aiCheck($id)
+    {
+        $this->checkAccess();
+        $v = VedomostSubmission::findOrFail($id);
+
+        if (!\App\Services\VedomostAiChecker::isConfigured()) {
+            return back()->with('error', "AI tekshiruv sozlanmagan (ANTHROPIC_API_KEY yo'q).");
+        }
+        if (!$v->pdf_path) {
+            return back()->with('error', 'Avval skaner (PDF) yuklang.');
+        }
+        if ($v->ai_check_status === 'running' || $v->ai_check_status === 'queued') {
+            return back()->with('error', 'AI tekshiruv allaqachon ishlamoqda.');
+        }
+
+        $v->update(['ai_check_status' => 'queued', 'ai_error' => null]);
+        \App\Jobs\CheckVedomostSubmissionWithAi::dispatch($v->id);
+
+        return back()->with('success', 'AI tekshiruv boshlandi. Natija bir necha daqiqada tayyor bo\'ladi (sahifani yangilang).');
     }
 
     /**

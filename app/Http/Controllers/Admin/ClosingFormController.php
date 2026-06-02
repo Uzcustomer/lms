@@ -25,6 +25,44 @@ class ClosingFormController extends Controller
         }
     }
 
+    /**
+     * Joriy semestrlarning semester_hemis_id ro'yxati.
+     *
+     * Har bir o'quv reja uchun joriy o'quv yili ichida bugungi kungacha BOSHLANGAN
+     * semestrlardan eng oxirgi boshlanganini tanlaydi. Faqat MIN(start_date) ga
+     * tayanadi — shu sabab HEMIS'dagi noto'g'ri end_date'lar (keyingi semestr
+     * haftalari xato semestrga biriktirilgan holatlar) natijaga ta'sir qilmaydi.
+     */
+    private function currentSemesterHemisIds(): array
+    {
+        // Joriy o'quv yili (HEMIS "current" bayrog'i butun yilni belgilaydi)
+        $currentYear = DB::table('semesters')->where('current', true)->max('education_year');
+        if (!$currentYear) {
+            return [];
+        }
+
+        // Joriy o'quv yili semestrlari + boshlanish sanasi (eng erta hafta),
+        // faqat bugungi kungacha boshlanganlari.
+        $sems = DB::table('semesters as s')
+            ->join('curriculum_weeks as w', 'w.semester_hemis_id', '=', 's.semester_hemis_id')
+            ->where('s.education_year', $currentYear)
+            ->groupBy('s.semester_hemis_id', 's.curriculum_hemis_id')
+            ->havingRaw('MIN(w.start_date) <= ?', [now()->toDateString() . ' 23:59:59'])
+            ->get([
+                's.semester_hemis_id',
+                's.curriculum_hemis_id',
+                DB::raw('MIN(w.start_date) as start_date'),
+            ]);
+
+        // Har bir o'quv reja uchun eng oxirgi boshlangan semestr — joriy semestr.
+        $ids = [];
+        foreach ($sems->groupBy('curriculum_hemis_id') as $group) {
+            $ids[] = $group->sortByDesc('start_date')->first()->semester_hemis_id;
+        }
+
+        return $ids;
+    }
+
     public function index(Request $request)
     {
         $this->checkAccess();
@@ -95,12 +133,7 @@ class ClosingFormController extends Controller
         }
 
         if ($request->get('current_semester', '1') == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
-            });
+            $query->whereIn('s.semester_hemis_id', $this->currentSemesterHemisIds());
         }
 
         $query->orderBy('f.name')
@@ -171,12 +204,7 @@ class ClosingFormController extends Controller
             $query->where('f.id', $request->faculty_id);
         }
         if ($request->get('current_semester', '1') == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= ? AND MAX(end_date) >= ?', [now()->toDateString(), now()->toDateString()]);
-            });
+            $query->whereIn('s.semester_hemis_id', $this->currentSemesterHemisIds());
         }
 
         $specialties = $query

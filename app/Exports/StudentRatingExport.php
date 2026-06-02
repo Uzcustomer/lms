@@ -24,16 +24,25 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
     protected ?string $specialty;
     protected ?string $level;
     protected ?string $search;
-    private array $studentHeaderRows = [];
-    private array $averageRows = [];
+    protected ?string $subjectId;
+    protected ?string $groupName;
+    private array $groupSeparatorRows = [];
     private int $totalRows = 0;
 
-    public function __construct(?string $department = null, ?string $specialty = null, ?string $level = null, ?string $search = null)
-    {
+    public function __construct(
+        ?string $department = null,
+        ?string $specialty = null,
+        ?string $level = null,
+        ?string $search = null,
+        ?string $subjectId = null,
+        ?string $groupName = null
+    ) {
         $this->department = $department;
         $this->specialty = $specialty;
         $this->level = $level;
         $this->search = $search;
+        $this->subjectId = $subjectId;
+        $this->groupName = $groupName;
     }
 
     public function headings(): array
@@ -43,7 +52,7 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
 
     public function array(): array
     {
-        $query = StudentRating::query()->orderByDesc('jn_average');
+        $query = StudentRating::query();
 
         if ($this->department) {
             $query->where('department_code', $this->department);
@@ -54,56 +63,80 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
         if ($this->level) {
             $query->where('level_code', $this->level);
         }
+        if ($this->groupName) {
+            $query->where('group_name', $this->groupName);
+        }
         if ($this->search) {
             $query->where(function ($q) {
                 $q->where('full_name', 'like', '%' . $this->search . '%')
                   ->orWhere('group_name', 'like', '%' . $this->search . '%');
             });
         }
+        if ($this->subjectId) {
+            $studentIdsWithSubject = StudentGrade::where('subject_id', $this->subjectId)
+                ->distinct()->pluck('student_hemis_id');
+            $query->whereIn('student_hemis_id', $studentIdsWithSubject);
+        }
 
+        // Guruh nomi bo'yicha → keyin jn_average desc → har guruh ichida reyting
+        $query->orderBy('group_name')->orderByDesc('jn_average');
         $ratings = $query->get();
+
         $excludeTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
         $rows = [];
         $rank = 0;
         $currentRow = 2; // row 1 is heading
+        $prevGroup = null;
 
         foreach ($ratings as $rating) {
             $rank++;
+
+            // Guruh o'zgarsa — ajratuvchi sarlavha qatori qo'shish
+            if ($rating->group_name !== $prevGroup) {
+                $rows[] = ['', "📚 Guruh: " . ($rating->group_name ?? '—'), '', '', '', '', '', '', '', ''];
+                $this->groupSeparatorRows[] = $currentRow;
+                $currentRow++;
+                $prevGroup = $rating->group_name;
+            }
+
             $student = Student::where('hemis_id', $rating->student_hemis_id)->first();
             if (!$student) {
-                $rows[] = [$rank, $rating->full_name, $rating->group_name, '-', '-', $rating->jn_average, '-', '-', '-'];
-                $this->studentHeaderRows[] = $currentRow;
-                $this->averageRows[] = $currentRow;
+                $rows[] = [
+                    $rank, $rating->full_name, $rating->group_name,
+                    '-', '-', $rating->jn_average, '-', '-', '-', '-',
+                ];
                 $currentRow++;
                 continue;
             }
 
             $subjects = $this->getSubjects($student, $excludeTypes);
 
+            // Subject filter ON bo'lsa — faqat o'sha fanni qoldirish
+            if ($this->subjectId) {
+                $subjects = array_values(array_filter(
+                    $subjects,
+                    fn($s) => (string) $s['subject_id'] === (string) $this->subjectId
+                ));
+            }
+
             if (empty($subjects)) {
-                $rows[] = [$rank, $rating->full_name, $rating->group_name, '-', '-', $rating->jn_average, '-', '-', '-', '-'];
-                $this->studentHeaderRows[] = $currentRow;
-                $this->averageRows[] = $currentRow;
+                $rows[] = [
+                    $rank, $rating->full_name, $rating->group_name,
+                    '-', '-', $rating->jn_average, '-', '-', '-', '-',
+                ];
                 $currentRow++;
                 continue;
             }
 
-            // Student header row (first subject)
-            $first = array_shift($subjects);
-            $rows[] = [$rank, $rating->full_name, $rating->group_name, $first['name'], $first['days'], $first['average'], $first['mt'], $first['oski'], $first['test'], $first['yn']];
-            $this->studentHeaderRows[] = $currentRow;
-            $currentRow++;
-
-            // Remaining subjects
+            // Har fan uchun ALOHIDA qator — har birida talaba ismi va guruhi to'liq
             foreach ($subjects as $s) {
-                $rows[] = ['', '', '', $s['name'], $s['days'], $s['average'], $s['mt'], $s['oski'], $s['test'], $s['yn']];
+                $rows[] = [
+                    $rank, $rating->full_name, $rating->group_name,
+                    $s['name'], $s['days'], $s['average'],
+                    $s['mt'], $s['oski'], $s['test'], $s['yn'],
+                ];
                 $currentRow++;
             }
-
-            // Average row — JN o'rtachasi (boshqa ustunlar bo'sh)
-            $rows[] = ['', '', '', "O'rtacha", '', $rating->jn_average, '', '', '', ''];
-            $this->averageRows[] = $currentRow;
-            $currentRow++;
         }
 
         $this->totalRows = $currentRow - 1;
@@ -112,7 +145,6 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
 
     private function getSubjects(Student $student, array $excludeTypes): array
     {
-        // JN baholari (excludeTypes: 11=Ma'ruza, 99=MT, 100=ON, 101=OSKI, 102=Test, 103)
         $grades = StudentGrade::where('student_hemis_id', $student->hemis_id)
             ->where('semester_code', $student->semester_code)
             ->when($student->education_year_code, fn($q) => $q->where(function ($q2) use ($student) {
@@ -123,7 +155,6 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             ->whereNotNull('lesson_date')
             ->get();
 
-        // MT/OSKI/Test baholari — alohida turlar bo'yicha
         $otherGrades = StudentGrade::where('student_hemis_id', $student->hemis_id)
             ->where('semester_code', $student->semester_code)
             ->when($student->education_year_code, fn($q) => $q->where(function ($q2) use ($student) {
@@ -133,7 +164,6 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             ->whereIn('training_type_code', [99, 101, 102])
             ->get();
 
-        // Subject ID -> [99 => baho, 101 => baho, 102 => baho]
         $mtBySubject = [];
         $oskiBySubject = [];
         $testBySubject = [];
@@ -142,16 +172,13 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             if ($val === null) continue;
             $code = (int) $g->training_type_code;
             if ($code === 99) {
-                // MT bir nechta bo'lishi mumkin → o'rtacha
                 $mtBySubject[$g->subject_id][] = (float) $val;
             } elseif ($code === 101) {
-                // OSKI — eng yuqori urinish bahosi
                 $cur = $oskiBySubject[$g->subject_id] ?? null;
                 if ($cur === null || (float) $val > $cur) {
                     $oskiBySubject[$g->subject_id] = (float) $val;
                 }
             } elseif ($code === 102) {
-                // Test — eng yuqori urinish bahosi
                 $cur = $testBySubject[$g->subject_id] ?? null;
                 if ($cur === null || (float) $val > $cur) {
                     $testBySubject[$g->subject_id] = (float) $val;
@@ -166,13 +193,11 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
         $bySubject = $grades->groupBy('subject_id');
         $subjects = [];
 
-        // Barcha fan ID lari (JN + MT/OSKI/Test)
         $allSubjectIds = $bySubject->keys()->merge(array_keys($mtBySubject))
             ->merge(array_keys($oskiBySubject))
             ->merge(array_keys($testBySubject))
             ->unique();
 
-        // YN consent (talaba YN topshirishga roziligi) — har fan uchun bir status
         $ynConsents = YnConsent::where('student_hemis_id', $student->hemis_id)
             ->where('semester_code', $student->semester_code)
             ->whereIn('subject_id', $allSubjectIds->all())
@@ -183,7 +208,6 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             $subjectGrades = $bySubject->get($subjectId, collect());
             $subjectName = $subjectGrades->first()->subject_name ?? null;
 
-            // JN o'rtachasini hisoblash
             $byDate = $subjectGrades->groupBy(fn($g) => substr($g->lesson_date, 0, 10));
             $totalDaily = 0;
             $daysCount = 0;
@@ -211,21 +235,17 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
 
             $avg = $daysCount > 0 ? round($totalDaily / $daysCount, 1) : 0;
 
-            // MT o'rtachasi
             $mtValues = $mtBySubject[$subjectId] ?? [];
             $mt = count($mtValues) > 0 ? round(array_sum($mtValues) / count($mtValues), 1) : '';
 
-            // OSKI/Test eng yuqori
             $oski = $oskiBySubject[$subjectId] ?? '';
             $test = $testBySubject[$subjectId] ?? '';
 
-            // Fan nomi noma'lum bo'lsa, MT/OSKI/Test yozuvidan olishga harakat
             if (!$subjectName) {
                 $otherForSubject = $otherGrades->where('subject_id', $subjectId)->first();
                 $subjectName = $otherForSubject->subject_name ?? $subjectId;
             }
 
-            // YN consent statusini matnga aylantirish
             $consent = $ynConsents->get($subjectId);
             $yn = match ($consent?->status) {
                 'approved' => 'Tayyor',
@@ -234,13 +254,14 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             };
 
             $subjects[] = [
-                'name'    => $subjectName,
-                'days'    => $daysCount,
-                'average' => $avg,
-                'mt'      => $mt,
-                'oski'    => $oski !== '' ? round((float) $oski, 1) : '',
-                'test'    => $test !== '' ? round((float) $test, 1) : '',
-                'yn'      => $yn,
+                'subject_id' => (string) $subjectId,
+                'name'       => $subjectName,
+                'days'       => $daysCount,
+                'average'    => $avg,
+                'mt'         => $mt,
+                'oski'       => $oski !== '' ? round((float) $oski, 1) : '',
+                'test'       => $test !== '' ? round((float) $test, 1) : '',
+                'yn'         => $yn,
             ];
         }
 
@@ -252,26 +273,19 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
     {
         $styles = [];
 
-        // Header row
+        // Header row — moviy fon
         $styles[1] = [
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '2563EB']],
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ];
 
-        // Student header rows — bold with light blue bg
-        foreach ($this->studentHeaderRows as $row) {
+        // Guruh ajratuvchi qatorlar — to'q sariq fon
+        foreach ($this->groupSeparatorRows as $row) {
             $styles[$row] = [
-                'font' => ['bold' => true],
-                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'DBEAFE']],
-            ];
-        }
-
-        // Average rows — bold with light green bg
-        foreach ($this->averageRows as $row) {
-            $styles[$row] = [
-                'font' => ['bold' => true],
-                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'D1FAE5']],
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F59E0B']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_LEFT, 'vertical' => Alignment::VERTICAL_CENTER],
             ];
         }
 

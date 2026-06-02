@@ -597,6 +597,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-semesters', [ClosingFormController::class, 'getSemesters'])->name('get-semesters');
         });
 
+        // Vedomost topshirilish holati (submission tracking)
+        Route::prefix('vedomost-submission')->name('vedomost-submission.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'index'])->name('index');
+            Route::post('/sync', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'sync'])->name('sync');
+        });
+
         // To'garak arizalari
         Route::prefix('club-applications')->name('club-applications.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'index'])->name('index');

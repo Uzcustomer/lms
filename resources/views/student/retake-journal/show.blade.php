@@ -6,7 +6,7 @@
             </a>
             <span class="text-gray-300">/</span>
             <h2 class="font-semibold text-sm text-gray-800 leading-tight truncate">
-                {{ $group->subject_name }}
+                {{ $application->subject_name }} · {{ $application->semester_name }}
             </h2>
         </div>
     </x-slot>
@@ -77,7 +77,7 @@
                             {{ $group->end_date->format('d.m.Y') }}
                         </p>
                         <p class="text-[11px] text-gray-500 mt-1">
-                            {{ __("Semestr") }}: {{ $group->semester_name }}
+                            {{ __("Semestr") }}: {{ $application->semester_name }}
                         </p>
                     </div>
 

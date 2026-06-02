@@ -6153,6 +6153,167 @@ class JournalController extends Controller
     }
 
     /**
+     * Standalone backfill — guruh+fan+semestr berilgan bo'lsa, eksport/qaydnoma
+     * kontekstidan ham chaqirish mumkin. Sinov fanida YN yuborilgan lekin
+     * student_grades sinov_yn_test yoki SinovTestGrade yo'q bo'lsa, ularni
+     * JN o'rtachasidan (yoki mavjud student_grades grade dan) tiklab beradi.
+     */
+    public static function backfillSinovDataForGroup(string $subjectId, string $semesterCode, string $groupHemisId): int
+    {
+        $group = Group::where('group_hemis_id', $groupHemisId)->first();
+        if (!$group) return 0;
+
+        $subject = CurriculumSubject::where('subject_id', $subjectId)
+            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+            ->where('semester_code', $semesterCode)
+            ->first();
+        if (!$subject || ($subject->closing_form ?? null) !== 'sinov') return 0;
+
+        $ynSubmission = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->first();
+        if (!$ynSubmission) return 0;
+
+        $studentHemisIds = DB::table('students')
+            ->where('group_id', $groupHemisId)
+            ->pluck('hemis_id')
+            ->toArray();
+        if (empty($studentHemisIds)) return 0;
+
+        // Mavjud student_grades sinov_yn_test va SinovTestGrade
+        $sgRows = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 102)
+            ->where('reason', 'sinov_yn_test')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->select('student_hemis_id', 'grade')
+            ->get()
+            ->keyBy('student_hemis_id');
+
+        $sinovOverrides = SinovTestGrade::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->get()
+            ->keyBy('student_hemis_id');
+
+        // Agar hammasi joyida — ish yo'q
+        $needsAny = false;
+        foreach ($studentHemisIds as $h) {
+            if (!$sinovOverrides->has($h) || !$sgRows->has($h)) {
+                $needsAny = true;
+                break;
+            }
+        }
+        if (!$needsAny) return 0;
+
+        // JN o'rtachalari (sukut fallback)
+        $instance = new self();
+        $jnMap = $instance->computeJnAveragesForGroup($subjectId, $semesterCode, $groupHemisId);
+
+        // student_grades insert uchun zarur ma'lumot
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+        $eduYearCode = null;
+        $eduYearName = null;
+        $lessonDateForRow = now()->toDateString();
+        $latestSched = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->orderBy('lesson_date', 'desc')
+            ->select('education_year_code', 'education_year_name', 'lesson_date')
+            ->first();
+        if ($latestSched) {
+            $eduYearCode = $latestSched->education_year_code ?? null;
+            $eduYearName = $latestSched->education_year_name ?? null;
+            if (!empty($latestSched->lesson_date)) {
+                $lessonDateForRow = $latestSched->lesson_date;
+            }
+        }
+        $now = now();
+        $studentRecords = DB::table('students')
+            ->whereIn('hemis_id', $studentHemisIds)
+            ->select('hemis_id', 'id')
+            ->get()
+            ->keyBy('hemis_id');
+
+        $touched = 0;
+        foreach ($studentHemisIds as $h) {
+            $fallback = $sgRows->get($h)?->grade ?? ($jnMap[$h] ?? null);
+            if ($fallback === null) continue;
+            $finalGrade = (int) round((float) $fallback, 0, PHP_ROUND_HALF_UP);
+
+            // 1) SinovTestGrade
+            if (!$sinovOverrides->has($h)) {
+                SinovTestGrade::updateOrCreate(
+                    [
+                        'subject_id' => $subjectId,
+                        'semester_code' => $semesterCode,
+                        'group_hemis_id' => $groupHemisId,
+                        'student_hemis_id' => $h,
+                    ],
+                    [
+                        'default_grade' => (float) ($jnMap[$h] ?? $finalGrade),
+                        'override_grade' => (float) $finalGrade,
+                        'is_locked' => true,
+                        'overridden_at' => $now,
+                    ]
+                );
+                $touched++;
+            }
+
+            // 2) student_grades sinov_yn_test
+            if (!$sgRows->has($h)) {
+                try {
+                    DB::table('student_grades')->insert(array_merge([
+                        'hemis_id' => 0,
+                        'student_id' => $studentRecords->get($h)?->id ?? 0,
+                        'student_hemis_id' => $h,
+                        'semester_code' => $semesterCode,
+                        'semester_name' => $subject->semester_name ?? '',
+                        'education_year_code' => $eduYearCode,
+                        'education_year_name' => $eduYearName,
+                        'subject_schedule_id' => 0,
+                        'subject_id' => $subjectId,
+                        'subject_name' => $subject->subject_name ?? '',
+                        'subject_code' => $subject->subject_code ?? '',
+                        'training_type_code' => 102,
+                        'training_type_name' => 'YN test',
+                        'employee_id' => 0,
+                        'employee_name' => '',
+                        'graded_by_user_id' => null,
+                        'lesson_date' => $lessonDateForRow,
+                        'lesson_pair_code' => '1',
+                        'lesson_pair_name' => 'YN test',
+                        'lesson_pair_start_time' => '00:00',
+                        'lesson_pair_end_time' => '00:00',
+                        'created_at_api' => $now,
+                        'grade' => $finalGrade,
+                        'status' => 'closed',
+                        'reason' => 'sinov_yn_test',
+                        'is_yn_locked' => true,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ], $hasAttemptCol ? ['attempt' => 1] : []));
+                    $touched++;
+                } catch (\Throwable $e) {
+                    Log::warning('backfillSinovDataForGroup: student_grades insert failed', [
+                        'group_hemis_id' => $groupHemisId,
+                        'subject_id' => $subjectId,
+                        'student_hemis_id' => $h,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        return $touched;
+    }
+
+    /**
      * Sinov fanida YN yuborilgan lekin SinovTestGrade va/yoki student_grades
      * sinov_yn_test yozuvlari yo'q bo'lsa, ularni JN o'rtachasidan backfill
      * qilish. Eski oqim/eski bug sababli yo'qolgan ma'lumotlarni tiklash uchun.
@@ -8413,6 +8574,14 @@ class JournalController extends Controller
         $group = Group::where('group_hemis_id', $groupHemisId)->first();
         if (!$group) {
             return back()->with('error', 'Guruh topilmadi');
+        }
+
+        // Sinov fani uchun student_grades sinov_yn_test yozuvlarini eksportdan
+        // oldin avtomatik backfill qilish (eski oqim/bug sababli yo'qolgan bo'lsa).
+        try {
+            self::backfillSinovDataForGroup((string) $subjectId, (string) $semesterCode, (string) $groupHemisId);
+        } catch (\Throwable $e) {
+            Log::warning('Sinov backfill failed in exportYnQaydnoma: ' . $e->getMessage());
         }
 
         $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)

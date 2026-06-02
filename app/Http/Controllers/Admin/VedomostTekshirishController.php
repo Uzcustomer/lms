@@ -353,6 +353,24 @@ class VedomostTekshirishController extends Controller
         ]);
 
         $exportRows   = $request->input('rows');
+
+        // Sinov fanlari uchun student_grades sinov_yn_test va SinovTestGrade
+        // yozuvlarini eksportdan oldin avtomatik backfill qilish (eski oqim yoki
+        // lesson_pair_code bug'i sababli yo'qolgan yozuvlar bo'lsa).
+        foreach ($exportRows as $r) {
+            try {
+                $g = Group::where('id', $r['group_id'])->first();
+                if (!$g) continue;
+                \App\Http\Controllers\Admin\JournalController::backfillSinovDataForGroup(
+                    (string) $r['subject_id'],
+                    (string) $r['semester_code'],
+                    (string) $g->group_hemis_id
+                );
+            } catch (\Throwable $e) {
+                \Log::warning('Sinov backfill failed for export row: ' . $e->getMessage());
+            }
+        }
+
         $wJn   = (int) ($request->weight_jn   ?? 50);
         $wMt   = (int) ($request->weight_mt   ?? 20);
         $wOn   = (int) ($request->weight_on   ?? 0);

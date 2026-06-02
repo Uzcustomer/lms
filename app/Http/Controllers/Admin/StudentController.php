@@ -1173,12 +1173,19 @@ class StudentController extends Controller
             return back()->withInput()->with('error', "Ma'lumotlarni saqlashda xatolik: " . $e->getMessage())->with('active_tab', 'qabul');
         }
 
-        $directFileFields = [
-            'passport_pdf', 'propiska_pdf', 'rasm_pdf',
-            'attestat_pdf', 'milliy_sertifikat_pdf', 'ruxsatnoma_pdf', 'dtm_varaqa_pdf',
-            'ota_passport_pdf', 'ona_passport_pdf', 'obyektivka',
+        $fileCategories = [
+            'passport_pdf'           => 'personal',
+            'propiska_pdf'           => 'personal',
+            'rasm_pdf'               => 'personal',
+            'attestat_pdf'           => 'education',
+            'milliy_sertifikat_pdf'  => 'education',
+            'ruxsatnoma_pdf'         => 'education',
+            'dtm_varaqa_pdf'         => 'education',
+            'ota_passport_pdf'       => 'parents',
+            'ona_passport_pdf'       => 'parents',
+            'obyektivka'             => 'documents',
         ];
-        foreach ($directFileFields as $name) {
+        foreach ($fileCategories as $name => $category) {
             if (!$request->hasFile($name)) continue;
             $file = $request->file($name);
             if (!$file || !$file->isValid()) continue;
@@ -1187,7 +1194,12 @@ class StudentController extends Controller
                 if ($oldFile) {
                     \Illuminate\Support\Facades\Storage::disk('public')->delete($oldFile->path);
                 }
-                $path = $file->store('student-files/' . $student->id, 'public');
+                $ext = $file->getClientOriginalExtension() ?: 'bin';
+                $path = $file->storeAs(
+                    "student-admission/{$student->id}/{$category}",
+                    "{$name}.{$ext}",
+                    'public'
+                );
                 \App\Models\StudentFile::updateOrCreate(
                     ['student_id' => $student->id, 'name' => $name],
                     [
@@ -1308,17 +1320,26 @@ class StudentController extends Controller
 
         $disk = \Illuminate\Support\Facades\Storage::disk('public');
 
-        $files = \App\Models\StudentFile::where('student_id', $student->id)->get();
+        $admissionFileNames = [
+            'passport_pdf', 'propiska_pdf', 'rasm_pdf',
+            'attestat_pdf', 'milliy_sertifikat_pdf', 'ruxsatnoma_pdf', 'dtm_varaqa_pdf',
+            'ota_passport_pdf', 'ona_passport_pdf', 'obyektivka',
+        ];
+
+        $files = \App\Models\StudentFile::where('student_id', $student->id)
+            ->whereIn('name', $admissionFileNames)
+            ->get();
         foreach ($files as $file) {
             $disk->delete($file->path);
             $file->delete();
         }
 
+        $disk->deleteDirectory('student-admission/' . $student->id);
         $disk->deleteDirectory('student-files/' . $student->id);
 
         \App\Models\StudentAdmissionData::where('student_id', $student->id)->delete();
 
-        return back()->with('success', "Barcha qabul ma'lumotlari va fayllar tozalandi.");
+        return back()->with('success', "Barcha qabul ma'lumotlari va fayllar tozalandi.")->with('active_tab', 'qabul');
     }
 
     public function getCurricula(Request $request)

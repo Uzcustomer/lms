@@ -2,6 +2,7 @@
 
 namespace App\Exports;
 
+use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\StudentRating;
@@ -26,6 +27,7 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
     protected ?string $search;
     protected ?string $subjectId;
     protected ?string $groupName;
+    protected ?string $semesterCode;
     private int $totalRows = 0;
 
     public function __construct(
@@ -34,7 +36,8 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
         ?string $level = null,
         ?string $search = null,
         ?string $subjectId = null,
-        ?string $groupName = null
+        ?string $groupName = null,
+        ?string $semesterCode = null
     ) {
         $this->department = $department;
         $this->specialty = $specialty;
@@ -42,6 +45,7 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
         $this->search = $search;
         $this->subjectId = $subjectId;
         $this->groupName = $groupName;
+        $this->semesterCode = $semesterCode;
     }
 
     public function headings(): array
@@ -77,6 +81,9 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
         if ($this->level) {
             $query->where('level_code', $this->level);
         }
+        if ($this->semesterCode) {
+            $query->where('semester_code', $this->semesterCode);
+        }
         if ($this->groupName) {
             $query->where('group_name', $this->groupName);
         }
@@ -101,6 +108,14 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             '14' => '4-kurs', '15' => '5-kurs', '16' => '6-kurs',
         ];
 
+        // Semester kodi → nom xaritasi (12 → "1-semestr" kabi)
+        $semesterCodes = $ratings->pluck('semester_code')->filter()->unique()->all();
+        $semesterNames = Semester::whereIn('code', $semesterCodes)
+            ->get(['code', 'name'])
+            ->unique('code')
+            ->pluck('name', 'code')
+            ->all();
+
         $excludeTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
         $rows = [];
         $rank = 0;
@@ -114,12 +129,13 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             $levelName = $levelLabels[(string) $rating->level_code] ?? ($rating->level_code ?? '');
             $groupName = $rating->group_name ?? '';
             $semCode = $rating->semester_code ?? '';
+            $semLabel = $semesterNames[$semCode] ?? $semCode;
 
             $student = Student::where('hemis_id', $rating->student_hemis_id)->first();
             if (!$student) {
                 $rows[] = [
                     $rank, $rating->full_name, $deptName, $specName, $levelName,
-                    $groupName, $semCode,
+                    $groupName, $semLabel,
                     '-', '-', $rating->jn_average, '-', '-', '-', '-',
                 ];
                 $currentRow++;
@@ -138,7 +154,7 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             if (empty($subjects)) {
                 $rows[] = [
                     $rank, $rating->full_name, $deptName, $specName, $levelName,
-                    $groupName, $semCode,
+                    $groupName, $semLabel,
                     '-', '-', $rating->jn_average, '-', '-', '-', '-',
                 ];
                 $currentRow++;
@@ -148,7 +164,7 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             foreach ($subjects as $s) {
                 $rows[] = [
                     $rank, $rating->full_name, $deptName, $specName, $levelName,
-                    $groupName, $semCode,
+                    $groupName, $semLabel,
                     $s['name'], $s['days'], $s['average'],
                     $s['mt'], $s['oski'], $s['test'], $s['yn'],
                 ];

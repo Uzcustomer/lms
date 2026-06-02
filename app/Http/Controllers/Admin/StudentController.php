@@ -1034,6 +1034,30 @@ class StudentController extends Controller
         return $disk->download($file->path, $file->original_name);
     }
 
+    public function viewAdmissionFile(Student $student, string $name)
+    {
+        $file = \App\Models\StudentFile::where('student_id', $student->id)
+            ->where('name', $name)
+            ->first();
+
+        if (!$file) {
+            abort(404, 'Fayl topilmadi.');
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        if (!$disk->exists($file->path)) {
+            abort(404, 'Fayl serverda mavjud emas.');
+        }
+
+        return response()->file(
+            $disk->path($file->path),
+            [
+                'Content-Type' => $file->mime_type ?: 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="' . addslashes($file->original_name) . '"',
+            ]
+        );
+    }
+
     public function deleteFile(Student $student, \App\Models\StudentFile $file)
     {
         $user = Auth::user();

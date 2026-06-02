@@ -79,6 +79,11 @@ class VedomostSubmission extends Model
         return $this->belongsTo(Teacher::class, 'teacher_hemis_id', 'hemis_id');
     }
 
+    public function logs()
+    {
+        return $this->hasMany(VedomostSubmissionLog::class)->orderByDesc('created_at');
+    }
+
     public static function statusLabels(): array
     {
         return [

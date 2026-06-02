@@ -54,6 +54,25 @@
             </div>
 
             <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="overflow:visible;">
+                @if($canToggleNotify)
+                    {{-- Vedomost xabarlari toggle (faqat admin) — faqat shu bo'limga tegishli xabarlarni yoqadi/o'chiradi --}}
+                    <div style="display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:10px 16px 0;">
+                        <span style="font-size:12px;color:#64748b;">Vedomost xabarlari (Telegram + tizim):</span>
+                        <form method="POST" action="{{ route('admin.vedomost-submission.toggle-notify') }}">
+                            @csrf
+                            @foreach(request()->query() as $k => $val)
+                                @if(!is_array($val))<input type="hidden" name="{{ $k }}" value="{{ $val }}">@endif
+                            @endforeach
+                            <input type="hidden" name="enabled" value="{{ $notifyEnabled ? 0 : 1 }}">
+                            <button type="submit" title="Bosib yoqish/o'chirish"
+                                style="display:inline-flex;align-items:center;gap:8px;border:none;cursor:pointer;background:{{ $notifyEnabled ? '#dcfce7' : '#fee2e2' }};color:{{ $notifyEnabled ? '#166534' : '#b91c1c' }};padding:6px 14px;border-radius:999px;font-weight:700;font-size:13px;">
+                                <span style="width:10px;height:10px;border-radius:50%;background:{{ $notifyEnabled ? '#16a34a' : '#dc2626' }};display:inline-block;"></span>
+                                {{ $notifyEnabled ? 'Yoqilgan' : "O'chirilgan" }}
+                            </button>
+                        </form>
+                    </div>
+                @endif
+
                 {{-- Filtrlar (yopilish shakli sahifasi uslubida) --}}
                 <form id="filter-form" method="GET" action="{{ route('admin.vedomost-submission.index') }}">
                     <div class="filter-container">
@@ -185,6 +204,7 @@
                                 <th><a href="{{ $sortUrl('base_date') }}">Asos sana {!! $arrow('base_date') !!}</a></th>
                                 <th><a href="{{ $sortUrl('deadline') }}">Muddat {!! $arrow('deadline') !!}</a></th>
                                 <th><a href="{{ $sortUrl('status') }}">Status {!! $arrow('status') !!}</a></th>
+                                <th>Amal</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -214,9 +234,13 @@
                                         @php $b = $statusBadge[$v->status] ?? ['—','#475569','#f1f5f9']; @endphp
                                         <span style="background:{{ $b[2] }};color:{{ $b[1] }};padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;">{{ $b[0] }}</span>
                                     </td>
+                                    <td>
+                                        <a href="{{ route('admin.vedomost-submission.show', $v->id) }}"
+                                           style="color:#1a3268;font-weight:600;text-decoration:none;white-space:nowrap;">Batafsil →</a>
+                                    </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="12" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
+                                <tr><td colspan="13" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
                             @endforelse
                         </tbody>
                     </table>

@@ -6,14 +6,21 @@ use App\Exports\VedomostSubmissionExport;
 use App\Http\Controllers\Controller;
 use App\Models\Curriculum;
 use App\Models\Department;
+use App\Models\Setting;
 use App\Models\VedomostSubmission;
+use App\Models\VedomostSubmissionLog;
+use App\Services\VedomostSubmissionNotifier;
 use App\Services\VedomostSubmissionService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 
 class VedomostSubmissionController extends Controller
 {
     private const ALLOWED_ROLES = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
+
+    /** Telegram/bildirishnoma toggle'ini boshqara oladigan rollar (admin). */
+    private const NOTIFY_TOGGLE_ROLES = ['superadmin', 'admin', 'kichik_admin'];
 
     /** Saralash mumkin bo'lgan ustunlar. */
     private const SORTABLE = [
@@ -28,8 +35,10 @@ class VedomostSubmissionController extends Controller
         'status' => 'vs.status',
     ];
 
-    public function __construct(private VedomostSubmissionService $service)
-    {
+    public function __construct(
+        private VedomostSubmissionService $service,
+        private VedomostSubmissionNotifier $notifier
+    ) {
     }
 
     private function checkAccess(): void
@@ -164,6 +173,9 @@ class VedomostSubmissionController extends Controller
         $perPage = (int) $request->get('per_page', 50);
         $submissions = $query->paginate($perPage)->appends($request->query());
 
+        $notifyEnabled = VedomostSubmissionNotifier::enabled();
+        $canToggleNotify = in_array(session('active_role', ''), self::NOTIFY_TOGGLE_ROLES, true);
+
         return view('admin.vedomost-submission.index', compact(
             'submissions',
             'faculties',
@@ -171,7 +183,9 @@ class VedomostSubmissionController extends Controller
             'educationTypes',
             'selectedEducationType',
             'closingForms',
-            'stats'
+            'stats',
+            'notifyEnabled',
+            'canToggleNotify'
         ));
     }
 
@@ -230,5 +244,182 @@ class VedomostSubmissionController extends Controller
         return redirect()
             ->route('admin.vedomost-submission.index', $request->query())
             ->with('success', "Joriy semestr bo'yicha {$count} ta vedomost yozuvi yangilandi.");
+    }
+
+    /**
+     * Telegram/bildirishnoma yuborishni yoqish/o'chirish (faqat admin).
+     */
+    public function toggleNotify(Request $request)
+    {
+        $this->checkAccess();
+        if (!in_array(session('active_role', ''), self::NOTIFY_TOGGLE_ROLES, true)) {
+            abort(403, 'Bu sozlamani faqat admin o\'zgartira oladi.');
+        }
+
+        $enabled = $request->boolean('enabled');
+        Setting::set('vedomost_notify_enabled', $enabled ? '1' : '0');
+
+        return redirect()
+            ->route('admin.vedomost-submission.index', $request->except(['enabled', '_token']))
+            ->with('success', $enabled
+                ? 'Telegram/bildirishnoma yuborish YOQILDI.'
+                : "Telegram/bildirishnoma yuborish O'CHIRILDI (test rejimi).");
+    }
+
+    public function show($id)
+    {
+        $this->checkAccess();
+        $submission = VedomostSubmission::with('logs')->findOrFail($id);
+
+        return view('admin.vedomost-submission.show', compact('submission'));
+    }
+
+    /**
+     * Skaner qilingan vedomostni yuklash (PDF + Excel). Status -> qabul qilindi.
+     */
+    public function uploadFiles(Request $request, $id)
+    {
+        $this->checkAccess();
+        $v = VedomostSubmission::findOrFail($id);
+
+        if (!in_array($v->status, [VedomostSubmission::STATUS_PENDING, VedomostSubmission::STATUS_REJECTED], true)) {
+            return back()->with('error', "Bu vedomost allaqachon qabul qilingan.");
+        }
+
+        $request->validate([
+            'pdf' => 'required|file|mimes:pdf|max:20480',
+            'excel' => 'required|file|mimes:xlsx,xls|max:20480',
+        ], [
+            'pdf.required' => 'Skaner qilingan PDF faylni yuklang.',
+            'pdf.mimes' => 'PDF fayl PDF formatida bo\'lishi kerak.',
+            'excel.required' => 'Excel faylни yuklang.',
+            'excel.mimes' => 'Excel fayl .xlsx yoki .xls formatida bo\'lishi kerak.',
+        ]);
+
+        $dir = "vedomost-submissions/{$v->id}";
+        // Eski fayllar bo'lsa (qayta yuklash) — o'chiramiz
+        foreach ([$v->pdf_path, $v->excel_path] as $old) {
+            if ($old && Storage::disk('public')->exists($old)) {
+                Storage::disk('public')->delete($old);
+            }
+        }
+
+        $from = $v->status;
+        $v->update([
+            'pdf_path' => $request->file('pdf')->store($dir, 'public'),
+            'excel_path' => $request->file('excel')->store($dir, 'public'),
+            'uploaded_by' => auth()->id(),
+            'uploaded_by_name' => $this->userName(),
+            'uploaded_at' => now(),
+            'status' => VedomostSubmission::STATUS_RECEIVED,
+            'rejection_reason' => null,
+            'reviewed_by' => null,
+            'reviewed_by_name' => null,
+            'reviewed_at' => null,
+        ]);
+
+        $this->log($v, 'upload', $from, $v->status);
+        $this->notifier->notifyStatusChange($v);
+
+        return back()->with('success', 'Vedomost yuklandi va tekshirishga qabul qilindi.');
+    }
+
+    public function review($id)
+    {
+        $this->checkAccess();
+        $v = VedomostSubmission::findOrFail($id);
+
+        if ($v->status !== VedomostSubmission::STATUS_RECEIVED) {
+            return back()->with('error', "Faqat qabul qilingan vedomostni tekshirishga olish mumkin.");
+        }
+
+        $from = $v->status;
+        $v->update(['status' => VedomostSubmission::STATUS_REVIEWING]);
+        $this->log($v, 'review', $from, $v->status);
+        $this->notifier->notifyStatusChange($v);
+
+        return back()->with('success', 'Vedomost tekshirishga olindi.');
+    }
+
+    public function approve($id)
+    {
+        $this->checkAccess();
+        $v = VedomostSubmission::findOrFail($id);
+
+        if (!in_array($v->status, [VedomostSubmission::STATUS_RECEIVED, VedomostSubmission::STATUS_REVIEWING], true)) {
+            return back()->with('error', "Bu vedomostni tasdiqlab bo'lmaydi.");
+        }
+
+        $from = $v->status;
+        $v->update([
+            'status' => VedomostSubmission::STATUS_APPROVED,
+            'reviewed_by' => auth()->id(),
+            'reviewed_by_name' => $this->userName(),
+            'reviewed_at' => now(),
+            'rejection_reason' => null,
+        ]);
+        $this->log($v, 'approve', $from, $v->status);
+        $this->notifier->notifyStatusChange($v);
+
+        return back()->with('success', 'Vedomost tasdiqlandi.');
+    }
+
+    public function reject(Request $request, $id)
+    {
+        $this->checkAccess();
+        $v = VedomostSubmission::findOrFail($id);
+
+        if (!in_array($v->status, [VedomostSubmission::STATUS_RECEIVED, VedomostSubmission::STATUS_REVIEWING], true)) {
+            return back()->with('error', "Bu vedomostni rad etib bo'lmaydi.");
+        }
+
+        $request->validate([
+            'rejection_reason' => 'required|string|min:3|max:1000',
+        ], [
+            'rejection_reason.required' => 'Rad etish sababini (xatolarni) kiriting.',
+        ]);
+
+        $from = $v->status;
+        $v->update([
+            'status' => VedomostSubmission::STATUS_REJECTED,
+            'reviewed_by' => auth()->id(),
+            'reviewed_by_name' => $this->userName(),
+            'reviewed_at' => now(),
+            'rejection_reason' => $request->rejection_reason,
+        ]);
+        $this->log($v, 'reject', $from, $v->status, $request->rejection_reason);
+        $this->notifier->notifyStatusChange($v);
+
+        return back()->with('success', 'Vedomost rad etildi va tegishli shaxslarga xabar yuborildi.');
+    }
+
+    public function downloadFile($id, $type)
+    {
+        $this->checkAccess();
+        $v = VedomostSubmission::findOrFail($id);
+
+        $path = $type === 'excel' ? $v->excel_path : $v->pdf_path;
+        abort_unless($path && Storage::disk('public')->exists($path), 404, 'Fayl topilmadi.');
+
+        return Storage::disk('public')->download($path);
+    }
+
+    private function userName(): string
+    {
+        $u = auth()->user();
+        return $u->name ?? $u->full_name ?? $u->short_name ?? 'Foydalanuvchi';
+    }
+
+    private function log(VedomostSubmission $v, string $action, ?string $from, ?string $to, ?string $note = null): void
+    {
+        VedomostSubmissionLog::create([
+            'vedomost_submission_id' => $v->id,
+            'action' => $action,
+            'from_status' => $from,
+            'to_status' => $to,
+            'note' => $note,
+            'user_id' => auth()->id(),
+            'user_name' => $this->userName(),
+        ]);
     }
 }

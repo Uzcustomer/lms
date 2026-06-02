@@ -23,6 +23,7 @@ class VedomostSubmissionService
     /** Sync davomida takroriy so'rovlarni kamaytirish uchun kesh. */
     private array $teacherCache = [];
     private array $mudiriCache = [];
+    private ?\Illuminate\Support\Collection $fanMasuliMap = null;
 
     /**
      * Joriy o'quv yili kodi (HEMIS "current" bayrog'idan).
@@ -84,6 +85,13 @@ class VedomostSubmissionService
         }
 
         $curriculumIds = $semByCurriculum->keys()->all();
+
+        // Fan mas'ullarini oldindan yuklab olamiz (har qator uchun alohida so'rov bermaslik uchun)
+        $this->fanMasuliMap = DB::table('teacher_responsible_subjects as trs')
+            ->join('teachers as t', 't.id', '=', 'trs.teacher_id')
+            ->select('trs.curriculum_subject_id', 't.hemis_id', 't.full_name', 't.phone')
+            ->get()
+            ->keyBy('curriculum_subject_id');
 
         $groups = Group::where('active', true)
             ->whereIn('curriculum_hemis_id', $curriculumIds)
@@ -222,19 +230,15 @@ class VedomostSubmissionService
     }
 
     /**
-     * Fan mas'uli — teacher_responsible_subjects pivot orqali (curriculum_subjects.id).
+     * Fan mas'uli — oldindan yuklangan map'dan (teacher_responsible_subjects).
      */
     private function fanMasuli($curriculumSubjectId): ?object
     {
-        if (!$curriculumSubjectId) {
+        if (!$curriculumSubjectId || !$this->fanMasuliMap) {
             return null;
         }
 
-        return DB::table('teacher_responsible_subjects as trs')
-            ->join('teachers as t', 't.id', '=', 'trs.teacher_id')
-            ->where('trs.curriculum_subject_id', $curriculumSubjectId)
-            ->select('t.hemis_id', 't.full_name', 't.phone')
-            ->first();
+        return $this->fanMasuliMap->get($curriculumSubjectId);
     }
 
     /**

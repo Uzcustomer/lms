@@ -24,6 +24,8 @@ class StudentRatingController extends Controller
         $selectedDepartment = $request->input('department');
         $selectedSpecialty = $request->input('specialty');
         $selectedLevel = $request->input('level');
+        $selectedSubject = $request->input('subject_id');
+        $selectedGroup = $request->input('group_name');
         $search = $request->input('search');
 
         if ($selectedDepartment) {
@@ -32,6 +34,25 @@ class StudentRatingController extends Controller
                 ->select('specialty_code', 'specialty_name')
                 ->distinct()
                 ->orderBy('specialty_name')
+                ->get();
+        }
+
+        // Guruh dropdown — joriy filtrlar ostida mavjud guruhlar
+        $groupsQuery = StudentRating::whereNotNull('group_name');
+        if ($selectedDepartment) $groupsQuery->where('department_code', $selectedDepartment);
+        if ($selectedSpecialty) $groupsQuery->where('specialty_code', $selectedSpecialty);
+        if ($selectedLevel) $groupsQuery->where('level_code', $selectedLevel);
+        $groups = $groupsQuery->select('group_name')->distinct()->orderBy('group_name')->pluck('group_name');
+
+        // Fan dropdown — joriy filtrlar ostidagi talabalar baholaridan fanlar
+        $subjects = collect();
+        $studentHemisIds = (clone $groupsQuery)->pluck('student_hemis_id');
+        if ($studentHemisIds->isNotEmpty()) {
+            $subjects = StudentGrade::whereIn('student_hemis_id', $studentHemisIds)
+                ->whereNotNull('subject_name')
+                ->select('subject_id', 'subject_name')
+                ->distinct()
+                ->orderBy('subject_name')
                 ->get();
         }
 
@@ -46,11 +67,19 @@ class StudentRatingController extends Controller
         if ($selectedLevel) {
             $query->where('level_code', $selectedLevel);
         }
+        if ($selectedGroup) {
+            $query->where('group_name', $selectedGroup);
+        }
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('full_name', 'like', '%' . $search . '%')
                   ->orWhere('group_name', 'like', '%' . $search . '%');
             });
+        }
+        if ($selectedSubject) {
+            $studentIdsWithSubject = StudentGrade::where('subject_id', $selectedSubject)
+                ->distinct()->pluck('student_hemis_id');
+            $query->whereIn('student_hemis_id', $studentIdsWithSubject);
         }
 
         $query->orderByDesc('jn_average');
@@ -69,8 +98,10 @@ class StudentRatingController extends Controller
         $lastUpdated = StudentRating::max('calculated_at');
 
         return view('admin.student-ratings.index', compact(
-            'departments', 'specialties', 'top10', 'others', 'totalStudents',
-            'selectedDepartment', 'selectedSpecialty', 'selectedLevel', 'search', 'lastUpdated'
+            'departments', 'specialties', 'groups', 'subjects',
+            'top10', 'others', 'totalStudents',
+            'selectedDepartment', 'selectedSpecialty', 'selectedLevel',
+            'selectedSubject', 'selectedGroup', 'search', 'lastUpdated'
         ));
     }
 
@@ -81,7 +112,9 @@ class StudentRatingController extends Controller
                 $request->input('department'),
                 $request->input('specialty'),
                 $request->input('level'),
-                $request->input('search')
+                $request->input('search'),
+                $request->input('subject_id'),
+                $request->input('group_name')
             ),
             'talabalar_reytingi_' . date('Y-m-d') . '.xlsx'
         );

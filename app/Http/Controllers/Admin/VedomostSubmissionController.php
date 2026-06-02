@@ -81,7 +81,7 @@ class VedomostSubmissionController extends Controller
             $query->where('f.id', $request->faculty);
         }
         if ($request->filled('specialty')) {
-            $query->where('c.specialty_hemis_id', $request->specialty);
+            $query->where('vs.specialty_name', $request->specialty);
         }
         if ($request->filled('level_code')) {
             $query->where('s.level_code', $request->level_code);
@@ -130,6 +130,23 @@ class VedomostSubmissionController extends Controller
             ->orderBy('name')
             ->get();
 
+        // Yo'nalishlar — nom bo'yicha distinct (bir xil nomlilar bitta ko'rinadi).
+        // Tanlangan ta'lim turi/fakultetga qarab cheklanadi.
+        $specialtyQuery = DB::table('vedomost_submissions as vs')
+            ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'vs.curriculum_hemis_id')
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->whereNotNull('vs.specialty_name')
+            ->where('vs.specialty_name', '!=', '');
+        if ($selectedEducationType) {
+            $specialtyQuery->where('c.education_type_code', $selectedEducationType);
+        }
+        if ($request->filled('faculty')) {
+            $specialtyQuery->where('f.id', $request->faculty);
+        }
+        $specialties = $specialtyQuery->distinct()
+            ->orderBy('vs.specialty_name')
+            ->pluck('vs.specialty_name');
+
         $closingForms = [
             'oski' => 'Faqat OSKI',
             'test' => 'Faqat Test',
@@ -150,6 +167,7 @@ class VedomostSubmissionController extends Controller
         return view('admin.vedomost-submission.index', compact(
             'submissions',
             'faculties',
+            'specialties',
             'educationTypes',
             'selectedEducationType',
             'closingForms',

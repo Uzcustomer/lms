@@ -82,6 +82,9 @@
                                 <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
                                 <select name="specialty" id="specialty" class="select2" style="width:100%;">
                                     <option value="">Barchasi</option>
+                                    @foreach($specialties as $sp)
+                                        <option value="{{ $sp }}" {{ request('specialty') === $sp ? 'selected' : '' }}>{{ $sp }}</option>
+                                    @endforeach
                                 </select>
                             </div>
                             <div class="filter-item" style="min-width:120px;">
@@ -233,7 +236,6 @@
                 $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text() });
             });
 
-            const selSpec = @json(request('specialty'));
             const selLevel = @json(request('level_code'));
             const selSem = @json(request('semester_code'));
 
@@ -243,17 +245,6 @@
                     $.each(data, function (k, v) { $(el).append('<option value="' + k + '">' + v + '</option>'); });
                     if (cb) cb();
                 }});
-            }
-            function loadSpecialties(preselect) {
-                reset('#specialty', 'Barchasi');
-                populate('{{ route('admin.closing-form.get-specialties') }}', {
-                    education_type: $('#education_type').val(),
-                    faculty_id: $('#faculty').val(),
-                    current_semester: '1'
-                }, '#specialty', function () {
-                    if (preselect) $('#specialty').val(preselect);
-                    $('#specialty').trigger('change.select2');
-                });
             }
             function loadLevels(preselect) {
                 reset('#level_code', 'Barchasi');
@@ -269,10 +260,8 @@
                     $('#semester_code').trigger('change.select2');
                 });
             }
-            loadSpecialties(selSpec);
             loadLevels(selLevel);
             loadSemesters(selSem);
-            $('#education_type, #faculty').on('change', function () { loadSpecialties(); });
             $('#level_code').on('change', function () { loadSemesters(); });
         });
     </script>

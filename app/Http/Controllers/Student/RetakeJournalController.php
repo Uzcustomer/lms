@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
 use App\Models\RetakeApplication;
-use App\Models\RetakeGroup;
 use App\Models\Student;
 use App\Services\Retake\RetakeJournalService;
 use Illuminate\Http\Request;
@@ -17,69 +16,68 @@ class RetakeJournalController extends Controller
     ) {}
 
     /**
-     * Talabaning o'zi a'zo bo'lgan retake guruhlari ro'yxati.
+     * Talabaning JURNAL kartochkalari ro'yxati.
+     * Har bir ariza = alohida kartochka (talaba bitta guruhda 2+ semestrdan
+     * arizasi bo'lsa, har biri uchun alohida jurnal ko'rinadi).
      */
     public function index()
     {
         /** @var Student $student */
         $student = Auth::guard('student')->user();
 
-        $groupIds = RetakeApplication::query()
+        $applications = RetakeApplication::query()
             ->where('student_hemis_id', $student->hemis_id)
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
             ->whereNotNull('retake_group_id')
-            ->pluck('retake_group_id')
-            ->unique();
-
-        $groups = RetakeGroup::query()
-            ->with('teacher')
-            ->whereIn('id', $groupIds)
-            ->orderByDesc('start_date')
-            ->get();
+            ->with(['retakeGroup.teacher'])
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn ($a) => $a->retakeGroup !== null)
+            ->values();
 
         return view('student.retake-journal.index', [
-            'groups' => $groups,
+            'applications' => $applications,
         ]);
     }
 
     /**
-     * Talaba uchun bitta guruhdagi jurnal — faqat o'qish.
+     * Talaba uchun bitta ARIZA jurnalini ko'rish (faqat o'qish + mustaqil yuklash).
      */
-    public function show(int $groupId)
+    public function show(int $applicationId)
     {
         /** @var Student $student */
         $student = Auth::guard('student')->user();
 
-        $group = RetakeGroup::with('teacher')->findOrFail($groupId);
-
-        // Talaba shu guruhda bo'lsa-yo'qmi
-        $myApp = RetakeApplication::query()
+        $app = RetakeApplication::query()
+            ->where('id', $applicationId)
             ->where('student_hemis_id', $student->hemis_id)
-            ->where('retake_group_id', $group->id)
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
+            ->with(['retakeGroup.teacher'])
             ->first();
-        if (!$myApp) {
-            abort(403, 'Siz bu guruhga biriktirilmagansiz');
+        if (!$app || !$app->retakeGroup) {
+            abort(403, 'Bu jurnal sizga tegishli emas yoki guruh topilmadi');
         }
 
-        // Mustaqil ta'lim submission
+        $group = $app->retakeGroup;
+
         $mustaqil = \App\Models\RetakeMustaqilSubmission::query()
             ->where('retake_group_id', $group->id)
-            ->where('application_id', $myApp->id)
+            ->where('application_id', $app->id)
             ->first();
 
         return view('student.retake-journal.show', [
             'group' => $group,
-            'application' => $myApp,
+            'application' => $app,
             'mustaqil' => $mustaqil,
             'isEditable' => $this->service->isEditable($group),
         ]);
     }
 
     /**
-     * Mustaqil ta'lim faylini yuklash.
+     * Mustaqil ta'lim faylini yuklash — aniq ariza uchun.
      */
-    public function uploadMustaqil(Request $request, int $groupId)
+    public function uploadMustaqil(Request $request, int $applicationId)
     {
         /** @var Student $student */
         $student = Auth::guard('student')->user();
@@ -99,20 +97,29 @@ class RetakeJournalController extends Controller
             return redirect()->back()->withErrors($e->errors())->withInput();
         }
 
-        $group = RetakeGroup::findOrFail($groupId);
+        $app = RetakeApplication::query()
+            ->where('id', $applicationId)
+            ->where('student_hemis_id', $student->hemis_id)
+            ->whereNotNull('retake_group_id')
+            ->with('retakeGroup')
+            ->first();
+        if (!$app || !$app->retakeGroup) {
+            abort(403);
+        }
 
         try {
             $this->service->submitMustaqil(
-                $group,
+                $app->retakeGroup,
                 $student,
                 $request->file('file'),
                 $request->input('comment'),
+                $app->id,
             );
         } catch (\Illuminate\Validation\ValidationException $e) {
             return redirect()->back()->withErrors($e->errors());
         } catch (\Throwable $e) {
             \Illuminate\Support\Facades\Log::error('[RetakeJournal] Mustaqil upload failed', [
-                'group_id' => $groupId,
+                'application_id' => $applicationId,
                 'student_hemis_id' => $student->hemis_id,
                 'message' => $e->getMessage(),
                 'file' => $e->getFile() . ':' . $e->getLine(),
@@ -122,29 +129,28 @@ class RetakeJournalController extends Controller
             ]);
         }
 
-        return redirect()->route('student.retake-journal.show', $groupId)
+        return redirect()->route('student.retake-journal.show', $applicationId)
             ->with('success', __('Mustaqil ta\'lim fayli yuklandi'));
     }
 
     /**
-     * O'z faylni yuklab olish.
+     * O'z faylini yuklab olish — aniq ariza uchun.
      */
-    public function downloadMustaqil(int $groupId)
+    public function downloadMustaqil(int $applicationId)
     {
         /** @var Student $student */
         $student = Auth::guard('student')->user();
 
-        $group = RetakeGroup::findOrFail($groupId);
-
-        $myApp = RetakeApplication::query()
+        $app = RetakeApplication::query()
+            ->where('id', $applicationId)
             ->where('student_hemis_id', $student->hemis_id)
-            ->where('retake_group_id', $group->id)
+            ->whereNotNull('retake_group_id')
             ->first();
-        if (!$myApp) abort(403);
+        if (!$app) abort(403);
 
         $submission = \App\Models\RetakeMustaqilSubmission::query()
-            ->where('retake_group_id', $group->id)
-            ->where('application_id', $myApp->id)
+            ->where('retake_group_id', $app->retake_group_id)
+            ->where('application_id', $app->id)
             ->firstOrFail();
 
         if (!$submission->file_path || !\Illuminate\Support\Facades\Storage::disk('public')->exists($submission->file_path)) {

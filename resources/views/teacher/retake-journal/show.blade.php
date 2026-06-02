@@ -24,6 +24,7 @@
              weightsModalOpen: false,
              weights: @js($defaultWeights),
              generating: false,
+             vedomostSemesters: @js($vedomostSemesters ?? []),
          })">
 
         @if(session('success'))
@@ -537,6 +538,13 @@
                     <div class="px-6 py-4 border-b border-gray-200">
                         <h3 class="text-lg font-bold text-gray-800">{{ __("Vaznlarni taqsimlang") }}</h3>
                         <p class="text-sm text-gray-500 mt-1">{{ __("Jami 100 bo'lishi kerak") }}</p>
+                        <template x-if="vedomostSemesters && vedomostSemesters.length > 1">
+                            <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mt-2">
+                                ⚠️ {{ __("Bu guruhda bir nechta semestr bor") }}
+                                (<span x-text="vedomostSemesters.join('-, ') + '-semestr'"></span>).
+                                {{ __("Har semestr uchun alohida vedomost yuklab olinadi.") }}
+                            </p>
+                        </template>
                     </div>
                     <div class="px-6 py-4 space-y-3">
                         <div class="flex items-center justify-between">
@@ -703,11 +711,52 @@
 
     @push('scripts')
         <script>
-            function retakeJournal({ saveJoriyUrl, gradeMustaqilUrl, vedomostUrl, csrf, canEdit, tab, filterMode, weightsModalOpen, weights, generating }) {
+            function retakeJournal({ saveJoriyUrl, gradeMustaqilUrl, vedomostUrl, csrf, canEdit, tab, filterMode, weightsModalOpen, weights, generating, vedomostSemesters }) {
                 return {
                     saveJoriyUrl, gradeMustaqilUrl, vedomostUrl, csrf, canEdit, tab, filterMode,
                     weightsModalOpen, weights, generating,
+                    vedomostSemesters: vedomostSemesters || [],
                     saving: {},
+
+                    // Bitta semestr uchun vedomost faylini yuklab oladi.
+                    async downloadVedomostFor(semester) {
+                        const body = {
+                            weight_jn: this.weights.jn,
+                            weight_mt: this.weights.mt,
+                            weight_on: this.weights.on,
+                            weight_oski: this.weights.oski,
+                            weight_test: this.weights.test,
+                        };
+                        if (semester !== null && semester !== undefined) body.semester = semester;
+
+                        const res = await fetch(this.vedomostUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': this.csrf,
+                                'Accept': 'application/octet-stream',
+                            },
+                            body: JSON.stringify(body),
+                        });
+                        if (!res.ok) {
+                            let msg = 'Server xatosi';
+                            try { const j = await res.json(); msg = j.error || j.message || msg; } catch (_) {}
+                            throw new Error(msg);
+                        }
+                        const cd = res.headers.get('Content-Disposition') || '';
+                        let fileName = 'YN_qaydnoma.xlsx';
+                        const m = cd.match(/filename="?([^";\n]+)"?/);
+                        if (m && m[1]) fileName = m[1];
+                        const blob = await res.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = fileName;
+                        document.body.appendChild(a);
+                        a.click();
+                        a.remove();
+                        window.URL.revokeObjectURL(url);
+                    },
 
                     async generateVedomost() {
                         const total = (this.weights.jn || 0) + (this.weights.mt || 0)
@@ -719,42 +768,16 @@
                         if (this.generating) return;
                         this.generating = true;
                         try {
-                            const res = await fetch(this.vedomostUrl, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRF-TOKEN': this.csrf,
-                                    'Accept': 'application/octet-stream',
-                                },
-                                body: JSON.stringify({
-                                    weight_jn: this.weights.jn,
-                                    weight_mt: this.weights.mt,
-                                    weight_on: this.weights.on,
-                                    weight_oski: this.weights.oski,
-                                    weight_test: this.weights.test,
-                                }),
-                            });
-                            if (!res.ok) {
-                                let msg = 'Server xatosi';
-                                try {
-                                    const j = await res.json();
-                                    msg = j.error || j.message || msg;
-                                } catch (_) {}
-                                throw new Error(msg);
+                            // Aralash semestrli guruh — har semestr uchun alohida fayl.
+                            if (this.vedomostSemesters && this.vedomostSemesters.length > 1) {
+                                for (const sem of this.vedomostSemesters) {
+                                    await this.downloadVedomostFor(sem);
+                                    // brauzer ketma-ket yuklab olishlarni bloklamasligi uchun kichik pauza
+                                    await new Promise(r => setTimeout(r, 400));
+                                }
+                            } else {
+                                await this.downloadVedomostFor(null);
                             }
-                            const cd = res.headers.get('Content-Disposition') || '';
-                            let fileName = 'YN_qaydnoma.xlsx';
-                            const m = cd.match(/filename="?([^";\n]+)"?/);
-                            if (m && m[1]) fileName = m[1];
-                            const blob = await res.blob();
-                            const url = window.URL.createObjectURL(blob);
-                            const a = document.createElement('a');
-                            a.href = url;
-                            a.download = fileName;
-                            document.body.appendChild(a);
-                            a.click();
-                            a.remove();
-                            window.URL.revokeObjectURL(url);
                             this.weightsModalOpen = false;
                         } catch (err) {
                             alert('Xatolik: ' + err.message);

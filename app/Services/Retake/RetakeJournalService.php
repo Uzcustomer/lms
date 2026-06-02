@@ -223,19 +223,28 @@ class RetakeJournalService
 
     /**
      * Talaba mustaqil ta'lim faylini yuklaydi.
+     *
+     * `$applicationId` ixtiyoriy — agar berilgan bo'lsa, aynan shu ariza
+     * uchun yuklanadi (bitta guruhda talabaning bir nechta arizasi bo'lsa
+     * kerak). Berilmasa, talabaning shu guruhdagi birinchi arizasi olinadi
+     * (orqaga moslik).
      */
     public function submitMustaqil(
         RetakeGroup $group,
         Student $student,
         UploadedFile $file,
         ?string $comment = null,
+        ?int $applicationId = null,
     ): RetakeMustaqilSubmission {
-        // Talaba shu guruhda?
-        $app = RetakeApplication::query()
+        // Talaba shu guruhda? (ixtiyoriy applicationId orqali aniqlanadi)
+        $query = RetakeApplication::query()
             ->where('student_hemis_id', $student->hemis_id)
             ->where('retake_group_id', $group->id)
-            ->where('final_status', RetakeApplication::STATUS_APPROVED)
-            ->first();
+            ->where('final_status', RetakeApplication::STATUS_APPROVED);
+        if ($applicationId !== null) {
+            $query->where('id', $applicationId);
+        }
+        $app = $query->first();
         if (!$app) {
             throw ValidationException::withMessages([
                 'group' => 'Siz bu guruhga biriktirilmagansiz',
@@ -559,7 +568,24 @@ class RetakeJournalService
     /**
      * @param  array{jn:int,mt:int,on:int,oski:int,test:int}|null  $weights
      */
-    public function buildVedomostExcel(RetakeGroup $group, ?array $weights = null): array
+    /**
+     * Guruhdagi tasdiqlangan arizalarning unikal semestr raqamlari (o'sish bo'yicha).
+     * Bittadan ortiq bo'lsa — har semestr uchun alohida vedomost shakllantiriladi.
+     *
+     * @return array<int>
+     */
+    public function vedomostSemesterNumbers(RetakeGroup $group): array
+    {
+        return $this->applications($group)
+            ->map(fn ($a) => preg_match('/(\d+)/', (string) $a->semester_name, $m) ? (int) $m[1] : null)
+            ->filter(fn ($n) => $n !== null)
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+    }
+
+    public function buildVedomostExcel(RetakeGroup $group, ?array $weights = null, ?int $semesterNumber = null): array
     {
         $templatePath = public_path('templates/yn_qaydnoma (1).xlsx');
         if (!file_exists($templatePath)) {
@@ -569,6 +595,21 @@ class RetakeJournalService
         }
 
         $applications = $this->applications($group);
+
+        // Semestr bo'yicha alohida vedomost — faqat shu semestrdagi arizalar.
+        if ($semesterNumber !== null) {
+            $applications = $applications->filter(function ($a) use ($semesterNumber) {
+                $num = preg_match('/(\d+)/', (string) $a->semester_name, $m) ? (int) $m[1] : null;
+                return $num === $semesterNumber;
+            })->values();
+
+            if ($applications->isEmpty()) {
+                throw ValidationException::withMessages([
+                    'semester' => "Bu guruhda {$semesterNumber}-semestr bo'yicha talaba yo'q",
+                ]);
+            }
+        }
+
         $gradesMap = $this->gradesMap($group);
         $mustaqilMap = $this->mustaqilMap($group);
 
@@ -608,9 +649,15 @@ class RetakeJournalService
         $facultyName = preg_replace('/\s*fakulteti?\s*$/iu', '', $facultyFullName);
         $specialtyName = $pickMostCommon($studentInfo, 'specialty_name');
         $levelName = $pickMostCommon($studentInfo, 'level_name');
-        $semesterName = $pickMostCommon($studentInfo, 'semester_name');
+        // Semestr — agar alohida-semestr vedomost bo'lsa, aynan shu semestr;
+        // aks holda arizalardagi ko'pchilik semestr.
+        $semesterName = $semesterNumber !== null
+            ? ($applications->first()->semester_name ?: ($semesterNumber . '-semestr'))
+            : $pickMostCommon($studentInfo, 'semester_name');
         $kurs = preg_match('/(\d+)/', $levelName, $m) ? $m[1] : '';
-        $semesterInYear = preg_match('/(\d+)/', $semesterName, $m) ? (int) $m[1] : '';
+        $semesterInYear = $semesterNumber !== null
+            ? $semesterNumber
+            : (preg_match('/(\d+)/', $semesterName, $m) ? (int) $m[1] : '');
 
         $teacherNameAbbr = $group->teacher_name ? $abbreviateName($group->teacher_name) : '';
 
@@ -787,7 +834,8 @@ class RetakeJournalService
 
         $cleanSubject = str_replace(['/', '\\', ' '], '_', $group->subject_name ?: 'fan');
         $cleanGroup = str_replace(['/', '\\', ' '], '_', $group->name ?: 'guruh');
-        $fileName = sprintf('YN_qaydnoma_%s_%s.xlsx', $cleanGroup, $cleanSubject);
+        $semesterSuffix = $semesterNumber !== null ? "_S{$semesterNumber}" : '';
+        $fileName = sprintf('YN_qaydnoma_%s_%s%s.xlsx', $cleanGroup, $cleanSubject, $semesterSuffix);
         $relPath = "retake/vedomosts/{$fileName}";
         $absPath = $tempDir . '/' . $fileName;
 

@@ -5957,15 +5957,11 @@ class JournalController extends Controller
                 ->where('student_hemis_id', $hemisId)
                 ->first();
 
-            if ($existing && $existing->is_locked) {
-                $skipped++;
-                $results[$hemisId] = [
-                    'applied' => false,
-                    'grade' => (int) round((float) $existing->override_grade, 0, PHP_ROUND_HALF_UP),
-                ];
-                continue;
-            }
-
+            // Eslatma: ilgari is_locked yozuvlar har doim o'tkazib yuborilardi.
+            // Endi YN hali yuborilmagan bo'lsa (function boshida tekshirilgan),
+            // qulflangan yozuvlar ham qayta hisoblanadi — bu retake bahosi kelganidan
+            // keyin Sinov (test) qiymati eski JN bilan qotmay qolmasligi uchun.
+            // is_locked flagi saqlanadi, faqat override_grade yangilanadi.
             $jnInt = (int) round((float) $jn, 0, PHP_ROUND_HALF_UP);
             $mtInt = (int) round((float) ($mtAverages[$hemisId] ?? 0), 0, PHP_ROUND_HALF_UP);
             $absPct = (float) ($davomatPct[$hemisId] ?? 0);
@@ -5985,7 +5981,8 @@ class JournalController extends Controller
                 [
                     'default_grade' => $grade,
                     'override_grade' => $grade,
-                    'is_locked' => false,
+                    // Avval qulflangan yozuvlarning is_locked statusini saqlash
+                    'is_locked' => $existing ? (bool) $existing->is_locked : false,
                     'overridden_by_user_id' => $userId,
                     'overridden_at' => $now,
                 ]

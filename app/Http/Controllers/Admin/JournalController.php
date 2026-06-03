@@ -389,9 +389,13 @@ class JournalController extends Controller
         $subject = null;
         $csId = $request->query('cs');
         if ($csId !== null && $csId !== '') {
+            // `cs` qatori AYNAN so'ralgan semestrga tegishli bo'lishi shart —
+            // aks holda eski/qo'lda o'zgartirilgan URL (boshqa semestrdagi shu fan)
+            // closing_form va fan metama'lumotlarini noto'g'ri ko'rsatishi mumkin.
             $subject = CurriculumSubject::where('id', $csId)
                 ->where('subject_id', $subjectId)
                 ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->whereIn('semester_code', array_unique([$semesterCode, $originalSemesterCode]))
                 ->first();
         }
         // `cs` bo'lmasa yoki topilmasa — faol va closing_form to'ldirilgan qatorni

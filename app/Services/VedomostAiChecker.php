@@ -80,6 +80,8 @@ class VedomostAiChecker
                 'cache_control' => ['type' => 'ephemeral'],
             ]],
             'output_config' => [
+                // effort: medium — kamroq o'ylash => kamroq token va tezroq javob.
+                'effort' => 'medium',
                 'format' => ['type' => 'json_schema', 'schema' => $this->schema()],
             ],
             'messages' => [[
@@ -88,20 +90,11 @@ class VedomostAiChecker
             ]],
         ];
 
-        $response = Http::withHeaders([
-            'x-api-key' => config('services.anthropic.api_key'),
-            'anthropic-version' => config('services.anthropic.version', '2023-06-01'),
-            'content-type' => 'application/json',
-        ])
-            ->timeout((int) config('services.anthropic.timeout', 180))
-            ->post('https://api.anthropic.com/v1/messages', $payload);
+        // Streaming: javob bo'lak-bo'lak keladi — ulanish "0 bayt"da qotmaydi va
+        // uzoq generatsiyada ham timeout bo'lmaydi (cURL 28 muammosining yechimi).
+        $result = $this->streamMessages($payload);
 
-        if (!$response->successful()) {
-            throw new RuntimeException('Claude API xatosi: ' . $response->status() . ' ' . $response->body());
-        }
-
-        $data = $response->json();
-        $stopReason = $data['stop_reason'] ?? null;
+        $stopReason = $result['stop_reason'];
         if ($stopReason === 'refusal') {
             throw new RuntimeException('Claude so\'rovni rad etdi (refusal).');
         }
@@ -109,15 +102,9 @@ class VedomostAiChecker
             throw new RuntimeException('Claude javobi max_tokens chegarasida kesildi — natija to\'liq emas.');
         }
 
-        // Structured output: matn blokida sxemaga mos JSON bo'ladi
-        $jsonText = null;
-        foreach ($data['content'] ?? [] as $block) {
-            if (($block['type'] ?? '') === 'text' && !empty($block['text'])) {
-                $jsonText = $block['text'];
-                break;
-            }
-        }
-        if ($jsonText === null) {
+        // Structured output: matnli bo'laklar sxemaga mos JSON'ni tashkil etadi.
+        $jsonText = trim($result['text']);
+        if ($jsonText === '') {
             throw new RuntimeException('Claude javobida natija topilmadi.');
         }
 
@@ -132,6 +119,78 @@ class VedomostAiChecker
             'discrepancies' => $parsed['discrepancies'] ?? [],
             'signatures' => $parsed['signatures'] ?? [],
         ];
+    }
+
+    /**
+     * Claude Messages API'ga STREAM (SSE) so'rov yuboradi va matn bo'laklarini
+     * hamda stop_reason'ni yig'ib qaytaradi. Streaming tufayli ulanish bo'sh
+     * turmaydi — uzoq javoblarda ham cURL timeout (xato 28) bo'lmaydi.
+     *
+     * @return array{text: string, stop_reason: ?string}
+     */
+    private function streamMessages(array $payload): array
+    {
+        $payload['stream'] = true;
+
+        $response = Http::withHeaders([
+            'x-api-key' => config('services.anthropic.api_key'),
+            'anthropic-version' => config('services.anthropic.version', '2023-06-01'),
+            'content-type' => 'application/json',
+        ])
+            ->withOptions(['stream' => true])
+            ->timeout((int) config('services.anthropic.timeout', 280))
+            ->post('https://api.anthropic.com/v1/messages', $payload);
+
+        if (!$response->successful()) {
+            throw new RuntimeException('Claude API xatosi: ' . $response->status() . ' ' . $response->body());
+        }
+
+        $stream = $response->toPsrResponse()->getBody();
+        $buffer = '';
+        $text = '';
+        $stopReason = null;
+
+        while (!$stream->eof()) {
+            $chunk = $stream->read(8192);
+            if ($chunk === '') {
+                continue;
+            }
+            $buffer .= $chunk;
+
+            // SSE qatorma-qator: "data: {...}" bo'laklarini ajratamiz.
+            while (($nl = strpos($buffer, "\n")) !== false) {
+                $line = trim(substr($buffer, 0, $nl));
+                $buffer = substr($buffer, $nl + 1);
+
+                if ($line === '' || !str_starts_with($line, 'data:')) {
+                    continue;
+                }
+                $json = trim(substr($line, 5));
+                if ($json === '' || $json === '[DONE]') {
+                    continue;
+                }
+                $event = json_decode($json, true);
+                if (!is_array($event)) {
+                    continue;
+                }
+
+                switch ($event['type'] ?? '') {
+                    case 'content_block_delta':
+                        // Faqat matn deltalari (thinking_delta'ni e'tiborsiz qoldiramiz).
+                        if (($event['delta']['type'] ?? '') === 'text_delta') {
+                            $text .= $event['delta']['text'] ?? '';
+                        }
+                        break;
+                    case 'message_delta':
+                        $stopReason = $event['delta']['stop_reason'] ?? $stopReason;
+                        break;
+                    case 'error':
+                        throw new RuntimeException('Claude API stream xatosi: ' . ($event['error']['message'] ?? 'noma\'lum'));
+                }
+            }
+        }
+
+        return ['text' => $text, 'stop_reason' => $stopReason];
     }
 
     /**

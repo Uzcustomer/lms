@@ -61,3 +61,4 @@ tmtags
 docker-compose.override.yml
 *.backup
 /public/uploads/
+__pycache__/

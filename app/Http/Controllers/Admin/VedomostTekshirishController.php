@@ -724,6 +724,34 @@ class VedomostTekshirishController extends Controller
                 102 => $onOskiTest['test'],
             ];
 
+            // SINOV fani: test bahosi student_grades ga FAQAT YN yuborilganda
+            // yoziladi (reason='sinov_yn_test'). YN yuborilmagan bo'lsa, sinov
+            // bahosi faqat sinov_test_grades (SinovTestGrade) da yashaydi —
+            // jurnal o'shandan o'qiydi. Vedomost jurnalga teng bo'lishi uchun,
+            // student_grades da test yo'q talabalar uchun uni SinovTestGrade
+            // (override ?? default) yoki JN o'rtachasidan to'ldiramiz.
+            if (($rowData['closing_form'] ?? null) === 'sinov') {
+                $sinovGrades = \App\Models\SinovTestGrade::where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->where('group_hemis_id', $groupHemisId)
+                    ->get()
+                    ->keyBy('student_hemis_id');
+                foreach ($studentHemisIds as $hid) {
+                    // student_grades da haqiqiy/sinov_yn_test bahosi bo'lsa — tegmaymiz.
+                    if (isset($gradesByType[102][$hid]) && $gradesByType[102][$hid] !== null) {
+                        continue;
+                    }
+                    $sg = $sinovGrades->get($hid);
+                    $val = $sg ? ($sg->override_grade ?? $sg->default_grade) : null;
+                    if ($val === null) {
+                        $val = $jnGrades[$hid] ?? null;
+                    }
+                    if ($val !== null) {
+                        $gradesByType[102][(string) $hid] = (int) round((float) $val, 0, PHP_ROUND_HALF_UP);
+                    }
+                }
+            }
+
             // --- O'qituvchilar ---
             $lectureTeacher   = $this->getTopTeacher($groupHemisId, $subjectId, $semesterCode, [11]);
             $practiceTeacher  = $this->getTopTeacher($groupHemisId, $subjectId, $semesterCode, [12, 13, 14, 18]);

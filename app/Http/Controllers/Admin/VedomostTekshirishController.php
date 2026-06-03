@@ -730,12 +730,17 @@ class VedomostTekshirishController extends Controller
             // jurnal o'shandan o'qiydi. Vedomost jurnalga teng bo'lishi uchun,
             // student_grades da test yo'q talabalar uchun uni SinovTestGrade
             // (override ?? default) yoki JN o'rtachasidan to'ldiramiz.
-            if (($rowData['closing_form'] ?? null) === 'sinov') {
-                $sinovGrades = \App\Models\SinovTestGrade::where('subject_id', $subjectId)
-                    ->where('semester_code', $semesterCode)
-                    ->where('group_hemis_id', $groupHemisId)
-                    ->get()
-                    ->keyBy('student_hemis_id');
+            //
+            // ESLATMA: closing_form export POST'ida kelmaydi (faqat group/subject/
+            // semester), shuningdek nofaol dublikat qator NULL berishi mumkin —
+            // shuning uchun sinov ekanini SinovTestGrade yozuvlari mavjudligi
+            // bilan aniqlaymiz (ular faqat sinov fanlari uchun yaratiladi).
+            $sinovGrades = \App\Models\SinovTestGrade::where('subject_id', (string) $subjectId)
+                ->where('semester_code', (string) $semesterCode)
+                ->where('group_hemis_id', (string) $groupHemisId)
+                ->get()
+                ->keyBy('student_hemis_id');
+            if ($sinovGrades->isNotEmpty()) {
                 foreach ($studentHemisIds as $hid) {
                     // student_grades da haqiqiy/sinov_yn_test bahosi bo'lsa — tegmaymiz.
                     if (isset($gradesByType[102][$hid]) && $gradesByType[102][$hid] !== null) {

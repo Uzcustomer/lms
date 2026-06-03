@@ -4026,6 +4026,49 @@ class JournalController extends Controller
                     'updated_at' => $now,
                 ]);
 
+            // Sinov fani (closing_form='sinov') bo'lsa va YN hali yuborilmagan bo'lsa,
+            // shu talaba uchun saqlangan SinovTestGrade override'ini yangi JN o'rtachasiga
+            // moslashtirish. Aks holda Sinov (test) ustuni eski JN bilan qotib qoladi.
+            try {
+                $subject = CurriculumSubject::where('subject_id', $studentGrade->subject_id)
+                    ->where('semester_code', $studentGrade->semester_code)
+                    ->first();
+                if ($subject && ($subject->closing_form ?? null) === 'sinov') {
+                    $student = Student::where('hemis_id', $studentGrade->student_hemis_id)->first();
+                    $groupHemisId = $student?->group_id;
+                    if ($groupHemisId) {
+                        $ynAlreadySubmitted = YnSubmission::where('subject_id', $studentGrade->subject_id)
+                            ->where('semester_code', $studentGrade->semester_code)
+                            ->where('group_hemis_id', $groupHemisId)
+                            ->exists();
+                        $override = SinovTestGrade::where('subject_id', $studentGrade->subject_id)
+                            ->where('semester_code', $studentGrade->semester_code)
+                            ->where('group_hemis_id', $groupHemisId)
+                            ->where('student_hemis_id', $studentGrade->student_hemis_id)
+                            ->first();
+                        if ($override && !$ynAlreadySubmitted) {
+                            $jnAverages = $this->computeJnAveragesForGroup(
+                                $studentGrade->subject_id,
+                                $studentGrade->semester_code,
+                                $groupHemisId
+                            );
+                            $newJn = $jnAverages[$studentGrade->student_hemis_id] ?? null;
+                            if ($newJn !== null) {
+                                $override->update([
+                                    'override_grade' => round((float) $newJn, 2),
+                                    'overridden_by_user_id' => $gradedByUserId,
+                                    'overridden_at' => $now,
+                                ]);
+                            }
+                        }
+                    }
+                }
+            } catch (\Throwable $e) {
+                Log::warning('Sinov override refresh failed: ' . $e->getMessage(), [
+                    'grade_id' => $gradeId,
+                ]);
+            }
+
             // Determine display info for frontend diagonal cell
             $isAbsentReason = $studentGrade->reason === 'absent';
             $originalGrade = $studentGrade->grade;

@@ -107,7 +107,11 @@ class JournalController extends Controller
                 ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
                 ->where('g.department_active', true)
-                ->where('g.active', true);
+                ->where('g.active', true)
+                // Faqat faol (HEMIS'da hozir mavjud) fanlar. Nofaol/eskirgan
+                // o'quv reja fanlari (HEMIS qaytarmagani uchun soft-delete qilinganlar)
+                // ro'yxatga tushmasligi kerak.
+                ->where('cs.is_active', true);
         };
 
         // Kafedra dropdown uchun - faqat haqiqiy natija bor kafedralar
@@ -4351,7 +4355,9 @@ class JournalController extends Controller
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
             ->where('g.department_active', true)
-            ->where('g.active', true);
+            ->where('g.active', true)
+            // Faqat faol fanlar — nofaol/eskirgan yozuvlar FAN dropdown'iga tushmasin
+            ->where('cs.is_active', true);
 
         // O'qituvchi uchun faqat o'zi dars jadvalida biriktirilgan fanlar
         $isOqituvchi = is_active_oqituvchi();
@@ -4480,6 +4486,7 @@ class JournalController extends Controller
         // Kafedra bo'yicha filtrlash (curriculum_subjects.department_id orqali)
         if ($request->filled('department_id')) {
             $curriculaWithDept = CurriculumSubject::where('department_id', $request->department_id)
+                ->where('is_active', true)
                 ->pluck('curricula_hemis_id')
                 ->unique();
             $query->whereIn('curriculum_hemis_id', $curriculaWithDept);

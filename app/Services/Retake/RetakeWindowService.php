@@ -142,14 +142,9 @@ class RetakeWindowService
             return 0;
         }
 
-        $newEnd = Carbon::parse($newEndDate)->startOfDay();
         $today = Carbon::today();
 
-        // Oyna sanasi o'tib ketgan bo'lsa — guruhni ochishning ma'nosi yo'q.
-        if ($newEnd->lt($today)) {
-            return 0;
-        }
-
+        // Shu oyna(lar) ostidagi o'qish guruhlari
         $groupIds = RetakeApplication::query()
             ->whereNotNull('retake_group_id')
             ->whereIn('group_id', function ($q) use ($windowIds) {
@@ -165,45 +160,62 @@ class RetakeWindowService
             return 0;
         }
 
-        // 1) Tugash sanasini uzaytirish — faqat yangidan oldin bo'lganlarni
-        //    (completed bo'lsa ham — auto-cron tugagan deb belgilab qo'ygan
-        //    bo'lishi mumkin, baribir uzaytiramiz).
-        $extended = RetakeGroup::query()
-            ->whereIn('id', $groupIds)
-            ->whereDate('end_date', '<', $newEnd)
-            ->update(['end_date' => $newEnd->toDateString()]);
+        // Har bir guruh uchun hissa qo'shgan BARCHA oynalarning eng kech tugash
+        // sanasini hisoblaymiz — guruh sanasi shu eng kech oyna sanasiga teng
+        // bo'ladi (aralash guruhlar uchun ham to'g'ri).
+        $maxEnds = RetakeApplication::query()
+            ->join('retake_application_groups as rag', 'rag.id', '=', 'retake_applications.group_id')
+            ->join('retake_application_windows as w', 'w.id', '=', 'rag.window_id')
+            ->whereNull('w.deleted_at')
+            ->whereIn('retake_applications.retake_group_id', $groupIds)
+            ->groupBy('retake_applications.retake_group_id')
+            ->selectRaw('retake_applications.retake_group_id as gid, MAX(w.end_date) as max_end')
+            ->pluck('max_end', 'gid');
 
-        // 2) Qulfni ochish — bog'liq barcha guruhlar uchun (status'dan qat'i
-        //    nazar). Muddat uzaytirilgani uchun yakuniy holatni bekor qilamiz.
-        RetakeGroup::query()
-            ->whereIn('id', $groupIds)
-            ->where('is_locked', true)
-            ->update([
-                'is_locked' => false,
-                'locked_at' => null,
-                'locked_by_user_id' => null,
-                'locked_by_name' => null,
-            ]);
+        $changed = 0;
+        $groups = RetakeGroup::query()->whereIn('id', $groupIds)->get();
 
-        // 3) Completed guruhlarni qayta faollashtirish — agar yangi end_date
-        //    bugun yoki keyin bo'lsa (cron oldin "tugagan" deb belgilab qo'ygan
-        //    bo'lishi mumkin). start_date kelajakdami yoki o'tganmiga qarab
-        //    scheduled/in_progress'ga qaytaramiz.
-        if ($newEnd->gte($today)) {
-            RetakeGroup::query()
-                ->whereIn('id', $groupIds)
-                ->where('status', RetakeGroup::STATUS_COMPLETED)
-                ->whereDate('start_date', '<=', $today)
-                ->update(['status' => RetakeGroup::STATUS_IN_PROGRESS]);
+        foreach ($groups as $group) {
+            $target = $maxEnds->get($group->id);
+            if (!$target) {
+                continue;
+            }
+            $targetEnd = Carbon::parse($target)->startOfDay();
 
-            RetakeGroup::query()
-                ->whereIn('id', $groupIds)
-                ->where('status', RetakeGroup::STATUS_COMPLETED)
-                ->whereDate('start_date', '>', $today)
-                ->update(['status' => RetakeGroup::STATUS_SCHEDULED]);
+            $update = [];
+
+            // Guruh sanasi oynaning eng kech sanasiga teng bo'lsin
+            // (faqat oldinga — qisqartirmaymiz, boshqa ishlar buzilmasin uchun).
+            $curEnd = $group->end_date ? Carbon::parse($group->end_date)->startOfDay() : null;
+            if ($curEnd === null || $curEnd->lt($targetEnd)) {
+                $update['end_date'] = $targetEnd->toDateString();
+            }
+
+            $effectiveEnd = isset($update['end_date']) ? $targetEnd : $curEnd;
+
+            // Muddat hali amal qilsa — qulfni ochamiz va completed'ni qaytaramiz
+            if ($effectiveEnd && $effectiveEnd->gte($today)) {
+                if ($group->is_locked) {
+                    $update['is_locked'] = false;
+                    $update['locked_at'] = null;
+                    $update['locked_by_user_id'] = null;
+                    $update['locked_by_name'] = null;
+                }
+                if ($group->status === RetakeGroup::STATUS_COMPLETED) {
+                    $startInFuture = $group->start_date && Carbon::parse($group->start_date)->startOfDay()->gt($today);
+                    $update['status'] = $startInFuture
+                        ? RetakeGroup::STATUS_SCHEDULED
+                        : RetakeGroup::STATUS_IN_PROGRESS;
+                }
+            }
+
+            if (!empty($update)) {
+                $group->update($update);
+                $changed++;
+            }
         }
 
-        return $extended;
+        return $changed;
     }
 
     /**

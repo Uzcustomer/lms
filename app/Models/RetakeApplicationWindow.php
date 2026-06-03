@@ -30,6 +30,28 @@ class RetakeApplicationWindow extends Model
         return self::$reopenColumnExists;
     }
 
+    /**
+     * Model eventlari: oyna tugash sanasi (end_date) o'zgarsa — shu oyna
+     * ostidagi o'qish guruhlari sanasi AVTOMATIK moslashadi (eng kech oyna
+     * sanasiga). Bu $window->save()/update() orqali bo'lgan har qanday
+     * o'zgarishda ishlaydi. (Bulk query-builder update'da event ishlamaydi,
+     * shuning uchun u yerda servis qo'lda chaqiriladi.)
+     */
+    protected static function booted(): void
+    {
+        static::updated(function (self $window) {
+            if (!$window->wasChanged('end_date')) {
+                return;
+            }
+            try {
+                app(\App\Services\Retake\RetakeWindowService::class)
+                    ->extendLinkedGroupEndDates([$window->id], (string) $window->end_date->toDateString());
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[Retake] window->group date sync: ' . $e->getMessage());
+            }
+        });
+    }
+
     protected $fillable = [
         'session_id',
         'specialty_id',

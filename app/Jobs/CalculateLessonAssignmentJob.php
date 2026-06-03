@@ -62,7 +62,23 @@ class CalculateLessonAssignmentJob implements ShouldQueue
 
         $excludedCodes = config('app.attendance_excluded_training_types', [99, 100, 101, 102]);
         $gradeExcludedNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test", "Klinik mashg'ulot", "Klinik mashgulot"];
-        $excludedSubjectPatterns = ["tanishuv amaliyoti", "quv amaliyoti"];
+
+        // "amaliyoti" subject_id larini oldindan hisoblab cache qilamiz —
+        // har safar LIKE '%amaliyoti%' qilish full table scan beradi.
+        $excludedSubjectIds = Cache::remember('lesson_assignment_excluded_subjects_v1', 3600, function () {
+            return DB::table('schedules')
+                ->whereNull('deleted_at')
+                ->where(function ($q) {
+                    $q->where('subject_name', 'LIKE', '%amaliyoti')
+                      ->orWhere('subject_name', 'LIKE', '%tanishuv amaliyoti%')
+                      ->orWhere('subject_name', 'LIKE', '%quv amaliyoti%');
+                })
+                ->distinct()
+                ->pluck('subject_id')
+                ->filter()
+                ->values()
+                ->toArray();
+        });
 
         $scheduleQuery = DB::table('schedules as sch')
             ->join('groups as g', 'g.group_hemis_id', '=', 'sch.group_id')
@@ -72,13 +88,12 @@ class CalculateLessonAssignmentJob implements ShouldQueue
             })
             ->whereNotIn('sch.training_type_code', $excludedCodes)
             ->where('sch.training_type_code', '!=', 11)
-            ->whereRaw("sch.subject_name NOT LIKE '%amaliyoti'")
             ->whereNotIn('sch.training_type_name', $gradeExcludedNames)
             ->whereNotNull('sch.lesson_date')
             ->whereNull('sch.deleted_at');
 
-        foreach ($excludedSubjectPatterns as $pattern) {
-            $scheduleQuery->where('sch.subject_name', 'NOT LIKE', "%{$pattern}%");
+        if (!empty($excludedSubjectIds)) {
+            $scheduleQuery->whereNotIn('sch.subject_id', $excludedSubjectIds);
         }
 
         if (($f['current_semester'] ?? '1') == '1') {

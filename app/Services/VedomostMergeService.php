@@ -112,6 +112,12 @@ class VedomostMergeService
 
         $subgroups = $group->pluck('group_name')->filter()->unique()->sort()->values();
 
+        // Ism va telefonni MOSLAB chiqaramiz: "A, B, C" -> "-, +998.., +998.."
+        // (telefoni yo'q o'qituvchi o'rnida "-").
+        $teacher = $this->joinPersons($group, 'teacher_name', 'teacher_phone');
+        $fanMasuli = $this->joinPersons($group, 'fan_masuli_name', 'fan_masuli_phone');
+        $kafedraMudiri = $this->joinPersons($group, 'kafedra_mudiri_name', 'kafedra_mudiri_phone');
+
         $out = (object) [
             'id' => $rep->id,
             'ids' => $group->pluck('id')->all(),
@@ -130,12 +136,12 @@ class VedomostMergeService
             'level_name' => $rep->level_name ?? null,
             'level_code' => $rep->level_code ?? null,
 
-            'teacher_name' => $this->joinDistinct($group, 'teacher_name'),
-            'teacher_phone' => $this->joinDistinct($group, 'teacher_phone'),
-            'fan_masuli_name' => $this->joinDistinct($group, 'fan_masuli_name'),
-            'fan_masuli_phone' => $this->joinDistinct($group, 'fan_masuli_phone'),
-            'kafedra_mudiri_name' => $this->joinDistinct($group, 'kafedra_mudiri_name'),
-            'kafedra_mudiri_phone' => $this->joinDistinct($group, 'kafedra_mudiri_phone'),
+            'teacher_name' => $teacher['names'],
+            'teacher_phone' => $teacher['phones'],
+            'fan_masuli_name' => $fanMasuli['names'],
+            'fan_masuli_phone' => $fanMasuli['phones'],
+            'kafedra_mudiri_name' => $kafedraMudiri['names'],
+            'kafedra_mudiri_phone' => $kafedraMudiri['phones'],
 
             'base_type' => $deadlineRep->base_type,
             'base_date' => $deadlineRep->base_date,
@@ -147,6 +153,42 @@ class VedomostMergeService
         ];
 
         return $out;
+    }
+
+    /**
+     * Ism + telefonni MOSLAB chiqaradi. Har bir takrorlanmas ism uchun (guruhcha
+     * o'qituvchilari) uning telefoni topiladi; telefoni yo'q bo'lsa "-" qo'yiladi.
+     * Ikkala ro'yxat bir xil tartibda (ksort) — ustunlar bir-biriga to'g'ri keladi.
+     *
+     *   names  = "Aliyev, Valiyev, Hasanov"
+     *   phones = "-, +998901112233, +998931234567"
+     *
+     * @return array{names: ?string, phones: ?string}
+     */
+    private function joinPersons(Collection $group, string $nameField, string $phoneField): array
+    {
+        $map = []; // ism => telefon
+        foreach ($group as $r) {
+            $name = trim((string) ($r->{$nameField} ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            $phone = trim((string) ($r->{$phoneField} ?? ''));
+            // Ism birinchi marta uchrasa yoki avval telefoni bo'sh bo'lib endi topilsa.
+            if (!array_key_exists($name, $map) || ($map[$name] === '' && $phone !== '')) {
+                $map[$name] = $phone;
+            }
+        }
+
+        if (empty($map)) {
+            return ['names' => null, 'phones' => null];
+        }
+
+        ksort($map, SORT_NATURAL | SORT_FLAG_CASE);
+        $names = implode(', ', array_keys($map));
+        $phones = implode(', ', array_map(fn($p) => $p !== '' ? $p : '-', array_values($map)));
+
+        return ['names' => $names, 'phones' => $phones];
     }
 
     /**

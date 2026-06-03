@@ -212,7 +212,12 @@
                                 @php $overdue = $v->deadline && \Carbon\Carbon::parse($v->deadline)->isPast() && !\Carbon\Carbon::parse($v->deadline)->isToday() && $v->status !== 'approved'; @endphp
                                 <tr>
                                     <td style="color:#94a3b8;">{{ $submissions->firstItem() + $i }}</td>
-                                    <td style="font-weight:600;">{{ $v->group_name }}</td>
+                                    <td style="font-weight:600;">
+                                        {{ $v->group_name }}
+                                        @if(($v->merge_count ?? 1) > 1)
+                                            <span class="vd-merge" title="Guruhchalar: {{ $v->subgroup_label }}">{{ $v->merge_count }} guruhcha</span>
+                                        @endif
+                                    </td>
                                     <td style="color:#64748b;">{{ $v->specialty_name }}</td>
                                     <td>{{ $v->subject_name }}</td>
                                     <td style="color:#64748b;">{{ $v->department_name }}</td>
@@ -233,6 +238,9 @@
                                     <td>
                                         @php $b = $statusBadge[$v->status] ?? ['—','#475569','#f1f5f9']; @endphp
                                         <span style="background:{{ $b[2] }};color:{{ $b[1] }};padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;">{{ $b[0] }}</span>
+                                        @if(!empty($v->is_mixed_status))
+                                            <div style="font-size:10px;color:#b45309;margin-top:2px;" title="Guruhchalar statusi har xil">aralash holat</div>
+                                        @endif
                                     </td>
                                     <td>
                                         <a href="{{ route('admin.vedomost-submission.show', $v->id) }}"
@@ -309,5 +317,6 @@
         .vd-table tbody td { padding: 8px 10px; border-top: 1px solid #f1f5f9; vertical-align: top; }
         .vd-table tbody tr:hover { background: #f8fafc; }
         .vd-person { cursor: help; }
+        .vd-merge { display:inline-block; margin-left:6px; background:#eef2ff; color:#4338ca; font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; cursor:help; white-space:nowrap; }
     </style>
 </x-app-layout>

@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            Vedomost — {{ $submission->group_name }} / {{ $submission->subject_name }}
+            Vedomost — {{ ($merged->group_name ?? $submission->group_name) }} / {{ ($merged->subject_name ?? $submission->subject_name) }}
         </h2>
     </x-slot>
 
@@ -45,15 +45,21 @@
                     <h3 style="font-size:16px;font-weight:700;color:#1e293b;">Ma'lumotlar</h3>
                     <span style="background:{{ $b[2] }};color:{{ $b[1] }};padding:5px 14px;border-radius:999px;font-size:13px;font-weight:700;">{{ $b[0] }}</span>
                 </div>
+                @php $m = $merged ?? $v; @endphp
                 <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:10px 24px;font-size:14px;">
-                    <div><span style="color:#94a3b8;">Guruh:</span> <b>{{ $v->group_name }}</b></div>
-                    <div><span style="color:#94a3b8;">Fan:</span> <b>{{ $v->subject_name }}</b></div>
+                    <div>
+                        <span style="color:#94a3b8;">Guruh:</span> <b>{{ $m->group_name }}</b>
+                        @if(($m->merge_count ?? 1) > 1)
+                            <div style="font-size:12px;color:#64748b;">Guruhchalar: {{ $m->subgroup_label }}</div>
+                        @endif
+                    </div>
+                    <div><span style="color:#94a3b8;">Fan:</span> <b>{{ $m->subject_name }}</b></div>
                     <div><span style="color:#94a3b8;">Yo'nalish:</span> {{ $v->specialty_name }}</div>
-                    <div><span style="color:#94a3b8;">Kafedra:</span> {{ $v->department_name }}</div>
+                    <div><span style="color:#94a3b8;">Kafedra:</span> {{ $m->department_name ?? $v->department_name }}</div>
                     <div><span style="color:#94a3b8;">Yopilish shakli:</span> {{ $closingFormLabels[$v->closing_form] ?? $v->closing_form }}</div>
-                    <div><span style="color:#94a3b8;">O'qituvchi:</span> {{ $v->teacher_name ?? '—' }} <span style="color:#94a3b8;">{{ $v->teacher_phone ? '('.$v->teacher_phone.')' : '' }}</span></div>
-                    <div><span style="color:#94a3b8;">Fan mas'uli:</span> {{ $v->fan_masuli_name ?? '—' }} <span style="color:#94a3b8;">{{ $v->fan_masuli_phone ? '('.$v->fan_masuli_phone.')' : '' }}</span></div>
-                    <div><span style="color:#94a3b8;">Kafedra mudiri:</span> {{ $v->kafedra_mudiri_name ?? '—' }} <span style="color:#94a3b8;">{{ $v->kafedra_mudiri_phone ? '('.$v->kafedra_mudiri_phone.')' : '' }}</span></div>
+                    <div><span style="color:#94a3b8;">O'qituvchi(lar):</span> {{ $m->teacher_name ?? '—' }} <span style="color:#94a3b8;">{{ $m->teacher_phone ? '('.$m->teacher_phone.')' : '' }}</span></div>
+                    <div><span style="color:#94a3b8;">Fan mas'uli:</span> {{ $m->fan_masuli_name ?? '—' }} <span style="color:#94a3b8;">{{ $m->fan_masuli_phone ? '('.$m->fan_masuli_phone.')' : '' }}</span></div>
+                    <div><span style="color:#94a3b8;">Kafedra mudiri:</span> {{ $m->kafedra_mudiri_name ?? '—' }} <span style="color:#94a3b8;">{{ $m->kafedra_mudiri_phone ? '('.$m->kafedra_mudiri_phone.')' : '' }}</span></div>
                     <div><span style="color:#94a3b8;">Asos sana:</span> {{ $v->base_date ? \Carbon\Carbon::parse($v->base_date)->format('d.m.Y') : '—' }} ({{ $v->base_type === 'lesson' ? 'oxirgi dars' : ($v->base_type === 'exam' ? 'YN' : '') }})</div>
                     <div><span style="color:#94a3b8;">Muddat:</span> <b style="{{ $overdue ? 'color:#b91c1c;' : '' }}">{{ $v->deadline ? \Carbon\Carbon::parse($v->deadline)->format('d.m.Y') : '—' }}</b> {{ $overdue ? '(kechikkan)' : '' }}</div>
                 </div>

@@ -119,6 +119,17 @@
                                     <span class="toggle-label">Joriy semestr</span>
                                 </div>
                             </div>
+
+                            <div class="filter-item" style="min-width: 180px;">
+                                <label class="filter-label">&nbsp;</label>
+                                <input type="hidden" name="show_inactive" id="show_inactive_input" value="{{ request('show_inactive') ? '1' : '0' }}">
+                                <div class="toggle-switch {{ $showInactive ? 'active' : '' }}" id="show-inactive-toggle" onclick="toggleShowInactive()" title="Semestr oxirida nofaol qilingan eski fanlar (a/b/c variantlar). Baholar shularda qolib ketgan bo'lishi mumkin.">
+                                    <div class="toggle-track">
+                                        <div class="toggle-thumb"></div>
+                                    </div>
+                                    <span class="toggle-label">Nofaol fanlar</span>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Row 2 -->
@@ -247,7 +258,7 @@
                             </thead>
                             <tbody>
                                 @foreach ($journals as $index => $journal)
-                                    <tr class="journal-row"
+                                    <tr class="journal-row {{ isset($journal->is_active) && !$journal->is_active ? 'journal-row-inactive' : '' }}"
                                         onclick="window.location='{{ route('admin.journal.show', ['groupId' => $journal->group_id, 'subjectId' => $journal->subject_id, 'semesterCode' => $journal->semester_code, 'cs' => $journal->id]) }}'">
                                         <td class="td-num">{{ $journals->firstItem() + $index }}</td>
                                         <td><span class="badge badge-blue">{{ $journal->education_type_name ?? '-' }}</span></td>
@@ -256,7 +267,12 @@
                                         <td><span class="text-cell text-cyan">{{ $journal->specialty_name ?? '-' }}</span></td>
                                         <td><span class="badge badge-violet">{{ $journal->level_name ?? '-' }}</span></td>
                                         <td><span class="badge badge-teal">{{ $journal->semester_name ?? '-' }}</span></td>
-                                        <td><span class="text-cell text-subject">{{ $journal->subject_name ?? '-' }}</span></td>
+                                        <td>
+                                            <span class="text-cell text-subject">{{ $journal->subject_name ?? '-' }}</span>
+                                            @if(isset($journal->is_active) && !$journal->is_active)
+                                                <span class="badge" style="background:#fee2e2;color:#b91c1c;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:6px;" title="Bu fan HEMIS'da nofaol qilingan (eski/eskirgan). Baholar shu yerda qolgan bo'lishi mumkin.">Nofaol</span>
+                                            @endif
+                                        </td>
                                         <td style="text-align:center;">
                                             @php $cf = $journal->closing_form ?? null; @endphp
                                             @if($cf && isset($closingFormBadges[$cf]))
@@ -311,6 +327,26 @@
         function toggleCurrentSemester() {
             const btn = document.getElementById('current-semester-toggle');
             const input = document.getElementById('current_semester_input');
+            const isActive = btn.classList.contains('active');
+
+            if (isActive) {
+                btn.classList.remove('active');
+                input.value = '0';
+            } else {
+                btn.classList.add('active');
+                input.value = '1';
+            }
+
+            setTimeout(function() {
+                document.getElementById('filter-loading').classList.remove('hidden');
+                document.getElementById('filter-loading').style.display = 'flex';
+                document.getElementById('filter-form').submit();
+            }, 100);
+        }
+
+        function toggleShowInactive() {
+            const btn = document.getElementById('show-inactive-toggle');
+            const input = document.getElementById('show_inactive_input');
             const isActive = btn.classList.contains('active');
 
             if (isActive) {
@@ -431,6 +467,7 @@
                     semester_code: $('#semester_code').val() || '',
                     subject_id: $('#subject').val() || '',
                     current_semester: $('#current_semester_input').val() || '1',
+                    show_inactive: $('#show_inactive_input').val() || '0',
                 };
             }
 
@@ -638,6 +675,21 @@
         }
         .toggle-switch.active .toggle-label {
             color: #1e3a5f;
+        }
+        /* Nofaol fanlar toggle'i yoqilganda — diqqatni tortuvchi rang */
+        #show-inactive-toggle.active .toggle-track {
+            background: #ef4444;
+        }
+        #show-inactive-toggle.active .toggle-label {
+            color: #b91c1c;
+        }
+
+        /* Nofaol (eskirgan) fan qatori — xira fon */
+        .journal-row-inactive {
+            background: #fef2f2;
+        }
+        .journal-row-inactive:hover {
+            background: #fee2e2;
         }
 
         /* ===== Table ===== */

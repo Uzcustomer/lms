@@ -156,6 +156,12 @@ class StudentRatingController extends Controller
 
     public function exportExcel(Request $request)
     {
+        // Katta dataset eksporti — PHP'ning default 128M va 30s limitlari
+        // yetmaydi. Web request kontekstida ham xavfsiz oshiriladi (faqat shu
+        // request uchun).
+        @ini_set('memory_limit', '768M');
+        @set_time_limit(300);
+
         $level = $request->input('level');
         $semester = $request->input('semester');
 

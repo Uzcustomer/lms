@@ -9,9 +9,12 @@ use App\Models\Department;
 use App\Models\Setting;
 use App\Models\VedomostSubmission;
 use App\Models\VedomostSubmissionLog;
+use App\Services\VedomostMergeService;
 use App\Services\VedomostSubmissionNotifier;
 use App\Services\VedomostSubmissionService;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -37,8 +40,38 @@ class VedomostSubmissionController extends Controller
 
     public function __construct(
         private VedomostSubmissionService $service,
-        private VedomostSubmissionNotifier $notifier
+        private VedomostSubmissionNotifier $notifier,
+        private VedomostMergeService $merge
     ) {
+    }
+
+    /**
+     * Jamlangan qatorlarni saralash (DB emas, PHP darajasida — birlashtirishdan keyin).
+     */
+    private function sortAggregated(Collection $rows, Request $request): Collection
+    {
+        $sort = $request->get('sort');
+        $dir = $request->get('dir') === 'desc' ? 'desc' : 'asc';
+        $map = [
+            'group' => 'group_name', 'subject' => 'subject_name',
+            'department' => 'department_name', 'teacher' => 'teacher_name',
+            'closing_form' => 'closing_form', 'semester' => 'semester_code',
+            'base_date' => 'base_date', 'deadline' => 'deadline', 'status' => 'status',
+        ];
+
+        if (isset($map[$sort])) {
+            $col = $map[$sort];
+            $sorted = $rows->sortBy(fn($r) => (string) ($r->{$col} ?? ''), SORT_NATURAL | SORT_FLAG_CASE, $dir === 'desc');
+            return $sorted->values();
+        }
+
+        // Default: muddat (bo'shlar oxirida), keyin guruh, fan.
+        return $rows->sortBy(fn($r) => [
+            $r->deadline === null ? 1 : 0,
+            (string) $r->deadline,
+            (string) $r->group_name,
+            (string) $r->subject_name,
+        ])->values();
     }
 
     private function checkAccess(): void
@@ -75,6 +108,11 @@ class VedomostSubmissionController extends Controller
         $selectedEducationType = $this->resolveSelectedEducationType($request, $educationTypes);
 
         $query = DB::table('vedomost_submissions as vs')
+            // MUHIM: faqat FAOL guruhlar — vedomost faol guruh uchun olinadi.
+            ->join('groups as g', function ($join) {
+                $join->on('g.group_hemis_id', '=', 'vs.group_hemis_id')
+                    ->where('g.active', true);
+            })
             ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'vs.curriculum_hemis_id')
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('semesters as s', function ($join) {
@@ -142,6 +180,10 @@ class VedomostSubmissionController extends Controller
         // Yo'nalishlar — nom bo'yicha distinct (bir xil nomlilar bitta ko'rinadi).
         // Tanlangan ta'lim turi/fakultetga qarab cheklanadi.
         $specialtyQuery = DB::table('vedomost_submissions as vs')
+            ->join('groups as g', function ($join) {
+                $join->on('g.group_hemis_id', '=', 'vs.group_hemis_id')
+                    ->where('g.active', true);
+            })
             ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'vs.curriculum_hemis_id')
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->whereNotNull('vs.specialty_name')
@@ -164,14 +206,22 @@ class VedomostSubmissionController extends Controller
             'sinov' => 'Sinov (test)',
         ];
 
-        // Status statistikasi (filtrlardan mustaqil — umumiy holat)
-        $stats = VedomostSubmission::select('status', DB::raw('COUNT(*) as cnt'))
-            ->groupBy('status')
-            ->pluck('cnt', 'status')
-            ->all();
+        // Filtrlangan yozuvlarni o'zak guruh × o'zak fan bo'yicha jamlaymiz —
+        // guruhcha (a/b/c) va fan variant harflari kesilib, bitta vedomost qatori bo'ladi.
+        $aggregated = $this->sortAggregated($this->merge->aggregate($query->get()), $request);
+
+        // Status statistikasi — jamlangan (o'zak) vedomostlar bo'yicha, jadval bilan mos.
+        $stats = $aggregated->groupBy('status')->map->count()->all();
 
         $perPage = (int) $request->get('per_page', 50);
-        $submissions = $query->paginate($perPage)->appends($request->query());
+        $page = max(1, (int) $request->get('page', 1));
+        $submissions = new LengthAwarePaginator(
+            $aggregated->forPage($page, $perPage)->values(),
+            $aggregated->count(),
+            $perPage,
+            $page,
+            ['path' => $request->url(), 'query' => $request->query()]
+        );
 
         $notifyEnabled = VedomostSubmissionNotifier::enabled();
         $canToggleNotify = in_array(session('active_role', ''), self::NOTIFY_TOGGLE_ROLES, true);
@@ -202,9 +252,12 @@ class VedomostSubmissionController extends Controller
         $statusLabels = VedomostSubmission::statusLabels();
         $today = now()->toDateString();
 
+        // Index bilan bir xil — o'zak guruh × o'zak fan bo'yicha jamlangan qatorlar.
+        $aggregated = $this->sortAggregated($this->merge->aggregate($query->get()), $request);
+
         $rows = [];
         $i = 1;
-        foreach ($query->get() as $v) {
+        foreach ($aggregated as $v) {
             $overdue = $v->deadline && $v->deadline < $today && $v->status !== VedomostSubmission::STATUS_APPROVED;
             $rows[] = [
                 $i++,
@@ -272,7 +325,11 @@ class VedomostSubmissionController extends Controller
         $submission = VedomostSubmission::with('logs')->findOrFail($id);
         $aiConfigured = \App\Services\VedomostAiChecker::isConfigured();
 
-        return view('admin.vedomost-submission.show', compact('submission', 'aiConfigured'));
+        // Birlashtirilgan (o'zak guruh × o'zak fan) ko'rinish — guruhchalar va
+        // ularning o'qituvchilari jamlangan holda ko'rsatish uchun.
+        $merged = $this->merge->aggregate($this->merge->siblingsOf($submission))->first();
+
+        return view('admin.vedomost-submission.show', compact('submission', 'aiConfigured', 'merged'));
     }
 
     /**
@@ -321,10 +378,16 @@ class VedomostSubmissionController extends Controller
             'excel.mimes' => 'Excel fayl .xlsx yoki .xls formatida bo\'lishi kerak.',
         ]);
 
+        // Bitta o'zak guruh × o'zak fan = bitta vedomost. Yuklash shu guruhdagi
+        // barcha guruhcha/variant yozuvlariga birdek qo'llanadi.
+        $siblings = $this->merge->siblingsOf($v);
+
         $dir = "vedomost-submissions/{$v->id}";
-        // Eski PDF bo'lsa (qayta yuklash) — o'chiramiz
-        if ($v->pdf_path && Storage::disk('public')->exists($v->pdf_path)) {
-            Storage::disk('public')->delete($v->pdf_path);
+        // Eski PDF fayllar (qayta yuklash) — barcha guruhchalardagilarni o'chiramiz.
+        foreach ($siblings->pluck('pdf_path')->filter()->unique() as $old) {
+            if (Storage::disk('public')->exists($old)) {
+                Storage::disk('public')->delete($old);
+            }
         }
 
         $update = [
@@ -339,16 +402,21 @@ class VedomostSubmissionController extends Controller
             'reviewed_at' => null,
         ];
 
-        // Excel ixtiyoriy — yuklansa, eskisini almashtiramiz
+        // Excel ixtiyoriy — yuklansa, barcha guruhchalardagi eskisini almashtiramiz.
         if ($request->hasFile('excel')) {
-            if ($v->excel_path && Storage::disk('public')->exists($v->excel_path)) {
-                Storage::disk('public')->delete($v->excel_path);
+            foreach ($siblings->pluck('excel_path')->filter()->unique() as $old) {
+                if (Storage::disk('public')->exists($old)) {
+                    Storage::disk('public')->delete($old);
+                }
             }
             $update['excel_path'] = $request->file('excel')->store($dir, 'public');
         }
 
         $from = $v->status;
-        $v->update($update);
+        foreach ($siblings as $sib) {
+            $sib->update($update);
+        }
+        $v->refresh();
 
         $this->log($v, 'upload', $from, $v->status);
         $this->notifier->notifyStatusChange($v);
@@ -366,7 +434,10 @@ class VedomostSubmissionController extends Controller
         }
 
         $from = $v->status;
-        $v->update(['status' => VedomostSubmission::STATUS_REVIEWING]);
+        foreach ($this->merge->siblingsOf($v) as $sib) {
+            $sib->update(['status' => VedomostSubmission::STATUS_REVIEWING]);
+        }
+        $v->refresh();
         $this->log($v, 'review', $from, $v->status);
         $this->notifier->notifyStatusChange($v);
 
@@ -383,13 +454,17 @@ class VedomostSubmissionController extends Controller
         }
 
         $from = $v->status;
-        $v->update([
+        $approval = [
             'status' => VedomostSubmission::STATUS_APPROVED,
             'reviewed_by' => auth()->id(),
             'reviewed_by_name' => $this->userName(),
             'reviewed_at' => now(),
             'rejection_reason' => null,
-        ]);
+        ];
+        foreach ($this->merge->siblingsOf($v) as $sib) {
+            $sib->update($approval);
+        }
+        $v->refresh();
         $this->log($v, 'approve', $from, $v->status);
         $this->notifier->notifyStatusChange($v);
 
@@ -412,13 +487,17 @@ class VedomostSubmissionController extends Controller
         ]);
 
         $from = $v->status;
-        $v->update([
+        $rejection = [
             'status' => VedomostSubmission::STATUS_REJECTED,
             'reviewed_by' => auth()->id(),
             'reviewed_by_name' => $this->userName(),
             'reviewed_at' => now(),
             'rejection_reason' => $request->rejection_reason,
-        ]);
+        ];
+        foreach ($this->merge->siblingsOf($v) as $sib) {
+            $sib->update($rejection);
+        }
+        $v->refresh();
         $this->log($v, 'reject', $from, $v->status, $request->rejection_reason);
         $this->notifier->notifyStatusChange($v);
 

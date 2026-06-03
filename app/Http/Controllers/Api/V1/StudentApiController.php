@@ -127,6 +127,42 @@ class StudentApiController extends Controller
             ? $semesterAvgs[$semesterKeys[$currentIndex - 1]]
             : null;
 
+        // Semester-level GPA (5-point scale) for the GPA trend chip.
+        $semesterGpas = AcademicRecord::where('student_id', $student->hemis_id)
+            ->whereNotNull('grade')
+            ->whereNotIn('grade', ['', '0'])
+            ->select('semester_id', DB::raw('AVG(CAST(grade AS DECIMAL(10,2))) as semester_gpa'))
+            ->groupBy('semester_id')
+            ->orderBy('semester_id')
+            ->pluck('semester_gpa', 'semester_id');
+
+        $gpaKeys = array_map('strval', $semesterGpas->keys()->toArray());
+        $currentGpaIndex = array_search((string) $currentSemesterId, $gpaKeys);
+        $currentSemesterGpa = ($currentGpaIndex !== false)
+            ? $semesterGpas[$semesterGpas->keys()[$currentGpaIndex]]
+            : null;
+        $prevSemesterGpa = ($currentGpaIndex !== false && $currentGpaIndex > 0)
+            ? $semesterGpas[$semesterGpas->keys()[$currentGpaIndex - 1]]
+            : null;
+
+        // Attendance streak — consecutive days since the student's last absence.
+        // An absence = a lesson with absent_on > 0 OR absent_off > 0.
+        $lastAbsenceDate = Attendance::where('student_id', $student->id)
+            ->where(function ($q) {
+                $q->where('absent_on', '>', 0)
+                  ->orWhere('absent_off', '>', 0);
+            })
+            ->max('lesson_date');
+        $firstLessonDate = Attendance::where('student_id', $student->id)
+            ->min('lesson_date');
+        $attendanceStreak = null;
+        $today = Carbon::now()->startOfDay();
+        if ($lastAbsenceDate) {
+            $attendanceStreak = Carbon::parse($lastAbsenceDate)->startOfDay()->diffInDays($today);
+        } elseif ($firstLessonDate) {
+            $attendanceStreak = Carbon::parse($firstLessonDate)->startOfDay()->diffInDays($today);
+        }
+
         return response()->json([
             'data' => [
                 'student_name' => $student->full_name,
@@ -134,6 +170,9 @@ class StudentApiController extends Controller
                 'avg_grade' => $student->avg_grade ?? 0,
                 'current_semester_avg' => $currentSemesterAvg ? round((float) $currentSemesterAvg, 2) : null,
                 'prev_semester_avg' => $prevSemesterAvg ? round((float) $prevSemesterAvg, 2) : null,
+                'current_semester_gpa' => $currentSemesterGpa ? round((float) $currentSemesterGpa, 2) : null,
+                'prev_semester_gpa' => $prevSemesterGpa ? round((float) $prevSemesterGpa, 2) : null,
+                'attendance_streak_days' => $attendanceStreak,
                 'debt_subjects' => $debtSubjectsCount,
                 'debt_by_semester' => $debtBySemester,
                 'total_absences' => $totalAbsent,
@@ -308,7 +347,7 @@ class StudentApiController extends Controller
                 'weeks' => $weeks,
                 'selected_week_id' => $selectedWeekId,
                 'week_label' => $weekLabel,
-                'days' => $days,
+                'days' => (object) $days,
                 'schedule' => $groupedSchedule,
             ],
         ]);
@@ -551,7 +590,7 @@ class StudentApiController extends Controller
                         });
                 }))
                 ->when($subjectEducationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
-                ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id')
+                ->select('training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'attempt')
                 ->get();
 
             $otherGrades = ['on' => null, 'oski' => null, 'test' => null];
@@ -571,12 +610,25 @@ class StudentApiController extends Controller
                             $typeCode = 102;
                         }
                     }
-                    $otherByType[$typeCode][] = $effectiveGrade;
+                    $attempt = (int) ($g->attempt ?? 1);
+                    $otherByType[$typeCode][$attempt][] = $effectiveGrade;
                 }
             }
-            if (!empty($otherByType[100])) $otherGrades['on'] = round(array_sum($otherByType[100]) / count($otherByType[100]), 0, PHP_ROUND_HALF_UP);
-            if (!empty($otherByType[101])) $otherGrades['oski'] = round(array_sum($otherByType[101]) / count($otherByType[101]), 0, PHP_ROUND_HALF_UP);
-            if (!empty($otherByType[102])) $otherGrades['test'] = round(array_sum($otherByType[102]) / count($otherByType[102]), 0, PHP_ROUND_HALF_UP);
+            // 2-urinish 1-urinishni almashtiradi (o'rtachalanmaydi).
+            $pickLatestAttempt = function (?array $byAttempt): ?float {
+                if (empty($byAttempt)) {
+                    return null;
+                }
+                $latest = max(array_keys($byAttempt));
+                $grades = $byAttempt[$latest];
+                if (empty($grades)) {
+                    return null;
+                }
+                return round(array_sum($grades) / count($grades), 0, PHP_ROUND_HALF_UP);
+            };
+            $otherGrades['on'] = $pickLatestAttempt($otherByType[100] ?? null);
+            $otherGrades['oski'] = $pickLatestAttempt($otherByType[101] ?? null);
+            $otherGrades['test'] = $pickLatestAttempt($otherByType[102] ?? null);
 
             // Attendance
             $absentOff = DB::table('attendances')
@@ -1355,5 +1407,95 @@ class StudentApiController extends Controller
                 'students' => $list,
             ],
         ]);
+    }
+
+    /**
+     * Paginated list of notifications for the authenticated student.
+     * Mirrors what the web /student/notifications page shows — but the API
+     * never auto-marks as read (the web page does). Mobile uses a separate
+     * mark-as-read endpoint.
+     */
+    public function notifications(Request $request): JsonResponse
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('student_notifications')) {
+            return response()->json([
+                'data' => [],
+                'unread_count' => 0,
+                'total' => 0,
+            ]);
+        }
+
+        $student = $request->user();
+        $perPage = min((int) $request->input('per_page', 30), 100);
+        $unreadOnly = $request->boolean('unread_only');
+
+        $query = \App\Models\StudentNotification::where('student_id', $student->id)
+            ->orderByDesc('created_at');
+        if ($unreadOnly) {
+            $query->whereNull('read_at');
+        }
+
+        $paginated = $query->paginate($perPage);
+        $unreadCount = \App\Models\StudentNotification::where('student_id', $student->id)
+            ->whereNull('read_at')->count();
+
+        return response()->json([
+            'data' => collect($paginated->items())->map(fn($n) => [
+                'id' => $n->id,
+                'type' => $n->type,
+                'title' => $n->title,
+                'message' => $n->message,
+                'link' => $n->link,
+                'data' => $n->data,
+                'read_at' => $n->read_at?->toIso8601String(),
+                'created_at' => $n->created_at?->toIso8601String(),
+            ])->values(),
+            'unread_count' => $unreadCount,
+            'total' => $paginated->total(),
+            'current_page' => $paginated->currentPage(),
+            'last_page' => $paginated->lastPage(),
+        ]);
+    }
+
+    /** Just the unread count — for the bell-icon badge. */
+    public function notificationsUnreadCount(Request $request): JsonResponse
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('student_notifications')) {
+            return response()->json(['count' => 0]);
+        }
+
+        $count = \App\Models\StudentNotification::where('student_id', $request->user()->id)
+            ->whereNull('read_at')->count();
+
+        return response()->json(['count' => $count]);
+    }
+
+    /** Mark a single notification as read. */
+    public function markNotificationRead(Request $request, $id): JsonResponse
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('student_notifications')) {
+            return response()->json(['success' => true]);
+        }
+
+        \App\Models\StudentNotification::where('id', $id)
+            ->where('student_id', $request->user()->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['success' => true]);
+    }
+
+    /** Mark all notifications as read. */
+    public function markAllNotificationsRead(Request $request): JsonResponse
+    {
+        if (!\Illuminate\Support\Facades\Schema::hasTable('student_notifications')) {
+            return response()->json(['success' => true]);
+        }
+
+        \App\Models\StudentNotification::where('student_id', $request->user()->id)
+            ->whereNull('read_at')
+            ->update(['read_at' => now()]);
+
+        return response()->json(['success' => true]);
     }
 }

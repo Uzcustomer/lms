@@ -183,8 +183,24 @@
             }
         });
 
+        // Har bir keystroke'da yashirin maydonni yangilab turamiz - bu
+        // foydalanuvchi Save tugmasini bosib forma submit qilganda blur
+        // event'i kech yetsa ham (yoki umuman ishlamasa) qiymat allaqachon
+        // formaga jo'natilishga tayyor turishi uchun.
+        this.display.addEventListener('input', function() {
+            if (self.display.value.trim() !== '') {
+                self._parseManual();
+            } else {
+                self.input.value = '';
+            }
+        });
+
         this.display.addEventListener('blur', function() {
-            if (self.display.value.trim() !== '' && !self.isOpen) {
+            // Qiymat bor bo'lsa har doim parse qilamiz - isOpen ni tekshirib
+            // o'tkazib yuborish bug edi: foydalanuvchi qo'lda sana yozib,
+            // Enter bosmasdan Saqlash tugmasini bossa, blur kalendar hali
+            // ochiq turganda fire bo'lardi va yashirin input bo'sh qolardi.
+            if (self.display.value.trim() !== '') {
                 self._parseManual();
             }
         });
@@ -291,14 +307,21 @@
         var val = this.display.value.trim();
         if (!val) return;
         var d = null;
-        // dd.mm.yyyy
-        var m = val.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+        // dd.mm.yyyy / dd/mm/yyyy / dd-mm-yyyy (ajratuvchi: . / -)
+        var m = val.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{4})$/);
         if (m) {
             d = new Date(parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
         }
-        // yyyy-mm-dd
+        // dd.mm.yy (2 raqamli yil → 20yy)
         if (!d) {
-            m = val.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+            m = val.match(/^(\d{1,2})[.\/\-](\d{1,2})[.\/\-](\d{2})$/);
+            if (m) {
+                d = new Date(2000 + parseInt(m[3]), parseInt(m[2]) - 1, parseInt(m[1]));
+            }
+        }
+        // yyyy-mm-dd / yyyy.mm.dd / yyyy/mm/dd (ISO va variantlari)
+        if (!d) {
+            m = val.match(/^(\d{4})[.\/\-](\d{1,2})[.\/\-](\d{1,2})$/);
             if (m) d = new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]));
         }
         if (d && !isNaN(d.getTime())) {

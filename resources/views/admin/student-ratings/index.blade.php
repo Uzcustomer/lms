@@ -32,10 +32,42 @@
             </div>
             <div class="w-[140px]">
                 <label class="block text-sm font-medium text-gray-700 mb-1">Kurs</label>
-                <select name="level" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                <select name="level" id="rating-level-select" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
                     <option value="">Barchasi</option>
                     @foreach(['11' => '1-kurs', '12' => '2-kurs', '13' => '3-kurs', '14' => '4-kurs', '15' => '5-kurs', '16' => '6-kurs'] as $code => $label)
                         <option value="{{ $code }}" {{ $selectedLevel == $code ? 'selected' : '' }}>{{ $label }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="w-[160px]">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Semestr</label>
+                <select name="semester" id="rating-semester-select" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Barchasi</option>
+                    @foreach($semesterRows as $sem)
+                        <option value="{{ $sem->code }}"
+                                data-level="{{ $sem->level_code }}"
+                                data-current="{{ $sem->current ? '1' : '0' }}"
+                                {{ (string) $selectedSemester === (string) $sem->code ? 'selected' : '' }}>
+                            {{ $sem->name }}{{ $sem->current ? ' (joriy)' : '' }}
+                        </option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="flex-1 min-w-[180px]">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Guruh</label>
+                <select name="group_name" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Barchasi</option>
+                    @foreach($groups as $g)
+                        <option value="{{ $g }}" {{ $selectedGroup === $g ? 'selected' : '' }}>{{ $g }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div class="flex-1 min-w-[220px]">
+                <label class="block text-sm font-medium text-gray-700 mb-1">Fan</label>
+                <select name="subject_id" onchange="this.form.submit()" class="w-full border-gray-300 rounded-lg text-sm focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">Barcha fanlar</option>
+                    @foreach($subjects as $s)
+                        <option value="{{ $s->subject_id }}" {{ (string) $selectedSubject === (string) $s->subject_id ? 'selected' : '' }}>{{ $s->subject_name }}</option>
                     @endforeach
                 </select>
             </div>

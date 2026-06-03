@@ -1,15 +1,12 @@
 import 'dart:typed_data';
-import 'dart:ui';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:provider/provider.dart';
-import '../../config/theme.dart';
-import '../../config/aurora_themes.dart';
-import '../../providers/settings_provider.dart';
 import '../../services/gemini_service.dart';
 import '../../services/student_context_builder.dart';
 import '../../services/student_data_cache.dart';
+import '../../widgets/clinic_header.dart';
+import '../../widgets/notification_bell.dart';
 
 class AiChatScreen extends StatefulWidget {
   const AiChatScreen({super.key});
@@ -30,6 +27,10 @@ class _AiChatScreenState extends State<AiChatScreen>
   bool _contextLoading = true;
   bool _contextLoaded = false;
   bool _picking = false;
+
+  // AI brand gradient.
+  static const _aiA = Color(0xFF4338CA);
+  static const _aiB = Color(0xFF7C3AED);
 
   static const _maxFileSize = 18 * 1024 * 1024;
   static const _imageExt = ['jpg', 'jpeg', 'png', 'webp', 'heic', 'heif'];
@@ -53,13 +54,21 @@ class _AiChatScreenState extends State<AiChatScreen>
       final cache = StudentDataCache();
       await cache.ensureFresh(force: force);
       final builder = StudentContextBuilder(cache);
-      final context = builder.build();
-      _gemini.setStudentContext(context);
+      final ctx = builder.build();
+      _gemini.setStudentContext(ctx);
       if (mounted) {
         setState(() {
           _contextLoading = false;
           _contextLoaded = cache.hasData;
         });
+        if (!cache.hasData) {
+          await cache.refresh();
+          if (mounted && cache.hasData) {
+            final ctx2 = StudentContextBuilder(cache).build();
+            _gemini.setStudentContext(ctx2);
+            setState(() => _contextLoaded = true);
+          }
+        }
       }
     } catch (_) {
       if (mounted) {
@@ -285,14 +294,13 @@ class _AiChatScreenState extends State<AiChatScreen>
       context: context,
       backgroundColor: Colors.transparent,
       builder: (ctx) {
-        final isDark = Theme.of(context).brightness == Brightness.dark;
         return Container(
           padding: EdgeInsets.only(
             top: 16,
             bottom: MediaQuery.of(ctx).padding.bottom + 16,
           ),
           decoration: BoxDecoration(
-            color: isDark ? AppTheme.darkCard : Colors.white,
+            color: ClinicTheme.surfaceOf(context),
             borderRadius: const BorderRadius.vertical(top: Radius.circular(22)),
           ),
           child: Column(
@@ -302,33 +310,33 @@ class _AiChatScreenState extends State<AiChatScreen>
                 width: 38,
                 height: 4,
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white24 : Colors.grey.shade300,
+                  color: ClinicTheme.dividerOf(context),
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
               const SizedBox(height: 18),
               _attachOption(Icons.image_outlined, 'Rasm', 'JPG, PNG, WEBP',
-                  const Color(0xFF4A6CF7), () {
+                  const Color(0xFF1D4ED8), () {
                 Navigator.pop(ctx);
                 _pickFile(FileType.custom, extensions: _imageExt);
               }),
               _attachOption(Icons.picture_as_pdf_outlined, 'PDF',
-                  'Hujjatlar va kitoblar', const Color(0xFFE53935), () {
+                  'Hujjatlar va kitoblar', const Color(0xFFBE123C), () {
                 Navigator.pop(ctx);
                 _pickFile(FileType.custom, extensions: ['pdf']);
               }),
               _attachOption(Icons.audiotrack_outlined, 'Audio',
-                  'MP3, WAV, M4A', const Color(0xFFF97316), () {
+                  'MP3, WAV, M4A', const Color(0xFFB45309), () {
                 Navigator.pop(ctx);
                 _pickFile(FileType.custom, extensions: _audioExt);
               }),
               _attachOption(Icons.videocam_outlined, 'Video',
-                  'MP4, MOV, WEBM', const Color(0xFF8B5CF6), () {
+                  'MP4, MOV, WEBM', const Color(0xFF7C3AED), () {
                 Navigator.pop(ctx);
                 _pickFile(FileType.custom, extensions: _videoExt);
               }),
               _attachOption(Icons.insert_drive_file_outlined, 'Boshqa fayl',
-                  'TXT, CSV, MD', const Color(0xFF14B8A6), () {
+                  'TXT, CSV, MD', const Color(0xFF0F766E), () {
                 Navigator.pop(ctx);
                 _pickFile(FileType.any);
               }),
@@ -341,23 +349,20 @@ class _AiChatScreenState extends State<AiChatScreen>
 
   Widget _attachOption(
       IconData icon, String title, String subtitle, Color color, VoidCallback onTap) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 11),
         child: Row(
           children: [
             Container(
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: color.withOpacity(isDark ? 0.2 : 0.1),
+                color: color,
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: color, size: 22),
+              child: Icon(icon, color: Colors.white, size: 22),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -367,15 +372,17 @@ class _AiChatScreenState extends State<AiChatScreen>
                   Text(title,
                       style: TextStyle(
                           fontSize: 14.5,
-                          fontWeight: FontWeight.w600,
-                          color: txt)),
+                          fontWeight: FontWeight.w800,
+                          color: ClinicTheme.inkOf(context))),
                   const SizedBox(height: 2),
                   Text(subtitle,
-                      style: TextStyle(fontSize: 11.5, color: sub)),
+                      style: TextStyle(
+                          fontSize: 11.5, color: ClinicTheme.mutedOf(context))),
                 ],
               ),
             ),
-            Icon(Icons.arrow_forward_ios_rounded, size: 14, color: sub),
+            Icon(Icons.arrow_forward_ios_rounded,
+                size: 14, color: ClinicTheme.faint),
           ],
         ),
       ),
@@ -414,141 +421,117 @@ class _AiChatScreenState extends State<AiChatScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final aurora = context.watch<SettingsProvider>().auroraTheme;
-    final statusBarH = MediaQuery.of(context).padding.top;
-
     return Scaffold(
-      backgroundColor: auroraBase(aurora, isDark),
+      backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
-          _buildHeader(statusBarH),
+          _buildHeader(),
           Expanded(
             child: _messages.isEmpty
-                ? _buildWelcome(isDark)
+                ? _buildWelcome()
                 : ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.fromLTRB(14, 14, 14, 14),
-                    itemCount: _messages.length + (_isStreaming ? 0 : 0),
-                    itemBuilder: (_, i) =>
-                        _buildBubble(_messages[i], isDark),
+                    itemCount: _messages.length,
+                    itemBuilder: (_, i) => _buildBubble(_messages[i]),
                   ),
           ),
-          _buildInput(isDark),
+          _buildInput(),
         ],
       ),
     );
   }
 
-  Widget _buildHeader(double statusBarH) {
+  Widget _buildHeader() {
+    final statusBarH = MediaQuery.of(context).padding.top;
+    final ink = ClinicTheme.inkOf(context);
     return Container(
-      padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
-      decoration: const BoxDecoration(
-        color: Color(0xFF0A1A3A),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(18),
-          bottomRight: Radius.circular(18),
+      padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
+      decoration: BoxDecoration(
+        color: ClinicTheme.surfaceOf(context),
+        border: Border(
+          bottom: BorderSide(color: ClinicTheme.dividerOf(context), width: 1),
         ),
       ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
+      child: Row(
         children: [
-          SizedBox(height: statusBarH > 0 ? 0 : 8),
-          Row(
-            children: [
-              IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                onPressed: () => Navigator.pop(context),
-              ),
-              const SizedBox(width: 4),
-              Container(
-                width: 32,
-                height: 32,
-                decoration: BoxDecoration(
-                  gradient: const LinearGradient(
-                    colors: [Color(0xFF4A6CF7), Color(0xFF9C27B0)],
-                  ),
-                  borderRadius: BorderRadius.circular(10),
+          ClinicIconButton(
+            icon: Icons.arrow_back_rounded,
+            onTap: () => Navigator.pop(context),
+          ),
+          const SizedBox(width: 11),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(colors: [_aiA, _aiB]),
+              borderRadius: BorderRadius.circular(11),
+            ),
+            child: const Icon(Icons.auto_awesome, color: Colors.white, size: 19),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'AI Yordamchi',
+                  style: TextStyle(
+                      fontSize: 15, fontWeight: FontWeight.w700, color: ink),
                 ),
-                child: const Icon(Icons.auto_awesome, color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                Row(
                   children: [
-                    const Text(
-                      'AI Yordamchi',
-                      style: TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                    if (_contextLoading) ...[
+                      SizedBox(
+                        width: 8,
+                        height: 8,
+                        child: CircularProgressIndicator(
+                            strokeWidth: 1.5, color: ClinicTheme.mutedOf(context)),
                       ),
-                    ),
-                    Row(
-                      children: [
-                        if (_contextLoading) ...[
-                          const SizedBox(
-                            width: 8,
-                            height: 8,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 1.5, color: Colors.white60),
-                          ),
-                          const SizedBox(width: 6),
-                          const Text(
-                            'Ma\'lumot yuklanmoqda...',
-                            style: TextStyle(fontSize: 10.5, color: Colors.white60),
-                          ),
-                        ] else if (_contextLoaded) ...[
-                          const Icon(Icons.check_circle_rounded,
-                              size: 11, color: Color(0xFF64FFDA)),
-                          const SizedBox(width: 4),
-                          const Text(
-                            'Ma\'lumotlaringiz bilan tayyor',
-                            style: TextStyle(fontSize: 10.5, color: Colors.white70),
-                          ),
-                        ] else
-                          const Text(
-                            'Gemini · TDTU',
-                            style: TextStyle(fontSize: 11, color: Colors.white60),
-                          ),
-                      ],
-                    ),
+                      const SizedBox(width: 6),
+                      Text('Ma\'lumot yuklanmoqda...',
+                          style: TextStyle(
+                              fontSize: 10.5, color: ClinicTheme.mutedOf(context))),
+                    ] else if (_contextLoaded) ...[
+                      const Icon(Icons.check_circle_rounded,
+                          size: 11, color: ClinicTheme.green),
+                      const SizedBox(width: 4),
+                      Text('Ma\'lumotlaringiz bilan tayyor',
+                          style: TextStyle(
+                              fontSize: 10.5, color: ClinicTheme.mutedOf(context))),
+                    ] else
+                      Text('Gemini · TDTU',
+                          style: TextStyle(
+                              fontSize: 11, color: ClinicTheme.mutedOf(context))),
                   ],
                 ),
-              ),
-              IconButton(
-                icon: _contextLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Colors.white70,
-                        ),
-                      )
-                    : const Icon(Icons.refresh_rounded,
-                        color: Colors.white70, size: 22),
-                tooltip: 'Ma\'lumotlarni yangilash',
-                onPressed: _contextLoading ? null : _refreshData,
-              ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline_rounded,
-                    color: Colors.white70, size: 22),
-                tooltip: 'Chatni tozalash',
-                onPressed: _messages.isNotEmpty ? _clearChat : null,
-              ),
-            ],
+              ],
+            ),
           ),
-          const SizedBox(height: 8),
+          const SizedBox(width: 8),
+          const NotificationBell(),
+          const SizedBox(width: 8),
+          ClinicIconButton(
+            icon: Icons.refresh_rounded,
+            onTap: () {
+              if (!_contextLoading) _refreshData();
+            },
+          ),
+          const SizedBox(width: 8),
+          ClinicIconButton(
+            icon: Icons.delete_outline_rounded,
+            onTap: () {
+              if (_messages.isNotEmpty) _clearChat();
+            },
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildWelcome(bool isDark) {
-    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
-    final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
+  Widget _buildWelcome() {
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
 
     final suggestions = _contextLoaded
         ? [
@@ -577,23 +560,23 @@ class _AiChatScreenState extends State<AiChatScreen>
           ];
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(18),
       child: Column(
         children: [
-          const SizedBox(height: 30),
+          const SizedBox(height: 26),
           Container(
             width: 80,
             height: 80,
             decoration: BoxDecoration(
               gradient: const LinearGradient(
-                colors: [Color(0xFF4A6CF7), Color(0xFF9C27B0)],
+                colors: [_aiA, _aiB],
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
               borderRadius: BorderRadius.circular(24),
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF4A6CF7).withOpacity(0.3),
+                  color: _aiA.withOpacity(0.35),
                   blurRadius: 20,
                   offset: const Offset(0, 8),
                 ),
@@ -601,41 +584,34 @@ class _AiChatScreenState extends State<AiChatScreen>
             ),
             child: const Icon(Icons.auto_awesome, color: Colors.white, size: 40),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 18),
           Text(
             'TDTU AI Yordamchi',
             style: TextStyle(
-              fontSize: 22,
-              fontWeight: FontWeight.w800,
-              color: txt,
-            ),
+                fontSize: 21, fontWeight: FontWeight.w900, color: ink),
           ),
           const SizedBox(height: 8),
           Text(
             'Tibbiyot fanlari va o\'quv jarayonida\nsizga yordam berishga tayyorman!',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 13.5, color: sub, height: 1.5),
+            style: TextStyle(fontSize: 13, color: muted, height: 1.5),
           ),
-          const SizedBox(height: 28),
+          const SizedBox(height: 24),
           ...suggestions.map((s) => Padding(
                 padding: const EdgeInsets.only(bottom: 10),
-                child: _buildSuggestionCard(s, isDark),
+                child: _buildSuggestionCard(s),
               )),
         ],
       ),
     );
   }
 
-  Widget _buildSuggestionCard(_Suggestion s, bool isDark) {
-    final surface = isDark
-        ? Colors.white.withOpacity(0.08)
-        : Colors.white.withOpacity(0.85);
-    final border = isDark ? Colors.white12 : Colors.grey.shade200;
-    final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+  Widget _buildSuggestionCard(_Suggestion s) {
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
 
     return Material(
-      color: surface,
+      color: ClinicTheme.surfaceOf(context),
       borderRadius: BorderRadius.circular(14),
       child: InkWell(
         borderRadius: BorderRadius.circular(14),
@@ -644,10 +620,11 @@ class _AiChatScreenState extends State<AiChatScreen>
           _send();
         },
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: border),
+            border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
+            boxShadow: ClinicTheme.cardShadow,
           ),
           child: Row(
             children: [
@@ -655,10 +632,10 @@ class _AiChatScreenState extends State<AiChatScreen>
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF4A6CF7).withOpacity(isDark ? 0.2 : 0.08),
-                  borderRadius: BorderRadius.circular(10),
+                  gradient: const LinearGradient(colors: [_aiA, _aiB]),
+                  borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(s.icon, size: 20, color: const Color(0xFF4A6CF7)),
+                child: Icon(s.icon, size: 19, color: Colors.white),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -668,17 +645,17 @@ class _AiChatScreenState extends State<AiChatScreen>
                     Text(s.label,
                         style: TextStyle(
                             fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: txt)),
+                            fontWeight: FontWeight.w800,
+                            color: ink)),
                     const SizedBox(height: 2),
                     Text(s.prompt,
-                        style: TextStyle(fontSize: 11.5, color: sub),
+                        style: TextStyle(fontSize: 11.5, color: muted),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis),
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios_rounded, size: 14, color: sub),
+              Icon(Icons.arrow_forward_ios_rounded, size: 14, color: ClinicTheme.faint),
             ],
           ),
         ),
@@ -686,14 +663,13 @@ class _AiChatScreenState extends State<AiChatScreen>
     );
   }
 
-  Widget _buildBubble(_ChatMessage msg, bool isDark) {
-    final isUser = msg.isUser;
-    final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+  Widget _buildBubble(_ChatMessage msg) {
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
 
-    if (!isUser) {
+    if (!msg.isUser) {
       return Padding(
-        padding: const EdgeInsets.only(bottom: 12, right: 40),
+        padding: const EdgeInsets.only(bottom: 12, right: 36),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -702,9 +678,7 @@ class _AiChatScreenState extends State<AiChatScreen>
               height: 30,
               margin: const EdgeInsets.only(top: 2),
               decoration: BoxDecoration(
-                gradient: const LinearGradient(
-                  colors: [Color(0xFF4A6CF7), Color(0xFF9C27B0)],
-                ),
+                gradient: const LinearGradient(colors: [_aiA, _aiB]),
                 borderRadius: BorderRadius.circular(9),
               ),
               child: const Icon(Icons.auto_awesome, color: Colors.white, size: 16),
@@ -714,7 +688,7 @@ class _AiChatScreenState extends State<AiChatScreen>
               child: Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: isDark ? AppTheme.darkCard : Colors.white,
+                  color: ClinicTheme.surfaceOf(context),
                   borderRadius: const BorderRadius.only(
                     topLeft: Radius.circular(4),
                     topRight: Radius.circular(16),
@@ -723,18 +697,10 @@ class _AiChatScreenState extends State<AiChatScreen>
                   ),
                   border: Border.all(
                     color: msg.isError
-                        ? Colors.red.withOpacity(0.3)
-                        : isDark
-                            ? Colors.white10
-                            : Colors.grey.shade200,
+                        ? const Color(0xFFBE123C)
+                        : ClinicTheme.dividerOf(context),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.04),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
+                  boxShadow: ClinicTheme.cardShadow,
                 ),
                 child: msg.text.isEmpty
                     ? _buildTypingIndicator()
@@ -746,32 +712,28 @@ class _AiChatScreenState extends State<AiChatScreen>
                             style: TextStyle(
                               fontSize: 14,
                               height: 1.5,
-                              color: msg.isError ? Colors.red : txt,
+                              color: msg.isError
+                                  ? const Color(0xFFBE123C)
+                                  : ink,
                             ),
                           ),
                           const SizedBox(height: 6),
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              InkWell(
-                                borderRadius: BorderRadius.circular(6),
-                                onTap: () {
-                                  Clipboard.setData(
-                                      ClipboardData(text: msg.text));
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text('Nusxa olindi'),
-                                      duration: Duration(seconds: 1),
-                                    ),
-                                  );
-                                },
-                                child: Padding(
-                                  padding: const EdgeInsets.all(4),
-                                  child: Icon(Icons.copy_rounded,
-                                      size: 14, color: sub),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () {
+                              Clipboard.setData(ClipboardData(text: msg.text));
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Nusxa olindi'),
+                                  duration: Duration(seconds: 1),
                                 ),
-                              ),
-                            ],
+                              );
+                            },
+                            child: Padding(
+                              padding: const EdgeInsets.all(4),
+                              child: Icon(Icons.copy_rounded,
+                                  size: 14, color: muted),
+                            ),
                           ),
                         ],
                       ),
@@ -787,11 +749,11 @@ class _AiChatScreenState extends State<AiChatScreen>
       child: Container(
         constraints:
             BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.75),
-        margin: const EdgeInsets.only(bottom: 12, left: 40),
+        margin: const EdgeInsets.only(bottom: 12, left: 36),
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 10),
         decoration: BoxDecoration(
           gradient: const LinearGradient(
-            colors: [Color(0xFF4A6CF7), Color(0xFF5B7BF8)],
+            colors: [Color(0xFF0F766E), Color(0xFF1E3A8A)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -803,7 +765,7 @@ class _AiChatScreenState extends State<AiChatScreen>
           ),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF4A6CF7).withOpacity(0.25),
+              color: const Color(0xFF0F766E).withOpacity(0.3),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),
@@ -844,11 +806,7 @@ class _AiChatScreenState extends State<AiChatScreen>
     if (a.isImage) {
       return ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: Image.memory(
-          a.bytes,
-          width: 220,
-          fit: BoxFit.cover,
-        ),
+        child: Image.memory(a.bytes, width: 220, fit: BoxFit.cover),
       );
     }
     IconData icon;
@@ -862,9 +820,8 @@ class _AiChatScreenState extends State<AiChatScreen>
       icon = Icons.insert_drive_file_rounded;
     }
     final sizeKb = (a.bytes.length / 1024).round();
-    final sizeStr = sizeKb > 1024
-        ? '${(sizeKb / 1024).toStringAsFixed(1)} MB'
-        : '$sizeKb KB';
+    final sizeStr =
+        sizeKb > 1024 ? '${(sizeKb / 1024).toStringAsFixed(1)} MB' : '$sizeKb KB';
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       decoration: BoxDecoration(
@@ -892,8 +849,8 @@ class _AiChatScreenState extends State<AiChatScreen>
                   maxLines: 1,
                 ),
                 Text(sizeStr,
-                    style: const TextStyle(
-                        fontSize: 10.5, color: Colors.white70)),
+                    style:
+                        const TextStyle(fontSize: 10.5, color: Colors.white70)),
               ],
             ),
           ),
@@ -915,8 +872,7 @@ class _AiChatScreenState extends State<AiChatScreen>
               width: 8,
               height: 8,
               decoration: BoxDecoration(
-                color: const Color(0xFF4A6CF7)
-                    .withOpacity(0.3 + 0.4 * ((v + i * 0.3) % 1.0)),
+                color: _aiA.withOpacity(0.3 + 0.4 * ((v + i * 0.3) % 1.0)),
                 shape: BoxShape.circle,
               ),
             );
@@ -926,9 +882,9 @@ class _AiChatScreenState extends State<AiChatScreen>
     );
   }
 
-  Widget _buildInput(bool isDark) {
-    final inputBg = isDark ? AppTheme.darkCard : Colors.white;
+  Widget _buildInput() {
     final disabled = _isStreaming || _contextLoading;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Container(
       padding: EdgeInsets.only(
@@ -938,32 +894,20 @@ class _AiChatScreenState extends State<AiChatScreen>
         bottom: MediaQuery.of(context).padding.bottom + 10,
       ),
       decoration: BoxDecoration(
-        color: inputBg,
+        color: ClinicTheme.surfaceOf(context),
         border: Border(
-          top: BorderSide(
-            color: isDark ? Colors.white10 : Colors.grey.shade200,
-          ),
+          top: BorderSide(color: ClinicTheme.dividerOf(context), width: 1),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, -3),
-          ),
-        ],
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          if (_pendingAttachments.isNotEmpty)
-            _buildAttachmentPreview(isDark),
+          if (_pendingAttachments.isNotEmpty) _buildAttachmentPreview(),
           Row(
             children: [
               Container(
                 decoration: BoxDecoration(
-                  color: disabled
-                      ? (isDark ? Colors.white10 : Colors.grey.shade200)
-                      : const Color(0xFF4A6CF7).withOpacity(isDark ? 0.2 : 0.1),
+                  color: disabled ? ClinicTheme.dividerOf(context) : ClinicTheme.teal,
                   shape: BoxShape.circle,
                 ),
                 child: Material(
@@ -979,82 +923,60 @@ class _AiChatScreenState extends State<AiChatScreen>
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Color(0xFF4A6CF7),
-                              ),
+                                  strokeWidth: 2, color: Colors.white),
                             )
-                          : Icon(
-                              Icons.add_rounded,
-                              color: disabled
-                                  ? (isDark
-                                      ? Colors.white38
-                                      : Colors.grey.shade400)
-                                  : const Color(0xFF4A6CF7),
-                              size: 22,
-                            ),
+                          : Icon(Icons.add_rounded,
+                              color: disabled ? ClinicTheme.faint : Colors.white,
+                              size: 22),
                     ),
                   ),
                 ),
               ),
               const SizedBox(width: 6),
               Expanded(
-                child: Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(
-                      color: isDark ? Colors.white12 : Colors.grey.shade300,
+                child: TextField(
+                  controller: _controller,
+                  focusNode: _focusNode,
+                  textCapitalization: TextCapitalization.sentences,
+                  maxLines: 4,
+                  minLines: 1,
+                  style: TextStyle(fontSize: 14, color: ClinicTheme.inkOf(context)),
+                  decoration: InputDecoration(
+                    hintText: _pendingAttachments.isNotEmpty
+                        ? 'Fayl haqida savol yozing...'
+                        : 'Savol yozing...',
+                    hintStyle: TextStyle(
+                        color: ClinicTheme.mutedOf(context), fontSize: 14),
+                    filled: true,
+                    fillColor: isDark
+                        ? Colors.white.withOpacity(0.05)
+                        : const Color(0xFFF1F5F9),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(22),
+                      borderSide:
+                          BorderSide(color: ClinicTheme.dividerOf(context)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(22),
+                      borderSide:
+                          const BorderSide(color: ClinicTheme.teal, width: 1.5),
                     ),
                   ),
-                  child: TextField(
-                    controller: _controller,
-                    focusNode: _focusNode,
-                    textCapitalization: TextCapitalization.sentences,
-                    maxLines: 4,
-                    minLines: 1,
-                    decoration: InputDecoration(
-                      hintText: _pendingAttachments.isNotEmpty
-                          ? 'Fayl haqida savol yozing...'
-                          : 'Savol yozing...',
-                      hintStyle: TextStyle(
-                        color: isDark
-                            ? AppTheme.darkTextSecondary
-                            : AppTheme.textSecondary,
-                        fontSize: 14,
-                      ),
-                      filled: true,
-                      fillColor: isDark
-                          ? AppTheme.darkBackground
-                          : const Color(0xFFF5F7FA),
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 18, vertical: 10),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(24),
-                        borderSide: BorderSide.none,
-                      ),
-                    ),
-                    onSubmitted: (_) => _send(),
-                  ),
+                  onSubmitted: (_) => _send(),
                 ),
               ),
               const SizedBox(width: 6),
               Container(
                 decoration: BoxDecoration(
-                  gradient: disabled
-                      ? null
-                      : const LinearGradient(
-                          colors: [Color(0xFF4A6CF7), Color(0xFF6C63FF)],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                  color: disabled
-                      ? (isDark ? Colors.white12 : Colors.grey.shade300)
-                      : null,
+                  color: disabled ? ClinicTheme.dividerOf(context) : ClinicTheme.teal,
                   shape: BoxShape.circle,
                   boxShadow: disabled
                       ? null
                       : [
                           BoxShadow(
-                            color: const Color(0xFF4A6CF7).withOpacity(0.3),
+                            color: ClinicTheme.teal.withOpacity(0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -1074,8 +996,9 @@ class _AiChatScreenState extends State<AiChatScreen>
                               height: 20,
                               child: CircularProgressIndicator(
                                   strokeWidth: 2, color: Colors.white))
-                          : const Icon(Icons.send_rounded,
-                              color: Colors.white, size: 20),
+                          : Icon(Icons.send_rounded,
+                              color: disabled ? ClinicTheme.faint : Colors.white,
+                              size: 20),
                     ),
                   ),
                 ),
@@ -1087,7 +1010,7 @@ class _AiChatScreenState extends State<AiChatScreen>
     );
   }
 
-  Widget _buildAttachmentPreview(bool isDark) {
+  Widget _buildAttachmentPreview() {
     return Container(
       height: 80,
       margin: const EdgeInsets.only(bottom: 8, left: 4, right: 4),
@@ -1095,17 +1018,14 @@ class _AiChatScreenState extends State<AiChatScreen>
         scrollDirection: Axis.horizontal,
         itemCount: _pendingAttachments.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (_, i) {
-          final a = _pendingAttachments[i];
-          return _buildPreviewChip(a, i, isDark);
-        },
+        itemBuilder: (_, i) => _buildPreviewChip(_pendingAttachments[i], i),
       ),
     );
   }
 
-  Widget _buildPreviewChip(GeminiAttachment a, int index, bool isDark) {
-    final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+  Widget _buildPreviewChip(GeminiAttachment a, int index) {
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
     final sizeKb = (a.bytes.length / 1024).round();
     final sizeStr = sizeKb > 1024
         ? '${(sizeKb / 1024).toStringAsFixed(1)}MB'
@@ -1115,40 +1035,43 @@ class _AiChatScreenState extends State<AiChatScreen>
     if (a.isImage) {
       content = ClipRRect(
         borderRadius: BorderRadius.circular(10),
-        child: Image.memory(
-          a.bytes,
-          width: 80,
-          height: 80,
-          fit: BoxFit.cover,
-        ),
+        child: Image.memory(a.bytes, width: 80, height: 80, fit: BoxFit.cover),
       );
     } else {
       IconData icon;
       Color iconColor;
       if (a.isPdf) {
         icon = Icons.picture_as_pdf_rounded;
-        iconColor = const Color(0xFFE53935);
+        iconColor = const Color(0xFFBE123C);
       } else if (a.isAudio) {
         icon = Icons.audiotrack_rounded;
-        iconColor = const Color(0xFFF97316);
+        iconColor = const Color(0xFFB45309);
       } else if (a.isVideo) {
         icon = Icons.videocam_rounded;
-        iconColor = const Color(0xFF8B5CF6);
+        iconColor = const Color(0xFF7C3AED);
       } else {
         icon = Icons.insert_drive_file_rounded;
-        iconColor = const Color(0xFF14B8A6);
+        iconColor = const Color(0xFF0F766E);
       }
       content = Container(
         width: 140,
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
         decoration: BoxDecoration(
-          color: isDark ? Colors.white10 : Colors.grey.shade100,
+          color: ClinicTheme.surfaceOf(context),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isDark ? Colors.white12 : Colors.grey.shade200),
+          border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
         ),
         child: Row(
           children: [
-            Icon(icon, color: iconColor, size: 26),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: iconColor,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Icon(icon, color: Colors.white, size: 18),
+            ),
             const SizedBox(width: 6),
             Expanded(
               child: Column(
@@ -1158,13 +1081,12 @@ class _AiChatScreenState extends State<AiChatScreen>
                   Text(a.name,
                       style: TextStyle(
                           fontSize: 11.5,
-                          fontWeight: FontWeight.w600,
-                          color: txt),
+                          fontWeight: FontWeight.w700,
+                          color: ink),
                       overflow: TextOverflow.ellipsis,
                       maxLines: 1),
                   const SizedBox(height: 2),
-                  Text(sizeStr,
-                      style: TextStyle(fontSize: 10, color: sub)),
+                  Text(sizeStr, style: TextStyle(fontSize: 10, color: muted)),
                 ],
               ),
             ),
@@ -1188,8 +1110,7 @@ class _AiChatScreenState extends State<AiChatScreen>
               onTap: () => _removeAttachment(index),
               child: const Padding(
                 padding: EdgeInsets.all(2),
-                child:
-                    Icon(Icons.close_rounded, size: 14, color: Colors.white),
+                child: Icon(Icons.close_rounded, size: 14, color: Colors.white),
               ),
             ),
           ),

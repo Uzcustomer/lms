@@ -131,7 +131,7 @@ class StudentDataCache {
       final detailFutures = <Future<MapEntry<int, Map<String, dynamic>?>>>[];
       for (final s in subjectsList) {
         if (s is Map<String, dynamic>) {
-          final id = s['id'];
+          final id = s['subject_id'] ?? s['id'];
           if (id is int) {
             detailFutures.add(_safe(() => svc.getSubjectGrades(id))
                 .then((res) => MapEntry(id, res)));
@@ -208,7 +208,7 @@ class StudentDataCache {
       Future<Map<String, dynamic>> Function() fn) async {
     try {
       final res = await fn();
-      if (res['success'] == true) return res;
+      if (res.containsKey('data') || res.containsKey('success')) return res;
     } catch (_) {}
     return null;
   }

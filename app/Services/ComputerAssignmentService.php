@@ -24,25 +24,30 @@ class ComputerAssignmentService
     public function __construct() {}
 
     /**
-     * Assign computers for one (schedule, yn_type). Idempotent — re-running
+     * Assign computers for one (schedule, yn_type, attempt). Idempotent — re-running
      * deletes any previous assignments for the same key and recomputes.
      *
      * @param string $ynType "oski" or "test"
+     * @param int    $attempt 1 = main, 2 = resit, 3 = resit2
      * @return array{ok:bool, count?:int, skipped?:bool, reason?:string}
      */
-    public function assign(ExamSchedule $schedule, string $ynType): array
+    public function assign(ExamSchedule $schedule, string $ynType, int $attempt = 1): array
     {
         $ynType = strtolower($ynType);
         if (!in_array($ynType, ['oski', 'test'], true)) {
             return ['ok' => false, 'skipped' => true, 'reason' => 'invalid yn_type'];
         }
+        if (!in_array($attempt, [1, 2, 3], true)) {
+            return ['ok' => false, 'skipped' => true, 'reason' => 'invalid attempt'];
+        }
 
-        $dateField = $ynType . '_date';
-        $timeField = $ynType . '_time';
-        $naField = $ynType . '_na';
+        $fields = self::attemptFields($ynType, $attempt);
+        $dateField = $fields['date'];
+        $timeField = $fields['time'];
+        $naField = $fields['na']; // null for resit attempts
 
-        if ($schedule->{$naField}) {
-            $this->clearAssignmentsFor($schedule->id, $ynType);
+        if ($naField !== null && $schedule->{$naField}) {
+            $this->clearAssignmentsFor($schedule->id, $ynType, $attempt);
             return ['ok' => true, 'skipped' => true, 'reason' => 'yn marked N/A'];
         }
         if (empty($schedule->{$dateField}) || empty($schedule->{$timeField})) {
@@ -54,14 +59,43 @@ class ComputerAssignmentService
             return ['ok' => false, 'skipped' => true, 'reason' => 'cannot parse date/time'];
         }
 
-        $duration = max(1, (int) config('services.moodle.quiz_duration_minutes', 25));
-        $buffer = max(0, (int) config('services.moodle.computer_buffer_minutes', 5));
+        // Slot duration comes from the per-date ExamCapacityService settings
+        // (what the admin sees as "Davomiyligi" in the UI). This used to read
+        // from a parallel services.moodle.* env block that drifted out of
+        // sync with the UI, so a 15-min setting in the admin panel produced
+        // 30-min cells on the proctor dashboard.
+        $capacity = ExamCapacityService::getSettingsForDate($startsAt->toDateString());
+        $duration = max(1, (int) ($capacity['test_duration_minutes'] ?? 15));
+        $buffer = max(0, (int) config('services.moodle.computer_buffer_minutes', 0));
         // planned_end represents "computer becomes free for the next student"
         // i.e. attempt-end + buffer.
         $plannedEnd = $startsAt->copy()->addMinutes($duration + $buffer);
 
+        // Exclude students who already have their OWN individual exam_schedules
+        // row covering the same exam (same subject + semester + same calendar
+        // date for this yn_type+attempt). Those students are driven by their
+        // individual schedule's assignSingleStudent() flow; if we also pick
+        // them up here, they end up with two computer_assignments rows
+        // (one for the group's exam_schedule_id, one for the personal one),
+        // which silently blocks an extra PC and confuses FaceID.
+        $groupDateStr = $startsAt->toDateString();
+        $individualHemisIds = ExamSchedule::query()
+            ->whereNotNull('student_hemis_id')
+            ->where('subject_id', $schedule->subject_id)
+            ->where('semester_code', $schedule->semester_code)
+            ->whereDate($dateField, $groupDateStr)
+            ->pluck('student_hemis_id')
+            ->filter()
+            ->map(fn($v) => (string) $v)
+            ->unique()
+            ->values()
+            ->all();
+
         $students = Student::where('group_id', $schedule->group_hemis_id)
             ->whereNotNull('student_id_number')
+            ->when(!empty($individualHemisIds), function ($q) use ($individualHemisIds) {
+                $q->whereNotIn('hemis_id', $individualHemisIds);
+            })
             ->get(['student_id_number', 'hemis_id']);
 
         if ($students->isEmpty()) {
@@ -88,9 +122,10 @@ class ComputerAssignmentService
 
         $picked = $available->shuffle()->take($students->count())->values();
 
-        DB::transaction(function () use ($schedule, $ynType, $students, $picked, $startsAt, $plannedEnd) {
+        DB::transaction(function () use ($schedule, $ynType, $attempt, $students, $picked, $startsAt, $plannedEnd) {
             ComputerAssignment::where('exam_schedule_id', $schedule->id)
                 ->where('yn_type', $ynType)
+                ->where('attempt', $attempt)
                 ->delete();
 
             $rows = [];
@@ -101,6 +136,7 @@ class ComputerAssignmentService
                     'student_id_number' => (string) $student->student_id_number,
                     'student_hemis_id' => (string) $student->hemis_id,
                     'yn_type' => $ynType,
+                    'attempt' => $attempt,
                     'computer_number' => (int) $picked[$i],
                     'planned_start' => $startsAt,
                     'planned_end' => $plannedEnd,
@@ -112,7 +148,85 @@ class ComputerAssignmentService
             ComputerAssignment::insert($rows);
         });
 
+        // Guruh vaqti barcha talabaga yozildi — endi individual grafikga ega
+        // (per-student exam_schedules qatori bor) talabalarning planned_start'ini
+        // o'z shaxsiy vaqtiga moslaymiz. TV displey va JIT reveal shu qiymatni
+        // o'qiydi.
+        $this->applyPerStudentTimeOverrides(
+            $schedule, $ynType, $attempt, $dateField, $timeField, $duration + $buffer
+        );
+
         return ['ok' => true, 'count' => $students->count()];
+    }
+
+    /**
+     * Guruh vaqti bilan ComputerAssignment qatorlari yozilgandan so'ng —
+     * per-student (individual grafik) exam_schedules qatorida shaxsiy
+     * vaqti bor talabalarning planned_start/planned_end/reveal_at qiymatini
+     * o'z vaqtiga moslaydi. ca qatorlari guruh exam_schedule_id ostida
+     * turadi, shuning uchun student_hemis_id bo'yicha topiladi.
+     */
+    private function applyPerStudentTimeOverrides(
+        ExamSchedule $schedule,
+        string $ynType,
+        int $attempt,
+        string $dateField,
+        string $timeField,
+        int $slotLen
+    ): void {
+        $perStudentRows = ExamSchedule::where('group_hemis_id', $schedule->group_hemis_id)
+            ->where('subject_id', $schedule->subject_id)
+            ->where('semester_code', $schedule->semester_code)
+            ->whereNotNull('student_hemis_id')
+            ->get();
+        if ($perStudentRows->isEmpty()) {
+            return;
+        }
+        $jitMin = max(1, (int) config('services.moodle.jit_assign_minutes_before', 10));
+        foreach ($perStudentRows as $ps) {
+            $psTime = $ps->{$timeField};
+            if (empty($psTime)) {
+                continue;
+            }
+            $start = $this->combineDateTime($ps->{$dateField} ?: $schedule->{$dateField}, $psTime);
+            if (!$start) {
+                continue;
+            }
+            $end = $start->copy()->addMinutes($slotLen);
+            ComputerAssignment::where('exam_schedule_id', $schedule->id)
+                ->where('student_hemis_id', (string) $ps->student_hemis_id)
+                ->where('yn_type', $ynType)
+                ->where('attempt', $attempt)
+                ->where('status', ComputerAssignment::STATUS_SCHEDULED)
+                ->update([
+                    'planned_start' => $start,
+                    'planned_end'   => $end,
+                    'reveal_at'     => $start->copy()->subMinutes($jitMin),
+                ]);
+        }
+    }
+
+    /**
+     * (yn_type, attempt) uchun ExamSchedule ustun nomlarini qaytaradi.
+     *
+     * @return array{date:string, time:string, na:?string}
+     */
+    public static function attemptFields(string $ynType, int $attempt): array
+    {
+        $ynType = strtolower($ynType);
+        $map = [
+            'oski' => [
+                1 => ['date' => 'oski_date',         'time' => 'oski_time',         'na' => 'oski_na'],
+                2 => ['date' => 'oski_resit_date',   'time' => 'oski_resit_time',   'na' => null],
+                3 => ['date' => 'oski_resit2_date',  'time' => 'oski_resit2_time',  'na' => null],
+            ],
+            'test' => [
+                1 => ['date' => 'test_date',         'time' => 'test_time',         'na' => 'test_na'],
+                2 => ['date' => 'test_resit_date',   'time' => 'test_resit_time',   'na' => null],
+                3 => ['date' => 'test_resit2_date',  'time' => 'test_resit2_time',  'na' => null],
+            ],
+        ];
+        return $map[$ynType][$attempt] ?? $map['test'][1];
     }
 
     /**
@@ -141,15 +255,320 @@ class ComputerAssignmentService
             ->all();
     }
 
-    private function clearAssignmentsFor(int $scheduleId, string $ynType): void
+    private function clearAssignmentsFor(int $scheduleId, string $ynType, ?int $attempt = null): void
     {
-        ComputerAssignment::where('exam_schedule_id', $scheduleId)
+        $query = ComputerAssignment::where('exam_schedule_id', $scheduleId)
             ->where('yn_type', $ynType)
             ->whereIn('status', [
                 ComputerAssignment::STATUS_SCHEDULED,
                 // do NOT delete in_progress / finished — those are real history
-            ])
-            ->delete();
+            ]);
+        if ($attempt !== null) {
+            $query->where('attempt', $attempt);
+        }
+        $query->delete();
+    }
+
+    /**
+     * Manual bulk assignment: admin explicitly picks (time, computer) per
+     * student. Each row in $perStudent is:
+     *   ['student_hemis_id' => string, 'computer_number' => int, 'time' => 'HH:MM']
+     *
+     * Validations are mostly mirrored from pinComputer():
+     *   - the computer must exist and be active
+     *   - it must not be occupied by ANOTHER (schedule, yn_type) at that
+     *     time window
+     *   - within this same call, two students can't share a computer
+     *     while their windows overlap
+     * Existing scheduled rows for (schedule, yn_type) are wiped before
+     * the new ones are inserted so re-running the modal is idempotent.
+     *
+     * @return array{ok:bool, count?:int, errors?:array<int, string>, earliest_time?:string}
+     */
+    public function manualAssign(ExamSchedule $schedule, string $ynType, array $perStudent, int $attempt = 1): array
+    {
+        $ynType = strtolower($ynType);
+        if (!in_array($ynType, ['oski', 'test'], true)) {
+            return ['ok' => false, 'errors' => ['Noto\'g\'ri yn turi.']];
+        }
+        if (!in_array($attempt, [1, 2, 3], true)) {
+            return ['ok' => false, 'errors' => ['Noto\'g\'ri urinish raqami.']];
+        }
+        $fields = self::attemptFields($ynType, $attempt);
+        $dateField = $fields['date'];
+        $naField   = $fields['na'];
+
+        if ($naField !== null && $schedule->{$naField}) {
+            return ['ok' => false, 'errors' => ['Bu yn N/A deb belgilangan.']];
+        }
+        if (empty($schedule->{$dateField})) {
+            return ['ok' => false, 'errors' => ['Avval sana belgilanishi kerak.']];
+        }
+        $dateStr = $schedule->{$dateField} instanceof Carbon
+            ? $schedule->{$dateField}->format('Y-m-d')
+            : Carbon::parse((string) $schedule->{$dateField})->format('Y-m-d');
+
+        if (empty($perStudent)) {
+            return ['ok' => false, 'errors' => ['Hech qaysi talaba uchun biriktiruv yuborilmagan.']];
+        }
+
+        // Same single source of truth as distribute() above.
+        $capacity = ExamCapacityService::getSettingsForDate($dateStr);
+        $duration = max(1, (int) ($capacity['test_duration_minutes'] ?? 15));
+        $buffer   = max(0, (int) config('services.moodle.computer_buffer_minutes', 0));
+        $slotLen  = $duration + $buffer;
+
+        // Build & validate every row.
+        $errors = [];
+        $rows = [];
+        $studentSeen = [];
+
+        $groupStudents = Student::where('group_id', $schedule->group_hemis_id)
+            ->whereNotNull('student_id_number')
+            ->get(['student_id_number', 'hemis_id', 'full_name'])
+            ->keyBy(fn($s) => (string) $s->hemis_id);
+
+        foreach ($perStudent as $idx => $entry) {
+            $hemisId = isset($entry['student_hemis_id']) ? (string) $entry['student_hemis_id'] : '';
+            $compNum = isset($entry['computer_number']) ? (int) $entry['computer_number'] : 0;
+            $timeStr = isset($entry['time']) ? substr((string) $entry['time'], 0, 5) : '';
+
+            if ($hemisId === '' || !preg_match('/^\d{2}:\d{2}$/', $timeStr) || $compNum < 1) {
+                $errors[] = "Qator " . ($idx + 1) . ": ma'lumot to'liq emas.";
+                continue;
+            }
+            if (!isset($groupStudents[$hemisId])) {
+                $errors[] = "Talaba (hemis_id={$hemisId}) bu guruhga tegishli emas.";
+                continue;
+            }
+            if (isset($studentSeen[$hemisId])) {
+                $errors[] = "Talaba {$groupStudents[$hemisId]->full_name} bir necha qatorda qaytarilgan.";
+                continue;
+            }
+            $studentSeen[$hemisId] = true;
+
+            try {
+                $start = Carbon::parse($dateStr . ' ' . $timeStr, config('app.timezone'));
+            } catch (\Throwable) {
+                $errors[] = "Talaba {$groupStudents[$hemisId]->full_name}: vaqt formatlash xatosi.";
+                continue;
+            }
+            $end = $start->copy()->addMinutes($slotLen);
+
+            $rows[] = [
+                'hemis_id'        => $hemisId,
+                'student'         => $groupStudents[$hemisId],
+                'computer_number' => $compNum,
+                'planned_start'   => $start,
+                'planned_end'     => $end,
+            ];
+        }
+
+        if (!empty($errors)) {
+            return ['ok' => false, 'errors' => $errors];
+        }
+
+        // Internal conflict: same computer, overlapping windows within this batch.
+        foreach ($rows as $i => $a) {
+            foreach ($rows as $j => $b) {
+                if ($i >= $j) continue;
+                if ($a['computer_number'] !== $b['computer_number']) continue;
+                if ($a['planned_end']->lte($b['planned_start'])) continue;
+                if ($b['planned_end']->lte($a['planned_start'])) continue;
+                $errors[] = "#{$a['computer_number']} kompyuter ikki talabaga bir vaqtda berilgan: "
+                    . "{$a['student']->full_name} va {$b['student']->full_name}.";
+            }
+        }
+        if (!empty($errors)) {
+            return ['ok' => false, 'errors' => array_values(array_unique($errors))];
+        }
+
+        // External conflict: each picked computer must not be busy at its
+        // window per any OTHER (schedule, yn_type).
+        foreach ($rows as $r) {
+            $occupied = $this->occupiedComputerNumbers(
+                $r['planned_start'],
+                $r['planned_end'],
+                $schedule->id,
+                $ynType,
+            );
+            if (in_array($r['computer_number'], $occupied, true)) {
+                $errors[] = "{$r['student']->full_name}: #{$r['computer_number']} bu vaqt oralig'ida boshqa guruh tomonidan band.";
+            }
+            $computer = \App\Models\Computer::where('number', $r['computer_number'])->first();
+            if (!$computer || !$computer->active) {
+                $errors[] = "Kompyuter #{$r['computer_number']} mavjud emas yoki faol emas.";
+            }
+        }
+        if (!empty($errors)) {
+            return ['ok' => false, 'errors' => array_values(array_unique($errors))];
+        }
+
+        // All good — wipe and insert atomically. The wipe matches what
+        // assign() does so re-running the modal is idempotent and the
+        // earlier status='in_progress'/'finished' history is preserved.
+        $now = now();
+        $earliest = collect($rows)->pluck('planned_start')->sort()->first();
+
+        DB::transaction(function () use ($schedule, $ynType, $attempt, $rows, $now, $earliest) {
+            ComputerAssignment::where('exam_schedule_id', $schedule->id)
+                ->where('yn_type', $ynType)
+                ->where('attempt', $attempt)
+                ->where('status', ComputerAssignment::STATUS_SCHEDULED)
+                ->delete();
+
+            $insert = [];
+            foreach ($rows as $r) {
+                $insert[] = [
+                    'exam_schedule_id'  => $schedule->id,
+                    'student_id_number' => (string) $r['student']->student_id_number,
+                    'student_hemis_id'  => (string) $r['student']->hemis_id,
+                    'yn_type'           => $ynType,
+                    'attempt'           => $attempt,
+                    'computer_number'   => $r['computer_number'],
+                    'planned_start'     => $r['planned_start'],
+                    'planned_end'       => $r['planned_end'],
+                    'reveal_at'         => null,
+                    'reveal_notified'   => false,
+                    'approach_notified' => false,
+                    'ready_notified'    => false,
+                    'is_reserve'        => false,
+                    'is_pinned'         => true,
+                    'status'            => ComputerAssignment::STATUS_SCHEDULED,
+                    'created_at'        => $now,
+                    'updated_at'        => $now,
+                ];
+            }
+            ComputerAssignment::insert($insert);
+
+            // 2/3-urinish (resit) uchun *_assignment_mode atributi yo'q —
+            // ular Test markazi tomonidan qo'lda boshqariladi; faqat 1-urinish
+            // uchun mode/time'ni guruh sathida saqlaymiz.
+            if ($attempt === 1) {
+                $modeField = $ynType . '_assignment_mode';
+                $timeField = $ynType . '_time';
+                $schedule->{$modeField} = 'manual_explicit';
+                if ($earliest) {
+                    $schedule->{$timeField} = $earliest->format('H:i');
+                }
+                $schedule->save();
+            } elseif ($earliest) {
+                $timeField = self::attemptFields($ynType, $attempt)['time'];
+                $schedule->{$timeField} = $earliest->format('H:i');
+                $schedule->save();
+            }
+        });
+
+        return [
+            'ok'             => true,
+            'count'          => count($rows),
+            'earliest_time'  => $earliest ? $earliest->format('H:i') : null,
+        ];
+    }
+
+    /**
+     * Bitta talabaga (individual vaqt qo'yilganda) bo'sh kompyuter raqamini
+     * avtomatik biriktiradi. Slot oralig'ida boshqa jadvallar — guruh yoki
+     * boshqa individual talabalar — band qilgan, hamda buzilgan raqamlar
+     * chetlab o'tiladi, shu sabab bitta kompyuter ikki kishiga tushmaydi.
+     *
+     * Talabada allaqachon scheduled qator bo'lsa va uning raqami hali bo'sh
+     * bo'lsa — o'sha raqam saqlab qolinadi (barqarorlik). in_progress /
+     * finished qatorlarga tegilmaydi.
+     *
+     * @return array{ok:bool, computer_number?:int|null, skipped?:bool, reason?:string}
+     */
+    public function assignSingleStudent(
+        ExamSchedule $schedule,
+        string $ynType,
+        int $attempt,
+        string $studentHemisId,
+        Carbon $startsAt
+    ): array {
+        $ynType = strtolower($ynType);
+        if (!in_array($ynType, ['oski', 'test'], true)) {
+            return ['ok' => false, 'reason' => 'invalid yn_type'];
+        }
+        if (!in_array($attempt, [1, 2, 3], true)) {
+            return ['ok' => false, 'reason' => 'invalid attempt'];
+        }
+
+        $dateStr = $startsAt->toDateString();
+        $capacity = ExamCapacityService::getSettingsForDate($dateStr);
+        $duration = max(1, (int) ($capacity['test_duration_minutes'] ?? 15));
+        $buffer = max(0, (int) config('services.moodle.computer_buffer_minutes', 0));
+        $plannedEnd = $startsAt->copy()->addMinutes($duration + $buffer);
+
+        $existing = ComputerAssignment::where('exam_schedule_id', $schedule->id)
+            ->where('yn_type', $ynType)
+            ->where('attempt', $attempt)
+            ->where('student_hemis_id', $studentHemisId)
+            ->first();
+
+        // Imtihon boshlangan yoki tugagan bo'lsa — tarix, tegmaymiz.
+        if ($existing && $existing->status !== ComputerAssignment::STATUS_SCHEDULED) {
+            return [
+                'ok' => true,
+                'skipped' => true,
+                'reason' => 'in progress or finished',
+                'computer_number' => $existing->computer_number !== null ? (int) $existing->computer_number : null,
+            ];
+        }
+
+        $broken = array_map('intval', (array) ($capacity['broken_computers'] ?? []));
+        $total = max(1, (int) ($capacity['computer_count'] ?? config('services.moodle.total_computers', 60)));
+        $occupied = $this->occupiedComputerNumbers($startsAt, $plannedEnd, $schedule->id, $ynType);
+        $taken = array_flip(array_map('intval', array_merge($occupied, $broken)));
+
+        // Mavjud raqam hali ham bo'sh bo'lsa — o'zgartirmaymiz.
+        $compNum = null;
+        if ($existing && $existing->computer_number !== null
+            && !isset($taken[(int) $existing->computer_number])
+            && (int) $existing->computer_number <= $total) {
+            $compNum = (int) $existing->computer_number;
+        } else {
+            for ($n = 1; $n <= $total; $n++) {
+                if (!isset($taken[$n])) {
+                    $compNum = $n;
+                    break;
+                }
+            }
+        }
+        if ($compNum === null) {
+            return ['ok' => false, 'reason' => 'no free computer at this slot'];
+        }
+
+        $jitMinutes = max(1, (int) config('services.moodle.reveal_minutes_before', 10));
+        $revealAt = $startsAt->copy()->subMinutes($jitMinutes);
+
+        if ($existing) {
+            $existing->computer_number = $compNum;
+            $existing->planned_start = $startsAt;
+            $existing->planned_end = $plannedEnd;
+            if (empty($existing->reveal_at)) {
+                $existing->reveal_at = $revealAt;
+            }
+            $existing->is_pinned = true;
+            $existing->save();
+        } else {
+            $studentIdNumber = (string) (Student::where('hemis_id', $studentHemisId)->value('student_id_number') ?? '');
+            ComputerAssignment::create([
+                'exam_schedule_id' => $schedule->id,
+                'student_id_number' => $studentIdNumber,
+                'student_hemis_id' => $studentHemisId,
+                'yn_type' => $ynType,
+                'attempt' => $attempt,
+                'computer_number' => $compNum,
+                'planned_start' => $startsAt,
+                'planned_end' => $plannedEnd,
+                'reveal_at' => $revealAt,
+                'is_pinned' => true,
+                'is_reserve' => false,
+                'status' => ComputerAssignment::STATUS_SCHEDULED,
+            ]);
+        }
+
+        return ['ok' => true, 'computer_number' => $compNum];
     }
 
     private function combineDateTime(mixed $date, mixed $time): ?Carbon

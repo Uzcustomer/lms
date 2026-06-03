@@ -7,6 +7,9 @@ import 'student_schedule_screen.dart';
 import 'student_profile_screen.dart';
 import 'student_useful_screen.dart';
 
+/// Tab shell with a fixed bottom nav and a separate [Navigator] per tab.
+/// Sub-pages pushed from a tab stay inside that tab, so the nav bar is
+/// visible across the whole student app.
 class StudentHomeScreen extends StatefulWidget {
   const StudentHomeScreen({super.key});
 
@@ -20,28 +23,77 @@ class StudentHomeScreen extends StatefulWidget {
     state?._onTabTapped(0);
   }
 
+  /// Notifier the dashboard sets when the user taps a subject card so the
+  /// Grades screen scrolls to that subject's card after the tab switch.
+  static final ValueNotifier<int?> pendingSubjectScroll =
+      ValueNotifier<int?>(null);
+
+  /// Switch to the Grades tab and scroll to the given subject's card.
+  static void openSubject(BuildContext context, int subjectId) {
+    pendingSubjectScroll.value = subjectId;
+    switchToGrades(context);
+  }
+
   @override
   State<StudentHomeScreen> createState() => _StudentHomeScreenState();
 }
 
 class _StudentHomeScreenState extends State<StudentHomeScreen> {
   int _currentIndex = 2;
-  int _previousIndex = 2;
 
-  final _screens = const [
-    StudentGradesScreen(),
-    StudentScheduleScreen(),
-    StudentDashboardScreen(),
-    StudentUsefulScreen(),
-    StudentProfileScreen(),
-  ];
+  static const _tabCount = 5;
+  final List<GlobalKey<NavigatorState>> _navKeys =
+      List.generate(_tabCount, (_) => GlobalKey<NavigatorState>());
+
+  Widget _rootForTab(int i) {
+    switch (i) {
+      case 0:
+        return const StudentGradesScreen();
+      case 1:
+        return const StudentScheduleScreen();
+      case 2:
+        return const StudentDashboardScreen();
+      case 3:
+        return const StudentUsefulScreen();
+      case 4:
+        return const StudentProfileScreen();
+      default:
+        return const StudentDashboardScreen();
+    }
+  }
 
   void _onTabTapped(int index) {
-    if (index == _currentIndex) return;
-    setState(() {
-      _previousIndex = _currentIndex;
-      _currentIndex = index;
-    });
+    if (index == _currentIndex) {
+      // Re-tapping the active tab pops back to its root.
+      _navKeys[index].currentState?.popUntil((r) => r.isFirst);
+      return;
+    }
+    setState(() => _currentIndex = index);
+  }
+
+  Future<bool> _onWillPop() async {
+    final nav = _navKeys[_currentIndex].currentState;
+    if (nav != null && nav.canPop()) {
+      nav.pop();
+      return false;
+    }
+    // If we're on the root of a non-home tab, jump back to the home tab
+    // before letting the OS leave the app — feels more natural.
+    if (_currentIndex != 2) {
+      setState(() => _currentIndex = 2);
+      return false;
+    }
+    return true;
+  }
+
+  Widget _buildTabNavigator(int index) {
+    return Navigator(
+      key: _navKeys[index],
+      onGenerateRoute: (settings) => MaterialPageRoute(
+        settings: settings,
+        builder: (_) => _rootForTab(index),
+      ),
+    );
   }
 
   @override
@@ -56,67 +108,46 @@ class _StudentHomeScreenState extends State<StudentHomeScreen> {
       _NavItem(Icons.person_outline, Icons.person, l.profile),
     ];
 
-    final goingRight = _currentIndex > _previousIndex;
-    final slideBegin = Offset(goingRight ? 0.08 : -0.08, 0);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final navBg = isDark ? AppTheme.darkCard : Colors.white;
+    final navBorder = isDark ? Colors.white12 : const Color(0xFFE2E8F0);
 
-    return Scaffold(
-      extendBody: true,
-      body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 380),
-        switchInCurve: Curves.easeOutCubic,
-        switchOutCurve: Curves.easeInCubic,
-        transitionBuilder: (child, animation) {
-          return FadeTransition(
-            opacity: animation,
-            child: SlideTransition(
-              position: Tween<Offset>(
-                begin: slideBegin,
-                end: Offset.zero,
-              ).animate(animation),
-              child: child,
-            ),
-          );
-        },
-        child: KeyedSubtree(
-          key: ValueKey<int>(_currentIndex),
-          child: _screens[_currentIndex],
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        body: IndexedStack(
+          index: _currentIndex,
+          children: List.generate(_tabCount, _buildTabNavigator),
         ),
-      ),
-      bottomNavigationBar: SafeArea(
-        child: Container(
-          margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        bottomNavigationBar: Container(
           decoration: BoxDecoration(
-            color: const Color(0xFF0A1A3A),
-            borderRadius: BorderRadius.circular(28),
+            color: navBg,
+            border: Border(top: BorderSide(color: navBorder, width: 1)),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF0A1A3A).withAlpha(50),
-                blurRadius: 16,
-                offset: const Offset(0, 4),
+                color: const Color(0xFF0F172A).withOpacity(0.06),
+                blurRadius: 8,
+                offset: const Offset(0, -2),
               ),
             ],
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(28),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(navItems.length, (index) {
-                  final item = navItems[index];
-                  final isActive = _currentIndex == index;
-                  return Expanded(
-                    child: GestureDetector(
-                      onTap: () => _onTabTapped(index),
-                      behavior: HitTestBehavior.opaque,
-                      child: _NavItemWidget(
-                        isActive: isActive,
-                        item: item,
-                      ),
+          child: SafeArea(
+            top: false,
+            child: Row(
+              children: List.generate(navItems.length, (index) {
+                final item = navItems[index];
+                final isActive = _currentIndex == index;
+                return Expanded(
+                  child: GestureDetector(
+                    onTap: () => _onTabTapped(index),
+                    behavior: HitTestBehavior.opaque,
+                    child: _NavItemWidget(
+                      isActive: isActive,
+                      item: item,
                     ),
-                  );
-                }),
-              ),
+                  ),
+                );
+              }),
             ),
           ),
         ),
@@ -187,9 +218,24 @@ class _NavItemWidgetState extends State<_NavItemWidget>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const activeColor = Color(0xFF0D9488);
+    final inactiveColor = isDark ? Colors.white60 : const Color(0xFF94A3B8);
+    final color = widget.isActive ? activeColor : inactiveColor;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
+        // Small top indicator border for the active tab.
+        Container(
+          height: 3,
+          width: 22,
+          decoration: BoxDecoration(
+            color: widget.isActive ? activeColor : Colors.transparent,
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(3)),
+          ),
+        ),
+        const SizedBox(height: 7),
         AnimatedBuilder(
           animation: _scale,
           builder: (context, child) {
@@ -198,36 +244,24 @@ class _NavItemWidgetState extends State<_NavItemWidget>
               child: child,
             );
           },
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 250),
-            padding: const EdgeInsets.all(8),
-            decoration: BoxDecoration(
-              color: widget.isActive
-                  ? Colors.white.withAlpha(20)
-                  : Colors.transparent,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(
-              widget.isActive ? widget.item.activeIcon : widget.item.icon,
-              color: widget.isActive
-                  ? const Color(0xFFFF9800)
-                  : Colors.white70,
-              size: 26,
-            ),
+          child: Icon(
+            widget.isActive ? widget.item.activeIcon : widget.item.icon,
+            color: color,
+            size: 24,
           ),
         ),
-        const SizedBox(height: 2),
+        const SizedBox(height: 3),
         Text(
           widget.item.label,
           style: TextStyle(
             fontSize: 10,
-            fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.normal,
-            color: widget.isActive ? Colors.white : Colors.white70,
+            fontWeight: widget.isActive ? FontWeight.w700 : FontWeight.w500,
+            color: color,
           ),
           overflow: TextOverflow.ellipsis,
         ),
+        const SizedBox(height: 7),
       ],
     );
   }
 }
-

@@ -16,6 +16,7 @@ use App\Models\StudentGrade;
 use App\Models\Teacher;
 use App\Models\YnStudentGrade;
 use App\Models\YnSubmission;
+use App\Services\JnMtCalculator;
 use App\Models\ContractList;
 use App\Models\Setting;
 use App\Models\DocumentVerification;
@@ -424,10 +425,13 @@ class YnQaytnomaController extends Controller
 
                 if (!$subject) continue;
 
-                // Har bir talaba uchun eng oxirgi snapshotni olish (tarixli)
-                $latestSnapshots = YnStudentGrade::latestPerStudent($submission->id)->get();
-                $savedGrades = $latestSnapshots->pluck('jn', 'student_hemis_id')->toArray();
-                $savedMtGrades = $latestSnapshots->pluck('mt', 'student_hemis_id')->toArray();
+                // JN/MT ni snapshotdan emas, jurnal mantig'i bilan jonli (live) hisoblash —
+                // shunda YN-oldi Word jurnal "ixcham" tabidagi qiymatlarga to'liq mos keladi.
+                $liveGrades = app(JnMtCalculator::class)->computeForGroup(
+                    $group->group_hemis_id,
+                    (int) $submission->subject_id,
+                    $semesterCode
+                );
 
                 // Talabalar ro'yxatini olish
                 $students = Student::select('full_name as student_name', 'student_id_number as student_id', 'hemis_id')
@@ -436,10 +440,10 @@ class YnQaytnomaController extends Controller
                     ->orderBy('full_name')
                     ->get();
 
-                // Saqlangan snapshot baholarni biriktirish
+                // Live hisoblangan baholarni biriktirish
                 foreach ($students as $student) {
-                    $student->jn = $savedGrades[$student->hemis_id] ?? 0;
-                    $student->mt = $savedMtGrades[$student->hemis_id] ?? 0;
+                    $student->jn = $liveGrades[$student->hemis_id]['jn'] ?? 0;
+                    $student->mt = $liveGrades[$student->hemis_id]['mt'] ?? 0;
                 }
 
                 // Get teachers for this subject and group
@@ -980,41 +984,18 @@ class YnQaytnomaController extends Controller
 
                 $studentHemisIds = $students->pluck('hemis_id')->toArray();
 
-                // ON baholarni olish (training_type_code = 100)
-                $onGrades = DB::table('student_grades')
-                    ->whereNull('deleted_at')
-                    ->whereIn('student_hemis_id', $studentHemisIds)
-                    ->where('subject_id', $subject->subject_id)
-                    ->where('semester_code', $semesterCode)
-                    ->where('training_type_code', 100)
-                    ->select('student_hemis_id', DB::raw('MAX(grade) as grade'))
-                    ->groupBy('student_hemis_id')
-                    ->pluck('grade', 'student_hemis_id')
-                    ->toArray();
-
-                // OSKI baholarni olish (training_type_code = 101)
-                $oskiGrades = DB::table('student_grades')
-                    ->whereNull('deleted_at')
-                    ->whereIn('student_hemis_id', $studentHemisIds)
-                    ->where('subject_id', $subject->subject_id)
-                    ->where('semester_code', $semesterCode)
-                    ->where('training_type_code', 101)
-                    ->select('student_hemis_id', DB::raw('MAX(grade) as grade'))
-                    ->groupBy('student_hemis_id')
-                    ->pluck('grade', 'student_hemis_id')
-                    ->toArray();
-
-                // Test baholarni olish (training_type_code = 102)
-                $testGrades = DB::table('student_grades')
-                    ->whereNull('deleted_at')
-                    ->whereIn('student_hemis_id', $studentHemisIds)
-                    ->where('subject_id', $subject->subject_id)
-                    ->where('semester_code', $semesterCode)
-                    ->where('training_type_code', 102)
-                    ->select('student_hemis_id', DB::raw('MAX(grade) as grade'))
-                    ->groupBy('student_hemis_id')
-                    ->pluck('grade', 'student_hemis_id')
-                    ->toArray();
+                // ON, OSKI, Test — jurnaldagi AYNAN bir xil tanlash mantig'i (MAX EMAS):
+                // is_qoshimcha=0, education_year/minScheduleDate oynasi, attempt=1,
+                // effectiveGrade va soxta 'sinov_yn_test' qatorini chetlatish.
+                $onOskiTest = \App\Services\JournalGradeService::computeOnOskiTest(
+                    (string) $group->group_hemis_id,
+                    (string) $subject->subject_id,
+                    (string) $semesterCode,
+                    $studentHemisIds
+                );
+                $onGrades   = $onOskiTest['on'];
+                $oskiGrades = $onOskiTest['oski'];
+                $testGrades = $onOskiTest['test'];
 
                 // O'qituvchilar
                 $maruzaTeacher = DB::table('student_grades as s')

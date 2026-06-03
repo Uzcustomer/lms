@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../services/student_service.dart';
 import '../services/api_service.dart';
 
+/// Student data provider — direct API calls per screen.
 class StudentProvider extends ChangeNotifier {
   final StudentService _service;
 
@@ -31,34 +32,36 @@ class StudentProvider extends ChangeNotifier {
   Map<String, dynamic>? get contract => _contract;
   List<dynamic>? get contractList => _contractList;
 
-  Future<void> loadDashboard() async {
+  Future<void> loadDashboard({bool force = false}) async {
+    if (_dashboard != null && !force) return;
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
       final response = await _service.getDashboard();
       _dashboard = response['data'] as Map<String, dynamic>?;
     } on ApiException catch (e) {
       _error = e.message;
+    } catch (e) {
+      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
     }
-
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> loadProfile() async {
+  Future<void> loadProfile({bool force = false}) async {
+    if (_profile != null && !force) return;
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
       final response = await _service.getProfile();
       _profile = response['data'] as Map<String, dynamic>?;
     } on ApiException catch (e) {
       _error = e.message;
+    } catch (e) {
+      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
     }
-
     _isLoading = false;
     notifyListeners();
   }
@@ -67,7 +70,6 @@ class StudentProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
       final response = await _service.getSchedule(
         semesterId: semesterId,
@@ -76,24 +78,26 @@ class StudentProvider extends ChangeNotifier {
       _schedule = response['data'] as Map<String, dynamic>?;
     } on ApiException catch (e) {
       _error = e.message;
+    } catch (e) {
+      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
     }
-
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> loadSubjects({String? semesterCode}) async {
+  Future<void> loadSubjects({String? semesterCode, bool force = false}) async {
+    if (_subjects != null && semesterCode == null && !force) return;
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
       final response = await _service.getSubjects(semesterCode: semesterCode);
       _subjects = response['data'] as List<dynamic>?;
     } on ApiException catch (e) {
       _error = e.message;
+    } catch (e) {
+      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
     }
-
     _isLoading = false;
     notifyListeners();
   }
@@ -102,45 +106,62 @@ class StudentProvider extends ChangeNotifier {
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
       final response = await _service.getAttendance(semesterCode: semesterCode);
       _attendance = response['data'] as Map<String, dynamic>?;
     } on ApiException catch (e) {
       _error = e.message;
+    } catch (e) {
+      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
     }
-
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> loadPendingLessons() async {
+  Future<void> loadPendingLessons({bool force = false}) async {
+    if (_pendingLessons != null && !force) return;
     _isLoading = true;
     _error = null;
     notifyListeners();
-
     try {
       final response = await _service.getPendingLessons();
       _pendingLessons = response['data'] as List<dynamic>?;
     } on ApiException catch (e) {
       _error = e.message;
+    } catch (e) {
+      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
     }
-
     _isLoading = false;
     notifyListeners();
   }
 
-  Future<void> loadContract() async {
+  Future<void> loadContract({bool force = false}) async {
+    if (_contract != null && !force) return;
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
     try {
       final response = await _service.getContract();
       _contract = response['data'] as Map<String, dynamic>?;
       _contractList = _contract?['contracts'] as List<dynamic>?;
     } on ApiException catch (e) {
-      // Contract data is optional, don't set error
-      _contract = null;
-      _contractList = null;
+      _error = e.message;
+    } catch (e) {
+      _error = 'Tarmoq xatoligi. Internet aloqasini tekshiring.';
     }
+    _isLoading = false;
     notifyListeners();
+  }
+
+  /// Pull-to-refresh — re-fetches the screens' essentials.
+  Future<void> refreshAll() async {
+    await Future.wait([
+      loadDashboard(force: true),
+      loadProfile(force: true),
+      loadSubjects(force: true),
+      loadPendingLessons(force: true),
+      loadContract(force: true),
+    ]);
   }
 
   Future<Map<String, dynamic>> saveTelegram(String telegramUsername) async {
@@ -170,19 +191,14 @@ class StudentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> loadExcuses() async {
-    _isLoading = true;
-    _error = null;
-    notifyListeners();
-
+  Future<void> loadExcuses({bool force = false}) async {
+    if (_excuses != null && !force) return;
     try {
       final response = await _service.getExcuses();
       _excuses = response['data'] as List<dynamic>?;
     } on ApiException catch (e) {
       _error = e.message;
     }
-
-    _isLoading = false;
     notifyListeners();
   }
 
@@ -190,7 +206,8 @@ class StudentProvider extends ChangeNotifier {
     return await _service.getExcuseDetail(id);
   }
 
-  Future<Map<String, dynamic>> getMissedAssessments(String startDate, String endDate) async {
+  Future<Map<String, dynamic>> getMissedAssessments(
+      String startDate, String endDate) async {
     return await _service.getMissedAssessments(startDate, endDate);
   }
 

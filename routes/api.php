@@ -1,7 +1,14 @@
 <?php
 
+use App\Http\Controllers\Api\ExamAccessCheckController;
+use App\Http\Controllers\Api\ExamLoginCheckController;
+use App\Http\Controllers\Api\ProctorActionController;
+use App\Http\Controllers\Api\ExamLayoutController;
+use App\Http\Controllers\Api\ExamQuizTargetController;
 use App\Http\Controllers\Api\MoodleDescriptorCallbackController;
+use App\Http\Controllers\Api\MoodleDescriptorFailedCallbackController;
 use App\Http\Controllers\Api\MoodlePhotoSyncController;
+use App\Http\Controllers\Api\MoodleTriggerPushController;
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
 use App\Http\Controllers\Api\V1\ChatApiController;
@@ -27,6 +34,59 @@ Route::post('/moodle-descriptor-confirmed', [MoodleDescriptorCallbackController:
     ->middleware('throttle:30,1')
     ->name('api.moodle.descriptor-confirmed');
 
+// Moodle plugin → LMS descriptor FAILURE. When face-api.js cannot detect a
+// face on a photo we already approved and pushed, Moodle calls this so we
+// can flip the photo back to 'rejected', clear the cached ArcFace embedding
+// and notify the tutor — instead of silently leaving an unusable approved
+// photo in Mark.
+Route::post('/moodle-descriptor-failed', [MoodleDescriptorFailedCallbackController::class, 'fail'])
+    ->middleware('throttle:60,1')
+    ->name('api.moodle.descriptor-failed');
+
+// Moodle quizaccess_lmsguard plugin → LMS pre-attempt check. Verifies the
+// student's IP matches the computer assigned to them and the slot is
+// active. Same X-SYNC-SECRET shared secret as the other Moodle callbacks.
+Route::post('/exam-access-check', [ExamAccessCheckController::class, 'check'])
+    ->middleware('throttle:120,1')
+    ->name('api.moodle.exam-access-check');
+
+// Moodle auth_faceid plugin → LMS pre-login check. Lighter than
+// exam-access-check: only blocks "wrong_computer" so students walking
+// up to the wrong PC during their exam slot are turned away at the
+// FaceID screen instead of getting an error 30 seconds later when they
+// try to open the quiz.
+Route::post('/exam-login-check', [ExamLoginCheckController::class, 'check'])
+    ->middleware('throttle:240,1')
+    ->name('api.moodle.exam-login-check');
+
+// Moodle proctor dashboard → proctor-initiated student moves between PCs
+// (drag-and-drop on the layout grid). Same X-SYNC-SECRET auth.
+Route::post('/proctor/move-student', [ProctorActionController::class, 'move'])
+    ->middleware('throttle:60,1')
+    ->name('api.moodle.proctor.move-student');
+
+// Moodle proctor dashboard (auth_faceid plugin) → today's full computer
+// grid with current/next student per cell. Same X-SYNC-SECRET auth.
+Route::post('/exam-layout-today', [ExamLayoutController::class, 'today'])
+    ->middleware('throttle:60,1')
+    ->name('api.moodle.exam-layout-today');
+
+// Moodle auth_faceid plugin → after a successful FaceID login, asks the
+// LMS whether this student has an active YN slot right now and, if so,
+// which Moodle quiz idnumber to redirect them to.
+Route::post('/exam-quiz-target', [ExamQuizTargetController::class, 'target'])
+    ->middleware('throttle:120,1')
+    ->name('api.moodle.exam-quiz-target');
+
+// Moodle lmsguard plugin → admin-triggered bulk re-push of exam schedules
+// in a given date range. Fires the same BookMoodleGroupExam job that the
+// ExamSchedule observer dispatches automatically, just on demand from the
+// "Markdan ma'lumot olish" button on the plugin settings page. Auth is an
+// inline shared-secret (MOODLE_API_KEY) check in the controller.
+Route::post('/moodle/trigger-push', MoodleTriggerPushController::class)
+    ->middleware('throttle:10,1')
+    ->name('api.moodle.trigger-push');
+
 /*
 |--------------------------------------------------------------------------
 | API Routes — /api/v1/...
@@ -37,6 +97,7 @@ Route::prefix('v1')->group(function () {
 
     // ── Public (no auth) ──────────────────────────────────
     Route::post('/student/login', [AuthController::class, 'studentLogin']);
+    Route::post('/student/face-login', [AuthController::class, 'studentFaceLogin']);
     Route::post('/student/verify-2fa', [AuthController::class, 'studentVerify2fa']);
     Route::post('/student/resend-2fa', [AuthController::class, 'studentResend2fa']);
 
@@ -68,6 +129,12 @@ Route::prefix('v1')->group(function () {
             Route::get('/contract', [StudentApiController::class, 'contract']);
             Route::get('/exam-schedule', [StudentApiController::class, 'examSchedule']);
             Route::get('/rating', [StudentApiController::class, 'studentRating']);
+
+            // Notifications (bell icon)
+            Route::get('/notifications', [StudentApiController::class, 'notifications']);
+            Route::get('/notifications/unread-count', [StudentApiController::class, 'notificationsUnreadCount']);
+            Route::post('/notifications/{id}/read', [StudentApiController::class, 'markNotificationRead']);
+            Route::post('/notifications/read-all', [StudentApiController::class, 'markAllNotificationsRead']);
 
             // Profile completion
             Route::post('/complete-profile/phone', [StudentApiController::class, 'savePhone']);

@@ -10,8 +10,8 @@ class FeatureToggleController extends Controller
 {
     private array $features = [
         'superadmin_grade_edit' => [
-            'label' => 'Superadmin baho tahrirlash',
-            'description' => 'Jurnalda batafsilga o\'tib istalgan bahoni edit qilish imkoniyati',
+            'label' => 'Superadmin/Admin baho tahrirlash',
+            'description' => 'Jurnalda batafsilga o\'tib istalgan bahoni edit qilish imkoniyati (superadmin va admin rollari uchun)',
         ],
         'absence_excuse_delete' => [
             'label' => 'Sababli ariza o\'chirish',
@@ -25,13 +25,30 @@ class FeatureToggleController extends Controller
             'label' => 'Sababli ariza kun chegarasi',
             'description' => 'Yoqilgan bo\'lsa, talaba 10 kunlik muddat tugagandan keyin ham ariza topshira oladi (limit olib tashlanadi). O\'chirilgan bo\'lsa, standart 10 kunlik chegara amal qiladi.',
         ],
+        'superadmin_mt_upload_after_deadline' => [
+            'label' => 'Superadmin MT fayl yuklash (muddatdan keyin ham)',
+            'description' => 'Yoqilgan bo\'lsa, superadmin talaba nomidan mustaqil ta\'lim faylini muddat tugagan bo\'lsa ham yuklay oladi va u jurnalda o\'sha talabaga ko\'rinadi.',
+        ],
     ];
+
+    private function ensureSuperadmin(): void
+    {
+        $activeRole = (string) session('active_role', '');
+        if ($activeRole === 'superadmin') {
+            return;
+        }
+
+        $user = auth('web')->user() ?? auth('teacher')->user();
+        if ($user && $user->roles()->where('name', 'superadmin')->exists()) {
+            return;
+        }
+
+        abort(403);
+    }
 
     public function index()
     {
-        if (!auth()->user()?->hasRole('superadmin')) {
-            abort(403);
-        }
+        $this->ensureSuperadmin();
 
         $toggles = [];
         foreach ($this->features as $key => $meta) {
@@ -48,9 +65,7 @@ class FeatureToggleController extends Controller
 
     public function update(Request $request)
     {
-        if (!auth()->user()?->hasRole('superadmin')) {
-            abort(403);
-        }
+        $this->ensureSuperadmin();
 
         $request->validate([
             'key' => 'required|string',

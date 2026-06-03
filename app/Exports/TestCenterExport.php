@@ -35,6 +35,7 @@ class TestCenterExport implements FromArray, WithHeadings, ShouldAutoSize, WithS
             'Fan nomi',
             'Kurs',
             'Semestr',
+            'Urinish',
             'YN turi',
             'Sana',
             'Vaqt',
@@ -89,6 +90,7 @@ class TestCenterExport implements FromArray, WithHeadings, ShouldAutoSize, WithS
                     $subject->subject_name ?? '',
                     $item['level_name'] ?? '',
                     $item['semester_name'] ?? '',
+                    ((int) ($item['attempt'] ?? 1)) . '-urinish',
                     $item['yn_type'] ?? '',
                     $dateStr,
                     $timeStr,
@@ -117,7 +119,7 @@ class TestCenterExport implements FromArray, WithHeadings, ShouldAutoSize, WithS
         ];
 
         if ($this->totalRows > 0) {
-            $range = 'A1:M' . ($this->totalRows + 1);
+            $range = 'A1:N' . ($this->totalRows + 1);
             $sheet->getStyle($range)->applyFromArray([
                 'borders' => [
                     'allBorders' => [
@@ -129,7 +131,7 @@ class TestCenterExport implements FromArray, WithHeadings, ShouldAutoSize, WithS
 
             // Center-align key columns
             $sheet->getStyle('A2:A' . ($this->totalRows + 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle('F2:M' . ($this->totalRows + 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle('F2:N' . ($this->totalRows + 1))->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         }
 
         return $styles;

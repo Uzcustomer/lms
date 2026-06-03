@@ -1,8 +1,17 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            Jurnal
-        </h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <h2 class="text-xl font-semibold leading-tight text-gray-800">
+                Jurnal
+            </h2>
+            <button type="button" onclick="document.getElementById('jx-export-modal').style.display='flex'"
+                    style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(217,119,6,0.3);">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/>
+                </svg>
+                OSKI / Test — Excel
+            </button>
+        </div>
     </x-slot>
 
     @if(session('error'))
@@ -110,6 +119,17 @@
                                     <span class="toggle-label">Joriy semestr</span>
                                 </div>
                             </div>
+
+                            <div class="filter-item" style="min-width: 180px;">
+                                <label class="filter-label">&nbsp;</label>
+                                <input type="hidden" name="show_inactive" id="show_inactive_input" value="{{ request('show_inactive') ? '1' : '0' }}">
+                                <div class="toggle-switch {{ $showInactive ? 'active' : '' }}" id="show-inactive-toggle" onclick="toggleShowInactive()" title="Semestr oxirida nofaol qilingan eski fanlar (a/b/c variantlar). Baholar shularda qolib ketgan bo'lishi mumkin.">
+                                    <div class="toggle-track">
+                                        <div class="toggle-thumb"></div>
+                                    </div>
+                                    <span class="toggle-label">Nofaol fanlar</span>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Row 2 -->
@@ -203,7 +223,16 @@
                                             'level' => 'Kurs',
                                             'semester' => 'Semestr',
                                             'subject' => 'Fan',
+                                            'closing_form' => 'Yopilish shakli',
                                             'group_name' => 'Guruh',
+                                        ];
+                                        $closingFormBadges = [
+                                            'oski' => ['label' => 'OSKI', 'bg' => '#dbeafe', 'fg' => '#1d4ed8'],
+                                            'test' => ['label' => 'Test', 'bg' => '#dcfce7', 'fg' => '#15803d'],
+                                            'oski_test' => ['label' => 'OSKI + Test', 'bg' => '#ede9fe', 'fg' => '#6d28d9'],
+                                            'normativ' => ['label' => 'Normativ', 'bg' => '#fef3c7', 'fg' => '#a16207'],
+                                            'sinov' => ['label' => 'Sinov (test)', 'bg' => '#ffedd5', 'fg' => '#c2410c'],
+                                            'none' => ['label' => "Yo'q", 'bg' => '#f1f5f9', 'fg' => '#475569'],
                                         ];
                                     @endphp
                                     @foreach($columns as $column => $label)
@@ -229,8 +258,8 @@
                             </thead>
                             <tbody>
                                 @foreach ($journals as $index => $journal)
-                                    <tr class="journal-row"
-                                        onclick="window.location='{{ route('admin.journal.show', ['groupId' => $journal->group_id, 'subjectId' => $journal->subject_id, 'semesterCode' => $journal->semester_code]) }}'">
+                                    <tr class="journal-row {{ isset($journal->is_active) && !$journal->is_active ? 'journal-row-inactive' : '' }}"
+                                        onclick="window.location='{{ route('admin.journal.show', ['groupId' => $journal->group_id, 'subjectId' => $journal->subject_id, 'semesterCode' => $journal->semester_code, 'cs' => $journal->id]) }}'">
                                         <td class="td-num">{{ $journals->firstItem() + $index }}</td>
                                         <td><span class="badge badge-blue">{{ $journal->education_type_name ?? '-' }}</span></td>
                                         <td><span class="text-cell text-emerald">{{ $journal->faculty_name ?? '-' }}</span></td>
@@ -238,7 +267,21 @@
                                         <td><span class="text-cell text-cyan">{{ $journal->specialty_name ?? '-' }}</span></td>
                                         <td><span class="badge badge-violet">{{ $journal->level_name ?? '-' }}</span></td>
                                         <td><span class="badge badge-teal">{{ $journal->semester_name ?? '-' }}</span></td>
-                                        <td><span class="text-cell text-subject">{{ $journal->subject_name ?? '-' }}</span></td>
+                                        <td>
+                                            <span class="text-cell text-subject">{{ $journal->subject_name ?? '-' }}</span>
+                                            @if(isset($journal->is_active) && !$journal->is_active)
+                                                <span class="badge" style="background:#fee2e2;color:#b91c1c;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:6px;" title="Bu fan HEMIS'da nofaol qilingan (eski/eskirgan). Baholar shu yerda qolgan bo'lishi mumkin.">Nofaol</span>
+                                            @endif
+                                        </td>
+                                        <td style="text-align:center;">
+                                            @php $cf = $journal->closing_form ?? null; @endphp
+                                            @if($cf && isset($closingFormBadges[$cf]))
+                                                @php $b = $closingFormBadges[$cf]; @endphp
+                                                <span class="badge" style="background:{{ $b['bg'] }};color:{{ $b['fg'] }};font-size:11px;padding:2px 8px;border-radius:6px;">{{ $b['label'] }}</span>
+                                            @else
+                                                <span style="color:#94a3b8;font-size:11px;">-</span>
+                                            @endif
+                                        </td>
                                         <td><span class="badge badge-indigo">{{ $journal->group_name ?? '-' }}</span></td>
                                     </tr>
                                 @endforeach
@@ -284,6 +327,26 @@
         function toggleCurrentSemester() {
             const btn = document.getElementById('current-semester-toggle');
             const input = document.getElementById('current_semester_input');
+            const isActive = btn.classList.contains('active');
+
+            if (isActive) {
+                btn.classList.remove('active');
+                input.value = '0';
+            } else {
+                btn.classList.add('active');
+                input.value = '1';
+            }
+
+            setTimeout(function() {
+                document.getElementById('filter-loading').classList.remove('hidden');
+                document.getElementById('filter-loading').style.display = 'flex';
+                document.getElementById('filter-form').submit();
+            }, 100);
+        }
+
+        function toggleShowInactive() {
+            const btn = document.getElementById('show-inactive-toggle');
+            const input = document.getElementById('show_inactive_input');
             const isActive = btn.classList.contains('active');
 
             if (isActive) {
@@ -404,6 +467,7 @@
                     semester_code: $('#semester_code').val() || '',
                     subject_id: $('#subject').val() || '',
                     current_semester: $('#current_semester_input').val() || '1',
+                    show_inactive: $('#show_inactive_input').val() || '0',
                 };
             }
 
@@ -612,6 +676,21 @@
         .toggle-switch.active .toggle-label {
             color: #1e3a5f;
         }
+        /* Nofaol fanlar toggle'i yoqilganda — diqqatni tortuvchi rang */
+        #show-inactive-toggle.active .toggle-track {
+            background: #ef4444;
+        }
+        #show-inactive-toggle.active .toggle-label {
+            color: #b91c1c;
+        }
+
+        /* Nofaol (eskirgan) fan qatori — xira fon */
+        .journal-row-inactive {
+            background: #fef2f2;
+        }
+        .journal-row-inactive:hover {
+            background: #fee2e2;
+        }
 
         /* ===== Table ===== */
         .journal-table {
@@ -717,4 +796,195 @@
             word-break: break-word;
         }
     </style>
+
+    {{-- OSKI/Test baholarini Excel'ga eksport modali --}}
+    <div id="jx-export-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.35);">
+            <div style="padding:14px 20px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;display:flex;align-items:center;justify-content:space-between;">
+                <h3 style="margin:0;font-size:16px;font-weight:700;">OSKI / Test baholarini Excelga olish</h3>
+                <button type="button" onclick="document.getElementById('jx-export-modal').style.display='none'" style="background:none;border:none;color:#fff;font-size:26px;line-height:1;cursor:pointer;">&times;</button>
+            </div>
+            <div style="padding:18px 20px;overflow-y:auto;">
+                <p style="margin:0 0 14px;font-size:13px;color:#475569;">
+                    Tanlangan sana oralig'idagi (imtihon kuni bo'yicha) barcha fanlardan OSKI va Test
+                    baholari — har urinish va qo'shimcha farmoyish alohida ustunda. Har qator — bitta talabaning bitta fani.
+                </p>
+
+                <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:160px;">
+                        <label style="display:block;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:4px;">Boshlanish sanasi</label>
+                        <input type="date" id="jx-date-from" value="{{ now()->startOfMonth()->format('Y-m-d') }}"
+                               style="width:100%;height:36px;padding:0 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                    </div>
+                    <div style="flex:1;min-width:160px;">
+                        <label style="display:block;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:4px;">Tugash sanasi</label>
+                        <input type="date" id="jx-date-to" value="{{ now()->format('Y-m-d') }}"
+                               style="width:100%;height:36px;padding:0 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                    </div>
+                </div>
+
+                <div style="margin-bottom:14px;">
+                    <label style="display:block;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:6px;">Kurslar</label>
+                    <div style="display:flex;gap:14px;flex-wrap:wrap;">
+                        @for($k = 1; $k <= 5; $k++)
+                            <label style="display:inline-flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;">
+                                <input type="checkbox" class="jx-kurs" value="{{ $k }}"> {{ $k }}-kurs
+                            </label>
+                        @endfor
+                    </div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:3px;">Hech biri tanlanmasa — barcha kurslar olinadi.</div>
+                </div>
+
+                <div>
+                    <label style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:6px;">
+                        Fakultetlar
+                        <label style="font-size:11px;font-weight:600;text-transform:none;cursor:pointer;">
+                            <input type="checkbox" id="jx-fac-all"> Barchasi
+                        </label>
+                    </label>
+                    <div style="max-height:200px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
+                        @foreach($faculties as $faculty)
+                            <label style="display:block;font-size:13px;padding:3px 0;cursor:pointer;">
+                                <input type="checkbox" class="jx-fac" value="{{ $faculty->id }}"> {{ $faculty->name }}
+                            </label>
+                        @endforeach
+                    </div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:3px;">Hech biri tanlanmasa — barcha fakultetlar olinadi.</div>
+                </div>
+            </div>
+            <div style="padding:14px 20px;border-top:1px solid #e5e7eb;background:#f8fafc;">
+                <div id="jx-export-progress" style="display:none;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;font-size:12px;color:#475569;margin-bottom:5px;">
+                        <span id="jx-export-msg" style="font-weight:600;">Tayyorlanmoqda...</span>
+                        <span id="jx-export-pct" style="font-weight:700;color:#d97706;">0%</span>
+                    </div>
+                    <div style="height:12px;background:#e2e8f0;border-radius:7px;overflow:hidden;">
+                        <div id="jx-export-bar" style="height:100%;width:0%;background:linear-gradient(135deg,#d97706,#f59e0b);transition:width .35s ease;border-radius:7px;"></div>
+                    </div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:5px;">Excel orqa fonda tayyorlanmoqda — bu oynani yopsangiz ham bo'ladi, tayyor bo'lgach yuklab olinadi.</div>
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:10px;">
+                    <button type="button" id="jx-export-cancel" onclick="document.getElementById('jx-export-modal').style.display='none'"
+                            style="padding:8px 18px;background:#f1f5f9;color:#475569;font-size:13px;font-weight:600;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;">Yopish</button>
+                    <button type="button" id="jx-export-submit"
+                            style="padding:8px 24px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer;">Excelga yuklab olish</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var startUrl    = @json(route('admin.journal.export-exam-grades-all.start'));
+            var statusUrl   = @json(route('admin.journal.export-exam-grades-all.status'));
+            var downloadUrl = @json(route('admin.journal.export-exam-grades-all.download'));
+            var csrfToken   = @json(csrf_token());
+
+            var facAll      = document.getElementById('jx-fac-all');
+            var submitBtn   = document.getElementById('jx-export-submit');
+            var progressBox = document.getElementById('jx-export-progress');
+            var barEl       = document.getElementById('jx-export-bar');
+            var pctEl       = document.getElementById('jx-export-pct');
+            var msgEl       = document.getElementById('jx-export-msg');
+
+            var pollTimer = null;
+
+            if (facAll) {
+                facAll.addEventListener('change', function () {
+                    document.querySelectorAll('.jx-fac').forEach(function (cb) { cb.checked = facAll.checked; });
+                });
+            }
+
+            function setProgress(pct, msg) {
+                pct = Math.max(0, Math.min(100, parseInt(pct, 10) || 0));
+                barEl.style.width = pct + '%';
+                pctEl.textContent = pct + '%';
+                if (msg) msgEl.textContent = msg;
+            }
+
+            function showRunning() {
+                progressBox.style.display = 'block';
+                submitBtn.style.display = 'none';
+            }
+
+            function resetUi() {
+                if (pollTimer) { clearTimeout(pollTimer); pollTimer = null; }
+                progressBox.style.display = 'none';
+                submitBtn.style.display = '';
+                submitBtn.disabled = false;
+                setProgress(0, 'Tayyorlanmoqda...');
+            }
+
+            function poll(exportKey) {
+                fetch(statusUrl + '?export_key=' + encodeURIComponent(exportKey), {
+                    headers: { 'Accept': 'application/json' }
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    var status = data.status || '';
+                    if (status === 'running') {
+                        setProgress(data.percent || 0, data.message || 'Ishlanmoqda...');
+                        pollTimer = setTimeout(function () { poll(exportKey); }, 1500);
+                    } else if (status === 'done') {
+                        setProgress(100, 'Tayyor — yuklab olinmoqda...');
+                        window.location.href = downloadUrl + '?export_key=' + encodeURIComponent(exportKey);
+                        setTimeout(resetUi, 2500);
+                    } else {
+                        alert('Eksport xatosi: ' + (data.message || 'noma\'lum xato'));
+                        resetUi();
+                    }
+                })
+                .catch(function () {
+                    pollTimer = setTimeout(function () { poll(exportKey); }, 2500);
+                });
+            }
+
+            if (submitBtn) {
+                submitBtn.addEventListener('click', function () {
+                    var from = (document.getElementById('jx-date-from').value || '').trim();
+                    var to = (document.getElementById('jx-date-to').value || '').trim();
+                    if (!from || !to) {
+                        alert('Boshlanish va tugash sanasini tanlang.');
+                        return;
+                    }
+                    var payload = { date_from: from, date_to: to, faculties: [], kurslar: [] };
+                    document.querySelectorAll('.jx-fac:checked').forEach(function (cb) {
+                        payload.faculties.push(parseInt(cb.value, 10));
+                    });
+                    document.querySelectorAll('.jx-kurs:checked').forEach(function (cb) {
+                        payload.kurslar.push(parseInt(cb.value, 10));
+                    });
+
+                    submitBtn.disabled = true;
+                    showRunning();
+                    setProgress(0, 'Navbatga qo\'shilmoqda...');
+
+                    fetch(startUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json',
+                            'X-CSRF-TOKEN': csrfToken
+                        },
+                        body: JSON.stringify(payload)
+                    })
+                    .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, body: d }; }); })
+                    .then(function (res) {
+                        if (!res.ok || !res.body.export_key) {
+                            var em = res.body && res.body.message ? res.body.message : 'Eksportni boshlab bo\'lmadi';
+                            alert(em);
+                            resetUi();
+                            return;
+                        }
+                        setProgress(res.body.percent || 0, res.body.message || 'Eksport boshlandi');
+                        poll(res.body.export_key);
+                    })
+                    .catch(function () {
+                        alert('Server bilan bog\'lanishda xato.');
+                        resetUi();
+                    });
+                });
+            }
+        })();
+    </script>
 </x-app-layout>

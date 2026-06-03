@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'dart:typed_data';
 import '../config/api_config.dart';
 import 'api_service.dart';
 
@@ -5,6 +7,23 @@ class AuthService {
   final ApiService _api;
 
   AuthService(this._api);
+
+  Future<Map<String, dynamic>> studentFaceLogin(String login, File photo) async {
+    final bytes = await photo.readAsBytes();
+    final response = await _api.multipartPost(
+      ApiConfig.studentFaceLogin,
+      {'login': login},
+      fileBytes: Uint8List.fromList(bytes),
+      fileName: photo.path.split('/').last,
+      fileField: 'photo',
+    );
+
+    if (response['token'] != null) {
+      await _api.saveToken(response['token'], response['guard'] ?? 'student');
+    }
+
+    return response;
+  }
 
   Future<Map<String, dynamic>> studentLogin(String login, String password) async {
     final response = await _api.post(ApiConfig.studentLogin, {

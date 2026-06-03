@@ -133,6 +133,458 @@ class StudentController extends Controller
         return view('admin.students.index', compact('students', 'educationTypes', 'countries'));
     }
 
+    public function statistics(Request $request)
+    {
+        // Faqat aktiv talabalar (student_status_code = 11) bo'yicha sanaymiz.
+        // Ta'lim turi va jinsi bo'yicha kesim — "Umumiy" tabidagi kartalar uchun.
+        $rows = DB::table('students')
+            ->selectRaw('education_type_name, gender_name, COUNT(*) as total')
+            ->where('student_status_code', 11)
+            ->groupBy('education_type_name', 'gender_name')
+            ->get();
+
+        $byEduGender = [];
+        foreach ($rows as $r) {
+            $type   = trim((string) $r->education_type_name);
+            $gender = strtolower(trim((string) $r->gender_name));
+            if ($type === '') {
+                continue;
+            }
+            if (!isset($byEduGender[$type])) {
+                $byEduGender[$type] = ['male' => 0, 'female' => 0, 'total' => 0];
+            }
+            $byEduGender[$type]['total'] += (int) $r->total;
+            // Erkak / Erkaklar / Male / etc.
+            if (str_starts_with($gender, 'erkak') || $gender === 'male' || $gender === 'm') {
+                $byEduGender[$type]['male'] += (int) $r->total;
+            } elseif (str_starts_with($gender, 'ayol') || str_starts_with($gender, 'xotin')
+                    || $gender === 'female' || $gender === 'f') {
+                $byEduGender[$type]['female'] += (int) $r->total;
+            }
+        }
+
+        // Bakalavr / Magistratura / Ordinatura kartalari — DB nomi farq qilishi
+        // mumkin (Bakalavriat, Magistr, Ordinatura...), shuning uchun moslama.
+        $aliases = [
+            'bakalavr'    => ['bakalavr', 'bakalavriat'],
+            'magistr'     => ['magistratura', 'magistr'],
+            'ordinatura'  => ['ordinatura'],
+        ];
+        $resolve = function (array $keys) use ($byEduGender) {
+            $out = ['male' => 0, 'female' => 0, 'total' => 0];
+            foreach ($byEduGender as $type => $stat) {
+                $low = mb_strtolower($type);
+                foreach ($keys as $k) {
+                    if (str_contains($low, $k)) {
+                        $out['male']   += $stat['male'];
+                        $out['female'] += $stat['female'];
+                        $out['total']  += $stat['total'];
+                        break;
+                    }
+                }
+            }
+            return $out;
+        };
+
+        $stats = [
+            'bakalavr'   => $resolve($aliases['bakalavr']),
+            'magistr'    => $resolve($aliases['magistr']),
+            'ordinatura' => $resolve($aliases['ordinatura']),
+        ];
+        $stats['total'] = [
+            'male'   => array_sum(array_column($byEduGender, 'male')),
+            'female' => array_sum(array_column($byEduGender, 'female')),
+            'total'  => array_sum(array_column($byEduGender, 'total')),
+        ];
+
+        // Yoshi kesimi — 30 yoshdan kichik / katta (birth_date asosida).
+        $ageRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->whereNotNull('birth_date')
+            ->selectRaw("SUM(TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) < 30) as younger,
+                         SUM(TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) >= 30) as older")
+            ->first();
+        $ageStats = [
+            'younger' => (int) ($ageRows->younger ?? 0),
+            'older'   => (int) ($ageRows->older ?? 0),
+        ];
+
+        // To'lov shakli kesimi — Davlat granti / To'lov-kontrakt.
+        $payRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('payment_form_name, COUNT(*) as total')
+            ->groupBy('payment_form_name')
+            ->get();
+        $payStats = ['grant' => 0, 'contract' => 0];
+        foreach ($payRows as $p) {
+            $name = mb_strtolower(trim((string) $p->payment_form_name));
+            if (str_contains($name, 'grant') || str_contains($name, 'byudjet') || str_contains($name, 'budjet')) {
+                $payStats['grant'] += (int) $p->total;
+            } else {
+                // qolganlari (to'lov-kontrakt, kontrakt, shartnoma, ...) kontraktga
+                $payStats['contract'] += (int) $p->total;
+            }
+        }
+
+        // Kurslar kesimi — ta'lim turi × kurs (level_code) × jins × semestr.
+        // Kurslar tabidagi KPI raqamlari va stacked bar chart uchun.
+        $courseRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->whereNotNull('level_code')
+            ->selectRaw('education_type_name, level_code, gender_name, semester_code, COUNT(*) as total')
+            ->groupBy('education_type_name', 'level_code', 'gender_name', 'semester_code')
+            ->get();
+
+        $eduKeyOf = function (string $type): ?string {
+            $low = mb_strtolower($type);
+            if (str_contains($low, 'bakalavr')) return 'bakalavr';
+            if (str_contains($low, 'magistr')) return 'magistr';
+            if (str_contains($low, 'ordinatura')) return 'ordinatura';
+            return null;
+        };
+
+        // courseStats[eduKey][level] = ['total','male','female','semesters'=>[sem=>count]]
+        $courseStats = [];
+        // courseTotals[level] = jami (barcha ta'lim turlari) — KPI kartalar uchun
+        $courseTotals = [];
+        // HEMIS level_code odatda 11..16 ko'rinishida (11=1-kurs ... 16=6-kurs).
+        // Toza 1..8 ko'rinishi ham bo'lishi mumkin — ikkalasini ham qo'llaymiz.
+        $toCourse = function ($raw): int {
+            $n = (int) $raw;
+            if ($n >= 11 && $n <= 20) {
+                return $n - 10;       // 11→1, 12→2, ... 16→6
+            }
+            return $n;                // allaqachon 1..8 bo'lsa
+        };
+        foreach ($courseRows as $r) {
+            $eduKey = $eduKeyOf((string) $r->education_type_name);
+            if ($eduKey === null) continue;
+            $level = $toCourse($r->level_code);
+            if ($level < 1 || $level > 8) continue;
+            $cnt = (int) $r->total;
+            $gender = mb_strtolower(trim((string) $r->gender_name));
+
+            if (!isset($courseStats[$eduKey][$level])) {
+                $courseStats[$eduKey][$level] = ['total' => 0, 'male' => 0, 'female' => 0, 'semesters' => []];
+            }
+            $courseStats[$eduKey][$level]['total'] += $cnt;
+            if (str_starts_with($gender, 'erkak') || $gender === 'male' || $gender === 'm') {
+                $courseStats[$eduKey][$level]['male'] += $cnt;
+            } elseif (str_starts_with($gender, 'ayol') || str_starts_with($gender, 'xotin')
+                    || $gender === 'female' || $gender === 'f') {
+                $courseStats[$eduKey][$level]['female'] += $cnt;
+            }
+            $sem = (string) ($r->semester_code ?? '');
+            if ($sem !== '') {
+                $courseStats[$eduKey][$level]['semesters'][$sem] =
+                    ($courseStats[$eduKey][$level]['semesters'][$sem] ?? 0) + $cnt;
+            }
+
+            $courseTotals[$level] = ($courseTotals[$level] ?? 0) + $cnt;
+        }
+        ksort($courseTotals);
+
+        // Ijtimoiy toifalar kesimi — social_category_name bo'yicha.
+        // "Boshqa" / bo'sh qiymatlar — ijtimoiy toifasi yo'q deb hisoblanadi.
+        $socialRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('social_category_name, COUNT(*) as total')
+            ->groupBy('social_category_name')
+            ->get();
+        $socialStats = [];          // [name => count] — faqat haqiqiy toifalar
+        $socialHasCategory = 0;     // toifasi bor talabalar jami
+        foreach ($socialRows as $s) {
+            $name = trim((string) $s->social_category_name);
+            $low = mb_strtolower($name);
+            if ($name === '' || str_contains($low, 'boshqa') || $low === "yo'q" || $low === 'yoq') {
+                continue;
+            }
+            $socialStats[$name] = (int) $s->total;
+            $socialHasCategory += (int) $s->total;
+        }
+        arsort($socialStats);
+
+        // Fuqaroligi kesimi — citizenship_name × ta'lim turi (stacked bar uchun).
+        $citRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('citizenship_name, education_type_name, COUNT(*) as total')
+            ->groupBy('citizenship_name', 'education_type_name')
+            ->get();
+        // citizenshipStats[citName] = ['total'=>n, 'edu'=>[eduKey=>n]]
+        $citizenshipStats = [];
+        foreach ($citRows as $r) {
+            $cit = trim((string) $r->citizenship_name);
+            if ($cit === '') {
+                $cit = 'Boshqa';
+            }
+            $eduKey = $eduKeyOf((string) $r->education_type_name) ?? 'other';
+            if (!isset($citizenshipStats[$cit])) {
+                $citizenshipStats[$cit] = ['total' => 0, 'edu' => ['bakalavr' => 0, 'magistr' => 0, 'ordinatura' => 0, 'other' => 0]];
+            }
+            $citizenshipStats[$cit]['total'] += (int) $r->total;
+            $citizenshipStats[$cit]['edu'][$eduKey] += (int) $r->total;
+        }
+        uasort($citizenshipStats, fn($a, $b) => $b['total'] <=> $a['total']);
+
+        // Davlat (country) kesimi — eng ko'p mamlakatlar (aylanma chart uchun).
+        $countryRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('country_name, COUNT(*) as total')
+            ->groupBy('country_name')
+            ->orderByDesc('total')
+            ->get();
+        $countryStats = [];
+        foreach ($countryRows as $c) {
+            $name = trim((string) $c->country_name);
+            if ($name === '') {
+                $name = 'Boshqa';
+            }
+            $countryStats[$name] = ($countryStats[$name] ?? 0) + (int) $c->total;
+        }
+        arsort($countryStats);
+
+        // Yashash joyi kesimi — ta'lim turi × accommodation_name (stacked bar uchun).
+        $accomRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('accommodation_name, education_type_name, COUNT(*) as total')
+            ->groupBy('accommodation_name', 'education_type_name')
+            ->get();
+        // accomStats[name] = ['total'=>n, 'edu'=>[eduKey=>n]]
+        $accomStats = [];
+        foreach ($accomRows as $r) {
+            $name = trim((string) $r->accommodation_name);
+            if ($name === '') {
+                $name = 'Boshqa';
+            }
+            $eduKey = $eduKeyOf((string) $r->education_type_name) ?? 'other';
+            if (!isset($accomStats[$name])) {
+                $accomStats[$name] = ['total' => 0, 'edu' => ['bakalavr' => 0, 'magistr' => 0, 'ordinatura' => 0, 'other' => 0]];
+            }
+            $accomStats[$name]['total'] += (int) $r->total;
+            $accomStats[$name]['edu'][$eduKey] += (int) $r->total;
+        }
+        uasort($accomStats, fn($a, $b) => $b['total'] <=> $a['total']);
+
+        // Viloyatlar kesimi — province_name × gender_name × education_type
+        // (gorizontal/vertikal bar chart, edu tab filtri uchun).
+        $provRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('province_name, gender_name, education_type_name, COUNT(*) as total')
+            ->groupBy('province_name', 'gender_name', 'education_type_name')
+            ->get();
+        $eduBuckets = ['all', 'bakalavr', 'magistr', 'ordinatura'];
+        $provinceByEdu = array_fill_keys($eduBuckets, []);
+        foreach ($provRows as $r) {
+            $name = trim((string) $r->province_name);
+            if ($name === '') { $name = 'Boshqa'; }
+            $gender = mb_strtolower(trim((string) $r->gender_name));
+            $ek = $eduKeyOf((string) $r->education_type_name);
+            $cnt = (int) $r->total;
+            $isMale   = str_starts_with($gender, 'erkak') || $gender === 'male' || $gender === 'm';
+            $isFemale = str_starts_with($gender, 'ayol') || str_starts_with($gender, 'xotin')
+                     || $gender === 'female' || $gender === 'f';
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                if (!isset($provinceByEdu[$bucket][$name])) {
+                    $provinceByEdu[$bucket][$name] = ['total' => 0, 'male' => 0, 'female' => 0];
+                }
+                $provinceByEdu[$bucket][$name]['total'] += $cnt;
+                if ($isMale)   $provinceByEdu[$bucket][$name]['male']   += $cnt;
+                if ($isFemale) $provinceByEdu[$bucket][$name]['female'] += $cnt;
+            }
+        }
+        foreach ($provinceByEdu as $k => $arr) {
+            uasort($arr, fn($a, $b) => $b['total'] <=> $a['total']);
+            $provinceByEdu[$k] = $arr;
+        }
+        $provinceStats = $provinceByEdu['all']; // legacy alias
+
+        // Yosh kesimini ta'lim turi bo'yicha (edu tab filtri uchun).
+        $ageRowsEdu = DB::table('students')
+            ->where('student_status_code', 11)
+            ->whereNotNull('birth_date')
+            ->selectRaw("education_type_name,
+                         SUM(TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) < 30) as younger,
+                         SUM(TIMESTAMPDIFF(YEAR, birth_date, CURDATE()) >= 30) as older")
+            ->groupBy('education_type_name')
+            ->get();
+        $ageByEdu = array_fill_keys($eduBuckets, ['younger' => 0, 'older' => 0]);
+        foreach ($ageRowsEdu as $r) {
+            $ek = $eduKeyOf((string) $r->education_type_name);
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                $ageByEdu[$bucket]['younger'] += (int) $r->younger;
+                $ageByEdu[$bucket]['older']   += (int) $r->older;
+            }
+        }
+
+        // To'lov shakli ta'lim turi bo'yicha
+        $payRowsEdu = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('payment_form_name, education_type_name, COUNT(*) as total')
+            ->groupBy('payment_form_name', 'education_type_name')
+            ->get();
+        $payByEdu = array_fill_keys($eduBuckets, ['grant' => 0, 'contract' => 0]);
+        foreach ($payRowsEdu as $p) {
+            $name = mb_strtolower(trim((string) $p->payment_form_name));
+            $ek = $eduKeyOf((string) $p->education_type_name);
+            $key = (str_contains($name, 'grant') || str_contains($name, 'byudjet') || str_contains($name, 'budjet'))
+                ? 'grant' : 'contract';
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                $payByEdu[$bucket][$key] += (int) $p->total;
+            }
+        }
+
+        // Ijtimoiy toifalar ta'lim turi bo'yicha
+        $socialRowsEdu = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('social_category_name, education_type_name, COUNT(*) as total')
+            ->groupBy('social_category_name', 'education_type_name')
+            ->get();
+        $socialByEdu = array_fill_keys($eduBuckets, []);
+        $socialHasCategoryByEdu = array_fill_keys($eduBuckets, 0);
+        foreach ($socialRowsEdu as $s) {
+            $name = trim((string) $s->social_category_name);
+            $low = mb_strtolower($name);
+            if ($name === '' || str_contains($low, 'boshqa') || $low === "yo'q" || $low === 'yoq') {
+                continue;
+            }
+            $ek = $eduKeyOf((string) $s->education_type_name);
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                $socialByEdu[$bucket][$name] = ($socialByEdu[$bucket][$name] ?? 0) + (int) $s->total;
+                $socialHasCategoryByEdu[$bucket] += (int) $s->total;
+            }
+        }
+        foreach ($socialByEdu as $k => $arr) { arsort($arr); $socialByEdu[$k] = $arr; }
+
+        // Davlatlar ta'lim turi bo'yicha
+        $countryRowsEdu = DB::table('students')
+            ->where('student_status_code', 11)
+            ->selectRaw('country_name, education_type_name, COUNT(*) as total')
+            ->groupBy('country_name', 'education_type_name')
+            ->get();
+        $countryByEdu = array_fill_keys($eduBuckets, []);
+        foreach ($countryRowsEdu as $c) {
+            $name = trim((string) $c->country_name);
+            if ($name === '') { $name = 'Boshqa'; }
+            $ek = $eduKeyOf((string) $c->education_type_name);
+            foreach (array_unique(['all', $ek ?: null]) as $bucket) {
+                if (!$bucket || !in_array($bucket, $eduBuckets, true)) continue;
+                $countryByEdu[$bucket][$name] = ($countryByEdu[$bucket][$name] ?? 0) + (int) $c->total;
+            }
+        }
+        foreach ($countryByEdu as $k => $arr) { arsort($arr); $countryByEdu[$k] = $arr; }
+
+        // Fuqaroligi ta'lim turi bo'yicha (jami count, edu split saqlanadi citizenshipStats da)
+        $citizenshipByEdu = array_fill_keys($eduBuckets, []);
+        foreach ($citizenshipStats as $cName => $cData) {
+            $citizenshipByEdu['all'][$cName] = ($citizenshipByEdu['all'][$cName] ?? 0) + (int) $cData['total'];
+            foreach (['bakalavr','magistr','ordinatura'] as $bucket) {
+                $citizenshipByEdu[$bucket][$cName] = ($citizenshipByEdu[$bucket][$cName] ?? 0)
+                    + (int) ($cData['edu'][$bucket] ?? 0);
+            }
+        }
+        foreach ($citizenshipByEdu as $k => $arr) { arsort($arr); $citizenshipByEdu[$k] = $arr; }
+
+        // ── Professor-o'qituvchilar (xodimlar) statistikasi ──
+        // FAQAT faol (is_active=1) va asosiy ish joyiga ega xodimlar.
+        // Yagona base query — qayta foydalanish uchun closure'da.
+        $activeMainQuery = fn() => DB::table('teachers')
+            ->where('is_active', 1)
+            ->whereRaw('LOWER(TRIM(employment_form)) = ?', ['asosiy ish joy']);
+
+        // "Turi" inner tabi — employee_type bo'yicha kesim.
+        $teacherTypeRows = $activeMainQuery()
+            ->selectRaw('employee_type, COUNT(*) as total')
+            ->groupBy('employee_type')
+            ->get();
+        $teacherTypeStats = []; // [employee_type => ['total'=>n]]
+        foreach ($teacherTypeRows as $r) {
+            $type = trim((string) $r->employee_type);
+            if ($type === '') continue;
+            $teacherTypeStats[$type] = ['total' => (int) $r->total];
+        }
+        uasort($teacherTypeStats, fn($a, $b) => $b['total'] <=> $a['total']);
+
+        // "Jins" inner tabi — Erkak/Ayol kesimi.
+        $teacherGenderRow = $activeMainQuery()
+            ->selectRaw("
+                COUNT(*) as total,
+                SUM(CASE
+                    WHEN LOWER(TRIM(gender)) LIKE 'erkak%'
+                      OR LOWER(TRIM(gender)) IN ('male','m')
+                    THEN 1 ELSE 0
+                END) as male,
+                SUM(CASE
+                    WHEN LOWER(TRIM(gender)) LIKE 'ayol%'
+                      OR LOWER(TRIM(gender)) LIKE 'xotin%'
+                      OR LOWER(TRIM(gender)) IN ('female','f')
+                    THEN 1 ELSE 0
+                END) as female
+            ")
+            ->first();
+        $teacherGenderStats = [
+            'total'  => (int) ($teacherGenderRow->total ?? 0),
+            'male'   => (int) ($teacherGenderRow->male ?? 0),
+            'female' => (int) ($teacherGenderRow->female ?? 0),
+        ];
+
+        // "Kafedra/bo'lim" va "Lavozim" tablari uchun xodimlar ro'yxati —
+        // bitta so'rovda barcha kerakli ustunlar olinadi, keyin PHP'da
+        // department va staff_position bo'yicha alohida indekslanadi.
+        $teacherMembersRaw = $activeMainQuery()
+            ->select('hemis_id', 'full_name', 'image', 'phone',
+                'department', 'staff_position', 'employee_type')
+            ->orderBy('full_name')
+            ->get();
+
+        $teacherDeptMembers = []; // [department => [...]]
+        $teacherPositionMembers = []; // [staff_position => [...]]
+        foreach ($teacherMembersRaw as $t) {
+            $member = [
+                'hemis_id'       => (string) $t->hemis_id,
+                'full_name'      => (string) $t->full_name,
+                'image'          => (string) ($t->image ?? ''),
+                'phone'          => (string) ($t->phone ?? ''),
+                'staff_position' => (string) ($t->staff_position ?? ''),
+                'department'     => (string) ($t->department ?? ''),
+            ];
+            $dept = trim((string) $t->department);
+            if ($dept !== '') {
+                $teacherDeptMembers[$dept][] = $member;
+            }
+            $pos = trim((string) $t->staff_position);
+            if ($pos !== '') {
+                $teacherPositionMembers[$pos][] = $member;
+            }
+        }
+        $teacherDeptStats = [];
+        foreach ($teacherDeptMembers as $dept => $list) {
+            $teacherDeptStats[$dept] = ['total' => count($list)];
+        }
+        uasort($teacherDeptStats, fn($a, $b) => $b['total'] <=> $a['total']);
+
+        $teacherPositionStats = [];
+        foreach ($teacherPositionMembers as $pos => $list) {
+            $teacherPositionStats[$pos] = ['total' => count($list)];
+        }
+        uasort($teacherPositionStats, fn($a, $b) => $b['total'] <=> $a['total']);
+
+        return view('admin.students.statistics', compact(
+            'stats', 'ageStats', 'payStats', 'courseStats', 'courseTotals',
+            'socialStats', 'socialHasCategory',
+            'citizenshipStats', 'countryStats',
+            'accomStats', 'provinceStats',
+            'ageByEdu', 'payByEdu', 'socialByEdu', 'socialHasCategoryByEdu',
+            'countryByEdu', 'citizenshipByEdu', 'provinceByEdu',
+            'teacherTypeStats', 'teacherGenderStats',
+            'teacherDeptStats', 'teacherDeptMembers',
+            'teacherPositionStats', 'teacherPositionMembers'
+        ));
+    }
+
     public function disabledIndex(Request $request)
     {
         $disabledFilter = function ($q) {
@@ -582,6 +1034,30 @@ class StudentController extends Controller
         return $disk->download($file->path, $file->original_name);
     }
 
+    public function viewAdmissionFile(Student $student, string $name)
+    {
+        $file = \App\Models\StudentFile::where('student_id', $student->id)
+            ->where('name', $name)
+            ->first();
+
+        if (!$file) {
+            abort(404, 'Fayl topilmadi.');
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        if (!$disk->exists($file->path)) {
+            abort(404, 'Fayl serverda mavjud emas.');
+        }
+
+        return response()->file(
+            $disk->path($file->path),
+            [
+                'Content-Type' => $file->mime_type ?: 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="' . addslashes($file->original_name) . '"',
+            ]
+        );
+    }
+
     public function deleteFile(Student $student, \App\Models\StudentFile $file)
     {
         $user = Auth::user();
@@ -618,26 +1094,87 @@ class StudentController extends Controller
             return back()->with('error', "Sizda bu ma'lumotlarni saqlash huquqi yo'q.");
         }
 
+        $aliasMap = [
+            'talim_country'         => 'talim_davlat',
+            'yashash_country'       => 'yashash_davlat',
+            'talim_tili_dtm'        => 'talim_tili',
+            'javob_varaqa_raqami'   => 'javoblar_varaqasi',
+            'yil_boshi'             => 'oqigan_yili_boshi',
+            'yil_tugashi'           => 'oqigan_yili_tugashi',
+        ];
+        foreach ($aliasMap as $formName => $dbName) {
+            if ($request->filled($formName) && !$request->filled($dbName)) {
+                $request->merge([$dbName => $request->input($formName)]);
+            }
+        }
+
         $data = $request->only([
             'familya', 'ism', 'otasining_ismi', 'tugilgan_sana', 'jshshir', 'jinsi',
-            'tel1', 'tel2', 'email', 'millat',
+            'tel1', 'tel2', 'email', 'millat', 'millat_other',
             'tugilgan_davlat', 'tugilgan_viloyat', 'tugulgan_tuman',
+            'tugilgan_viloyat_text', 'tugilgan_tuman_text',
+            'doimiy_manzil',
             'yashash_davlat', 'yashash_viloyat', 'yashash_tuman', 'yashash_manzil',
+            'yashash_viloyat_text', 'yashash_tuman_text',
             'vaqtinchalik_manzil',
+            'kenglik', 'uzunlik',
             'passport_seriya', 'passport_raqam', 'passport_sana', 'passport_joy',
             'abituriyent_id', 'javoblar_varaqasi', 'talim_tili', 'imtihon_alifbosi',
-            'oliy_malumot', 'otm_nomi', 'talim_turi', 'talim_shakli', 'mutaxassislik', 'hozirgi_talim_turi',
-            'toplagan_ball', 'tavsiya_turi', 'tolov_shakli', 'muassasa_nomi', 'hujjat_seriya', 'ortalacha_ball',
-            'talim_davlat', 'talim_viloyat', 'talim_tuman', 'oqigan_yili_boshi', 'oqigan_yili_tugashi',
-            'sertifikat_turi', 'sertifikat_ball', 'milliy_sertifikat', 'chet_til_sertifikat', 'chet_til_ball',
+            'oliy_malumot', 'otm_nomi', 'prev_otm_nomi',
+            'talim_turi', 'talim_shakli', 'mutaxassislik', 'hozirgi_talim_turi',
+            'toplagan_ball', 'tavsiya_turi', 'tolov_shakli',
+            'muassasa_nomi', 'muassasa_turi', 'hujjat_seriya', 'ortalacha_ball',
+            'talim_davlat', 'talim_viloyat', 'talim_tuman', 'talim_viloyat_text', 'talim_tuman_text',
+            'oqigan_yili_boshi', 'oqigan_yili_tugashi',
+            'sertifikat_turi', 'sertifikat_ball', 'milliy_sertifikat',
+            'chet_til_sertifikat', 'chet_til_ball', 'chet_til_boshqa',
             'ota_familiya', 'ota_ismi', 'ota_sharifi', 'ota_tel', 'ota_ish_joyi', 'ota_lavozimi',
             'ona_familiya', 'ona_ismi', 'ona_sharifi', 'ona_tel', 'ona_ish_joyi', 'ona_lavozimi',
+            'd_kiritilgan_turi', 'd_oila_turi',
+            'nogiron_guruh', 'nogiron_toifa', 'nogiron_toifa_boshqa', 'yetim_turi',
+            'davlat_mukofoti_desc', 'kokrak_nishoni_desc', 'prezident_stip_desc',
+            'davlat_stip_desc', 'xalqaro_stip_desc', 'resp_sport_desc', 'xal_sport_desc',
+            'resp_fan_olimp_desc', 'xal_fan_olimp_desc', 'boshqa_yutuq_desc',
+            'iqtidori_boshqa', 'sport_boshqa',
         ]);
 
         foreach (['tugilgan_sana', 'passport_sana'] as $df) {
-            if (empty($data[$df])) {
+            if (!empty($data[$df])) {
+                $val = $data[$df];
+                if (preg_match('/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/', $val, $m)) {
+                    $data[$df] = sprintf('%04d-%02d-%02d', $m[3], $m[2], $m[1]);
+                }
+            } else {
                 $data[$df] = null;
             }
+        }
+
+        $boolFields = [
+            'd_kiritilgan', 'd_oila_azosi', 'kam_taminlangan', 'harbiy_qaytgan',
+            'nafaqa_oluvchi', 'nogironligi', 'yetim_talaba',
+            'davlat_mukofoti', 'kokrak_nishoni', 'prezident_stip', 'davlat_stip',
+            'xalqaro_stip', 'resp_sport', 'xal_sport', 'resp_fan_olimp',
+            'xal_fan_olimp', 'boshqa_yutuq',
+        ];
+        foreach ($boolFields as $b) {
+            $data[$b] = $request->boolean($b);
+        }
+
+        foreach (['chet_tillari', 'iqtidori', 'sport_qobiliyat'] as $arr) {
+            $val = $request->input($arr);
+            if (is_array($val)) {
+                $val = array_values(array_filter($val, fn($v) => $v !== null && $v !== ''));
+                $data[$arr] = $val;
+            } elseif ($val !== null && $val !== '') {
+                $data[$arr] = [$val];
+            } else {
+                $data[$arr] = [];
+            }
+        }
+
+        foreach (['kenglik', 'uzunlik'] as $coord) {
+            $v = $request->input($coord);
+            $data[$coord] = ($v === '' || $v === null) ? null : (float) $v;
         }
 
         $skipUpper = ['tugilgan_sana', 'passport_sana', 'email'];
@@ -646,9 +1183,6 @@ class StudentController extends Controller
                 $data[$key] = mb_strtoupper($val, 'UTF-8');
             }
         }
-
-        $data['otm_nomi'] = 'Toshkent davlat tibbiyot universiteti Termiz filiali';
-        unset($data['doimiy_manzil'], $data['updated_by']);
 
         try {
             $columns = \Illuminate\Support\Facades\Schema::getColumnListing('student_admission_data');
@@ -661,6 +1195,48 @@ class StudentController extends Controller
         } catch (\Exception $e) {
             \Log::error('Admission data save error: ' . $e->getMessage());
             return back()->withInput()->with('error', "Ma'lumotlarni saqlashda xatolik: " . $e->getMessage())->with('active_tab', 'qabul');
+        }
+
+        $fileCategories = [
+            'passport_pdf'           => 'personal',
+            'propiska_pdf'           => 'personal',
+            'rasm_pdf'               => 'personal',
+            'attestat_pdf'           => 'education',
+            'milliy_sertifikat_pdf'  => 'education',
+            'ruxsatnoma_pdf'         => 'education',
+            'dtm_varaqa_pdf'         => 'education',
+            'ota_passport_pdf'       => 'parents',
+            'ona_passport_pdf'       => 'parents',
+            'obyektivka'             => 'documents',
+        ];
+        foreach ($fileCategories as $name => $category) {
+            if (!$request->hasFile($name)) continue;
+            $file = $request->file($name);
+            if (!$file || !$file->isValid()) continue;
+            try {
+                $oldFile = \App\Models\StudentFile::where('student_id', $student->id)->where('name', $name)->first();
+                if ($oldFile) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($oldFile->path);
+                }
+                $ext = $file->getClientOriginalExtension() ?: 'bin';
+                $path = $file->storeAs(
+                    "student-admission/{$student->id}/{$category}",
+                    "{$name}.{$ext}",
+                    'public'
+                );
+                \App\Models\StudentFile::updateOrCreate(
+                    ['student_id' => $student->id, 'name' => $name],
+                    [
+                        'original_name' => $file->getClientOriginalName(),
+                        'path' => $path,
+                        'mime_type' => $file->getClientMimeType(),
+                        'size' => $file->getSize(),
+                        'uploaded_by' => $user?->id,
+                    ]
+                );
+            } catch (\Exception $e) {
+                \Log::error("File upload error [{$name}]: " . $e->getMessage());
+            }
         }
 
         if ($request->hasFile('files')) {
@@ -768,17 +1344,26 @@ class StudentController extends Controller
 
         $disk = \Illuminate\Support\Facades\Storage::disk('public');
 
-        $files = \App\Models\StudentFile::where('student_id', $student->id)->get();
+        $admissionFileNames = [
+            'passport_pdf', 'propiska_pdf', 'rasm_pdf',
+            'attestat_pdf', 'milliy_sertifikat_pdf', 'ruxsatnoma_pdf', 'dtm_varaqa_pdf',
+            'ota_passport_pdf', 'ona_passport_pdf', 'obyektivka',
+        ];
+
+        $files = \App\Models\StudentFile::where('student_id', $student->id)
+            ->whereIn('name', $admissionFileNames)
+            ->get();
         foreach ($files as $file) {
             $disk->delete($file->path);
             $file->delete();
         }
 
+        $disk->deleteDirectory('student-admission/' . $student->id);
         $disk->deleteDirectory('student-files/' . $student->id);
 
         \App\Models\StudentAdmissionData::where('student_id', $student->id)->delete();
 
-        return back()->with('success', "Barcha qabul ma'lumotlari va fayllar tozalandi.");
+        return back()->with('success', "Barcha qabul ma'lumotlari va fayllar tozalandi.")->with('active_tab', 'qabul');
     }
 
     public function getCurricula(Request $request)

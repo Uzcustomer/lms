@@ -666,11 +666,27 @@ class AbsenceExcuseController extends Controller
                     $q2->whereNotNull('test_date')
                         ->whereDate('test_date', '>=', $startDate)
                         ->whereDate('test_date', '<=', $endDate);
+                })->orWhere(function ($q2) use ($startDate, $endDate) {
+                    $q2->whereNotNull('oski_resit_date')
+                        ->whereDate('oski_resit_date', '>=', $startDate)
+                        ->whereDate('oski_resit_date', '<=', $endDate);
+                })->orWhere(function ($q2) use ($startDate, $endDate) {
+                    $q2->whereNotNull('test_resit_date')
+                        ->whereDate('test_resit_date', '>=', $startDate)
+                        ->whereDate('test_resit_date', '<=', $endDate);
+                })->orWhere(function ($q2) use ($startDate, $endDate) {
+                    $q2->whereNotNull('oski_resit2_date')
+                        ->whereDate('oski_resit2_date', '>=', $startDate)
+                        ->whereDate('oski_resit2_date', '<=', $endDate);
+                })->orWhere(function ($q2) use ($startDate, $endDate) {
+                    $q2->whereNotNull('test_resit2_date')
+                        ->whereDate('test_resit2_date', '>=', $startDate)
+                        ->whereDate('test_resit2_date', '<=', $endDate);
                 });
             })->get();
 
         foreach ($examSchedules as $es) {
-            // oski_na NULL yoki false bo'lsa — OSKI ko'rsatiladi
+            // 1-urinish OSKI (oski_na NULL yoki false bo'lsa ko'rsatiladi)
             if (!$es->oski_na && $es->oski_date && $es->oski_date->between($startDate, $endDate)) {
                 $missedAssessments->push([
                     'subject_name' => $es->subject_name,
@@ -678,9 +694,10 @@ class AbsenceExcuseController extends Controller
                     'assessment_type' => 'oski',
                     'assessment_type_code' => '101',
                     'original_date' => $es->oski_date->format('Y-m-d'),
+                    'attempt' => 1,
                 ]);
             }
-            // test_na NULL yoki false bo'lsa — Test ko'rsatiladi
+            // 1-urinish Test
             if (!$es->test_na && $es->test_date && $es->test_date->between($startDate, $endDate)) {
                 $missedAssessments->push([
                     'subject_name' => $es->subject_name,
@@ -688,11 +705,57 @@ class AbsenceExcuseController extends Controller
                     'assessment_type' => 'test',
                     'assessment_type_code' => '102',
                     'original_date' => $es->test_date->format('Y-m-d'),
+                    'attempt' => 1,
+                ]);
+            }
+            // 2-urinish OSKI (resit) — _na flag bu yerda yo'q, sana mavjudligi bilan ko'rsatamiz
+            if ($es->oski_resit_date && $es->oski_resit_date->between($startDate, $endDate)) {
+                $missedAssessments->push([
+                    'subject_name' => $es->subject_name,
+                    'subject_id' => $es->subject_id,
+                    'assessment_type' => 'oski',
+                    'assessment_type_code' => '101',
+                    'original_date' => $es->oski_resit_date->format('Y-m-d'),
+                    'attempt' => 2,
+                ]);
+            }
+            // 2-urinish Test (resit)
+            if ($es->test_resit_date && $es->test_resit_date->between($startDate, $endDate)) {
+                $missedAssessments->push([
+                    'subject_name' => $es->subject_name,
+                    'subject_id' => $es->subject_id,
+                    'assessment_type' => 'test',
+                    'assessment_type_code' => '102',
+                    'original_date' => $es->test_resit_date->format('Y-m-d'),
+                    'attempt' => 2,
+                ]);
+            }
+            // 3-urinish OSKI (resit2)
+            if ($es->oski_resit2_date && $es->oski_resit2_date->between($startDate, $endDate)) {
+                $missedAssessments->push([
+                    'subject_name' => $es->subject_name,
+                    'subject_id' => $es->subject_id,
+                    'assessment_type' => 'oski',
+                    'assessment_type_code' => '101',
+                    'original_date' => $es->oski_resit2_date->format('Y-m-d'),
+                    'attempt' => 3,
+                ]);
+            }
+            // 3-urinish Test (resit2)
+            if ($es->test_resit2_date && $es->test_resit2_date->between($startDate, $endDate)) {
+                $missedAssessments->push([
+                    'subject_name' => $es->subject_name,
+                    'subject_id' => $es->subject_id,
+                    'assessment_type' => 'test',
+                    'assessment_type_code' => '102',
+                    'original_date' => $es->test_resit2_date->format('Y-m-d'),
+                    'attempt' => 3,
                 ]);
             }
         }
 
-        // Duplikatlarni olib tashlash
+        // Duplikatlarni olib tashlash (turli urinishlar turli sanalarda bo'ladi,
+        // shu bois original_date tabiiy ravishda ajratadi)
         return $missedAssessments->unique(function ($item) {
             return $item['subject_name'] . '|' . $item['assessment_type'] . '|' . $item['original_date'];
         })->values();

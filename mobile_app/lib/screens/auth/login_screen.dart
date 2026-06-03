@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
-import '../../services/api_service.dart';
 import '../../services/biometric_service.dart';
 import '../../utils/page_transitions.dart';
+import '../../widgets/clinic_header.dart';
+import 'face_login_screen.dart';
 import 'verify_2fa_screen.dart';
 
 enum _Role { student, staff }
@@ -20,35 +21,25 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _idCtrl = TextEditingController();
   final _pwCtrl = TextEditingController();
-  final _biometricService = BiometricService();
-  final _apiService = ApiService();
   bool _showPw = false;
   bool _remember = true;
-  bool _biometricAvailable = false;
-  bool _biometricEnabled = false;
 
   static const _ink = Color(0xFF0F1B3D);
+  static const _accent = Color(0xFF0D9488); // teal
+  static const _accentDeep = Color(0xFF1E3A8A); // navy
 
-  Color get _accent =>
-      _role == _Role.student ? const Color(0xFF1E3A8A) : const Color(0xFF0F766E);
-  Color get _accentSoft =>
-      _role == _Role.student ? const Color(0xFF2950C8) : const Color(0xFF14B8A6);
   bool get _isStudent => _role == _Role.student;
+
+  final _bio = BiometricService();
+  bool _bioReady = false;
+  bool _bioBusy = false;
 
   @override
   void initState() {
     super.initState();
-    _checkBiometric();
-  }
-
-  Future<void> _checkBiometric() async {
-    final available = await _biometricService.isAvailable();
-    final enabled = await _biometricService.isEnabled();
-    final hasToken = await _apiService.isLoggedIn();
-    if (!mounted) return;
-    setState(() {
-      _biometricAvailable = available;
-      _biometricEnabled = enabled && hasToken;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final auth = context.read<AuthProvider>();
+      _checkBiometric(autoPrompt: !auth.loggedOut);
     });
   }
 
@@ -59,94 +50,106 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  Future<void> _checkBiometric({bool autoPrompt = false}) async {
+    final ready = await _bio.isEnabled() &&
+        await _bio.isAvailable() &&
+        await _bio.hasCredentials();
+    if (!mounted) return;
+    setState(() => _bioReady = ready);
+    if (ready && autoPrompt) _biometricLogin();
+  }
+
+  /// Re-logs in using the stored credentials behind a biometric check.
+  Future<void> _biometricLogin() async {
+    if (_bioBusy) return;
+    final creds = await _bio.getCredentials();
+    if (creds == null || !mounted) return;
+
+    _bioBusy = true;
+    final ok = await _bio.authenticate(
+      reason: 'Ilovaga kirish uchun qurilma himoyasini tasdiqlang',
+    );
+    _bioBusy = false;
+    if (!ok || !mounted) return;
+
+    final auth = context.read<AuthProvider>();
+    auth.clearError();
+    final login = creds['login']!;
+    if (creds['role'] == 'staff') {
+      await auth.teacherLogin(login, creds['password']!);
+    } else {
+      await auth.studentLogin(login, creds['password']!);
+    }
+    if (!mounted) return;
+    if (auth.state == AuthState.requires2fa) {
+      Navigator.of(context).push(
+        SlideFadePageRoute(builder: (_) => Verify2faScreen(login: login)),
+      );
+    }
+  }
+
   Future<void> _submit() async {
     final auth = context.read<AuthProvider>();
     auth.clearError();
     if (!_formKey.currentState!.validate()) return;
 
+    final login = _idCtrl.text.trim();
+    final password = _pwCtrl.text;
+
     if (_isStudent) {
-      await auth.studentLogin(_idCtrl.text.trim(), _pwCtrl.text);
+      await auth.studentLogin(login, password);
     } else {
-      await auth.teacherLogin(_idCtrl.text.trim(), _pwCtrl.text);
+      await auth.teacherLogin(login, password);
     }
 
     if (!mounted) return;
+
+    // Stash the credentials so biometric re-login works after logout.
+    if (auth.state == AuthState.authenticated ||
+        auth.state == AuthState.profileIncomplete) {
+      await _bio.saveCredentials(
+        login: login,
+        password: password,
+        role: _isStudent ? 'student' : 'staff',
+      );
+    }
 
     if (auth.state == AuthState.requires2fa) {
       Navigator.of(context).push(
         SlideFadePageRoute(
-          builder: (_) => Verify2faScreen(login: _idCtrl.text.trim()),
+          builder: (_) => Verify2faScreen(login: login),
         ),
       );
-      return;
-    }
-
-    if (auth.state == AuthState.authenticated || auth.state == AuthState.profileIncomplete) {
-      await _maybePromptEnableBiometric();
-    }
-  }
-
-  Future<void> _maybePromptEnableBiometric() async {
-    if (!_biometricAvailable) return;
-    final already = await _biometricService.isEnabled();
-    if (already) return;
-    if (!mounted) return;
-
-    final accept = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: const Text('Face ID yoqilsinmi?', style: TextStyle(fontWeight: FontWeight.w700)),
-        content: const Text(
-          "Keyingi safar tezroq kirish uchun yuz tanish (Face ID / Face Unlock) yoqishni xohlaysizmi?",
-          style: TextStyle(fontSize: 13),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Yo`q'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: _accent),
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yoqish', style: TextStyle(color: Colors.white)),
-          ),
-        ],
-      ),
-    );
-
-    if (accept == true) {
-      final ok = await _biometricService.authenticate(
-        reason: 'Face ID ni yoqish uchun yuzingizni tasdiqlang',
-      );
-      if (ok) {
-        await _biometricService.setEnabled(true);
-      }
     }
   }
 
   Future<void> _faceIdLogin() async {
-    if (!_biometricAvailable) {
+    // If device biometric login is set up, use it.
+    if (_bioReady) {
+      _biometricLogin();
+      return;
+    }
+
+    if (!_isStudent) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Bu qurilmada Face ID mavjud emas')),
+        const SnackBar(content: Text('Tezkor kirish faqat talabalar uchun')),
       );
       return;
     }
 
-    final hasToken = await _apiService.isLoggedIn();
-    if (!hasToken) {
+    final login = _idCtrl.text.trim();
+    if (login.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Avval bir marta login va parol bilan kiring')),
+        const SnackBar(content: Text('Avval Login (talaba ID) ni kiriting')),
       );
       return;
     }
 
-    final ok = await _biometricService.authenticate();
-    if (!ok) return;
-    if (!mounted) return;
-
-    final auth = context.read<AuthProvider>();
-    await auth.checkAuth();
+    Navigator.of(context).push(
+      SlideFadePageRoute(
+        builder: (_) => FaceLoginScreen(login: login),
+      ),
+    );
   }
 
   void _onRoleChanged(_Role r) {
@@ -163,8 +166,6 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget build(BuildContext context) {
     final safeTop = MediaQuery.of(context).padding.top;
     final safeBottom = MediaQuery.of(context).padding.bottom;
-    final screenH = MediaQuery.of(context).size.height;
-    final heroH = screenH * 0.36;
 
     return Scaffold(
       backgroundColor: const Color(0xFFF7F8FB),
@@ -172,45 +173,44 @@ class _LoginScreenState extends State<LoginScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _Hero(
-              accent: _accent,
-              accentSoft: _accentSoft,
-              topPadding: safeTop,
-              height: heroH,
-            ),
+            _Hero(topPadding: safeTop),
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 14, 24, 0),
+              padding: const EdgeInsets.fromLTRB(22, 18, 22, 0),
               child: Form(
                 key: _formKey,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const Text(
-                      'Xush kelibsiz',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: -0.6,
-                        color: _ink,
-                      ),
-                    ),
                     const SizedBox(height: 4),
-                    Text(
-                      _isStudent
-                          ? 'Talaba portaliga kirish'
-                          : 'Xodimlar portaliga kirish',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                          fontSize: 13, color: _ink.withOpacity(0.6)),
-                    ),
-                    const SizedBox(height: 16),
                     _buildRoleTabs(),
-                    const SizedBox(height: 16),
+                    const SizedBox(height: 14),
                     _buildIdField(),
                     const SizedBox(height: 10),
                     _buildPasswordField(),
-                    const SizedBox(height: 12),
+                    const SizedBox(height: 6),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: GestureDetector(
+                        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                                "Parolni tiklash uchun universitet IT-bo'limiga murojaat qiling."),
+                          ),
+                        ),
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                          child: Text(
+                            'Parolni unutdingizmi?',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: _accent,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
                     _buildRememberCheckbox(),
                     Consumer<AuthProvider>(
                       builder: (context, auth, _) {
@@ -243,9 +243,9 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                     ),
                     _buildSubmitButton(),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     _buildOrDivider(),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 16),
                     _buildFaceIdButton(),
                     SizedBox(height: 16 + safeBottom),
                   ],
@@ -268,24 +268,22 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
       child: Row(
         children: [
-          _tabButton('Talaba', _Role.student),
+          _tabButton('Talaba', Icons.school_outlined, _Role.student),
           const SizedBox(width: 4),
-          _tabButton('Xodim', _Role.staff),
+          _tabButton('Xodim', Icons.badge_outlined, _Role.staff),
         ],
       ),
     );
   }
 
-  Widget _tabButton(String label, _Role r) {
+  Widget _tabButton(String label, IconData icon, _Role r) {
     final on = _role == r;
-    final color =
-        r == _Role.student ? const Color(0xFF1E3A8A) : const Color(0xFF0F766E);
     return Expanded(
       child: GestureDetector(
         onTap: () => _onRoleChanged(r),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 180),
-          padding: const EdgeInsets.symmetric(vertical: 10),
+          padding: const EdgeInsets.symmetric(vertical: 14),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: on ? Colors.white : Colors.transparent,
@@ -300,13 +298,21 @@ class _LoginScreenState extends State<LoginScreen> {
                   ]
                 : null,
           ),
-          child: Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.w700,
-              color: on ? color : _ink.withOpacity(0.55),
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon,
+                  size: 20, color: on ? _accent : _ink.withOpacity(0.5)),
+              const SizedBox(width: 8),
+              Text(
+                label,
+                style: TextStyle(
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                  color: on ? _accent : _ink.withOpacity(0.55),
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -315,144 +321,135 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Widget _buildIdField() {
     return _FieldShell(
-      label: 'LOGIN',
+      icon: Icons.person_outline_rounded,
+      trailing: _idCtrl.text.trim().isNotEmpty
+          ? Container(
+              width: 20,
+              height: 20,
+              decoration: const BoxDecoration(
+                color: _accent,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.check, size: 13, color: Colors.white),
+            )
+          : null,
       child: TextFormField(
         controller: _idCtrl,
         keyboardType: TextInputType.visiblePassword,
         autocorrect: false,
         enableSuggestions: false,
         cursorColor: _accent,
+        onChanged: (_) => setState(() {}),
         style: const TextStyle(
-          fontSize: 15,
-          fontWeight: FontWeight.w600,
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
           color: _ink,
         ),
         validator: (v) {
           if (v == null || v.trim().isEmpty) return 'Login kiriting';
           return null;
         },
-        decoration: const InputDecoration(
-          isDense: true,
-          filled: true,
-          fillColor: Colors.white,
-          contentPadding: EdgeInsets.zero,
-          border: InputBorder.none,
-          enabledBorder: InputBorder.none,
-          focusedBorder: InputBorder.none,
-          errorBorder: InputBorder.none,
-          focusedErrorBorder: InputBorder.none,
-          errorStyle: TextStyle(
-            fontSize: 11,
-            color: Color(0xFFB91C1C),
-            height: 1.2,
-          ),
-        ),
+        decoration: _inputDecoration.copyWith(hintText: 'ID raqam'),
       ),
     );
   }
 
   Widget _buildPasswordField() {
     return _FieldShell(
-      label: 'PASSWORD',
+      icon: Icons.lock_outline_rounded,
       trailing: GestureDetector(
-        onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-                "Parolni tiklash uchun universitet IT-bo'limiga murojaat qiling."),
-          ),
-        ),
-        child: Text(
-          'Unutdingizmi?',
-          style: TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.w700,
-            color: _accent,
-          ),
+        onTap: () => setState(() => _showPw = !_showPw),
+        child: Icon(
+          _showPw
+              ? Icons.visibility_off_outlined
+              : Icons.visibility_outlined,
+          size: 19,
+          color: _ink.withOpacity(0.5),
         ),
       ),
-      child: Row(
-        children: [
-          Expanded(
-            child: TextFormField(
-              controller: _pwCtrl,
-              obscureText: !_showPw,
-              autocorrect: false,
-              enableSuggestions: false,
-              cursorColor: _accent,
-              style: const TextStyle(
-                fontSize: 15,
-                fontWeight: FontWeight.w600,
-                color: _ink,
-              ),
-              validator: (v) {
-                if (v == null || v.isEmpty) return 'Parol kiriting';
-                return null;
-              },
-              decoration: const InputDecoration(
-                isDense: true,
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding: EdgeInsets.zero,
-                border: InputBorder.none,
-                enabledBorder: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                errorBorder: InputBorder.none,
-                focusedErrorBorder: InputBorder.none,
-                errorStyle: TextStyle(
-                  fontSize: 11,
-                  color: Color(0xFFB91C1C),
-                  height: 1.2,
-                ),
-              ),
-            ),
-          ),
-          GestureDetector(
-            onTap: () => setState(() => _showPw = !_showPw),
-            child: Icon(
-              _showPw
-                  ? Icons.visibility_off_outlined
-                  : Icons.visibility_outlined,
-              size: 18,
-              color: _ink.withOpacity(0.55),
-            ),
-          ),
-        ],
+      child: TextFormField(
+        controller: _pwCtrl,
+        obscureText: !_showPw,
+        autocorrect: false,
+        enableSuggestions: false,
+        cursorColor: _accent,
+        style: const TextStyle(
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+          color: _ink,
+        ),
+        validator: (v) {
+          if (v == null || v.isEmpty) return 'Parol kiriting';
+          return null;
+        },
+        decoration: _inputDecoration.copyWith(hintText: 'Parol'),
       ),
     );
   }
 
+  static final _inputDecoration = InputDecoration(
+    isDense: true,
+    filled: true,
+    fillColor: Colors.white,
+    contentPadding: EdgeInsets.zero,
+    border: InputBorder.none,
+    enabledBorder: InputBorder.none,
+    focusedBorder: InputBorder.none,
+    errorBorder: InputBorder.none,
+    focusedErrorBorder: InputBorder.none,
+    hintStyle: TextStyle(
+      fontSize: 13.5,
+      fontWeight: FontWeight.w500,
+      color: const Color(0xFF0F1B3D).withOpacity(0.35),
+    ),
+    errorStyle: const TextStyle(
+      fontSize: 11,
+      color: Color(0xFFB91C1C),
+      height: 1.2,
+    ),
+  );
+
   Widget _buildRememberCheckbox() {
-    return GestureDetector(
-      onTap: () => setState(() => _remember = !_remember),
-      behavior: HitTestBehavior.opaque,
-      child: Row(
-        children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            width: 18,
-            height: 18,
-            decoration: BoxDecoration(
-              color: _remember ? _accent : Colors.white,
-              borderRadius: BorderRadius.circular(5),
-              border: _remember
-                  ? null
-                  : Border.all(color: _ink.withOpacity(0.25), width: 1.5),
-            ),
-            child: _remember
-                ? const Icon(Icons.check, size: 12, color: Colors.white)
-                : null,
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: () => setState(() => _remember = !_remember),
+          behavior: HitTestBehavior.opaque,
+          child: Row(
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 150),
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: _remember ? _accent : Colors.white,
+                  borderRadius: BorderRadius.circular(5),
+                  border: _remember
+                      ? null
+                      : Border.all(color: _ink.withOpacity(0.25), width: 1.5),
+                ),
+                child: _remember
+                    ? const Icon(Icons.check, size: 12, color: Colors.white)
+                    : null,
+              ),
+              const SizedBox(width: 8),
+              const Text(
+                'Meni eslab qol',
+                style: TextStyle(
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  color: _ink,
+                ),
+              ),
+            ],
           ),
-          const SizedBox(width: 8),
-          const Text(
-            'Meni eslab qol',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: _ink,
-            ),
-          ),
-        ],
-      ),
+        ),
+        const Spacer(),
+        Text(
+          '30 kun davomida',
+          style: TextStyle(fontSize: 11, color: _ink.withOpacity(0.45)),
+        ),
+      ],
     );
   }
 
@@ -460,47 +457,74 @@ class _LoginScreenState extends State<LoginScreen> {
     return Consumer<AuthProvider>(
       builder: (context, auth, _) {
         final loading = auth.state == AuthState.loading;
-        return InkWell(
-          borderRadius: BorderRadius.circular(14),
-          onTap: loading ? null : _submit,
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(vertical: 14),
-            decoration: BoxDecoration(
-              color: _accent.withOpacity(loading ? 0.7 : 1),
-              borderRadius: BorderRadius.circular(14),
-              boxShadow: [
-                BoxShadow(
-                  color: _accent.withOpacity(0.33),
-                  blurRadius: 24,
-                  offset: const Offset(0, 10),
-                ),
-              ],
-            ),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                if (loading) ...[
-                  const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2.4,
-                      valueColor: AlwaysStoppedAnimation(Colors.white),
-                    ),
+        return Opacity(
+          opacity: loading ? 0.75 : 1,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(14),
+            onTap: loading ? null : _submit,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: _accent.withOpacity(0.33),
+                    blurRadius: 22,
+                    offset: const Offset(0, 10),
                   ),
-                  const SizedBox(width: 8),
                 ],
-                Text(
-                  loading ? 'Tekshirilmoqda…' : 'Tizimga kirish',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 13.5,
-                    fontWeight: FontWeight.w700,
-                    letterSpacing: 0.3,
-                  ),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(14),
+                child: Stack(
+                  children: [
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 15),
+                      decoration: const BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [_accent, _accentDeep],
+                          begin: Alignment.centerLeft,
+                          end: Alignment.centerRight,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (loading) ...[
+                            const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2.4,
+                                valueColor:
+                                    AlwaysStoppedAnimation(Colors.white),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                          ],
+                          Text(
+                            loading ? 'Tekshirilmoqda…' : 'Tizimga kirish',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                          if (!loading) ...[
+                            const SizedBox(width: 6),
+                            const Icon(Icons.arrow_forward_rounded,
+                                color: Colors.white, size: 17),
+                          ],
+                        ],
+                      ),
+                    ),
+                    const Positioned.fill(
+                      child: ShineOverlay(opacity: 0.28),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         );
@@ -517,9 +541,9 @@ class _LoginScreenState extends State<LoginScreen> {
           'YOKI',
           style: TextStyle(
             fontSize: 10.5,
-            fontWeight: FontWeight.w700,
+            fontWeight: FontWeight.w800,
             letterSpacing: 1,
-            color: _ink.withOpacity(0.45),
+            color: _ink.withOpacity(0.4),
           ),
         ),
         const SizedBox(width: 10),
@@ -529,52 +553,36 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildFaceIdButton() {
-    final disabled = !_biometricAvailable || !_biometricEnabled;
     return InkWell(
       borderRadius: BorderRadius.circular(14),
-      onTap: disabled
-          ? () => ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(!_biometricAvailable
-                      ? 'Bu qurilmada Face ID mavjud emas'
-                      : 'Avval bir marta login va parol bilan kiring'),
-                ),
-              )
-          : _faceIdLogin,
+      onTap: _faceIdLogin,
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 14),
+        padding: const EdgeInsets.symmetric(vertical: 13, horizontal: 14),
         decoration: BoxDecoration(
           color: Colors.white,
-          border: Border.all(
-            color: disabled ? _ink.withOpacity(0.15) : _accent,
-            width: 1.5,
-          ),
+          border: Border.all(color: _ink.withOpacity(0.12), width: 1.4),
           borderRadius: BorderRadius.circular(14),
         ),
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              width: 24,
-              height: 24,
+              width: 26,
+              height: 26,
               decoration: BoxDecoration(
-                color: disabled ? _ink.withOpacity(0.15) : _accent,
-                borderRadius: BorderRadius.circular(6),
+                color: _accent.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(8),
               ),
               alignment: Alignment.center,
-              child: const Icon(
-                Icons.face_outlined,
-                color: Colors.white,
-                size: 16,
-              ),
+              child: const Icon(Icons.face_outlined, color: _accent, size: 17),
             ),
             const SizedBox(width: 10),
-            Text(
-              'Face ID orqali kirish',
+            const Text(
+              'Tezkor kirish',
               style: TextStyle(
-                color: disabled ? _ink.withOpacity(0.4) : _accent,
+                color: _ink,
                 fontSize: 13.5,
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w800,
               ),
             ),
           ],
@@ -582,95 +590,83 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
+
 }
 
+// ─────────────────────────────────────────────────────
+// Hero header with an animated heart + EKG logo
+// ─────────────────────────────────────────────────────
 class _Hero extends StatelessWidget {
-  final Color accent;
-  final Color accentSoft;
   final double topPadding;
-  final double height;
-  const _Hero({
-    required this.accent,
-    required this.accentSoft,
-    required this.topPadding,
-    required this.height,
-  });
+  const _Hero({required this.topPadding});
 
   @override
   Widget build(BuildContext context) {
     return ClipRRect(
       borderRadius: const BorderRadius.only(
-        bottomLeft: Radius.circular(36),
-        bottomRight: Radius.circular(36),
+        bottomLeft: Radius.circular(34),
+        bottomRight: Radius.circular(34),
       ),
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        height: height,
-        decoration: BoxDecoration(
+      child: Container(
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [accent, accentSoft],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [Color(0xFF0D9488), Color(0xFF1E3A8A)],
           ),
         ),
         child: Stack(
+          alignment: Alignment.topCenter,
           children: [
             Positioned(
               left: 0,
               right: 0,
               bottom: 0,
               child: CustomPaint(
-                size: Size(MediaQuery.of(context).size.width, height * 0.82),
-                painter: _BuildingPainter(
-                  color: Colors.white.withOpacity(0.10),
-                ),
+                size: Size(MediaQuery.of(context).size.width, 380),
+                painter: _BuildingPainter(color: Colors.white.withOpacity(0.13)),
               ),
             ),
-            Positioned.fill(
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(24, topPadding + 24, 24, 28),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
-                  crossAxisAlignment: CrossAxisAlignment.center,
-                  children: [
-                    const SizedBox(height: 12),
-                    Container(
-                      width: 72,
-                      height: 72,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.16),
-                        border: Border.all(
-                            color: Colors.white.withOpacity(0.45), width: 1.5),
-                        borderRadius: BorderRadius.circular(18),
-                      ),
-                      child: const Icon(Icons.school_rounded,
-                          color: Colors.white, size: 36),
+            // Shimmer sweeps over the header, under the logo + texts.
+            const Positioned.fill(child: ShineOverlay()),
+            Padding(
+              padding: EdgeInsets.fromLTRB(24, topPadding + 26, 24, 30),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  const _HeartLogo(),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'TASHMEDUNITF · LMS',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 17,
+                      letterSpacing: 2.2,
+                      fontWeight: FontWeight.w800,
                     ),
-                    const SizedBox(height: 18),
-                    const Text(
-                      'TASHMEDUNITF - LMS',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 13,
-                        letterSpacing: 2.5,
-                        fontWeight: FontWeight.w700,
-                      ),
+                  ),
+                  const SizedBox(height: 7),
+                  Text(
+                    'Toshkent Davlat Tibbiyot Universiteti',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.92),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Toshkent Davlat Tibbiyot Universiteti\nTermiz filiali',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.75),
-                        fontSize: 11.5,
-                        letterSpacing: 1,
-                        fontWeight: FontWeight.w500,
-                        height: 1.4,
-                      ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    'Termiz filiali · 2018',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.8),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -680,6 +676,206 @@ class _Hero extends StatelessWidget {
   }
 }
 
+/// White heart logo with a realistic, looping ECG sweep.
+class _HeartLogo extends StatefulWidget {
+  const _HeartLogo();
+
+  @override
+  State<_HeartLogo> createState() => _HeartLogoState();
+}
+
+class _HeartLogoState extends State<_HeartLogo> with TickerProviderStateMixin {
+  static const double _box = 156;
+  static const double _heart = 112;
+
+  late final AnimationController _beat;
+  late final AnimationController _sweep;
+  late final AnimationController _wave;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _beat = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..repeat();
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 14),
+      TweenSequenceItem(
+          tween: Tween(begin: 1.0, end: 1.20)
+              .chain(CurveTween(curve: Curves.easeOut)),
+          weight: 8),
+      TweenSequenceItem(
+          tween: Tween(begin: 1.20, end: 1.0)
+              .chain(CurveTween(curve: Curves.easeIn)),
+          weight: 10),
+      TweenSequenceItem(
+          tween: Tween(begin: 1.0, end: 1.10)
+              .chain(CurveTween(curve: Curves.easeOut)),
+          weight: 7),
+      TweenSequenceItem(
+          tween: Tween(begin: 1.10, end: 1.0)
+              .chain(CurveTween(curve: Curves.easeIn)),
+          weight: 9),
+      TweenSequenceItem(tween: ConstantTween(1.0), weight: 52),
+    ]).animate(_beat);
+    _sweep = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1700),
+    )..repeat();
+    _wave = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2600),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _beat.dispose();
+    _sweep.dispose();
+    _wave.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: _box,
+      height: _box,
+      child: AnimatedBuilder(
+        animation: Listenable.merge([_scale, _sweep, _wave]),
+        builder: (_, __) {
+          return Stack(
+            alignment: Alignment.center,
+            children: [
+              // Expanding heart-shaped waves.
+              for (int i = 0; i < 2; i++)
+                _waveHeart((_wave.value + i / 2) % 1.0),
+              // Beating white heart with the ECG sweep on top.
+              Transform.scale(
+                scale: _scale.value,
+                child: SizedBox(
+                  width: _heart + 10,
+                  height: _heart,
+                  child: Stack(
+                    alignment: Alignment.center,
+                    children: [
+                      Icon(
+                        Icons.favorite_rounded,
+                        color: Colors.white,
+                        size: _heart,
+                        shadows: [
+                          Shadow(
+                            color: Colors.black.withOpacity(0.25),
+                            blurRadius: 14,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      Positioned.fill(
+                        child: CustomPaint(painter: _EkgPainter(_sweep.value)),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _waveHeart(double t) {
+    final opacity = (1 - t) * 0.4;
+    if (opacity <= 0) return const SizedBox.shrink();
+    return Transform.scale(
+      scale: 0.94 + t * 0.55,
+      child: Icon(
+        Icons.favorite_border_rounded,
+        color: Colors.white.withOpacity(opacity),
+        size: _heart,
+      ),
+    );
+  }
+}
+
+/// Realistic looping ECG monitor sweep — the trace is drawn left-to-right
+/// by a glowing head, bright near the head and fading behind it.
+class _EkgPainter extends CustomPainter {
+  final double progress;
+  const _EkgPainter(this.progress);
+
+  static const Color _red = Color(0xFFE53935);
+
+  // Flat baseline with a small P wave then a sharp QRS complex.
+  static const List<Offset> _pts = [
+    Offset(0.02, 0.52), Offset(0.30, 0.52),
+    Offset(0.36, 0.45), Offset(0.41, 0.58),
+    Offset(0.46, 0.14), Offset(0.52, 0.90), Offset(0.57, 0.42),
+    Offset(0.64, 0.52), Offset(0.98, 0.52),
+  ];
+
+  Path _buildPath(Size size) {
+    final path = Path();
+    for (var i = 0; i < _pts.length; i++) {
+      final x = _pts[i].dx * size.width;
+      final y = _pts[i].dy * size.height;
+      i == 0 ? path.moveTo(x, y) : path.lineTo(x, y);
+    }
+    return path;
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final path = _buildPath(size);
+    final metrics = path.computeMetrics().toList();
+    if (metrics.isEmpty) return;
+    final m = metrics.first;
+    final len = m.length;
+    final head = (progress * len).clamp(0.0, len);
+
+    // Faint already-drawn trace.
+    if (head > 0) {
+      canvas.drawPath(
+        m.extractPath(0, head),
+        Paint()
+          ..color = _red.withOpacity(0.26)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.6
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+    // Bright recent segment behind the head.
+    final brightTail = (head - len * 0.32).clamp(0.0, len);
+    if (head > brightTail) {
+      canvas.drawPath(
+        m.extractPath(brightTail, head),
+        Paint()
+          ..color = _red
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3.4
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
+    // Glowing sweep head.
+    final tan = m.getTangentForOffset(head);
+    if (tan != null) {
+      canvas.drawCircle(
+          tan.position, 7, Paint()..color = _red.withOpacity(0.22));
+      canvas.drawCircle(tan.position, 3.4, Paint()..color = _red);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_EkgPainter old) => old.progress != progress;
+}
+
+/// Classical medical-university facade — stepped base, columns, an
+/// architrave and a triangular pediment.
 class _BuildingPainter extends CustomPainter {
   final Color color;
   _BuildingPainter({required this.color});
@@ -687,47 +883,61 @@ class _BuildingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()..color = color;
-    const pillarCount = 11;
-    final pillarW = size.width * 0.042;
-    final gapX = size.width * 0.027;
-    final totalW = pillarCount * pillarW + (pillarCount - 1) * gapX;
-    final startX = (size.width - totalW) / 2;
+    final w = size.width;
+    final h = size.height;
+    final cx = w / 2;
 
-    final pillarH = size.height * 0.62;
-    final pillarTopY = size.height - pillarH;
+    Rect centered(double width, double top, double height) =>
+        Rect.fromLTWH(cx - width / 2, top, width, height);
 
-    final beamH = size.height * 0.045;
-    final beamGap = size.height * 0.04;
-    final beamY = pillarTopY - beamGap - beamH;
-
-    final roofPeakY = beamY - size.height * 0.20;
-
-    for (int i = 0; i < pillarCount; i++) {
-      final x = startX + i * (pillarW + gapX);
-      final rect = RRect.fromRectAndRadius(
-        Rect.fromLTWH(x, pillarTopY, pillarW, pillarH),
-        const Radius.circular(2),
+    // ── Stepped base (widest ~92% of the width) ──
+    final stepH = h * 0.03;
+    const stepFrac = [0.92, 0.86, 0.80];
+    for (int i = 0; i < 3; i++) {
+      canvas.drawRect(
+        centered(w * stepFrac[i], h - stepH * (i + 1), stepH),
+        paint,
       );
-      canvas.drawRRect(rect, paint);
+    }
+    final stepsTop = h - stepH * 3;
+
+    // ── Columns ──
+    const colCount = 9;
+    final colH = h * 0.46;
+    final colsTop = stepsTop - colH;
+    final colSpan = w * 0.74;
+    final colsLeft = cx - colSpan / 2;
+    final gap = colSpan / colCount;
+    final colW = gap * 0.56;
+    for (int i = 0; i < colCount; i++) {
+      final x = colsLeft + gap * i + (gap - colW) / 2;
+      canvas.drawRect(
+          Rect.fromLTWH(x, colsTop + colH * 0.08, colW, colH * 0.84), paint);
+      // capital
+      canvas.drawRect(
+          Rect.fromLTWH(x - colW * 0.18, colsTop, colW * 1.36, colH * 0.08),
+          paint);
+      // base
+      canvas.drawRect(
+          Rect.fromLTWH(
+              x - colW * 0.18, colsTop + colH * 0.92, colW * 1.36, colH * 0.08),
+          paint);
     }
 
-    final beamRect = Rect.fromLTWH(
-      startX - gapX * 2,
-      beamY,
-      totalW + gapX * 4,
-      beamH,
-    );
-    canvas.drawRRect(
-      RRect.fromRectAndRadius(beamRect, const Radius.circular(2)),
-      paint,
-    );
+    // ── Architrave (beam) ──
+    final beamH = h * 0.05;
+    final beamW = w * 0.80;
+    final beamY = colsTop - beamH;
+    canvas.drawRect(centered(beamW, beamY, beamH), paint);
 
-    final roofPath = Path()
-      ..moveTo(startX - gapX * 2, beamY)
-      ..lineTo(startX + totalW / 2, roofPeakY)
-      ..lineTo(startX + totalW + gapX * 2, beamY)
+    // ── Triangular pediment ──
+    final pedH = h * 0.19;
+    final roof = Path()
+      ..moveTo(cx - beamW / 2 - w * 0.012, beamY)
+      ..lineTo(cx, beamY - pedH)
+      ..lineTo(cx + beamW / 2 + w * 0.012, beamY)
       ..close();
-    canvas.drawPath(roofPath, paint);
+    canvas.drawPath(roof, paint);
   }
 
   @override
@@ -735,41 +945,51 @@ class _BuildingPainter extends CustomPainter {
 }
 
 class _FieldShell extends StatelessWidget {
-  final String label;
+  final IconData icon;
+  final String? label;
+  final Widget? labelTrailing;
   final Widget child;
   final Widget? trailing;
-  const _FieldShell({required this.label, required this.child, this.trailing});
+  const _FieldShell({
+    required this.icon,
+    required this.child,
+    this.label,
+    this.labelTrailing,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) {
     const ink = Color(0xFF0F1B3D);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
       decoration: BoxDecoration(
         color: Colors.white,
         border: Border.all(color: ink.withOpacity(0.10)),
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(13),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                  color: ink.withOpacity(0.5),
-                  letterSpacing: 1,
-                ),
-              ),
-              if (trailing != null) trailing!,
-            ],
+          Icon(icon, size: 22, color: ink.withOpacity(0.5)),
+          const SizedBox(width: 11),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (labelTrailing != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: labelTrailing!,
+                  ),
+                child,
+              ],
+            ),
           ),
-          const SizedBox(height: 2),
-          child,
+          if (trailing != null) ...[
+            const SizedBox(width: 10),
+            trailing!,
+          ],
         ],
       ),
     );

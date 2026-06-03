@@ -106,8 +106,6 @@
         /* Filter header row */
         .filter-header-row { background: #f1f5f9 !important; }
         .filter-header-row th { padding: 4px 4px 6px; border-bottom: 2px solid #94a3b8; }
-        .col-filter { width: 100%; padding: 3px 4px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; font-weight: 500; color: #334155; background: #fff; cursor: pointer; outline: none; height: 26px; }
-        .col-filter:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
         .col-filter-input { width: 100%; padding: 3px 6px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; font-weight: 500; color: #334155; background: #fff; outline: none; height: 26px; }
         .col-filter-input:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
         .col-filter-input::placeholder { color: #94a3b8; }
@@ -131,6 +129,25 @@
         .adv-btn-clear:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
         .adv-btn-apply { padding: 4px 10px; border: none; border-radius: 6px; font-size: 10px; font-weight: 700; color: #fff; background: linear-gradient(135deg, #2563eb, #3b82f6); cursor: pointer; transition: all 0.15s; box-shadow: 0 1px 4px rgba(37,99,235,0.3); }
         .adv-btn-apply:hover { background: linear-gradient(135deg, #1d4ed8, #2563eb); transform: translateY(-1px); }
+
+        /* Ustun ko'p tanlovli filtrlari */
+        .ms-wrap { position: relative; }
+        .ms-col-btn { display: flex; align-items: center; justify-content: space-between; gap: 3px; width: 100%; padding: 3px 5px; height: 26px; border: 1px solid #cbd5e1; border-radius: 5px; font-size: 10px; font-weight: 500; color: #334155; background: #fff; cursor: pointer; outline: none; }
+        .ms-col-btn:hover { border-color: #2b5ea7; }
+        .ms-col-btn.ms-active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; font-weight: 700; }
+        .ms-btn-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ms-popup { display: none; position: absolute; top: 30px; left: 0; z-index: 200; width: 230px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.16); padding: 8px; }
+        .ms-search { width: 100%; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; outline: none; margin-bottom: 6px; box-sizing: border-box; }
+        .ms-search:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
+        .ms-opts { max-height: 220px; overflow-y: auto; }
+        .ms-opt { display: flex; align-items: center; gap: 6px; padding: 4px 6px; font-size: 11px; font-weight: 500; color: #334155; cursor: pointer; border-radius: 5px; }
+        .ms-opt:hover { background: #f1f5f9; }
+        .ms-opt input[type="checkbox"] { width: 14px; height: 14px; cursor: pointer; flex: 0 0 auto; }
+        .ms-opt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ms-opt-all { border-bottom: 1px solid #e2e8f0; margin-bottom: 4px; padding-bottom: 6px; font-weight: 700; }
+        .ms-actions { display: flex; justify-content: flex-end; margin-top: 6px; padding-top: 6px; border-top: 1px solid #e2e8f0; }
+        .ms-clear { padding: 4px 10px; border: 1px solid #e2e8f0; border-radius: 6px; font-size: 10px; font-weight: 600; color: #64748b; background: #f8fafc; cursor: pointer; }
+        .ms-clear:hover { background: #fee2e2; color: #dc2626; border-color: #fca5a5; }
 
         .journal-table tbody tr { transition: all 0.15s; border-bottom: 1px solid #f1f5f9; }
         .journal-table tbody tr:nth-child(even) { background: #f8fafc; }
@@ -215,6 +232,26 @@
                                 <button type="button" id="btn-tartibga" class="btn-tartibga" onclick="loadTartibgaSol()">
                                     <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"/></svg>
                                     Tartibga solish
+                                </button>
+                            </div>
+                        </div>
+                        <div class="filter-item" style="margin-left:auto;max-width:280px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Ism bo'yicha qidiruv ({{ now('Asia/Tashkent')->year }}-yil)</label>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <input type="text" id="search_student_name" class="date-input" placeholder="FISH kiriting..." autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();searchByName();}" style="flex:1;" />
+                                <button type="button" class="btn-tartibga" onclick="searchByName()" style="background:#10b981;border-color:#059669;white-space:nowrap;">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    Qidirish
+                                </button>
+                            </div>
+                        </div>
+                        <div class="filter-item" style="max-width:280px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Shakl bo'yicha qidiruv (barcha sanalar)</label>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <input type="text" id="search_shakl" class="date-input" placeholder="masalan: qo'shimcha" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();searchByShakl();}" style="flex:1;" />
+                                <button type="button" class="btn-tartibga" onclick="searchByShakl()" style="background:#0ea5e9;border-color:#0284c7;white-space:nowrap;">
+                                    <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/></svg>
+                                    Qidirish
                                 </button>
                             </div>
                         </div>
@@ -313,20 +350,36 @@
                                         <th>Xulosa</th>
                                         <th style="width:60px;">Jurnal</th>
                                     </tr>
+                                    @php
+                                        $msCell = function ($col) {
+                                            $h = e($col);
+                                            return '<div class="ms-wrap" data-ms="' . $h . '">'
+                                                . '<button type="button" class="ms-col-btn" onclick="msToggle(\'' . $h . '\')">'
+                                                . '<span class="ms-btn-text" id="ms-text-' . $h . '">Barchasi</span>'
+                                                . '<svg width="10" height="10" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>'
+                                                . '</button>'
+                                                . '<div class="ms-popup" id="ms-popup-' . $h . '">'
+                                                . '<input type="text" class="ms-search" placeholder="Qidirish..." oninput="msFilterOptions(\'' . $h . '\')">'
+                                                . '<label class="ms-opt ms-opt-all"><input type="checkbox" class="ms-all-cb" onchange="msToggleAll(\'' . $h . '\')"><span>Barchasi</span></label>'
+                                                . '<div class="ms-opts" id="ms-opts-' . $h . '"></div>'
+                                                . '<div class="ms-actions"><button type="button" class="ms-clear" onclick="msClear(\'' . $h . '\')">Tozalash</button></div>'
+                                                . '</div></div>';
+                                        };
+                                    @endphp
                                     <tr class="filter-header-row">
                                         <th></th>
                                         <th></th>
                                         <th><input type="text" class="col-filter-input" data-col="student_id" placeholder="ID..."></th>
                                         <th><input type="text" class="col-filter-input" data-col="full_name" placeholder="Ism..."></th>
-                                        <th><select class="col-filter" data-col="faculty"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="direction"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="kurs"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="semester"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="group"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="fan_name"><option value="">Barchasi</option></select></th>
+                                        <th>{!! $msCell('faculty') !!}</th>
+                                        <th>{!! $msCell('direction') !!}</th>
+                                        <th>{!! $msCell('kurs') !!}</th>
+                                        <th>{!! $msCell('semester') !!}</th>
+                                        <th>{!! $msCell('group') !!}</th>
+                                        <th>{!! $msCell('fan_name') !!}</th>
                                         <th><input type="text" class="col-filter-input" data-col="fan_id" placeholder="Fan ID..."></th>
-                                        <th><select class="col-filter" data-col="yn_turi"><option value="">Barchasi</option></select></th>
-                                        <th><select class="col-filter" data-col="shakl"><option value="">Barchasi</option></select></th>
+                                        <th>{!! $msCell('yn_turi') !!}</th>
+                                        <th>{!! $msCell('shakl') !!}</th>
                                         <th>
                                             <div class="adv-filter-wrap">
                                                 <button type="button" class="adv-filter-btn" onclick="toggleAdvFilter('baho')">
@@ -383,7 +436,7 @@
                                                 </div>
                                             </div>
                                         </th>
-                                        <th><select class="col-filter" data-col="xulosa_code"><option value="">Barchasi</option></select></th>
+                                        <th>{!! $msCell('xulosa_code') !!}</th>
                                         <th></th>
                                     </tr>
                                 </thead>
@@ -470,10 +523,35 @@
         }
 
         // ========== TARTIBGA SOLISH ==========
+        function searchByName() {
+            var nameQ = ($('#search_student_name').val() || '').trim();
+            if (!nameQ) {
+                alert("Iltimos, qidirish uchun talaba ismini kiriting.");
+                $('#search_student_name').focus();
+                return;
+            }
+            loadTartibgaSol();
+        }
+
+        function searchByShakl() {
+            var shaklQ = ($('#search_shakl').val() || '').trim();
+            if (!shaklQ) {
+                alert("Iltimos, qidirish uchun shakl matnini kiriting.");
+                $('#search_shakl').focus();
+                return;
+            }
+            loadTartibgaSol();
+        }
+
         function loadTartibgaSol() {
+            var nameQ = ($('#search_student_name').val() || '').trim();
+            var shaklQ = ($('#search_shakl').val() || '').trim();
+            var hasGlobalSearch = nameQ || shaklQ;
             var params = {
-                date_from: $('#date_from').val() || '',
-                date_to: $('#date_to').val() || '',
+                date_from: hasGlobalSearch ? '' : ($('#date_from').val() || ''),
+                date_to:   hasGlobalSearch ? '' : ($('#date_to').val()   || ''),
+                student_name: nameQ,
+                shakl_search: shaklQ,
             };
 
             $('#empty-state').hide(); $('#table-area').hide(); $('#loading-state').show();
@@ -494,7 +572,7 @@
                         return;
                     }
                     allData = res.data;
-                    populateColumnFilters();
+                    msPopulate();
                     applyColumnFilters();
                     $('#table-area').show();
                     $('#btn-excel, #btn-excel-xulosa').prop('disabled', false);
@@ -511,34 +589,116 @@
             });
         }
 
-        // ========== USTUN FILTRLARI ==========
-        function populateColumnFilters() {
-            var cols = ['faculty','direction','kurs','semester','group','fan_name','yn_turi','shakl','xulosa_code'];
-            cols.forEach(function(col) {
-                var unique = [];
-                var seen = {};
+        // ========== USTUN KO'P TANLOVLI FILTRLARI ==========
+        var msSelected = {}; // col => [tanlangan qiymatlar]
+        var msColsList = ['faculty','direction','kurs','semester','group','fan_name','yn_turi','shakl','xulosa_code'];
+
+        function msPopulate() {
+            msColsList.forEach(function(col) {
+                var unique = [], seen = {};
                 allData.forEach(function(r) {
-                    var v = r[col] || '';
+                    var v = (r[col] || '').toString();
                     if (v && !seen[v]) { seen[v] = true; unique.push(v); }
                 });
-                unique.sort();
-                var sel = $('select.col-filter[data-col="' + col + '"]');
-                var curVal = sel.val();
-                sel.find('option:not(:first)').remove();
+                unique.sort(function(a, b) { return a.localeCompare(b, undefined, { numeric: true }); });
+
+                // Endi mavjud bo'lmagan tanlovlarni olib tashlash
+                if (msSelected[col]) {
+                    msSelected[col] = msSelected[col].filter(function(v) { return seen[v]; });
+                }
+
+                var box = $('#ms-opts-' + col);
+                box.empty();
                 unique.forEach(function(v) {
                     var label = col === 'xulosa_code' ? (xulosaCodes[v] || v) : v;
-                    sel.append('<option value="' + esc(v) + '">' + esc(label) + '</option>');
+                    var checked = (msSelected[col] && msSelected[col].indexOf(v) !== -1) ? ' checked' : '';
+                    box.append(
+                        '<label class="ms-opt"><input type="checkbox" class="ms-cb" data-col="' + esc(col) + '" value="' + esc(v) + '"' + checked + '>' +
+                        '<span title="' + esc(label) + '">' + esc(label) + '</span></label>'
+                    );
                 });
-                if (curVal) sel.val(curVal);
+                msUpdateLabel(col);
             });
         }
 
+        function msToggle(col) {
+            var popup = document.getElementById('ms-popup-' + col);
+            var visible = popup.style.display === 'block';
+            document.querySelectorAll('.ms-popup').forEach(function(p) { p.style.display = 'none'; });
+            document.querySelectorAll('.adv-filter-popup').forEach(function(p) { p.style.display = 'none'; });
+            if (!visible) {
+                popup.style.left = '0';
+                popup.style.right = 'auto';
+                popup.style.display = 'block';
+                // Ekran o'ng chetidan chiqib ketsa — chapga ochiladi
+                var rect = popup.getBoundingClientRect();
+                if (rect.right > window.innerWidth - 8) {
+                    popup.style.left = 'auto';
+                    popup.style.right = '0';
+                }
+            }
+        }
+
+        function msFilterOptions(col) {
+            var q = ($('#ms-popup-' + col + ' .ms-search').val() || '').toLowerCase();
+            $('#ms-opts-' + col + ' .ms-opt').each(function() {
+                $(this).toggle($(this).text().toLowerCase().indexOf(q) !== -1);
+            });
+        }
+
+        function msToggleAll(col) {
+            var checked = $('#ms-popup-' + col + ' .ms-all-cb').prop('checked');
+            $('#ms-opts-' + col + ' .ms-opt:visible .ms-cb').prop('checked', checked);
+            msApply(col);
+        }
+
+        function msClear(col) {
+            $('#ms-opts-' + col + ' .ms-cb').prop('checked', false);
+            $('#ms-popup-' + col + ' .ms-all-cb').prop('checked', false);
+            $('#ms-popup-' + col + ' .ms-search').val('');
+            msFilterOptions(col);
+            msApply(col);
+        }
+
+        function msApply(col) {
+            var vals = [];
+            $('#ms-opts-' + col + ' .ms-cb:checked').each(function() { vals.push($(this).val()); });
+            msSelected[col] = vals;
+            msUpdateLabel(col);
+            applyColumnFilters();
+        }
+
+        function msUpdateLabel(col) {
+            var vals = msSelected[col] || [];
+            var textEl = $('#ms-text-' + col);
+            var btn = textEl.closest('.ms-col-btn');
+            if (!vals.length) {
+                textEl.text('Barchasi');
+                btn.removeClass('ms-active');
+            } else if (vals.length === 1) {
+                var v = vals[0];
+                textEl.text(col === 'xulosa_code' ? (xulosaCodes[v] || v) : v);
+                btn.addClass('ms-active');
+            } else {
+                textEl.text(vals.length + ' ta');
+                btn.addClass('ms-active');
+            }
+            var total = $('#ms-opts-' + col + ' .ms-cb').length;
+            var checked = $('#ms-opts-' + col + ' .ms-cb:checked').length;
+            $('#ms-popup-' + col + ' .ms-all-cb').prop('checked', total > 0 && checked === total);
+        }
+
+        $(document).on('change', '.ms-cb', function() {
+            msApply($(this).data('col'));
+        });
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('.ms-wrap').length) {
+                $('.ms-popup').hide();
+            }
+        });
+
         function applyColumnFilters() {
             var filters = {};
-            $('select.col-filter').each(function() {
-                var val = $(this).val();
-                if (val) filters[$(this).data('col')] = val;
-            });
             $('input.col-filter-input').each(function() {
                 var val = $.trim($(this).val()).toLowerCase();
                 if (val) filters[$(this).data('col')] = val;
@@ -548,10 +708,13 @@
                 for (var col in filters) {
                     var fv = filters[col];
                     var rv = (r[col] || '').toString();
-                    if ($('input.col-filter-input[data-col="' + col + '"]').length) {
-                        if (rv.toLowerCase().indexOf(fv) === -1) return false;
-                    } else {
-                        if (rv !== fv) return false;
+                    if (rv.toLowerCase().indexOf(fv) === -1) return false;
+                }
+                // Ustun ko'p tanlovli filtrlari
+                for (var mc in msSelected) {
+                    var sel = msSelected[mc];
+                    if (sel && sel.length) {
+                        if (sel.indexOf((r[mc] || '').toString()) === -1) return false;
                     }
                 }
                 if (!matchAdvFilter(advFilters.baho, r.grade, false)) return false;
@@ -564,7 +727,7 @@
             var okCount = 0, mavzuCount = 0, uploadedCount = 0, errCount = 0;
             filteredData.forEach(function(r) {
                 if (r.xulosa_code === 'ok') okCount++;
-                else if (r.xulosa_code === 'mavzu') mavzuCount++;
+                else if (r.xulosa_code === 'mavzu' || r.xulosa_code === 'mavzu_nb' || r.xulosa_code === 'mavzu_grade') mavzuCount++;
                 else if (r.xulosa_code === 'uploaded' || r.xulosa_code === 'mavzu_uploaded') uploadedCount++;
                 else errCount++;
             });
@@ -694,6 +857,13 @@
 
         // ========== JADVAL RENDERI ==========
         function renderTable(data) {
+            // Jurnalga yuklanganlar pastga tushadi, yuklanmaganlarning HAMMASI
+            // (yuklasa bo'ladi, baho bor, mavzu, xato va h.k.) tepada joylashadi
+            data.sort(function(a, b) {
+                var ua = (a.xulosa_code === 'uploaded' || a.xulosa_code === 'mavzu_uploaded') ? 1 : 0;
+                var ub = (b.xulosa_code === 'uploaded' || b.xulosa_code === 'mavzu_uploaded') ? 1 : 0;
+                return ua - ub;
+            });
             var html = '';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
@@ -709,7 +879,10 @@
                 var nameCell = '<span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span>';
                 var fanCell = '<span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span>';
 
-                html += '<tr class="' + rowClass + '" id="row-' + r.id + '">';
+                // Quiz semestri talabaning LMS semestriga mos kelmasa — qator qizil belgilanadi.
+                var semMismatch = !!r.semester_mismatch;
+                var rowStyle = semMismatch ? ' style="background:#fef2f2;"' : '';
+                html += '<tr class="' + rowClass + '" id="row-' + r.id + '"' + rowStyle + '>';
                 html += '<td style="padding-left:14px;"><input type="checkbox" class="row-checkbox cb-styled" value="' + r.id + '" data-xulosa="' + r.xulosa_code + '"></td>';
                 html += '<td class="td-num">' + (i + 1) + '</td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.student_id) + '</span></td>';
@@ -717,10 +890,14 @@
                 html += '<td><span class="text-cell text-emerald">' + esc(r.faculty) + '</span></td>';
                 html += '<td><span class="text-cell text-cyan">' + esc(r.direction) + '</span></td>';
                 html += '<td><span class="badge" style="background:#e0e7ff;color:#3730a3;border:1px solid #c7d2fe;">' + esc(r.kurs) + '</span></td>';
-                html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.semester) + '</span></td>';
+                if (semMismatch) {
+                    html += '<td><span class="badge" title="Quiz semestri talabaning LMS semestriga mos kelmaydi — talaba aslida ' + esc(r.student_semester || '-') + '" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;font-weight:700;">⚠ ' + esc(r.semester) + '</span></td>';
+                } else {
+                    html += '<td><span class="badge" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;">' + esc(r.semester) + '</span></td>';
+                }
                 html += '<td><span class="badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;">' + esc(r.group) + '</span></td>';
                 html += '<td>' + fanCell + '</td>';
-                html += '<td><span class="badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;">' + esc(r.fan_id || '-') + '</span></td>';
+                html += '<td><span class="badge editable-fan-id" data-id="' + r.id + '" onclick="editFanId(this,' + r.id + ')" title="Fan ID ni tahrirlash uchun bosing" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;cursor:pointer;">' + esc(r.fan_id || '-') + '</span></td>';
                 html += '<td style="text-align:center;">' + ynBadge + '</td>';
                 html += '<td><span class="text-cell">' + esc(r.shakl) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade editable-grade" data-id="' + r.id + '" onclick="editGrade(this,' + r.id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + esc(r.grade) + '</span></td>';
@@ -731,7 +908,6 @@
             }
             $('#table-body').html(html);
             $('#select-all').prop('checked', false);
-
         }
 
         // ========== TANLASH BOSHQARUVI ==========
@@ -763,9 +939,11 @@
 
         // ========== EXCEL (Quiz natijalar) ==========
         function downloadExcel() {
+            var nameQ = ($('#search_student_name').val() || '').trim();
             var params = {
-                date_from: $('#date_from').val() || '',
-                date_to: $('#date_to').val() || '',
+                date_from: nameQ ? '' : ($('#date_from').val() || ''),
+                date_to:   nameQ ? '' : ($('#date_to').val()   || ''),
+                student_name: nameQ,
                 export: 'excel',
             };
             window.location.href = dataUrl + '?' + $.param(params);
@@ -899,7 +1077,6 @@
                 $('#select-all').prop('checked', total > 0 && checked === total);
             });
 
-            $(document).on('change', 'select.col-filter', function() { applyColumnFilters(); });
             var filterTimer = null;
             $(document).on('input', 'input.col-filter-input', function() {
                 clearTimeout(filterTimer);
@@ -958,6 +1135,66 @@
                 });
             };
 
+            window.editFanId = function(el, id) {
+                var currentFanId = el.textContent.trim();
+                if (currentFanId === '-') currentFanId = '';
+                var td = el.parentNode;
+                var input = document.createElement('input');
+                input.type = 'number';
+                input.min = '1';
+                input.value = currentFanId;
+                input.style.cssText = 'width:90px;padding:4px 6px;font-size:12px;font-weight:600;text-align:center;border:2px solid #3b82f6;border-radius:6px;outline:none;';
+                td.innerHTML = '';
+                td.appendChild(input);
+                input.focus();
+                input.select();
+
+                function restore(val) {
+                    td.innerHTML = '<span class="badge editable-fan-id" data-id="' + id + '" onclick="editFanId(this,' + id + ')" title="Fan ID ni tahrirlash uchun bosing" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;cursor:pointer;">' + (val || '-') + '</span>';
+                }
+
+                function saveFanId() {
+                    var newFanId = parseInt(input.value);
+                    if (isNaN(newFanId) || newFanId < 1) {
+                        alert('Fan ID raqam bo\'lishi kerak!');
+                        input.focus();
+                        return;
+                    }
+                    if (String(newFanId) === String(currentFanId)) {
+                        restore(currentFanId);
+                        return;
+                    }
+                    $.ajax({
+                        url: '{{ route($routePrefix . ".quiz-results.update-fan-id") }}',
+                        type: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrfToken },
+                        data: { id: id, fan_id: newFanId },
+                        success: function(data) {
+                            if (!data.success) {
+                                alert(data.message || 'Xatolik');
+                                restore(currentFanId);
+                                return;
+                            }
+                            var row = allData.find(function(r) { return r.id === id; });
+                            if (row) { row.fan_id = data.fan_id; row.fan_name = data.fan_name; }
+                            restore(newFanId);
+                            // Xulosa va boshqa derived qiymatlar yangilanishi uchun qayta sinxronlash
+                            loadTartibgaSol();
+                        },
+                        error: function(xhr) {
+                            alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                            restore(currentFanId);
+                        }
+                    });
+                }
+
+                input.addEventListener('blur', saveFanId);
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); saveFanId(); }
+                    if (e.key === 'Escape') { restore(currentFanId); }
+                });
+            };
+
             // SISTEMAGA YUKLASH
             $('#btn-upload').on('click', function() {
                 var ids = getSelectedIds();
@@ -968,7 +1205,8 @@
                 var skippedCount = 0;
                 ids.forEach(function(id) {
                     var row = allData.find(function(r) { return r.id === id; });
-                    if (row && (row.xulosa_code === 'ok' || row.xulosa_code === 'mavzu')) {
+                    if (row && (row.xulosa_code === 'ok' || row.xulosa_code === 'mavzu'
+                            || row.xulosa_code === 'mavzu_nb' || row.xulosa_code === 'mavzu_grade')) {
                         okIds.push(id);
                     } else {
                         skippedCount++;
@@ -1055,70 +1293,82 @@
 
             // Qayta yuklash modal
             function showReuploadModal(groups, ids) {
+                var groupMap = {};
+                groups.forEach(function(g) { groupMap[g.key] = g; });
+
+                // Berilgan semestr uchun "Yuklanadigan fan" select HTML
+                function buildSubjectSelect(g, semCode) {
+                    var subs = (g.subjects_by_semester && g.subjects_by_semester[semCode]) || [];
+                    if (subs.length === 0) {
+                        return '<div style="color:#dc2626;font-size:12px;">Bu semestrda fanlar topilmadi — faqat asl ID (' + esc(g.original_fan_id) + ') ishlatiladi</div>';
+                    }
+                    var foundOriginal = subs.some(function(s) {
+                        return String(s.subject_id) === String(g.original_fan_id);
+                    });
+                    var h = '<select class="reupload-subject-select" data-key="' + esc(g.key) + '" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">';
+                    if (!foundOriginal) {
+                        h += '<option value="' + esc(g.original_fan_id) + '" data-lesson-count="0" selected style="color:#dc2626;">';
+                        h += esc(g.original_fan_name) + ' (Moodle, ID: ' + g.original_fan_id + ' — semestrda yo\'q)';
+                        h += '</option>';
+                        h += '<option disabled>──── Semestr fanlari ────</option>';
+                    }
+                    subs.forEach(function(s) {
+                        var selected = foundOriginal && String(s.subject_id) === String(g.original_fan_id);
+                        var lc = s.lesson_count || 0;
+                        h += '<option value="' + esc(s.subject_id) + '" data-lesson-count="' + lc + '"' + (selected ? ' selected' : '') + '>';
+                        h += esc(s.subject_name);
+                        if (s.subject_code) h += ' [' + esc(s.subject_code) + ']';
+                        h += ' (ID: ' + s.subject_id + (lc > 0 ? ', ' + lc + ' ta dars' : '') + ')';
+                        h += '</option>';
+                    });
+                    h += '</select>';
+                    return h;
+                }
+
                 var html = '<div id="reupload-modal-overlay" class="reupload-modal-overlay">';
                 html += '<div class="reupload-modal">';
                 html += '<div class="reupload-modal-header">';
-                html += '<h3>Qayta yuklash — fan ID ni tasdiqlang</h3>';
+                html += '<h3>Qayta yuklash — semestr va fanni tasdiqlang</h3>';
                 html += '<button type="button" class="reupload-modal-close" onclick="closeReuploadModal()">&times;</button>';
                 html += '</div>';
                 html += '<div class="reupload-modal-body">';
-                html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Dropdown — talabaning <strong>joriy semestriga biriktirilgan fanlar</strong>. Default — Moodledan kelgan fan, lekin to\'g\'ri fanga o\'zgartirib yuklash mumkin.</p>';
+                html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Semestr noto\'g\'ri bo\'lsa — to\'g\'ri semestrni tanlang, "Yuklanadigan fan" ro\'yxati o\'sha semestr fanlariga yangilanadi.</p>';
                 html += '<table class="reupload-modal-table">';
-                html += '<thead><tr><th>#</th><th>Guruh</th><th>Semestr</th><th>Moodle fan</th><th>Baholar</th><th>YN turi</th><th>Yuklanadigan fan</th></tr></thead>';
+                html += '<thead><tr><th>#</th><th>Guruh</th><th>Semestr</th><th>Moodle fan</th><th>Baholar</th><th>Shakl</th><th>YN turi</th><th>Yuklanadigan fan</th></tr></thead>';
                 html += '<tbody>';
                 groups.forEach(function(g, i) {
+                    var defSem = String(g.semester_code || '');
                     html += '<tr>';
                     html += '<td>' + (i + 1) + '</td>';
                     html += '<td><strong>' + esc(g.group_name) + '</strong></td>';
-                    html += '<td style="font-size:12px;color:#475569;">' + esc(g.semester_name || g.semester_code || '-') + '</td>';
+                    // Semestr — tanlanadigan dropdown
+                    html += '<td>';
+                    if (g.available_semesters && g.available_semesters.length > 0) {
+                        html += '<select class="reupload-semester-select" data-key="' + esc(g.key) + '" data-default="' + esc(defSem) + '" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;min-width:120px;">';
+                        g.available_semesters.forEach(function(sm) {
+                            var sel = String(sm.code) === defSem ? ' selected' : '';
+                            html += '<option value="' + esc(sm.code) + '"' + sel + '>' + esc(sm.name || (sm.code + '-semestr')) + '</option>';
+                        });
+                        html += '</select>';
+                    } else {
+                        html += '<span style="font-size:12px;color:#475569;">' + esc(g.semester_name || g.semester_code || '-') + '</span>';
+                    }
+                    html += '</td>';
                     html += '<td><div style="font-weight:600;">' + esc(g.original_fan_name) + '</div><div style="font-size:11px;color:#94a3b8;">ID: ' + g.original_fan_id + '</div></td>';
                     html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
-                    html += '<td>';
-                    if (g.yn_turi === 'jn_mavzu') {
-                        html += '<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;background:#fef3c7;color:#92400e;">' + esc(g.mavzu_shakl || g.shakl || 'Mavzu') + '</span>';
-                    } else if (g.yn_turi) {
-                        html += '<span style="padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;' + (g.yn_turi === 'oski' ? 'background:#dbeafe;color:#1e40af;' : 'background:#d1fae5;color:#065f46;') + '">' + (g.yn_turi === 'oski' ? 'OSKI' : 'Test') + '</span>';
-                    } else {
-                        // Dinamik: 1-mavzu..N-mavzu opsiyalari yuklanadigan fanning lesson_count'iga qarab to'ladi
-                        html += '<select class="reupload-yn-turi-select" data-key="' + esc(g.key) + '" style="padding:5px;border:1px solid #fca5a5;border-radius:6px;font-size:12px;background:#fef2f2;min-width:120px;">';
-                        html += '<option value="">Tanlang</option>';
-                        html += '<option value="oski">OSKI</option>';
-                        html += '<option value="test">Test</option>';
-                        html += '</select>';
+                    // YN turi tanlovi: OSKI/Test + mavzular (1..N). Default — qatordagi qiymat.
+                    var defaultYnTuri = '';
+                    if (g.yn_turi === 'oski' || g.yn_turi === 'test') {
+                        defaultYnTuri = g.yn_turi;
+                    } else if (g.yn_turi === 'jn_mavzu') {
+                        var m = String(g.mavzu_shakl || g.shakl || '').match(/(\d+)\s*-\s*mavzu/i);
+                        if (m && m[1]) defaultYnTuri = 'mavzu_' + m[1];
                     }
-                    html += '</td>';
-                    html += '<td>';
-                    if (g.available_subjects && g.available_subjects.length > 0) {
-                        // Moodle ID semestr ro'yxatida bormi tekshirish
-                        var foundOriginal = g.available_subjects.some(function(s) {
-                            return String(s.subject_id) === String(g.original_fan_id);
-                        });
-
-                        var selectHtml = '<select class="reupload-subject-select" data-key="' + esc(g.key) + '" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">';
-
-                        // Agar Moodle ID ro'yxatda bo'lmasa — yuqoriga "Moodle (jadvalda yo'q)" qator qo'shamiz
-                        if (!foundOriginal) {
-                            selectHtml += '<option value="' + esc(g.original_fan_id) + '" data-lesson-count="0" selected style="color:#dc2626;">';
-                            selectHtml += esc(g.original_fan_name) + ' (Moodle, ID: ' + g.original_fan_id + ' — semestrda yo\'q)';
-                            selectHtml += '</option>';
-                            selectHtml += '<option disabled>──── Joriy semestr fanlari ────</option>';
-                        }
-
-                        g.available_subjects.forEach(function(s) {
-                            var selected = foundOriginal && String(s.subject_id) === String(g.original_fan_id);
-                            var lc = s.lesson_count || 0;
-                            selectHtml += '<option value="' + esc(s.subject_id) + '" data-lesson-count="' + lc + '"' + (selected ? ' selected' : '') + '>';
-                            selectHtml += esc(s.subject_name);
-                            if (s.subject_code) selectHtml += ' [' + esc(s.subject_code) + ']';
-                            selectHtml += ' (ID: ' + s.subject_id + (lc > 0 ? ', ' + lc + ' ta dars' : '') + ')';
-                            selectHtml += '</option>';
-                        });
-                        selectHtml += '</select>';
-                        html += selectHtml;
-                    } else {
-                        html += '<div style="color:#dc2626;font-size:12px;">Joriy semestrda fanlar topilmadi — faqat asl ID (' + g.original_fan_id + ') ishlatiladi</div>';
-                    }
-                    html += '</td>';
+                    html += '<td><select class="reupload-yn-turi-select" data-key="' + esc(g.key) + '" data-default="' + esc(defaultYnTuri) + '" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;min-width:140px;">';
+                    html += '<option value="">Tanlang</option><option value="oski">OSKI</option><option value="test">Test</option>';
+                    html += '</select></td>';
+                    // Yuklanadigan fan — semestr o'zgarsa shu yacheyka qayta quriladi
+                    html += '<td class="reupload-subject-cell" data-key="' + esc(g.key) + '">' + buildSubjectSelect(g, defSem) + '</td>';
                     html += '</tr>';
                 });
                 html += '</tbody></table>';
@@ -1130,6 +1380,8 @@
                 html += '</div></div>';
                 $('body').append(html);
 
+                var $overlay = $('#reupload-modal-overlay');
+
                 // YN turi dropdownini fan tanloviga qarab yangilash:
                 // OSKI, Test + tanlangan fanning lesson_count'iga qarab 1-mavzu..N-mavzu
                 function refreshYnTuriOptions(key) {
@@ -1137,7 +1389,7 @@
                     if (ynSel.length === 0) return;
                     var fanSel = $('.reupload-subject-select[data-key="' + $.escapeSelector(key) + '"]');
                     var lc = parseInt(fanSel.find(':selected').data('lesson-count')) || 0;
-                    var current = ynSel.val() || '';
+                    var current = ynSel.val() || ynSel.data('default') || '';
 
                     var optsHtml = '<option value="">Tanlang</option>';
                     optsHtml += '<option value="oski"' + (current === 'oski' ? ' selected' : '') + '>OSKI</option>';
@@ -1158,9 +1410,20 @@
                     refreshYnTuriOptions($(this).data('key'));
                 });
 
-                // Fan o'zgarganda — shu qator uchun YN turi opsiyalari yangilanadi
-                $('.reupload-subject-select').on('change', function() {
+                // Fan o'zgarganda — YN turi opsiyalari yangilanadi (delegatsiya: fan
+                // select semestr o'zgarganda qayta yaratiladi)
+                $overlay.on('change', '.reupload-subject-select', function() {
                     refreshYnTuriOptions($(this).data('key'));
+                });
+
+                // Semestr o'zgarganda — shu qator fan ro'yxati o'sha semestrga yangilanadi
+                $overlay.on('change', '.reupload-semester-select', function() {
+                    var key = $(this).data('key');
+                    var g = groupMap[key];
+                    if (!g) return;
+                    $('.reupload-subject-cell[data-key="' + $.escapeSelector(key) + '"]')
+                        .html(buildSubjectSelect(g, String($(this).val())));
+                    refreshYnTuriOptions(key);
                 });
 
                 $('#reupload-modal-submit').on('click', function() {
@@ -1174,6 +1437,19 @@
                         }
                     });
 
+                    // Semestr — modalda tanlangan qiymat DOIM yuboriladi. Modal = aniq
+                    // qaror: tanlangan semestr talabaning joriy semestri bilan bir xil
+                    // bo'lsa ham, natija semestri bilan mos kelmaslik tekshiruvi
+                    // o'tkazib yuborilishi kerak (aks holda "Semestr mos kelmadi" xatosi).
+                    var semesterOverrides = {};
+                    $('.reupload-semester-select').each(function() {
+                        var key = $(this).data('key');
+                        var val = String($(this).val() || '');
+                        if (val) {
+                            semesterOverrides[key] = val;
+                        }
+                    });
+
                     var ynTuriOverrides = {};
                     var ynMissing = false;
                     $('.reupload-yn-turi-select').each(function() {
@@ -1184,6 +1460,12 @@
                     });
                     if (ynMissing) { alert('YN turini tanlang (OSKI yoki Test)'); return; }
 
+                    // Shakl (urinish) tanlovi — har qatorda doim qiymatga ega
+                    var attemptOverrides = {};
+                    $('.reupload-shakl-select').each(function() {
+                        attemptOverrides[$(this).data('key')] = $(this).val();
+                    });
+
                     var btn = $(this);
                     btn.prop('disabled', true).html('<span class="spinner-sm"></span> Yuklanmoqda...');
 
@@ -1191,12 +1473,17 @@
                         url: reuploadUrl, type: 'POST',
                         headers: { 'X-CSRF-TOKEN': csrfToken },
                         contentType: 'application/json',
-                        data: JSON.stringify({ ids: ids, subject_overrides: overrides, yn_turi_overrides: ynTuriOverrides }),
+                        data: JSON.stringify({ ids: ids, subject_overrides: overrides, yn_turi_overrides: ynTuriOverrides, semester_overrides: semesterOverrides }),
                         success: function(data) {
                             closeReuploadModal();
                             var html = '';
                             if (data.success_count > 0) {
                                 html += '<div class="diag-msg diag-success"><strong>Muvaffaqiyatli!</strong> ' + data.success_count + ' ta natija qayta yuklandi.</div>';
+                            }
+                            if (data.warning_count > 0) {
+                                html += '<div class="diag-msg diag-warning"><strong>' + data.warning_count + ' ta ogohlantirish:</strong><ul style="margin-top:4px;padding-left:20px;">';
+                                data.warnings.forEach(function(w) { html += '<li>' + esc(w.student_name) + ' — ' + esc(w.fan_name) + ': ' + esc(w.error) + '</li>'; });
+                                html += '</ul></div>';
                             }
                             if (data.error_count > 0) {
                                 html += '<div class="diag-msg diag-error"><strong>' + data.error_count + ' ta xato:</strong><ul style="margin-top:4px;padding-left:20px;">';
@@ -1228,24 +1515,176 @@
                 var ids = getSelectedIds();
                 if (ids.length === 0) return;
 
-                // Faqat "uploaded" tanlanganlarnigina o'chirish
-                var uploadedIds = [];
-                ids.forEach(function(id) {
-                    var row = allData.find(function(r) { return r.id === id; });
-                    if (row && row.xulosa_code === 'uploaded') {
-                        uploadedIds.push(id);
+                openSubjectPickerModal('delete', ids, $(this));
+            });
+
+            // Fan + YN turi tanlash modali (delete va compare uchun umumiy)
+            function openSubjectPickerModal(action, ids, btn) {
+                var origHtml = btn.html();
+                btn.prop('disabled', true).html('<span class="spinner-sm"></span> Yuklanmoqda...');
+
+                $.ajax({
+                    url: reuploadPreviewUrl, type: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ ids: ids }),
+                    success: function(data) {
+                        if (!data.success || !data.groups || data.groups.length === 0) {
+                            alert('Preview ma\'lumot olinmadi.');
+                            return;
+                        }
+                        showSubjectPickerModal(action, data.groups, ids);
+                    },
+                    error: function(xhr) {
+                        var msg = xhr.responseJSON?.message || 'Server xatosi';
+                        alert('Xato: ' + msg);
+                    },
+                    complete: function() { btn.prop('disabled', false).html(origHtml); }
+                });
+            }
+
+            function showSubjectPickerModal(action, groups, ids) {
+                var isDelete = action === 'delete';
+                var title = isDelete ? 'Bahoni o\'chirish — fan va YN turini tanlang' : 'Solishtirish — fan va YN turini tanlang';
+                var submitLabel = isDelete ? 'O\'chirish' : 'Solishtirish';
+                var submitClass = isDelete ? 'reupload-btn-confirm' : 'reupload-btn-confirm';
+
+                var html = '<div id="picker-modal-overlay" class="reupload-modal-overlay">';
+                html += '<div class="reupload-modal">';
+                html += '<div class="reupload-modal-header">';
+                html += '<h3>' + title + '</h3>';
+                html += '<button type="button" class="reupload-modal-close" onclick="closePickerModal()">&times;</button>';
+                html += '</div>';
+                html += '<div class="reupload-modal-body">';
+                html += '<p style="margin-bottom:12px;color:#475569;font-size:13px;">Default — Moodledan kelgan fan va YN turi. Agar baho boshqa fanga/turiga yuklangan bo\'lsa, to\'g\'rilab tanlang.</p>';
+                html += '<table class="reupload-modal-table">';
+                html += '<thead><tr><th>#</th><th>Guruh</th><th>Semestr</th><th>Moodle fan</th><th>Baholar</th><th>YN turi</th><th>Fan</th></tr></thead>';
+                html += '<tbody>';
+                groups.forEach(function(g, i) {
+                    html += '<tr>';
+                    html += '<td>' + (i + 1) + '</td>';
+                    html += '<td><strong>' + esc(g.group_name) + '</strong></td>';
+                    html += '<td style="font-size:12px;color:#475569;">' + esc(g.semester_name || g.semester_code || '-') + '</td>';
+                    html += '<td><div style="font-weight:600;">' + esc(g.original_fan_name) + '</div><div style="font-size:11px;color:#94a3b8;">ID: ' + g.original_fan_id + '</div></td>';
+                    html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
+                    // YN turi — har doim tanlash mumkin
+                    html += '<td>';
+                    html += '<select class="picker-yn-turi-select" data-key="' + esc(g.key) + '" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;min-width:100px;">';
+                    var ynVal = g.yn_turi === 'oski' || g.yn_turi === 'test' ? g.yn_turi : '';
+                    html += '<option value="">Tanlang</option>';
+                    html += '<option value="oski"' + (ynVal === 'oski' ? ' selected' : '') + '>OSKI</option>';
+                    html += '<option value="test"' + (ynVal === 'test' ? ' selected' : '') + '>Test</option>';
+                    html += '</select>';
+                    html += '</td>';
+                    // Fan dropdown
+                    html += '<td>';
+                    if (g.available_subjects && g.available_subjects.length > 0) {
+                        var foundOriginal = g.available_subjects.some(function(s) {
+                            return String(s.subject_id) === String(g.original_fan_id);
+                        });
+                        var selectHtml = '<select class="picker-subject-select" data-key="' + esc(g.key) + '" style="width:100%;padding:6px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;">';
+                        if (!foundOriginal) {
+                            selectHtml += '<option value="' + esc(g.original_fan_id) + '" selected style="color:#dc2626;">';
+                            selectHtml += esc(g.original_fan_name) + ' (Moodle, ID: ' + g.original_fan_id + ' — semestrda yo\'q)';
+                            selectHtml += '</option>';
+                            selectHtml += '<option disabled>──── Joriy semestr fanlari ────</option>';
+                        }
+                        g.available_subjects.forEach(function(s) {
+                            var selected = foundOriginal && String(s.subject_id) === String(g.original_fan_id);
+                            selectHtml += '<option value="' + esc(s.subject_id) + '"' + (selected ? ' selected' : '') + '>';
+                            selectHtml += esc(s.subject_name);
+                            if (s.subject_code) selectHtml += ' [' + esc(s.subject_code) + ']';
+                            selectHtml += ' (ID: ' + s.subject_id + ')';
+                            selectHtml += '</option>';
+                        });
+                        selectHtml += '</select>';
+                        html += selectHtml;
+                    } else {
+                        html += '<div style="color:#dc2626;font-size:12px;">Joriy semestrda fanlar topilmadi — faqat asl ID (' + g.original_fan_id + ') ishlatiladi</div>';
+                    }
+                    html += '</td>';
+                    html += '</tr>';
+                });
+                html += '</tbody></table>';
+                html += '</div>';
+                html += '<div class="reupload-modal-footer">';
+                html += '<button type="button" onclick="closePickerModal()" class="reupload-btn-cancel">Bekor qilish</button>';
+                html += '<button type="button" id="picker-modal-submit" class="' + submitClass + '">' + submitLabel + '</button>';
+                html += '</div>';
+                html += '</div></div>';
+                $('body').append(html);
+
+                $('#picker-modal-submit').on('click', function() {
+                    var subjectOverrides = {};
+                    $('.picker-subject-select').each(function() {
+                        var key = $(this).data('key');
+                        var newSubjectId = $(this).val();
+                        var origFanId = key.split('_')[0];
+                        if (String(newSubjectId) !== String(origFanId)) {
+                            subjectOverrides[key] = newSubjectId;
+                        }
+                    });
+
+                    var ynTuriOverrides = {};
+                    var ynMissing = false;
+                    $('.picker-yn-turi-select').each(function() {
+                        var key = $(this).data('key');
+                        var val = $(this).val();
+                        if (!val) { ynMissing = true; $(this).css('border-color', '#dc2626'); }
+                        else { ynTuriOverrides[key] = val; $(this).css('border-color', '#cbd5e1'); }
+                    });
+                    if (ynMissing) { alert('YN turini tanlang (OSKI yoki Test)'); return; }
+
+                    var btn = $(this);
+                    btn.prop('disabled', true).html('<span class="spinner-sm"></span> ...');
+
+                    if (action === 'delete') {
+                        $.ajax({
+                            url: deleteGradesUrl, type: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrfToken },
+                            contentType: 'application/json',
+                            data: JSON.stringify({ ids: ids, subject_overrides: subjectOverrides, yn_turi_overrides: ynTuriOverrides }),
+                            success: function(data) {
+                                closePickerModal();
+                                var html = '';
+                                if (data.deleted_count > 0) {
+                                    html += '<div class="diag-msg diag-success"><strong>Muvaffaqiyatli!</strong> ' + data.deleted_count + ' ta baho sistemadan o\'chirildi.</div>';
+                                }
+                                if (data.error_count > 0) {
+                                    html += '<div class="diag-msg diag-error"><strong>' + data.error_count + ' ta xato:</strong><ul style="margin-top:4px;padding-left:20px;">';
+                                    data.errors.forEach(function(err) { html += '<li>' + esc(err.student_name) + ' — ' + esc(err.fan_name) + ': ' + esc(err.error) + '</li>'; });
+                                    html += '</ul></div>';
+                                }
+                                $('#upload-result').html(html).show();
+                                if (data.deleted_count > 0) loadTartibgaSol();
+                            },
+                            error: function(xhr) {
+                                alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                                btn.prop('disabled', false).html(submitLabel);
+                            }
+                        });
+                    } else {
+                        $.ajax({
+                            url: compareGradesUrl, type: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrfToken },
+                            contentType: 'application/json',
+                            data: JSON.stringify({ ids: ids, subject_overrides: subjectOverrides, yn_turi_overrides: ynTuriOverrides }),
+                            success: function(data) {
+                                closePickerModal();
+                                showCompareModal(data.comparisons || []);
+                            },
+                            error: function(xhr) {
+                                alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                                btn.prop('disabled', false).html(submitLabel);
+                            }
+                        });
                     }
                 });
+            }
 
-                if (uploadedIds.length === 0) {
-                    alert('Tanlangan natijalar orasida sistemaga yuklangani yo\'q.');
-                    return;
-                }
-
-                if (!confirm(uploadedIds.length + ' ta natijaning bahosini sistemadan o\'chirishni tasdiqlaysizmi?\n\nO\'chirilgan baholar jurnaldan ham yo\'qoladi.')) return;
-
-                sendDeleteRequest(uploadedIds, []);
-            });
+            window.closePickerModal = function() {
+                $('#picker-modal-overlay').remove();
+            };
 
             function sendDeleteRequest(ids, confirmedFanNames) {
                 var payload = { ids: ids };
@@ -1386,25 +1825,7 @@
             $('#btn-compare').on('click', function() {
                 var ids = getSelectedIds();
                 if (ids.length === 0) return;
-
-                var btn = $(this);
-                btn.prop('disabled', true);
-                var origHtml = btn.html();
-                btn.html('<span class="spinner-sm"></span> Tekshirilmoqda...');
-
-                $.ajax({
-                    url: compareGradesUrl, type: 'POST',
-                    headers: { 'X-CSRF-TOKEN': csrfToken },
-                    contentType: 'application/json',
-                    data: JSON.stringify({ ids: ids }),
-                    success: function(data) {
-                        showCompareModal(data.comparisons || []);
-                    },
-                    error: function(xhr) {
-                        alert(xhr.responseJSON?.message || 'Server xatosi');
-                    },
-                    complete: function() { btn.prop('disabled', false).html(origHtml); }
-                });
+                openSubjectPickerModal('compare', ids, $(this));
             });
 
             function showCompareModal(comparisons) {
@@ -1419,8 +1840,12 @@
                 if (comparisons.length === 0) {
                     html += '<div class="compare-empty">Tanlangan natijalar uchun sistemada mavjud OSKI/Test bahosi topilmadi.</div>';
                 } else {
+                    html += '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;">';
+                    html += '<button onclick="bulkDeleteCompareGrades()" id="cmp-bulk-delete" class="btn-delete-grades" style="height:32px;font-size:12px;padding:6px 14px;">Tanlanganlarni o\'chirish (<span id="cmp-sel-count">0</span>)</button>';
+                    html += '</div>';
                     html += '<table class="compare-table">';
                     html += '<thead><tr>';
+                    html += '<th style="width:30px;"><input type="checkbox" id="cmp-select-all" onclick="toggleAllCompare(this)"></th>';
                     html += '<th>Talaba</th><th>Fan</th><th>Turi</th>';
                     html += '<th style="color:#059669;">Moodle baho</th>';
                     html += '<th style="color:#dc2626;">Sistemadagi baho</th>';
@@ -1430,9 +1855,11 @@
                     for (var i = 0; i < comparisons.length; i++) {
                         var c = comparisons[i];
                         var reasonLabel = c.existing_reason === 'quiz_result' ? 'Moodle' : (c.existing_reason || 'Noma\'lum');
-                        html += '<tr id="cmp-row-' + c.student_grade_id + '">';
+                        var rowBg = c.is_deleted ? 'background:#fef9c3;' : '';
+                        html += '<tr id="cmp-row-' + c.student_grade_id + '" style="' + rowBg + '">';
+                        html += '<td style="text-align:center;"><input type="checkbox" class="cmp-row-cb" value="' + c.student_grade_id + '" onclick="updateCmpSelCount()"></td>';
                         html += '<td style="font-weight:600;">' + esc(c.student_name) + '<br><span style="font-size:10px;color:#94a3b8;">' + esc(c.student_id) + '</span></td>';
-                        html += '<td>' + esc(c.fan_name) + '<br><span style="font-size:10px;color:#94a3b8;">ID: ' + esc(c.fan_id) + '</span></td>';
+                        html += '<td>' + esc(c.fan_name) + '<br><span style="font-size:10px;color:#94a3b8;">ID: ' + esc(c.fan_id) + '</span>' + (c.is_deleted ? '<br><span style="font-size:10px;color:#b45309;font-weight:600;">⚠ Soft-deleted (orphan)</span>' : '') + '</td>';
                         html += '<td><span class="badge ' + (c.type === 'Test' ? 'badge-grade' : 'badge-oski') + '">' + esc(c.type) + '</span></td>';
                         html += '<td style="font-weight:700;color:#059669;font-size:14px;">' + esc(c.moodle_grade) + '</td>';
                         html += '<td style="font-weight:700;color:#dc2626;font-size:14px;">' + esc(c.existing_grade) + '</td>';
@@ -1450,6 +1877,50 @@
 
             window.closeCompareModal = function() {
                 $('#compare-overlay').remove();
+            };
+
+            window.updateCmpSelCount = function() {
+                $('#cmp-sel-count').text($('.cmp-row-cb:checked').length);
+            };
+
+            window.toggleAllCompare = function(el) {
+                $('.cmp-row-cb').prop('checked', el.checked);
+                updateCmpSelCount();
+            };
+
+            window.bulkDeleteCompareGrades = function() {
+                var ids = $('.cmp-row-cb:checked').map(function() { return parseInt(this.value); }).get();
+                if (ids.length === 0) { alert('Hech narsa tanlanmagan'); return; }
+                if (!confirm(ids.length + ' ta bahoni sistemadan o\'chirishni tasdiqlaysizmi?')) return;
+
+                var btn = $('#cmp-bulk-delete');
+                btn.prop('disabled', true).html('O\'chirilmoqda...');
+
+                $.ajax({
+                    url: deleteStudentGradeUrl, type: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrfToken },
+                    contentType: 'application/json',
+                    data: JSON.stringify({ student_grade_ids: ids }),
+                    success: function(data) {
+                        if (data.success) {
+                            ids.forEach(function(id) {
+                                $('#cmp-row-' + id).css({ background: '#fef2f2', opacity: 0.5 });
+                                $('#cmp-row-' + id + ' button').text('O\'chirildi').css({ background: '#9ca3af', cursor: 'default' }).prop('disabled', true);
+                                $('#cmp-row-' + id + ' .cmp-row-cb').prop('checked', false).prop('disabled', true);
+                            });
+                            updateCmpSelCount();
+                            btn.html('Tanlanganlarni o\'chirish (<span id="cmp-sel-count">0</span>)').prop('disabled', false);
+                            loadTartibgaSol();
+                        } else {
+                            alert(data.message || 'Xatolik');
+                            btn.prop('disabled', false).html('Tanlanganlarni o\'chirish (<span id="cmp-sel-count">' + ids.length + '</span>)');
+                        }
+                    },
+                    error: function(xhr) {
+                        alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                        btn.prop('disabled', false).html('Tanlanganlarni o\'chirish (<span id="cmp-sel-count">' + ids.length + '</span>)');
+                    }
+                });
             };
 
             window.deleteCompareGrade = function(gradeId) {

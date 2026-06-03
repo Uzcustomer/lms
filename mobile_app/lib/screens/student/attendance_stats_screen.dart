@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../../config/theme.dart';
-import '../../config/aurora_themes.dart';
-import '../../providers/settings_provider.dart';
 import '../../providers/student_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
+import '../../widgets/clinic_header.dart';
 
 class AttendanceStatsScreen extends StatefulWidget {
   const AttendanceStatsScreen({super.key});
@@ -15,6 +13,11 @@ class AttendanceStatsScreen extends StatefulWidget {
 }
 
 class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
+  static const _green = Color(0xFF15803D);
+  static const _blue = Color(0xFF1D4ED8);
+  static const _amber = Color(0xFFB45309);
+  static const _red = Color(0xFFBE123C);
+
   List<dynamic> _subjects = [];
   bool _loadingSubjects = true;
   int? _selectedSubjectId;
@@ -51,12 +54,10 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     }
   }
 
-  Future<void> _loadGrades(int subjectId) async {
+  Future<void> _loadGrades(int subjectId, {bool force = false}) async {
     setState(() => _loadingGrades = true);
     try {
-      final api = ApiService();
-      final service = StudentService(api);
-      final res = await service.getSubjectGrades(subjectId);
+      final res = await StudentService(ApiService()).getSubjectGrades(subjectId);
       if (mounted) {
         final data = res['data'] as Map<String, dynamic>? ?? {};
         setState(() {
@@ -69,44 +70,25 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     }
   }
 
+  Color _gradeColor(double v) {
+    if (v >= 86) return _green;
+    if (v >= 71) return _blue;
+    if (v >= 56) return _amber;
+    return _red;
+  }
+
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final aurora = context.watch<SettingsProvider>().auroraTheme;
-    final statusBarH = MediaQuery.of(context).padding.top;
-    final txt = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final muted = ClinicTheme.mutedOf(context);
 
     return Scaffold(
-      backgroundColor: auroraBase(aurora, isDark),
+      backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
-          Container(
-            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
-            height: statusBarH + 64,
-            decoration: const BoxDecoration(
-              color: Color(0xFF0A1A3A),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-              ),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                const Expanded(
-                  child: Text(
-                    'Davomat statistikasi',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(width: 48),
-              ],
-            ),
+          ClinicHeader(
+            overline: 'FOYDALI',
+            title: 'Davomat statistikasi',
+            onBack: () => Navigator.pop(context),
           ),
           if (_loadingSubjects)
             const Expanded(child: Center(child: CircularProgressIndicator()))
@@ -114,17 +96,19 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
             Expanded(
               child: Center(
                 child: Text('Fanlar topilmadi',
-                    style: TextStyle(color: sub, fontSize: 15))),
+                    style: TextStyle(color: muted, fontSize: 15)),
+              ),
             )
           else ...[
-            _buildSubjectDropdown(isDark, txt, sub),
+            _buildSubjectDropdown(),
             if (_selectedSubjectId != null)
               Expanded(
                 child: _loadingGrades
                     ? const Center(child: CircularProgressIndicator())
                     : RefreshIndicator(
-                        onRefresh: () => _loadGrades(_selectedSubjectId!),
-                        child: _buildContent(isDark, txt, sub),
+                        onRefresh: () =>
+                            _loadGrades(_selectedSubjectId!, force: true),
+                        child: _buildContent(),
                       ),
               ),
             if (_selectedSubjectId == null)
@@ -134,13 +118,13 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(Icons.touch_app_outlined,
-                          size: 48, color: sub.withOpacity(0.5)),
+                          size: 48, color: ClinicTheme.faint),
                       const SizedBox(height: 12),
                       Text('Fanni tanlang',
                           style: TextStyle(
-                              color: sub,
+                              color: muted,
                               fontSize: 15,
-                              fontWeight: FontWeight.w500)),
+                              fontWeight: FontWeight.w600)),
                     ],
                   ),
                 ),
@@ -151,28 +135,29 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     );
   }
 
-  Widget _buildSubjectDropdown(bool isDark, Color txt, Color sub) {
-    final cardBg = isDark ? AppTheme.darkCard : Colors.white;
-    final borderColor = isDark ? Colors.white12 : Colors.grey.shade300;
+  Widget _buildSubjectDropdown() {
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
+    final surface = ClinicTheme.surfaceOf(context);
 
     return Container(
-      margin: const EdgeInsets.fromLTRB(14, 12, 14, 8),
+      margin: const EdgeInsets.fromLTRB(14, 14, 14, 8),
       padding: const EdgeInsets.symmetric(horizontal: 14),
       decoration: BoxDecoration(
-        color: cardBg,
+        color: surface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: borderColor),
+        border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
+        boxShadow: ClinicTheme.cardShadow,
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
           value: _selectedSubjectId,
-          hint: Text('Fanni tanlang',
-              style: TextStyle(color: sub, fontSize: 14)),
+          hint: Text('Fanni tanlang', style: TextStyle(color: muted, fontSize: 14)),
           isExpanded: true,
-          icon: Icon(Icons.keyboard_arrow_down_rounded, color: sub),
-          dropdownColor: cardBg,
+          icon: Icon(Icons.keyboard_arrow_down_rounded, color: muted),
+          dropdownColor: surface,
           borderRadius: BorderRadius.circular(14),
-          style: TextStyle(fontSize: 14, color: txt),
+          style: TextStyle(fontSize: 14, color: ink),
           items: _subjects.map<DropdownMenuItem<int>>((s) {
             final id = s['subject_id'] as int? ?? 0;
             final name = s['subject_name']?.toString() ?? '';
@@ -188,25 +173,23 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                         overflow: TextOverflow.ellipsis,
                         style: TextStyle(
                             fontSize: 13.5,
-                            fontWeight: _selectedSubjectId == id
-                                ? FontWeight.w600
-                                : FontWeight.w400,
-                            color: txt)),
+                            fontWeight: FontWeight.w600,
+                            color: ink)),
                   ),
                   if (hasAbsence)
                     Container(
                       margin: const EdgeInsets.only(left: 8),
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
+                      padding:
+                          const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
-                        color: AppTheme.errorColor.withOpacity(0.1),
+                        color: _red,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text('${davPercent.toStringAsFixed(0)}%',
                           style: const TextStyle(
                               fontSize: 10,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.errorColor)),
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white)),
                     ),
                 ],
               ),
@@ -229,13 +212,16 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
   }
 
   List<_DayData> _buildDays() {
-    // Key: "date|pair" → list of parsed grades for dedup
     final rawMap = <String, List<_PairGrade>>{};
 
     for (final g in _grades) {
       final ttCode = g['training_type_code'];
-      if (ttCode == 11 || ttCode == 99 || ttCode == 100 ||
-          ttCode == 101 || ttCode == 102 || ttCode == 103) {
+      if (ttCode == 11 ||
+          ttCode == 99 ||
+          ttCode == 100 ||
+          ttCode == 101 ||
+          ttCode == 102 ||
+          ttCode == 103) {
         continue;
       }
 
@@ -277,7 +263,6 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
       rawMap[key]!.add(_PairGrade(pairNum, type, value));
     }
 
-    // Group by date, keeping one merged grade per pair
     final dayMap = <String, List<_PairGrade>>{};
     for (final entry in rawMap.entries) {
       final dateKey = entry.key.split('|')[0];
@@ -296,13 +281,17 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
 
   _PairGrade _mergePairGrades(List<_PairGrade> items) {
     final pair = items.first.pair;
-    // Priority: graded > retake > absent > empty
-    final graded = items.where((p) => p.type == _CellType.graded && p.value != null).toList();
+    final graded = items
+        .where((p) => p.type == _CellType.graded && p.value != null)
+        .toList();
     if (graded.isNotEmpty) {
-      final avg = graded.map((p) => p.value!).reduce((a, b) => a + b) / graded.length;
+      final avg =
+          graded.map((p) => p.value!).reduce((a, b) => a + b) / graded.length;
       return _PairGrade(pair, _CellType.graded, avg);
     }
-    final retake = items.where((p) => p.type == _CellType.retake && p.value != null).toList();
+    final retake = items
+        .where((p) => p.type == _CellType.retake && p.value != null)
+        .toList();
     if (retake.isNotEmpty) {
       return _PairGrade(pair, _CellType.retake, retake.last.value);
     }
@@ -312,7 +301,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     return _PairGrade(pair, _CellType.empty, null);
   }
 
-  Widget _buildContent(bool isDark, Color txt, Color sub) {
+  Widget _buildContent() {
     final days = _buildDays();
 
     if (days.isEmpty) {
@@ -320,11 +309,10 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.event_note_outlined,
-                size: 48, color: sub.withOpacity(0.5)),
+            Icon(Icons.event_note_outlined, size: 48, color: ClinicTheme.faint),
             const SizedBox(height: 12),
             Text('Ma\'lumot topilmadi',
-                style: TextStyle(color: sub, fontSize: 14)),
+                style: TextStyle(color: ClinicTheme.mutedOf(context), fontSize: 14)),
           ],
         ),
       );
@@ -352,38 +340,31 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
 
     return Column(
       children: [
-        _buildStatsBar(
-            totalPairs, attended, absentPairs, percent, avgGrade, isDark, txt),
+        _buildStatsBar(totalPairs, attended, absentPairs, percent, avgGrade),
         Expanded(
           child: ListView.builder(
             padding: const EdgeInsets.fromLTRB(14, 0, 14, 20),
             itemCount: days.length,
-            itemBuilder: (_, i) =>
-                _buildDayCard(days[i], isDark, txt, sub),
+            itemBuilder: (_, i) => _buildDayCard(days[i]),
           ),
         ),
       ],
     );
   }
 
-  Widget _buildStatsBar(int total, int attended, int absent, double percent,
-      double avgGrade, bool isDark, Color txt) {
-    final percentColor = percent >= 85
-        ? AppTheme.successColor
-        : percent >= 70
-            ? AppTheme.warningColor
-            : AppTheme.errorColor;
+  Widget _buildStatsBar(
+      int total, int attended, int absent, double percent, double avgGrade) {
+    final percentColor =
+        percent >= 85 ? _green : (percent >= 70 ? _amber : _red);
 
     return Container(
       margin: const EdgeInsets.fromLTRB(14, 4, 14, 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
       decoration: BoxDecoration(
-        gradient: LinearGradient(colors: [
-          percentColor.withOpacity(0.1),
-          percentColor.withOpacity(0.04),
-        ]),
+        color: ClinicTheme.surfaceOf(context),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: percentColor.withOpacity(0.2)),
+        border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
+        boxShadow: ClinicTheme.cardShadow,
       ),
       child: Row(
         children: [
@@ -392,28 +373,27 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
             height: 46,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: percentColor.withOpacity(0.15),
+              color: percentColor,
             ),
             child: Center(
               child: Text('${percent.round()}%',
-                  style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w800,
-                      color: percentColor)),
+                  style: const TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                      color: Colors.white)),
             ),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Wrap(
               spacing: 6,
-              runSpacing: 4,
+              runSpacing: 6,
               children: [
-                _chip('Jami', '$total', Colors.blueGrey),
-                _chip('Bor', '$attended', AppTheme.successColor),
-                _chip('NB', '$absent', AppTheme.errorColor),
+                _chip('Jami', '$total', ClinicTheme.mutedOf(context)),
+                _chip('Bor', '$attended', _green),
+                _chip('NB', '$absent', _red),
                 if (avgGrade > 0)
-                  _chip('O\'rtacha', avgGrade.toStringAsFixed(1),
-                      const Color(0xFF1E88E5)),
+                  _chip('O\'rtacha', avgGrade.toStringAsFixed(1), _blue),
               ],
             ),
           ),
@@ -424,22 +404,22 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
 
   Widget _chip(String label, String value, Color color) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
+        color: color,
         borderRadius: BorderRadius.circular(8),
       ),
       child: Text('$label: $value',
-          style: TextStyle(
-              fontSize: 10.5, fontWeight: FontWeight.w600, color: color)),
+          style: const TextStyle(
+              fontSize: 10.5, fontWeight: FontWeight.w800, color: Colors.white)),
     );
   }
 
-  Widget _buildDayCard(_DayData day, bool isDark, Color txt, Color sub) {
+  Widget _buildDayCard(_DayData day) {
+    final ink = ClinicTheme.inkOf(context);
+    final muted = ClinicTheme.mutedOf(context);
     final hasAbsent = day.pairs.any((p) => p.type == _CellType.absent);
     final hasRetake = day.pairs.any((p) => p.type == _CellType.retake);
-    final cardBg = isDark ? AppTheme.darkCard : Colors.white;
-    final borderColor = isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0);
 
     String dateStr;
     String weekDay;
@@ -447,18 +427,29 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
       final dt = DateTime.parse(day.date);
       dateStr =
           '${dt.day.toString().padLeft(2, '0')}.${dt.month.toString().padLeft(2, '0')}';
-      const wds = ['Dushanba', 'Seshanba', 'Chorshanba', 'Payshanba', 'Juma', 'Shanba', 'Yakshanba'];
+      const wds = [
+        'Dushanba',
+        'Seshanba',
+        'Chorshanba',
+        'Payshanba',
+        'Juma',
+        'Shanba',
+        'Yakshanba'
+      ];
       weekDay = wds[dt.weekday - 1];
     } catch (_) {
       dateStr = day.date;
       weekDay = '';
     }
 
-    final gradedPairs = day.pairs.where((p) =>
-        p.type == _CellType.graded || p.type == _CellType.retake).toList();
+    final gradedPairs = day.pairs
+        .where((p) =>
+            p.type == _CellType.graded || p.type == _CellType.retake)
+        .toList();
     double? dayAvg;
     if (gradedPairs.isNotEmpty) {
-      final vals = gradedPairs.where((p) => p.value != null).map((p) => p.value!);
+      final vals =
+          gradedPairs.where((p) => p.value != null).map((p) => p.value!);
       if (vals.isNotEmpty) {
         dayAvg = vals.reduce((a, b) => a + b) / vals.length;
       }
@@ -467,18 +458,20 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
-        color: cardBg,
+        color: ClinicTheme.surfaceOf(context),
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: hasAbsent
-              ? AppTheme.errorColor.withOpacity(0.25)
+              ? _red
               : hasRetake
-                  ? AppTheme.warningColor.withOpacity(0.25)
-                  : borderColor,
+                  ? _amber
+                  : ClinicTheme.dividerOf(context),
+          width: hasAbsent || hasRetake ? 1.5 : 1,
         ),
+        boxShadow: ClinicTheme.cardShadow,
       ),
       child: Padding(
-        padding: const EdgeInsets.all(14),
+        padding: const EdgeInsets.all(13),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -486,23 +479,23 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
               children: [
                 Container(
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF4A6CF7).withOpacity(0.08),
+                    color: ClinicTheme.teal,
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Text(dateStr,
-                      style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w700,
-                          color: txt)),
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white)),
                 ),
                 const SizedBox(width: 10),
                 Text(weekDay,
                     style: TextStyle(
                         fontSize: 12,
-                        fontWeight: FontWeight.w500,
-                        color: sub)),
+                        fontWeight: FontWeight.w600,
+                        color: muted)),
                 const Spacer(),
                 if (dayAvg != null) _buildAvgBadge(dayAvg),
               ],
@@ -511,9 +504,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
             Wrap(
               spacing: 8,
               runSpacing: 8,
-              children: day.pairs.map((p) {
-                return _buildPairChip(p, isDark, txt, sub);
-              }).toList(),
+              children: day.pairs.map(_buildPairChip).toList(),
             ),
           ],
         ),
@@ -522,91 +513,61 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
   }
 
   Widget _buildAvgBadge(double avg) {
-    final color = avg >= 86
-        ? AppTheme.successColor
-        : avg >= 71
-            ? const Color(0xFF1E88E5)
-            : avg >= 56
-                ? AppTheme.warningColor
-                : AppTheme.errorColor;
-
+    final color = _gradeColor(avg);
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color,
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: color.withOpacity(0.3)),
       ),
       child: Text(avg.toStringAsFixed(1),
-          style: TextStyle(
-              fontSize: 12, fontWeight: FontWeight.w700, color: color)),
+          style: const TextStyle(
+              fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white)),
     );
   }
 
-  Widget _buildPairChip(_PairGrade p, bool isDark, Color txt, Color sub) {
+  Widget _buildPairChip(_PairGrade p) {
+    final muted = ClinicTheme.mutedOf(context);
+
     if (p.type == _CellType.retake) {
-      return Container(
-        width: 68,
-        height: 52,
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(10),
-        ),
-        child: Column(
-          children: [
-            SizedBox(
-              width: 68,
-              height: 36,
-              child: CustomPaint(
-                painter: _DiagonalCellPainter(
-                  nbText: 'NB',
-                  gradeText: p.value != null
-                      ? (p.value! % 1 == 0
-                          ? p.value!.toInt().toString()
-                          : p.value!.toStringAsFixed(1))
-                      : '',
-                  isDark: isDark,
-                ),
+      return Column(
+        children: [
+          SizedBox(
+            width: 68,
+            height: 36,
+            child: CustomPaint(
+              painter: _DiagonalCellPainter(
+                gradeText: p.value != null
+                    ? (p.value! % 1 == 0
+                        ? p.value!.toInt().toString()
+                        : p.value!.toStringAsFixed(1))
+                    : '',
               ),
             ),
-            const SizedBox(height: 2),
-            Text('${p.pair}-juftlik',
-                style: TextStyle(fontSize: 9.5, color: sub)),
-          ],
-        ),
+          ),
+          const SizedBox(height: 2),
+          Text('${p.pair}-juftlik', style: TextStyle(fontSize: 9.5, color: muted)),
+        ],
       );
     }
 
     Color bgColor;
-    Color borderCol;
     String displayText;
     Color textColor;
 
     if (p.type == _CellType.absent) {
-      bgColor = AppTheme.errorColor.withOpacity(0.08);
-      borderCol = AppTheme.errorColor.withOpacity(0.25);
+      bgColor = _red;
       displayText = 'NB';
-      textColor = AppTheme.errorColor;
+      textColor = Colors.white;
     } else if (p.type == _CellType.empty) {
-      bgColor = Colors.grey.withOpacity(0.05);
-      borderCol = Colors.grey.withOpacity(0.15);
+      bgColor = ClinicTheme.dividerOf(context);
       displayText = '—';
-      textColor = sub;
+      textColor = ClinicTheme.faint;
     } else {
       final v = p.value ?? 0;
-      final gradeColor = v >= 86
-          ? AppTheme.successColor
-          : v >= 71
-              ? const Color(0xFF1E88E5)
-              : v >= 56
-                  ? AppTheme.warningColor
-                  : v > 0
-                      ? AppTheme.errorColor
-                      : sub;
-      bgColor = gradeColor.withOpacity(0.08);
-      borderCol = gradeColor.withOpacity(0.25);
-      displayText =
-          v % 1 == 0 ? v.toInt().toString() : v.toStringAsFixed(1);
-      textColor = gradeColor;
+      bgColor = v > 0 ? _gradeColor(v) : ClinicTheme.dividerOf(context);
+      displayText = v % 1 == 0 ? v.toInt().toString() : v.toStringAsFixed(1);
+      textColor = v > 0 ? Colors.white : ClinicTheme.faint;
     }
 
     return Column(
@@ -617,18 +578,14 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
           decoration: BoxDecoration(
             color: bgColor,
             borderRadius: BorderRadius.circular(10),
-            border: Border.all(color: borderCol),
           ),
           alignment: Alignment.center,
           child: Text(displayText,
               style: TextStyle(
-                  fontSize: 15,
-                  fontWeight: FontWeight.w800,
-                  color: textColor)),
+                  fontSize: 15, fontWeight: FontWeight.w900, color: textColor)),
         ),
         const SizedBox(height: 2),
-        Text('${p.pair}-juftlik',
-            style: TextStyle(fontSize: 9.5, color: sub)),
+        Text('${p.pair}-juftlik', style: TextStyle(fontSize: 9.5, color: muted)),
       ],
     );
   }
@@ -660,61 +617,67 @@ class _DayData {
   _DayData(this.date, this.pairs);
 }
 
+/// A pair cell that was missed then retaken — red lower-left triangle (NB)
+/// and a green upper-right triangle with the retake grade.
 class _DiagonalCellPainter extends CustomPainter {
-  final String nbText;
   final String gradeText;
-  final bool isDark;
 
-  _DiagonalCellPainter({
-    required this.nbText,
-    required this.gradeText,
-    required this.isDark,
-  });
+  _DiagonalCellPainter({required this.gradeText});
+
+  static const _red = Color(0xFFBE123C);
+  static const _green = Color(0xFF15803D);
 
   @override
   void paint(Canvas canvas, Size size) {
     final rect = RRect.fromRectAndRadius(
         Rect.fromLTWH(0, 0, size.width, size.height),
         const Radius.circular(10));
-
-    canvas.drawRRect(
-        rect, Paint()..color = AppTheme.warningColor.withOpacity(0.08));
-    canvas.drawRRect(
-        rect,
-        Paint()
-          ..color = AppTheme.warningColor.withOpacity(0.25)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1);
-
     canvas.save();
     canvas.clipRRect(rect);
-    canvas.drawLine(Offset(0, size.height), Offset(size.width, 0),
-        Paint()
-          ..color = AppTheme.warningColor.withOpacity(0.35)
-          ..strokeWidth = 1);
+
+    // Lower-left triangle (NB).
+    final lower = Path()
+      ..moveTo(0, 0)
+      ..lineTo(0, size.height)
+      ..lineTo(size.width, size.height)
+      ..close();
+    canvas.drawPath(lower, Paint()..color = _red);
+
+    // Upper-right triangle (retake grade).
+    final upper = Path()
+      ..moveTo(0, 0)
+      ..lineTo(size.width, 0)
+      ..lineTo(size.width, size.height)
+      ..close();
+    canvas.drawPath(upper, Paint()..color = _green);
+
+    canvas.drawLine(
+      Offset(0, size.height),
+      Offset(size.width, 0),
+      Paint()
+        ..color = Colors.white.withOpacity(0.6)
+        ..strokeWidth = 1,
+    );
 
     final nbPainter = TextPainter(
-      text: TextSpan(
-          text: nbText,
-          style: TextStyle(
-              fontSize: 9,
-              fontWeight: FontWeight.w700,
-              color: AppTheme.errorColor.withOpacity(0.7))),
+      text: const TextSpan(
+        text: 'NB',
+        style: TextStyle(
+            fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white),
+      ),
       textDirection: TextDirection.ltr,
     )..layout();
     nbPainter.paint(canvas, Offset(4, size.height - nbPainter.height - 3));
 
     final gradePainter = TextPainter(
       text: TextSpan(
-          text: gradeText,
-          style: const TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w800,
-              color: AppTheme.successColor)),
+        text: gradeText,
+        style: const TextStyle(
+            fontSize: 12, fontWeight: FontWeight.w900, color: Colors.white),
+      ),
       textDirection: TextDirection.ltr,
     )..layout();
-    gradePainter.paint(
-        canvas, Offset(size.width - gradePainter.width - 4, 3));
+    gradePainter.paint(canvas, Offset(size.width - gradePainter.width - 4, 3));
 
     canvas.restore();
   }

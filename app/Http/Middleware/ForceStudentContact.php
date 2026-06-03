@@ -17,11 +17,6 @@ class ForceStudentContact
             return $next($request);
         }
 
-        // Impersonatsiya rejimida profil majburiy emas
-        if (session('impersonating')) {
-            return $next($request);
-        }
-
         $allowedRoutes = [
             'student.complete-profile*',
             'student.verify-telegram*',
@@ -38,12 +33,18 @@ class ForceStudentContact
         }
 
         if (!$isAllowed) {
-            // 1. Telefon raqami majburiy
-            if (!$student->isProfileComplete()) {
+            $isImpersonating = (bool) session('impersonating');
+
+            // 1. Telefon raqami majburiy — impersonatsiyada yumshatilgan,
+            // superadmin testlash uchun talaba sahifalarini ochishi mumkin.
+            if (!$isImpersonating && !$student->isProfileComplete()) {
                 return redirect()->route('student.complete-profile');
             }
 
-            // 2. Telegram tasdiqlash — muhlat o'tgandan keyin block
+            // 2. Telegram tasdiqlash muhlat o'tgandan keyin — impersonatsiyada
+            // ham bloklanadi. Banner "tasdiqlanmaguncha tizimdan foydalanish
+            // cheklanadi" deb ogohlantirgani uchun, xabar bilan haqiqiy hatti-harakat
+            // mos bo'lishi shart.
             if ($student->isTelegramDeadlinePassed()) {
                 return redirect()->route('student.complete-profile');
             }

@@ -442,7 +442,7 @@ class StudentController extends Controller
             ->where('semester_code', $semesterCode)
             ->whereIn('subject_id', $subjectIds)
             ->whereIn('training_type_code', [100, 101, 102, 103])
-            ->select('subject_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'education_year_code', 'lesson_date')
+            ->select('subject_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'education_year_code', 'lesson_date', 'attempt')
             ->get()
             ->groupBy('subject_id');
 
@@ -762,12 +762,25 @@ class StudentController extends Controller
                             $typeCode = 102;
                         }
                     }
-                    $otherByType[$typeCode][] = $effectiveGrade;
+                    $attempt = (int) ($g->attempt ?? 1);
+                    $otherByType[$typeCode][$attempt][] = $effectiveGrade;
                 }
             }
-            if (!empty($otherByType[100])) $otherGrades['on'] = round(array_sum($otherByType[100]) / count($otherByType[100]), 0, PHP_ROUND_HALF_UP);
-            if (!empty($otherByType[101])) $otherGrades['oski'] = round(array_sum($otherByType[101]) / count($otherByType[101]), 0, PHP_ROUND_HALF_UP);
-            if (!empty($otherByType[102])) $otherGrades['test'] = round(array_sum($otherByType[102]) / count($otherByType[102]), 0, PHP_ROUND_HALF_UP);
+            // 2-urinish 1-urinishni almashtiradi (o'rtachalanmaydi).
+            $pickLatestAttempt = function (?array $byAttempt): ?float {
+                if (empty($byAttempt)) {
+                    return null;
+                }
+                $latest = max(array_keys($byAttempt));
+                $grades = $byAttempt[$latest];
+                if (empty($grades)) {
+                    return null;
+                }
+                return round(array_sum($grades) / count($grades), 0, PHP_ROUND_HALF_UP);
+            };
+            $otherGrades['on'] = $pickLatestAttempt($otherByType[100] ?? null);
+            $otherGrades['oski'] = $pickLatestAttempt($otherByType[101] ?? null);
+            $otherGrades['test'] = $pickLatestAttempt($otherByType[102] ?? null);
 
             // ---- Davomat (in-memory filter) ----
             $excludedAttendanceCodes = [99, 100, 101, 102];
@@ -1536,15 +1549,37 @@ class StudentController extends Controller
             return $redirect;
         }
 
+        // exam_schedules da har bir (group, subject, semester) uchun guruh
+        // qatori (student_hemis_id NULL) bo'lishi mumkin, qo'shimcha esa shu
+        // talabaning individual qatori (student_hemis_id = hemis) bo'lishi
+        // mumkin — registrator ofisi alohida sana/vaqt qo'ygan bo'lsa. Talabaga
+        // FAQAT bittasi ko'rsatilishi kerak: individual yozuv bor bo'lsa shu
+        // (uning sanasi ustun); aks holda guruh qatori. student_hemis_id ni
+        // filtrlamasa, talaba ham guruh qatorini, ham o'zining (va boshqalarning)
+        // per-student qatorini ko'rar edi — dublikat va xato sanalar bilan.
         $examSchedules = ExamSchedule::where('group_hemis_id', $student->group_id)
             ->where('semester_code', $student->semester_code)
             ->where(function ($query) use ($student) {
                 $query->where('education_year', $student->education_year_code)
                     ->orWhereNull('education_year');
             })
+            ->where(function ($query) use ($student) {
+                $query->whereNull('student_hemis_id')
+                    ->orWhere('student_hemis_id', $student->hemis_id);
+            })
             ->orderBy('oski_date')
             ->orderBy('test_date')
-            ->get();
+            ->get()
+            // (subject_id|semester_code) bo'yicha dedup: agar shu talabaga
+            // individual qator mavjud bo'lsa, guruh qatorini chiqarib tashlaymiz.
+            ->groupBy(fn($r) => $r->subject_id . '|' . $r->semester_code)
+            ->map(function ($rows) use ($student) {
+                $personal = $rows->firstWhere('student_hemis_id', (string) $student->hemis_id)
+                    ?? $rows->firstWhere('student_hemis_id', $student->hemis_id);
+                return $personal ?: $rows->firstWhere('student_hemis_id', null);
+            })
+            ->filter()
+            ->values();
 
         // Personal computer assignments for this student. Keyed as
         // "{schedule_id}:{yn_type}" so the view can quickly look them up.

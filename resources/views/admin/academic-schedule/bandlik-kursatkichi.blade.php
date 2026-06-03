@@ -2,7 +2,7 @@
     <x-slot name="header">
         <div class="flex items-center justify-between">
             <h2 class="text-xl font-semibold leading-tight text-gray-800">
-                Bandlik ko'rsatkichi
+                Kompyuter bandligi ko'rsatkichi
             </h2>
             <div class="text-sm text-gray-600">
                 Jami komputerlar: <span class="font-bold text-indigo-700">{{ $totalComputers }}</span>

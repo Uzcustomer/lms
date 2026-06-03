@@ -1,12 +1,9 @@
 import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../config/theme.dart';
-import '../../config/aurora_themes.dart';
-import '../../providers/settings_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
+import '../../widgets/clinic_header.dart';
 
 class AppealCreateScreen extends StatefulWidget {
   const AppealCreateScreen({super.key});
@@ -95,7 +92,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(res['message'] ?? 'Apellyatsiya topshirildi'),
-          backgroundColor: const Color(0xFF16A34A),
+          backgroundColor: const Color(0xFF047857),
         ),
       );
       Navigator.pop(context, true);
@@ -111,51 +108,27 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
   }
 
   Color _gradeColor(num grade) {
-    if (grade >= 86) return const Color(0xFF16A34A);
-    if (grade >= 71) return const Color(0xFF2563EB);
-    if (grade >= 60) return const Color(0xFFF59E0B);
-    return const Color(0xFFDC2626);
+    if (grade >= 86) return const Color(0xFF047857);
+    if (grade >= 71) return ClinicTheme.blue;
+    if (grade >= 60) return const Color(0xFFB45309);
+    return const Color(0xFFBE123C);
   }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final aurora = context.watch<SettingsProvider>().auroraTheme;
-    final statusBarH = MediaQuery.of(context).padding.top;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final cardColor = ClinicTheme.surfaceOf(context);
+    final textColor = ClinicTheme.inkOf(context);
+    final subColor = ClinicTheme.mutedOf(context);
 
     return Scaffold(
-      backgroundColor: auroraBase(aurora, isDark),
+      backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
-          Container(
-            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
-            height: statusBarH + 64,
-            decoration: const BoxDecoration(
-              color: Color(0xFF0A1A3A),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-              ),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                const Expanded(
-                  child: Text(
-                    'Yangi apellyatsiya',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(width: 48),
-              ],
-            ),
+          ClinicHeader(
+            overline: 'XIZMATLAR',
+            title: 'Yangi apellyatsiya',
+            onBack: () => Navigator.pop(context),
           ),
           Expanded(
             child: _loading
@@ -179,19 +152,19 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF7C3AED).withAlpha(15),
-                                border: Border.all(color: const Color(0xFF7C3AED).withAlpha(60)),
+                                color: ClinicTheme.teal.withAlpha(15),
+                                border: Border.all(color: ClinicTheme.teal.withAlpha(60)),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: const Row(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Icon(Icons.info_outline, size: 16, color: Color(0xFF7C3AED)),
+                                  Icon(Icons.info_outline, size: 16, color: ClinicTheme.teal),
                                   SizedBox(width: 8),
                                   Expanded(
                                     child: Text(
                                       "Faqat oxirgi 24 soat ichida qo'yilgan baholarga apellyatsiya topshirish mumkin.",
-                                      style: TextStyle(fontSize: 11, color: Color(0xFF7C3AED), height: 1.4),
+                                      style: TextStyle(fontSize: 11, color: ClinicTheme.teal, height: 1.4),
                                     ),
                                   ),
                                 ],
@@ -207,7 +180,6 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                 decoration: BoxDecoration(
                                   color: cardColor,
                                   borderRadius: BorderRadius.circular(12),
-                                  border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
                                 ),
                                 child: Center(
                                   child: Text(
@@ -239,10 +211,10 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                           borderRadius: BorderRadius.circular(12),
                                           border: Border.all(
                                             color: isSelected
-                                                ? const Color(0xFF7C3AED)
+                                                ? ClinicTheme.teal
                                                 : isDark
                                                     ? Colors.white10
-                                                    : const Color(0xFFE2E8F0),
+                                                    : ClinicTheme.dividerOf(context),
                                             width: isSelected ? 1.6 : 1,
                                           ),
                                         ),
@@ -260,12 +232,12 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                                     shape: BoxShape.circle,
                                                     border: Border.all(
                                                       color: isSelected
-                                                          ? const Color(0xFF7C3AED)
+                                                          ? ClinicTheme.teal
                                                           : subColor.withAlpha(120),
                                                       width: 1.6,
                                                     ),
                                                     color: isSelected
-                                                        ? const Color(0xFF7C3AED)
+                                                        ? ClinicTheme.teal
                                                         : Colors.transparent,
                                                   ),
                                                   child: isSelected
@@ -328,8 +300,8 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                                     decoration: BoxDecoration(
                                                       color: canAppeal
-                                                          ? const Color(0xFF16A34A).withAlpha(20)
-                                                          : const Color(0xFF94A3B8).withAlpha(40),
+                                                          ? const Color(0xFF047857).withAlpha(20)
+                                                          : ClinicTheme.faint.withAlpha(40),
                                                       borderRadius: BorderRadius.circular(5),
                                                     ),
                                                     child: Text(
@@ -338,8 +310,8 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                                         fontSize: 10,
                                                         fontWeight: FontWeight.w700,
                                                         color: canAppeal
-                                                            ? const Color(0xFF16A34A)
-                                                            : const Color(0xFF64748B),
+                                                            ? const Color(0xFF047857)
+                                                            : ClinicTheme.muted,
                                                       ),
                                                     ),
                                                   ),
@@ -361,7 +333,6 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                               decoration: BoxDecoration(
                                 color: cardColor,
                                 borderRadius: BorderRadius.circular(12),
-                                border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
                               ),
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                               child: TextFormField(
@@ -399,10 +370,10 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                   border: Border.all(
                                     color: _fileName != null
-                                        ? const Color(0xFF7C3AED)
+                                        ? ClinicTheme.teal
                                         : isDark
                                             ? Colors.white10
-                                            : const Color(0xFFE2E8F0),
+                                            : ClinicTheme.dividerOf(context),
                                     style: _fileName == null ? BorderStyle.solid : BorderStyle.solid,
                                   ),
                                 ),
@@ -411,7 +382,7 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                     Icon(
                                       _fileName != null ? Icons.attach_file : Icons.upload_file_outlined,
                                       size: 20,
-                                      color: _fileName != null ? const Color(0xFF7C3AED) : subColor,
+                                      color: _fileName != null ? ClinicTheme.teal : subColor,
                                     ),
                                     const SizedBox(width: 10),
                                     Expanded(
@@ -442,13 +413,13 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFFDC2626).withAlpha(15),
-                                  border: Border.all(color: const Color(0xFFDC2626).withAlpha(60)),
+                                  color: const Color(0xFFBE123C).withAlpha(15),
+                                  border: Border.all(color: const Color(0xFFBE123C).withAlpha(60)),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   _submitError!,
-                                  style: const TextStyle(fontSize: 12, color: Color(0xFFB91C1C)),
+                                  style: const TextStyle(fontSize: 12, color: Color(0xFFBE123C)),
                                 ),
                               ),
                             ],
@@ -462,12 +433,12 @@ class _AppealCreateScreenState extends State<AppealCreateScreen> {
                                   gradient: const LinearGradient(
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
-                                    colors: [Color(0xFF8B5CF6), Color(0xFF7C3AED)],
+                                    colors: [ClinicTheme.teal, ClinicTheme.blue],
                                   ),
                                   borderRadius: BorderRadius.circular(14),
                                   boxShadow: [
                                     BoxShadow(
-                                      color: const Color(0xFF7C3AED).withAlpha(70),
+                                      color: ClinicTheme.teal.withAlpha(70),
                                       blurRadius: 16,
                                       offset: const Offset(0, 6),
                                     ),

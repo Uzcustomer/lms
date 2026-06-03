@@ -1,11 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
-import '../../config/theme.dart';
-import '../../config/aurora_themes.dart';
-import '../../providers/settings_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../utils/page_transitions.dart';
+import '../../widgets/clinic_header.dart';
 import 'appeal_create_screen.dart';
 import 'appeal_detail_screen.dart';
 
@@ -49,34 +46,31 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
   Color _statusColor(String status) {
     switch (status) {
       case 'approved':
-        return const Color(0xFF16A34A);
+        return const Color(0xFF047857);
       case 'rejected':
-        return const Color(0xFFDC2626);
+        return const Color(0xFFBE123C);
       case 'reviewing':
-        return const Color(0xFF2563EB);
+        return ClinicTheme.blue;
       default:
-        return const Color(0xFFF59E0B);
+        return const Color(0xFFB45309);
     }
   }
 
   Color _gradeColor(num grade) {
-    if (grade >= 86) return const Color(0xFF16A34A);
-    if (grade >= 71) return const Color(0xFF2563EB);
-    if (grade >= 60) return const Color(0xFFF59E0B);
-    return const Color(0xFFDC2626);
+    if (grade >= 86) return const Color(0xFF047857);
+    if (grade >= 71) return ClinicTheme.blue;
+    if (grade >= 60) return const Color(0xFFB45309);
+    return const Color(0xFFBE123C);
   }
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final aurora = context.watch<SettingsProvider>().auroraTheme;
-    final statusBarH = MediaQuery.of(context).padding.top;
-    final cardColor = isDark ? AppTheme.darkCard : Colors.white;
-    final textColor = isDark ? AppTheme.darkTextPrimary : AppTheme.textPrimary;
-    final subColor = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final cardColor = ClinicTheme.surfaceOf(context);
+    final textColor = ClinicTheme.inkOf(context);
+    final subColor = ClinicTheme.mutedOf(context);
 
     return Scaffold(
-      backgroundColor: auroraBase(aurora, isDark),
+      backgroundColor: ClinicTheme.bgOf(context),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () async {
           final result = await Navigator.push(
@@ -85,39 +79,17 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
           );
           if (result == true && mounted) _loadData();
         },
-        backgroundColor: const Color(0xFF7C3AED),
+        backgroundColor: ClinicTheme.teal,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
         label: const Text('Yangi apellyatsiya', style: TextStyle(fontWeight: FontWeight.w700)),
       ),
       body: Column(
         children: [
-          Container(
-            padding: EdgeInsets.only(top: statusBarH, left: 4, right: 4),
-            height: statusBarH + 64,
-            decoration: const BoxDecoration(
-              color: Color(0xFF0A1A3A),
-              borderRadius: BorderRadius.only(
-                bottomLeft: Radius.circular(18),
-                bottomRight: Radius.circular(18),
-              ),
-            ),
-            child: Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 22),
-                  onPressed: () => Navigator.pop(context),
-                ),
-                const Expanded(
-                  child: Text(
-                    'Apellyatsiya',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                const SizedBox(width: 48),
-              ],
-            ),
+          ClinicHeader(
+            overline: 'XIZMATLAR',
+            title: 'Apellyatsiya',
+            onBack: () => Navigator.pop(context),
           ),
           Expanded(
             child: _loading
@@ -185,17 +157,10 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
                                       child: Container(
                                         padding: const EdgeInsets.all(14),
                                         decoration: BoxDecoration(
+                                          color: cardColor,
                                           borderRadius: BorderRadius.circular(14),
-                                          border: Border.all(color: isDark ? Colors.white10 : const Color(0xFFE2E8F0)),
-                                          boxShadow: [
-                                            BoxShadow(
-                                              color: isDark
-                                                  ? Colors.black.withAlpha(40)
-                                                  : const Color(0xFF0F1B3D).withAlpha(8),
-                                              blurRadius: 10,
-                                              offset: const Offset(0, 4),
-                                            ),
-                                          ],
+                                          border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
+                                          boxShadow: ClinicTheme.cardShadow,
                                         ),
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,

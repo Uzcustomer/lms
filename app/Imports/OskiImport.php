@@ -152,6 +152,7 @@ class OskiImport implements ToCollection, WithHeadingRow, WithValidation
                                     'subject_code' => $exam_test->subject->subject_code,
                                     'training_type_code' => 101,
                                     'training_type_name' => "OSKI",
+                                    'attempt' => (int) ($exam_test->shakl ?? 1),
                                     'employee_id' => "0",
                                     'employee_name' => auth()->user()->name,
                                     'lesson_pair_name' => "",

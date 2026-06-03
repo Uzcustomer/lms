@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Computer;
 use App\Models\ComputerAssignment;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -22,7 +23,10 @@ use Illuminate\Support\Facades\Log;
  *     "course_id":      int,
  *     "course_idnumber":string,
  *     "timestamp":      int (Unix ts of the event),
- *     "state":          string                (e.g. inprogress|finished|abandoned)
+ *     "state":          string,               (e.g. inprogress|finished|abandoned)
+ *     "client_ip":      string                (remote IP of the Moodle request,
+ *                                              used to derive the PC the student
+ *                                              is actually sitting at)
  *   }
  *
  * Auth: shared secret via X-SYNC-SECRET header (same as /moodle/import).
@@ -72,6 +76,15 @@ class MoodleExamEventController extends Controller
             $assignment->actual_start = $occurredAt;
             $assignment->moodle_attempt_id = $attemptId;
             $assignment->status = ComputerAssignment::STATUS_IN_PROGRESS;
+
+            // Resolve the PC the student is physically sitting at from the
+            // client IP that Moodle captured at attempt_started time. NULL
+            // result is fine — leaves actual_computer_number unset and the
+            // dashboard will treat it as "unknown PC" rather than mismatch.
+            $clientIp = trim((string) $request->input('client_ip', ''));
+            if ($clientIp !== '') {
+                $assignment->actual_computer_number = Computer::numberByIp($clientIp);
+            }
         } else {
             $assignment->actual_end = $occurredAt;
             $assignment->moodle_attempt_id = $assignment->moodle_attempt_id ?: $attemptId;
@@ -86,6 +99,7 @@ class MoodleExamEventController extends Controller
             'matched' => true,
             'assignment_id' => $assignment->id,
             'computer_number' => $assignment->computer_number,
+            'actual_computer_number' => $assignment->actual_computer_number,
             'status' => $assignment->status,
         ]);
     }

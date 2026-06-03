@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\ExamSchedule;
 use App\Services\ComputerAssignmentService;
+use App\Services\ExamNotificationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Foundation\Queue\Queueable;
@@ -21,23 +22,27 @@ class AssignComputersJob implements ShouldQueue
     public function __construct(
         public int $examScheduleId,
         public string $ynType,
+        public int $attempt = 1,
     ) {}
 
-    public function handle(ComputerAssignmentService $service): void
+    public function handle(ComputerAssignmentService $service, ExamNotificationService $notifier): void
     {
         $schedule = ExamSchedule::find($this->examScheduleId);
         if (!$schedule) {
             return;
         }
 
-        $result = $service->assign($schedule, $this->ynType);
+        $result = $service->assign($schedule, $this->ynType, $this->attempt);
 
         if (empty($result['ok'])) {
+            $reason = $result['reason'] ?? 'unknown';
             Log::warning('AssignComputersJob: not assigned', [
                 'schedule_id' => $this->examScheduleId,
                 'yn' => $this->ynType,
-                'reason' => $result['reason'] ?? 'unknown',
+                'attempt' => $this->attempt,
+                'reason' => $reason,
             ]);
+            $notifier->notifyComputerShortage($schedule, $this->ynType, $reason);
             return;
         }
     }

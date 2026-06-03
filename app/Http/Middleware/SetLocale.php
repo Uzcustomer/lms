@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use Carbon\Carbon;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\App;
@@ -45,6 +46,9 @@ class SetLocale
 
         if (in_array($locale, ['uz', 'ru', 'en'])) {
             App::setLocale($locale);
+            // Carbon hafta kunlari/oylar lotin alifbosida bo'lishi uchun
+            // 'uz' uchun 'uz_Latn' qo'llanadi (Carbon'ning 'uz' locale'i kirill).
+            Carbon::setLocale($locale === 'uz' ? 'uz_Latn' : $locale);
         }
 
         return $next($request);

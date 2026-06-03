@@ -95,9 +95,16 @@ class JournalController extends Controller
 
         $faculties = $facultyQuery->get();
 
+        // Nofaol fanlarni ko'rsatish toggle'i.
+        // Default — faqat faol (HEMIS'da hozir mavjud) fanlar ko'rsatiladi.
+        // Yoqilganda nofaol/eskirgan fanlar ham chiqadi: semestr davomida fanlar
+        // a/b/c variantlarda ishlatilib, semestr oxirida nofaol qilinadi, lekin
+        // baholar o'sha variantlarda qolib ketadi — ularni topish uchun kerak.
+        $showInactive = $request->boolean('show_inactive');
+
         // Base query builder (umumiy join va filtrlar)
-        $baseQuery = function () {
-            return DB::table('curriculum_subjects as cs')
+        $baseQuery = function () use ($showInactive) {
+            $q = DB::table('curriculum_subjects as cs')
                 ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
                 ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
                 ->join('semesters as s', function ($join) {
@@ -108,6 +115,12 @@ class JournalController extends Controller
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
                 ->where('g.department_active', true)
                 ->where('g.active', true);
+
+            if (!$showInactive) {
+                $q->where('cs.is_active', true);
+            }
+
+            return $q;
         };
 
         // Kafedra dropdown uchun - faqat haqiqiy natija bor kafedralar
@@ -159,6 +172,7 @@ class JournalController extends Controller
                 'cs.subject_id',
                 'cs.subject_name',
                 'cs.closing_form',
+                'cs.is_active',
                 'cs.semester_code',
                 'cs.semester_name',
                 'c.education_type_name',
@@ -284,7 +298,8 @@ class JournalController extends Controller
             'sortColumn',
             'sortDirection',
             'dekanFacultyIds',
-            'isOqituvchi'
+            'isOqituvchi',
+            'showInactive'
         ));
     }
 
@@ -4353,6 +4368,12 @@ class JournalController extends Controller
             ->where('g.department_active', true)
             ->where('g.active', true);
 
+        // Default — faqat faol fanlar. show_inactive yoqilganda nofaol/eskirgan
+        // fanlar ham FAN dropdown'ida chiqadi (a/b/c variantlarni tanlay olish uchun).
+        if (!$request->boolean('show_inactive')) {
+            $query->where('cs.is_active', true);
+        }
+
         // O'qituvchi uchun faqat o'zi dars jadvalida biriktirilgan fanlar
         $isOqituvchi = is_active_oqituvchi();
         $teacherHemisId = null;
@@ -4480,6 +4501,7 @@ class JournalController extends Controller
         // Kafedra bo'yicha filtrlash (curriculum_subjects.department_id orqali)
         if ($request->filled('department_id')) {
             $curriculaWithDept = CurriculumSubject::where('department_id', $request->department_id)
+                ->when(!$request->boolean('show_inactive'), fn($q) => $q->where('is_active', true))
                 ->pluck('curricula_hemis_id')
                 ->unique();
             $query->whereIn('curriculum_hemis_id', $curriculaWithDept);

@@ -10,8 +10,8 @@ class FeatureToggleController extends Controller
 {
     private array $features = [
         'superadmin_grade_edit' => [
-            'label' => 'Superadmin baho tahrirlash',
-            'description' => 'Jurnalda batafsilga o\'tib istalgan bahoni edit qilish imkoniyati',
+            'label' => 'Superadmin/Admin baho tahrirlash',
+            'description' => 'Jurnalda batafsilga o\'tib istalgan bahoni edit qilish imkoniyati (superadmin va admin rollari uchun)',
         ],
         'absence_excuse_delete' => [
             'label' => 'Sababli ariza o\'chirish',

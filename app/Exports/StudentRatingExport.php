@@ -125,41 +125,54 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
         $hemisIds = $ratings->pluck('student_hemis_id')->filter()->unique()->values()->all();
         $excludeTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
-        // 1) Students (hemis_id => Student)
-        $studentsMap = Student::whereIn('hemis_id', $hemisIds)
-            ->get()
-            ->keyBy('hemis_id');
+        $studentsMap = collect();
+        $jnGradesByHemis = collect();
+        $otherGradesByHemis = collect();
+        $ynConsentsByHemis = collect();
 
-        // 2) JN baholari (lesson_date bilan) — bulk
-        $jnGradesByHemis = StudentGrade::whereIn('student_hemis_id', $hemisIds)
-            ->whereIn('semester_code', $semesterCodesOfRatings)
-            ->whereNotIn('training_type_code', $excludeTypes)
-            ->whereNotNull('lesson_date')
-            ->select([
-                'student_hemis_id', 'semester_code', 'education_year_code',
-                'subject_id', 'subject_name', 'lesson_date', 'grade',
-                'retake_grade', 'status', 'reason',
-            ])
-            ->get()
-            ->groupBy('student_hemis_id');
+        if (!empty($hemisIds) && !empty($semesterCodesOfRatings)) {
+            try {
+                $studentsMap = Student::whereIn('hemis_id', $hemisIds)
+                    ->get()
+                    ->keyBy('hemis_id');
 
-        // 3) MT/OSKI/Test baholari — bulk
-        $otherGradesByHemis = StudentGrade::whereIn('student_hemis_id', $hemisIds)
-            ->whereIn('semester_code', $semesterCodesOfRatings)
-            ->whereIn('training_type_code', [99, 101, 102])
-            ->select([
-                'student_hemis_id', 'semester_code', 'education_year_code',
-                'subject_id', 'subject_name', 'grade', 'retake_grade', 'training_type_code',
-            ])
-            ->get()
-            ->groupBy('student_hemis_id');
+                $jnGradesByHemis = StudentGrade::whereIn('student_hemis_id', $hemisIds)
+                    ->whereIn('semester_code', $semesterCodesOfRatings)
+                    ->whereNotIn('training_type_code', $excludeTypes)
+                    ->whereNotNull('lesson_date')
+                    ->select([
+                        'student_hemis_id', 'semester_code', 'education_year_code',
+                        'subject_id', 'subject_name', 'lesson_date', 'grade',
+                        'retake_grade', 'status', 'reason',
+                    ])
+                    ->get()
+                    ->groupBy('student_hemis_id');
 
-        // 4) YN consent — bulk
-        $ynConsentsByHemis = YnConsent::whereIn('student_hemis_id', $hemisIds)
-            ->whereIn('semester_code', $semesterCodesOfRatings)
-            ->select(['student_hemis_id', 'subject_id', 'status'])
-            ->get()
-            ->groupBy('student_hemis_id');
+                $otherGradesByHemis = StudentGrade::whereIn('student_hemis_id', $hemisIds)
+                    ->whereIn('semester_code', $semesterCodesOfRatings)
+                    ->whereIn('training_type_code', [99, 101, 102])
+                    ->select([
+                        'student_hemis_id', 'semester_code', 'education_year_code',
+                        'subject_id', 'subject_name', 'grade', 'retake_grade', 'training_type_code',
+                    ])
+                    ->get()
+                    ->groupBy('student_hemis_id');
+
+                $ynConsentsByHemis = YnConsent::whereIn('student_hemis_id', $hemisIds)
+                    ->whereIn('semester_code', $semesterCodesOfRatings)
+                    ->select(['student_hemis_id', 'subject_id', 'status'])
+                    ->get()
+                    ->groupBy('student_hemis_id');
+            } catch (\Throwable $e) {
+                \Log::error('StudentRatingExport bulk-load failed: ' . $e->getMessage(), [
+                    'hemis_count' => count($hemisIds),
+                    'semester_codes' => $semesterCodesOfRatings,
+                    'trace' => $e->getTraceAsString(),
+                ]);
+                // Bulk-load barbod bo'lsa ham eksport ishlasin — fanlar ustunlari "-"
+                // bilan qoladi
+            }
+        }
 
         $rows = [];
         $rank = 0;
@@ -344,8 +357,10 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
             'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
         ];
 
-        // Borders for all data
-        if ($this->totalRows > 0) {
+        // Borders for all data — autoFilter faqat haqiqiy data qatorlari bor
+        // bo'lganda qo'llaniladi (faqat sarlavha bo'lsa PhpSpreadsheet ba'zan
+        // xatoga uchraydi)
+        if ($this->totalRows > 1) {
             $range = 'A1:N' . ($this->totalRows + 1);
             $sheet->getStyle($range)->applyFromArray([
                 'borders' => [
@@ -355,9 +370,7 @@ class StudentRatingExport implements FromArray, WithHeadings, ShouldAutoSize, Wi
                     ],
                 ],
             ]);
-
-            // Excel auto-filter — har ustun bo'yicha filtrlash imkoni
-            $sheet->setAutoFilter('A1:N' . ($this->totalRows + 1));
+            $sheet->setAutoFilter($range);
         }
 
         return $styles;

@@ -3469,8 +3469,8 @@ class JournalController extends Controller
      */
     public function superadminEditGrade(Request $request)
     {
-        if (!auth()->user()?->hasRole('superadmin')) {
-            return response()->json(['success' => false, 'message' => 'Faqat superadmin uchun'], 403);
+        if (!auth()->user()?->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['success' => false, 'message' => 'Faqat superadmin yoki admin uchun'], 403);
         }
 
         if (Setting::get('feature_superadmin_grade_edit', '0') !== '1') {
@@ -3562,8 +3562,8 @@ class JournalController extends Controller
      */
     public function superadminEditExamGrade(Request $request)
     {
-        if (!auth()->user()?->hasRole('superadmin')) {
-            return response()->json(['success' => false, 'message' => 'Faqat superadmin uchun'], 403);
+        if (!auth()->user()?->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['success' => false, 'message' => 'Faqat superadmin yoki admin uchun'], 403);
         }
 
         if (Setting::get('feature_superadmin_grade_edit', '0') !== '1') {
@@ -3946,13 +3946,13 @@ class JournalController extends Controller
             }
 
             // YN ga yuborilganligini tekshirish
-            // YN ga yuborilganligini tekshirish — Superadmin override mavjud
-            // (feature_superadmin_grade_edit toggle ON bo'lsa, superadmin YN locked
-            // bo'lsa ham bahoni o'zgartira oladi).
+            // YN ga yuborilganligini tekshirish — Superadmin/Admin override mavjud
+            // (feature_superadmin_grade_edit toggle ON bo'lsa, superadmin yoki
+            // admin YN locked bo'lsa ham bahoni o'zgartira oladi).
             if ($studentGrade->is_yn_locked) {
-                $isSuper = auth()->user()?->hasRole('superadmin') ?? false;
+                $isPrivileged = auth()->user()?->hasAnyRole(['superadmin', 'admin']) ?? false;
                 $superToggleOn = Setting::get('feature_superadmin_grade_edit', '0') === '1';
-                if (!($isSuper && $superToggleOn)) {
+                if (!($isPrivileged && $superToggleOn)) {
                     return response()->json([
                         'success' => false,
                         'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
@@ -3962,11 +3962,11 @@ class JournalController extends Controller
             }
 
             // Retake bahosi allaqachon qo'yilgan bo'lsa — o'zgartirishga ruxsat berilmagan
-            // (Superadmin toggle yoqilgan bo'lsa, superadmin baribir o'zgartira oladi.)
+            // (Toggle yoqilgan bo'lsa, superadmin yoki admin baribir o'zgartira oladi.)
             if ($studentGrade->retake_grade !== null) {
-                $isSuper = auth()->user()?->hasRole('superadmin') ?? false;
+                $isPrivileged = auth()->user()?->hasAnyRole(['superadmin', 'admin']) ?? false;
                 $superToggleOn = Setting::get('feature_superadmin_grade_edit', '0') === '1';
-                if (!($isSuper && $superToggleOn)) {
+                if (!($isPrivileged && $superToggleOn)) {
                     return response()->json(['success' => false, 'message' => 'Retake bahosi allaqachon qo\'yilgan. O\'zgartirishga ruxsat berilmagan.'], 400);
                 }
             }

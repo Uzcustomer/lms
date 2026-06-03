@@ -128,3 +128,29 @@ FROM vedomost_submissions
 WHERE subject_name <> REGEXP_REPLACE(subject_name, ' *\\([A-Za-zА-Яа-яёЁ0-9]\\) *$', '')
 GROUP BY fan_qoshimcha
 ORDER BY nechta_yozuv DESC;
+
+
+-- ---------------------------------------------------------------------------
+-- 8) GURUH "quyrug'i" — o'zakdan (...NN-NN) keyingi BUTUN qism. Til tegi va harf
+--    birga ko'rinadi: "a (ang)", "b (rus)", "a", " (a)", "с" ... Eng to'liq survey.
+-- ---------------------------------------------------------------------------
+SELECT
+    REGEXP_REPLACE(group_name, '^.*?[0-9]+-[0-9]+', '') AS guruh_quyruq,
+    COUNT(*)                   AS nechta_yozuv,
+    COUNT(DISTINCT group_name) AS nechta_guruh
+FROM vedomost_submissions
+GROUP BY guruh_quyruq
+ORDER BY nechta_yozuv DESC;
+
+
+-- ---------------------------------------------------------------------------
+-- 9) FAN nomidagi har qanday oxirgi qavs (1 yoki ko'p harfli) — " (a)", " (ang)" ...
+-- ---------------------------------------------------------------------------
+SELECT
+    REGEXP_SUBSTR(subject_name, '\\([^)]*\\) *$') AS fan_oxirgi_qavs,
+    COUNT(*)                     AS nechta_yozuv,
+    COUNT(DISTINCT subject_name) AS nechta_fan
+FROM vedomost_submissions
+WHERE subject_name REGEXP '\\([^)]*\\) *$'
+GROUP BY fan_oxirgi_qavs
+ORDER BY nechta_yozuv DESC;

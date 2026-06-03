@@ -90,6 +90,23 @@ QUERIES = {
         GROUP BY fan_qoshimcha
         ORDER BY nechta_yozuv DESC
     """,
+    "8. GURUH quyrug'i (til tegi + harf)": """
+        SELECT REGEXP_REPLACE(group_name, '^.*?[0-9]+-[0-9]+', '') AS guruh_quyruq,
+               COUNT(*)                   AS nechta_yozuv,
+               COUNT(DISTINCT group_name) AS nechta_guruh
+        FROM vedomost_submissions
+        GROUP BY guruh_quyruq
+        ORDER BY nechta_yozuv DESC
+    """,
+    "9. FAN oxirgi qavsi (har qanday)": r"""
+        SELECT REGEXP_SUBSTR(subject_name, '\([^)]*\) *$') AS fan_oxirgi_qavs,
+               COUNT(*)                     AS nechta_yozuv,
+               COUNT(DISTINCT subject_name) AS nechta_fan
+        FROM vedomost_submissions
+        WHERE subject_name REGEXP '\([^)]*\) *$'
+        GROUP BY fan_oxirgi_qavs
+        ORDER BY nechta_yozuv DESC
+    """,
 }
 
 

@@ -7033,6 +7033,25 @@ class JournalController extends Controller
                         ->when($hasAttemptCol, fn($q) => $q->where('attempt', 1))
                         ->delete();
 
+                    // Agar talabada HAQIQIY test natijasi (test markazi / quiz_result —
+                    // reason != 'sinov_yn_test') bo'lsa, JN-asosli soxta test qatorini
+                    // YOZMAYMIZ. Aks holda ikki xil 102-qator paydo bo'lib, baholar
+                    // nomuvofiq ko'rinadi.
+                    $hasRealTest = DB::table('student_grades')
+                        ->whereNull('deleted_at')
+                        ->where('student_hemis_id', $hemisId)
+                        ->where('subject_id', $subjectId)
+                        ->where('semester_code', $semesterCode)
+                        ->where('training_type_code', 102)
+                        ->where(function ($q) {
+                            $q->where('reason', '<>', 'sinov_yn_test')
+                                ->orWhereNull('reason');
+                        })
+                        ->exists();
+                    if ($hasRealTest) {
+                        continue;
+                    }
+
                     $student = DB::table('students')->where('hemis_id', $hemisId)->first();
 
                     $row = [

@@ -882,7 +882,10 @@
         $pastLessonDates = array_values(array_filter($jbLessonDates, fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d') <= $todayStr));
         $teacherEditableDatesRaw = $teacherCanEdit ? array_slice($pastLessonDates, -$teacherEditDays) : [];
         $teacherEditableDates = array_map(fn($d) => \Carbon\Carbon::parse($d)->format('Y-m-d'), $teacherEditableDatesRaw);
-        $isSuperAdmin = (auth()->user()?->hasRole('superadmin') ?? false) && \App\Models\Setting::get('feature_superadmin_grade_edit', '0') === '1';
+        // Toggle yoqilgan bo'lsa, superadmin VA admin ham YN locked rowlarga
+        // baho qo'ya/tahrirlay oladi. Backend (saveRetakeGrade va
+        // superadminEditGrade) ham shu rol ro'yxatini tekshiradi.
+        $isSuperAdmin = (auth()->user()?->hasAnyRole(['superadmin', 'admin']) ?? false) && \App\Models\Setting::get('feature_superadmin_grade_edit', '0') === '1';
         $canAdminEditExam = false;
     @endphp
     <div class="py-2 journal-page-wrapper" style="padding-top: 15vh;">

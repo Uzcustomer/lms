@@ -107,8 +107,9 @@ class CalculateLessonAssignmentJob implements ShouldQueue
         if (!empty($f['subject'])) $scheduleQuery->where('sch.subject_id', $f['subject']);
         if (!empty($f['group'])) $scheduleQuery->where('sch.group_id', $f['group']);
 
-        if (!empty($f['date_from'])) $scheduleQuery->whereRaw('DATE(sch.lesson_date) >= ?', [$f['date_from']]);
-        if (!empty($f['date_to'])) $scheduleQuery->whereRaw('DATE(sch.lesson_date) <= ?', [$f['date_to']]);
+        // DATE() funksiyasi lesson_date indexini bloklaydi — to'g'ridan-to'g'ri timestamp solishtirish
+        if (!empty($f['date_from'])) $scheduleQuery->where('sch.lesson_date', '>=', $f['date_from'] . ' 00:00:00');
+        if (!empty($f['date_to'])) $scheduleQuery->where('sch.lesson_date', '<=', $f['date_to'] . ' 23:59:59');
 
         if (!empty($f['dekan_faculty_ids'])) {
             $deptHemisIds = Department::whereIn('id', $f['dekan_faculty_ids'])->pluck('department_hemis_id')->toArray();
@@ -146,7 +147,7 @@ class CalculateLessonAssignmentJob implements ShouldQueue
             ->whereIn('employee_id', $employeeIds)
             ->whereIn('group_id', $groupHemisIds)
             ->whereIn('subject_id', $subjectIds)
-            ->whereRaw('DATE(lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+            ->whereBetween('lesson_date', [$minDate . ' 00:00:00', $maxDate . ' 23:59:59'])
             ->where('load', '>', 0)
             ->select(DB::raw("DISTINCT CONCAT(employee_id, '|', group_id, '|', subject_id, '|', DATE(lesson_date), '|', training_type_code, '|', lesson_pair_code) as ck"))
             ->pluck('ck')->flip();
@@ -163,7 +164,7 @@ class CalculateLessonAssignmentJob implements ShouldQueue
             ->whereNull('sg.deleted_at')
             ->whereIn('st.group_id', $groupHemisIds)
             ->whereIn('sg.subject_id', $subjectIds)
-            ->whereRaw('DATE(sg.lesson_date) BETWEEN ? AND ?', [$minDate, $maxDate])
+            ->whereBetween('sg.lesson_date', [$minDate . ' 00:00:00', $maxDate . ' 23:59:59'])
             ->whereNotIn('sg.training_type_code', [100, 101, 102, 103])
             ->select(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code) as gk"), DB::raw('COUNT(DISTINCT sg.student_hemis_id) as cnt'))
             ->groupBy(DB::raw("CONCAT(st.group_id, '|', sg.subject_id, '|', DATE(sg.lesson_date), '|', sg.lesson_pair_code)"))

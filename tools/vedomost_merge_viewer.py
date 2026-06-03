@@ -72,6 +72,24 @@ QUERIES = {
                      specialty_name, closing_form, {RG}, {RS})) AS ozak_vedomostlar
         FROM vedomost_submissions
     """,
+    "6. NOYOB guruh qo'shimchalari": f"""
+        SELECT SUBSTRING(group_name, CHAR_LENGTH({RG}) + 1) AS guruh_qoshimcha,
+               COUNT(*)                   AS nechta_yozuv,
+               COUNT(DISTINCT group_name) AS nechta_guruh
+        FROM vedomost_submissions
+        WHERE group_name <> {RG}
+        GROUP BY guruh_qoshimcha
+        ORDER BY nechta_yozuv DESC
+    """,
+    "7. NOYOB fan qo'shimchalari": f"""
+        SELECT SUBSTRING(subject_name, CHAR_LENGTH({RS}) + 1) AS fan_qoshimcha,
+               COUNT(*)                     AS nechta_yozuv,
+               COUNT(DISTINCT subject_name) AS nechta_fan
+        FROM vedomost_submissions
+        WHERE subject_name <> {RS}
+        GROUP BY fan_qoshimcha
+        ORDER BY nechta_yozuv DESC
+    """,
 }
 
 

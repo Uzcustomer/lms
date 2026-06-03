@@ -93,3 +93,38 @@ SELECT
         REGEXP_REPLACE(subject_name, ' *\\([A-Za-zА-Яа-яёЁ0-9]\\) *$', '')
     )) AS ozak_vedomostlar
 FROM vedomost_submissions;
+
+
+-- ---------------------------------------------------------------------------
+-- 6) NOYOB GURUH qo'shimchalari — o'zakdan keyin qolgan qism (a / б / " (a)" ...).
+--    Butun ro'yxat emas, faqat takrorlanmas formatlar. Format tekshirish uchun eng qulay.
+-- ---------------------------------------------------------------------------
+SELECT
+    SUBSTRING(group_name, CHAR_LENGTH(
+        REGEXP_REPLACE(
+            REGEXP_REPLACE(group_name, ' *\\([A-Za-zА-Яа-яёЁ]\\) *$', ''),
+            '(?<=[0-9])[A-Za-zА-Яа-яёЁ]$', '')
+    ) + 1) AS guruh_qoshimcha,
+    COUNT(*)                    AS nechta_yozuv,
+    COUNT(DISTINCT group_name)  AS nechta_guruh
+FROM vedomost_submissions
+WHERE group_name <> REGEXP_REPLACE(
+        REGEXP_REPLACE(group_name, ' *\\([A-Za-zА-Яа-яёЁ]\\) *$', ''),
+        '(?<=[0-9])[A-Za-zА-Яа-яёЁ]$', '')
+GROUP BY guruh_qoshimcha
+ORDER BY nechta_yozuv DESC;
+
+
+-- ---------------------------------------------------------------------------
+-- 7) NOYOB FAN qo'shimchalari — o'zakdan keyin qolgan qism (" (a)", "(1)" ...).
+-- ---------------------------------------------------------------------------
+SELECT
+    SUBSTRING(subject_name, CHAR_LENGTH(
+        REGEXP_REPLACE(subject_name, ' *\\([A-Za-zА-Яа-яёЁ0-9]\\) *$', '')
+    ) + 1) AS fan_qoshimcha,
+    COUNT(*)                      AS nechta_yozuv,
+    COUNT(DISTINCT subject_name)  AS nechta_fan
+FROM vedomost_submissions
+WHERE subject_name <> REGEXP_REPLACE(subject_name, ' *\\([A-Za-zА-Яа-яёЁ0-9]\\) *$', '')
+GROUP BY fan_qoshimcha
+ORDER BY nechta_yozuv DESC;

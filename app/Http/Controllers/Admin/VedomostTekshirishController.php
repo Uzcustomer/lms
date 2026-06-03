@@ -709,24 +709,20 @@ class VedomostTekshirishController extends Controller
             }
 
             // --- ON, OSKI, Test baholar ---
-            // YN qaydnoma yaratish bilan bir xil qiymat chiqishi uchun
-            // YnQaytnomaController::generateYnQaydnoma() dagi logikani
-            // aynan takrorlaymiz: har bir training_type_code uchun MAX(grade)
-            // to'g'ridan-to'g'ri SQL darajasida, education_year_code/
-            // lesson_date filtrlarisiz.
-            $gradesByType = [100 => [], 101 => [], 102 => []];
-            foreach ([100, 101, 102] as $tc) {
-                $gradesByType[$tc] = DB::table('student_grades')
-                    ->whereNull('deleted_at')
-                    ->whereIn('student_hemis_id', $studentHemisIds)
-                    ->where('subject_id', $subjectId)
-                    ->where('semester_code', $semesterCode)
-                    ->where('training_type_code', $tc)
-                    ->select('student_hemis_id', DB::raw('MAX(grade) as grade'))
-                    ->groupBy('student_hemis_id')
-                    ->pluck('grade', 'student_hemis_id')
-                    ->toArray();
-            }
+            // Jurnaldagi AYNAN bir xil tanlash mantig'i (MAX EMAS):
+            // is_qoshimcha=0, education_year/minScheduleDate oynasi, attempt=1,
+            // effectiveGrade va soxta 'sinov_yn_test' qatorini chetlatish.
+            $onOskiTest = \App\Services\JournalGradeService::computeOnOskiTest(
+                (string) $groupHemisId,
+                (string) $subjectId,
+                (string) $semesterCode,
+                $studentHemisIds
+            );
+            $gradesByType = [
+                100 => $onOskiTest['on'],
+                101 => $onOskiTest['oski'],
+                102 => $onOskiTest['test'],
+            ];
 
             // --- O'qituvchilar ---
             $lectureTeacher   = $this->getTopTeacher($groupHemisId, $subjectId, $semesterCode, [11]);

@@ -68,20 +68,18 @@ class YnQaydnomaDataService
             $mt = $latest->pluck('mt', 'student_hemis_id')->toArray();
         }
 
-        $grade = fn(int $code) => DB::table('student_grades')
-            ->whereNull('deleted_at')
-            ->whereIn('student_hemis_id', $studentHemisIds)
-            ->where('subject_id', $subject->subject_id)
-            ->where('semester_code', $semesterCode)
-            ->where('training_type_code', $code)
-            ->select('student_hemis_id', DB::raw('MAX(grade) as grade'))
-            ->groupBy('student_hemis_id')
-            ->pluck('grade', 'student_hemis_id')
-            ->toArray();
-
-        $on = $grade(100);
-        $oski = $grade(101);
-        $test = $grade(102);
+        // ON, OSKI, Test — jurnaldagi AYNAN bir xil tanlash mantig'i (MAX EMAS):
+        // is_qoshimcha=0, education_year/minScheduleDate oynasi, attempt=1,
+        // effectiveGrade va soxta 'sinov_yn_test' qatorini chetlatish.
+        $onOskiTest = \App\Services\JournalGradeService::computeOnOskiTest(
+            (string) $groupHemisId,
+            (string) $subject->subject_id,
+            (string) $semesterCode,
+            $studentHemisIds
+        );
+        $on = $onOskiTest['on'];
+        $oski = $onOskiTest['oski'];
+        $test = $onOskiTest['test'];
 
         // O'qituvchilar
         $maruza = DB::table('student_grades as s')

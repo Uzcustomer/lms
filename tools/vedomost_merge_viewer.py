@@ -25,33 +25,41 @@ except ImportError:
     pymysql = None
 
 # O'zak qoidalar (PHP VedomostMergeService bilan AYNAN bir xil).
-# REGEXP_REPLACE iboralarini bir joyda yig'amiz (SQL ichida takror ishlatamiz).
-RG = (
-    "REGEXP_REPLACE(REGEXP_REPLACE(group_name, ' *\\\\([A-Za-zА-Яа-яёЁ]\\\\) *$', ''), "
-    "'(?<=[0-9])[A-Za-zА-Яа-яёЁ]$', '')"
-)
+#   RG = o'zak guruh (nom boshidan birinchi NN-NN gacha)
+#   RS = o'zak fan (oxirgi bitta belgili qavs kesiladi)
+RG = "COALESCE(REGEXP_SUBSTR(group_name, '^.*?[0-9]+-[0-9]+'), group_name)"
 RS = "REGEXP_REPLACE(subject_name, ' *\\\\([A-Za-zА-Яа-яёЁ0-9]\\\\) *$', '')"
 
+# MUHIM: faqat FAOL guruhlar. vedomost_submissions ni groups bilan bog'lab,
+# g.active = 1 bo'lganlarini olamiz (groups — MySQL reserved so'z, backtick kerak).
+FROM_ACTIVE = (
+    "FROM vedomost_submissions vs "
+    "JOIN `groups` g ON g.group_hemis_id = vs.group_hemis_id AND g.active = 1"
+)
+
 QUERIES = {
-    "1. Barcha guruhlar + o'zagi": f"""
-        SELECT group_name,
-               {RG} AS root_group,
-               COUNT(*) AS yozuvlar
-        FROM vedomost_submissions
+    "1. Barcha (faol) guruhlar + o'zagi": f"""
+        SELECT group_name, {RG} AS root_group, COUNT(*) AS yozuvlar
+        {FROM_ACTIVE}
         GROUP BY group_name
         ORDER BY group_name
     """,
-    "2. Qo'shimchali guruhlar (o'zgargan)": f"""
-        SELECT DISTINCT group_name, {RG} AS root_group
-        FROM vedomost_submissions
-        WHERE group_name <> {RG}
-        ORDER BY group_name
+    "2. GURUH quyrug'i (til tegi + harf)": f"""
+        SELECT REGEXP_REPLACE(group_name, '^.*?[0-9]+-[0-9]+', '') AS guruh_quyruq,
+               COUNT(*)                   AS nechta_yozuv,
+               COUNT(DISTINCT group_name) AS nechta_guruh
+        {FROM_ACTIVE}
+        GROUP BY guruh_quyruq
+        ORDER BY nechta_yozuv DESC
     """,
-    "3. Qo'shimchali fanlar (o'zgargan)": f"""
-        SELECT DISTINCT subject_name, {RS} AS root_subject
-        FROM vedomost_submissions
-        WHERE subject_name <> {RS}
-        ORDER BY subject_name
+    "3. FAN oxirgi qavsi (har qanday)": rf"""
+        SELECT REGEXP_SUBSTR(subject_name, '\([^)]*\) *$') AS fan_oxirgi_qavs,
+               COUNT(*)                     AS nechta_yozuv,
+               COUNT(DISTINCT subject_name) AS nechta_fan
+        {FROM_ACTIVE}
+        WHERE subject_name REGEXP '\([^)]*\) *$'
+        GROUP BY fan_oxirgi_qavs
+        ORDER BY nechta_yozuv DESC
     """,
     "4. BIRLASHTIRISH ko'rinishi (o'qituvchilar bilan)": f"""
         SELECT education_year, semester_code, specialty_name, closing_form,
@@ -61,7 +69,7 @@ QUERIES = {
                GROUP_CONCAT(DISTINCT group_name   ORDER BY group_name   SEPARATOR ', ') AS guruhchalar,
                GROUP_CONCAT(DISTINCT subject_name ORDER BY subject_name SEPARATOR ', ') AS fan_variantlari,
                GROUP_CONCAT(DISTINCT teacher_name ORDER BY teacher_name SEPARATOR ', ') AS oqituvchilar
-        FROM vedomost_submissions
+        {FROM_ACTIVE}
         GROUP BY education_year, semester_code, specialty_name, closing_form, root_group, root_subject
         HAVING guruhcha_soni > 1
         ORDER BY guruhcha_soni DESC, root_group, root_subject
@@ -70,42 +78,7 @@ QUERIES = {
         SELECT COUNT(*) AS yozuvlar_jami,
                COUNT(DISTINCT CONCAT_WS('|', education_year, semester_code,
                      specialty_name, closing_form, {RG}, {RS})) AS ozak_vedomostlar
-        FROM vedomost_submissions
-    """,
-    "6. NOYOB guruh qo'shimchalari": f"""
-        SELECT SUBSTRING(group_name, CHAR_LENGTH({RG}) + 1) AS guruh_qoshimcha,
-               COUNT(*)                   AS nechta_yozuv,
-               COUNT(DISTINCT group_name) AS nechta_guruh
-        FROM vedomost_submissions
-        WHERE group_name <> {RG}
-        GROUP BY guruh_qoshimcha
-        ORDER BY nechta_yozuv DESC
-    """,
-    "7. NOYOB fan qo'shimchalari": f"""
-        SELECT SUBSTRING(subject_name, CHAR_LENGTH({RS}) + 1) AS fan_qoshimcha,
-               COUNT(*)                     AS nechta_yozuv,
-               COUNT(DISTINCT subject_name) AS nechta_fan
-        FROM vedomost_submissions
-        WHERE subject_name <> {RS}
-        GROUP BY fan_qoshimcha
-        ORDER BY nechta_yozuv DESC
-    """,
-    "8. GURUH quyrug'i (til tegi + harf)": """
-        SELECT REGEXP_REPLACE(group_name, '^.*?[0-9]+-[0-9]+', '') AS guruh_quyruq,
-               COUNT(*)                   AS nechta_yozuv,
-               COUNT(DISTINCT group_name) AS nechta_guruh
-        FROM vedomost_submissions
-        GROUP BY guruh_quyruq
-        ORDER BY nechta_yozuv DESC
-    """,
-    "9. FAN oxirgi qavsi (har qanday)": r"""
-        SELECT REGEXP_SUBSTR(subject_name, '\([^)]*\) *$') AS fan_oxirgi_qavs,
-               COUNT(*)                     AS nechta_yozuv,
-               COUNT(DISTINCT subject_name) AS nechta_fan
-        FROM vedomost_submissions
-        WHERE subject_name REGEXP '\([^)]*\) *$'
-        GROUP BY fan_oxirgi_qavs
-        ORDER BY nechta_yozuv DESC
+        {FROM_ACTIVE}
     """,
 }
 

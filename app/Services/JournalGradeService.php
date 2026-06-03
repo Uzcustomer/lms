@@ -5,6 +5,7 @@ namespace App\Services;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Jurnaldagi JN (joriy nazorat) va MT (mustaqil ta'lim) o'rtacha baholarini
@@ -386,5 +387,167 @@ class JournalGradeService
             return (float) $row->retake_grade;
         }
         return null;
+    }
+
+    /**
+     * ON (100), OSKI (101), Test (102) baholarini jurnal sahifasidagi
+     * AYNAN bir xil mantiq bilan hisoblaydi — `MAX(grade)` EMAS.
+     *
+     * Manba: JournalController::show() dagi OSKI/Test ustun hisobi
+     * (is_qoshimcha=0, education_year/minScheduleDate oynasi, attempt=1,
+     * effectiveGrade). Vedomost-tekshirish, YN qaydnoma generatori va
+     * YnQaydnomaDataService shu yagona mantiqdan foydalanadi — natijada
+     * qaydnoma har doim jurnaldagi qiymatga teng bo'ladi.
+     *
+     * QO'SHIMCHA QOIDA: agar talabada haqiqiy natija (reason !=
+     * 'sinov_yn_test') bo'lsa, soxta 'sinov_yn_test' qatori hisobga
+     * OLINMAYDI. Sinov fani uchun (faqat sinov qatori bor) esa o'sha
+     * qiymat ishlatiladi.
+     *
+     * @param array<int,int|string> $studentHemisIds
+     * @return array{on:array<string,int>,oski:array<string,int>,test:array<string,int>}
+     */
+    public static function computeOnOskiTest(
+        string $groupHemisId,
+        string $subjectId,
+        string $semesterCode,
+        array $studentHemisIds
+    ): array {
+        $out = ['on' => [], 'oski' => [], 'test' => []];
+        if (empty($studentHemisIds)) {
+            return $out;
+        }
+        $studentHids = array_map('strval', $studentHemisIds);
+
+        // Joriy o'quv yili — eng so'nggi jadval yozuvidan (jurnal bilan bir xil).
+        $educationYearCode = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->whereNotNull('education_year_code')
+            ->orderBy('lesson_date', 'desc')
+            ->value('education_year_code');
+
+        // Shu semestr jadvalining eng erta (imtihonsiz) dars sanasi —
+        // undan oldingi eski yozuvlarni chetlatish uchun.
+        $minScheduleDate = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->whereNotNull('lesson_date')
+            ->whereNotIn('training_type_code', [100, 101, 102, 103])
+            ->when($educationYearCode !== null, fn ($q) => $q->where('education_year_code', $educationYearCode))
+            ->min('lesson_date');
+
+        $hasQoshimcha = Schema::hasColumn('student_grades', 'is_qoshimcha');
+        $hasAttempt   = Schema::hasColumn('student_grades', 'attempt');
+
+        $rows = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->whereIn('student_hemis_id', $studentHids)
+            ->where('subject_id', $subjectId)
+            // OSKI/Test boshqa semestrda saqlangan bo'lishi mumkin (jurnal bilan bir xil yumshatish)
+            ->where(function ($q) use ($semesterCode) {
+                $q->where('semester_code', $semesterCode)
+                    ->orWhereIn('training_type_code', [101, 102]);
+            })
+            ->whereIn('training_type_code', [100, 101, 102, 103])
+            ->when($hasQoshimcha, fn ($q) => $q->where('is_qoshimcha', 0))
+            ->when($educationYearCode !== null, function ($q) use ($educationYearCode, $minScheduleDate) {
+                $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
+                    $q2->where('education_year_code', $educationYearCode)
+                        ->orWhere(function ($q3) use ($minScheduleDate) {
+                            $q3->whereNull('education_year_code')
+                                ->when($minScheduleDate !== null, fn ($q4) => $q4->where('lesson_date', '>=', $minScheduleDate));
+                        });
+                });
+            })
+            ->when($educationYearCode === null && $minScheduleDate !== null, fn ($q) => $q->where('lesson_date', '>=', $minScheduleDate))
+            ->select(
+                'student_hemis_id',
+                'training_type_code',
+                'grade',
+                'retake_grade',
+                'status',
+                'reason',
+                'quiz_result_id',
+                $hasAttempt ? DB::raw('attempt') : DB::raw('1 as attempt')
+            )
+            ->get();
+
+        // Eski 103 (quiz) kodini quiz_type bo'yicha 101/102 ga aniqlash.
+        $quizIds = $rows->where('training_type_code', 103)
+            ->pluck('quiz_result_id')->filter()->unique()->values()->all();
+        $quizTypeById = [];
+        if (!empty($quizIds)) {
+            $quizTypeById = DB::table('hemis_quiz_results')
+                ->whereIn('id', $quizIds)
+                ->pluck('quiz_type', 'id')->toArray();
+        }
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+
+        // [hemis][typeCode][attempt] = [ ['grade'=>float,'sinov'=>bool], ... ]
+        $grouped = [];
+        foreach ($rows as $r) {
+            $eff = self::effectiveGrade($r);
+            if ($eff === null) {
+                continue;
+            }
+            $tc = (int) $r->training_type_code;
+            if ($tc === 103 && $r->quiz_result_id) {
+                $qt = $quizTypeById[$r->quiz_result_id] ?? null;
+                if (in_array($qt, $oskiTypes, true)) {
+                    $tc = 101;
+                } elseif (in_array($qt, $testTypes, true)) {
+                    $tc = 102;
+                } else {
+                    continue;
+                }
+            }
+            if (!in_array($tc, [100, 101, 102], true)) {
+                continue;
+            }
+            $attempt = (int) ($r->attempt ?? 1);
+            $grouped[(string) $r->student_hemis_id][$tc][$attempt][] = [
+                'grade' => $eff,
+                'sinov' => ($r->reason === 'sinov_yn_test'),
+            ];
+        }
+
+        foreach ($grouped as $hemis => $types) {
+            foreach ([100 => 'on', 101 => 'oski', 102 => 'test'] as $tc => $key) {
+                if (empty($types[$tc])) {
+                    continue;
+                }
+                // ON: mavjud eng kichik urinish; OSKI/Test: asosiy ustun = 1-urinish.
+                $target = $tc === 100 ? (int) min(array_keys($types[$tc])) : 1;
+                if (empty($types[$tc][$target])) {
+                    continue;
+                }
+                $list = $types[$tc][$target];
+                // Haqiqiy natija bo'lsa, soxta sinov qatorini tashlaymiz.
+                $hasReal = false;
+                foreach ($list as $item) {
+                    if (!$item['sinov']) {
+                        $hasReal = true;
+                        break;
+                    }
+                }
+                if ($hasReal) {
+                    $list = array_values(array_filter($list, fn ($i) => !$i['sinov']));
+                }
+                if (empty($list)) {
+                    continue;
+                }
+                $vals = array_map(fn ($i) => $i['grade'], $list);
+                $out[$key][(string) $hemis] = (int) round(array_sum($vals) / count($vals), 0, PHP_ROUND_HALF_UP);
+            }
+        }
+
+        return $out;
     }
 }

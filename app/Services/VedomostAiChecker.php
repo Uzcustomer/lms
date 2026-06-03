@@ -15,8 +15,10 @@ use RuntimeException;
  */
 class VedomostAiChecker
 {
-    public function __construct(private YnQaydnomaDataService $qaydnoma)
-    {
+    public function __construct(
+        private YnQaydnomaDataService $qaydnoma,
+        private VedomostMergeService $merge
+    ) {
     }
 
     public static function isConfigured(): bool
@@ -36,11 +38,10 @@ class VedomostAiChecker
             throw new RuntimeException('Skaner PDF topilmadi.');
         }
 
-        $expected = $this->qaydnoma->buildExpectedData(
-            (string) $v->group_hemis_id,
-            (string) $v->subject_id,
-            (string) $v->semester_code
-        );
+        // Birlashtirilgan vedomost: bitta o'zak guruh × o'zak fan uchun bitta varaq,
+        // unda barcha guruhcha/variant talabalari jamlangan. Shuning uchun kutilgan
+        // ma'lumotni barcha siblinglardan birlashtirib quramiz.
+        $expected = $this->buildMergedExpected($v);
         if (!$expected) {
             throw new RuntimeException('Tizimda bu guruh/fan uchun YN qaydnoma ma\'lumoti topilmadi.');
         }
@@ -69,7 +70,9 @@ class VedomostAiChecker
 
         $payload = [
             'model' => config('services.anthropic.model'),
-            'max_tokens' => 8000,
+            // Katta guruhda (ko'p talaba) ko'p nomuvofiqlik + adaptive thinking bo'lishi
+            // mumkin — javob yarmida kesilmasligi uchun yetarli headroom.
+            'max_tokens' => 16000,
             'thinking' => ['type' => 'adaptive'],
             'system' => [[
                 'type' => 'text',
@@ -102,6 +105,9 @@ class VedomostAiChecker
         if ($stopReason === 'refusal') {
             throw new RuntimeException('Claude so\'rovni rad etdi (refusal).');
         }
+        if ($stopReason === 'max_tokens') {
+            throw new RuntimeException('Claude javobi max_tokens chegarasida kesildi — natija to\'liq emas.');
+        }
 
         // Structured output: matn blokida sxemaga mos JSON bo'ladi
         $jsonText = null;
@@ -128,12 +134,106 @@ class VedomostAiChecker
         ];
     }
 
+    /**
+     * Birlashtirilgan vedomost uchun kutilgan ma'lumot — o'zak guruh × o'zak fanga
+     * tegishli barcha guruhcha/variant yozuvlarining ma'lumotini bitta tuzilmaga
+     * jamlaydi (talabalar birlashtiriladi, o'qituvchilar/sanalar to'planadi).
+     */
+    private function buildMergedExpected(VedomostSubmission $v): ?array
+    {
+        $siblings = $this->merge->siblingsOf($v);
+
+        $parts = [];
+        foreach ($siblings as $sib) {
+            $data = $this->qaydnoma->buildExpectedData(
+                (string) $sib->group_hemis_id,
+                (string) $sib->subject_id,
+                (string) $sib->semester_code
+            );
+            if ($data) {
+                $parts[] = $data;
+            }
+        }
+
+        if (empty($parts)) {
+            return null;
+        }
+        if (count($parts) === 1) {
+            return $parts[0];
+        }
+
+        $first = $parts[0];
+        $groupNames = [];
+        $maruzachi = [];
+        $amaliyot = [];
+        $ynSanasi = [];
+        $students = [];
+        $seen = [];
+
+        foreach ($parts as $p) {
+            if (!empty($p['guruh'])) {
+                $groupNames[$p['guruh']] = true;
+            }
+            foreach (explode(', ', (string) ($p['maruzachi'] ?? '')) as $name) {
+                $name = trim($name);
+                if ($name !== '') {
+                    $maruzachi[$name] = true;
+                }
+            }
+            foreach (explode(', ', (string) ($p['amaliyot_oqituvchilari'] ?? '')) as $name) {
+                $name = trim($name);
+                if ($name !== '') {
+                    $amaliyot[$name] = true;
+                }
+            }
+            if (!empty($p['yn_sanasi'])) {
+                $ynSanasi[$p['yn_sanasi']] = true;
+            }
+            foreach ($p['talabalar'] ?? [] as $row) {
+                // Bir talaba ikki marta tushmasligi uchun talaba ID (yoki FISH) bo'yicha dedupe.
+                $key = !empty($row['student_id']) ? 'id:' . $row['student_id'] : 'fish:' . ($row['fish'] ?? '');
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
+                $students[] = $row;
+            }
+        }
+
+        // Talabalarni qayta raqamlaymiz (birlashgan ro'yxat bo'yicha 1..N).
+        foreach ($students as $i => &$row) {
+            $row['n'] = $i + 1;
+        }
+        unset($row);
+
+        $subgroups = array_keys($groupNames);
+        sort($subgroups, SORT_NATURAL | SORT_FLAG_CASE);
+        $rootGroup = $this->merge->rootGroupName($v->group_name);
+
+        return array_merge($first, [
+            'fan' => $this->merge->rootSubjectName($first['fan'] ?? $v->subject_name),
+            'guruh' => $rootGroup . (count($subgroups) > 1 ? ' (' . implode(', ', $subgroups) . ')' : ''),
+            'maruzachi' => empty($maruzachi) ? null : implode(', ', array_keys($maruzachi)),
+            'amaliyot_oqituvchilari' => implode(', ', array_keys($amaliyot)),
+            'yn_sanasi' => empty($ynSanasi) ? null : implode(', ', array_keys($ynSanasi)),
+            'jami_talabalar' => count($students),
+            'talabalar' => $students,
+        ]);
+    }
+
     private function systemPrompt(): string
     {
         return <<<'TXT'
 Siz universitet o'quv bo'limining vedomost (YN qaydnoma) tekshiruvchi yordamchisisiz.
 Vazifa: o'qituvchi taqdim etgan skaner qilingan vedomostni (PDF) tizimdagi rasmiy
 YN qaydnoma ma'lumoti bilan solishtirib, nomuvofiqliklarni aniqlash.
+
+MUHIM: Bitta vedomost bitta O'ZAK guruh × o'zak fan uchun bir varaqda olinadi va
+bir nechta guruhcha (a/b/c, til oqimlari) talabalarini jamlashi mumkin. Tizim
+ma'lumotidagi "guruh" maydonida o'zak guruh va uning guruhchalari ko'rsatilgan,
+"talabalar" ro'yxati esa barcha guruhchalar talabalarining birlashmasi. Skanerda
+shu barcha talabalar bo'lishi normal — buni xato deb belgilamang. O'qituvchilar
+ham bir nechta bo'lishi mumkin (har guruhchaning o'qituvchisi).
 
 Quyidagilarni tekshiring:
 1) Sarlavha maydonlari tizim ma'lumotiga mos kelishi: fakultet nomi, o'quv yili, yo'nalish,

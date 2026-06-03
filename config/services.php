@@ -195,7 +195,9 @@ return [
     'anthropic' => [
         // Claude API kaliti (api.anthropic.com). Bo'sh bo'lsa AI tekshiruv o'chiq.
         'api_key' => env('ANTHROPIC_API_KEY'),
-        'model' => env('ANTHROPIC_MODEL', 'claude-opus-4-8'),
+        // Sonnet — token narxi arzonroq ($3/$15). Vedomost solishtirish uchun yetarli.
+        // Kerak bo'lsa ANTHROPIC_MODEL=claude-opus-4-8 bilan Opus'ga qaytarish mumkin.
+        'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-6'),
         'version' => env('ANTHROPIC_VERSION', '2023-06-01'),
         'timeout' => (int) env('ANTHROPIC_TIMEOUT', 180),
     ],

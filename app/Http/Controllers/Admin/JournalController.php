@@ -5884,7 +5884,9 @@ class JournalController extends Controller
     /**
      * Sinov (test) baholarini admin tomonidan o'zgartirish ruxsati bormi?
      * - admin/superadmin rol bo'lishi shart;
-     * - sozlamada `sinov_test_grades_editable` yoqilgan bo'lishi shart.
+     * - sozlamalardan birortasi yoqilgan bo'lishi shart:
+     *     `sinov_test_grades_editable` — Sinov uchun maxsus toggle
+     *     `feature_superadmin_grade_edit` — barcha baholarni tahrirlash (umumiy)
      */
     public function canEditLockedSinov(): bool
     {
@@ -5892,7 +5894,9 @@ class JournalController extends Controller
         if (!$user || !$user->hasAnyRole(['admin', 'superadmin'])) {
             return false;
         }
-        return (bool) \App\Models\Setting::get('sinov_test_grades_editable', false);
+        $sinovToggle = (bool) \App\Models\Setting::get('sinov_test_grades_editable', false);
+        $generalToggle = \App\Models\Setting::get('feature_superadmin_grade_edit', '0') === '1';
+        return $sinovToggle || $generalToggle;
     }
 
     /**

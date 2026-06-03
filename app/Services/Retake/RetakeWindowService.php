@@ -94,11 +94,6 @@ class RetakeWindowService
     {
         $this->validateDateRange($startDate, $endDate);
 
-        // Uzaytirishmi? (yangi tugash sanasi eskisidan keyinmi)
-        $oldEnd = $window->end_date ? Carbon::parse($window->end_date)->startOfDay() : null;
-        $newEnd = Carbon::parse($endDate)->startOfDay();
-        $isExtension = $oldEnd === null || $newEnd->gt($oldEnd);
-
         $update = [
             'start_date' => $startDate,
             'end_date' => $endDate,
@@ -116,13 +111,11 @@ class RetakeWindowService
 
         $window->update($update);
 
-        // Window UZAYTIRILSA — ostidagi o'qish guruhlarining tugash sanasi ham
-        // uzayadi va qulfi ochiladi. Shunda guruhda mustaqil ta'lim yuklash va
-        // baho qo'yish yangi tugash sanasigacha ochiq turadi (yakuniy qilingan
-        // bo'lsa ham). Qisqartirishda guruhlar tegmaydi.
-        if ($isExtension) {
-            $this->extendLinkedGroupEndDates([$window->id], $endDate);
-        }
+        // Override har doim ostidagi o'qish guruhlariga sinxronlanadi: guruh
+        // sanasi yangi oyna sanasidan orqada bo'lsa uzaytiriladi, qulfi ochiladi
+        // va completed bo'lsa qayta faollashtiriladi. Bu avval uzaytirilgan,
+        // ammo guruhga tushmay qolgan holatlarni ham to'g'rilaydi.
+        $this->extendLinkedGroupEndDates([$window->id], $endDate);
     }
 
     /**
@@ -151,6 +144,11 @@ class RetakeWindowService
 
         $newEnd = Carbon::parse($newEndDate)->startOfDay();
         $today = Carbon::today();
+
+        // Oyna sanasi o'tib ketgan bo'lsa — guruhni ochishning ma'nosi yo'q.
+        if ($newEnd->lt($today)) {
+            return 0;
+        }
 
         $groupIds = RetakeApplication::query()
             ->whereNotNull('retake_group_id')

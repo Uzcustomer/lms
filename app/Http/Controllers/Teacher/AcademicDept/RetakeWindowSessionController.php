@@ -130,8 +130,6 @@ class RetakeWindowSessionController extends Controller
         // ochiladi (oynalarning eski tugash sanasi har xil bo'lishi mumkin).
         $windowService = app(\App\Services\Retake\RetakeWindowService::class);
         $supportsReopen = \App\Models\RetakeApplicationWindow::supportsReopen();
-        $newEndC = \Illuminate\Support\Carbon::parse($data['end_date'])->startOfDay();
-        $extendedWindowIds = [];
         $count = 0;
         foreach ($windows as $w) {
             $update = [
@@ -144,21 +142,17 @@ class RetakeWindowSessionController extends Controller
                     $update['application_reopen_until'] = $reopen;
                 }
             }
-            // Bu oyna uzaytirildimi? (yangi tugash sanasi eskisidan keyinmi)
-            $oldEnd = $w->end_date ? \Illuminate\Support\Carbon::parse($w->end_date)->startOfDay() : null;
-            if ($oldEnd === null || $newEndC->gt($oldEnd)) {
-                $extendedWindowIds[] = $w->id;
-            }
             \App\Models\RetakeApplicationWindow::whereKey($w->id)->update($update);
             $count++;
         }
 
-        // Faqat UZAYTIRILGAN window'lar ostidagi o'qish guruhlarining tugash
-        // sanasi uzayadi va qulfi ochiladi — guruhda mustaqil ta'lim yuklash va
-        // baho qo'yish yangi tugash sanasigacha ochiq turishi uchun (yakuniy
-        // qilingan bo'lsa ham). Qisqartirishda guruhlar tegmaydi.
-        if (!empty($extendedWindowIds)) {
-            $windowService->extendLinkedGroupEndDates($extendedWindowIds, $data['end_date']);
+        // Har doim ostidagi o'qish guruhlariga sinxronlanadi: guruh sanasi
+        // yangi oyna sanasidan orqada bo'lsa uzaytiriladi, qulfi ochiladi,
+        // completed bo'lsa qayta faollashtiriladi. Sana o'tib ketgan bo'lsa
+        // helper jim qoladi. Avval uzaytirilib, guruhga tushmay qolgan
+        // holatlarni ham to'g'rilaydi.
+        if ($windowIds->isNotEmpty()) {
+            $windowService->extendLinkedGroupEndDates($windowIds->all(), $data['end_date']);
         }
 
         // Telegram xabar JAVOBDAN KEYIN — sahifa muzlamasligi uchun.

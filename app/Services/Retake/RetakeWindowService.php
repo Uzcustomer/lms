@@ -135,7 +135,14 @@ class RetakeWindowService
      *
      * @return int Sana uzaytirilgan guruhlar soni
      */
-    public function extendLinkedGroupEndDates(array $windowIds, string $newEndDate): int
+    /**
+     * @param  array<int>  $windowIds
+     * @param  string|null $newEndDate Endi ishlatilmaydi (orqaga moslik uchun
+     *                                 saqlangan) — helper har guruh uchun
+     *                                 hissa qo'shgan barcha oynalarning eng
+     *                                 kech end_date'idan boshlab o'zi hisoblaydi.
+     */
+    public function extendLinkedGroupEndDates(array $windowIds, ?string $newEndDate = null): int
     {
         $windowIds = array_values(array_filter($windowIds));
         if (empty($windowIds)) {

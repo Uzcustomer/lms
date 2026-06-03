@@ -5778,6 +5778,25 @@ class JournalController extends Controller
     }
 
     /**
+     * (subject_id, curriculum, semester) bo'yicha curriculum_subjects qatorini
+     * yuklaydi — FAOL va closing_form to'ldirilgan qatorni AFZAL ko'radi.
+     *
+     * HEMIS sync ba'zan bir xil (subject, curriculum, semester) uchun faol va
+     * nofaol dublikat qatorlar yaratadi (turli curriculum_subject_hemis_id).
+     * Tartiblashsiz ->first() nofaol/bo'sh (closing_form=NULL) qatorni olib,
+     * sinov fanini noto'g'ri aniqlashga olib kelardi.
+     */
+    private function resolveCurriculumSubject($subjectId, $curriculaHemisId, $semesterCode)
+    {
+        return CurriculumSubject::where('subject_id', $subjectId)
+            ->where('curricula_hemis_id', $curriculaHemisId)
+            ->where('semester_code', $semesterCode)
+            ->orderByDesc('is_active')
+            ->orderByRaw('closing_form IS NULL')
+            ->first();
+    }
+
+    /**
      * Sinov fani uchun YN test bahosini o'qituvchi tomonidan bir marta o'zgartirish.
      * Sukut qiymat — joriy JN o'rtachasi. Override yozuvi saqlangach qulflanadi.
      */
@@ -5819,10 +5838,7 @@ class JournalController extends Controller
         if (!$group) {
             return response()->json(['success' => false, 'message' => 'Guruh topilmadi.'], 404);
         }
-        $subject = CurriculumSubject::where('subject_id', $data['subject_id'])
-            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('semester_code', $data['semester_code'])
-            ->first();
+        $subject = $this->resolveCurriculumSubject($data['subject_id'], $group->curriculum_hemis_id, $data['semester_code']);
         if (!$subject || ($subject->closing_form ?? null) !== 'sinov') {
             return response()->json(['success' => false, 'message' => 'Bu funksiya faqat sinov bilan yopiladigan fanlarga tegishli.'], 422);
         }
@@ -5963,10 +5979,7 @@ class JournalController extends Controller
         if (!$group) {
             return response()->json(['success' => false, 'message' => 'Guruh topilmadi.'], 404);
         }
-        $subject = CurriculumSubject::where('subject_id', $data['subject_id'])
-            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('semester_code', $data['semester_code'])
-            ->first();
+        $subject = $this->resolveCurriculumSubject($data['subject_id'], $group->curriculum_hemis_id, $data['semester_code']);
         if (!$subject || ($subject->closing_form ?? null) !== 'sinov') {
             return response()->json(['success' => false, 'message' => 'Bu funksiya faqat sinov bilan yopiladigan fanlarga tegishli.'], 422);
         }
@@ -6115,10 +6128,7 @@ class JournalController extends Controller
         if (!$group) {
             return response()->json(['success' => false, 'message' => 'Guruh topilmadi.'], 404);
         }
-        $subject = CurriculumSubject::where('subject_id', $data['subject_id'])
-            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('semester_code', $data['semester_code'])
-            ->first();
+        $subject = $this->resolveCurriculumSubject($data['subject_id'], $group->curriculum_hemis_id, $data['semester_code']);
         if (!$subject || ($subject->closing_form ?? null) !== 'sinov') {
             return response()->json(['success' => false, 'message' => 'Bu funksiya faqat sinov bilan yopiladigan fanlarga tegishli.'], 422);
         }
@@ -6266,10 +6276,7 @@ class JournalController extends Controller
         $group = Group::where('group_hemis_id', $groupHemisId)->first();
         if (!$group) return 0;
 
-        $subject = CurriculumSubject::where('subject_id', $subjectId)
-            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('semester_code', $semesterCode)
-            ->first();
+        $subject = $this->resolveCurriculumSubject($subjectId, $group->curriculum_hemis_id, $semesterCode);
         if (!$subject || ($subject->closing_form ?? null) !== 'sinov') return 0;
 
         $ynSubmission = YnSubmission::where('subject_id', $subjectId)
@@ -6676,10 +6683,7 @@ class JournalController extends Controller
         $group = Group::where('group_hemis_id', $groupHemisId)->first();
         $auditoriumHours = 0.0;
         if ($group) {
-            $subj = CurriculumSubject::where('subject_id', $subjectId)
-                ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-                ->where('semester_code', $semesterCode)
-                ->first();
+            $subj = $this->resolveCurriculumSubject($subjectId, $group->curriculum_hemis_id, $semesterCode);
             $auditoriumHours = (float) ($subj->total_acload ?? 0);
         }
 
@@ -7013,10 +7017,7 @@ class JournalController extends Controller
             $submitGroup = Group::where('group_hemis_id', $groupHemisId)->first();
             $sinovSubject = null;
             if ($submitGroup) {
-                $sinovSubject = CurriculumSubject::where('subject_id', $subjectId)
-                    ->where('curricula_hemis_id', $submitGroup->curriculum_hemis_id)
-                    ->where('semester_code', $semesterCode)
-                    ->first();
+                $sinovSubject = $this->resolveCurriculumSubject($subjectId, $submitGroup->curriculum_hemis_id, $semesterCode);
             }
             $isSinovSubmit = $sinovSubject && ($sinovSubject->closing_form ?? null) === 'sinov';
 
@@ -8132,10 +8133,7 @@ class JournalController extends Controller
         // Sinov fani — test markazidan natija tortilmaydi (joriy o'rtacha submitToYn da yozilgan)
         $sinovGroup = Group::where('group_hemis_id', $groupHemisId)->first();
         if ($sinovGroup) {
-            $sinovSubject = CurriculumSubject::where('subject_id', $subjectId)
-                ->where('curricula_hemis_id', $sinovGroup->curriculum_hemis_id)
-                ->where('semester_code', $semesterCode)
-                ->first();
+            $sinovSubject = $this->resolveCurriculumSubject($subjectId, $sinovGroup->curriculum_hemis_id, $semesterCode);
             if ($sinovSubject && ($sinovSubject->closing_form ?? null) === 'sinov') {
                 return response()->json([
                     'success' => true,

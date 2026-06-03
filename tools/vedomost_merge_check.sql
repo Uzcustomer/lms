@@ -1,130 +1,97 @@
 -- ============================================================================
 -- Vedomost topshirish — o'zak guruh × o'zak fan birlashtirish DIAGNOSTIKASI
--- MySQL / MariaDB (8.0+ / 10.0.5+) — REGEXP_REPLACE kerak.
+-- MySQL / MariaDB (8.0+ / 10.0.5+) — REGEXP_SUBSTR / REGEXP_REPLACE kerak.
+-- Hammasi READ-ONLY (faqat SELECT).
 --
--- Maqsad: bazadagi guruh/fan nomlari REAL formatini ko'rib, birlashtirish
--- qoidasi to'g'ri ishlashini tekshirish (lotin/kirill, qavsli "(a)" yoki
--- bevosita oxirgi harf "...01a").
+-- MUHIM: faqat FAOL guruhlar. vedomost_submissions `groups` bilan bog'lanib,
+--        g.active = 1 bo'lganlari olinadi. (`groups` — MySQL reserved so'z → backtick.)
 --
--- O'zak qoidalar (PHP VedomostMergeService bilan AYNAN bir xil):
---   GROUP: avval " (a)" qavsli variant, keyin raqamdan keyingi bevosita harf kesiladi
---   SUBJECT: oxirgi " (a)" / "(1)" qavsli variant kesiladi
+-- O'ZAK QOIDALAR (PHP VedomostMergeService bilan AYNAN bir xil):
+--   GROUP : o'zak = nom boshidan birinchi "...NN-NN" gacha. Undan keyingi BUTUN
+--           quyruq (variant harfi a/b/c/с, til tegi (ang)/(rus)/(ing), o'lcham
+--           tegi (2 talik guruh)/(3 talik), qavsli " (a)") tashlanadi.
+--           d1/21-09a (ang) -> d1/21-09   |   d1/22-01 (b) -> d1/22-01
+--   SUBJECT: oxirgi " (a)" / "(1)" qavsli VARIANT (bitta belgi) kesiladi.
+--
+--   <RG> = COALESCE(REGEXP_SUBSTR(group_name, '^.*?[0-9]+-[0-9]+'), group_name)
+--   <RS> = REGEXP_REPLACE(subject_name, ' *\\([A-Za-zА-Яа-яёЁ0-9]\\) *$', '')
 -- ============================================================================
 
 
 -- ---------------------------------------------------------------------------
--- 1) Barcha guruh nomlari va ularning o'zagi (faqat o'zgaganlarini ko'rish oson)
+-- 1) Barcha (faol) guruhlar va ularning o'zagi
 -- ---------------------------------------------------------------------------
 SELECT
     group_name,
-    REGEXP_REPLACE(
-        REGEXP_REPLACE(group_name, ' *\\([A-Za-zА-Яа-яёЁ]\\) *$', ''),
-        '(?<=[0-9])[A-Za-zА-Яа-яёЁ]$', ''
-    ) AS root_group,
+    COALESCE(REGEXP_SUBSTR(group_name, '^.*?[0-9]+-[0-9]+'), group_name) AS root_group,
     COUNT(*) AS yozuvlar
-FROM vedomost_submissions
+FROM vedomost_submissions vs
+JOIN `groups` g ON g.group_hemis_id = vs.group_hemis_id AND g.active = 1
 GROUP BY group_name
 ORDER BY group_name;
 
 
 -- ---------------------------------------------------------------------------
--- 2) FAQAT qo'shimchasi bor guruhlar (kesilganda o'zgargan) — formatni tasdiqlash
+-- 2) GURUH "quyrug'i" — o'zakdan keyingi BUTUN qism (til/o'lcham tegi + harf).
+--    Noyob variantlar: "a", "b", "c", "с", "(a)", "a (ang)", "b (rus)" ...
 -- ---------------------------------------------------------------------------
-SELECT DISTINCT
-    group_name,
-    REGEXP_REPLACE(
-        REGEXP_REPLACE(group_name, ' *\\([A-Za-zА-Яа-яёЁ]\\) *$', ''),
-        '(?<=[0-9])[A-Za-zА-Яа-яёЁ]$', ''
-    ) AS root_group
-FROM vedomost_submissions
-WHERE group_name <> REGEXP_REPLACE(
-        REGEXP_REPLACE(group_name, ' *\\([A-Za-zА-Яа-яёЁ]\\) *$', ''),
-        '(?<=[0-9])[A-Za-zА-Яа-яёЁ]$', '')
-ORDER BY group_name;
+SELECT
+    REGEXP_REPLACE(group_name, '^.*?[0-9]+-[0-9]+', '') AS guruh_quyruq,
+    COUNT(*)                   AS nechta_yozuv,
+    COUNT(DISTINCT group_name) AS nechta_guruh
+FROM vedomost_submissions vs
+JOIN `groups` g ON g.group_hemis_id = vs.group_hemis_id AND g.active = 1
+GROUP BY guruh_quyruq
+ORDER BY nechta_yozuv DESC;
 
 
 -- ---------------------------------------------------------------------------
--- 3) FAQAT qo'shimchasi bor fanlar (kesilganda o'zgargan) — formatni tasdiqlash
+-- 3) FAN nomidagi har qanday oxirgi qavs (1 yoki ko'p harfli)
 -- ---------------------------------------------------------------------------
-SELECT DISTINCT
-    subject_name,
-    REGEXP_REPLACE(subject_name, ' *\\([A-Za-zА-Яа-яёЁ0-9]\\) *$', '') AS root_subject
-FROM vedomost_submissions
-WHERE subject_name <> REGEXP_REPLACE(subject_name, ' *\\([A-Za-zА-Яа-яёЁ0-9]\\) *$', '')
-ORDER BY subject_name;
+SELECT
+    REGEXP_SUBSTR(subject_name, '\\([^)]*\\) *$') AS fan_oxirgi_qavs,
+    COUNT(*)                     AS nechta_yozuv,
+    COUNT(DISTINCT subject_name) AS nechta_fan
+FROM vedomost_submissions vs
+JOIN `groups` g ON g.group_hemis_id = vs.group_hemis_id AND g.active = 1
+WHERE subject_name REGEXP '\\([^)]*\\) *$'
+GROUP BY fan_oxirgi_qavs
+ORDER BY nechta_yozuv DESC;
 
 
 -- ---------------------------------------------------------------------------
--- 4) BIRLASHTIRISH KO'RINISHI (eng muhim) — qaysi yozuvlar bitta vedomostga
---    jamlanadi va o'qituvchilar qanday birlashadi. PHP merge kaliti bilan bir xil:
---    education_year | semester_code | specialty_name | closing_form | root_group | root_subject
---    Faqat 1 tadan ko'p guruhcha/variant bor (= haqiqatan birlashadigan) qatorlar.
+-- 4) BIRLASHTIRISH KO'RINISHI (eng muhim) — qaysi (faol) yozuvlar bitta
+--    vedomostga jamlanadi va o'qituvchilar qanday birlashadi.
+--    Merge kaliti: education_year | semester_code | specialty_name | closing_form
+--                  | root_group | root_subject.   Faqat 1 tadan ko'p qatorlar.
 -- ---------------------------------------------------------------------------
 SELECT
     education_year,
     semester_code,
     specialty_name,
     closing_form,
-    REGEXP_REPLACE(
-        REGEXP_REPLACE(group_name, ' *\\([A-Za-zА-Яа-яёЁ]\\) *$', ''),
-        '(?<=[0-9])[A-Za-zА-Яа-яёЁ]$', ''
-    ) AS root_group,
-    REGEXP_REPLACE(subject_name, ' *\\([A-Za-zА-Яа-яёЁ0-9]\\) *$', '') AS root_subject,
+    COALESCE(REGEXP_SUBSTR(group_name, '^.*?[0-9]+-[0-9]+'), group_name) AS root_group,
+    REGEXP_REPLACE(subject_name, ' *\\([A-Za-zА-Яа-яёЁ0-9]\\) *$', '')    AS root_subject,
     COUNT(*) AS guruhcha_soni,
     GROUP_CONCAT(DISTINCT group_name   ORDER BY group_name   SEPARATOR ', ') AS guruhchalar,
     GROUP_CONCAT(DISTINCT subject_name ORDER BY subject_name SEPARATOR ', ') AS fan_variantlari,
     GROUP_CONCAT(DISTINCT teacher_name ORDER BY teacher_name SEPARATOR ', ') AS oqituvchilar
-FROM vedomost_submissions
+FROM vedomost_submissions vs
+JOIN `groups` g ON g.group_hemis_id = vs.group_hemis_id AND g.active = 1
 GROUP BY education_year, semester_code, specialty_name, closing_form, root_group, root_subject
 HAVING guruhcha_soni > 1
 ORDER BY guruhcha_soni DESC, root_group, root_subject;
 
 
 -- ---------------------------------------------------------------------------
--- 5) YIG'MA SON: birlashtirishdan oldin/keyin nechta qator bo'lishi
+-- 5) YIG'MA SON: birlashtirishdan oldin/keyin nechta qator (faqat faol)
 -- ---------------------------------------------------------------------------
 SELECT
     COUNT(*) AS yozuvlar_jami,
     COUNT(DISTINCT CONCAT_WS('|',
         education_year, semester_code, specialty_name, closing_form,
-        REGEXP_REPLACE(
-            REGEXP_REPLACE(group_name, ' *\\([A-Za-zА-Яа-яёЁ]\\) *$', ''),
-            '(?<=[0-9])[A-Za-zА-Яа-яёЁ]$', ''),
+        COALESCE(REGEXP_SUBSTR(group_name, '^.*?[0-9]+-[0-9]+'), group_name),
         REGEXP_REPLACE(subject_name, ' *\\([A-Za-zА-Яа-яёЁ0-9]\\) *$', '')
     )) AS ozak_vedomostlar
-FROM vedomost_submissions;
-
-
--- ---------------------------------------------------------------------------
--- 6) NOYOB GURUH qo'shimchalari — o'zakdan keyin qolgan qism (a / б / " (a)" ...).
---    Butun ro'yxat emas, faqat takrorlanmas formatlar. Format tekshirish uchun eng qulay.
--- ---------------------------------------------------------------------------
-SELECT
-    SUBSTRING(group_name, CHAR_LENGTH(
-        REGEXP_REPLACE(
-            REGEXP_REPLACE(group_name, ' *\\([A-Za-zА-Яа-яёЁ]\\) *$', ''),
-            '(?<=[0-9])[A-Za-zА-Яа-яёЁ]$', '')
-    ) + 1) AS guruh_qoshimcha,
-    COUNT(*)                    AS nechta_yozuv,
-    COUNT(DISTINCT group_name)  AS nechta_guruh
-FROM vedomost_submissions
-WHERE group_name <> REGEXP_REPLACE(
-        REGEXP_REPLACE(group_name, ' *\\([A-Za-zА-Яа-яёЁ]\\) *$', ''),
-        '(?<=[0-9])[A-Za-zА-Яа-яёЁ]$', '')
-GROUP BY guruh_qoshimcha
-ORDER BY nechta_yozuv DESC;
-
-
--- ---------------------------------------------------------------------------
--- 7) NOYOB FAN qo'shimchalari — o'zakdan keyin qolgan qism (" (a)", "(1)" ...).
--- ---------------------------------------------------------------------------
-SELECT
-    SUBSTRING(subject_name, CHAR_LENGTH(
-        REGEXP_REPLACE(subject_name, ' *\\([A-Za-zА-Яа-яёЁ0-9]\\) *$', '')
-    ) + 1) AS fan_qoshimcha,
-    COUNT(*)                      AS nechta_yozuv,
-    COUNT(DISTINCT subject_name)  AS nechta_fan
-FROM vedomost_submissions
-WHERE subject_name <> REGEXP_REPLACE(subject_name, ' *\\([A-Za-zА-Яа-яёЁ0-9]\\) *$', '')
-GROUP BY fan_qoshimcha
-ORDER BY nechta_yozuv DESC;
+FROM vedomost_submissions vs
+JOIN `groups` g ON g.group_hemis_id = vs.group_hemis_id AND g.active = 1;

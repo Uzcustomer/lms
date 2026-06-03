@@ -28,17 +28,27 @@ class VedomostMergeService
     ];
 
     /**
-     * Guruh nomidan guruhcha qo'shimchasini kesib, o'zak guruhni qaytaradi.
-     *  - "d1/22-01a" -> "d1/22-01"   (raqamdan keyingi bevosita harf)
-     *  - "d1/22-01 (b)" -> "d1/22-01" (qavsli variant)
-     * Harf lotin yoki kirill bo'lishi mumkin.
+     * Guruh nomidan barcha guruhcha/til/o'lcham qo'shimchalarini kesib, o'zak
+     * guruhni qaytaradi. O'zak — nom boshidan birinchi "...NN-NN" gacha; undan
+     * keyingi BUTUN quyruq (variant harfi, til va o'lcham teglari) tashlanadi:
+     *   "d1/22-01a"               -> "d1/22-01"   (bevosita harf)
+     *   "d1/22-01 (b)"            -> "d1/22-01"   (qavsli variant)
+     *   "d1/22-01с"               -> "d1/22-01"   (kirill harf)
+     *   "d1/21-09a (ang)"         -> "d1/21-09"   (harf + til tegi)
+     *   "d1/21-09a (rus)"         -> "d1/21-09"   (boshqa til ham bitta o'zakka)
+     *   "d1/21-09a (2 talik guruh)" -> "d1/21-09" (o'lcham tegi)
      */
     public function rootGroupName(?string $name): string
     {
         $name = trim((string) $name);
-        // Qavsli variant: " (a)" / " (б)"
+
+        // O'zak: nom boshidan birinchi "...NN-NN" bloki gacha.
+        if (preg_match('~^(.*?\d+-\d+)~u', $name, $m)) {
+            return trim($m[1]);
+        }
+
+        // "NN-NN" formatiga tushmasa — xavfsiz zaxira: faqat oxirgi variant belgisi.
         $name = preg_replace('/\s*\([A-Za-zА-Яа-яёЁ]\)\s*$/u', '', $name);
-        // Bevosita oxirgi harf (faqat raqamdan keyin kelsa): "...01a" -> "...01"
         $name = preg_replace('/(?<=\d)[A-Za-zА-Яа-яёЁ]$/u', '', $name);
 
         return trim($name);
@@ -163,6 +173,10 @@ class VedomostMergeService
     public function siblingsOf(VedomostSubmission $v): Collection
     {
         $query = VedomostSubmission::query()
+            // Faqat FAOL guruhlar — index ro'yxati bilan mos bo'lishi uchun.
+            ->whereIn('group_hemis_id', function ($q) {
+                $q->select('group_hemis_id')->from('groups')->where('active', true);
+            })
             ->where('education_year', $v->education_year)
             ->where('semester_code', $v->semester_code)
             ->where('closing_form', $v->closing_form);

@@ -108,6 +108,11 @@ class VedomostSubmissionController extends Controller
         $selectedEducationType = $this->resolveSelectedEducationType($request, $educationTypes);
 
         $query = DB::table('vedomost_submissions as vs')
+            // MUHIM: faqat FAOL guruhlar — vedomost faol guruh uchun olinadi.
+            ->join('groups as g', function ($join) {
+                $join->on('g.group_hemis_id', '=', 'vs.group_hemis_id')
+                    ->where('g.active', true);
+            })
             ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'vs.curriculum_hemis_id')
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->leftJoin('semesters as s', function ($join) {
@@ -175,6 +180,10 @@ class VedomostSubmissionController extends Controller
         // Yo'nalishlar — nom bo'yicha distinct (bir xil nomlilar bitta ko'rinadi).
         // Tanlangan ta'lim turi/fakultetga qarab cheklanadi.
         $specialtyQuery = DB::table('vedomost_submissions as vs')
+            ->join('groups as g', function ($join) {
+                $join->on('g.group_hemis_id', '=', 'vs.group_hemis_id')
+                    ->where('g.active', true);
+            })
             ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'vs.curriculum_hemis_id')
             ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
             ->whereNotNull('vs.specialty_name')

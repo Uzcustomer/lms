@@ -5800,13 +5800,19 @@ class JournalController extends Controller
             return response()->json(['success' => false, 'message' => 'Bu funksiya faqat sinov bilan yopiladigan fanlarga tegishli.'], 422);
         }
 
-        // YN ga yuborilmagan bo'lishi shart
+        // YN ga yuborilgandan keyin oddiy yo'l bilan o'zgartirib bo'lmaydi —
+        // lekin Superadmin baho tahrirlash toggle yoqilgan bo'lsa, superadmin
+        // qaytadan yoza oladi.
         $ynSubmission = YnSubmission::where('subject_id', $data['subject_id'])
             ->where('semester_code', $data['semester_code'])
             ->where('group_hemis_id', $data['group_hemis_id'])
             ->first();
         if ($ynSubmission) {
-            return response()->json(['success' => false, 'message' => 'YN ga yuborilgandan keyin o\'zgartirib bo\'lmaydi.'], 422);
+            $isSuper = auth()->user()?->hasRole('superadmin') ?? false;
+            $superToggleOn = Setting::get('feature_superadmin_grade_edit', '0') === '1';
+            if (!($isSuper && $superToggleOn)) {
+                return response()->json(['success' => false, 'message' => 'YN ga yuborilgandan keyin o\'zgartirib bo\'lmaydi.'], 422);
+            }
         }
 
         // Talaba shu guruhda bo'lishi shart

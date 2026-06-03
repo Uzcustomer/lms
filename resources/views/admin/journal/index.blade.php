@@ -248,7 +248,7 @@
                             <tbody>
                                 @foreach ($journals as $index => $journal)
                                     <tr class="journal-row"
-                                        onclick="window.location='{{ route('admin.journal.show', ['groupId' => $journal->group_id, 'subjectId' => $journal->subject_id, 'semesterCode' => $journal->semester_code]) }}'">
+                                        onclick="window.location='{{ route('admin.journal.show', ['groupId' => $journal->group_id, 'subjectId' => $journal->subject_id, 'semesterCode' => $journal->semester_code, 'cs' => $journal->id]) }}'">
                                         <td class="td-num">{{ $journals->firstItem() + $index }}</td>
                                         <td><span class="badge badge-blue">{{ $journal->education_type_name ?? '-' }}</span></td>
                                         <td><span class="text-cell text-emerald">{{ $journal->faculty_name ?? '-' }}</span></td>

@@ -367,21 +367,43 @@ class JournalController extends Controller
             }
         }
 
-        $subject = CurriculumSubject::where('subject_id', $subjectId)
-            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('semester_code', $semesterCode)
-            ->first();
+        // Ro'yxatdan bosilgan ANIQ qatorni ochish uchun `cs` (curriculum_subjects.id)
+        // uzatiladi. Bir xil (subject_id, curriculum, semester) bo'yicha faol va
+        // nofaol dublikat qatorlar bo'lishi mumkin — `cs` ularni aniq ajratadi
+        // (faol fanga bossak faol, nofaolga bossak nofaol qatori ochiladi).
+        $subject = null;
+        $csId = $request->query('cs');
+        if ($csId !== null && $csId !== '') {
+            $subject = CurriculumSubject::where('id', $csId)
+                ->where('subject_id', $subjectId)
+                ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->first();
+        }
+        // `cs` bo'lmasa yoki topilmasa — faol va closing_form to'ldirilgan qatorni
+        // afzal ko'rgan holda yuklaymiz (nofaol/bo'sh dublikatga tushib qolmaslik uchun).
+        if (!$subject) {
+            $subject = CurriculumSubject::where('subject_id', $subjectId)
+                ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->where('semester_code', $semesterCode)
+                ->orderByDesc('is_active')
+                ->orderByRaw('closing_form IS NULL')
+                ->first();
+        }
         // Agar yangi semester_code bilan ham topilmasa, original bilan sinab ko'rish
         if (!$subject && $semesterCode !== $originalSemesterCode) {
             $subject = CurriculumSubject::where('subject_id', $subjectId)
                 ->where('curricula_hemis_id', $group->curriculum_hemis_id)
                 ->where('semester_code', $originalSemesterCode)
+                ->orderByDesc('is_active')
+                ->orderByRaw('closing_form IS NULL')
                 ->first();
         }
-        // Hech biri topilmasa — semester filtrSIZ birinchi natijani olish
+        // Hech biri topilmasa — semester filtrSIZ (faol qatorni afzal ko'rib)
         if (!$subject) {
             $subject = CurriculumSubject::where('subject_id', $subjectId)
                 ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->orderByDesc('is_active')
+                ->orderByRaw('closing_form IS NULL')
                 ->first();
         }
         if (!$subject) {

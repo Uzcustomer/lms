@@ -315,6 +315,16 @@ Quyidagilarni tekshiring:
    soni, a'lo/yaxshi/o'rta/qoniqarsiz/kelmadi/qo'yilmadi sonlari hamda guruh o'zlashtirish va
    sifat ko'rsatkichlari ustundagi qiymatlarga mos kelishini tekshiring.
 
+ISM YOZILISHI (juda muhim — noto'g'ri belgilamang): Vedomostda ism QISQARTIRILGAN
+yozilishi MAQBUL — familiya to'liq, ism va otasining ismi bosh harf bilan
+("Familiya I.S." yoki "I.S. Familiya", masalan tizimdagi "AZIZI AHMAD RESHAD" →
+skanerda "Azizi A.R" yoki "A.R. Azizi"). Bu, ayniqsa, xodimlarga (ma'ruzachi,
+amaliyot o'qituvchilari, fan mas'uli, kafedra mudiri, imzo egalari) tegishli.
+Familiya mos kelsa va bosh harflar tizimdagi to'liq ismga mos bo'lsa — buni
+nomuvofiqlik DEB BELGILAMANG. Faqat familiya boshqa bo'lsa yoki bosh harflar
+to'liq ismga mos kelmasa belgilang. (Talabani esa talaba ID raqami orqali ham
+tasdiqlash mumkin.)
+
 Qoidalar:
 - Faqat sxema bo'yicha JSON qaytaring, qo'shimcha matn yozmang.
 - verdict: nomuvofiqlik topilmasa "ok", aks holda "issues".

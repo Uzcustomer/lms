@@ -10,6 +10,9 @@ services:
       - ./:/var/www/html
       - ./storage:/var/www/html/storage
       - ./public:/var/www/html/public
+      # Talabaning ariza fayllari uchun alohida disk (yangi qo'shilgan)
+      # .env'dagi ADMISSION_STORAGE_PATH shu yo'lga sozlangan bo'lishi kerak
+      - /data/storage/2025_applications:/data/storage/2025_applications
     ports:
       - "9001:9000"
     networks:

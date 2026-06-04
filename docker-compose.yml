@@ -10,9 +10,10 @@ services:
       - ./:/var/www/html
       - ./storage:/var/www/html/storage
       - ./public:/var/www/html/public
-      # Talabaning ariza fayllari uchun alohida disk (yangi qo'shilgan)
-      # .env'dagi ADMISSION_STORAGE_PATH shu yo'lga sozlangan bo'lishi kerak
-      - /data/storage/2025_applications:/data/storage/2025_applications
+      # Tashqi data disk: shu joydagi barcha papkalar konteynerda ko'rinadi
+      # (admission fayllari, kelajakda student_photos, backups va h.k.).
+      # Yangi papka qo'shganda docker-compose'ni yangilash shart emas.
+      - /data:/data
     ports:
       - "9001:9000"
     networks:

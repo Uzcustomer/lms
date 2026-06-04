@@ -10,6 +10,7 @@ class StudentAdmissionData extends Model
 
     protected $fillable = [
         'student_id',
+        'application_number', 'submitted_at', 'files',
         'familya', 'ism', 'otasining_ismi', 'tugilgan_sana', 'jshshir', 'jinsi',
         'tel1', 'tel2', 'email', 'millat', 'millat_other',
         'tugilgan_davlat', 'tugilgan_viloyat', 'tugulgan_tuman',
@@ -53,6 +54,8 @@ class StudentAdmissionData extends Model
     protected $casts = [
         'tugilgan_sana' => 'date',
         'passport_sana' => 'date',
+        'submitted_at' => 'datetime',
+        'files' => 'array',
         'kenglik' => 'decimal:6',
         'uzunlik' => 'decimal:6',
         'chet_tillari' => 'array',

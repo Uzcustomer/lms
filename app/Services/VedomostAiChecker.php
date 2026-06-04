@@ -70,9 +70,10 @@ class VedomostAiChecker
 
         $payload = [
             'model' => config('services.anthropic.model'),
-            // Katta guruhda (ko'p talaba) ko'p nomuvofiqlik + adaptive thinking bo'lishi
-            // mumkin — javob yarmida kesilmasligi uchun yetarli headroom.
-            'max_tokens' => 16000,
+            // Streaming ishlatamiz, shuning uchun katta max_tokens xavfsiz (timeout yo'q).
+            // Thinking ham max_tokens ichiga kiradi — katta guruhda javob kesilmasligi
+            // uchun keng chegara. Bu shift — ceiling, model faqat kerakligini sarflaydi.
+            'max_tokens' => 48000,
             'thinking' => ['type' => 'adaptive'],
             'system' => [[
                 'type' => 'text',

@@ -354,7 +354,22 @@ class VedomostSubmissionController extends Controller
         $v->update(['ai_check_status' => 'queued', 'ai_error' => null]);
         \App\Jobs\CheckVedomostSubmissionWithAi::dispatch($v->id);
 
-        return back()->with('success', 'AI tekshiruv boshlandi. Natija bir necha daqiqada tayyor bo\'ladi (sahifani yangilang).');
+        return back()->with('success', 'AI tekshiruv boshlandi. Natija bir necha daqiqada tayyor bo\'ladi (sahifani yangilash shart emas).');
+    }
+
+    /**
+     * AI tekshiruv holatini JSON qaytaradi (show sahifasidagi jonli progress uchun).
+     */
+    public function aiStatus($id)
+    {
+        $this->checkAccess();
+        $v = VedomostSubmission::findOrFail($id);
+
+        return response()->json([
+            'status' => $v->ai_check_status,
+            'verdict' => $v->ai_verdict,
+            'error' => $v->ai_error,
+        ]);
     }
 
     /**

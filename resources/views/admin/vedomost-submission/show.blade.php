@@ -157,7 +157,47 @@
                 @elseif(!$v->pdf_path)
                     <div style="color:#94a3b8;font-size:13px;">Avval skaner (PDF) yuklang.</div>
                 @elseif(in_array($v->ai_check_status, ['queued','running']))
-                    <div style="color:#b45309;font-size:14px;">⏳ Tekshirilmoqda... Natija bir necha daqiqada tayyor bo'ladi. Sahifani yangilang.</div>
+                    <div id="ai-progress" style="display:flex;align-items:center;gap:12px;background:#fef3c7;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;">
+                        <span class="ai-spinner"></span>
+                        <div>
+                            <div id="ai-stage" style="color:#b45309;font-size:14px;font-weight:600;">
+                                {{ $v->ai_check_status === 'running' ? 'Claude tahlil qilmoqda...' : 'Navbatda kutilmoqda...' }}
+                            </div>
+                            <div style="color:#92700a;font-size:12px;">O'tgan vaqt: <span id="ai-elapsed">0s</span> · tayyor bo'lishi bilan natija o'zi chiqadi</div>
+                        </div>
+                    </div>
+                    <style>
+                        .ai-spinner { width:22px;height:22px;border:3px solid #fde68a;border-top-color:#b45309;border-radius:50%;display:inline-block;animation:ai-spin 0.8s linear infinite;flex-shrink:0; }
+                        @keyframes ai-spin { to { transform: rotate(360deg); } }
+                    </style>
+                    <script>
+                        (function () {
+                            const url = "{{ route('admin.vedomost-submission.ai-status', $v->id) }}";
+                            const start = Date.now();
+                            const elapsedEl = document.getElementById('ai-elapsed');
+                            const stageEl = document.getElementById('ai-stage');
+                            const stages = { queued: 'Navbatda kutilmoqda...', running: 'Claude tahlil qilmoqda...' };
+
+                            setInterval(function () {
+                                if (elapsedEl) elapsedEl.textContent = Math.floor((Date.now() - start) / 1000) + 's';
+                            }, 1000);
+
+                            function poll() {
+                                fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' }, cache: 'no-store' })
+                                    .then(function (r) { return r.json(); })
+                                    .then(function (d) {
+                                        if (d.status === 'done' || d.status === 'error') {
+                                            location.reload();
+                                            return;
+                                        }
+                                        if (stageEl && stages[d.status]) stageEl.textContent = stages[d.status];
+                                        setTimeout(poll, 3000);
+                                    })
+                                    .catch(function () { setTimeout(poll, 5000); });
+                            }
+                            setTimeout(poll, 3000);
+                        })();
+                    </script>
                 @elseif($v->ai_check_status === 'error')
                     <div style="background:#fee2e2;color:#b91c1c;padding:10px;border-radius:8px;font-size:13px;">Xatolik: {{ $v->ai_error }}</div>
                 @elseif($v->ai_check_status === 'done')

@@ -222,6 +222,20 @@ class ImportAdmissionJson extends Command
                     // skip
                 }
             }
+            if ($existingColumns->has('full_name')) {
+                $full = trim((string)($json['applicant']['full'] ?? ''));
+                if ($full === '') {
+                    $full = trim(
+                        trim((string)($fields['familya'] ?? '')) . ' ' .
+                        trim((string)($fields['ism'] ?? '')) . ' ' .
+                        trim((string)($fields['otasining_ismi'] ?? ''))
+                    );
+                }
+                $full = preg_replace('/\s+/u', ' ', $full);
+                if ($full !== '') {
+                    $payload['full_name'] = $full;
+                }
+            }
 
             $filesCopied = 0;
             if (!$dryRun && $existingColumns->has('files') && !empty($json['files']) && is_array($json['files'])) {

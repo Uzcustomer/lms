@@ -129,7 +129,8 @@ class YnQaydnomaDataService
 
         return [
             'fakultet' => $department->name ?? null,
-            'oquv_yili' => $semester->education_year ?? null,
+            // O'quv yilini diapazon ko'rinishida: "2025" -> "2025-2026" (vedomostdagidek).
+            'oquv_yili' => $this->formatEducationYear($semester->education_year ?? null),
             'yonalish' => $specialty->name ?? null,
             'fan' => $subject->subject_name,
             'maruzachi' => $maruza->full_names ?? null,
@@ -137,11 +138,32 @@ class YnQaydnomaDataService
             'umumiy_soat' => $subject->total_acload,
             'kredit' => $subject->credit,
             'yn_sanasi' => optional($submission?->exam_date)->format('d.m.Y'),
-            'kurs' => $semester->level_code ?? null,
-            'semestr' => $semester->code ?? null,
+            // Kurs/semestr — inson o'qiydigan nom (level_name="3-kurs", name="6-semestr"),
+            // ichki kod (13/16) emas — aks holda AI "13 vs 3-kurs" deb noto'g'ri belgilaydi.
+            'kurs' => $semester->level_name ?? $semester->level_code ?? null,
+            'semestr' => $semester->name ?? $semester->code ?? null,
             'guruh' => $group->name,
             'jami_talabalar' => count($studentRows),
             'talabalar' => $studentRows,
         ];
+    }
+
+    /**
+     * "2025" -> "2025-2026". Allaqachon diapazon yoki raqamsiz bo'lsa — o'zgartirmaydi.
+     */
+    private function formatEducationYear($year): ?string
+    {
+        if ($year === null || $year === '') {
+            return null;
+        }
+        $year = (string) $year;
+        if (str_contains($year, '-')) {
+            return $year;
+        }
+        if (ctype_digit($year)) {
+            return $year . '-' . ((int) $year + 1);
+        }
+
+        return $year;
     }
 }

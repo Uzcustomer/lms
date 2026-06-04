@@ -220,6 +220,7 @@
                             <span style="margin-left:6px;">O'qituvchi: {!! ($sig['oqituvchi'] ?? false) ? '✅' : '❌' !!}</span>
                             <span style="margin-left:10px;">Dekan: {!! ($sig['dekan'] ?? false) ? '✅' : '❌' !!}</span>
                             <span style="margin-left:10px;">Kafedra mudiri: {!! ($sig['kafedra_mudiri'] ?? false) ? '✅' : '❌' !!}</span>
+                            <span style="margin-left:10px;">Muhr (M.O'): {!! ($sig['muhr'] ?? false) ? '✅' : '❌' !!}</span>
                         </div>
                     @endif
 

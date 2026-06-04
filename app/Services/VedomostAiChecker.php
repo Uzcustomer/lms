@@ -311,6 +311,10 @@ Quyidagilarni tekshiring:
    so'zi, F.I.Sh yoki bo'sh chiziq bo'lsa — imzo YO'Q (false). Ishonchsiz bo'lsangiz
    ham YO'Q deb belgilang (false). Har bir yetishmayotgan imzoni discrepancies'ga ham
    qo'shing (severity=high), masalan field="Imzo: fakultet dekani".
+4a) MUHR (signatures.muhr): "M.O'." (Muhr O'rni) yonida rasmiy DUMALOQ muhr/shtamp
+   (masalan "DAVOLASH FAKULTETI" yozuvli ko'k/qora dumaloq bosma) qo'yilganmi.
+   Qo'yilgan bo'lsa muhr=true, aks holda false. "M.O'." — bu faqat joy belgisi,
+   muhr emas. Muhr yo'q bo'lsa discrepancies'ga field="Muhr (M.O')", severity=high.
 5) Ichki izchillik: o'zlashtirish ko'rsatkichi (%) ga mos ECTS harfi va baho to'g'ri qo'yilganmi
    (90-100=A/a'lo, 85-89=B+, 70-84=B/yaxshi, 60-69=C/o'rta, 0-59=F/qoniqarsiz). Jami talabalar
    soni, a'lo/yaxshi/o'rta/qoniqarsiz/kelmadi/qo'yilmadi sonlari hamda guruh o'zlashtirish va
@@ -366,8 +370,9 @@ TXT;
                         'oqituvchi' => ['type' => 'boolean'],
                         'dekan' => ['type' => 'boolean'],
                         'kafedra_mudiri' => ['type' => 'boolean'],
+                        'muhr' => ['type' => 'boolean'],
                     ],
-                    'required' => ['oqituvchi', 'dekan', 'kafedra_mudiri'],
+                    'required' => ['oqituvchi', 'dekan', 'kafedra_mudiri', 'muhr'],
                 ],
             ],
             'required' => ['verdict', 'summary', 'discrepancies', 'signatures'],

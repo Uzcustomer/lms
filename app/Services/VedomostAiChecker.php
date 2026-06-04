@@ -302,8 +302,14 @@ Quyidagilarni tekshiring:
    yozilganmi, ortiqcha yoki kam talaba bormi.
 3) Har bir talaba uchun JN, MT, ON (JB+MT+ON), OSKE, Test ustunlaridagi qiymatlar tizim
    ma'lumotiga mos kelishi.
-4) Imzolar mavjudligi (skanerda ko'rinishi): fan o'qituvchisi imzosi, fakultet dekani imzosi,
-   kafedra mudiri imzosi.
+4) Imzolar — skanerda HAQIQIY qo'l qo'yilganmi (fan o'qituvchisi, fakultet dekani,
+   kafedra mudiri). DIQQAT: blankada "imzo", "M.O'." (muhr o'rni), "F.I.Sh", "___"
+   kabi OLDINDAN CHOP ETILGAN yorliq va chiziqlar bo'ladi — bular imzo EMAS, faqat
+   joy belgisi. Imzo MAVJUD deb faqat chiziq ustida/yonida haqiqiy qo'lda chizilgan
+   belgi (parah, ruchka izi) yoki muhr bo'lsa hisoblang. Agar katakda faqat "imzo"
+   so'zi, F.I.Sh yoki bo'sh chiziq bo'lsa — imzo YO'Q (false). Ishonchsiz bo'lsangiz
+   ham YO'Q deb belgilang (false). Har bir yetishmayotgan imzoni discrepancies'ga ham
+   qo'shing (severity=high), masalan field="Imzo: fakultet dekani".
 5) Ichki izchillik: o'zlashtirish ko'rsatkichi (%) ga mos ECTS harfi va baho to'g'ri qo'yilganmi
    (90-100=A/a'lo, 85-89=B+, 70-84=B/yaxshi, 60-69=C/o'rta, 0-59=F/qoniqarsiz). Jami talabalar
    soni, a'lo/yaxshi/o'rta/qoniqarsiz/kelmadi/qo'yilmadi sonlari hamda guruh o'zlashtirish va

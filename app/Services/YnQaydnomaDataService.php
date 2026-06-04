@@ -148,6 +148,7 @@ class YnQaydnomaDataService
             // Kurs/semestr — inson o'qiydigan nom (level_name="3-kurs", name="6-semestr"),
             // ichki kod (13/16) emas — aks holda AI "13 vs 3-kurs" deb noto'g'ri belgilaydi.
             'kurs' => $semester->level_name ?? $semester->level_code ?? null,
+            'level_code' => $semester->level_code ?? null,
             'semestr' => $semester->name ?? $semester->code ?? null,
             'guruh' => $group->name,
             'jami_talabalar' => count($studentRows),

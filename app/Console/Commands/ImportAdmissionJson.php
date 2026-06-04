@@ -408,12 +408,13 @@ class ImportAdmissionJson extends Command
 
     /**
      * JSON files[]={'category' => [{'saved_path', 'original_name', ...}]} dan
-     * fayllarni storage/app/public/admission/{student_id}/{category}/{filename} ga
-     * ko'chiramiz va yangi yo'llar bilan array qaytaramiz.
+     * fayllarni admission disk'iga ko'chiramiz (config/filesystems.php → admission).
+     * DB ga disk root'ga nisbatan yo'l saqlanadi: "{student_id}/{category}/{filename}".
      */
     private function copyApplicationFiles(array $filesByCategory, string $jsonPath, int $studentId): array
     {
         $studentFolder = dirname($jsonPath);
+        $diskRoot = rtrim(config('filesystems.disks.admission.root', storage_path('app/public/admission')), '/');
         $out = [];
         $copied = 0;
         $missing = 0;
@@ -441,7 +442,7 @@ class ImportAdmissionJson extends Command
                     continue;
                 }
 
-                $destDir = storage_path("app/public/admission/{$studentId}/{$cleanCategory}");
+                $destDir = "{$diskRoot}/{$studentId}/{$cleanCategory}";
                 if (!is_dir($destDir) && !mkdir($destDir, 0755, true) && !is_dir($destDir)) {
                     Log::warning('ImportAdmissionJson: failed to create dest dir', ['dir' => $destDir]);
                     continue;
@@ -459,7 +460,7 @@ class ImportAdmissionJson extends Command
                 $copied++;
 
                 $categoryOut[] = [
-                    'path' => "admission/{$studentId}/{$cleanCategory}/{$filename}",
+                    'path' => "{$studentId}/{$cleanCategory}/{$filename}",
                     'original_name' => $f['original_name'] ?? $filename,
                     'mime' => $f['mime'] ?? null,
                     'size' => $f['size'] ?? @filesize($destPath),

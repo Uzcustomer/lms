@@ -45,6 +45,15 @@ return [
             'throw' => false,
         ],
 
+        // Talabaning ariza fayllari (pasport, attestat, ...). LMS ning ichida emas,
+        // alohida diskka yoki katalogga sozlash uchun. .env da
+        // ADMISSION_STORAGE_PATH ni o'zgartirish kifoya.
+        'admission' => [
+            'driver' => 'local',
+            'root' => env('ADMISSION_STORAGE_PATH', storage_path('app/public/admission')),
+            'throw' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

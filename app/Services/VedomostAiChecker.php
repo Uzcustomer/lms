@@ -201,7 +201,10 @@ class VedomostAiChecker
      */
     private function buildMergedExpected(VedomostSubmission $v): ?array
     {
-        $siblings = $this->merge->siblingsOf($v);
+        // Guruhcha tartibida (a, b, c) — amaliyot o'qituvchilari shu tartibda kelishi uchun.
+        $siblings = $this->merge->siblingsOf($v)
+            ->sortBy('group_name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
 
         $parts = [];
         foreach ($siblings as $sib) {
@@ -225,7 +228,7 @@ class VedomostAiChecker
         $first = $parts[0];
         $groupNames = [];
         $maruzachi = [];
-        $amaliyot = [];
+        $amaliyotList = [];
         $ynSanasi = [];
         $students = [];
         $seen = [];
@@ -240,11 +243,11 @@ class VedomostAiChecker
                     $maruzachi[$name] = true;
                 }
             }
-            foreach (explode(', ', (string) ($p['amaliyot_oqituvchilari'] ?? '')) as $name) {
-                $name = trim($name);
-                if ($name !== '') {
-                    $amaliyot[$name] = true;
-                }
+            // Amaliyot: har guruhchadan BITTA o'qituvchi, guruhcha tartibida (a, b, c).
+            // Takror (bir o'qituvchi bir nechta guruhchada) bo'lsa bir marta ko'rsatamiz.
+            $amaliyot = trim((string) ($p['amaliyot_oqituvchilari'] ?? ''));
+            if ($amaliyot !== '' && !in_array($amaliyot, $amaliyotList, true)) {
+                $amaliyotList[] = $amaliyot;
             }
             if (!empty($p['yn_sanasi'])) {
                 $ynSanasi[$p['yn_sanasi']] = true;
@@ -274,7 +277,7 @@ class VedomostAiChecker
             'fan' => $this->merge->rootSubjectName($first['fan'] ?? $v->subject_name),
             'guruh' => $rootGroup . (count($subgroups) > 1 ? ' (' . implode(', ', $subgroups) . ')' : ''),
             'maruzachi' => empty($maruzachi) ? null : implode(', ', array_keys($maruzachi)),
-            'amaliyot_oqituvchilari' => implode(', ', array_keys($amaliyot)),
+            'amaliyot_oqituvchilari' => implode(', ', $amaliyotList),
             'yn_sanasi' => empty($ynSanasi) ? null : implode(', ', array_keys($ynSanasi)),
             'jami_talabalar' => count($students),
             'talabalar' => $students,
@@ -301,8 +304,26 @@ Quyidagilarni tekshiring:
    kurs, semestr, guruh nomi.
 2) Talabalar ro'yxati: tizimdagi har bir talaba mavjudmi, FISH va talaba ID raqami to'g'ri
    yozilganmi, ortiqcha yoki kam talaba bormi.
-3) Har bir talaba uchun JN, MT, ON (JB+MT+ON), OSKE, Test ustunlaridagi qiymatlar tizim
-   ma'lumotiga mos kelishi.
+3) Har bir talaba uchun JN(JB), MT, ON, OSKE, Test ustunlaridagi FOIZ (%) qiymatlari
+   tizim ma'lumotiga (jn/mt/on/oski/test) mos kelishi.
+3b) HAR BIR KATAK BALLINI HAM TEKSHIRING (juda muhim — albatta bajaring).
+   OG'IRLIKLARNI (har ustunning maksimal bali) SKANERNING O'ZIDAN o'qing — ular
+   sarlavhadagi "ball" qatorida har nazorat turi (JB, MT, ON, OSKE, Test) ostida
+   ko'rsatilgan (masalan JB=50, MT=20, ON=0, JB+MT+ON=70, OSKE=0, Test=30). Bu
+   og'irliklar har vedomostda farq qilishi mumkin — qotib qolgan qiymatga tayanmang,
+   ayni shu skanerdagilarini ishlating. Har talaba, har ustun uchun ballni hisoblang
+   va skanerdagi yozilgan ball bilan solishtiring:
+     • Foiz < 60 bo'lsa → ball = 0.
+     • Aks holda ball = foiz × (ustun og'irligi) / 100.
+     • YAXLITLASH — JB/MT/ON: 1–3 kursda 1 KASR (masalan 96 × 20 / 100 = 19.2),
+       4–5 kursda butun (half-up). OSKE/Test: faqat bittasi og'irlikka ega bo'lsa →
+       butun, ikkalasi ham bo'lsa → 1 kasr.
+     • JB+MT+ON = JB ball + MT ball + ON ball (1 kasr).
+   Skanerdagi ball hisoblangandan farq qilsa — nomuvofiqlik (field="Talaba 1 — MT ball",
+   expected="19.2", found="19", severity=medium). Kursni tizimdagi "kurs"dan oling.
+   O'zlashtirish (%) = JB+MT+ON ball + OSKE/Test ball (yaxlitlangan), ECTS va bahoni
+   ham shu o'zlashtirishga mos kelishini tekshiring. Davomat ≥25% / kelmadi / qo'yilmadi
+   holatida skaner ham shunday bo'lsa — belgilamang.
 4) Imzolar — skanerda HAQIQIY qo'l qo'yilganmi (fan o'qituvchisi, fakultet dekani,
    kafedra mudiri). DIQQAT: blankada "imzo", "M.O'." (muhr o'rni), "F.I.Sh", "___"
    kabi OLDINDAN CHOP ETILGAN yorliq va chiziqlar bo'ladi — bular imzo EMAS, faqat
@@ -311,6 +332,10 @@ Quyidagilarni tekshiring:
    so'zi, F.I.Sh yoki bo'sh chiziq bo'lsa — imzo YO'Q (false). Ishonchsiz bo'lsangiz
    ham YO'Q deb belgilang (false). Har bir yetishmayotgan imzoni discrepancies'ga ham
    qo'shing (severity=high), masalan field="Imzo: fakultet dekani".
+4a) MUHR (signatures.muhr): "M.O'." (Muhr O'rni) yonida rasmiy DUMALOQ muhr/shtamp
+   (masalan "DAVOLASH FAKULTETI" yozuvli ko'k/qora dumaloq bosma) qo'yilganmi.
+   Qo'yilgan bo'lsa muhr=true, aks holda false. "M.O'." — bu faqat joy belgisi,
+   muhr emas. Muhr yo'q bo'lsa discrepancies'ga field="Muhr (M.O')", severity=high.
 5) Ichki izchillik: o'zlashtirish ko'rsatkichi (%) ga mos ECTS harfi va baho to'g'ri qo'yilganmi
    (90-100=A/a'lo, 85-89=B+, 70-84=B/yaxshi, 60-69=C/o'rta, 0-59=F/qoniqarsiz). Jami talabalar
    soni, a'lo/yaxshi/o'rta/qoniqarsiz/kelmadi/qo'yilmadi sonlari hamda guruh o'zlashtirish va
@@ -366,8 +391,9 @@ TXT;
                         'oqituvchi' => ['type' => 'boolean'],
                         'dekan' => ['type' => 'boolean'],
                         'kafedra_mudiri' => ['type' => 'boolean'],
+                        'muhr' => ['type' => 'boolean'],
                     ],
-                    'required' => ['oqituvchi', 'dekan', 'kafedra_mudiri'],
+                    'required' => ['oqituvchi', 'dekan', 'kafedra_mudiri', 'muhr'],
                 ],
             ],
             'required' => ['verdict', 'summary', 'discrepancies', 'signatures'],

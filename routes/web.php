@@ -613,6 +613,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'approve'])->whereNumber('id')->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'reject'])->whereNumber('id')->name('reject');
             Route::post('/{id}/ai-check', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'aiCheck'])->whereNumber('id')->name('ai-check');
+            Route::get('/{id}/ai-status', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'aiStatus'])->whereNumber('id')->name('ai-status');
             Route::get('/{id}/file/{type}', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'downloadFile'])->whereNumber('id')->name('file');
         });
 

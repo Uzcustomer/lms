@@ -91,25 +91,31 @@ class YnQaydnomaDataService
             ->groupBy('s.employee_id')
             ->first();
 
-        $others = DB::table('student_grades as s')
-            ->leftJoin('teachers as t', 't.hemis_id', '=', 's.employee_id')
-            ->select(DB::raw('GROUP_CONCAT(DISTINCT t.full_name SEPARATOR ", ") AS full_names'))
-            ->where('s.subject_id', $subject->subject_id)
-            ->where('s.training_type_code', '!=', 11)
-            ->whereNotIn('s.training_type_code', [99, 100, 101, 102, 103])
-            ->whereIn('s.student_hemis_id', $studentHemisIds)
-            ->groupBy('s.employee_id')
-            ->get();
-        $otherNames = [];
-        foreach ($others as $t) {
-            foreach (explode(', ', (string) $t->full_names) as $name) {
-                $name = trim($name);
-                if ($name && !in_array($name, $otherNames, true)) {
-                    $otherNames[] = $name;
-                }
-            }
-        }
+        // Amaliyot o'qituvchisi — guruhcha uchun BITTA (jurnal logikasi: dars jadvalida
+        // eng ko'p dars o'tgan). Ma'ruza (11) va baho turlari (99-103) hisobga olinmaydi.
+        $excludedTrainingCodes = [11, 99, 100, 101, 102, 103];
+        $subjectKeys = array_values(array_filter([
+            $subjectId,
+            $subject->curriculum_subject_hemis_id ?? null,
+        ]));
+        $practiceTeacher = DB::table('schedules')
+            ->whereNull('deleted_at')
+            ->where('group_id', $group->group_hemis_id)
+            ->whereIn('subject_id', $subjectKeys)
+            ->where('semester_code', $semesterCode)
+            ->whereNotIn('training_type_code', $excludedTrainingCodes)
+            ->whereNotNull('employee_name')
+            ->where('employee_name', '!=', 'Manual Entry')
+            ->where('employee_name', '!=', '')
+            ->select('employee_name', DB::raw('COUNT(*) as cnt'))
+            ->groupBy('employee_name')
+            ->orderByDesc('cnt')
+            ->value('employee_name');
 
+        // Har talaba uchun FOIZ (%) qiymatlari — tizim haqiqati. Ball/o'zlashtirish
+        // og'irliklarni talab qiladi; og'irliklar esa har vedomostda PDF sarlavhasida
+        // ko'rsatilgan (farq qilishi mumkin), shuning uchun ballni AI skanerdan o'qigan
+        // og'irliklar bilan hisoblaydi. Bu yerda faqat foizlarni beramiz.
         $studentRows = [];
         foreach ($students as $i => $stu) {
             $hid = $stu->hemis_id;
@@ -131,8 +137,9 @@ class YnQaydnomaDataService
             'oquv_yili' => $this->formatEducationYear($semester->education_year ?? null),
             'yonalish' => $specialty->name ?? null,
             'fan' => $subject->subject_name,
+            'yopilish_shakli' => $subject->closing_form,
             'maruzachi' => $maruza->full_names ?? null,
-            'amaliyot_oqituvchilari' => implode(', ', $otherNames),
+            'amaliyot_oqituvchilari' => $practiceTeacher ?: '',
             'umumiy_soat' => $subject->total_acload,
             'kredit' => $subject->credit,
             'yn_sanasi' => optional($submission?->exam_date)->format('d.m.Y'),

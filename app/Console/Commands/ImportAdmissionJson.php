@@ -274,6 +274,13 @@ class ImportAdmissionJson extends Command
     private function resolvePath(string $raw): string
     {
         if (str_starts_with($raw, '/')) return $raw;
+
+        // Avval loyiha ildiziga nisbatan ko'ramiz — foydalanuvchi `storage/app/X` yozsa ham
+        // yoki `cwd` dan boshqa joydan chaqirsa ham ishlasin.
+        $fromBase = base_path(ltrim($raw, '/'));
+        if (is_dir($fromBase)) return $fromBase;
+
+        // Aks holda — storage/app/ ga nisbatan
         return storage_path('app/' . ltrim($raw, '/'));
     }
 

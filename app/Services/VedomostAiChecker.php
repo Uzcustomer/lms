@@ -304,17 +304,26 @@ Quyidagilarni tekshiring:
    kurs, semestr, guruh nomi.
 2) Talabalar ro'yxati: tizimdagi har bir talaba mavjudmi, FISH va talaba ID raqami to'g'ri
    yozilganmi, ortiqcha yoki kam talaba bormi.
-3) Har talaba uchun tizimda TAYYOR HISOBLANGAN qiymatlar beriladi — O'ZINGIZ
-   HISOBLAMANG, faqat skanerdagi mos kataklar bilan SOLISHTIRING:
-     • jb_pct, mt_pct, on_pct, oski_pct, test_pct — FOIZ (%) ustunlari;
-     • jb_ball, mt_ball, on_ball, oski_ball, test_ball — mos BALL ustunlari;
-     • jbmton_ball — JB+MT+ON yig'indi bali;
-     • ozlashtirish — O'zlashtirish ko'rsatkichi (%); ects — ECTS harfi; baho — yakuniy baho.
-   Skanerdagi har bir katakni shu qiymat bilan solishtiring. Farq bo'lsa nomuvofiqlik
-   qo'shing (masalan field="Talaba 1 — MT ball", expected="19.2", found="19", severity=medium).
-   MISOL: tizimda mt_ball=19.2 bo'lsa, skanerda 19 yozilgan bo'lsa — XATO.
-   ESLATMA: agar talabada davomat ≥25% yoki kelmadi/qo'yilmadi holati bo'lsa va skanerda
-   ham shunday ko'rsatilgan bo'lsa, ozlashtirish/ects/baho farqini belgilamang.
+3) Har bir talaba uchun JN(JB), MT, ON, OSKE, Test ustunlaridagi FOIZ (%) qiymatlari
+   tizim ma'lumotiga (jn/mt/on/oski/test) mos kelishi.
+3b) HAR BIR KATAK BALLINI HAM TEKSHIRING (juda muhim — albatta bajaring).
+   OG'IRLIKLARNI (har ustunning maksimal bali) SKANERNING O'ZIDAN o'qing — ular
+   sarlavhadagi "ball" qatorida har nazorat turi (JB, MT, ON, OSKE, Test) ostida
+   ko'rsatilgan (masalan JB=50, MT=20, ON=0, JB+MT+ON=70, OSKE=0, Test=30). Bu
+   og'irliklar har vedomostda farq qilishi mumkin — qotib qolgan qiymatga tayanmang,
+   ayni shu skanerdagilarini ishlating. Har talaba, har ustun uchun ballni hisoblang
+   va skanerdagi yozilgan ball bilan solishtiring:
+     • Foiz < 60 bo'lsa → ball = 0.
+     • Aks holda ball = foiz × (ustun og'irligi) / 100.
+     • YAXLITLASH — JB/MT/ON: 1–3 kursda 1 KASR (masalan 96 × 20 / 100 = 19.2),
+       4–5 kursda butun (half-up). OSKE/Test: faqat bittasi og'irlikka ega bo'lsa →
+       butun, ikkalasi ham bo'lsa → 1 kasr.
+     • JB+MT+ON = JB ball + MT ball + ON ball (1 kasr).
+   Skanerdagi ball hisoblangandan farq qilsa — nomuvofiqlik (field="Talaba 1 — MT ball",
+   expected="19.2", found="19", severity=medium). Kursni tizimdagi "kurs"dan oling.
+   O'zlashtirish (%) = JB+MT+ON ball + OSKE/Test ball (yaxlitlangan), ECTS va bahoni
+   ham shu o'zlashtirishga mos kelishini tekshiring. Davomat ≥25% / kelmadi / qo'yilmadi
+   holatida skaner ham shunday bo'lsa — belgilamang.
 4) Imzolar — skanerda HAQIQIY qo'l qo'yilganmi (fan o'qituvchisi, fakultet dekani,
    kafedra mudiri). DIQQAT: blankada "imzo", "M.O'." (muhr o'rni), "F.I.Sh", "___"
    kabi OLDINDAN CHOP ETILGAN yorliq va chiziqlar bo'ladi — bular imzo EMAS, faqat

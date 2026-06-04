@@ -21,10 +21,6 @@ use Illuminate\Support\Facades\DB;
  */
 class YnQaydnomaDataService
 {
-    public function __construct(private VedomostGradeCalculator $calc)
-    {
-    }
-
     /**
      * @return array|null Bitta (guruh, fan, semestr) uchun kutilgan ma'lumot.
      */
@@ -118,25 +114,23 @@ class YnQaydnomaDataService
             ->orderByDesc('cnt')
             ->value('employee_name');
 
-        // Har talaba uchun barcha katak qiymatlari PHP'da (generator bilan bir xil)
-        // oldindan hisoblanadi — AI faqat skanerni o'qib solishtiradi, hisoblamaydi.
-        $levelCode = (string) ($semester->level_code ?? '');
+        // Har talaba uchun FOIZ (%) qiymatlari — tizim haqiqati. Ball/o'zlashtirish
+        // og'irliklarni talab qiladi; og'irliklar esa har vedomostda PDF sarlavhasida
+        // ko'rsatilgan (farq qilishi mumkin), shuning uchun ballni AI skanerdan o'qigan
+        // og'irliklar bilan hisoblaydi. Bu yerda faqat foizlarni beramiz.
         $studentRows = [];
         foreach ($students as $i => $stu) {
             $hid = $stu->hemis_id;
-            $cells = $this->calc->compute(
-                $jn[$hid] ?? null,
-                $mt[$hid] ?? null,
-                $on[$hid] ?? null,
-                $oski[$hid] ?? null,
-                $test[$hid] ?? null,
-                $levelCode
-            );
-            $studentRows[] = array_merge([
+            $studentRows[] = [
                 'n' => $i + 1,
                 'fish' => $stu->full_name,
                 'student_id' => $stu->student_id_number,
-            ], $cells);
+                'jn' => $jn[$hid] ?? null,
+                'mt' => $mt[$hid] ?? null,
+                'on' => $on[$hid] ?? null,
+                'oski' => $oski[$hid] ?? null,
+                'test' => $test[$hid] ?? null,
+            ];
         }
 
         return [

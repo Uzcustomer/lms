@@ -157,6 +157,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::delete('/students/{student}/files/{file}', [AdminStudentController::class, 'deleteFile'])->name('students.files.delete');
         Route::post('/students/{student}/admission-data', [AdminStudentController::class, 'saveAdmissionData'])->name('students.admission-data.save');
         Route::get('/students/{student}/admission-files/view/{name}', [AdminStudentController::class, 'viewAdmissionFile'])->name('students.admission-files.view');
+        Route::get('/students/{student}/admission-data/file/{path}', [AdminStudentController::class, 'viewAdmissionDataFile'])
+            ->where('path', '.*')
+            ->name('students.admission-data.file');
         Route::post('/students/{student}/admission-files', [AdminStudentController::class, 'uploadAdmissionFile'])->name('students.admission-files.upload');
         Route::delete('/students/{student}/admission-files/{file}', [AdminStudentController::class, 'deleteAdmissionFile'])->name('students.admission-files.delete');
         Route::delete('/students/{student}/admission-data/clear', [AdminStudentController::class, 'clearAdmissionData'])->name('students.admission-data.clear');

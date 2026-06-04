@@ -85,4 +85,27 @@ class StudentAdmissionData extends Model
     {
         return $this->belongsTo(Student::class);
     }
+
+    /**
+     * Berilgan kategoriyadagi fayl uchun controller route'i orqali URL qaytaradi.
+     * URL admission disk'idan o'qib oladi (config/filesystems.php → admission).
+     */
+    public function fileUrl(string $category, int $index = 0): ?string
+    {
+        $files = $this->files ?? [];
+        $path = $files[$category][$index]['path'] ?? null;
+        if (!$path) return null;
+        return route('admin.students.admission-data.file', [
+            'student' => $this->student_id,
+            'path' => $path,
+        ]);
+    }
+
+    /**
+     * Berilgan kategoriyadagi fayl uchun original (foydalanuvchi yuklagan) nom.
+     */
+    public function fileOriginalName(string $category, int $index = 0): ?string
+    {
+        return $this->files[$category][$index]['original_name'] ?? null;
+    }
 }

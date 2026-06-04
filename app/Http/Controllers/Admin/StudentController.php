@@ -1058,6 +1058,53 @@ class StudentController extends Controller
         );
     }
 
+    /**
+     * student_admission_data.files JSON ustunidagi fayl (apply forma'dan import qilingan).
+     * Admission disk'idan (config/filesystems.php) o'qib, inline ko'rsatadi.
+     * Talaba va yo'l o'zaro mosligi tekshiriladi — boshqa talabaning faylini ololmaydi.
+     */
+    public function viewAdmissionDataFile(Student $student, string $path)
+    {
+        if (str_contains($path, '..') || str_starts_with($path, '/')) {
+            abort(404);
+        }
+
+        $data = \App\Models\StudentAdmissionData::where('student_id', $student->id)->first();
+        if (!$data || empty($data->files)) {
+            abort(404, 'Admission ma\'lumotlari topilmadi.');
+        }
+
+        $original = null;
+        $mime = null;
+        foreach ($data->files as $files) {
+            if (!is_array($files)) continue;
+            foreach ($files as $f) {
+                if (($f['path'] ?? null) === $path) {
+                    $original = $f['original_name'] ?? null;
+                    $mime = $f['mime'] ?? null;
+                    break 2;
+                }
+            }
+        }
+
+        if ($original === null) {
+            abort(403, 'Bu fayl ushbu talabaga tegishli emas.');
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('admission');
+        if (!$disk->exists($path)) {
+            abort(404, 'Fayl serverda mavjud emas.');
+        }
+
+        return response()->file(
+            $disk->path($path),
+            [
+                'Content-Type' => $mime ?: 'application/octet-stream',
+                'Content-Disposition' => 'inline; filename="' . addslashes($original) . '"',
+            ]
+        );
+    }
+
     public function deleteFile(Student $student, \App\Models\StudentFile $file)
     {
         $user = Auth::user();

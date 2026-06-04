@@ -199,7 +199,8 @@ return [
         // Kerak bo'lsa ANTHROPIC_MODEL=claude-opus-4-8 bilan Opus'ga qaytarish mumkin.
         'model' => env('ANTHROPIC_MODEL', 'claude-sonnet-4-6'),
         'version' => env('ANTHROPIC_VERSION', '2023-06-01'),
-        'timeout' => (int) env('ANTHROPIC_TIMEOUT', 180),
+        // Streaming so'rov uchun umumiy vaqt chegarasi (job timeout 300s dan past).
+        'timeout' => (int) env('ANTHROPIC_TIMEOUT', 280),
     ],
 
 ];

@@ -10,21 +10,19 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
-use Illuminate\Support\Str;
 
 class ImportAdmissionJson extends Command
 {
     protected $signature = 'import:admission-json
-        {path : Directory containing the apply form *.json files (relative to storage/app or absolute)}
-        {--dry-run : Parse and match but don\'t write to DB}
-        {--update : Update rows that already exist (otherwise they are skipped)}
-        {--report=admission-import-report.csv : Filename written under storage/app/ with per-file outcome}';
+        {path : Talabaning ariza papkalari joylashgan asosiy katalog (relative storage/app ga yoki absolute)}
+        {--dry-run : DB ga yozmaslik va fayl ko\'chirmaslik, faqat moslashtirish va hisobot}
+        {--update : Mavjud yozuvlarni yangilash (default — o\'tkazib yuborish)}
+        {--report=admission-import-report.csv : storage/app/ ichidagi hisobot fayl nomi}';
 
-    protected $description = 'Talabaning apply formidan kelgan JSON fayllarini student_admission_data jadvaliga yuklash';
+    protected $description = 'Apply formidan kelgan JSON fayllarni student_admission_data ga import va fayllarni storage/app/public/admission/ ga ko\'chirish';
 
     /**
-     * Map from JSON `fields` key → student_admission_data column.
-     * Keys that already match the column name 1:1 are listed only once.
+     * JSON `fields` → student_admission_data column mapping (1:1 va renamed).
      */
     private array $fieldMap = [
         // 1:1
@@ -37,13 +35,17 @@ class ImportAdmissionJson extends Command
         'tel2' => 'tel2',
         'email' => 'email',
         'millat' => 'millat',
+        'millat_other' => 'millat_other',
         'tugilgan_davlat' => 'tugilgan_davlat',
         'tugilgan_viloyat' => 'tugilgan_viloyat',
         'tugulgan_tuman' => 'tugulgan_tuman',
+        'tugilgan_viloyat_text' => 'tugilgan_viloyat_text',
+        'tugilgan_tuman_text' => 'tugilgan_tuman_text',
         'passport_seriya' => 'passport_seriya',
         'passport_raqam' => 'passport_raqam',
         'passport_joy' => 'passport_joy',
         'oliy_malumot' => 'oliy_malumot',
+        'prev_otm_nomi' => 'prev_otm_nomi',
         'otm_nomi' => 'otm_nomi',
         'talim_turi' => 'talim_turi',
         'talim_shakli' => 'talim_shakli',
@@ -54,7 +56,10 @@ class ImportAdmissionJson extends Command
         'tolov_shakli' => 'tolov_shakli',
         'talim_viloyat' => 'talim_viloyat',
         'talim_tuman' => 'talim_tuman',
+        'talim_viloyat_text' => 'talim_viloyat_text',
+        'talim_tuman_text' => 'talim_tuman_text',
         'muassasa_nomi' => 'muassasa_nomi',
+        'muassasa_turi' => 'muassasa_turi',
         'hujjat_seriya' => 'hujjat_seriya',
         'ortalacha_ball' => 'ortalacha_ball',
         'milliy_sertifikat' => 'milliy_sertifikat',
@@ -62,7 +67,11 @@ class ImportAdmissionJson extends Command
         'sertifikat_ball' => 'sertifikat_ball',
         'yashash_viloyat' => 'yashash_viloyat',
         'yashash_tuman' => 'yashash_tuman',
+        'yashash_viloyat_text' => 'yashash_viloyat_text',
+        'yashash_tuman_text' => 'yashash_tuman_text',
         'doimiy_manzil' => 'doimiy_manzil',
+        'kenglik' => 'kenglik',
+        'uzunlik' => 'uzunlik',
         'ota_familiya' => 'ota_familiya',
         'ota_ismi' => 'ota_ismi',
         'ota_sharifi' => 'ota_sharifi',
@@ -85,6 +94,34 @@ class ImportAdmissionJson extends Command
         'yil_tugashi' => 'oqigan_yili_tugashi',
     ];
 
+    private array $booleanFields = [
+        'd_kiritilgan', 'd_oila_azosi', 'kam_taminlangan', 'harbiy_qaytgan',
+        'nafaqa_oluvchi', 'nogironligi', 'yetim_talaba',
+        'davlat_mukofoti', 'kokrak_nishoni', 'prezident_stip', 'davlat_stip',
+        'xalqaro_stip', 'resp_sport', 'xal_sport', 'resp_fan_olimp',
+        'xal_fan_olimp', 'boshqa_yutuq',
+    ];
+
+    private array $stringPassthroughFields = [
+        'd_kiritilgan_turi', 'd_oila_turi',
+        'nogiron_guruh', 'nogiron_toifa', 'nogiron_toifa_boshqa',
+        'yetim_turi',
+        'davlat_mukofoti_desc', 'kokrak_nishoni_desc',
+        'prezident_stip_desc', 'davlat_stip_desc', 'xalqaro_stip_desc',
+        'resp_sport_desc', 'xal_sport_desc',
+        'resp_fan_olimp_desc', 'xal_fan_olimp_desc',
+        'boshqa_yutuq_desc',
+        'iqtidori_boshqa', 'sport_boshqa', 'chet_til_boshqa',
+    ];
+
+    private array $jsonArrayFields = ['iqtidori', 'sport_qobiliyat', 'chet_tillari'];
+
+    /**
+     * Pre-loaded student name index: normalized full_name → [student_id, ...]
+     */
+    private array $studentsByNorm = [];
+    private array $studentsBySortedNorm = [];
+
     public function handle(): int
     {
         $rawPath = $this->argument('path');
@@ -94,11 +131,18 @@ class ImportAdmissionJson extends Command
             return self::FAILURE;
         }
 
-        $files = collect(File::files($dir))
-            ->filter(fn ($f) => str_ends_with(strtolower($f->getFilename()), '.json'))
+        $this->info("📁 Asosiy katalog: {$dir}");
+        $this->info('🔍 JSON fayllarni qidirish (recursive, .bak chiqarib tashlanadi)...');
+
+        $jsonFiles = collect(File::allFiles($dir))
+            ->filter(function ($f) {
+                $name = $f->getFilename();
+                return str_ends_with(strtolower($name), '.json')
+                    && !str_ends_with(strtolower($name), '.json.bak');
+            })
             ->values();
 
-        if ($files->isEmpty()) {
+        if ($jsonFiles->isEmpty()) {
             $this->error("JSON fayl topilmadi: {$dir}");
             return self::FAILURE;
         }
@@ -107,82 +151,108 @@ class ImportAdmissionJson extends Command
         $updateExisting = (bool) $this->option('update');
         $reportPath = storage_path('app/' . $this->option('report'));
         $report = fopen($reportPath, 'w');
-        fputcsv($report, ['file', 'application_number', 'applicant', 'status', 'student_id', 'detail']);
+        fputcsv($report, ['file', 'application_number', 'applicant', 'status', 'student_id', 'files_copied', 'detail']);
 
-        // Cache list of real columns to handle production schemas that lack
-        // some of the newer fields.
+        $this->info("📥 {$jsonFiles->count()} ta JSON fayl topildi.");
+        $this->info($dryRun ? '🧪 DRY-RUN — DB ga yozilmaydi, fayl ko\'chirilmaydi' : '💾 LIVE — DB ga yoziladi, fayllar ko\'chiriladi');
+
+        $this->info('👥 Talaba indeksi tuzilmoqda (students.full_name)...');
+        $this->buildStudentIndex();
+        $this->info("   {$this->indexSize()} ta talaba indekslandi.");
+
         $existingColumns = collect(Schema::getColumnListing('student_admission_data'))->flip();
+        $stats = [
+            'matched' => 0, 'inserted' => 0, 'updated' => 0,
+            'skipped' => 0, 'unmatched' => 0, 'errors' => 0,
+            'files_copied' => 0, 'files_missing' => 0,
+        ];
 
-        $total = $files->count();
-        $stats = ['matched' => 0, 'inserted' => 0, 'updated' => 0, 'skipped' => 0, 'unmatched' => 0, 'errors' => 0];
-
-        $this->info("📂 {$total} ta fayl topildi: {$dir}");
-        $this->info($dryRun ? '🧪 DRY-RUN — yozish o\'chirilgan' : '💾 LIVE — DB ga yoziladi');
-        $bar = $this->output->createProgressBar($total);
+        $bar = $this->output->createProgressBar($jsonFiles->count());
         $bar->start();
 
-        foreach ($files as $file) {
+        foreach ($jsonFiles as $file) {
             $bar->advance();
             $filename = $file->getFilename();
+            $jsonPath = $file->getPathname();
+
             try {
-                $json = json_decode(File::get($file->getPathname()), true, 512, JSON_THROW_ON_ERROR);
+                $json = json_decode(File::get($jsonPath), true, 512, JSON_THROW_ON_ERROR);
             } catch (\Throwable $e) {
                 $stats['errors']++;
-                fputcsv($report, [$filename, '', '', 'json-error', '', $e->getMessage()]);
+                fputcsv($report, [$filename, '', '', 'json-error', '', 0, $e->getMessage()]);
                 continue;
             }
 
-            $appNum = $json['application_number'] ?? '';
+            $appNum = (string)($json['application_number'] ?? '');
             $applicant = $json['applicant']['full'] ?? '';
             $fields = $json['fields'] ?? [];
             if (!is_array($fields) || empty($fields)) {
                 $stats['errors']++;
-                fputcsv($report, [$filename, $appNum, $applicant, 'no-fields', '', '']);
+                fputcsv($report, [$filename, $appNum, $applicant, 'no-fields', '', 0, '']);
                 continue;
             }
 
-            $student = $this->findStudent($fields);
+            $student = $this->findStudent($json['applicant'] ?? [], $fields);
             if (!$student) {
                 $stats['unmatched']++;
                 fputcsv($report, [
-                    $filename, $appNum, $applicant, 'unmatched', '',
-                    'name=' . trim(($fields['familya'] ?? '') . ' ' . ($fields['ism'] ?? ''))
-                    . ' birth=' . ($fields['tugilgan_sana'] ?? ''),
+                    $filename, $appNum, $applicant, 'unmatched', '', 0,
+                    'full=' . $applicant,
                 ]);
                 continue;
             }
             $stats['matched']++;
 
-            $payload = $this->buildPayload($fields, $existingColumns);
-
-            if ($dryRun) {
-                fputcsv($report, [$filename, $appNum, $applicant, 'matched-dry', $student->id, '']);
-                continue;
-            }
-
             $existing = StudentAdmissionData::where('student_id', $student->id)->first();
             if ($existing && !$updateExisting) {
                 $stats['skipped']++;
-                fputcsv($report, [$filename, $appNum, $applicant, 'skipped-exists', $student->id, '']);
+                fputcsv($report, [$filename, $appNum, $applicant, 'skipped-exists', $student->id, 0, '']);
+                continue;
+            }
+
+            $payload = $this->buildPayload($fields, $existingColumns);
+
+            if ($existingColumns->has('application_number') && $appNum !== '') {
+                $payload['application_number'] = $appNum;
+            }
+            if ($existingColumns->has('submitted_at') && !empty($json['submitted_at'])) {
+                try {
+                    $payload['submitted_at'] = Carbon::parse($json['submitted_at']);
+                } catch (\Throwable) {
+                    // skip
+                }
+            }
+
+            $filesCopied = 0;
+            if (!$dryRun && $existingColumns->has('files') && !empty($json['files']) && is_array($json['files'])) {
+                $copyResult = $this->copyApplicationFiles($json['files'], $jsonPath, $student->id);
+                $payload['files'] = $copyResult['files'];
+                $filesCopied = $copyResult['copied'];
+                $stats['files_copied'] += $copyResult['copied'];
+                $stats['files_missing'] += $copyResult['missing'];
+            }
+
+            if ($dryRun) {
+                fputcsv($report, [$filename, $appNum, $applicant, 'matched-dry', $student->id, 0, '']);
                 continue;
             }
 
             try {
-                DB::transaction(function () use ($existing, $student, $payload, &$stats, $report, $filename, $appNum, $applicant) {
+                DB::transaction(function () use ($existing, $student, $payload, &$stats, $report, $filename, $appNum, $applicant, $filesCopied) {
                     if ($existing) {
                         $existing->fill($payload)->save();
                         $stats['updated']++;
-                        fputcsv($report, [$filename, $appNum, $applicant, 'updated', $student->id, '']);
+                        fputcsv($report, [$filename, $appNum, $applicant, 'updated', $student->id, $filesCopied, '']);
                     } else {
                         StudentAdmissionData::create(array_merge($payload, ['student_id' => $student->id]));
                         $stats['inserted']++;
-                        fputcsv($report, [$filename, $appNum, $applicant, 'inserted', $student->id, '']);
+                        fputcsv($report, [$filename, $appNum, $applicant, 'inserted', $student->id, $filesCopied, '']);
                     }
                 });
             } catch (\Throwable $e) {
                 $stats['errors']++;
-                fputcsv($report, [$filename, $appNum, $applicant, 'db-error', $student->id, $e->getMessage()]);
-                Log::warning("ImportAdmissionJson DB error", ['file' => $filename, 'error' => $e->getMessage()]);
+                fputcsv($report, [$filename, $appNum, $applicant, 'db-error', $student->id, $filesCopied, $e->getMessage()]);
+                Log::warning('ImportAdmissionJson DB error', ['file' => $filename, 'error' => $e->getMessage()]);
             }
         }
 
@@ -190,10 +260,11 @@ class ImportAdmissionJson extends Command
         fclose($report);
         $this->newLine(2);
         $this->table(
-            ['Topildi', 'Qo\'shildi', 'Yangilandi', 'O\'tkazib yuborildi', 'Topilmadi', 'Xato'],
+            ['Topildi', 'Qo\'shildi', 'Yangilandi', 'O\'tkazib yuborildi', 'Topilmadi', 'Xato', 'Fayl ko\'chirildi', 'Fayl yo\'q'],
             [[
                 $stats['matched'], $stats['inserted'], $stats['updated'],
                 $stats['skipped'], $stats['unmatched'], $stats['errors'],
+                $stats['files_copied'], $stats['files_missing'],
             ]],
         );
         $this->info("📊 Hisobot: {$reportPath}");
@@ -207,46 +278,59 @@ class ImportAdmissionJson extends Command
     }
 
     /**
-     * Match priority:
-     *   1) name parts (familya/ism/otasining_ismi) + birth_date
-     *   2) full_name (normalized) + birth_date
-     *   3) full_name only (last-resort, may match more than one — skipped)
+     * Barcha talabalarni 1 marta yuklab, normalize qilingan kalit bo'yicha indeks tuzamiz.
+     * Bu har bir JSON uchun alohida SQL so'rovdan ko'ra ancha tezroq.
      */
-    private function findStudent(array $fields): ?Student
+    private function buildStudentIndex(): void
     {
-        $birth = $this->parseDate($fields['tugilgan_sana'] ?? null);
-        $familya = $this->norm($fields['familya'] ?? '');
-        $ism = $this->norm($fields['ism'] ?? '');
-        $otasi = $this->norm($fields['otasining_ismi'] ?? '');
+        Student::query()
+            ->select(['id', 'full_name'])
+            ->whereNotNull('full_name')
+            ->orderBy('id')
+            ->chunk(2000, function ($students) {
+                foreach ($students as $s) {
+                    $norm = $this->norm($s->full_name);
+                    if ($norm === '') continue;
+                    $this->studentsByNorm[$norm][] = $s->id;
 
-        if ($birth && $familya && $ism) {
-            // Try the structured columns first.
-            $q = Student::query()
-                ->whereDate('birth_date', $birth)
-                ->whereRaw('LOWER(second_name) = ?', [$familya])
-                ->whereRaw('LOWER(first_name) = ?', [$ism]);
-            if ($otasi) {
-                $q->where(function ($w) use ($otasi) {
-                    $w->whereRaw('LOWER(third_name) = ?', [$otasi])
-                        ->orWhereRaw('LOWER(third_name) LIKE ?', [$otasi . '%']);
-                });
-            }
-            $hit = $q->first();
-            if ($hit) return $hit;
+                    $sortedNorm = $this->normSorted($s->full_name);
+                    $this->studentsBySortedNorm[$sortedNorm][] = $s->id;
+                }
+            });
+    }
 
-            // Fallback: full_name contains all parts.
-            $haystack = $familya . ' ' . $ism;
-            $candidates = Student::query()
-                ->whereDate('birth_date', $birth)
-                ->whereRaw('LOWER(full_name) LIKE ?', ['%' . $haystack . '%'])
-                ->get();
-            if ($candidates->count() === 1) return $candidates->first();
-            if ($candidates->count() > 1 && $otasi !== '') {
-                $narrowed = $candidates->filter(
-                    fn ($c) => str_contains(Str::lower($c->full_name ?? ''), $otasi),
-                );
-                if ($narrowed->count() === 1) return $narrowed->first();
-            }
+    private function indexSize(): int
+    {
+        $unique = [];
+        foreach ($this->studentsByNorm as $ids) {
+            foreach ($ids as $id) $unique[$id] = true;
+        }
+        return count($unique);
+    }
+
+    /**
+     * applicant.full bo'yicha qidirish. So'zlar tartibi farq qilsa, sorted match.
+     */
+    private function findStudent(array $applicant, array $fields): ?Student
+    {
+        $full = trim((string)($applicant['full'] ?? ''));
+        if ($full === '') {
+            $full = trim(
+                (string)($fields['familya'] ?? '') . ' ' .
+                (string)($fields['ism'] ?? '') . ' ' .
+                (string)($fields['otasining_ismi'] ?? '')
+            );
+        }
+        if ($full === '') return null;
+
+        $norm = $this->norm($full);
+        if (isset($this->studentsByNorm[$norm]) && count($this->studentsByNorm[$norm]) === 1) {
+            return Student::find($this->studentsByNorm[$norm][0]);
+        }
+
+        $sortedNorm = $this->normSorted($full);
+        if (isset($this->studentsBySortedNorm[$sortedNorm]) && count($this->studentsBySortedNorm[$sortedNorm]) === 1) {
+            return Student::find($this->studentsBySortedNorm[$sortedNorm][0]);
         }
 
         return null;
@@ -265,7 +349,6 @@ class ImportAdmissionJson extends Command
             $out[$col] = $val;
         }
 
-        // Date columns need normalization.
         foreach (['tugilgan_sana' => 'tugilgan_sana', 'passport_sana' => 'passport_sana'] as $jsonKey => $col) {
             if (isset($fields[$jsonKey]) && $existingColumns->has($col)) {
                 $d = $this->parseDate($fields[$jsonKey]);
@@ -273,16 +356,119 @@ class ImportAdmissionJson extends Command
             }
         }
 
-        // Foreign-language certificate: prefer explicit fields, fall back to
-        // joining the chet_tillari array.
-        if ($existingColumns->has('chet_til_sertifikat')) {
-            $langs = $fields['chet_tillari'] ?? null;
-            if (is_array($langs) && $langs) {
-                $out['chet_til_sertifikat'] = implode(', ', array_filter($langs));
+        foreach ($this->booleanFields as $col) {
+            if (array_key_exists($col, $fields) && $existingColumns->has($col)) {
+                $out[$col] = $this->parseBool($fields[$col]);
+            }
+        }
+
+        foreach ($this->stringPassthroughFields as $col) {
+            if (array_key_exists($col, $fields) && $existingColumns->has($col)) {
+                $v = is_string($fields[$col]) ? trim($fields[$col]) : $fields[$col];
+                if ($v !== '' && $v !== null) $out[$col] = $v;
+            }
+        }
+
+        foreach ($this->jsonArrayFields as $col) {
+            if (!array_key_exists($col, $fields) || !$existingColumns->has($col)) continue;
+            $raw = $fields[$col];
+            if (is_string($raw)) {
+                $decoded = json_decode($raw, true);
+                if (is_array($decoded)) $raw = $decoded;
+            }
+            if (is_array($raw)) {
+                $clean = array_values(array_filter(array_map('trim', $raw), fn ($v) => $v !== ''));
+                if (!empty($clean)) $out[$col] = $clean;
             }
         }
 
         return $out;
+    }
+
+    /**
+     * JSON files[]={'category' => [{'saved_path', 'original_name', ...}]} dan
+     * fayllarni storage/app/public/admission/{student_id}/{category}/{filename} ga
+     * ko'chiramiz va yangi yo'llar bilan array qaytaramiz.
+     */
+    private function copyApplicationFiles(array $filesByCategory, string $jsonPath, int $studentId): array
+    {
+        $studentFolder = dirname($jsonPath);
+        $out = [];
+        $copied = 0;
+        $missing = 0;
+
+        foreach ($filesByCategory as $category => $files) {
+            if (!is_array($files)) continue;
+            $cleanCategory = preg_replace('/[^a-z0-9_-]/i', '', $category);
+            if ($cleanCategory === '') continue;
+
+            $categoryOut = [];
+            foreach ($files as $f) {
+                if (!is_array($f) || empty($f['saved_path'])) continue;
+
+                $filename = basename($f['saved_path']);
+                $srcPath = $this->resolveSourceFile($studentFolder, $category, $filename, $f['saved_path']);
+
+                if ($srcPath === null) {
+                    $missing++;
+                    Log::warning('ImportAdmissionJson: source file not found', [
+                        'student_id' => $studentId,
+                        'category' => $category,
+                        'filename' => $filename,
+                        'saved_path' => $f['saved_path'],
+                    ]);
+                    continue;
+                }
+
+                $destDir = storage_path("app/public/admission/{$studentId}/{$cleanCategory}");
+                if (!is_dir($destDir) && !mkdir($destDir, 0755, true) && !is_dir($destDir)) {
+                    Log::warning('ImportAdmissionJson: failed to create dest dir', ['dir' => $destDir]);
+                    continue;
+                }
+                $destPath = $destDir . '/' . $filename;
+
+                if (!@copy($srcPath, $destPath)) {
+                    Log::warning('ImportAdmissionJson: copy failed', [
+                        'from' => $srcPath, 'to' => $destPath,
+                    ]);
+                    continue;
+                }
+
+                @chmod($destPath, 0644);
+                $copied++;
+
+                $categoryOut[] = [
+                    'path' => "admission/{$studentId}/{$cleanCategory}/{$filename}",
+                    'original_name' => $f['original_name'] ?? $filename,
+                    'mime' => $f['mime'] ?? null,
+                    'size' => $f['size'] ?? @filesize($destPath),
+                ];
+            }
+
+            if (!empty($categoryOut)) {
+                $out[$cleanCategory] = $categoryOut;
+            }
+        }
+
+        return ['files' => $out, 'copied' => $copied, 'missing' => $missing];
+    }
+
+    /**
+     * Manba fayl yo'lini bir nechta variantda qidirish (papka nomi farqli bo'lishi mumkin).
+     */
+    private function resolveSourceFile(string $studentFolder, string $category, string $filename, string $savedPath): ?string
+    {
+        $candidates = [
+            $studentFolder . '/' . $category . '/' . $filename,
+            $studentFolder . '/' . $category . '_pdf/' . $filename,
+            $studentFolder . '/' . preg_replace('/_pdf$/', '', $category) . '/' . $filename,
+            // JSON saved_path ga to'g'ridan-to'g'ri urinish (asosiy katalogga nisbatan)
+            dirname($studentFolder) . '/' . $savedPath,
+        ];
+        foreach ($candidates as $path) {
+            if (is_file($path)) return $path;
+        }
+        return null;
     }
 
     private function parseDate(?string $raw): ?string
@@ -293,17 +479,36 @@ class ImportAdmissionJson extends Command
             try {
                 return Carbon::createFromFormat($fmt, $raw)->format('Y-m-d');
             } catch (\Throwable) {
-                // try next format
+                // try next
             }
         }
         return null;
     }
 
+    private function parseBool($v): bool
+    {
+        if (is_bool($v)) return $v;
+        if (is_int($v)) return $v !== 0;
+        if (is_string($v)) {
+            $v = strtolower(trim($v));
+            return in_array($v, ['1', 'true', 'yes', 'ha', 'on'], true);
+        }
+        return false;
+    }
+
     private function norm(string $s): string
     {
         $s = mb_strtolower(trim($s));
-        // Common ASCII vs. Cyrillic O/apostrophe noise from DTM data.
-        $s = str_replace(['ʻ', 'ʼ', '`', "'", '‘', '’'], '', $s);
+        $s = str_replace(['ʻ', 'ʼ', '`', "'", '‘', '’', "'"], '', $s);
+        $s = preg_replace('/\s+/u', ' ', $s);
         return $s;
+    }
+
+    private function normSorted(string $s): string
+    {
+        $words = explode(' ', $this->norm($s));
+        $words = array_filter($words, fn ($w) => $w !== '');
+        sort($words);
+        return implode(' ', $words);
     }
 }

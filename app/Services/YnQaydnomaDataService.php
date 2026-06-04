@@ -135,6 +135,7 @@ class YnQaydnomaDataService
             'oquv_yili' => $this->formatEducationYear($semester->education_year ?? null),
             'yonalish' => $specialty->name ?? null,
             'fan' => $subject->subject_name,
+            'yopilish_shakli' => $subject->closing_form,
             'maruzachi' => $maruza->full_names ?? null,
             'amaliyot_oqituvchilari' => $practiceTeacher ?: '',
             'umumiy_soat' => $subject->total_acload,

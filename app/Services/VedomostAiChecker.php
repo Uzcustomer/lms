@@ -304,25 +304,17 @@ Quyidagilarni tekshiring:
    kurs, semestr, guruh nomi.
 2) Talabalar ro'yxati: tizimdagi har bir talaba mavjudmi, FISH va talaba ID raqami to'g'ri
    yozilganmi, ortiqcha yoki kam talaba bormi.
-3) Har bir talaba uchun JN, MT, ON (JB+MT+ON), OSKE, Test ustunlaridagi FOIZ (%)
-   qiymatlari tizim ma'lumotiga mos kelishi.
-3b) HAR BIR KATAK BALLINI HAM TEKSHIRING (juda muhim — buni albatta bajaring).
-   Vedomostda har bir baho ustuni IKKI qismdan iborat: "%" (foiz) va "ball". Sarlavhaning
-   "ball" qatorida har ustunning MAKSIMAL bali = OG'IRLIGI ko'rsatilgan (masalan JB=50,
-   MT=20, ON=0, OSKE=0, Test=30). Har talaba, har ustun uchun ballni QAYTA HISOBLANG va
-   skanerdagi yozilgan ball bilan SOLISHTIRING:
-     • Foiz < 60 bo'lsa → ball = 0.
-     • Aks holda ball = foiz × (ustun og'irligi) / 100.
-     • YAXLITLASH — JB/MT/ON uchun: 1–3 kurs talabalarida 1 KASR xonagacha
-       (masalan 96 × 20 / 100 = 19.2); 4–5 kursda butun songacha (half-up).
-     • OSKE/Test uchun: agar faqat BITTASINING og'irligi bo'lsa → BUTUN songacha
-       yaxlitlanadi; ikkalasining ham og'irligi bo'lsa → 1 kasr xonagacha.
-     • JB+MT+ON ustuni = JB ball + MT ball + ON ball (1 kasr).
-   Agar skanerdagi yozilgan ball hisoblangandan farq qilsa — nomuvofiqlik qo'shing
-   (field="Talaba N — MT ball", expected="19.2", found="19", severity=medium).
-   MISOL: MT foiz 96, og'irlik 20 → ball 19.2 bo'lishi shart; skanerda 19 bo'lsa — XATO.
-   Kursni tizimdagi "kurs" qiymatidan oling. O'rtacha foiz va yakuniy ball ustunlarini
-   ham shu yig'indilarga mos kelishini tekshiring.
+3) Har talaba uchun tizimda TAYYOR HISOBLANGAN qiymatlar beriladi — O'ZINGIZ
+   HISOBLAMANG, faqat skanerdagi mos kataklar bilan SOLISHTIRING:
+     • jb_pct, mt_pct, on_pct, oski_pct, test_pct — FOIZ (%) ustunlari;
+     • jb_ball, mt_ball, on_ball, oski_ball, test_ball — mos BALL ustunlari;
+     • jbmton_ball — JB+MT+ON yig'indi bali;
+     • ozlashtirish — O'zlashtirish ko'rsatkichi (%); ects — ECTS harfi; baho — yakuniy baho.
+   Skanerdagi har bir katakni shu qiymat bilan solishtiring. Farq bo'lsa nomuvofiqlik
+   qo'shing (masalan field="Talaba 1 — MT ball", expected="19.2", found="19", severity=medium).
+   MISOL: tizimda mt_ball=19.2 bo'lsa, skanerda 19 yozilgan bo'lsa — XATO.
+   ESLATMA: agar talabada davomat ≥25% yoki kelmadi/qo'yilmadi holati bo'lsa va skanerda
+   ham shunday ko'rsatilgan bo'lsa, ozlashtirish/ects/baho farqini belgilamang.
 4) Imzolar — skanerda HAQIQIY qo'l qo'yilganmi (fan o'qituvchisi, fakultet dekani,
    kafedra mudiri). DIQQAT: blankada "imzo", "M.O'." (muhr o'rni), "F.I.Sh", "___"
    kabi OLDINDAN CHOP ETILGAN yorliq va chiziqlar bo'ladi — bular imzo EMAS, faqat

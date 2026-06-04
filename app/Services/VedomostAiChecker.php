@@ -201,7 +201,10 @@ class VedomostAiChecker
      */
     private function buildMergedExpected(VedomostSubmission $v): ?array
     {
-        $siblings = $this->merge->siblingsOf($v);
+        // Guruhcha tartibida (a, b, c) — amaliyot o'qituvchilari shu tartibda kelishi uchun.
+        $siblings = $this->merge->siblingsOf($v)
+            ->sortBy('group_name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
 
         $parts = [];
         foreach ($siblings as $sib) {
@@ -225,7 +228,7 @@ class VedomostAiChecker
         $first = $parts[0];
         $groupNames = [];
         $maruzachi = [];
-        $amaliyot = [];
+        $amaliyotList = [];
         $ynSanasi = [];
         $students = [];
         $seen = [];
@@ -240,11 +243,11 @@ class VedomostAiChecker
                     $maruzachi[$name] = true;
                 }
             }
-            foreach (explode(', ', (string) ($p['amaliyot_oqituvchilari'] ?? '')) as $name) {
-                $name = trim($name);
-                if ($name !== '') {
-                    $amaliyot[$name] = true;
-                }
+            // Amaliyot: har guruhchadan BITTA o'qituvchi, guruhcha tartibida (a, b, c).
+            // Takror (bir o'qituvchi bir nechta guruhchada) bo'lsa bir marta ko'rsatamiz.
+            $amaliyot = trim((string) ($p['amaliyot_oqituvchilari'] ?? ''));
+            if ($amaliyot !== '' && !in_array($amaliyot, $amaliyotList, true)) {
+                $amaliyotList[] = $amaliyot;
             }
             if (!empty($p['yn_sanasi'])) {
                 $ynSanasi[$p['yn_sanasi']] = true;
@@ -274,7 +277,7 @@ class VedomostAiChecker
             'fan' => $this->merge->rootSubjectName($first['fan'] ?? $v->subject_name),
             'guruh' => $rootGroup . (count($subgroups) > 1 ? ' (' . implode(', ', $subgroups) . ')' : ''),
             'maruzachi' => empty($maruzachi) ? null : implode(', ', array_keys($maruzachi)),
-            'amaliyot_oqituvchilari' => implode(', ', array_keys($amaliyot)),
+            'amaliyot_oqituvchilari' => implode(', ', $amaliyotList),
             'yn_sanasi' => empty($ynSanasi) ? null : implode(', ', array_keys($ynSanasi)),
             'jami_talabalar' => count($students),
             'talabalar' => $students,

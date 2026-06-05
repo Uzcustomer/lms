@@ -1000,19 +1000,35 @@
                                                     $scheduledPairs = $lecturePairsByDate[$date] ?? [];
                                                     $isDayMarked = false;
                                                     $isAbsent = false;
+                                                    $absentPair = null;
 
                                                     foreach ($scheduledPairs as $pair) {
                                                         if (isset($lectureMarkedPairs[$date][$pair])) {
                                                             $isDayMarked = true;
                                                             if (($studentLecture[$date][$pair] ?? null) === 'NB') {
                                                                 $isAbsent = true;
+                                                                $absentPair = $pair;
                                                                 break;
                                                             }
                                                         }
                                                     }
+
+                                                    // Sababli mi? LMS arizasi yoki HEMIS absent_on > 0
+                                                    $lecDateStr = \Carbon\Carbon::parse($date)->format('Y-m-d');
+                                                    $lecSababli = false;
+                                                    if ($isAbsent) {
+                                                        foreach (($broadExcuses[$student->hemis_id] ?? collect()) as $exc) {
+                                                            if ($exc->start_date <= $date && $exc->end_date >= $date) { $lecSababli = true; break; }
+                                                        }
+                                                        if (!$lecSababli && $absentPair !== null) {
+                                                            $lecSababli = !empty($hemisSababliByKey[$student->hemis_id][$lecDateStr][$absentPair] ?? null);
+                                                        }
+                                                    }
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $idx === 0 ? 'date-separator' : '' }} {{ $idx === count($lectureLessonDates) - 1 ? 'date-end' : '' }}">
-                                                    @if($isAbsent)
+                                                    @if($isAbsent && $lecSababli)
+                                                        <span class="excuse-nb-cell font-medium" title="Sababli">NB <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg></span>
+                                                    @elseif($isAbsent)
                                                         <span class="text-red-600 font-medium">NB</span>
                                                     @elseif($isDayMarked)
                                                         <span class="text-green-600 font-bold">+</span>
@@ -1054,9 +1070,21 @@
                                                 @php
                                                     $lectureMark = $studentLecture[$col['date']][$col['pair']] ?? null;
                                                     $isMarkedPair = isset($lectureMarkedPairs[$col['date']][$col['pair']]);
+                                                    $lecDateStrD = \Carbon\Carbon::parse($col['date'])->format('Y-m-d');
+                                                    $lecSababliD = false;
+                                                    if ($isMarkedPair && $lectureMark === 'NB') {
+                                                        foreach (($broadExcuses[$student->hemis_id] ?? collect()) as $exc) {
+                                                            if ($exc->start_date <= $col['date'] && $exc->end_date >= $col['date']) { $lecSababliD = true; break; }
+                                                        }
+                                                        if (!$lecSababliD) {
+                                                            $lecSababliD = !empty($hemisSababliByKey[$student->hemis_id][$lecDateStrD][$col['pair']] ?? null);
+                                                        }
+                                                    }
                                                 @endphp
                                                 <td class="px-1 py-1 text-center {{ $idx === 0 || $lectureColumns[$idx - 1]['date'] !== $col['date'] ? 'detailed-date-start' : '' }} {{ !isset($lectureColumns[$idx + 1]) || $lectureColumns[$idx + 1]['date'] !== $col['date'] ? 'detailed-date-end' : '' }}">
-                                                    @if($isMarkedPair && $lectureMark === 'NB')
+                                                    @if($isMarkedPair && $lectureMark === 'NB' && $lecSababliD)
+                                                        <span class="excuse-nb-cell font-medium" title="Sababli">NB <svg xmlns="http://www.w3.org/2000/svg" class="inline w-3 h-3" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" /></svg></span>
+                                                    @elseif($isMarkedPair && $lectureMark === 'NB')
                                                         <span class="text-red-600 font-medium">NB</span>
                                                     @elseif($isMarkedPair)
                                                         <span class="text-green-600 font-bold">+</span>

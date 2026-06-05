@@ -17,7 +17,8 @@ class VedomostAiChecker
 {
     public function __construct(
         private YnQaydnomaDataService $qaydnoma,
-        private VedomostMergeService $merge
+        private VedomostMergeService $merge,
+        private VedomostGradeCalculator $calc
     ) {
     }
 
@@ -46,12 +47,27 @@ class VedomostAiChecker
             throw new RuntimeException('Tizimda bu guruh/fan uchun YN qaydnoma ma\'lumoti topilmadi.');
         }
 
+        // 1-bosqich: AI faqat SKANERNI O'QIYDI (transkripsiya) — hisoblamaydi,
+        // solishtirmaydi. Shuning uchun thinking minimal, tez va arzon.
+        $scan = $this->transcribeScan($v, $expected);
+
+        // 2-bosqich: PHP hisoblaydi va solishtiradi (determinik, aniq).
+        return $this->compare($expected, $scan);
+    }
+
+    /**
+     * AI orqali skanerni strukturali JSONga o'qiydi (og'irliklar, talabalar
+     * yozilgan qiymatlari, imzo/muhr, sarlavha nomuvofiqliklari). Hisob yo'q.
+     */
+    private function transcribeScan(VedomostSubmission $v, array $expected): array
+    {
         $pdfBase64 = base64_encode(Storage::disk('public')->get($v->pdf_path));
 
         $content = [
             [
                 'type' => 'text',
-                'text' => "TIZIMDAGI (kutilgan) YN QAYDNOMA MA'LUMOTI (JSON):\n"
+                'text' => "TIZIMDAGI (kutilgan) YN QAYDNOMA MA'LUMOTI (JSON) — faqat sarlavha\n"
+                    . "nomuvofiqliklarini baholash uchun:\n"
                     . json_encode($expected, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT),
             ],
             [
@@ -64,26 +80,26 @@ class VedomostAiChecker
             ],
             [
                 'type' => 'text',
-                'text' => "Yuqoridagi SKANER (PDF) ni tizim ma'lumoti bilan solishtiring va sxema bo'yicha natija qaytaring.",
+                'text' => "SKANER (PDF) dan sxema bo'yicha qiymatlarni O'QIB chiqing. Sonlarni"
+                    . " HISOBLAMANG va solishtirmang — faqat yozilganini ko'chiring.",
             ],
         ];
 
         $payload = [
             'model' => config('services.anthropic.model'),
-            // Streaming ishlatamiz, shuning uchun katta max_tokens xavfsiz (timeout yo'q).
-            // Thinking ham max_tokens ichiga kiradi — katta guruhda javob kesilmasligi
-            // uchun keng chegara. Bu shift — ceiling, model faqat kerakligini sarflaydi.
-            'max_tokens' => 48000,
+            // Transkripsiya chiqishi (talabalar ro'yxati) uchun keng chegara; effort low
+            // bo'lgani uchun thinking minimal — bu deyarli toza chiqish.
+            'max_tokens' => 32000,
             'thinking' => ['type' => 'adaptive'],
             'system' => [[
                 'type' => 'text',
-                'text' => $this->systemPrompt(),
+                'text' => $this->transcribePrompt(),
                 'cache_control' => ['type' => 'ephemeral'],
             ]],
             'output_config' => [
-                // effort: medium — kamroq o'ylash => kamroq token va tezroq javob.
-                'effort' => 'medium',
-                'format' => ['type' => 'json_schema', 'schema' => $this->schema()],
+                // effort: low — bu OCR/ko'chirish ishi, og'ir o'ylash kerak emas (tez).
+                'effort' => 'low',
+                'format' => ['type' => 'json_schema', 'schema' => $this->transcribeSchema()],
             ],
             'messages' => [[
                 'role' => 'user',
@@ -91,8 +107,6 @@ class VedomostAiChecker
             ]],
         ];
 
-        // Streaming: javob bo'lak-bo'lak keladi — ulanish "0 bayt"da qotmaydi va
-        // uzoq generatsiyada ham timeout bo'lmaydi (cURL 28 muammosining yechimi).
         $result = $this->streamMessages($payload);
 
         $stopReason = $result['stop_reason'];
@@ -103,23 +117,16 @@ class VedomostAiChecker
             throw new RuntimeException('Claude javobi max_tokens chegarasida kesildi — natija to\'liq emas.');
         }
 
-        // Structured output: matnli bo'laklar sxemaga mos JSON'ni tashkil etadi.
         $jsonText = trim($result['text']);
         if ($jsonText === '') {
             throw new RuntimeException('Claude javobida natija topilmadi.');
         }
-
         $parsed = json_decode($jsonText, true);
         if (!is_array($parsed)) {
             throw new RuntimeException('Claude javobini JSON sifatida o\'qib bo\'lmadi.');
         }
 
-        return [
-            'verdict' => $parsed['verdict'] ?? 'issues',
-            'summary' => $parsed['summary'] ?? '',
-            'discrepancies' => $parsed['discrepancies'] ?? [],
-            'signatures' => $parsed['signatures'] ?? [],
-        ];
+        return $parsed;
     }
 
     /**
@@ -151,7 +158,14 @@ class VedomostAiChecker
         $text = '';
         $stopReason = null;
 
+        // Devor-soat chegarasi: manual oqim o'qishda Guzzle timeout har doim ham
+        // ishlamaydi — generatsiya cheksiz cho'zilmasligi uchun o'zimiz cheklaymiz.
+        $deadline = microtime(true) + (int) config('services.anthropic.timeout', 280);
+
         while (!$stream->eof()) {
+            if (microtime(true) > $deadline) {
+                throw new RuntimeException('Claude javobi belgilangan vaqtda tugamadi (timeout) — qayta urinib ko\'ring.');
+            }
             $chunk = $stream->read(8192);
             if ($chunk === '') {
                 continue;
@@ -284,92 +298,99 @@ class VedomostAiChecker
         ]);
     }
 
-    private function systemPrompt(): string
+    private function transcribePrompt(): string
     {
         return <<<'TXT'
-Siz universitet o'quv bo'limining vedomost (YN qaydnoma) tekshiruvchi yordamchisisiz.
-Vazifa: o'qituvchi taqdim etgan skaner qilingan vedomostni (PDF) tizimdagi rasmiy
-YN qaydnoma ma'lumoti bilan solishtirib, nomuvofiqliklarni aniqlash.
+Siz vedomost (YN qaydnoma) skanerini O'QIYDIGAN yordamchisiz. Vazifa — SKANER (PDF)dan
+qiymatlarni strukturali ko'chirib olish. SONLARNI HISOBLAMANG, ballarni O'ZINGIZ
+chiqarmang, tizim bilan SOLISHTIRMANG — faqat skanerda YOZILGANINI o'qing (sarlavhadan
+tashqari; sonlarni PHP hisoblaydi).
 
-MUHIM: Bitta vedomost bitta O'ZAK guruh × o'zak fan uchun bir varaqda olinadi va
-bir nechta guruhcha (a/b/c, til oqimlari) talabalarini jamlashi mumkin. Tizim
-ma'lumotidagi "guruh" maydonida o'zak guruh va uning guruhchalari ko'rsatilgan,
-"talabalar" ro'yxati esa barcha guruhchalar talabalarining birlashmasi. Skanerda
-shu barcha talabalar bo'lishi normal — buni xato deb belgilamang. O'qituvchilar
-ham bir nechta bo'lishi mumkin (har guruhchaning o'qituvchisi).
+1) OG'IRLIKLAR (weights): sarlavhaning "ball" qatorida har nazorat turi (JB, MT, ON,
+   OSKE, Test) ostidagi maksimal ball. Butun son sifatida oling; tegishli ustun yo'q
+   bo'lsa 0.
 
-Quyidagilarni tekshiring:
-1) Sarlavha maydonlari tizim ma'lumotiga mos kelishi: fakultet nomi, o'quv yili, yo'nalish,
-   fan nomi, ma'ruzachi, amaliyot o'qituvchilari, umumiy soat, kredit, YN o'tkazilgan sana,
-   kurs, semestr, guruh nomi.
-2) Talabalar ro'yxati: tizimdagi har bir talaba mavjudmi, FISH va talaba ID raqami to'g'ri
-   yozilganmi, ortiqcha yoki kam talaba bormi.
-3) Har bir talaba uchun JN(JB), MT, ON, OSKE, Test ustunlaridagi FOIZ (%) qiymatlari
-   tizim ma'lumotiga (jn/mt/on/oski/test) mos kelishi.
-3b) HAR BIR KATAK BALLINI HAM TEKSHIRING (juda muhim — albatta bajaring).
-   OG'IRLIKLARNI (har ustunning maksimal bali) SKANERNING O'ZIDAN o'qing — ular
-   sarlavhadagi "ball" qatorida har nazorat turi (JB, MT, ON, OSKE, Test) ostida
-   ko'rsatilgan (masalan JB=50, MT=20, ON=0, JB+MT+ON=70, OSKE=0, Test=30). Bu
-   og'irliklar har vedomostda farq qilishi mumkin — qotib qolgan qiymatga tayanmang,
-   ayni shu skanerdagilarini ishlating. Har talaba, har ustun uchun ballni hisoblang
-   va skanerdagi yozilgan ball bilan solishtiring:
-     • Foiz < 60 bo'lsa → ball = 0.
-     • Aks holda ball = foiz × (ustun og'irligi) / 100.
-     • YAXLITLASH — JB/MT/ON: 1–3 kursda 1 KASR (masalan 96 × 20 / 100 = 19.2),
-       4–5 kursda butun (half-up). OSKE/Test: faqat bittasi og'irlikka ega bo'lsa →
-       butun, ikkalasi ham bo'lsa → 1 kasr.
-     • JB+MT+ON = JB ball + MT ball + ON ball (1 kasr).
-   Skanerdagi ball hisoblangandan farq qilsa — nomuvofiqlik (field="Talaba 1 — MT ball",
-   expected="19.2", found="19", severity=medium). Kursni tizimdagi "kurs"dan oling.
-   O'zlashtirish (%) = JB+MT+ON ball + OSKE/Test ball (yaxlitlangan), ECTS va bahoni
-   ham shu o'zlashtirishga mos kelishini tekshiring. Davomat ≥25% / kelmadi / qo'yilmadi
-   holatida skaner ham shunday bo'lsa — belgilamang.
-4) Imzolar — skanerda HAQIQIY qo'l qo'yilganmi (fan o'qituvchisi, fakultet dekani,
-   kafedra mudiri). DIQQAT: blankada "imzo", "M.O'." (muhr o'rni), "F.I.Sh", "___"
-   kabi OLDINDAN CHOP ETILGAN yorliq va chiziqlar bo'ladi — bular imzo EMAS, faqat
-   joy belgisi. Imzo MAVJUD deb faqat chiziq ustida/yonida haqiqiy qo'lda chizilgan
-   belgi (parah, ruchka izi) yoki muhr bo'lsa hisoblang. Agar katakda faqat "imzo"
-   so'zi, F.I.Sh yoki bo'sh chiziq bo'lsa — imzo YO'Q (false). Ishonchsiz bo'lsangiz
-   ham YO'Q deb belgilang (false). Har bir yetishmayotgan imzoni discrepancies'ga ham
-   qo'shing (severity=high), masalan field="Imzo: fakultet dekani".
-4a) MUHR (signatures.muhr): "M.O'." (Muhr O'rni) yonida rasmiy DUMALOQ muhr/shtamp
-   (masalan "DAVOLASH FAKULTETI" yozuvli ko'k/qora dumaloq bosma) qo'yilganmi.
-   Qo'yilgan bo'lsa muhr=true, aks holda false. "M.O'." — bu faqat joy belgisi,
-   muhr emas. Muhr yo'q bo'lsa discrepancies'ga field="Muhr (M.O')", severity=high.
-5) Ichki izchillik: o'zlashtirish ko'rsatkichi (%) ga mos ECTS harfi va baho to'g'ri qo'yilganmi
-   (90-100=A/a'lo, 85-89=B+, 70-84=B/yaxshi, 60-69=C/o'rta, 0-59=F/qoniqarsiz). Jami talabalar
-   soni, a'lo/yaxshi/o'rta/qoniqarsiz/kelmadi/qo'yilmadi sonlari hamda guruh o'zlashtirish va
-   sifat ko'rsatkichlari ustundagi qiymatlarga mos kelishini tekshiring.
+2) TALABALAR (students): jadvalning har bir TO'LDIRILGAN qatoridan o'qing:
+   - student_id — "Talaba ID" ustuni (raqam);
+   - fish — talaba F.I.Sh;
+   - jb_pct, mt_pct, on_pct, oski_pct, test_pct — har ustunning "%" qismi;
+   - jb_ball, mt_ball, on_ball, oski_ball, test_ball — har ustunning "ball" qismi;
+   - jbmton_ball — "JB+MT+ON" ustunidagi ball;
+   - ozlashtirish — "O'zlashtirish ko'rsatkichi" ustuni;
+   - ects — ECTS ustuni; baho — yakuniy baho ustuni.
+   Bo'sh katakni "" qoldiring. Sonlarni nuqta bilan yozing (masalan 19.2). Bo'sh
+   (talaba yo'q) qatorlarni o'qimang.
 
-ISM YOZILISHI (juda muhim — noto'g'ri belgilamang): Vedomostda ism QISQARTIRILGAN
-yozilishi MAQBUL — familiya to'liq, ism va otasining ismi bosh harf bilan
-("Familiya I.S." yoki "I.S. Familiya", masalan tizimdagi "AZIZI AHMAD RESHAD" →
-skanerda "Azizi A.R" yoki "A.R. Azizi"). Bu, ayniqsa, xodimlarga (ma'ruzachi,
-amaliyot o'qituvchilari, fan mas'uli, kafedra mudiri, imzo egalari) tegishli.
-Familiya mos kelsa va bosh harflar tizimdagi to'liq ismga mos bo'lsa — buni
-nomuvofiqlik DEB BELGILAMANG. Faqat familiya boshqa bo'lsa yoki bosh harflar
-to'liq ismga mos kelmasa belgilang. (Talabani esa talaba ID raqami orqali ham
-tasdiqlash mumkin.)
+3) IMZOLAR (signatures) — skanerda HAQIQIY qo'l qo'yilganmi:
+   - oqituvchi, dekan, kafedra_mudiri — chiziq ustida haqiqiy qo'lda chizilgan imzo (parah,
+     ruchka izi) bo'lsa true;
+   - muhr — "M.O'" yonida rasmiy DUMALOQ muhr/shtamp bo'lsa true.
+   DIQQAT: "imzo", "M.O'", "F.I.Sh", "___" — bular CHOP ETILGAN yorliq, imzo EMAS → false.
+   Ishonchsiz bo'lsangiz false.
 
-Qoidalar:
-- Faqat sxema bo'yicha JSON qaytaring, qo'shimcha matn yozmang.
-- verdict: nomuvofiqlik topilmasa "ok", aks holda "issues".
-- Har bir nomuvofiqlik uchun: field (qaysi maydon/talaba), severity (high/medium/low),
-  expected (tizimdagi qiymat), found (skanerdagi qiymat), note (qisqa izoh, o'zbekcha).
-- severity: baho/talaba/imzo xatolari = high; sarlavha xatolari = medium; kichik nomuvofiqlik = low.
-- Agar skaner sifati past bo'lib biror qiymat o'qilmasa, found="o'qib bo'lmadi" deb belgilang (severity=low).
+4) HEADER_ISSUES — faqat SARLAVHA maydonlarini (fakultet, o'quv yili, yo'nalish, fan nomi,
+   ma'ruzachi, amaliyot o'qituvchilari, umumiy soat, kredit, YN sanasi, kurs, semestr,
+   guruh) tizim ma'lumoti bilan solishtiring; FARQ bo'lsa shu yerga yozing
+   (field, severity, expected=tizim, found=skaner, note — o'zbekcha). Ism qisqartmasi
+   (familiya to'liq + ism/sharif bosh harf, masalan "Azizi A.R") MAQBUL — familiya va
+   bosh harflar mos bo'lsa belgilamang. Talaba ballari/sonlarini bu yerga YOZMANG
+   (ularni PHP solishtiradi).
+
+Faqat sxema bo'yicha JSON qaytaring, boshqa matn yozmang.
 TXT;
     }
 
-    private function schema(): array
+    private function transcribeSchema(): array
     {
+        $str = ['type' => 'string'];
+        $studentFields = [
+            'student_id', 'fish',
+            'jb_pct', 'mt_pct', 'on_pct', 'oski_pct', 'test_pct',
+            'jb_ball', 'mt_ball', 'on_ball', 'oski_ball', 'test_ball',
+            'jbmton_ball', 'ozlashtirish', 'ects', 'baho',
+        ];
+        $studentProps = [];
+        foreach ($studentFields as $f) {
+            $studentProps[$f] = $str;
+        }
+
         return [
             'type' => 'object',
             'additionalProperties' => false,
             'properties' => [
-                'verdict' => ['type' => 'string', 'enum' => ['ok', 'issues']],
-                'summary' => ['type' => 'string'],
-                'discrepancies' => [
+                'weights' => [
+                    'type' => 'object',
+                    'additionalProperties' => false,
+                    'properties' => [
+                        'jb' => ['type' => 'integer'],
+                        'mt' => ['type' => 'integer'],
+                        'on' => ['type' => 'integer'],
+                        'oski' => ['type' => 'integer'],
+                        'test' => ['type' => 'integer'],
+                    ],
+                    'required' => ['jb', 'mt', 'on', 'oski', 'test'],
+                ],
+                'students' => [
+                    'type' => 'array',
+                    'items' => [
+                        'type' => 'object',
+                        'additionalProperties' => false,
+                        'properties' => $studentProps,
+                        'required' => $studentFields,
+                    ],
+                ],
+                'signatures' => [
+                    'type' => 'object',
+                    'additionalProperties' => false,
+                    'properties' => [
+                        'oqituvchi' => ['type' => 'boolean'],
+                        'dekan' => ['type' => 'boolean'],
+                        'kafedra_mudiri' => ['type' => 'boolean'],
+                        'muhr' => ['type' => 'boolean'],
+                    ],
+                    'required' => ['oqituvchi', 'dekan', 'kafedra_mudiri', 'muhr'],
+                ],
+                'header_issues' => [
                     'type' => 'array',
                     'items' => [
                         'type' => 'object',
@@ -384,19 +405,258 @@ TXT;
                         'required' => ['field', 'severity', 'expected', 'found', 'note'],
                     ],
                 ],
-                'signatures' => [
-                    'type' => 'object',
-                    'additionalProperties' => false,
-                    'properties' => [
-                        'oqituvchi' => ['type' => 'boolean'],
-                        'dekan' => ['type' => 'boolean'],
-                        'kafedra_mudiri' => ['type' => 'boolean'],
-                        'muhr' => ['type' => 'boolean'],
-                    ],
-                    'required' => ['oqituvchi', 'dekan', 'kafedra_mudiri', 'muhr'],
-                ],
             ],
-            'required' => ['verdict', 'summary', 'discrepancies', 'signatures'],
+            'required' => ['weights', 'students', 'signatures', 'header_issues'],
         ];
+    }
+
+    /**
+     * PHP tomonida: tizim foizlari + skaner og'irliklari bilan ball/o'zlashtirish/ECTS/
+     * bahoni hisoblab, skanerdan o'qilgan qiymatlar bilan solishtiradi.
+     *
+     * @return array{verdict:string, summary:string, discrepancies:array, signatures:array}
+     */
+    private function compare(array $expected, array $scan): array
+    {
+        $disc = [];
+
+        // 1) Sarlavha (matnli) nomuvofiqliklari — AI bahosi.
+        foreach (($scan['header_issues'] ?? []) as $d) {
+            if (is_array($d) && !empty($d['field'])) {
+                $disc[] = $this->normIssue($d);
+            }
+        }
+
+        // 2) Og'irliklar (skanerdan) va kurs.
+        $w = [
+            'jn'   => (int) ($scan['weights']['jb']   ?? 0),
+            'mt'   => (int) ($scan['weights']['mt']   ?? 0),
+            'on'   => (int) ($scan['weights']['on']   ?? 0),
+            'oski' => (int) ($scan['weights']['oski'] ?? 0),
+            'test' => (int) ($scan['weights']['test'] ?? 0),
+        ];
+        $levelCode = (string) ($expected['level_code'] ?? '');
+
+        // Skaner talabalarini ID bo'yicha indekslash.
+        $scanById = [];
+        foreach (($scan['students'] ?? []) as $s) {
+            $id = $this->digits($s['student_id'] ?? '');
+            if ($id !== '') {
+                $scanById[$id] = $s;
+            }
+        }
+
+        $matched = [];
+        foreach (($expected['talabalar'] ?? []) as $stu) {
+            $id = $this->digits($stu['student_id'] ?? '');
+            $label = 'Talaba ' . ($stu['fish'] ?? $id);
+            $s = $id !== '' ? ($scanById[$id] ?? null) : null;
+            if (!$s) {
+                $disc[] = ['field' => $label . ' (' . $id . ')', 'severity' => 'high',
+                    'expected' => "ro'yxatda", 'found' => "skanerda yo'q",
+                    'note' => 'Tizimdagi talaba skanerda topilmadi.'];
+                continue;
+            }
+            $matched[$id] = true;
+
+            // Foizlar: tizim haqiqati vs skaner.
+            $this->cmpNum($disc, $label . ' — JB %',   $stu['jn']   ?? null, $s['jb_pct']   ?? null);
+            $this->cmpNum($disc, $label . ' — MT %',   $stu['mt']   ?? null, $s['mt_pct']   ?? null);
+            $this->cmpNum($disc, $label . ' — ON %',   $stu['on']   ?? null, $s['on_pct']   ?? null);
+            $this->cmpNum($disc, $label . ' — OSKE %', $stu['oski'] ?? null, $s['oski_pct'] ?? null);
+            $this->cmpNum($disc, $label . ' — Test %', $stu['test'] ?? null, $s['test_pct'] ?? null);
+
+            // Ballar: PHP hisoblagan (tizim foizi × skaner og'irligi) vs skaner.
+            $e = $this->calc->compute(
+                $stu['jn'] ?? null, $stu['mt'] ?? null, $stu['on'] ?? null,
+                $stu['oski'] ?? null, $stu['test'] ?? null, $levelCode, $w
+            );
+            $this->cmpNum($disc, $label . ' — JB ball', $e['jb_ball'], $s['jb_ball'] ?? null);
+            $this->cmpNum($disc, $label . ' — MT ball', $e['mt_ball'], $s['mt_ball'] ?? null);
+            if ($w['on'] > 0) {
+                $this->cmpNum($disc, $label . ' — ON ball', $e['on_ball'], $s['on_ball'] ?? null);
+            }
+            if ($w['oski'] > 0) {
+                $this->cmpNum($disc, $label . ' — OSKE ball', $e['oski_ball'], $s['oski_ball'] ?? null);
+            }
+            if ($w['test'] > 0) {
+                $this->cmpNum($disc, $label . ' — Test ball', $e['test_ball'], $s['test_ball'] ?? null);
+            }
+            $this->cmpNum($disc, $label . ' — JB+MT+ON ball', $e['jbmton_ball'], $s['jbmton_ball'] ?? null);
+
+            // O'zlashtirish/ECTS/baho — maxsus holat (davomat/kelmadi/qo'yilmadi) bo'lmasa.
+            if (!$this->isSpecialBaho(mb_strtolower(trim((string) ($s['baho'] ?? ''))))) {
+                $this->cmpNum($disc, $label . " — O'zlashtirish", $e['ozlashtirish'], $s['ozlashtirish'] ?? null, 0.5, 'low');
+                $this->cmpStr($disc, $label . ' — ECTS', $e['ects'], $s['ects'] ?? null);
+                $this->cmpStr($disc, $label . ' — Baho', $e['baho'], $s['baho'] ?? null);
+            }
+        }
+
+        // Skanerda ortiqcha (tizimda yo'q) talabalar.
+        foreach ($scanById as $id => $s) {
+            if (!isset($matched[$id])) {
+                $disc[] = ['field' => 'Talaba ' . ($s['fish'] ?? $id) . ' (' . $id . ')', 'severity' => 'high',
+                    'expected' => "tizimda yo'q", 'found' => 'skanerda bor',
+                    'note' => 'Skanerdagi talaba tizimda topilmadi.'];
+            }
+        }
+
+        // Jami talabalar soni.
+        $sysN = count($expected['talabalar'] ?? []);
+        $scanN = count($scan['students'] ?? []);
+        if ($sysN !== $scanN) {
+            $disc[] = ['field' => 'Jami talabalar soni', 'severity' => 'high',
+                'expected' => (string) $sysN, 'found' => (string) $scanN,
+                'note' => 'Talabalar soni mos kelmaydi.'];
+        }
+
+        // Imzolar + muhr.
+        $sig = [
+            'oqituvchi' => (bool) ($scan['signatures']['oqituvchi'] ?? false),
+            'dekan' => (bool) ($scan['signatures']['dekan'] ?? false),
+            'kafedra_mudiri' => (bool) ($scan['signatures']['kafedra_mudiri'] ?? false),
+            'muhr' => (bool) ($scan['signatures']['muhr'] ?? false),
+        ];
+        $labels = [
+            'oqituvchi' => "Imzo: o'qituvchi",
+            'dekan' => 'Imzo: fakultet dekani',
+            'kafedra_mudiri' => 'Imzo: kafedra mudiri',
+            'muhr' => "Muhr (M.O')",
+        ];
+        foreach ($sig as $k => $ok) {
+            if (!$ok) {
+                $disc[] = ['field' => $labels[$k], 'severity' => 'high',
+                    'expected' => "qo'yilgan", 'found' => "yo'q", 'note' => 'Skanerda topilmadi.'];
+            }
+        }
+
+        return [
+            'verdict' => empty($disc) ? 'ok' : 'issues',
+            'summary' => $this->buildSummary($disc, $sysN, $scanN),
+            'discrepancies' => $disc,
+            'signatures' => $sig,
+        ];
+    }
+
+    /** Faqat raqamlarni qoldiradi (talaba ID solishtirish uchun). */
+    private function digits($s): string
+    {
+        return preg_replace('/\D+/', '', (string) $s);
+    }
+
+    /** Matnli qiymatni songa o'giradi (vergul→nuqta), bo'sh bo'lsa null. */
+    private function num($v): ?float
+    {
+        if ($v === null) {
+            return null;
+        }
+        $v = str_replace(',', '.', trim((string) $v));
+        if ($v === '' || $v === '-' || !is_numeric($v)) {
+            return null;
+        }
+
+        return (float) $v;
+    }
+
+    private function fmt($v): string
+    {
+        $n = $this->num($v);
+        if ($n === null) {
+            return (string) $v;
+        }
+
+        return ($n == (int) $n) ? (string) (int) $n : rtrim(rtrim(number_format($n, 2, '.', ''), '0'), '.');
+    }
+
+    /** Ikki sonni tolerantlik bilan solishtiradi; farq bo'lsa nomuvofiqlik qo'shadi. */
+    private function cmpNum(array &$disc, string $field, $expected, $found, float $tol = 0.05, string $sev = 'medium'): void
+    {
+        $e = $this->num($expected);
+        $f = $this->num($found);
+
+        if ($e === null && $f === null) {
+            return;
+        }
+        // Ball 0 va skaner bo'sh (yoki aksincha) — odatda bir xil, belgilamaymiz.
+        if ($e !== null && abs($e) < 0.001 && $f === null) {
+            return;
+        }
+        if ($f !== null && abs($f) < 0.001 && $e === null) {
+            return;
+        }
+        if ($e === null) {
+            $disc[] = ['field' => $field, 'severity' => $sev, 'expected' => '—',
+                'found' => $this->fmt($found), 'note' => "Tizimda yo'q, skanerda bor."];
+
+            return;
+        }
+        if ($f === null) {
+            $disc[] = ['field' => $field, 'severity' => $sev, 'expected' => $this->fmt($expected),
+                'found' => '—', 'note' => 'Skanerda yozilmagan.'];
+
+            return;
+        }
+        if (abs($e - $f) > $tol) {
+            $disc[] = ['field' => $field, 'severity' => $sev, 'expected' => $this->fmt($expected),
+                'found' => $this->fmt($found), 'note' => 'Qiymat mos kelmaydi.'];
+        }
+    }
+
+    /** Matnli qiymatlarni (ECTS/baho) normallashtirib solishtiradi. */
+    private function cmpStr(array &$disc, string $field, $expected, $found, string $sev = 'low'): void
+    {
+        $e = $this->canon($expected);
+        $f = $this->canon($found);
+        if ($e === '' && $f === '') {
+            return;
+        }
+        if ($e !== $f) {
+            $disc[] = ['field' => $field, 'severity' => $sev, 'expected' => (string) $expected,
+                'found' => (string) $found, 'note' => 'Mos kelmaydi.'];
+        }
+    }
+
+    private function canon($s): string
+    {
+        $s = mb_strtolower(trim((string) $s));
+
+        return str_replace(['ʼ', 'ʻ', '‘', '’', '`', ' ', '-'], '', $s);
+    }
+
+    private function isSpecialBaho(string $b): bool
+    {
+        if ($b === '') {
+            return true;
+        }
+        foreach (['kelmadi', 'qo', 'yilmadi', 'davomat'] as $k) {
+            if (mb_strpos($b, $k) !== false) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normIssue(array $d): array
+    {
+        $sev = $d['severity'] ?? 'medium';
+
+        return [
+            'field' => (string) ($d['field'] ?? ''),
+            'severity' => in_array($sev, ['high', 'medium', 'low'], true) ? $sev : 'medium',
+            'expected' => (string) ($d['expected'] ?? ''),
+            'found' => (string) ($d['found'] ?? ''),
+            'note' => (string) ($d['note'] ?? ''),
+        ];
+    }
+
+    private function buildSummary(array $disc, int $sysN, int $scanN): string
+    {
+        if (empty($disc)) {
+            return "Vedomost tizim ma'lumotiga to'liq mos keladi ({$sysN} talaba; ballar, o'zlashtirish va imzolar tekshirildi).";
+        }
+        $high = count(array_filter($disc, fn($d) => ($d['severity'] ?? '') === 'high'));
+
+        return count($disc) . " ta nomuvofiqlik topildi ({$high} ta jiddiy). Tizimda {$sysN}, skanerda {$scanN} talaba.";
     }
 }

@@ -90,8 +90,13 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="padding:18px;margin-top:14px;">
                 <h3 style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:12px;">Amallar</h3>
 
-                @if(in_array($v->status, ['pending','rejected']))
-                    {{-- Yuklash --}}
+                @if(in_array($v->status, ['pending','rejected','received']))
+                    {{-- Yuklash / almashtirish --}}
+                    @if($v->status === 'received')
+                        <div style="font-size:12px;color:#b45309;margin-bottom:8px;">
+                            Vedomost hali tekshirishga olinmagan — fayl noto'g'ri bo'lsa, almashtirishingiz mumkin.
+                        </div>
+                    @endif
                     <form method="POST" action="{{ route('admin.vedomost-submission.upload', $v->id) }}" enctype="multipart/form-data" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
                         @csrf
                         <div>
@@ -103,7 +108,7 @@
                             <input type="file" name="excel" accept=".xlsx,.xls">
                         </div>
                         <button type="submit" style="background:#1a3268;color:#fff;border:none;padding:9px 18px;border-radius:8px;cursor:pointer;">
-                            {{ $v->status === 'rejected' ? 'Qayta yuklash' : 'Yuklash va qabul qilish' }}
+                            {{ $v->status === 'received' ? 'Faylni almashtirish' : ($v->status === 'rejected' ? 'Qayta yuklash' : 'Yuklash va qabul qilish') }}
                         </button>
                     </form>
                 @endif

@@ -380,8 +380,15 @@ class VedomostSubmissionController extends Controller
         $this->checkAccess();
         $v = VedomostSubmission::findOrFail($id);
 
-        if (!in_array($v->status, [VedomostSubmission::STATUS_PENDING, VedomostSubmission::STATUS_REJECTED], true)) {
-            return back()->with('error', "Bu vedomost allaqachon qabul qilingan.");
+        // Tekshirishga OLINMAGUNCHA (pending/rejected/received) fayl yuklash/almashtirish
+        // mumkin. Tekshirilmoqda yoki tasdiqlangan bo'lsa — yo'q.
+        $canUpload = in_array($v->status, [
+            VedomostSubmission::STATUS_PENDING,
+            VedomostSubmission::STATUS_REJECTED,
+            VedomostSubmission::STATUS_RECEIVED,
+        ], true);
+        if (!$canUpload) {
+            return back()->with('error', "Bu vedomost tekshirishga olingan yoki tasdiqlangan — faylni almashtirib bo'lmaydi.");
         }
 
         $request->validate([
@@ -415,6 +422,13 @@ class VedomostSubmissionController extends Controller
             'reviewed_by' => null,
             'reviewed_by_name' => null,
             'reviewed_at' => null,
+            // Fayl almashtirilsa eski AI tekshiruv natijasi eskiradi — tozalaymiz.
+            'ai_check_status' => null,
+            'ai_verdict' => null,
+            'ai_summary' => null,
+            'ai_result' => null,
+            'ai_error' => null,
+            'ai_checked_at' => null,
         ];
 
         // Excel ixtiyoriy — yuklansa, barcha guruhchalardagi eskisini almashtiramiz.
@@ -434,9 +448,16 @@ class VedomostSubmissionController extends Controller
         $v->refresh();
 
         $this->log($v, 'upload', $from, $v->status);
-        $this->notifier->notifyStatusChange($v);
 
-        return back()->with('success', 'Vedomost yuklandi va tekshirishga qabul qilindi.');
+        // Received -> received (faqat fayl almashtirish) bo'lsa, qayta xabar bermaymiz.
+        $isReplace = $from === VedomostSubmission::STATUS_RECEIVED;
+        if (!$isReplace) {
+            $this->notifier->notifyStatusChange($v);
+        }
+
+        return back()->with('success', $isReplace
+            ? 'Fayl almashtirildi (vedomost hali tekshirishga olinmagan).'
+            : 'Vedomost yuklandi va tekshirishga qabul qilindi.');
     }
 
     public function review($id)

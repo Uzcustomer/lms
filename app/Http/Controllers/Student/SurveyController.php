@@ -87,19 +87,21 @@ class SurveyController extends Controller
                 foreach ($answersInput as $qid => $ans) {
                     if (is_array($ans)) {
                         StudentSurveyAnswer::create([
-                            'survey_key'  => $surveyKey,
-                            'session_token' => $sessionToken,
-                            'question_id' => (string) $qid,
-                            'answer'      => null,
-                            'answer_multi' => array_values($ans),
+                            'survey_key'       => $surveyKey,
+                            'student_hemis_id' => $student->hemis_id,
+                            'session_token'    => $sessionToken,
+                            'question_id'      => (string) $qid,
+                            'answer'           => null,
+                            'answer_multi'     => array_values($ans),
                         ]);
                     } else {
                         StudentSurveyAnswer::create([
-                            'survey_key'  => $surveyKey,
-                            'session_token' => $sessionToken,
-                            'question_id' => (string) $qid,
-                            'answer'      => (string) $ans,
-                            'answer_multi' => null,
+                            'survey_key'       => $surveyKey,
+                            'student_hemis_id' => $student->hemis_id,
+                            'session_token'    => $sessionToken,
+                            'question_id'      => (string) $qid,
+                            'answer'           => (string) $ans,
+                            'answer_multi'     => null,
                         ]);
                     }
                 }

@@ -112,8 +112,8 @@ class SurveyController extends Controller
                     'completed_at'    => now(),
                 ]);
 
-                // CSV ga ham yozish — bitta qator, ustunlar: talaba ma'lumotlari + har savol matnli javobi
-                $this->appendToCsv($config, $student, $answersInput);
+                // XLSX ga yozish — bitta qator, ustunlar: talaba ma'lumotlari + har savol matnli javobi
+                $this->appendToXlsx($config, $student, $answersInput);
             });
         } catch (\Throwable $e) {
             Log::error('Student survey submit failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
@@ -197,19 +197,21 @@ class SurveyController extends Controller
     }
 
     /**
-     * Bitta talabaning javobini CSV ga qator sifatida qo'shish.
-     * Fayl: storage/app/surveys/{survey_key}.csv
-     * Header birinchi qator sifatida bir marta yoziladi.
+     * Bitta talabaning javobini XLSX ga qator sifatida qo'shish.
+     * Fayl: storage/app/surveys/{survey_key}.xlsx
+     *
+     * Birinchi qator — stillangan sarlavha (rangli fon, oq matn, balandroq).
+     * Mavjud bo'lsa yuklanadi, oxiriga qator qo'shiladi, qayta saqlanadi.
+     * Parallel yozishlar uchun alohida lock fayl orqali flock ishlatiladi.
      */
-    private function appendToCsv(array $config, $student, array $answers): void
+    private function appendToXlsx(array $config, $student, array $answers): void
     {
         $dir = storage_path('app/surveys');
         if (!is_dir($dir)) {
             File::makeDirectory($dir, 0755, true);
         }
-        $path = $dir . '/' . $config['key'] . '.csv';
-
-        $isNew = !file_exists($path);
+        $path = $dir . '/' . $config['key'] . '.xlsx';
+        $lockPath = $path . '.lock';
 
         $headers = ['Talaba ID', 'F.I.SH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Semestr'];
         foreach ($config['questions'] as $q) {
@@ -217,7 +219,7 @@ class SurveyController extends Controller
         }
 
         $row = [
-            $student->student_id_number ?? '',
+            (string) ($student->student_id_number ?? ''),
             $student->full_name ?? '',
             $student->department_name ?? '',
             $student->specialty_name ?? '',
@@ -229,18 +231,100 @@ class SurveyController extends Controller
             $row[] = $this->formatAnswerForCsv($q, $answers[$q['id']] ?? null);
         }
 
-        $fp = fopen($path, 'a');
-        if (!$fp) return;
-        if (flock($fp, LOCK_EX)) {
-            if ($isNew) {
-                // UTF-8 BOM — Excel'da to'g'ri ochilishi uchun
-                fwrite($fp, "\xEF\xBB\xBF");
-                fputcsv($fp, $headers);
-            }
-            fputcsv($fp, $row);
-            flock($fp, LOCK_UN);
+        $lockFp = fopen($lockPath, 'c');
+        if (!$lockFp) return;
+        if (!flock($lockFp, LOCK_EX)) {
+            fclose($lockFp);
+            return;
         }
-        fclose($fp);
+
+        try {
+            if (file_exists($path)) {
+                $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($path);
+                $sheet = $spreadsheet->getActiveSheet();
+                $nextRow = $sheet->getHighestDataRow() + 1;
+            } else {
+                $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+                $sheet = $spreadsheet->getActiveSheet();
+                $sheet->setTitle('Javoblar');
+                $this->writeXlsxHeader($sheet, $headers);
+                $nextRow = 2;
+            }
+
+            // Talaba ID — matn sifatida (juda uzun raqamlar uchun)
+            $sheet->setCellValueExplicit('A' . $nextRow, $row[0], \PhpOffice\PhpSpreadsheet\Cell\DataType::TYPE_STRING);
+            $col = 1;
+            foreach (array_slice($row, 1) as $val) {
+                $sheet->setCellValueByColumnAndRow($col + 1, $nextRow, $val);
+                $col++;
+            }
+            // Data qatori uchun yuqori cherchirov + matn wrap
+            $sheet->getRowDimension($nextRow)->setRowHeight(28);
+            $lastCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
+            $sheet->getStyle("A{$nextRow}:{$lastCol}{$nextRow}")->getAlignment()
+                ->setWrapText(true)
+                ->setVertical(\PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER);
+
+            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+            $writer->save($path);
+
+            $spreadsheet->disconnectWorksheets();
+            unset($spreadsheet);
+        } finally {
+            flock($lockFp, LOCK_UN);
+            fclose($lockFp);
+        }
+    }
+
+    /**
+     * Birinchi qatorni yozish + stil: rangli fon, oq qalin matn, balandroq qator,
+     * birinchi qator yuqorida muzlatish, ustun kengligi auto.
+     */
+    private function writeXlsxHeader($sheet, array $headers): void
+    {
+        foreach ($headers as $i => $h) {
+            $sheet->setCellValueByColumnAndRow($i + 1, 1, $h);
+        }
+
+        $lastCol = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex(count($headers));
+        $range = "A1:{$lastCol}1";
+
+        $sheet->getStyle($range)->applyFromArray([
+            'font' => [
+                'bold'  => true,
+                'color' => ['rgb' => 'FFFFFF'],
+                'size'  => 11,
+            ],
+            'fill' => [
+                'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '4F46E5'],
+            ],
+            'alignment' => [
+                'horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER,
+                'vertical'   => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER,
+                'wrapText'   => true,
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN,
+                    'color'       => ['rgb' => '3730A3'],
+                ],
+            ],
+        ]);
+
+        $sheet->getRowDimension(1)->setRowHeight(56);
+        $sheet->freezePane('A2');
+
+        // Birinchi 7 ustun (talaba ma'lumotlari) — maqbul kenglik
+        $fixedWidths = ['A' => 16, 'B' => 32, 'C' => 22, 'D' => 22, 'E' => 10, 'F' => 14, 'G' => 14];
+        foreach ($fixedWidths as $col => $w) {
+            $sheet->getColumnDimension($col)->setWidth($w);
+        }
+        // Qolgan savol ustunlari — auto-fit talab qilinmasin, qo'lda 42
+        for ($i = 8; $i <= count($headers); $i++) {
+            $col = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($i);
+            $sheet->getColumnDimension($col)->setWidth(42);
+        }
     }
 
     /**

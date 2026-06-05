@@ -10037,16 +10037,20 @@ class JournalController extends Controller
         $sheet->setTitle('Sinov fanlar');
 
         $headers = ['#', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh', 'F.I.O', 'Talaba ID',
-                    'Fan', 'JN bali', 'MT bali', 'Sinov (test)'];
+                    'Fan', 'MT bali', 'JN bali', 'JN (round)', 'Sinov (test)'];
         foreach ($headers as $col => $h) {
             $cell = chr(65 + $col) . '1';
             $sheet->setCellValue($cell, $h);
         }
-        $sheet->getStyle('A1:L1')->applyFromArray([
+        $sheet->getStyle('A1:M1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '7C3AED']],
             'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
         ]);
+
+        // Mismatch ranglash uchun ham JN(round), ham Sinov(test) cellni
+        // qizilga bo'yash uchun qatorlar ro'yxati
+        $mismatchRows = [];
 
         $row = 2;
         $rank = 0;
@@ -10065,6 +10069,9 @@ class JournalController extends Controller
                     $key = $stu->hemis_id . '|' . $subj->subject_id . '|' . $subj->semester_code;
                     $jn = $jnGradesByKey[$key] ?? '';
                     $mt = $mtGradesByKey[$key] ?? '';
+                    $jnRound = ($jn !== '' && $jn !== null)
+                        ? (int) round((float) $jn, 0, PHP_ROUND_HALF_DOWN)
+                        : '';
 
                     $sinovKey = $subj->subject_id . '|' . $subj->semester_code . '|' . $grp->group_hemis_id . '|' . $stu->hemis_id;
                     $sinovOverride = $sinovBy[$sinovKey] ?? null;
@@ -10072,21 +10079,35 @@ class JournalController extends Controller
                         ? round((float) $sinovOverride->override_grade, 1)
                         : '';
 
+                    // JN(round) va Sinov(test) farq qilsa — qator ranglanadi
+                    if ($jnRound !== '' && $sinov !== '' && (int) round((float) $sinov) !== (int) $jnRound) {
+                        $mismatchRows[] = $row;
+                    }
+
                     $sheet->fromArray([
                         $rank, $facName, $specName, $levelLabel, $semLabel,
                         $grp->name, $stu->full_name, $stu->student_id_number,
-                        $subj->subject_name, $jn, $mt, $sinov,
+                        $subj->subject_name, $mt, $jn, $jnRound, $sinov,
                     ], null, 'A' . $row);
                     $row++;
                 }
             }
         }
 
-        foreach (range('A', 'L') as $col) {
+        // JN(round) — L ustun, Sinov(test) — M ustun. Mismatch qatorlarni qizilga
+        // bo'yash (faqat shu ikki cellda) — operator ko'zga uradi
+        foreach ($mismatchRows as $r) {
+            $sheet->getStyle('L' . $r . ':M' . $r)->applyFromArray([
+                'font' => ['bold' => true, 'color' => ['rgb' => 'B91C1C']],
+                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEE2E2']],
+            ]);
+        }
+
+        foreach (range('A', 'M') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
         if ($row > 2) {
-            $sheet->setAutoFilter('A1:L' . ($row - 1));
+            $sheet->setAutoFilter('A1:M' . ($row - 1));
         }
 
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);

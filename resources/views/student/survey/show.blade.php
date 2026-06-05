@@ -50,7 +50,7 @@
             border: 1.5px solid transparent;
             transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
             cursor: pointer;
-            padding: 14px 16px;
+            padding: 9px 12px;
         }
         .sv-option:hover:not(.selected) {
             background: #f4f4ff;
@@ -156,20 +156,20 @@
            yashirish istalmaydi — lekin survey sahifasi uchun toza ko'rinish */
     </style>
 
-    <div class="px-3 py-4 sm:py-8 bg-gradient-to-br from-slate-50 via-indigo-50/30 to-blue-50/30 min-h-[calc(100vh-80px)]">
+    <div class="px-2 py-2 sm:py-5 bg-gradient-to-br from-slate-50 via-indigo-50/30 to-blue-50/30 min-h-[calc(100vh-80px)]">
         <div class="max-w-2xl mx-auto">
-            <div class="sv-card bg-white rounded-3xl overflow-hidden">
+            <div class="sv-card bg-white rounded-2xl overflow-hidden">
 
                 {{-- HEADER — gradient + counter + progress (har doim ko'rinadi) --}}
-                <div class="sv-card-header px-5 sm:px-7 pt-5 pb-4 text-white">
-                    <div class="flex items-center justify-between gap-3 mb-3">
-                        <h1 class="text-base sm:text-lg font-bold leading-snug">{{ $survey['title'] }}</h1>
+                <div class="sv-card-header px-4 sm:px-5 pt-3 pb-2.5 text-white">
+                    <div class="flex items-center justify-between gap-2 mb-2">
+                        <h1 class="text-sm sm:text-base font-bold leading-snug">{{ $survey['title'] }}</h1>
                         <span id="sv-counter"
-                              class="text-xs font-bold bg-white text-indigo-700 px-3 py-1.5 rounded-full whitespace-nowrap shadow-sm">
+                              class="text-[11px] font-bold bg-white text-indigo-700 px-2.5 py-1 rounded-full whitespace-nowrap shadow-sm">
                             1/{{ $totalQuestions }}
                         </span>
                     </div>
-                    <div class="h-2 w-full bg-white/25 rounded-full overflow-hidden">
+                    <div class="h-1.5 w-full bg-white/25 rounded-full overflow-hidden">
                         <div id="sv-progress" class="sv-progress-bar h-full rounded-full transition-all duration-500"
                              style="width: {{ round(100 / $totalQuestions) }}%"></div>
                     </div>
@@ -191,39 +191,39 @@
                     </div>
                 @else
                     {{-- KIRISH SAHIFA --}}
-                    <div id="sv-intro" class="px-5 sm:px-7 py-6">
-                        <div class="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-2xl p-4 mb-5 flex items-start gap-3">
-                            <div class="w-9 h-9 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
-                                <svg class="w-5 h-5 text-amber-700" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                    <div id="sv-intro" class="px-4 sm:px-5 py-4">
+                        <div class="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-2.5 mb-3 flex items-start gap-2">
+                            <div class="w-7 h-7 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
+                                <svg class="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                                 </svg>
                             </div>
-                            <p class="text-xs sm:text-sm text-amber-900 leading-relaxed pt-1">
+                            <p class="text-xs sm:text-sm text-amber-900 leading-snug pt-0.5">
                                 Bu so'rovnoma <strong class="font-bold">anonim</strong> — javoblaringiz hech kimga ko'rinmaydi.
                             </p>
                         </div>
 
-                        <div class="text-sm text-slate-700 leading-relaxed whitespace-pre-line mb-5">{{ $survey['description'] }}</div>
+                        <div class="text-sm text-slate-700 leading-snug whitespace-pre-line mb-3">{{ $survey['description'] }}</div>
 
-                        <div class="bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 mb-5 flex items-center gap-2 text-xs text-slate-600">
-                            <svg class="w-4 h-4 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 mb-3 flex items-center gap-2 text-xs text-slate-600">
+                            <svg class="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                             <span>Tugash muddati: <strong class="text-slate-800">{{ $deadlineFormatted }}</strong></span>
                         </div>
 
                         <button type="button" onclick="svStart()"
-                                class="w-full sv-btn-primary text-sm font-bold rounded-2xl mb-3 flex items-center justify-center gap-2"
-                                style="padding-top:12px;padding-bottom:12px;">
+                                class="w-full sv-btn-primary text-sm font-bold rounded-xl mb-2 flex items-center justify-center gap-2"
+                                style="padding-top:10px;padding-bottom:10px;">
                             <span>So'rovnomani boshlash</span>
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
                             </svg>
                         </button>
                         @if(!$deadlinePassed)
                         <button type="button" onclick="svShowLaterWarning()"
-                                class="w-full text-sm font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 rounded-2xl transition"
-                                style="padding-top:12px;padding-bottom:12px;">
+                                class="w-full text-sm font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 rounded-xl transition"
+                                style="padding-top:10px;padding-bottom:10px;">
                             Keyinroq bajarish
                         </button>
                         @endif
@@ -243,7 +243,7 @@
                         @endphp
 
                         @foreach($rootQuestions as $idx => $q)
-                            <div class="sv-question hidden px-5 sm:px-7 py-6"
+                            <div class="sv-question hidden px-4 sm:px-5 py-4"
                                  data-qid="{{ $q['id'] }}"
                                  data-type="{{ $q['type'] }}"
                                  data-index="{{ $idx }}">
@@ -252,17 +252,17 @@
 
                                 {{-- Nested conditional bolalar (5.1 kabi) --}}
                                 @foreach($childrenByParent[$q['id']] ?? [] as $child)
-                                    <div class="sv-child-q hidden mt-5"
+                                    <div class="sv-child-q hidden mt-3"
                                          data-child-qid="{{ $child['id'] }}"
                                          data-child-type="{{ $child['type'] }}"
                                          data-show-when="{{ $child['show_if']['when_option'] }}">
-                                        <div class="bg-indigo-50/60 border-l-4 border-indigo-400 rounded-r-2xl rounded-l-lg p-4 sm:p-5">
+                                        <div class="bg-indigo-50/60 border-l-4 border-indigo-400 rounded-r-xl rounded-l-lg p-3 sm:p-3.5">
                                             @include('student.survey._question-block', ['q' => $child, 'isChild' => true])
                                         </div>
                                     </div>
                                 @endforeach
 
-                                <div class="sv-error hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+                                <div class="sv-error hidden mt-3 p-2.5 bg-red-50 border border-red-200 rounded-lg">
                                     <p class="text-xs sm:text-sm text-red-700 font-semibold flex items-center gap-2">
                                         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
@@ -275,17 +275,17 @@
                     </div>
 
                     {{-- NAVIGATSIYA --}}
-                    <div id="sv-nav" class="hidden border-t border-slate-200 px-5 sm:px-7 py-4 bg-gradient-to-b from-white to-slate-50/70">
-                        <div class="flex items-center gap-2 mb-2">
+                    <div id="sv-nav" class="hidden border-t border-slate-200 px-4 sm:px-5 py-2.5 bg-gradient-to-b from-white to-slate-50/70">
+                        <div class="flex items-center gap-1.5 mb-1.5">
                             <button id="sv-back" type="button" onclick="svBack()"
-                                    class="flex-1 py-3 text-sm font-bold sv-btn-blue rounded-xl flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
+                                    class="flex-1 py-2 text-sm font-bold sv-btn-blue rounded-lg flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M11 17l-5-5m0 0l5-5m-5 5h12"/>
                                 </svg>
                                 Orqaga
                             </button>
                             <button id="sv-next" type="button" onclick="svNext()"
-                                    class="flex-1 py-3 text-sm font-bold sv-btn-success rounded-xl flex items-center justify-center gap-1.5">
+                                    class="flex-1 py-2 text-sm font-bold sv-btn-success rounded-lg flex items-center justify-center gap-1.5">
                                 <span id="sv-next-text">Keyingisi</span>
                                 <svg id="sv-next-icon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
@@ -294,7 +294,7 @@
                         </div>
                         @if(!$deadlinePassed)
                         <button type="button" onclick="svShowLaterWarning()"
-                                class="w-full py-3 text-sm font-bold sv-btn-purple rounded-xl flex items-center justify-center gap-2">
+                                class="w-full py-2 text-sm font-bold sv-btn-purple rounded-lg flex items-center justify-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>

@@ -16,9 +16,20 @@
             </svg>
             Bir nechtasini tanlash mumkin
         </p>
+    @elseif($q['type'] === 'text' && empty($q['required']))
+        <p class="text-xs text-slate-500 mt-2 font-medium">Ixtiyoriy — javob bermaslik mumkin</p>
     @endif
 </div>
 
+@if($q['type'] === 'text')
+    <div>
+        <textarea name="q_{{ $q['id'] }}"
+                  rows="4"
+                  data-qid="{{ $q['id'] }}"
+                  placeholder="{{ $q['placeholder'] ?? 'Javobingizni yozing...' }}"
+                  class="sv-text-input w-full px-4 py-3 text-sm bg-white border border-slate-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none transition resize-y leading-relaxed"></textarea>
+    </div>
+@else
 <div class="space-y-2.5">
     @foreach($q['options'] as $opt)
         <label class="sv-option flex flex-col" data-qid="{{ $q['id'] }}">
@@ -47,3 +58,4 @@
         </label>
     @endforeach
 </div>
+@endif

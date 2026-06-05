@@ -13,6 +13,7 @@
  * Savol turlari:
  *   - radio       — bitta variant
  *   - checkbox    — bir nechta variant (multi)
+ *   - text        — erkin matnli javob (textarea)
  *
  * Variant strukturasi:
  *   - id          — kichik kalit (a, b, c... yoki 1, 2, 3...)
@@ -275,6 +276,27 @@ return [
                 ['id' => 'h', 'text' => "Muammo yo'q, hammasi yaxshi"],
                 ['id' => 'other', 'text' => "Boshqa", 'has_other' => true],
             ],
+        ],
+        [
+            'id'          => '19',
+            'type'        => 'text',
+            'text'        => "Qaysi menejer(lar) talabalarga nisbatan yomon munosabatda bo'ladi, qo'pollik qiladi yoki o'z vazifasini lozim darajada bajarmaydi? (Menejerning ismi-sharifi, fakulteti yoki oyna raqamini yozishingiz mumkin)",
+            'required'    => false,
+            'placeholder' => "Menejer ismi, fakulteti yoki oyna raqami...",
+        ],
+        [
+            'id'          => '20',
+            'type'        => 'text',
+            'text'        => "Aksincha, qaysi menejerning xizmatidan va muomalasidan juda mamnunsiz? (Namuna xodim)",
+            'required'    => false,
+            'placeholder' => "Mamnun bo'lgan menejer ismi...",
+        ],
+        [
+            'id'          => '21',
+            'type'        => 'text',
+            'text'        => "Registrator ofisi faoliyatini tubdan yaxshilash, imtihon jarayonlari hamda yuzni tanish tizimini takomillashtirish bo'yicha qanday aniq takliflaringiz bor?",
+            'required'    => false,
+            'placeholder' => "Takliflaringizni yozing...",
         ],
     ],
 ];

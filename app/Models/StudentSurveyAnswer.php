@@ -10,6 +10,7 @@ class StudentSurveyAnswer extends Model
 
     protected $fillable = [
         'survey_key',
+        'student_hemis_id',
         'session_token',
         'question_id',
         'answer',

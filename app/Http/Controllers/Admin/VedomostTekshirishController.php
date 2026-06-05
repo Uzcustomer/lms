@@ -340,11 +340,6 @@ class VedomostTekshirishController extends Controller
     {
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
 
-        // Katta dataset eksporti — PHP'ning default cheklovlari yetmaydi.
-        // Faqat shu request uchun oshiriladi.
-        @ini_set('memory_limit', '1024M');
-        @set_time_limit(600);
-
         // Qatorlar ko'p bo'lganda (1000+) hidden input formati PHP'ning
         // max_input_vars chegarasini oshib ketadi va silent truncation
         // qiladi → validation failure. Front-end endi qatorlarni `rows_json`
@@ -356,27 +351,17 @@ class VedomostTekshirishController extends Controller
             }
         }
 
-        try {
-            $request->validate([
-                'rows'                 => 'required|array|min:1',
-                'rows.*.group_id'      => 'required',
-                'rows.*.subject_id'    => 'required|string',
-                'rows.*.semester_code' => 'required|string',
-                'weight_jn'    => 'nullable|integer|min:0|max:100',
-                'weight_mt'    => 'nullable|integer|min:0|max:100',
-                'weight_on'    => 'nullable|integer|min:0|max:100',
-                'weight_oski'  => 'nullable|integer|min:0|max:100',
-                'weight_test'  => 'nullable|integer|min:0|max:100',
-            ]);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            \Log::warning('VedomostTekshirish export validation failed', [
-                'errors' => $e->errors(),
-                'rows_count' => is_array($request->input('rows')) ? count($request->input('rows')) : 0,
-                'rows_json_len' => strlen((string) $request->input('rows_json')),
-                'has_rows_json' => $request->filled('rows_json'),
-            ]);
-            throw $e;
-        }
+        $request->validate([
+            'rows'                 => 'required|array|min:1',
+            'rows.*.group_id'      => 'required',
+            'rows.*.subject_id'    => 'required|string',
+            'rows.*.semester_code' => 'required|string',
+            'weight_jn'    => 'nullable|integer|min:0|max:100',
+            'weight_mt'    => 'nullable|integer|min:0|max:100',
+            'weight_on'    => 'nullable|integer|min:0|max:100',
+            'weight_oski'  => 'nullable|integer|min:0|max:100',
+            'weight_test'  => 'nullable|integer|min:0|max:100',
+        ]);
 
         $exportRows   = $request->input('rows');
         $wJn   = (int) ($request->weight_jn   ?? 50);

@@ -328,6 +328,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/download-submission/{submissionId}', [JournalController::class, 'downloadSubmission'])->name('download-submission');
             Route::get('/download-history-file/{historyId}', [JournalController::class, 'downloadHistoryFile'])->name('download-history-file');
             Route::get('/export-student-grades', [JournalController::class, 'exportStudentGrades'])->name('export-student-grades');
+            Route::post('/export-sinov-grades', [JournalController::class, 'exportSinovGrades'])->name('export-sinov-grades');
             Route::post('/export-exam-grades-all/start', [JournalController::class, 'startExamGradesExport'])->name('export-exam-grades-all.start');
             Route::get('/export-exam-grades-all/status', [JournalController::class, 'examGradesExportStatus'])->name('export-exam-grades-all.status');
             Route::get('/export-exam-grades-all/download', [JournalController::class, 'examGradesExportDownload'])->name('export-exam-grades-all.download');

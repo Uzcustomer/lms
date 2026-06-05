@@ -9876,6 +9876,229 @@ class JournalController extends Controller
      * jobda boshlash. Bir nechta fakultet/kurs tanlanganda so'rov timeout
      * bo'lmasligi uchun ish navbatga qo'yiladi, foiz cache orqali kuzatiladi.
      */
+
+    /**
+     * Sinov fanlari uchun Excel eksport — tanlangan fakultet/kurs/semestrdagi
+     * yopilish shakli "Sinov (test)" bo'lgan barcha fanlar bo'yicha har talabaning
+     * JN, MT va Sinov (test) baholarini bitta varaqda qaytaradi.
+     */
+    public function exportSinovGrades(Request $request)
+    {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(600);
+
+        $data = $request->validate([
+            'level_code'     => 'required|string',
+            'semester_code'  => 'nullable|string',
+            'faculty_ids'    => 'nullable|array',
+            'faculty_ids.*'  => 'integer',
+        ]);
+
+        $levelCode    = $data['level_code'];
+        $semesterCode = $data['semester_code'] ?? null;
+        $facultyIds   = $data['faculty_ids'] ?? [];
+
+        // Semestr berilmagan bo'lsa — tanlangan kursning joriy semestr(lari)
+        $semesterCodes = [];
+        if ($semesterCode) {
+            $semesterCodes = [$semesterCode];
+        } else {
+            $semesterCodes = Semester::where('level_code', $levelCode)
+                ->where('current', true)
+                ->distinct()->pluck('code')->all();
+        }
+        if (empty($semesterCodes)) {
+            return back()->with('error', 'Tanlangan kurs uchun joriy semestr topilmadi. Semestrni qo\'lda kiriting.');
+        }
+
+        // Fakultet → department_hemis_id
+        $deptHemisIds = [];
+        if (!empty($facultyIds)) {
+            $deptHemisIds = Department::whereIn('id', $facultyIds)
+                ->pluck('department_hemis_id')->all();
+        }
+
+        // 1) Tanlangan kurs/semestrdagi sinov fanlari (curriculum_subjects)
+        $sinovSubjects = CurriculumSubject::whereIn('semester_code', $semesterCodes)
+            ->where('closing_form', 'sinov')
+            ->where('is_active', true)
+            ->get(['subject_id', 'subject_name', 'semester_code', 'semester_name', 'curricula_hemis_id']);
+
+        if ($sinovSubjects->isEmpty()) {
+            return back()->with('error', 'Tanlangan kurs/semestrda sinov fanlari topilmadi.');
+        }
+
+        $subjectIds = $sinovSubjects->pluck('subject_id')->unique()->all();
+
+        // 2) Tegishli guruhlar (curriculum_hemis_id orqali bog'lanadi)
+        $curHemisIds = $sinovSubjects->pluck('curricula_hemis_id')->unique()->all();
+        $groupsQuery = Group::whereIn('curriculum_hemis_id', $curHemisIds)
+            ->where('active', true);
+        if (!empty($deptHemisIds)) {
+            $groupsQuery->whereIn('department_hemis_id', $deptHemisIds);
+        }
+        $groups = $groupsQuery->get();
+
+        if ($groups->isEmpty()) {
+            return back()->with('error', 'Tanlangan filtrlarda guruhlar topilmadi.');
+        }
+        $groupHids = $groups->pluck('group_hemis_id')->unique()->values()->all();
+        $groupsByHid = $groups->keyBy('group_hemis_id');
+
+        // Level/semester nomlari (kursni inson o'qishidagi nomga aylantirish uchun)
+        $levelLabels = [
+            '11' => '1-kurs', '12' => '2-kurs', '13' => '3-kurs',
+            '14' => '4-kurs', '15' => '5-kurs', '16' => '6-kurs',
+        ];
+        $levelLabel = $levelLabels[$levelCode] ?? $levelCode;
+        $semesterNames = Semester::whereIn('code', $semesterCodes)
+            ->get(['code', 'name'])->unique('code')->pluck('name', 'code')->all();
+
+        // Fakultet nomi xaritasi (department_hemis_id → name)
+        $deptNames = Department::whereIn('department_hemis_id', $groups->pluck('department_hemis_id')->unique())
+            ->get(['department_hemis_id', 'name'])->pluck('name', 'department_hemis_id')->all();
+
+        // 3) Talabalar (faqat aktiv — status=11)
+        $students = Student::whereIn('group_id', $groupHids)
+            ->where('student_status_code', 11)
+            ->get(['hemis_id', 'full_name', 'student_id_number', 'group_id'])
+            ->groupBy('group_id');
+
+        // 4) Sinov override (key: subject|semester|group|hemis)
+        $sinovRows = SinovTestGrade::whereIn('subject_id', $subjectIds)
+            ->whereIn('semester_code', $semesterCodes)
+            ->whereIn('group_hemis_id', $groupHids)
+            ->get();
+        $sinovBy = [];
+        foreach ($sinovRows as $r) {
+            $sinovBy[$r->subject_id . '|' . $r->semester_code . '|' . $r->group_hemis_id . '|' . $r->student_hemis_id] = $r;
+        }
+
+        // 5) Barcha JN va MT baholari — bulk
+        $studentHids = $students->collapse()->pluck('hemis_id')->unique()->values()->all();
+        $excludeTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+
+        $jnGradesByKey = []; // hemis|subject|semester => avg
+        if (!empty($studentHids)) {
+            $jnRaw = DB::table('student_grades')
+                ->whereIn('student_hemis_id', $studentHids)
+                ->whereIn('subject_id', $subjectIds)
+                ->whereIn('semester_code', $semesterCodes)
+                ->whereNotIn('training_type_code', $excludeTypes)
+                ->whereNotNull('lesson_date')
+                ->whereNull('deleted_at')
+                ->select(['student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'grade', 'retake_grade', 'status', 'reason'])
+                ->get();
+
+            $grouped = $jnRaw->groupBy(fn($g) => $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code);
+            foreach ($grouped as $key => $items) {
+                $byDate = $items->groupBy(fn($g) => substr((string) $g->lesson_date, 0, 10));
+                $totalDaily = 0; $daysCount = 0;
+                foreach ($byDate as $dayGrades) {
+                    $dayTotal = 0; $dayCount = 0; $absentCount = 0;
+                    foreach ($dayGrades as $g) {
+                        if ($g->status === 'retake') {
+                            $dayTotal += $g->retake_grade ?? 0;
+                        } elseif ($g->status === 'pending' && $g->reason === 'absent') {
+                            $absentCount++;
+                        } else {
+                            $dayTotal += $g->grade ?? 0;
+                        }
+                        $dayCount++;
+                    }
+                    if ($dayCount === 0) continue;
+                    $totalDaily += ($absentCount === $dayCount) ? 0 : round($dayTotal / $dayCount);
+                    $daysCount++;
+                }
+                $jnGradesByKey[$key] = $daysCount > 0 ? round($totalDaily / $daysCount, 1) : null;
+            }
+        }
+
+        $mtGradesByKey = []; // hemis|subject|semester => avg
+        if (!empty($studentHids)) {
+            $mtRaw = DB::table('student_grades')
+                ->whereIn('student_hemis_id', $studentHids)
+                ->whereIn('subject_id', $subjectIds)
+                ->whereIn('semester_code', $semesterCodes)
+                ->where('training_type_code', 99)
+                ->whereNull('deleted_at')
+                ->select(['student_hemis_id', 'subject_id', 'semester_code', 'grade', 'retake_grade'])
+                ->get();
+            $mtGrouped = $mtRaw->groupBy(fn($g) => $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code);
+            foreach ($mtGrouped as $key => $items) {
+                $vals = $items->map(fn($g) => (float) ($g->retake_grade ?? $g->grade))->filter(fn($v) => $v !== null);
+                $mtGradesByKey[$key] = $vals->isNotEmpty() ? round($vals->avg(), 1) : null;
+            }
+        }
+
+        // 6) Excel yaratish
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Sinov fanlar');
+
+        $headers = ['#', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh', 'F.I.O', 'Talaba ID',
+                    'Fan', 'JN bali', 'MT bali', 'Sinov (test)'];
+        foreach ($headers as $col => $h) {
+            $cell = chr(65 + $col) . '1';
+            $sheet->setCellValue($cell, $h);
+        }
+        $sheet->getStyle('A1:L1')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '7C3AED']],
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+        ]);
+
+        $row = 2;
+        $rank = 0;
+        foreach ($groups as $grp) {
+            $facName = $deptNames[$grp->department_hemis_id] ?? '';
+            $specName = $grp->specialty_name ?? '';
+            $groupStudents = $students->get($grp->group_hemis_id, collect());
+
+            foreach ($sinovSubjects as $subj) {
+                // Faqat shu guruhning curriculumiga tegishli sinov fani
+                if ($subj->curricula_hemis_id != $grp->curriculum_hemis_id) continue;
+                $semLabel = $semesterNames[$subj->semester_code] ?? $subj->semester_code;
+
+                foreach ($groupStudents as $stu) {
+                    $rank++;
+                    $key = $stu->hemis_id . '|' . $subj->subject_id . '|' . $subj->semester_code;
+                    $jn = $jnGradesByKey[$key] ?? '';
+                    $mt = $mtGradesByKey[$key] ?? '';
+
+                    $sinovKey = $subj->subject_id . '|' . $subj->semester_code . '|' . $grp->group_hemis_id . '|' . $stu->hemis_id;
+                    $sinovOverride = $sinovBy[$sinovKey] ?? null;
+                    $sinov = $sinovOverride && $sinovOverride->override_grade !== null
+                        ? round((float) $sinovOverride->override_grade, 1)
+                        : '';
+
+                    $sheet->fromArray([
+                        $rank, $facName, $specName, $levelLabel, $semLabel,
+                        $grp->name, $stu->full_name, $stu->student_id_number,
+                        $subj->subject_name, $jn, $mt, $sinov,
+                    ], null, 'A' . $row);
+                    $row++;
+                }
+            }
+        }
+
+        foreach (range('A', 'L') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+        if ($row > 2) {
+            $sheet->setAutoFilter('A1:L' . ($row - 1));
+        }
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $filename = 'sinov_fanlar_' . $levelCode . '_' . now()->format('d.m.Y_His') . '.xlsx';
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
     public function startExamGradesExport(Request $request)
     {
         $request->validate([

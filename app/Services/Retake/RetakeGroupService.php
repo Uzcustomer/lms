@@ -213,16 +213,24 @@ class RetakeGroupService
      * Mavjud guruhga qo'shimcha talaba (ariza)larni qo'shish.
      *
      * Guruh `forming` bo'lsa — arizalar oddiy attach (draft) qilinadi.
-     * Guruh `scheduled`/`in_progress` bo'lsa — academicApprove orqali
+     * Aks holda (scheduled/in_progress/completed) — academicApprove orqali
      * to'liq tasdiqlanadi (final_status='approved').
+     *
+     * `completed` guruhga ham qo'shish mumkin, agar tugash sanasi hali
+     * amal qilsa (end_date >= bugun) — bu holatda guruh `in_progress`'ga
+     * qaytariladi.
      *
      * @return int Qo'shilgan arizalar soni
      */
     public function addApplicationsToGroup(RetakeGroup $group, array $applicationIds, Teacher $actor): int
     {
-        if ($group->status === RetakeGroup::STATUS_COMPLETED) {
+        $today = \Illuminate\Support\Carbon::today();
+        $periodEnded = $group->end_date && $group->end_date->lt($today);
+
+        // Muddat butunlay tugagan (sana o'tgan) guruhgagina qo'shib bo'lmaydi
+        if ($group->status === RetakeGroup::STATUS_COMPLETED && $periodEnded) {
             throw ValidationException::withMessages([
-                'group' => "Tugagan guruhga talaba qo'shib bo'lmaydi",
+                'group' => "Muddati tugagan guruhga talaba qo'shib bo'lmaydi. Avval qabul oynasi orqali muddatni uzaytiring.",
             ]);
         }
 
@@ -242,7 +250,13 @@ class RetakeGroupService
 
         $shouldApprove = $group->status !== RetakeGroup::STATUS_FORMING;
 
-        DB::transaction(function () use ($group, $apps, $actor, $shouldApprove) {
+        DB::transaction(function () use ($group, $apps, $actor, $shouldApprove, $today) {
+            // Completed guruh (muddat hali amal qilsa) — in_progress'ga qaytarish
+            if ($group->status === RetakeGroup::STATUS_COMPLETED
+                && $group->end_date && $group->end_date->gte($today)) {
+                $group->update(['status' => RetakeGroup::STATUS_IN_PROGRESS]);
+            }
+
             foreach ($apps as $app) {
                 if ($shouldApprove) {
                     $this->applicationService->academicApprove($app, $actor, $group->id);
@@ -273,9 +287,12 @@ class RetakeGroupService
      */
     public function removeApplicationFromGroup(RetakeGroup $group, int $applicationId, Teacher $actor): void
     {
-        if ($group->status === RetakeGroup::STATUS_COMPLETED) {
+        // Faqat muddati butunlay tugagan (sana o'tgan) guruhda cheklanadi.
+        // Muddat hali amal qilsa (completed bo'lsa ham) — chiqarish mumkin.
+        if ($group->status === RetakeGroup::STATUS_COMPLETED
+            && $group->end_date && $group->end_date->lt(\Illuminate\Support\Carbon::today())) {
             throw ValidationException::withMessages([
-                'group' => "Tugagan guruhdan talabani chiqarib bo'lmaydi",
+                'group' => "Muddati tugagan guruhdan talabani chiqarib bo'lmaydi",
             ]);
         }
 

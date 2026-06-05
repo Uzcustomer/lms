@@ -353,6 +353,24 @@ class VedomostTekshirishController extends Controller
         ]);
 
         $exportRows   = $request->input('rows');
+
+        // Sinov fanlari uchun student_grades sinov_yn_test va SinovTestGrade
+        // yozuvlarini eksportdan oldin avtomatik backfill qilish (eski oqim yoki
+        // lesson_pair_code bug'i sababli yo'qolgan yozuvlar bo'lsa).
+        foreach ($exportRows as $r) {
+            try {
+                $g = Group::where('id', $r['group_id'])->first();
+                if (!$g) continue;
+                \App\Http\Controllers\Admin\JournalController::backfillSinovDataForGroup(
+                    (string) $r['subject_id'],
+                    (string) $r['semester_code'],
+                    (string) $g->group_hemis_id
+                );
+            } catch (\Throwable $e) {
+                \Log::warning('Sinov backfill failed for export row: ' . $e->getMessage());
+            }
+        }
+
         $wJn   = (int) ($request->weight_jn   ?? 50);
         $wMt   = (int) ($request->weight_mt   ?? 20);
         $wOn   = (int) ($request->weight_on   ?? 0);
@@ -691,23 +709,52 @@ class VedomostTekshirishController extends Controller
             }
 
             // --- ON, OSKI, Test baholar ---
-            // YN qaydnoma yaratish bilan bir xil qiymat chiqishi uchun
-            // YnQaytnomaController::generateYnQaydnoma() dagi logikani
-            // aynan takrorlaymiz: har bir training_type_code uchun MAX(grade)
-            // to'g'ridan-to'g'ri SQL darajasida, education_year_code/
-            // lesson_date filtrlarisiz.
-            $gradesByType = [100 => [], 101 => [], 102 => []];
-            foreach ([100, 101, 102] as $tc) {
-                $gradesByType[$tc] = DB::table('student_grades')
-                    ->whereNull('deleted_at')
-                    ->whereIn('student_hemis_id', $studentHemisIds)
-                    ->where('subject_id', $subjectId)
-                    ->where('semester_code', $semesterCode)
-                    ->where('training_type_code', $tc)
-                    ->select('student_hemis_id', DB::raw('MAX(grade) as grade'))
-                    ->groupBy('student_hemis_id')
-                    ->pluck('grade', 'student_hemis_id')
-                    ->toArray();
+            // Jurnaldagi AYNAN bir xil tanlash mantig'i (MAX EMAS):
+            // is_qoshimcha=0, education_year/minScheduleDate oynasi, attempt=1,
+            // effectiveGrade va soxta 'sinov_yn_test' qatorini chetlatish.
+            $onOskiTest = \App\Services\JournalGradeService::computeOnOskiTest(
+                (string) $groupHemisId,
+                (string) $subjectId,
+                (string) $semesterCode,
+                $studentHemisIds
+            );
+            $gradesByType = [
+                100 => $onOskiTest['on'],
+                101 => $onOskiTest['oski'],
+                102 => $onOskiTest['test'],
+            ];
+
+            // SINOV fani: test bahosi student_grades ga FAQAT YN yuborilganda
+            // yoziladi (reason='sinov_yn_test'). YN yuborilmagan bo'lsa, sinov
+            // bahosi faqat sinov_test_grades (SinovTestGrade) da yashaydi —
+            // jurnal o'shandan o'qiydi. Vedomost jurnalga teng bo'lishi uchun,
+            // student_grades da test yo'q talabalar uchun uni SinovTestGrade
+            // (override ?? default) yoki JN o'rtachasidan to'ldiramiz.
+            //
+            // ESLATMA: closing_form export POST'ida kelmaydi (faqat group/subject/
+            // semester), shuningdek nofaol dublikat qator NULL berishi mumkin —
+            // shuning uchun sinov ekanini SinovTestGrade yozuvlari mavjudligi
+            // bilan aniqlaymiz (ular faqat sinov fanlari uchun yaratiladi).
+            $sinovGrades = \App\Models\SinovTestGrade::where('subject_id', (string) $subjectId)
+                ->where('semester_code', (string) $semesterCode)
+                ->where('group_hemis_id', (string) $groupHemisId)
+                ->get()
+                ->keyBy('student_hemis_id');
+            if ($sinovGrades->isNotEmpty()) {
+                foreach ($studentHemisIds as $hid) {
+                    // student_grades da haqiqiy/sinov_yn_test bahosi bo'lsa — tegmaymiz.
+                    if (isset($gradesByType[102][$hid]) && $gradesByType[102][$hid] !== null) {
+                        continue;
+                    }
+                    $sg = $sinovGrades->get($hid);
+                    $val = $sg ? ($sg->override_grade ?? $sg->default_grade) : null;
+                    if ($val === null) {
+                        $val = $jnGrades[$hid] ?? null;
+                    }
+                    if ($val !== null) {
+                        $gradesByType[102][(string) $hid] = (int) round((float) $val, 0, PHP_ROUND_HALF_UP);
+                    }
+                }
             }
 
             // --- O'qituvchilar ---

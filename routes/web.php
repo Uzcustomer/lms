@@ -300,6 +300,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/save-retake-grade', [JournalController::class, 'saveRetakeGrade'])->name('save-retake-grade');
             Route::post('/superadmin-edit-grade', [JournalController::class, 'superadminEditGrade'])->name('superadmin-edit-grade');
             Route::post('/superadmin-edit-exam-grade', [JournalController::class, 'superadminEditExamGrade'])->name('superadmin-edit-exam-grade');
+            Route::post('/superadmin-delete-exam-grade', [JournalController::class, 'superadminDeleteExamGrade'])->name('superadmin-delete-exam-grade');
             Route::post('/superadmin-upload-mt', [JournalController::class, 'superadminUploadMt'])->name('superadmin-upload-mt');
             Route::post('/delete-retake-grade', [JournalController::class, 'deleteRetakeGrade'])->name('delete-retake-grade');
             Route::post('/create-retake-grade', [JournalController::class, 'createRetakeGrade'])->name('create-retake-grade');
@@ -327,6 +328,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/download-submission/{submissionId}', [JournalController::class, 'downloadSubmission'])->name('download-submission');
             Route::get('/download-history-file/{historyId}', [JournalController::class, 'downloadHistoryFile'])->name('download-history-file');
             Route::get('/export-student-grades', [JournalController::class, 'exportStudentGrades'])->name('export-student-grades');
+            Route::post('/export-sinov-grades', [JournalController::class, 'exportSinovGrades'])->name('export-sinov-grades');
             Route::post('/export-exam-grades-all/start', [JournalController::class, 'startExamGradesExport'])->name('export-exam-grades-all.start');
             Route::get('/export-exam-grades-all/status', [JournalController::class, 'examGradesExportStatus'])->name('export-exam-grades-all.status');
             Route::get('/export-exam-grades-all/download', [JournalController::class, 'examGradesExportDownload'])->name('export-exam-grades-all.download');
@@ -599,6 +601,22 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/get-specialties', [ClosingFormController::class, 'getSpecialties'])->name('get-specialties');
             Route::get('/get-level-codes', [ClosingFormController::class, 'getLevelCodes'])->name('get-level-codes');
             Route::get('/get-semesters', [ClosingFormController::class, 'getSemesters'])->name('get-semesters');
+        });
+
+        // Vedomost topshirilish holati (submission tracking)
+        Route::prefix('vedomost-submission')->name('vedomost-submission.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'index'])->name('index');
+            Route::get('/export', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'export'])->name('export');
+            Route::post('/sync', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'sync'])->name('sync');
+            Route::post('/toggle-notify', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'toggleNotify'])->name('toggle-notify');
+            Route::get('/{id}', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'show'])->whereNumber('id')->name('show');
+            Route::post('/{id}/upload', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'uploadFiles'])->whereNumber('id')->name('upload');
+            Route::post('/{id}/review', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'review'])->whereNumber('id')->name('review');
+            Route::post('/{id}/approve', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'approve'])->whereNumber('id')->name('approve');
+            Route::post('/{id}/reject', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'reject'])->whereNumber('id')->name('reject');
+            Route::post('/{id}/ai-check', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'aiCheck'])->whereNumber('id')->name('ai-check');
+            Route::get('/{id}/ai-status', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'aiStatus'])->whereNumber('id')->name('ai-status');
+            Route::get('/{id}/file/{type}', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'downloadFile'])->whereNumber('id')->name('file');
         });
 
         // To'garak arizalari
@@ -1125,6 +1143,9 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::post('/yn-consent', [StudentController::class, 'submitYnConsent'])->name('yn-consent');
         Route::get('/profile-my', [StudentController::class, 'profile'])->name('profile');
         Route::post('/profile-my/update-contact', [StudentController::class, 'updateContact'])->name('profile.update-contact');
+        // Anonim so'rovnoma (Registrator ofisi baholash) — bir martalik
+        Route::get('/survey',  [\App\Http\Controllers\Student\SurveyController::class, 'show'])->name('survey.show');
+        Route::post('/survey', [\App\Http\Controllers\Student\SurveyController::class, 'submit'])->name('survey.submit');
         Route::get('/exam-schedule', [StudentController::class, 'examSchedule'])->name('exam-schedule');
         Route::get('/exam/status', [\App\Http\Controllers\Student\StartExamController::class, 'status'])->name('exam.status');
         Route::post('/exam/start', [\App\Http\Controllers\Student\StartExamController::class, 'start'])
@@ -1169,9 +1190,9 @@ Route::prefix('student')->name('student.')->group(function () {
         // Talaba qayta o'qish jurnali — read-only + mustaqil ta'lim upload
         Route::prefix('retake-journal')->name('retake-journal.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Student\RetakeJournalController::class, 'index'])->name('index');
-            Route::get('/{groupId}', [\App\Http\Controllers\Student\RetakeJournalController::class, 'show'])->name('show');
-            Route::post('/{groupId}/mustaqil', [\App\Http\Controllers\Student\RetakeJournalController::class, 'uploadMustaqil'])->name('mustaqil-upload');
-            Route::get('/{groupId}/mustaqil/download', [\App\Http\Controllers\Student\RetakeJournalController::class, 'downloadMustaqil'])->name('mustaqil-download');
+            Route::get('/{applicationId}', [\App\Http\Controllers\Student\RetakeJournalController::class, 'show'])->name('show');
+            Route::post('/{applicationId}/mustaqil', [\App\Http\Controllers\Student\RetakeJournalController::class, 'uploadMustaqil'])->name('mustaqil-upload');
+            Route::get('/{applicationId}/mustaqil/download', [\App\Http\Controllers\Student\RetakeJournalController::class, 'downloadMustaqil'])->name('mustaqil-download');
         });
 
         // Imtihon natijalari bo'yicha apellyatsiya

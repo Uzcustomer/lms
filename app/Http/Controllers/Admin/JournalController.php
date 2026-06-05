@@ -95,9 +95,16 @@ class JournalController extends Controller
 
         $faculties = $facultyQuery->get();
 
+        // Nofaol fanlarni ko'rsatish toggle'i.
+        // Default — faqat faol (HEMIS'da hozir mavjud) fanlar ko'rsatiladi.
+        // Yoqilganda nofaol/eskirgan fanlar ham chiqadi: semestr davomida fanlar
+        // a/b/c variantlarda ishlatilib, semestr oxirida nofaol qilinadi, lekin
+        // baholar o'sha variantlarda qolib ketadi — ularni topish uchun kerak.
+        $showInactive = $request->boolean('show_inactive');
+
         // Base query builder (umumiy join va filtrlar)
-        $baseQuery = function () {
-            return DB::table('curriculum_subjects as cs')
+        $baseQuery = function () use ($showInactive) {
+            $q = DB::table('curriculum_subjects as cs')
                 ->join('curricula as c', 'cs.curricula_hemis_id', '=', 'c.curricula_hemis_id')
                 ->join('groups as g', 'g.curriculum_hemis_id', '=', 'c.curricula_hemis_id')
                 ->join('semesters as s', function ($join) {
@@ -108,6 +115,12 @@ class JournalController extends Controller
                 ->leftJoin('specialties as sp', 'sp.specialty_hemis_id', '=', 'g.specialty_hemis_id')
                 ->where('g.department_active', true)
                 ->where('g.active', true);
+
+            if (!$showInactive) {
+                $q->where('cs.is_active', true);
+            }
+
+            return $q;
         };
 
         // Kafedra dropdown uchun - faqat haqiqiy natija bor kafedralar
@@ -159,6 +172,7 @@ class JournalController extends Controller
                 'cs.subject_id',
                 'cs.subject_name',
                 'cs.closing_form',
+                'cs.is_active',
                 'cs.semester_code',
                 'cs.semester_name',
                 'c.education_type_name',
@@ -284,7 +298,8 @@ class JournalController extends Controller
             'sortColumn',
             'sortDirection',
             'dekanFacultyIds',
-            'isOqituvchi'
+            'isOqituvchi',
+            'showInactive'
         ));
     }
 
@@ -367,21 +382,47 @@ class JournalController extends Controller
             }
         }
 
-        $subject = CurriculumSubject::where('subject_id', $subjectId)
-            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('semester_code', $semesterCode)
-            ->first();
+        // Ro'yxatdan bosilgan ANIQ qatorni ochish uchun `cs` (curriculum_subjects.id)
+        // uzatiladi. Bir xil (subject_id, curriculum, semester) bo'yicha faol va
+        // nofaol dublikat qatorlar bo'lishi mumkin — `cs` ularni aniq ajratadi
+        // (faol fanga bossak faol, nofaolga bossak nofaol qatori ochiladi).
+        $subject = null;
+        $csId = $request->query('cs');
+        if ($csId !== null && $csId !== '') {
+            // `cs` qatori AYNAN so'ralgan semestrga tegishli bo'lishi shart —
+            // aks holda eski/qo'lda o'zgartirilgan URL (boshqa semestrdagi shu fan)
+            // closing_form va fan metama'lumotlarini noto'g'ri ko'rsatishi mumkin.
+            $subject = CurriculumSubject::where('id', $csId)
+                ->where('subject_id', $subjectId)
+                ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->whereIn('semester_code', array_unique([$semesterCode, $originalSemesterCode]))
+                ->first();
+        }
+        // `cs` bo'lmasa yoki topilmasa — faol va closing_form to'ldirilgan qatorni
+        // afzal ko'rgan holda yuklaymiz (nofaol/bo'sh dublikatga tushib qolmaslik uchun).
+        if (!$subject) {
+            $subject = CurriculumSubject::where('subject_id', $subjectId)
+                ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->where('semester_code', $semesterCode)
+                ->orderByDesc('is_active')
+                ->orderByRaw('closing_form IS NULL')
+                ->first();
+        }
         // Agar yangi semester_code bilan ham topilmasa, original bilan sinab ko'rish
         if (!$subject && $semesterCode !== $originalSemesterCode) {
             $subject = CurriculumSubject::where('subject_id', $subjectId)
                 ->where('curricula_hemis_id', $group->curriculum_hemis_id)
                 ->where('semester_code', $originalSemesterCode)
+                ->orderByDesc('is_active')
+                ->orderByRaw('closing_form IS NULL')
                 ->first();
         }
-        // Hech biri topilmasa — semester filtrSIZ birinchi natijani olish
+        // Hech biri topilmasa — semester filtrSIZ (faol qatorni afzal ko'rib)
         if (!$subject) {
             $subject = CurriculumSubject::where('subject_id', $subjectId)
                 ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                ->orderByDesc('is_active')
+                ->orderByRaw('closing_form IS NULL')
                 ->first();
         }
         if (!$subject) {
@@ -944,7 +985,8 @@ class JournalController extends Controller
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select(array_merge(
-                ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'attempt', 'lesson_date'],
+                ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'attempt', 'lesson_date',
+                 'graded_by_user_id', 'employee_id', 'employee_name', 'retake_by'],
                 $hasSababliCol ? ['retake_was_sababli'] : []
             ))
             ->get();
@@ -953,6 +995,8 @@ class JournalController extends Controller
         $otherGradesSababli = [];
         // Sana tooltip uchun: $otherGradeDates[hemis_id][ttc][attempt] = 'YYYY-MM-DD'
         $otherGradeDates = [];
+        // Tooltip uchun grader raw ma'lumotlari (keyin name lookup qilinadi)
+        $otherGradeGraderRaw = [];
         foreach ($otherGradesRaw as $g) {
             $effectiveGrade = $getEffectiveGrade($g);
             if ($effectiveGrade !== null) {
@@ -977,6 +1021,13 @@ class JournalController extends Controller
                 if (!empty($g->lesson_date)) {
                     $otherGradeDates[$g->student_hemis_id][$typeCode][$attempt] = $g->lesson_date;
                 }
+                // Grader manbalari — tooltip uchun
+                $otherGradeGraderRaw[$g->student_hemis_id][$typeCode][$attempt] = [
+                    'graded_by_user_id' => $g->graded_by_user_id ?? null,
+                    'employee_id'       => $g->employee_id ?? null,
+                    'employee_name'     => $g->employee_name ?? null,
+                    'retake_by'         => $g->retake_by ?? null,
+                ];
             }
         }
         // Asosiy ustunda 1-urinish bahosi ko'rinadi (asosiy stsenariy uchun ham).
@@ -1023,7 +1074,55 @@ class JournalController extends Controller
             if (isset($byType[102][3])) $testAttempt3DateMap[$sid] = $formatDate($byType[102][3]);
         }
 
+        // OSKI/Test grader nomlarini lookup qilish — tooltip uchun.
+        // Manbalar: graded_by_user_id → users.name; employee_id → teachers.full_name;
+        // Aks holda employee_name yoki retake_by satrlari ishlatiladi.
+        $examGraderUserIds = [];
+        $examGraderEmpIds = [];
+        foreach ($otherGradeGraderRaw as $sid => $byType) {
+            foreach ($byType as $ttc => $byAttempt) {
+                foreach ($byAttempt as $att => $info) {
+                    if (!empty($info['graded_by_user_id'])) $examGraderUserIds[$info['graded_by_user_id']] = true;
+                    if (!empty($info['employee_id'])) $examGraderEmpIds[$info['employee_id']] = true;
+                }
+            }
+        }
+        $examGraderUserNames = !empty($examGraderUserIds)
+            ? DB::table('users')->whereIn('id', array_keys($examGraderUserIds))->pluck('name', 'id')->toArray()
+            : [];
+        $examGraderEmpNames = !empty($examGraderEmpIds)
+            ? DB::table('teachers')->whereIn('hemis_id', array_keys($examGraderEmpIds))->pluck('full_name', 'hemis_id')->toArray()
+            : [];
+
+        // 6 ta xarita — har turdagi har urinish uchun
+        $oskiAttempt1GraderMap = [];
+        $oskiAttempt2GraderMap = [];
+        $oskiAttempt3GraderMap = [];
+        $testAttempt1GraderMap = [];
+        $testAttempt2GraderMap = [];
+        $testAttempt3GraderMap = [];
+        $resolveGrader = function ($info) use ($examGraderUserNames, $examGraderEmpNames) {
+            if (!empty($info['graded_by_user_id']) && isset($examGraderUserNames[$info['graded_by_user_id']])) {
+                return $examGraderUserNames[$info['graded_by_user_id']];
+            }
+            if (!empty($info['employee_id']) && isset($examGraderEmpNames[$info['employee_id']])) {
+                return $examGraderEmpNames[$info['employee_id']];
+            }
+            return $info['employee_name'] ?: ($info['retake_by'] ?: null);
+        };
+        foreach ($otherGradeGraderRaw as $sid => $byType) {
+            if (isset($byType[101][1])) $oskiAttempt1GraderMap[$sid] = $resolveGrader($byType[101][1]);
+            if (isset($byType[101][2])) $oskiAttempt2GraderMap[$sid] = $resolveGrader($byType[101][2]);
+            if (isset($byType[101][3])) $oskiAttempt3GraderMap[$sid] = $resolveGrader($byType[101][3]);
+            if (isset($byType[102][1])) $testAttempt1GraderMap[$sid] = $resolveGrader($byType[102][1]);
+            if (isset($byType[102][2])) $testAttempt2GraderMap[$sid] = $resolveGrader($byType[102][2]);
+            if (isset($byType[102][3])) $testAttempt3GraderMap[$sid] = $resolveGrader($byType[102][3]);
+        }
+
         // Get attendance data for each student (auditorium types only: exclude MT, ON, OSKI, Test)
+        // Sababli ariza oraliqlarini Dav % dan chiqarib tashlash: tasdiqlangan
+        // ariza sanasi qatorlarni whereNotExists subquery orqali hisobdan
+        // chiqaramiz (ham amaliyot, ham ma'ruza turi uchun).
         $excludedAttendanceCodes = [99, 100, 101, 102];
         $attendanceData = DB::table('attendances')
             ->whereIn('student_hemis_id', $studentHemisIds)
@@ -1031,6 +1130,14 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->whereNotIn('training_type_code', $excludedAttendanceCodes)
+            ->whereNotExists(function ($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('absence_excuses')
+                    ->whereColumn('absence_excuses.student_hemis_id', 'attendances.student_hemis_id')
+                    ->where('absence_excuses.status', 'approved')
+                    ->whereRaw('absence_excuses.start_date <= DATE(attendances.lesson_date)')
+                    ->whereRaw('absence_excuses.end_date >= DATE(attendances.lesson_date)');
+            })
             ->select('student_hemis_id', DB::raw('SUM(absent_off) as total_absent_off'))
             ->groupBy('student_hemis_id')
             ->pluck('total_absent_off', 'student_hemis_id')
@@ -1498,6 +1605,19 @@ class JournalController extends Controller
             Log::warning('AbsenceExcuse query failed: ' . $e->getMessage());
         }
 
+        // Kengaytirilgan sababli arizalar ro'yxati — assessment_type yoki makeup
+        // chegarasisiz. Ma'ruza tab va Dav % hisobi shu yerdan sababli oraliqlarni
+        // o'qiydi. Bitta talabaning bir necha arizasi bo'lishi mumkin → groupBy.
+        $broadExcuses = collect();
+        try {
+            $broadExcuses = AbsenceExcuse::where('status', 'approved')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->get()
+                ->groupBy('student_hemis_id');
+        } catch (\Exception $e) {
+            Log::warning('AbsenceExcuse broad query failed: ' . $e->getMessage());
+        }
+
         if ($ynSubmission) {
             try {
                 // Avval kiritilgan sababli baholarni olish (faqat YN yuborilgan bo'lsa)
@@ -1909,37 +2029,15 @@ class JournalController extends Controller
                     ->keyBy('student_hemis_id');
 
                 // Fallback: agar YN allaqachon yuborilgan lekin SinovTestGrade yozuvi
-                // yo'q bo'lsa (o'qituvchi yangi oqimdan oldin to'g'ridan-to'g'ri
-                // submitToYn qilgan holat) — student_grades sinov_yn_test yozuvidan
-                // yoki joriy JN o'rtachasidan sintetik yozuv yaratamiz. Bu tepa
-                // jurnal "Sinov (test)" ustunining bo'sh ko'rinishini oldini oladi.
+                // yoki student_grades sinov_yn_test yozuvi yo'q bo'lsa (eski oqimda
+                // submitToYn xatolik bilan tugagan, yoki lesson_pair_code bug'i
+                // sababli student_grades insert yiqilgan) — backfill qilamiz va
+                // sintetik xotira obyektini ham qaytaramiz.
                 if (!empty($ynSubmission)) {
-                    $sgRows = DB::table('student_grades')
-                        ->whereNull('deleted_at')
-                        ->where('subject_id', $subjectId)
-                        ->where('semester_code', $semesterCode)
-                        ->where('training_type_code', 102)
-                        ->where('reason', 'sinov_yn_test')
-                        ->whereIn('student_hemis_id', $students->pluck('hemis_id')->all())
-                        ->select('student_hemis_id', 'grade')
-                        ->get()
-                        ->keyBy('student_hemis_id');
-
-                    foreach ($students as $stuRow) {
-                        $h = $stuRow->hemis_id;
-                        if ($sinovOverrides->has($h)) continue;
-                        $fallback = $sgRows->get($h)?->grade ?? ($sinovJnMap[$h] ?? null);
-                        if ($fallback === null) continue;
-                        $synth = new SinovTestGrade();
-                        $synth->subject_id = $subjectId;
-                        $synth->semester_code = $semesterCode;
-                        $synth->group_hemis_id = $group->group_hemis_id;
-                        $synth->student_hemis_id = $h;
-                        $synth->override_grade = (float) $fallback;
-                        $synth->default_grade = (float) ($sinovJnMap[$h] ?? $fallback);
-                        $synth->is_locked = true;
-                        $sinovOverrides->put($h, $synth);
-                    }
+                    $this->backfillSinovDataIfMissing(
+                        $subjectId, $semesterCode, $group->group_hemis_id,
+                        $subject, $students, $sinovJnMap, $sinovOverrides
+                    );
                 }
 
                 // $sinovInJournal = qaydnoma yopilgan deb hisoblash uchun is_locked
@@ -2033,6 +2131,7 @@ class JournalController extends Controller
             'lastLessonDate',
             'levelDeadline',
             'approvedExcuses',
+            'broadExcuses',
             'excuseGradeSnapshots',
             'excuseOpenedDatesPerStudent',
             'studentStages',
@@ -2054,6 +2153,12 @@ class JournalController extends Controller
             'testAttempt2DateMap',
             'oskiAttempt3DateMap',
             'testAttempt3DateMap',
+            'oskiAttempt1GraderMap',
+            'oskiAttempt2GraderMap',
+            'oskiAttempt3GraderMap',
+            'testAttempt1GraderMap',
+            'testAttempt2GraderMap',
+            'testAttempt3GraderMap',
             'isSinov',
             'sinovDefaults',
             'sinovOverrides',
@@ -3491,8 +3596,8 @@ class JournalController extends Controller
      */
     public function superadminEditGrade(Request $request)
     {
-        if (!auth()->user()?->hasRole('superadmin')) {
-            return response()->json(['success' => false, 'message' => 'Faqat superadmin uchun'], 403);
+        if (!auth()->user()?->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['success' => false, 'message' => 'Faqat superadmin yoki admin uchun'], 403);
         }
 
         if (Setting::get('feature_superadmin_grade_edit', '0') !== '1') {
@@ -3584,8 +3689,8 @@ class JournalController extends Controller
      */
     public function superadminEditExamGrade(Request $request)
     {
-        if (!auth()->user()?->hasRole('superadmin')) {
-            return response()->json(['success' => false, 'message' => 'Faqat superadmin uchun'], 403);
+        if (!auth()->user()?->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['success' => false, 'message' => 'Faqat superadmin yoki admin uchun'], 403);
         }
 
         if (Setting::get('feature_superadmin_grade_edit', '0') !== '1') {
@@ -3759,6 +3864,54 @@ class JournalController extends Controller
             'success' => true,
             'grade'   => (float) $data['grade'],
             'updated' => $rows->count(),
+        ]);
+    }
+
+    /**
+     * Superadmin/Admin: OSKI yoki Test bahosini butunlay o'chirish — feature
+     * `feature_superadmin_grade_edit` yoqilgan bo'lsa. Talaba+fan+semestr+yn_type+
+     * urinish bo'yicha barcha mos qator(lar) soft-delete qilinadi.
+     */
+    public function superadminDeleteExamGrade(Request $request)
+    {
+        if (!auth()->user()?->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['success' => false, 'message' => 'Faqat superadmin yoki admin uchun'], 403);
+        }
+
+        if (Setting::get('feature_superadmin_grade_edit', '0') !== '1') {
+            return response()->json(['success' => false, 'message' => 'Bu funksiya hozirda o\'chirilgan'], 403);
+        }
+
+        $data = $request->validate([
+            'student_hemis_id'   => 'required',
+            'subject_id'         => 'required',
+            'semester_code'      => 'required',
+            'training_type_code' => 'required|integer|in:101,102',
+            'attempt'            => 'required|integer|in:1,2,3',
+        ]);
+
+        $deleted = DB::table('student_grades')
+            ->where('student_hemis_id', $data['student_hemis_id'])
+            ->where('subject_id', $data['subject_id'])
+            ->where('semester_code', $data['semester_code'])
+            ->where('training_type_code', $data['training_type_code'])
+            ->where('attempt', $data['attempt'])
+            ->whereNull('deleted_at')
+            ->update([
+                'deleted_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        if ($deleted === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'O\'chirish uchun mos yozuv topilmadi.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'deleted' => $deleted,
         ]);
     }
 
@@ -3968,13 +4121,13 @@ class JournalController extends Controller
             }
 
             // YN ga yuborilganligini tekshirish
-            // YN ga yuborilganligini tekshirish — Superadmin override mavjud
-            // (feature_superadmin_grade_edit toggle ON bo'lsa, superadmin YN locked
-            // bo'lsa ham bahoni o'zgartira oladi).
+            // YN ga yuborilganligini tekshirish — Superadmin/Admin override mavjud
+            // (feature_superadmin_grade_edit toggle ON bo'lsa, superadmin yoki
+            // admin YN locked bo'lsa ham bahoni o'zgartira oladi).
             if ($studentGrade->is_yn_locked) {
-                $isSuper = auth()->user()?->hasRole('superadmin') ?? false;
+                $isPrivileged = auth()->user()?->hasAnyRole(['superadmin', 'admin']) ?? false;
                 $superToggleOn = Setting::get('feature_superadmin_grade_edit', '0') === '1';
-                if (!($isSuper && $superToggleOn)) {
+                if (!($isPrivileged && $superToggleOn)) {
                     return response()->json([
                         'success' => false,
                         'message' => 'YN ga yuborilgan. Baholarni o\'zgartirish mumkin emas.',
@@ -3984,11 +4137,11 @@ class JournalController extends Controller
             }
 
             // Retake bahosi allaqachon qo'yilgan bo'lsa — o'zgartirishga ruxsat berilmagan
-            // (Superadmin toggle yoqilgan bo'lsa, superadmin baribir o'zgartira oladi.)
+            // (Toggle yoqilgan bo'lsa, superadmin yoki admin baribir o'zgartira oladi.)
             if ($studentGrade->retake_grade !== null) {
-                $isSuper = auth()->user()?->hasRole('superadmin') ?? false;
+                $isPrivileged = auth()->user()?->hasAnyRole(['superadmin', 'admin']) ?? false;
                 $superToggleOn = Setting::get('feature_superadmin_grade_edit', '0') === '1';
-                if (!($isSuper && $superToggleOn)) {
+                if (!($isPrivileged && $superToggleOn)) {
                     return response()->json(['success' => false, 'message' => 'Retake bahosi allaqachon qo\'yilgan. O\'zgartirishga ruxsat berilmagan.'], 400);
                 }
             }
@@ -4375,6 +4528,12 @@ class JournalController extends Controller
             ->where('g.department_active', true)
             ->where('g.active', true);
 
+        // Default — faqat faol fanlar. show_inactive yoqilganda nofaol/eskirgan
+        // fanlar ham FAN dropdown'ida chiqadi (a/b/c variantlarni tanlay olish uchun).
+        if (!$request->boolean('show_inactive')) {
+            $query->where('cs.is_active', true);
+        }
+
         // O'qituvchi uchun faqat o'zi dars jadvalida biriktirilgan fanlar
         $isOqituvchi = is_active_oqituvchi();
         $teacherHemisId = null;
@@ -4502,6 +4661,7 @@ class JournalController extends Controller
         // Kafedra bo'yicha filtrlash (curriculum_subjects.department_id orqali)
         if ($request->filled('department_id')) {
             $curriculaWithDept = CurriculumSubject::where('department_id', $request->department_id)
+                ->when(!$request->boolean('show_inactive'), fn($q) => $q->where('is_active', true))
                 ->pluck('curricula_hemis_id')
                 ->unique();
             $query->whereIn('curriculum_hemis_id', $curriculaWithDept);
@@ -5709,6 +5869,25 @@ class JournalController extends Controller
     }
 
     /**
+     * (subject_id, curriculum, semester) bo'yicha curriculum_subjects qatorini
+     * yuklaydi — FAOL va closing_form to'ldirilgan qatorni AFZAL ko'radi.
+     *
+     * HEMIS sync ba'zan bir xil (subject, curriculum, semester) uchun faol va
+     * nofaol dublikat qatorlar yaratadi (turli curriculum_subject_hemis_id).
+     * Tartiblashsiz ->first() nofaol/bo'sh (closing_form=NULL) qatorni olib,
+     * sinov fanini noto'g'ri aniqlashga olib kelardi.
+     */
+    private function resolveCurriculumSubject($subjectId, $curriculaHemisId, $semesterCode)
+    {
+        return CurriculumSubject::where('subject_id', $subjectId)
+            ->where('curricula_hemis_id', $curriculaHemisId)
+            ->where('semester_code', $semesterCode)
+            ->orderByDesc('is_active')
+            ->orderByRaw('closing_form IS NULL')
+            ->first();
+    }
+
+    /**
      * Sinov fani uchun YN test bahosini o'qituvchi tomonidan bir marta o'zgartirish.
      * Sukut qiymat — joriy JN o'rtachasi. Override yozuvi saqlangach qulflanadi.
      */
@@ -5750,21 +5929,24 @@ class JournalController extends Controller
         if (!$group) {
             return response()->json(['success' => false, 'message' => 'Guruh topilmadi.'], 404);
         }
-        $subject = CurriculumSubject::where('subject_id', $data['subject_id'])
-            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('semester_code', $data['semester_code'])
-            ->first();
+        $subject = $this->resolveCurriculumSubject($data['subject_id'], $group->curriculum_hemis_id, $data['semester_code']);
         if (!$subject || ($subject->closing_form ?? null) !== 'sinov') {
             return response()->json(['success' => false, 'message' => 'Bu funksiya faqat sinov bilan yopiladigan fanlarga tegishli.'], 422);
         }
 
-        // YN ga yuborilmagan bo'lishi shart
+        // YN ga yuborilgandan keyin oddiy yo'l bilan o'zgartirib bo'lmaydi —
+        // lekin Superadmin baho tahrirlash toggle yoqilgan bo'lsa, superadmin
+        // qaytadan yoza oladi.
         $ynSubmission = YnSubmission::where('subject_id', $data['subject_id'])
             ->where('semester_code', $data['semester_code'])
             ->where('group_hemis_id', $data['group_hemis_id'])
             ->first();
         if ($ynSubmission) {
-            return response()->json(['success' => false, 'message' => 'YN ga yuborilgandan keyin o\'zgartirib bo\'lmaydi.'], 422);
+            $isSuper = auth()->user()?->hasRole('superadmin') ?? false;
+            $superToggleOn = Setting::get('feature_superadmin_grade_edit', '0') === '1';
+            if (!($isSuper && $superToggleOn)) {
+                return response()->json(['success' => false, 'message' => 'YN ga yuborilgandan keyin o\'zgartirib bo\'lmaydi.'], 422);
+            }
         }
 
         // Talaba shu guruhda bo'lishi shart
@@ -5842,7 +6024,9 @@ class JournalController extends Controller
     /**
      * Sinov (test) baholarini admin tomonidan o'zgartirish ruxsati bormi?
      * - admin/superadmin rol bo'lishi shart;
-     * - sozlamada `sinov_test_grades_editable` yoqilgan bo'lishi shart.
+     * - sozlamalardan birortasi yoqilgan bo'lishi shart:
+     *     `sinov_test_grades_editable` — Sinov uchun maxsus toggle
+     *     `feature_superadmin_grade_edit` — barcha baholarni tahrirlash (umumiy)
      */
     public function canEditLockedSinov(): bool
     {
@@ -5850,7 +6034,9 @@ class JournalController extends Controller
         if (!$user || !$user->hasAnyRole(['admin', 'superadmin'])) {
             return false;
         }
-        return (bool) \App\Models\Setting::get('sinov_test_grades_editable', false);
+        $sinovToggle = (bool) \App\Models\Setting::get('sinov_test_grades_editable', false);
+        $generalToggle = \App\Models\Setting::get('feature_superadmin_grade_edit', '0') === '1';
+        return $sinovToggle || $generalToggle;
     }
 
     /**
@@ -5894,10 +6080,7 @@ class JournalController extends Controller
         if (!$group) {
             return response()->json(['success' => false, 'message' => 'Guruh topilmadi.'], 404);
         }
-        $subject = CurriculumSubject::where('subject_id', $data['subject_id'])
-            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('semester_code', $data['semester_code'])
-            ->first();
+        $subject = $this->resolveCurriculumSubject($data['subject_id'], $group->curriculum_hemis_id, $data['semester_code']);
         if (!$subject || ($subject->closing_form ?? null) !== 'sinov') {
             return response()->json(['success' => false, 'message' => 'Bu funksiya faqat sinov bilan yopiladigan fanlarga tegishli.'], 422);
         }
@@ -6046,10 +6229,7 @@ class JournalController extends Controller
         if (!$group) {
             return response()->json(['success' => false, 'message' => 'Guruh topilmadi.'], 404);
         }
-        $subject = CurriculumSubject::where('subject_id', $data['subject_id'])
-            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('semester_code', $data['semester_code'])
-            ->first();
+        $subject = $this->resolveCurriculumSubject($data['subject_id'], $group->curriculum_hemis_id, $data['semester_code']);
         if (!$subject || ($subject->closing_form ?? null) !== 'sinov') {
             return response()->json(['success' => false, 'message' => 'Bu funksiya faqat sinov bilan yopiladigan fanlarga tegishli.'], 422);
         }
@@ -6187,6 +6367,289 @@ class JournalController extends Controller
     }
 
     /**
+     * Standalone backfill — guruh+fan+semestr berilgan bo'lsa, eksport/qaydnoma
+     * kontekstidan ham chaqirish mumkin. Sinov fanida YN yuborilgan lekin
+     * student_grades sinov_yn_test yoki SinovTestGrade yo'q bo'lsa, ularni
+     * JN o'rtachasidan (yoki mavjud student_grades grade dan) tiklab beradi.
+     */
+    public static function backfillSinovDataForGroup(string $subjectId, string $semesterCode, string $groupHemisId): int
+    {
+        $group = Group::where('group_hemis_id', $groupHemisId)->first();
+        if (!$group) return 0;
+
+        $subject = $this->resolveCurriculumSubject($subjectId, $group->curriculum_hemis_id, $semesterCode);
+        if (!$subject || ($subject->closing_form ?? null) !== 'sinov') return 0;
+
+        $ynSubmission = YnSubmission::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->first();
+        if (!$ynSubmission) return 0;
+
+        $studentHemisIds = DB::table('students')
+            ->where('group_id', $groupHemisId)
+            ->pluck('hemis_id')
+            ->toArray();
+        if (empty($studentHemisIds)) return 0;
+
+        // Mavjud student_grades sinov_yn_test va SinovTestGrade
+        $sgRows = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 102)
+            ->where('reason', 'sinov_yn_test')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->select('student_hemis_id', 'grade')
+            ->get()
+            ->keyBy('student_hemis_id');
+
+        $sinovOverrides = SinovTestGrade::where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->get()
+            ->keyBy('student_hemis_id');
+
+        // Agar hammasi joyida — ish yo'q
+        $needsAny = false;
+        foreach ($studentHemisIds as $h) {
+            if (!$sinovOverrides->has($h) || !$sgRows->has($h)) {
+                $needsAny = true;
+                break;
+            }
+        }
+        if (!$needsAny) return 0;
+
+        // JN o'rtachalari (sukut fallback)
+        $instance = new self();
+        $jnMap = $instance->computeJnAveragesForGroup($subjectId, $semesterCode, $groupHemisId);
+
+        // student_grades insert uchun zarur ma'lumot
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+        $eduYearCode = null;
+        $eduYearName = null;
+        $lessonDateForRow = now()->toDateString();
+        $latestSched = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->orderBy('lesson_date', 'desc')
+            ->select('education_year_code', 'education_year_name', 'lesson_date')
+            ->first();
+        if ($latestSched) {
+            $eduYearCode = $latestSched->education_year_code ?? null;
+            $eduYearName = $latestSched->education_year_name ?? null;
+            if (!empty($latestSched->lesson_date)) {
+                $lessonDateForRow = $latestSched->lesson_date;
+            }
+        }
+        $now = now();
+        $studentRecords = DB::table('students')
+            ->whereIn('hemis_id', $studentHemisIds)
+            ->select('hemis_id', 'id')
+            ->get()
+            ->keyBy('hemis_id');
+
+        $touched = 0;
+        foreach ($studentHemisIds as $h) {
+            $fallback = $sgRows->get($h)?->grade ?? ($jnMap[$h] ?? null);
+            if ($fallback === null) continue;
+            $finalGrade = (int) round((float) $fallback, 0, PHP_ROUND_HALF_UP);
+
+            // 1) SinovTestGrade
+            if (!$sinovOverrides->has($h)) {
+                SinovTestGrade::updateOrCreate(
+                    [
+                        'subject_id' => $subjectId,
+                        'semester_code' => $semesterCode,
+                        'group_hemis_id' => $groupHemisId,
+                        'student_hemis_id' => $h,
+                    ],
+                    [
+                        'default_grade' => (float) ($jnMap[$h] ?? $finalGrade),
+                        'override_grade' => (float) $finalGrade,
+                        'is_locked' => true,
+                        'overridden_at' => $now,
+                    ]
+                );
+                $touched++;
+            }
+
+            // 2) student_grades sinov_yn_test
+            if (!$sgRows->has($h)) {
+                try {
+                    DB::table('student_grades')->insert(array_merge([
+                        'hemis_id' => 0,
+                        'student_id' => $studentRecords->get($h)?->id ?? 0,
+                        'student_hemis_id' => $h,
+                        'semester_code' => $semesterCode,
+                        'semester_name' => $subject->semester_name ?? '',
+                        'education_year_code' => $eduYearCode,
+                        'education_year_name' => $eduYearName,
+                        'subject_schedule_id' => 0,
+                        'subject_id' => $subjectId,
+                        'subject_name' => $subject->subject_name ?? '',
+                        'subject_code' => $subject->subject_code ?? '',
+                        'training_type_code' => 102,
+                        'training_type_name' => 'YN test',
+                        'employee_id' => 0,
+                        'employee_name' => '',
+                        'graded_by_user_id' => null,
+                        'lesson_date' => $lessonDateForRow,
+                        'lesson_pair_code' => '1',
+                        'lesson_pair_name' => 'YN test',
+                        'lesson_pair_start_time' => '00:00',
+                        'lesson_pair_end_time' => '00:00',
+                        'created_at_api' => $now,
+                        'grade' => $finalGrade,
+                        'status' => 'closed',
+                        'reason' => 'sinov_yn_test',
+                        'is_yn_locked' => true,
+                        'created_at' => $now,
+                        'updated_at' => $now,
+                    ], $hasAttemptCol ? ['attempt' => 1] : []));
+                    $touched++;
+                } catch (\Throwable $e) {
+                    Log::warning('backfillSinovDataForGroup: student_grades insert failed', [
+                        'group_hemis_id' => $groupHemisId,
+                        'subject_id' => $subjectId,
+                        'student_hemis_id' => $h,
+                        'error' => $e->getMessage(),
+                    ]);
+                }
+            }
+        }
+
+        return $touched;
+    }
+
+    /**
+     * Sinov fanida YN yuborilgan lekin SinovTestGrade va/yoki student_grades
+     * sinov_yn_test yozuvlari yo'q bo'lsa, ularni JN o'rtachasidan backfill
+     * qilish. Eski oqim/eski bug sababli yo'qolgan ma'lumotlarni tiklash uchun.
+     * $sinovOverrides collectionga ham qo'shib qaytaradi (xotira ichida).
+     */
+    private function backfillSinovDataIfMissing(
+        string $subjectId,
+        string $semesterCode,
+        string $groupHemisId,
+        $subject,
+        $students,
+        array $sinovJnMap,
+        $sinovOverrides
+    ): void {
+        $studentHemisIds = $students->pluck('hemis_id')->all();
+        if (empty($studentHemisIds)) return;
+
+        $sgRows = DB::table('student_grades')
+            ->whereNull('deleted_at')
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('training_type_code', 102)
+            ->where('reason', 'sinov_yn_test')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->select('student_hemis_id', 'grade')
+            ->get()
+            ->keyBy('student_hemis_id');
+
+        // student_grades insert uchun zarur ma'lumotlar
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+        $eduYearCode = null;
+        $eduYearName = null;
+        $lessonDateForRow = now()->toDateString();
+        $latestSched = DB::table('schedules')
+            ->where('group_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->whereNull('deleted_at')
+            ->orderBy('lesson_date', 'desc')
+            ->select('education_year_code', 'education_year_name', 'lesson_date')
+            ->first();
+        if ($latestSched) {
+            $eduYearCode = $latestSched->education_year_code ?? null;
+            $eduYearName = $latestSched->education_year_name ?? null;
+            if (!empty($latestSched->lesson_date)) {
+                $lessonDateForRow = $latestSched->lesson_date;
+            }
+        }
+        $teacherEmployeeId = is_active_oqituvchi() ? (get_teacher_hemis_id() ?? 0) : 0;
+        $now = now();
+        $studentRecords = DB::table('students')
+            ->whereIn('hemis_id', $studentHemisIds)
+            ->select('hemis_id', 'id')
+            ->get()
+            ->keyBy('hemis_id');
+
+        foreach ($students as $stuRow) {
+            $h = $stuRow->hemis_id;
+            if ($sinovOverrides->has($h)) continue;
+
+            $fallback = $sgRows->get($h)?->grade ?? ($sinovJnMap[$h] ?? null);
+            if ($fallback === null) continue;
+            $finalGrade = (int) round((float) $fallback, 0, PHP_ROUND_HALF_UP);
+
+            // 1) SinovTestGrade backfill (DB)
+            $stg = SinovTestGrade::updateOrCreate(
+                [
+                    'subject_id' => $subjectId,
+                    'semester_code' => $semesterCode,
+                    'group_hemis_id' => $groupHemisId,
+                    'student_hemis_id' => $h,
+                ],
+                [
+                    'default_grade' => (float) ($sinovJnMap[$h] ?? $finalGrade),
+                    'override_grade' => (float) $finalGrade,
+                    'is_locked' => true,
+                    'overridden_at' => $now,
+                ]
+            );
+            $sinovOverrides->put($h, $stg);
+
+            // 2) student_grades sinov_yn_test backfill (agar yo'q bo'lsa)
+            if ($sgRows->has($h)) continue;
+            try {
+                DB::table('student_grades')->insert(array_merge([
+                    'hemis_id' => 0,
+                    'student_id' => $studentRecords->get($h)?->id ?? 0,
+                    'student_hemis_id' => $h,
+                    'semester_code' => $semesterCode,
+                    'semester_name' => $subject->semester_name ?? '',
+                    'education_year_code' => $eduYearCode,
+                    'education_year_name' => $eduYearName,
+                    'subject_schedule_id' => 0,
+                    'subject_id' => $subjectId,
+                    'subject_name' => $subject->subject_name ?? '',
+                    'subject_code' => $subject->subject_code ?? '',
+                    'training_type_code' => 102,
+                    'training_type_name' => 'YN test',
+                    'employee_id' => $teacherEmployeeId,
+                    'employee_name' => '',
+                    'graded_by_user_id' => null,
+                    'lesson_date' => $lessonDateForRow,
+                    'lesson_pair_code' => '1',
+                    'lesson_pair_name' => 'YN test',
+                    'lesson_pair_start_time' => '00:00',
+                    'lesson_pair_end_time' => '00:00',
+                    'created_at_api' => $now,
+                    'grade' => $finalGrade,
+                    'status' => 'closed',
+                    'reason' => 'sinov_yn_test',
+                    'is_yn_locked' => true,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ], $hasAttemptCol ? ['attempt' => 1] : []));
+            } catch (\Throwable $e) {
+                Log::warning('backfillSinovDataIfMissing: student_grades insert failed', [
+                    'student_hemis_id' => $h,
+                    'subject_id' => $subjectId,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+        }
+    }
+
+    /**
      * Guruh + fan bo'yicha har talaba uchun MT (mustaqil ta'lim) o'rtachasini
      * hisoblash. Manual MT grade mavjud bo'lsa (training_type_code=99,
      * lesson_date IS NULL) — uni ustun deb oladi. Aks holda schedule-asoslangan
@@ -6321,10 +6784,7 @@ class JournalController extends Controller
         $group = Group::where('group_hemis_id', $groupHemisId)->first();
         $auditoriumHours = 0.0;
         if ($group) {
-            $subj = CurriculumSubject::where('subject_id', $subjectId)
-                ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-                ->where('semester_code', $semesterCode)
-                ->first();
+            $subj = $this->resolveCurriculumSubject($subjectId, $group->curriculum_hemis_id, $semesterCode);
             $auditoriumHours = (float) ($subj->total_acload ?? 0);
         }
 
@@ -6658,10 +7118,7 @@ class JournalController extends Controller
             $submitGroup = Group::where('group_hemis_id', $groupHemisId)->first();
             $sinovSubject = null;
             if ($submitGroup) {
-                $sinovSubject = CurriculumSubject::where('subject_id', $subjectId)
-                    ->where('curricula_hemis_id', $submitGroup->curriculum_hemis_id)
-                    ->where('semester_code', $semesterCode)
-                    ->first();
+                $sinovSubject = $this->resolveCurriculumSubject($subjectId, $submitGroup->curriculum_hemis_id, $semesterCode);
             }
             $isSinovSubmit = $sinovSubject && ($sinovSubject->closing_form ?? null) === 'sinov';
 
@@ -6746,6 +7203,25 @@ class JournalController extends Controller
                         ->where('reason', 'sinov_yn_test')
                         ->when($hasAttemptCol, fn($q) => $q->where('attempt', 1))
                         ->delete();
+
+                    // Agar talabada HAQIQIY test natijasi (test markazi / quiz_result —
+                    // reason != 'sinov_yn_test') bo'lsa, JN-asosli soxta test qatorini
+                    // YOZMAYMIZ. Aks holda ikki xil 102-qator paydo bo'lib, baholar
+                    // nomuvofiq ko'rinadi.
+                    $hasRealTest = DB::table('student_grades')
+                        ->whereNull('deleted_at')
+                        ->where('student_hemis_id', $hemisId)
+                        ->where('subject_id', $subjectId)
+                        ->where('semester_code', $semesterCode)
+                        ->where('training_type_code', 102)
+                        ->where(function ($q) {
+                            $q->where('reason', '<>', 'sinov_yn_test')
+                                ->orWhereNull('reason');
+                        })
+                        ->exists();
+                    if ($hasRealTest) {
+                        continue;
+                    }
 
                     $student = DB::table('students')->where('hemis_id', $hemisId)->first();
 
@@ -7758,10 +8234,7 @@ class JournalController extends Controller
         // Sinov fani — test markazidan natija tortilmaydi (joriy o'rtacha submitToYn da yozilgan)
         $sinovGroup = Group::where('group_hemis_id', $groupHemisId)->first();
         if ($sinovGroup) {
-            $sinovSubject = CurriculumSubject::where('subject_id', $subjectId)
-                ->where('curricula_hemis_id', $sinovGroup->curriculum_hemis_id)
-                ->where('semester_code', $semesterCode)
-                ->first();
+            $sinovSubject = $this->resolveCurriculumSubject($subjectId, $sinovGroup->curriculum_hemis_id, $semesterCode);
             if ($sinovSubject && ($sinovSubject->closing_form ?? null) === 'sinov') {
                 return response()->json([
                     'success' => true,
@@ -8322,6 +8795,14 @@ class JournalController extends Controller
         $group = Group::where('group_hemis_id', $groupHemisId)->first();
         if (!$group) {
             return back()->with('error', 'Guruh topilmadi');
+        }
+
+        // Sinov fani uchun student_grades sinov_yn_test yozuvlarini eksportdan
+        // oldin avtomatik backfill qilish (eski oqim/bug sababli yo'qolgan bo'lsa).
+        try {
+            self::backfillSinovDataForGroup((string) $subjectId, (string) $semesterCode, (string) $groupHemisId);
+        } catch (\Throwable $e) {
+            Log::warning('Sinov backfill failed in exportYnQaydnoma: ' . $e->getMessage());
         }
 
         $semester = Semester::where('curriculum_hemis_id', $group->curriculum_hemis_id)
@@ -9420,6 +9901,250 @@ class JournalController extends Controller
      * jobda boshlash. Bir nechta fakultet/kurs tanlanganda so'rov timeout
      * bo'lmasligi uchun ish navbatga qo'yiladi, foiz cache orqali kuzatiladi.
      */
+
+    /**
+     * Sinov fanlari uchun Excel eksport — tanlangan fakultet/kurs/semestrdagi
+     * yopilish shakli "Sinov (test)" bo'lgan barcha fanlar bo'yicha har talabaning
+     * JN, MT va Sinov (test) baholarini bitta varaqda qaytaradi.
+     */
+    public function exportSinovGrades(Request $request)
+    {
+        @ini_set('memory_limit', '1024M');
+        @set_time_limit(600);
+
+        $data = $request->validate([
+            'level_code'     => 'required|string',
+            'semester_code'  => 'nullable|string',
+            'faculty_ids'    => 'nullable|array',
+            'faculty_ids.*'  => 'integer',
+        ]);
+
+        $levelCode    = $data['level_code'];
+        $semesterCode = $data['semester_code'] ?? null;
+        $facultyIds   = $data['faculty_ids'] ?? [];
+
+        // Semestr berilmagan bo'lsa — tanlangan kursning joriy semestr(lari)
+        $semesterCodes = [];
+        if ($semesterCode) {
+            $semesterCodes = [$semesterCode];
+        } else {
+            $semesterCodes = Semester::where('level_code', $levelCode)
+                ->where('current', true)
+                ->distinct()->pluck('code')->all();
+        }
+        if (empty($semesterCodes)) {
+            return back()->with('error', 'Tanlangan kurs uchun joriy semestr topilmadi. Semestrni qo\'lda kiriting.');
+        }
+
+        // Fakultet → department_hemis_id
+        $deptHemisIds = [];
+        if (!empty($facultyIds)) {
+            $deptHemisIds = Department::whereIn('id', $facultyIds)
+                ->pluck('department_hemis_id')->all();
+        }
+
+        // 1) Tanlangan kurs/semestrdagi sinov fanlari (curriculum_subjects)
+        $sinovSubjects = CurriculumSubject::whereIn('semester_code', $semesterCodes)
+            ->where('closing_form', 'sinov')
+            ->where('is_active', true)
+            ->get(['subject_id', 'subject_name', 'semester_code', 'semester_name', 'curricula_hemis_id']);
+
+        if ($sinovSubjects->isEmpty()) {
+            return back()->with('error', 'Tanlangan kurs/semestrda sinov fanlari topilmadi.');
+        }
+
+        $subjectIds = $sinovSubjects->pluck('subject_id')->unique()->all();
+
+        // 2) Tegishli guruhlar (curriculum_hemis_id orqali bog'lanadi)
+        $curHemisIds = $sinovSubjects->pluck('curricula_hemis_id')->unique()->all();
+        $groupsQuery = Group::whereIn('curriculum_hemis_id', $curHemisIds)
+            ->where('active', true);
+        if (!empty($deptHemisIds)) {
+            $groupsQuery->whereIn('department_hemis_id', $deptHemisIds);
+        }
+        $groups = $groupsQuery->get();
+
+        if ($groups->isEmpty()) {
+            return back()->with('error', 'Tanlangan filtrlarda guruhlar topilmadi.');
+        }
+        $groupHids = $groups->pluck('group_hemis_id')->unique()->values()->all();
+        $groupsByHid = $groups->keyBy('group_hemis_id');
+
+        // Level/semester nomlari (kursni inson o'qishidagi nomga aylantirish uchun)
+        $levelLabels = [
+            '11' => '1-kurs', '12' => '2-kurs', '13' => '3-kurs',
+            '14' => '4-kurs', '15' => '5-kurs', '16' => '6-kurs',
+        ];
+        $levelLabel = $levelLabels[$levelCode] ?? $levelCode;
+        $semesterNames = Semester::whereIn('code', $semesterCodes)
+            ->get(['code', 'name'])->unique('code')->pluck('name', 'code')->all();
+
+        // Fakultet nomi xaritasi (department_hemis_id → name)
+        $deptNames = Department::whereIn('department_hemis_id', $groups->pluck('department_hemis_id')->unique())
+            ->get(['department_hemis_id', 'name'])->pluck('name', 'department_hemis_id')->all();
+
+        // 3) Talabalar (faqat aktiv — status=11)
+        $students = Student::whereIn('group_id', $groupHids)
+            ->where('student_status_code', 11)
+            ->get(['hemis_id', 'full_name', 'student_id_number', 'group_id'])
+            ->groupBy('group_id');
+
+        // 4) Sinov override (key: subject|semester|group|hemis)
+        $sinovRows = SinovTestGrade::whereIn('subject_id', $subjectIds)
+            ->whereIn('semester_code', $semesterCodes)
+            ->whereIn('group_hemis_id', $groupHids)
+            ->get();
+        $sinovBy = [];
+        foreach ($sinovRows as $r) {
+            $sinovBy[$r->subject_id . '|' . $r->semester_code . '|' . $r->group_hemis_id . '|' . $r->student_hemis_id] = $r;
+        }
+
+        // 5) Barcha JN va MT baholari — bulk
+        $studentHids = $students->collapse()->pluck('hemis_id')->unique()->values()->all();
+        $excludeTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+
+        $jnGradesByKey = []; // hemis|subject|semester => avg
+        if (!empty($studentHids)) {
+            $jnRaw = DB::table('student_grades')
+                ->whereIn('student_hemis_id', $studentHids)
+                ->whereIn('subject_id', $subjectIds)
+                ->whereIn('semester_code', $semesterCodes)
+                ->whereNotIn('training_type_code', $excludeTypes)
+                ->whereNotNull('lesson_date')
+                ->whereNull('deleted_at')
+                ->select(['student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'grade', 'retake_grade', 'status', 'reason'])
+                ->get();
+
+            $grouped = $jnRaw->groupBy(fn($g) => $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code);
+            foreach ($grouped as $key => $items) {
+                $byDate = $items->groupBy(fn($g) => substr((string) $g->lesson_date, 0, 10));
+                $totalDaily = 0; $daysCount = 0;
+                foreach ($byDate as $dayGrades) {
+                    $dayTotal = 0; $dayCount = 0; $absentCount = 0;
+                    foreach ($dayGrades as $g) {
+                        if ($g->status === 'retake') {
+                            $dayTotal += $g->retake_grade ?? 0;
+                        } elseif ($g->status === 'pending' && $g->reason === 'absent') {
+                            $absentCount++;
+                        } else {
+                            $dayTotal += $g->grade ?? 0;
+                        }
+                        $dayCount++;
+                    }
+                    if ($dayCount === 0) continue;
+                    $totalDaily += ($absentCount === $dayCount) ? 0 : round($dayTotal / $dayCount);
+                    $daysCount++;
+                }
+                $jnGradesByKey[$key] = $daysCount > 0 ? round($totalDaily / $daysCount, 1) : null;
+            }
+        }
+
+        $mtGradesByKey = []; // hemis|subject|semester => avg
+        if (!empty($studentHids)) {
+            $mtRaw = DB::table('student_grades')
+                ->whereIn('student_hemis_id', $studentHids)
+                ->whereIn('subject_id', $subjectIds)
+                ->whereIn('semester_code', $semesterCodes)
+                ->where('training_type_code', 99)
+                ->whereNull('deleted_at')
+                ->select(['student_hemis_id', 'subject_id', 'semester_code', 'grade', 'retake_grade'])
+                ->get();
+            $mtGrouped = $mtRaw->groupBy(fn($g) => $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code);
+            foreach ($mtGrouped as $key => $items) {
+                $vals = $items->map(fn($g) => (float) ($g->retake_grade ?? $g->grade))->filter(fn($v) => $v !== null);
+                $mtGradesByKey[$key] = $vals->isNotEmpty() ? round($vals->avg(), 1) : null;
+            }
+        }
+
+        // 6) Excel yaratish
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Sinov fanlar');
+
+        $headers = ['#', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh', 'F.I.O', 'Talaba ID',
+                    'Fan', 'MT bali', 'JN bali', 'JN (round)', 'Sinov (test)'];
+        foreach ($headers as $col => $h) {
+            $cell = chr(65 + $col) . '1';
+            $sheet->setCellValue($cell, $h);
+        }
+        $sheet->getStyle('A1:M1')->applyFromArray([
+            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
+            'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '7C3AED']],
+            'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
+        ]);
+
+        // Mismatch ranglash uchun ham JN(round), ham Sinov(test) cellni
+        // qizilga bo'yash uchun qatorlar ro'yxati
+        $mismatchRows = [];
+
+        $row = 2;
+        $rank = 0;
+        foreach ($groups as $grp) {
+            $facName = $deptNames[$grp->department_hemis_id] ?? '';
+            $specName = $grp->specialty_name ?? '';
+            $groupStudents = $students->get($grp->group_hemis_id, collect());
+
+            foreach ($sinovSubjects as $subj) {
+                // Faqat shu guruhning curriculumiga tegishli sinov fani
+                if ($subj->curricula_hemis_id != $grp->curriculum_hemis_id) continue;
+                $semLabel = $semesterNames[$subj->semester_code] ?? $subj->semester_code;
+
+                foreach ($groupStudents as $stu) {
+                    $rank++;
+                    $key = $stu->hemis_id . '|' . $subj->subject_id . '|' . $subj->semester_code;
+                    $jn = $jnGradesByKey[$key] ?? '';
+                    $mt = $mtGradesByKey[$key] ?? '';
+                    $jnRound = ($jn !== '' && $jn !== null)
+                        ? (int) round((float) $jn, 0, PHP_ROUND_HALF_UP)
+                        : '';
+
+                    $sinovKey = $subj->subject_id . '|' . $subj->semester_code . '|' . $grp->group_hemis_id . '|' . $stu->hemis_id;
+                    $sinovOverride = $sinovBy[$sinovKey] ?? null;
+                    $sinov = $sinovOverride && $sinovOverride->override_grade !== null
+                        ? round((float) $sinovOverride->override_grade, 1)
+                        : '';
+
+                    // JN(round) va Sinov(test) farq qilsa — qator ranglanadi
+                    if ($jnRound !== '' && $sinov !== '' && (int) round((float) $sinov) !== (int) $jnRound) {
+                        $mismatchRows[] = $row;
+                    }
+
+                    $sheet->fromArray([
+                        $rank, $facName, $specName, $levelLabel, $semLabel,
+                        $grp->name, $stu->full_name, $stu->student_id_number,
+                        $subj->subject_name, $mt, $jn, $jnRound, $sinov,
+                    ], null, 'A' . $row);
+                    $row++;
+                }
+            }
+        }
+
+        // JN(round) — L ustun, Sinov(test) — M ustun. Mismatch qatorlarni qizilga
+        // bo'yash (faqat shu ikki cellda) — operator ko'zga uradi
+        foreach ($mismatchRows as $r) {
+            $sheet->getStyle('L' . $r . ':M' . $r)->applyFromArray([
+                'font' => ['bold' => true, 'color' => ['rgb' => 'B91C1C']],
+                'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEE2E2']],
+            ]);
+        }
+
+        foreach (range('A', 'M') as $col) {
+            $sheet->getColumnDimension($col)->setAutoSize(true);
+        }
+        if ($row > 2) {
+            $sheet->setAutoFilter('A1:M' . ($row - 1));
+        }
+
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $filename = 'sinov_fanlar_' . $levelCode . '_' . now()->format('d.m.Y_His') . '.xlsx';
+
+        return response()->streamDownload(function () use ($writer) {
+            $writer->save('php://output');
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ]);
+    }
+
     public function startExamGradesExport(Request $request)
     {
         $request->validate([

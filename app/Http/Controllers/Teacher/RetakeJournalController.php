@@ -168,6 +168,7 @@ class RetakeJournalController extends Controller
             'groupNames' => $groupNames,
             'canEdit' => $canEdit,
             'isEditable' => $this->service->isEditable($group),
+            'vedomostSemesters' => $this->service->vedomostSemesterNumbers($group),
         ]);
     }
 
@@ -278,6 +279,7 @@ class RetakeJournalController extends Controller
             'weight_on'   => 'nullable|integer|min:0|max:100',
             'weight_oski' => 'nullable|integer|min:0|max:100',
             'weight_test' => 'nullable|integer|min:0|max:100',
+            'semester'    => 'nullable|integer|min:1|max:20',
         ]);
 
         $weights = [
@@ -292,13 +294,17 @@ class RetakeJournalController extends Controller
             return response()->json(['error' => "Vaznlar jami 100 bo'lishi kerak"], 422);
         }
 
+        // Aralash semestrli guruhda — har semestr uchun alohida vedomost.
+        $semesterNumber = $request->filled('semester') ? (int) $request->input('semester') : null;
+
         try {
-            $built = $this->service->buildVedomostExcel($group, $weights);
+            $built = $this->service->buildVedomostExcel($group, $weights, $semesterNumber);
         } catch (ValidationException $e) {
             return response()->json(['error' => collect($e->errors())->flatten()->first()], 422);
         }
 
-        if ($group->vedomost_path !== $built['relPath']) {
+        // Faqat to'liq guruh vedomostini guruhga saqlaymiz (semestr filtri yo'q).
+        if ($semesterNumber === null && $group->vedomost_path !== $built['relPath']) {
             $group->update([
                 'vedomost_path' => $built['relPath'],
                 'vedomost_generated_at' => now(),

@@ -121,6 +121,17 @@
                                     <span class="toggle-label">Joriy semestr</span>
                                 </div>
                             </div>
+
+                            <div class="filter-item" style="min-width: 180px;">
+                                <label class="filter-label">&nbsp;</label>
+                                <input type="hidden" name="show_inactive" id="show_inactive_input" value="{{ request('show_inactive') ? '1' : '0' }}">
+                                <div class="toggle-switch {{ $showInactive ? 'active' : '' }}" id="show-inactive-toggle" onclick="toggleShowInactive()" title="Semestr oxirida nofaol qilingan eski fanlar (a/b/c variantlar). Baholar shularda qolib ketgan bo'lishi mumkin.">
+                                    <div class="toggle-track">
+                                        <div class="toggle-thumb"></div>
+                                    </div>
+                                    <span class="toggle-label">Nofaol fanlar</span>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Row 2 -->
@@ -249,8 +260,8 @@
                             </thead>
                             <tbody>
                                 @foreach ($journals as $index => $journal)
-                                    <tr class="journal-row"
-                                        onclick="window.location='{{ route('admin.journal.show', ['groupId' => $journal->group_id, 'subjectId' => $journal->subject_id, 'semesterCode' => $journal->semester_code]) }}'">
+                                    <tr class="journal-row {{ isset($journal->is_active) && !$journal->is_active ? 'journal-row-inactive' : '' }}"
+                                        onclick="window.location='{{ route('admin.journal.show', ['groupId' => $journal->group_id, 'subjectId' => $journal->subject_id, 'semesterCode' => $journal->semester_code, 'cs' => $journal->id]) }}'">
                                         <td class="td-num">{{ $journals->firstItem() + $index }}</td>
                                         <td><span class="badge badge-blue">{{ $journal->education_type_name ?? '-' }}</span></td>
                                         <td><span class="text-cell text-emerald">{{ $journal->faculty_name ?? '-' }}</span></td>
@@ -258,7 +269,12 @@
                                         <td><span class="text-cell text-cyan">{{ $journal->specialty_name ?? '-' }}</span></td>
                                         <td><span class="badge badge-violet">{{ $journal->level_name ?? '-' }}</span></td>
                                         <td><span class="badge badge-teal">{{ $journal->semester_name ?? '-' }}</span></td>
-                                        <td><span class="text-cell text-subject">{{ $journal->subject_name ?? '-' }}</span></td>
+                                        <td>
+                                            <span class="text-cell text-subject">{{ $journal->subject_name ?? '-' }}</span>
+                                            @if(isset($journal->is_active) && !$journal->is_active)
+                                                <span class="badge" style="background:#fee2e2;color:#b91c1c;font-size:10px;padding:1px 6px;border-radius:6px;margin-left:6px;" title="Bu fan HEMIS'da nofaol qilingan (eski/eskirgan). Baholar shu yerda qolgan bo'lishi mumkin.">Nofaol</span>
+                                            @endif
+                                        </td>
                                         <td style="text-align:center;">
                                             @php $cf = $journal->closing_form ?? null; @endphp
                                             @if($cf && isset($closingFormBadges[$cf]))
@@ -313,6 +329,26 @@
         function toggleCurrentSemester() {
             const btn = document.getElementById('current-semester-toggle');
             const input = document.getElementById('current_semester_input');
+            const isActive = btn.classList.contains('active');
+
+            if (isActive) {
+                btn.classList.remove('active');
+                input.value = '0';
+            } else {
+                btn.classList.add('active');
+                input.value = '1';
+            }
+
+            setTimeout(function() {
+                document.getElementById('filter-loading').classList.remove('hidden');
+                document.getElementById('filter-loading').style.display = 'flex';
+                document.getElementById('filter-form').submit();
+            }, 100);
+        }
+
+        function toggleShowInactive() {
+            const btn = document.getElementById('show-inactive-toggle');
+            const input = document.getElementById('show_inactive_input');
             const isActive = btn.classList.contains('active');
 
             if (isActive) {
@@ -433,6 +469,7 @@
                     semester_code: $('#semester_code').val() || '',
                     subject_id: $('#subject').val() || '',
                     current_semester: $('#current_semester_input').val() || '1',
+                    show_inactive: $('#show_inactive_input').val() || '0',
                 };
             }
 
@@ -641,6 +678,21 @@
         .toggle-switch.active .toggle-label {
             color: #1e3a5f;
         }
+        /* Nofaol fanlar toggle'i yoqilganda — diqqatni tortuvchi rang */
+        #show-inactive-toggle.active .toggle-track {
+            background: #ef4444;
+        }
+        #show-inactive-toggle.active .toggle-label {
+            color: #b91c1c;
+        }
+
+        /* Nofaol (eskirgan) fan qatori — xira fon */
+        .journal-row-inactive {
+            background: #fef2f2;
+        }
+        .journal-row-inactive:hover {
+            background: #fee2e2;
+        }
 
         /* ===== Table ===== */
         .journal-table {
@@ -746,6 +798,76 @@
             word-break: break-word;
         }
     </style>
+
+    {{-- Sinov fanlar uchun Excel eksport modali --}}
+    <div id="jx-sinov-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;align-items:center;justify-content:center;padding:16px;">
+        <div style="background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:90vh;overflow:hidden;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.35);">
+            <div style="padding:14px 20px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;display:flex;align-items:center;justify-content:space-between;">
+                <h3 style="margin:0;font-size:16px;font-weight:700;">Sinov fanlari — Excel</h3>
+                <button type="button" onclick="document.getElementById('jx-sinov-modal').style.display='none'" style="background:none;border:none;color:#fff;font-size:26px;line-height:1;cursor:pointer;">&times;</button>
+            </div>
+            <form id="jx-sinov-form" method="POST" action="{{ route('admin.journal.export-sinov-grades') }}" target="_blank" style="padding:18px 20px;overflow-y:auto;">
+                @csrf
+                <p style="margin:0 0 14px;font-size:13px;color:#475569;">
+                    Tanlangan fakultet/kurs/semestrdagi <strong>yopilish shakli "Sinov (test)"</strong> bo'lgan
+                    barcha fanlar bo'yicha har talabaning <strong>JN, MT va Sinov (test)</strong> baholari
+                    Excelga yuklanadi.
+                </p>
+
+                <div style="display:flex;gap:12px;margin-bottom:14px;flex-wrap:wrap;">
+                    <div style="flex:1;min-width:160px;">
+                        <label style="display:block;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:4px;">Kurs</label>
+                        <select name="level_code" required
+                                style="width:100%;height:36px;padding:0 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                            <option value="">Tanlang...</option>
+                            @foreach(['11' => '1-kurs', '12' => '2-kurs', '13' => '3-kurs', '14' => '4-kurs', '15' => '5-kurs', '16' => '6-kurs'] as $code => $label)
+                                <option value="{{ $code }}">{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div style="flex:1;min-width:160px;">
+                        <label style="display:block;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:4px;">Semestr (ixtiyoriy)</label>
+                        <input type="text" name="semester_code" placeholder="Bo'sh = joriy semestr"
+                               style="width:100%;height:36px;padding:0 10px;border:1px solid #cbd5e1;border-radius:8px;font-size:13px;">
+                    </div>
+                </div>
+
+                <div>
+                    <label style="display:flex;align-items:center;justify-content:space-between;font-size:11px;font-weight:700;color:#475569;text-transform:uppercase;margin-bottom:6px;">
+                        Fakultetlar
+                        <label style="font-size:11px;font-weight:600;text-transform:none;cursor:pointer;">
+                            <input type="checkbox" id="jx-sinov-fac-all"> Barchasi
+                        </label>
+                    </label>
+                    <div style="max-height:240px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px;">
+                        @foreach($faculties as $faculty)
+                            <label style="display:block;font-size:13px;padding:3px 0;cursor:pointer;">
+                                <input type="checkbox" class="jx-sinov-fac" name="faculty_ids[]" value="{{ $faculty->id }}"> {{ $faculty->name }}
+                            </label>
+                        @endforeach
+                    </div>
+                    <div style="font-size:11px;color:#94a3b8;margin-top:3px;">Hech biri tanlanmasa — barcha fakultetlar olinadi.</div>
+                </div>
+
+                <div style="margin-top:18px;padding-top:14px;border-top:1px solid #e5e7eb;display:flex;justify-content:flex-end;gap:10px;">
+                    <button type="button" onclick="document.getElementById('jx-sinov-modal').style.display='none'"
+                            style="padding:8px 18px;background:#f1f5f9;color:#475569;font-size:13px;font-weight:600;border:1px solid #cbd5e1;border-radius:8px;cursor:pointer;">Yopish</button>
+                    <button type="submit"
+                            style="padding:8px 24px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;font-size:13px;font-weight:700;border:none;border-radius:8px;cursor:pointer;">Excelga yuklab olish</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            var facAll = document.getElementById('jx-sinov-fac-all');
+            if (!facAll) return;
+            facAll.addEventListener('change', function () {
+                document.querySelectorAll('.jx-sinov-fac').forEach(function (cb) { cb.checked = facAll.checked; });
+            });
+        })();
+    </script>
 
     {{-- OSKI/Test baholarini Excel'ga eksport modali --}}
     <div id="jx-export-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.55);z-index:9999;align-items:center;justify-content:center;padding:16px;">

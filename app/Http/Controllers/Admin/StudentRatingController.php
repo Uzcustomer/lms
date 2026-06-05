@@ -4,10 +4,13 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Exports\StudentRatingExport;
+use App\Models\CurriculumSubject;
+use App\Models\Semester;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\StudentRating;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Maatwebsite\Excel\Facades\Excel;
 
 class StudentRatingController extends Controller
@@ -24,9 +27,44 @@ class StudentRatingController extends Controller
         $selectedDepartment = $request->input('department');
         $selectedSpecialty = $request->input('specialty');
         $selectedLevel = $request->input('level');
+        $selectedSemester = $request->input('semester');
         $selectedSubject = $request->input('subject_id');
         $selectedGroup = $request->input('group_name');
         $search = $request->input('search');
+
+        // Semestrlar — Semester jadvalidan (kod → nom). Level tanlanganida shu
+        // levelning semesterlari ko'rsatiladi; aks holda barchasi.
+        $semesterQuery = Semester::query();
+        if ($selectedLevel) {
+            $semesterQuery->where('level_code', $selectedLevel);
+        }
+        $semesterRows = $semesterQuery->orderBy('level_code')->orderBy('code')
+            ->get(['code', 'name', 'level_code', 'current'])
+            ->unique('code')
+            ->values();
+
+        // Joriy semestr kodlari (har level uchun bittadan) — default uchun
+        $currentSemesterCodes = Semester::where('current', true)
+            ->distinct()
+            ->pluck('code')
+            ->all();
+
+        // Default semester logikasi (foydalanuvchi tajribasi):
+        //   - Request'da 'semester' key umuman yo'q (birinchi yuklash) →
+        //     joriy semestrlarni default qilib olamiz (Kurs tanlangan bo'lsa
+        //     o'sha levelning joriysi, aks holda barcha levellardagi joriylar).
+        //   - Foydalanuvchi "Barchasi" ni tanlasa, semester=key keladi (qiymat
+        //     bo'sh string), filter qo'llanilmaydi.
+        $useCurrentDefault = !$request->has('semester');
+        if ($useCurrentDefault) {
+            if ($selectedLevel) {
+                $currentSem = $semesterRows->where('level_code', $selectedLevel)
+                    ->firstWhere('current', true);
+                if ($currentSem) {
+                    $selectedSemester = $currentSem->code;
+                }
+            }
+        }
 
         if ($selectedDepartment) {
             $specialties = StudentRating::where('department_code', $selectedDepartment)
@@ -37,23 +75,28 @@ class StudentRatingController extends Controller
                 ->get();
         }
 
-        // Guruh dropdown — joriy filtrlar ostida mavjud guruhlar
-        $groupsQuery = StudentRating::whereNotNull('group_name');
-        if ($selectedDepartment) $groupsQuery->where('department_code', $selectedDepartment);
-        if ($selectedSpecialty) $groupsQuery->where('specialty_code', $selectedSpecialty);
-        if ($selectedLevel) $groupsQuery->where('level_code', $selectedLevel);
-        $groups = $groupsQuery->distinct()->orderBy('group_name')->pluck('group_name');
+        // Guruh dropdown — joriy filtrlar ostida mavjud guruhlar (10 daqiqa cache)
+        $groupsCacheKey = 'student_rating.groups.' . md5(($selectedDepartment ?? '') . '|' . ($selectedSpecialty ?? '') . '|' . ($selectedLevel ?? ''));
+        $groups = Cache::remember($groupsCacheKey, 600, function () use ($selectedDepartment, $selectedSpecialty, $selectedLevel) {
+            $q = StudentRating::whereNotNull('group_name');
+            if ($selectedDepartment) $q->where('department_code', $selectedDepartment);
+            if ($selectedSpecialty) $q->where('specialty_code', $selectedSpecialty);
+            if ($selectedLevel) $q->where('level_code', $selectedLevel);
+            return $q->distinct()->orderBy('group_name')->pluck('group_name');
+        });
 
-        // Fan dropdown — student_grades dan to'g'ridan-to'g'ri distinct fanlar.
-        // Eslatma: pre-filter "ostidagi talabalar fanlari" ni hisoblash 10K+ ID
-        // bo'yicha whereIn ga olib keladi va 504 timeout chiqaradi. Buning o'rniga
-        // hamma fanlarni ko'rsatamiz — fan tanlanganda Excel/sahifa qaytadan
-        // filtrlanadi.
-        $subjects = StudentGrade::whereNotNull('subject_name')
-            ->select('subject_id', 'subject_name')
-            ->distinct()
-            ->orderBy('subject_name')
-            ->get();
+        // Fan dropdown — curriculum_subjects dan (kichik jadval, tez). Student_grades
+        // DISTINCT bilan millionlab qator skani ~30 sek davom etadi. Curriculum
+        // jadvalida har fan bir necha marta (curriculum × semestr) takrorlanadi
+        // shuning uchun subject_id bo'yicha unique qilamiz. 30 daqiqa cache.
+        $subjects = Cache::remember('student_rating.subjects.v2', 1800, function () {
+            return CurriculumSubject::whereNotNull('subject_name')
+                ->select('subject_id', 'subject_name')
+                ->orderBy('subject_name')
+                ->get()
+                ->unique('subject_id')
+                ->values();
+        });
 
         $query = StudentRating::query();
 
@@ -65,6 +108,13 @@ class StudentRatingController extends Controller
         }
         if ($selectedLevel) {
             $query->where('level_code', $selectedLevel);
+        }
+        if ($selectedSemester) {
+            $query->where('semester_code', $selectedSemester);
+        } elseif ($useCurrentDefault && !$selectedLevel && !empty($currentSemesterCodes)) {
+            // Hech qanday semester tanlanmagan va Kurs ham tanlanmagan →
+            // barcha kurslarning joriy semestrlari bo'yicha filter.
+            $query->whereIn('semester_code', $currentSemesterCodes);
         }
         if ($selectedGroup) {
             $query->where('group_name', $selectedGroup);
@@ -97,23 +147,47 @@ class StudentRatingController extends Controller
         $lastUpdated = StudentRating::max('calculated_at');
 
         return view('admin.student-ratings.index', compact(
-            'departments', 'specialties', 'groups', 'subjects',
+            'departments', 'specialties', 'groups', 'subjects', 'semesterRows',
             'top10', 'others', 'totalStudents',
-            'selectedDepartment', 'selectedSpecialty', 'selectedLevel',
+            'selectedDepartment', 'selectedSpecialty', 'selectedLevel', 'selectedSemester',
             'selectedSubject', 'selectedGroup', 'search', 'lastUpdated'
         ));
     }
 
     public function exportExcel(Request $request)
     {
+        // Katta dataset eksporti — PHP'ning default 128M va 30s limitlari
+        // yetmaydi. Web request kontekstida ham xavfsiz oshiriladi (faqat shu
+        // request uchun).
+        @ini_set('memory_limit', '768M');
+        @set_time_limit(300);
+
+        $level = $request->input('level');
+        $semester = $request->input('semester');
+
+        // Index() bilan bir xil default — sahifa URL'iga semester qo'shilmagan
+        // bo'lsa ham, eksportda joriy semestrlar bo'yicha filter qilamiz, aks
+        // holda million qator skanlash 504 chiqaradi.
+        if (!$request->has('semester')) {
+            if ($level) {
+                $currentSem = Semester::where('level_code', $level)
+                    ->where('current', true)
+                    ->first();
+                if ($currentSem) {
+                    $semester = $currentSem->code;
+                }
+            }
+        }
+
         return Excel::download(
             new StudentRatingExport(
                 $request->input('department'),
                 $request->input('specialty'),
-                $request->input('level'),
+                $level,
                 $request->input('search'),
                 $request->input('subject_id'),
-                $request->input('group_name')
+                $request->input('group_name'),
+                $semester
             ),
             'talabalar_reytingi_' . date('Y-m-d') . '.xlsx'
         );

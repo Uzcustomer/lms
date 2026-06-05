@@ -7,19 +7,18 @@
 
     <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3 pb-10"
          x-data="retakeApplicationPage({
-             debts: @js($debts->map(function($d) use ($activeApplications) {
+             debts: @js($debts->map(function($d) use ($activeApplications, $currentSemester) {
                  $key = $d->subject_id . '|' . $d->semester_id;
                  $app = $activeApplications->get($key);
                  $rg = $app?->retakeGroup;
+                 $semNum = preg_match('/(\d+)/', (string) ($d->semester_name ?: $d->semester_id), $mm) ? (int) $mm[1] : null;
                  return [
                      'subject_id' => $d->subject_id,
                      'subject_name' => $d->subject_name,
                      'semester_id' => $d->semester_id,
                      'semester_name' => $d->semester_name,
                      'credit' => (float) $d->credit,
-                     'is_current_semester' => $currentSemester !== null
-                         && (preg_match('/(\d+)/', (string) $d->semester_name, $m1) || preg_match('/(\d+)/', (string) $d->semester_id, $m1))
-                         && (int) $m1[1] === (int) $currentSemester,
+                     'is_current_semester' => $currentSemester !== null && $semNum !== null && $semNum === (int) $currentSemester,
                      'active_status' => optional($app)->studentDisplayStatus(),
                      'is_active' => $activeApplications->has($key),
                      'final_status' => optional($app)->final_status,

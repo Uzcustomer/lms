@@ -1079,6 +1079,9 @@ class JournalController extends Controller
         }
 
         // Get attendance data for each student (auditorium types only: exclude MT, ON, OSKI, Test)
+        // Sababli ariza oraliqlarini Dav % dan chiqarib tashlash: tasdiqlangan
+        // ariza sanasi qatorlarni whereNotExists subquery orqali hisobdan
+        // chiqaramiz (ham amaliyot, ham ma'ruza turi uchun).
         $excludedAttendanceCodes = [99, 100, 101, 102];
         $attendanceData = DB::table('attendances')
             ->whereIn('student_hemis_id', $studentHemisIds)
@@ -1086,6 +1089,14 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->when($educationYearCode !== null, fn($q) => $q->where('education_year_code', $educationYearCode))
             ->whereNotIn('training_type_code', $excludedAttendanceCodes)
+            ->whereNotExists(function ($sub) {
+                $sub->select(DB::raw(1))
+                    ->from('absence_excuses')
+                    ->whereColumn('absence_excuses.student_hemis_id', 'attendances.student_hemis_id')
+                    ->where('absence_excuses.status', 'approved')
+                    ->whereRaw('absence_excuses.start_date <= DATE(attendances.lesson_date)')
+                    ->whereRaw('absence_excuses.end_date >= DATE(attendances.lesson_date)');
+            })
             ->select('student_hemis_id', DB::raw('SUM(absent_off) as total_absent_off'))
             ->groupBy('student_hemis_id')
             ->pluck('total_absent_off', 'student_hemis_id')
@@ -1551,6 +1562,19 @@ class JournalController extends Controller
                 ->keyBy('student_hemis_id');
         } catch (\Exception $e) {
             Log::warning('AbsenceExcuse query failed: ' . $e->getMessage());
+        }
+
+        // Kengaytirilgan sababli arizalar ro'yxati — assessment_type yoki makeup
+        // chegarasisiz. Ma'ruza tab va Dav % hisobi shu yerdan sababli oraliqlarni
+        // o'qiydi. Bitta talabaning bir necha arizasi bo'lishi mumkin → groupBy.
+        $broadExcuses = collect();
+        try {
+            $broadExcuses = AbsenceExcuse::where('status', 'approved')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->get()
+                ->groupBy('student_hemis_id');
+        } catch (\Exception $e) {
+            Log::warning('AbsenceExcuse broad query failed: ' . $e->getMessage());
         }
 
         if ($ynSubmission) {
@@ -2053,6 +2077,7 @@ class JournalController extends Controller
             'lastLessonDate',
             'levelDeadline',
             'approvedExcuses',
+            'broadExcuses',
             'excuseGradeSnapshots',
             'excuseOpenedDatesPerStudent',
             'studentStages',

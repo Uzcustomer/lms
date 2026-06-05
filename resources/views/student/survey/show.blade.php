@@ -8,59 +8,187 @@
     @php
         $questionsForJs = $survey['questions'];
         $totalQuestions = count($questionsForJs);
+        $deadlineFormatted = \Carbon\Carbon::parse($survey['deadline'])->format('d.m.Y H:i');
     @endphp
 
-    <div class="min-h-[calc(100vh-80px)] flex items-start justify-center px-3 py-4 sm:py-8 bg-slate-50">
-        <div class="w-full max-w-2xl bg-white rounded-2xl shadow-lg overflow-hidden flex flex-col" style="min-height:75vh;">
+    <style>
+        @keyframes sv-slide-in {
+            from { opacity: 0; transform: translateY(8px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes sv-pop {
+            0%, 100% { transform: scale(1); }
+            50%      { transform: scale(1.04); }
+        }
+        @keyframes sv-shake {
+            0%, 100% { transform: translateX(0); }
+            25%      { transform: translateX(-6px); }
+            75%      { transform: translateX(6px); }
+        }
+        .sv-question.active {
+            animation: sv-slide-in 0.35s ease-out;
+        }
+        .sv-option {
+            background: linear-gradient(180deg, #ffffff 0%, #fafbff 100%);
+        }
+        .sv-option.selected {
+            background: linear-gradient(135deg, #eef2ff 0%, #e0e7ff 100%);
+            border-color: #6366f1;
+            box-shadow: 0 4px 12px -4px rgba(99,102,241,0.35);
+        }
+        .sv-option.selected .sv-dot {
+            background: #6366f1;
+            border-color: #6366f1;
+            box-shadow: 0 0 0 4px rgba(99,102,241,0.18);
+        }
+        .sv-option.selected .sv-dot::after {
+            opacity: 1;
+            transform: scale(1);
+        }
+        .sv-option.selected .sv-text {
+            color: #1e1b4b;
+            font-weight: 600;
+        }
+        .sv-dot {
+            width: 22px; height: 22px;
+            flex-shrink: 0;
+            border: 2px solid #cbd5e1;
+            border-radius: 999px;
+            background: #fff;
+            position: relative;
+            transition: all 0.2s ease;
+            margin-top: 1px;
+        }
+        .sv-dot.square { border-radius: 6px; }
+        .sv-dot::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            margin: auto;
+            width: 10px; height: 10px;
+            background: #fff;
+            border-radius: 999px;
+            opacity: 0;
+            transform: scale(0.4);
+            transition: all 0.2s;
+        }
+        .sv-dot.square::after {
+            width: 12px; height: 12px;
+            background: transparent;
+            border: 2.5px solid #fff;
+            border-top: 0;
+            border-left: 0;
+            transform: scale(0.4) rotate(45deg);
+            margin-top: -2px;
+            border-radius: 0;
+        }
+        .sv-option.selected .sv-dot.square::after {
+            transform: scale(1) rotate(45deg);
+        }
+        .sv-option:hover:not(.selected) {
+            transform: translateY(-1px);
+            border-color: #a5b4fc;
+            box-shadow: 0 4px 12px -6px rgba(99,102,241,0.25);
+        }
+        .sv-btn-primary {
+            background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
+            box-shadow: 0 4px 14px -4px rgba(79,70,229,0.5);
+        }
+        .sv-btn-primary:hover {
+            background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%);
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px -4px rgba(79,70,229,0.55);
+        }
+        .sv-btn-success {
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            box-shadow: 0 4px 14px -4px rgba(5,150,105,0.5);
+        }
+        .sv-btn-success:hover {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
+            transform: translateY(-1px);
+        }
+        .sv-card {
+            box-shadow: 0 20px 50px -20px rgba(99,102,241,0.25), 0 8px 24px -12px rgba(15,23,42,0.12);
+        }
+        .sv-error.show {
+            animation: sv-shake 0.4s ease;
+        }
+        .sv-progress-bar {
+            background: linear-gradient(90deg, #34d399 0%, #10b981 50%, #6366f1 100%);
+            background-size: 200% 100%;
+            background-position: 0% 50%;
+            transition: width 0.5s ease, background-position 0.5s ease;
+        }
+        .sv-modal-backdrop {
+            backdrop-filter: blur(4px);
+            background: rgba(15, 23, 42, 0.55);
+        }
+    </style>
+
+    <div class="min-h-[calc(100vh-80px)] flex items-start justify-center px-3 py-4 sm:py-8 bg-gradient-to-br from-slate-50 via-indigo-50/30 to-blue-50/30">
+        <div class="sv-card w-full max-w-2xl bg-white rounded-3xl overflow-hidden flex flex-col" style="min-height:75vh;">
 
             {{-- HEADER --}}
-            <div class="px-5 sm:px-7 pt-5 pb-4 bg-gradient-to-br from-indigo-600 to-blue-600 text-white">
-                <div class="flex items-center justify-between mb-3">
-                    <h1 class="text-base sm:text-lg font-bold leading-snug pr-2">{{ $survey['title'] }}</h1>
-                    <span id="sv-counter" class="text-xs font-bold bg-white/20 px-3 py-1 rounded-full whitespace-nowrap">1/{{ $totalQuestions }}</span>
-                </div>
-                {{-- Progress bar --}}
-                <div class="h-2 w-full bg-white/20 rounded-full overflow-hidden">
-                    <div id="sv-progress" class="h-full bg-gradient-to-r from-emerald-400 to-green-300 transition-all duration-500" style="width: {{ round(100 / $totalQuestions) }}%"></div>
+            <div class="px-5 sm:px-7 pt-5 pb-4 bg-gradient-to-br from-indigo-600 via-indigo-600 to-blue-600 text-white relative overflow-hidden">
+                <div class="absolute -top-12 -right-12 w-48 h-48 bg-white/10 rounded-full"></div>
+                <div class="absolute -bottom-8 -left-8 w-32 h-32 bg-white/5 rounded-full"></div>
+                <div class="relative">
+                    <div class="flex items-center justify-between mb-3">
+                        <h1 class="text-base sm:text-lg font-bold leading-snug pr-2">{{ $survey['title'] }}</h1>
+                        <span id="sv-counter" class="text-xs font-bold bg-white/25 backdrop-blur-sm px-3 py-1.5 rounded-full whitespace-nowrap border border-white/20">1/{{ $totalQuestions }}</span>
+                    </div>
+                    <div class="h-2.5 w-full bg-white/20 rounded-full overflow-hidden">
+                        <div id="sv-progress" class="sv-progress-bar h-full rounded-full" style="width: {{ round(100 / $totalQuestions) }}%"></div>
+                    </div>
                 </div>
             </div>
 
             @if($alreadyCompleted)
-                {{-- Allaqachon bajarilgan --}}
                 <div class="flex-1 flex flex-col items-center justify-center text-center p-8">
-                    <div class="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mb-4">
-                        <svg class="w-9 h-9 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 flex items-center justify-center mb-5 shadow-inner">
+                        <svg class="w-11 h-11 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                         </svg>
                     </div>
-                    <h3 class="text-lg font-bold text-slate-800 mb-2">Rahmat!</h3>
-                    <p class="text-sm text-slate-600 max-w-sm">Siz bu so'rovnomani allaqachon bajargansiz. Vaqtingiz uchun rahmat.</p>
-                    <a href="{{ route('student.profile') }}" class="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition">
+                    <h3 class="text-xl font-bold text-slate-800 mb-2">Rahmat!</h3>
+                    <p class="text-sm text-slate-600 max-w-sm leading-relaxed">Siz bu so'rovnomani allaqachon bajargansiz. Vaqtingiz uchun rahmat.</p>
+                    <a href="{{ route('student.profile') }}" class="mt-6 inline-flex items-center gap-2 px-6 py-3 sv-btn-primary text-white text-sm font-bold rounded-xl transition">
                         Profilga qaytish
                     </a>
                 </div>
             @else
                 {{-- KIRISH SAHIFA --}}
-                <div id="sv-intro" class="flex-1 px-5 sm:px-7 py-5 flex flex-col">
-                    <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 flex items-start gap-2">
-                        <svg class="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-                        </svg>
-                        <p class="text-xs text-amber-800 leading-relaxed">Bu so'rovnoma <strong>anonim</strong> — javoblaringiz hech kimga ko'rinmaydi.</p>
+                <div id="sv-intro" class="flex-1 px-5 sm:px-7 py-6 flex flex-col">
+                    <div class="bg-gradient-to-r from-amber-50 to-yellow-50 border-2 border-amber-200 rounded-2xl p-4 mb-5 flex items-start gap-3 shadow-sm">
+                        <div class="w-9 h-9 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
+                            <svg class="w-5 h-5 text-amber-700" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+                            </svg>
+                        </div>
+                        <p class="text-xs sm:text-sm text-amber-900 leading-relaxed pt-1">Bu so'rovnoma <strong class="font-bold">anonim</strong> — javoblaringiz hech kimga ko'rinmaydi.</p>
                     </div>
                     <div class="text-sm text-slate-700 leading-relaxed whitespace-pre-line mb-6">{{ $survey['description'] }}</div>
                     <div class="flex-1"></div>
-                    <button type="button" onclick="svStart()" class="w-full py-3.5 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-sm font-bold rounded-xl shadow-sm transition">
-                        So'rovnomani boshlash
+
+                    <div class="bg-slate-50 rounded-xl p-3 mb-4 border border-slate-200">
+                        <div class="flex items-center gap-2 text-xs text-slate-600">
+                            <svg class="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span>Tugash muddati: <strong class="text-slate-800">{{ $deadlineFormatted }}</strong></span>
+                        </div>
+                    </div>
+
+                    <button type="button" onclick="svStart()" class="w-full py-4 sv-btn-primary text-white text-sm font-bold rounded-2xl transition mb-3 flex items-center justify-center gap-2">
+                        <span>So'rovnomani boshlash</span>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
                     </button>
                     @if(!$deadlinePassed)
-                    <a href="{{ route('student.profile') }}" class="mt-3 block text-center text-sm text-slate-500 hover:text-slate-700 py-2">
+                    <button type="button" onclick="svShowLaterWarning()" class="w-full py-3 text-sm font-semibold text-slate-600 hover:text-slate-900 bg-white border-2 border-slate-200 hover:border-slate-300 rounded-2xl transition">
                         Keyinroq bajarish
-                    </a>
+                    </button>
                     @endif
                 </div>
 
-                {{-- SAVOLLAR — har biri alohida step --}}
+                {{-- SAVOLLAR --}}
                 <div id="sv-questions" class="flex-1 hidden flex-col">
                     @foreach($questionsForJs as $idx => $q)
                         <div class="sv-question hidden flex-col flex-1 px-5 sm:px-7 py-5"
@@ -71,32 +199,34 @@
                                  data-show-if-qid="{{ $q['show_if']['question_id'] }}"
                                  data-show-if-opt="{{ $q['show_if']['when_option'] }}"
                              @endif>
-                            <div class="mb-4">
-                                <div class="text-[11px] font-bold uppercase tracking-wide text-indigo-600 mb-1">
+                            <div class="mb-5">
+                                <div class="inline-flex items-center gap-1.5 mb-2 px-2.5 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase tracking-wide rounded-full">
                                     Savol {{ $q['id'] }}
                                 </div>
-                                <h3 class="text-base sm:text-lg font-semibold text-slate-800 leading-snug">{{ $q['text'] }}</h3>
+                                <h3 class="text-base sm:text-lg font-bold text-slate-800 leading-snug">{{ $q['text'] }}</h3>
                                 @if($q['type'] === 'checkbox')
-                                    <p class="text-xs text-slate-500 mt-1.5">Bir nechtasini tanlash mumkin</p>
+                                    <p class="text-xs text-indigo-600 mt-2 font-medium flex items-center gap-1">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                        Bir nechtasini tanlash mumkin
+                                    </p>
                                 @endif
                             </div>
 
                             <div class="space-y-2.5 flex-1">
                                 @foreach($q['options'] as $opt)
-                                    <label class="sv-option block border-2 border-slate-200 rounded-xl p-3.5 cursor-pointer transition hover:border-indigo-300 hover:bg-indigo-50/30">
-                                        <div class="flex items-start gap-3">
+                                    <label class="sv-option block border-2 border-slate-200 rounded-2xl px-4 py-3.5 cursor-pointer transition-all duration-200">
+                                        <div class="flex items-start gap-3.5">
+                                            <span class="sv-dot {{ $q['type'] === 'checkbox' ? 'square' : '' }}"></span>
                                             @if($q['type'] === 'radio')
-                                                <input type="radio" name="q_{{ $q['id'] }}" value="{{ $opt['id'] }}"
-                                                       class="mt-0.5 w-5 h-5 accent-indigo-600 flex-shrink-0">
+                                                <input type="radio" name="q_{{ $q['id'] }}" value="{{ $opt['id'] }}" class="sr-only">
                                             @else
-                                                <input type="checkbox" name="q_{{ $q['id'] }}[]" value="{{ $opt['id'] }}"
-                                                       class="mt-0.5 w-5 h-5 accent-indigo-600 flex-shrink-0">
+                                                <input type="checkbox" name="q_{{ $q['id'] }}[]" value="{{ $opt['id'] }}" class="sr-only">
                                             @endif
-                                            <span class="text-sm text-slate-700 leading-snug flex-1">{{ $opt['text'] }}</span>
+                                            <span class="sv-text text-sm text-slate-700 leading-snug flex-1">{{ $opt['text'] }}</span>
                                         </div>
                                         @if(!empty($opt['has_other']))
-                                            <div class="sv-other-wrap hidden mt-3 ml-8">
-                                                <input type="text" class="sv-other-input w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none"
+                                            <div class="sv-other-wrap hidden mt-3 ml-[34px]">
+                                                <input type="text" class="sv-other-input w-full px-3.5 py-2.5 text-sm bg-white border-2 border-indigo-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none transition"
                                                        placeholder="Iltimos, izoh yozing..."
                                                        data-opt="{{ $opt['id'] }}">
                                             </div>
@@ -105,44 +235,89 @@
                                 @endforeach
                             </div>
 
-                            <div class="sv-error hidden text-xs text-red-600 font-medium mt-3 px-1">⚠ Iltimos, javob tanlang</div>
+                            <div class="sv-error hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-xl">
+                                <p class="text-xs sm:text-sm text-red-700 font-semibold flex items-center gap-2">
+                                    <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/></svg>
+                                    <span>Iltimos, javob tanlang yoki to'ldiring</span>
+                                </p>
+                            </div>
                         </div>
                     @endforeach
                 </div>
 
                 {{-- NAVIGATSIYA --}}
-                <div id="sv-nav" class="hidden border-t border-slate-200 px-5 sm:px-7 py-3.5 bg-slate-50/70 flex items-center gap-3">
-                    <button id="sv-back" type="button" onclick="svBack()" class="flex-1 py-2.5 text-sm font-semibold text-slate-700 bg-white border border-slate-300 hover:bg-slate-100 rounded-lg transition disabled:opacity-40">
-                        ← Orqaga
+                <div id="sv-nav" class="hidden border-t border-slate-200 px-5 sm:px-7 py-4 bg-gradient-to-b from-white to-slate-50/70">
+                    <div class="flex items-center gap-3 mb-3">
+                        <button id="sv-back" type="button" onclick="svBack()" class="flex-1 py-3 text-sm font-semibold text-slate-700 bg-white border-2 border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M11 17l-5-5m0 0l5-5m-5 5h12"/></svg>
+                            Orqaga
+                        </button>
+                        <button id="sv-next" type="button" onclick="svNext()" class="flex-[1.5] py-3 text-sm font-bold text-white sv-btn-primary rounded-xl transition flex items-center justify-center gap-1.5">
+                            <span id="sv-next-text">Keyingisi</span>
+                            <svg id="sv-next-icon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
+                        </button>
+                    </div>
+                    @if(!$deadlinePassed)
+                    <button type="button" onclick="svShowLaterWarning()" class="w-full py-3 text-sm font-semibold text-slate-600 hover:text-indigo-700 bg-white border-2 border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/40 rounded-xl transition flex items-center justify-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        Keyinroq bajarish
                     </button>
-                    <button id="sv-next" type="button" onclick="svNext()" class="flex-[1.5] py-2.5 text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition">
-                        Keyingisi →
-                    </button>
+                    @endif
                 </div>
 
-                {{-- YUBORISH OYNASI --}}
+                {{-- YUBORISH OYNALARI --}}
                 <div id="sv-submitting" class="hidden flex-1 flex-col items-center justify-center p-8 text-center">
-                    <div class="w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mb-4"></div>
-                    <p class="text-sm text-slate-600">Javoblar yuborilmoqda...</p>
+                    <div class="w-14 h-14 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-5"></div>
+                    <p class="text-sm font-medium text-slate-700">Javoblar yuborilmoqda...</p>
+                    <p class="text-xs text-slate-500 mt-1">Biroz kuting</p>
                 </div>
 
                 <div id="sv-success" class="hidden flex-1 flex-col items-center justify-center text-center p-8">
-                    <div class="w-16 h-16 rounded-full bg-emerald-100 flex items-center justify-center mb-4">
-                        <svg class="w-9 h-9 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <div class="w-20 h-20 rounded-full bg-gradient-to-br from-emerald-100 to-emerald-50 flex items-center justify-center mb-5 shadow-inner" style="animation: sv-pop 0.6s ease;">
+                        <svg class="w-11 h-11 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                         </svg>
                     </div>
-                    <h3 class="text-lg font-bold text-slate-800 mb-2">Rahmat!</h3>
-                    <p class="text-sm text-slate-600 max-w-sm" id="sv-success-msg">Javoblaringiz qabul qilindi.</p>
-                    <a href="{{ route('student.profile') }}" class="mt-6 inline-flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition">
+                    <h3 class="text-xl font-bold text-slate-800 mb-2">Rahmat!</h3>
+                    <p class="text-sm text-slate-600 max-w-sm leading-relaxed" id="sv-success-msg">Javoblaringiz qabul qilindi.</p>
+                    <a href="{{ route('student.profile') }}" class="mt-6 inline-flex items-center gap-2 px-6 py-3 sv-btn-primary text-white text-sm font-bold rounded-xl transition">
                         Profilga qaytish
                     </a>
                 </div>
 
-                <div id="sv-error-box" class="hidden border-t border-red-200 px-5 sm:px-7 py-3 bg-red-50">
-                    <p class="text-sm text-red-700" id="sv-error-text"></p>
+                <div id="sv-error-box" class="hidden border-t border-red-200 px-5 sm:px-7 py-3.5 bg-red-50">
+                    <p class="text-sm text-red-700 font-medium flex items-center gap-2" id="sv-error-text"></p>
                 </div>
             @endif
+        </div>
+    </div>
+
+    {{-- "Keyinroq bajarish" ogohlantirish modali --}}
+    <div id="sv-later-modal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 sv-modal-backdrop">
+        <div class="bg-white rounded-3xl max-w-md w-full overflow-hidden shadow-2xl" style="animation: sv-slide-in 0.3s ease;">
+            <div class="px-6 pt-6 pb-2 flex flex-col items-center text-center">
+                <div class="w-16 h-16 rounded-full bg-gradient-to-br from-amber-100 to-orange-100 flex items-center justify-center mb-4 shadow-inner">
+                    <svg class="w-9 h-9 text-amber-600" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                </div>
+                <h3 class="text-lg font-bold text-slate-800 mb-2">E'tibor!</h3>
+                <p class="text-sm text-slate-600 leading-relaxed mb-3">
+                    Sizga <strong class="text-slate-800">{{ $deadlineFormatted }}</strong> gacha muhlat berilgan.
+                </p>
+                <p class="text-sm text-slate-600 leading-relaxed">
+                    Agar so'rovnomani belgilangan muddatda bajarmasangiz,
+                    <strong class="text-red-600">tizim xizmatlaridan foydalanish cheklanadi</strong>.
+                </p>
+            </div>
+            <div class="px-6 py-5 bg-slate-50/50 border-t border-slate-100 flex flex-col sm:flex-row gap-2.5">
+                <button type="button" onclick="svCloseLaterWarning()" class="flex-1 py-3 text-sm font-semibold text-slate-700 bg-white border-2 border-slate-200 hover:bg-slate-50 rounded-xl transition">
+                    Davom etish
+                </button>
+                <a href="{{ route('student.profile') }}" class="flex-1 py-3 text-sm font-bold text-center bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl transition">
+                    Profilga qaytish
+                </a>
+            </div>
         </div>
     </div>
 
@@ -157,8 +332,22 @@
             visibleOrder: [],
         };
 
+        function svShowLaterWarning() {
+            const m = document.getElementById('sv-later-modal');
+            m.classList.remove('hidden');
+            m.classList.add('flex');
+        }
+        function svCloseLaterWarning() {
+            const m = document.getElementById('sv-later-modal');
+            m.classList.add('hidden');
+            m.classList.remove('flex');
+        }
+        document.addEventListener('click', function (e) {
+            const m = document.getElementById('sv-later-modal');
+            if (e.target === m) svCloseLaterWarning();
+        });
+
         function svRecomputeOrder() {
-            // Conditional savollar — show_if shartiga ko'ra ko'rinadigan tartib
             const order = [];
             SV.questions.forEach((q, idx) => {
                 if (q.show_if) {
@@ -184,36 +373,39 @@
         }
 
         function svRender() {
-            // Barchasini yashirish
             document.querySelectorAll('.sv-question').forEach(el => {
-                el.classList.remove('flex');
+                el.classList.remove('flex', 'active');
                 el.classList.add('hidden');
             });
-            // Joriyni ko'rsatish
             const qIdx = SV.visibleOrder[SV.currentIdx];
             const el = document.querySelectorAll('.sv-question')[qIdx];
             if (!el) return;
             el.classList.remove('hidden');
-            el.classList.add('flex');
+            el.classList.add('flex', 'active');
 
-            // Counter va progress
             const total = SV.visibleOrder.length;
             const pos = SV.currentIdx + 1;
             document.getElementById('sv-counter').textContent = pos + '/' + total;
             document.getElementById('sv-progress').style.width = Math.round(pos / total * 100) + '%';
 
-            // Back tugmasi
             document.getElementById('sv-back').disabled = (SV.currentIdx === 0);
 
-            // Next tugmasi: oxirgi savolda "Yuborish" matni
+            const isLast = SV.currentIdx === total - 1;
             const nextBtn = document.getElementById('sv-next');
-            nextBtn.textContent = (SV.currentIdx === total - 1) ? "Yuborish ✓" : "Keyingisi →";
-            nextBtn.classList.toggle('bg-emerald-600', SV.currentIdx === total - 1);
-            nextBtn.classList.toggle('hover:bg-emerald-700', SV.currentIdx === total - 1);
-            nextBtn.classList.toggle('bg-indigo-600', SV.currentIdx !== total - 1);
-            nextBtn.classList.toggle('hover:bg-indigo-700', SV.currentIdx !== total - 1);
+            const nextText = document.getElementById('sv-next-text');
+            const nextIcon = document.getElementById('sv-next-icon');
+            if (isLast) {
+                nextText.textContent = 'Yuborish';
+                nextIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>';
+                nextBtn.classList.remove('sv-btn-primary');
+                nextBtn.classList.add('sv-btn-success');
+            } else {
+                nextText.textContent = 'Keyingisi';
+                nextIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>';
+                nextBtn.classList.add('sv-btn-primary');
+                nextBtn.classList.remove('sv-btn-success');
+            }
 
-            // Avval kiritilgan javobni qayta tiklash
             const q = SV.questions[qIdx];
             const ans = SV.answers[q.id];
             if (q.type === 'radio') {
@@ -249,13 +441,20 @@
                     });
                 }
             }
-
+            svPaintSelected(el);
             el.querySelector('.sv-error')?.classList.add('hidden');
             window.scrollTo({top: 0, behavior: 'smooth'});
         }
 
+        function svPaintSelected(qEl) {
+            qEl.querySelectorAll('.sv-option').forEach(lb => {
+                const inp = lb.querySelector('input');
+                if (inp?.checked) lb.classList.add('selected');
+                else lb.classList.remove('selected');
+            });
+        }
+
         function svCollect() {
-            // Joriy savol javobini SV.answers ga qo'shish; agar tanlanmagan bo'lsa false qaytarish
             const qIdx = SV.visibleOrder[SV.currentIdx];
             const q = SV.questions[qIdx];
             const el = document.querySelectorAll('.sv-question')[qIdx];
@@ -295,10 +494,12 @@
         function svNext() {
             if (!svCollect()) {
                 const el = document.querySelectorAll('.sv-question')[SV.visibleOrder[SV.currentIdx]];
-                el.querySelector('.sv-error')?.classList.remove('hidden');
+                const err = el.querySelector('.sv-error');
+                err?.classList.remove('hidden');
+                err?.classList.add('show');
+                setTimeout(() => err?.classList.remove('show'), 500);
                 return;
             }
-            // Conditional yangilash
             svRecomputeOrder();
             if (SV.currentIdx < SV.visibleOrder.length - 1) {
                 SV.currentIdx++;
@@ -310,7 +511,7 @@
 
         function svBack() {
             if (SV.currentIdx > 0) {
-                svCollect(); // Joriy javobni ham saqlash (xato bo'lsa ham OK)
+                svCollect();
                 SV.currentIdx--;
                 svRecomputeOrder();
                 svRender();
@@ -361,7 +562,6 @@
             });
         }
 
-        // "Boshqa" input qayta ko'rinish/ko'rsatilmaslik
         document.addEventListener('change', function (e) {
             if (e.target.matches('.sv-question input[type=radio], .sv-question input[type=checkbox]')) {
                 const label = e.target.closest('label');
@@ -372,23 +572,12 @@
                         wrap.classList.remove('hidden');
                         setTimeout(() => wrap.querySelector('.sv-other-input')?.focus(), 100);
                     } else if (e.target.type === 'radio') {
-                        // radio: agar boshqa option tanlandi → others ni yopish
                         label.closest('.sv-question').querySelectorAll('.sv-other-wrap').forEach(w => w.classList.add('hidden'));
                     } else if (!e.target.checked) {
                         wrap.classList.add('hidden');
                     }
                 }
-                // Tanlangan label vizual ajratish
-                label.closest('.sv-question').querySelectorAll('.sv-option').forEach(lb => {
-                    const inp = lb.querySelector('input');
-                    if (inp?.checked) {
-                        lb.classList.add('border-indigo-500', 'bg-indigo-50');
-                        lb.classList.remove('border-slate-200');
-                    } else {
-                        lb.classList.remove('border-indigo-500', 'bg-indigo-50');
-                        lb.classList.add('border-slate-200');
-                    }
-                });
+                svPaintSelected(label.closest('.sv-question'));
             }
         });
     </script>

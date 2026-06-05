@@ -281,7 +281,7 @@
                                 Orqaga
                             </button>
                             <button id="sv-next" type="button" onclick="svNext()"
-                                    class="flex-[1.5] py-3 text-sm font-bold sv-btn-primary rounded-xl flex items-center justify-center gap-1.5">
+                                    class="flex-1 py-3 text-sm font-bold sv-btn-primary rounded-xl flex items-center justify-center gap-1.5">
                                 <span id="sv-next-text">Keyingisi</span>
                                 <svg id="sv-next-icon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>

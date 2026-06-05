@@ -631,15 +631,14 @@
             var selected=getSelectedRows();
             if(selected.length===0) return;
 
-            // Qatorlarni HIDDEN INPUTLAR sifatida emas, bitta JSON maydonda yuboramiz.
-            // Aks holda 1000+ qator × 3 input PHP default max_input_vars (=1000)
-            // limitini oshirib, silent truncation va validation xatosiga olib keladi
-            // (sayt sahifa "refresh" bo'lganga o'xshaydi).
+            // Build form
             var container=$('#export-rows-container');
             container.empty();
-            container.append('<input type="hidden" name="rows_json" value="' +
-                JSON.stringify(selected).replace(/"/g, '&quot;') + '">');
-
+            for(var i=0;i<selected.length;i++){
+                container.append('<input type="hidden" name="rows['+i+'][group_id]" value="'+selected[i].group_id+'">');
+                container.append('<input type="hidden" name="rows['+i+'][subject_id]" value="'+selected[i].subject_id+'">');
+                container.append('<input type="hidden" name="rows['+i+'][semester_code]" value="'+selected[i].semester_code+'">');
+            }
             $('#ef_jn').val($('#m_jn').val());
             $('#ef_mt').val($('#m_mt').val());
             $('#ef_on').val($('#m_on').val());

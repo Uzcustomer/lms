@@ -479,7 +479,8 @@
                 el.classList.remove('active');
             });
             const qIdx = SV.visibleOrder[SV.currentIdx];
-            const el = document.querySelectorAll('.sv-question')[qIdx];
+            const q = SV.questions[qIdx];
+            const el = document.querySelector('.sv-question[data-qid="' + q.id + '"]');
             if (!el) return;
             el.classList.remove('hidden');
             el.classList.add('active');
@@ -502,7 +503,6 @@
                 nextIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>';
             }
 
-            const q = SV.questions[qIdx];
             svRestoreAnswer(el, q.id, q.type);
             // Bolalar (5.1 kabi) — saqlangan javobini ko'rsatish va shartga qarab ochish
             el.querySelectorAll('.sv-child-q').forEach(child => {
@@ -579,7 +579,8 @@
         function svCollect() {
             const qIdx = SV.visibleOrder[SV.currentIdx];
             const q = SV.questions[qIdx];
-            const el = document.querySelectorAll('.sv-question')[qIdx];
+            const el = document.querySelector('.sv-question[data-qid="' + q.id + '"]');
+            if (!el) return false;
 
             if (!svCollectQuestion(el, q.id, q.type, q.required !== false)) return false;
 
@@ -596,8 +597,9 @@
 
         function svNext() {
             if (!svCollect()) {
-                const el = document.querySelectorAll('.sv-question')[SV.visibleOrder[SV.currentIdx]];
-                const err = el.querySelector('.sv-error');
+                const q = SV.questions[SV.visibleOrder[SV.currentIdx]];
+                const el = document.querySelector('.sv-question[data-qid="' + q.id + '"]');
+                const err = el?.querySelector('.sv-error');
                 err?.classList.remove('hidden');
                 err?.classList.add('show');
                 setTimeout(() => err?.classList.remove('show'), 500);

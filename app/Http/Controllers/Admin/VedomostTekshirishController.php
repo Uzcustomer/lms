@@ -340,17 +340,6 @@ class VedomostTekshirishController extends Controller
     {
         abort_unless(auth()->user()->hasAnyRole($this->allowedRoles), 403);
 
-        // Qatorlar ko'p bo'lganda (1000+) hidden input formati PHP'ning
-        // max_input_vars chegarasini oshib ketadi va silent truncation
-        // qiladi → validation failure. Front-end endi qatorlarni `rows_json`
-        // ichida JSON string sifatida yuboradi.
-        if ($request->filled('rows_json')) {
-            $decoded = json_decode($request->input('rows_json'), true);
-            if (is_array($decoded)) {
-                $request->merge(['rows' => $decoded]);
-            }
-        }
-
         $request->validate([
             'rows'                 => 'required|array|min:1',
             'rows.*.group_id'      => 'required',

@@ -1,0 +1,269 @@
+<?php
+
+namespace App\Http\Controllers\Student;
+
+use App\Http\Controllers\Controller;
+use App\Models\StudentSurveyAnswer;
+use App\Models\StudentSurveyCompletion;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Str;
+
+class SurveyController extends Controller
+{
+    /**
+     * So'rovnoma modalini ko'rsatish — talaba "So'rovnoma" tugmasini bosganda
+     * yoki muddat tugagandan keyin majburiy holatda.
+     */
+    public function show()
+    {
+        $student = auth('student')->user();
+        if (!$student) abort(401);
+
+        $config = config('student_survey');
+
+        // Allaqachon bajarganmi?
+        $alreadyCompleted = StudentSurveyCompletion::where('survey_key', $config['key'])
+            ->where('student_hemis_id', $student->hemis_id)
+            ->exists();
+
+        $deadlinePassed = strtotime($config['deadline']) < time();
+
+        return view('student.survey.show', [
+            'survey'           => $config,
+            'student'          => $student,
+            'alreadyCompleted' => $alreadyCompleted,
+            'deadlinePassed'   => $deadlinePassed,
+        ]);
+    }
+
+    /**
+     * Submit qilish: javoblarni DB ga + CSV faylga yozish, completion belgilash.
+     */
+    public function submit(Request $request)
+    {
+        $student = auth('student')->user();
+        if (!$student) abort(401);
+
+        $config = config('student_survey');
+        $surveyKey = $config['key'];
+
+        // Allaqachon bajargan bo'lsa — qaytarmaymiz
+        $alreadyCompleted = StudentSurveyCompletion::where('survey_key', $surveyKey)
+            ->where('student_hemis_id', $student->hemis_id)
+            ->exists();
+        if ($alreadyCompleted) {
+            return response()->json([
+                'success' => false,
+                'message' => "Siz bu so'rovnomani allaqachon bajargansiz.",
+            ], 409);
+        }
+
+        $answersInput = $request->input('answers', []);
+        if (!is_array($answersInput) || empty($answersInput)) {
+            return response()->json([
+                'success' => false,
+                'message' => "Javoblar yuborilmadi.",
+            ], 422);
+        }
+
+        // Server tomondan ham majburiy savollarni tekshirish.
+        // Conditional savollar — shart bajarilmasa, javob kerak emas.
+        $errors = $this->validateAnswers($config['questions'], $answersInput);
+        if (!empty($errors)) {
+            return response()->json([
+                'success' => false,
+                'message' => "Quyidagi savollarga javob to'liq emas: " . implode(', ', $errors),
+                'errors'  => $errors,
+            ], 422);
+        }
+
+        $sessionToken = (string) Str::uuid();
+
+        try {
+            DB::transaction(function () use ($surveyKey, $sessionToken, $answersInput, $student, $config) {
+                foreach ($answersInput as $qid => $ans) {
+                    if (is_array($ans)) {
+                        StudentSurveyAnswer::create([
+                            'survey_key'  => $surveyKey,
+                            'session_token' => $sessionToken,
+                            'question_id' => (string) $qid,
+                            'answer'      => null,
+                            'answer_multi' => array_values($ans),
+                        ]);
+                    } else {
+                        StudentSurveyAnswer::create([
+                            'survey_key'  => $surveyKey,
+                            'session_token' => $sessionToken,
+                            'question_id' => (string) $qid,
+                            'answer'      => (string) $ans,
+                            'answer_multi' => null,
+                        ]);
+                    }
+                }
+
+                StudentSurveyCompletion::create([
+                    'survey_key'      => $surveyKey,
+                    'student_hemis_id' => $student->hemis_id,
+                    'completed_at'    => now(),
+                ]);
+
+                // CSV ga ham yozish — bitta qator, ustunlar: talaba ma'lumotlari + har savol matnli javobi
+                $this->appendToCsv($config, $student, $answersInput);
+            });
+        } catch (\Throwable $e) {
+            Log::error('Student survey submit failed', ['error' => $e->getMessage(), 'trace' => $e->getTraceAsString()]);
+            return response()->json([
+                'success' => false,
+                'message' => "Saqlashda xatolik. Iltimos qaytadan urinib ko'ring.",
+            ], 500);
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => "Rahmat! Javoblaringiz qabul qilindi.",
+        ]);
+    }
+
+    /**
+     * Server tomondan tekshirish: majburiy savollar javobli bo'lsin, conditional
+     * savollar shart bajarilsa javob talab qilinsin, "Boshqa" tanlangan bo'lsa
+     * matn bo'sh bo'lmasin.
+     *
+     * @return string[] xato savol ID lar ro'yxati
+     */
+    private function validateAnswers(array $questions, array $answers): array
+    {
+        $errors = [];
+        foreach ($questions as $q) {
+            $qid = $q['id'];
+
+            // Conditional — shart bajarilmasa, savol kerak emas
+            if (!empty($q['show_if'])) {
+                $parentId  = $q['show_if']['question_id'];
+                $whenOpt   = $q['show_if']['when_option'];
+                $parentAns = $answers[$parentId] ?? null;
+                if ($parentAns === null) {
+                    continue; // ota savolga javob yo'q → bu savol ham talab qilinmaydi
+                }
+                // Parent radio bo'lsa — string, checkbox bo'lsa — massiv. Faqat radio
+                // bilan ishlashga moslangan (config'da "show_if" faqat radio'da)
+                if (!is_string($parentAns) || strpos($parentAns, $whenOpt) !== 0) {
+                    continue;
+                }
+            }
+
+            $required = $q['required'] ?? true;
+            if (!$required) continue;
+
+            $val = $answers[$qid] ?? null;
+            if ($q['type'] === 'radio') {
+                if (!is_string($val) || trim($val) === '') {
+                    $errors[] = $qid;
+                    continue;
+                }
+                // "Boshqa" bo'lsa, matn ham bo'sh bo'lmasin (format: "other:Matn")
+                if (strpos($val, 'other:') === 0) {
+                    $otherText = trim(substr($val, 6));
+                    if ($otherText === '') $errors[] = $qid;
+                }
+            } elseif ($q['type'] === 'checkbox') {
+                if (!is_array($val) || count($val) === 0) {
+                    $errors[] = $qid;
+                    continue;
+                }
+                foreach ($val as $v) {
+                    if (is_string($v) && strpos($v, 'other:') === 0) {
+                        $otherText = trim(substr($v, 6));
+                        if ($otherText === '') {
+                            $errors[] = $qid;
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+        return $errors;
+    }
+
+    /**
+     * Bitta talabaning javobini CSV ga qator sifatida qo'shish.
+     * Fayl: storage/app/surveys/{survey_key}.csv
+     * Header birinchi qator sifatida bir marta yoziladi.
+     */
+    private function appendToCsv(array $config, $student, array $answers): void
+    {
+        $dir = storage_path('app/surveys');
+        if (!is_dir($dir)) {
+            File::makeDirectory($dir, 0755, true);
+        }
+        $path = $dir . '/' . $config['key'] . '.csv';
+
+        $isNew = !file_exists($path);
+
+        $headers = ['Talaba ID', 'F.I.SH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Semestr'];
+        foreach ($config['questions'] as $q) {
+            $headers[] = ($q['id']) . '. ' . $q['text'];
+        }
+
+        $row = [
+            $student->student_id_number ?? '',
+            $student->full_name ?? '',
+            $student->department_name ?? '',
+            $student->specialty_name ?? '',
+            $student->level_name ?? ($student->level_code ?? ''),
+            $student->group_name ?? '',
+            $student->semester_name ?? ($student->semester_code ?? ''),
+        ];
+        foreach ($config['questions'] as $q) {
+            $row[] = $this->formatAnswerForCsv($q, $answers[$q['id']] ?? null);
+        }
+
+        $fp = fopen($path, 'a');
+        if (!$fp) return;
+        if (flock($fp, LOCK_EX)) {
+            if ($isNew) {
+                // UTF-8 BOM — Excel'da to'g'ri ochilishi uchun
+                fwrite($fp, "\xEF\xBB\xBF");
+                fputcsv($fp, $headers);
+            }
+            fputcsv($fp, $row);
+            flock($fp, LOCK_UN);
+        }
+        fclose($fp);
+    }
+
+    /**
+     * Javobni CSV uchun inson o'qiy oladigan matnga aylantirish:
+     * - radio: variant matni yoki "Boshqa: <foydalanuvchi matni>"
+     * - checkbox: vergul bilan ajratilgan variantlar
+     */
+    private function formatAnswerForCsv(array $question, $value): string
+    {
+        if ($value === null || $value === '') return '';
+
+        $optionsById = [];
+        foreach ($question['options'] ?? [] as $opt) {
+            $optionsById[$opt['id']] = $opt;
+        }
+
+        $resolve = function ($v) use ($optionsById) {
+            // "Boshqa: matn" formatida bo'lsa
+            if (is_string($v) && strpos($v, 'other:') === 0) {
+                $txt = trim(substr($v, 6));
+                return "Boshqa: " . $txt;
+            }
+            if (is_string($v) && isset($optionsById[$v])) {
+                return $optionsById[$v]['text'];
+            }
+            return (string) $v;
+        };
+
+        if (is_array($value)) {
+            return implode(' | ', array_map($resolve, $value));
+        }
+        return $resolve($value);
+    }
+}

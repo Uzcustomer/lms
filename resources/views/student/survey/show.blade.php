@@ -48,7 +48,6 @@
         .sv-option {
             background: #fafbff;
             border: 1.5px solid transparent;
-            border-radius: 16px;
             transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease;
             cursor: pointer;
             padding: 14px 16px;
@@ -128,6 +127,26 @@
             background: linear-gradient(135deg, #059669 0%, #047857 100%);
             transform: translateY(-1px);
         }
+        .sv-btn-blue {
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+            color: #fff;
+            box-shadow: 0 4px 14px -4px rgba(37,99,235,0.55);
+            transition: all 0.2s ease;
+        }
+        .sv-btn-blue:hover:not(:disabled) {
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+            transform: translateY(-1px);
+        }
+        .sv-btn-purple {
+            background: linear-gradient(135deg, #a855f7 0%, #9333ea 100%);
+            color: #fff;
+            box-shadow: 0 4px 14px -4px rgba(147,51,234,0.55);
+            transition: all 0.2s ease;
+        }
+        .sv-btn-purple:hover {
+            background: linear-gradient(135deg, #9333ea 0%, #7e22ce 100%);
+            transform: translateY(-1px);
+        }
         .sv-modal-backdrop {
             backdrop-filter: blur(4px);
             background: rgba(15, 23, 42, 0.55);
@@ -194,7 +213,8 @@
                         </div>
 
                         <button type="button" onclick="svStart()"
-                                class="w-full py-3.5 sv-btn-primary text-sm font-bold rounded-2xl mb-3 flex items-center justify-center gap-2">
+                                class="w-full sv-btn-primary text-sm font-bold rounded-2xl mb-3 flex items-center justify-center gap-2"
+                                style="padding-top:12px;padding-bottom:12px;">
                             <span>So'rovnomani boshlash</span>
                             <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
@@ -202,7 +222,8 @@
                         </button>
                         @if(!$deadlinePassed)
                         <button type="button" onclick="svShowLaterWarning()"
-                                class="w-full py-3.5 text-sm font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 rounded-2xl transition">
+                                class="w-full text-sm font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 rounded-2xl transition"
+                                style="padding-top:12px;padding-bottom:12px;">
                             Keyinroq bajarish
                         </button>
                         @endif
@@ -255,16 +276,16 @@
 
                     {{-- NAVIGATSIYA --}}
                     <div id="sv-nav" class="hidden border-t border-slate-200 px-5 sm:px-7 py-4 bg-gradient-to-b from-white to-slate-50/70">
-                        <div class="flex items-center gap-3 mb-3">
+                        <div class="flex items-center gap-2 mb-2">
                             <button id="sv-back" type="button" onclick="svBack()"
-                                    class="flex-1 py-3 text-sm font-semibold text-slate-700 bg-white border border-slate-200 hover:border-slate-300 hover:bg-slate-50 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-1.5">
+                                    class="flex-1 py-3 text-sm font-bold sv-btn-blue rounded-xl flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M11 17l-5-5m0 0l5-5m-5 5h12"/>
                                 </svg>
                                 Orqaga
                             </button>
                             <button id="sv-next" type="button" onclick="svNext()"
-                                    class="flex-1 py-3 text-sm font-bold sv-btn-primary rounded-xl flex items-center justify-center gap-1.5">
+                                    class="flex-1 py-3 text-sm font-bold sv-btn-success rounded-xl flex items-center justify-center gap-1.5">
                                 <span id="sv-next-text">Keyingisi</span>
                                 <svg id="sv-next-icon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
@@ -273,7 +294,7 @@
                         </div>
                         @if(!$deadlinePassed)
                         <button type="button" onclick="svShowLaterWarning()"
-                                class="w-full py-3 text-sm font-semibold text-slate-600 hover:text-indigo-700 bg-white border border-slate-200 hover:border-indigo-200 hover:bg-indigo-50/40 rounded-xl transition flex items-center justify-center gap-2">
+                                class="w-full py-3 text-sm font-bold sv-btn-purple rounded-xl flex items-center justify-center gap-2">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
@@ -466,19 +487,14 @@
             document.getElementById('sv-back').disabled = (SV.currentIdx === 0);
 
             const isLast = SV.currentIdx === total - 1;
-            const nextBtn = document.getElementById('sv-next');
             const nextText = document.getElementById('sv-next-text');
             const nextIcon = document.getElementById('sv-next-icon');
             if (isLast) {
                 nextText.textContent = 'Yuborish';
                 nextIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>';
-                nextBtn.classList.remove('sv-btn-primary');
-                nextBtn.classList.add('sv-btn-success');
             } else {
                 nextText.textContent = 'Keyingisi';
                 nextIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>';
-                nextBtn.classList.add('sv-btn-primary');
-                nextBtn.classList.remove('sv-btn-success');
             }
 
             const q = SV.questions[qIdx];

@@ -433,6 +433,11 @@
         function svRestoreAnswer(scopeEl, qid, qType) {
             // Yagona savol uchun saqlangan javobni inputlarga qaytarish
             const ans = SV.answers[qid];
+            if (qType === 'text') {
+                const ta = scopeEl.querySelector('textarea[name="q_' + qid + '"]');
+                if (ta) ta.value = (typeof ans === 'string') ? ans : '';
+                return;
+            }
             if (qType === 'radio') {
                 scopeEl.querySelectorAll('input[type=radio][name="q_' + qid + '"]').forEach(inp => inp.checked = false);
                 if (typeof ans === 'string') {
@@ -527,7 +532,18 @@
 
         // Bitta savol uchun javobni inputlardan yig'ish. Muvaffaqiyatda javobni
         // SV.answers ga yozadi va true qaytaradi; bo'sh/noto'g'ri bo'lsa false.
-        function svCollectQuestion(scopeEl, qid, qType) {
+        function svCollectQuestion(scopeEl, qid, qType, required) {
+            if (qType === 'text') {
+                const ta = scopeEl.querySelector('textarea[name="q_' + qid + '"]');
+                const txt = (ta?.value || '').trim();
+                if (!txt) {
+                    if (required) return false;
+                    delete SV.answers[qid];
+                    return true;
+                }
+                SV.answers[qid] = txt;
+                return true;
+            }
             if (qType === 'radio') {
                 const checked = scopeEl.querySelector('input[type=radio][name="q_' + qid + '"]:checked');
                 if (!checked) return false;
@@ -565,14 +581,15 @@
             const q = SV.questions[qIdx];
             const el = document.querySelectorAll('.sv-question')[qIdx];
 
-            if (!svCollectQuestion(el, q.id, q.type)) return false;
+            if (!svCollectQuestion(el, q.id, q.type, q.required !== false)) return false;
 
             // Ko'rinadigan bolalar — ularning javobi ham majburiy
             const visibleChildren = el.querySelectorAll('.sv-child-q:not(.hidden)');
             for (const child of visibleChildren) {
                 const cqid = child.dataset.childQid;
                 const ctype = child.dataset.childType;
-                if (!svCollectQuestion(child, cqid, ctype)) return false;
+                const cq = SV.questions.find(x => x.id === cqid);
+                if (!svCollectQuestion(child, cqid, ctype, cq?.required !== false)) return false;
             }
             return true;
         }

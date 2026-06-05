@@ -161,6 +161,12 @@ class SurveyController extends Controller
             if (!$required) continue;
 
             $val = $answers[$qid] ?? null;
+            if ($q['type'] === 'text') {
+                if (!is_string($val) || trim($val) === '') {
+                    $errors[] = $qid;
+                }
+                continue;
+            }
             if ($q['type'] === 'radio') {
                 if (!is_string($val) || trim($val) === '') {
                     $errors[] = $qid;
@@ -245,6 +251,11 @@ class SurveyController extends Controller
     private function formatAnswerForCsv(array $question, $value): string
     {
         if ($value === null || $value === '') return '';
+
+        // Erkin matnli savol — qiymatni o'zicha qaytaramiz
+        if (($question['type'] ?? '') === 'text') {
+            return is_string($value) ? trim($value) : '';
+        }
 
         $optionsById = [];
         foreach ($question['options'] ?? [] as $opt) {

@@ -869,6 +869,32 @@
                 font-size: 9px;
             }
         }
+
+        /* Superadmin uchun OSKI/Test cellning o'ng-yuqori burchagidagi mayda X tugmasi */
+        .exam-delete-x {
+            position: absolute;
+            top: 1px;
+            right: 2px;
+            width: 14px;
+            height: 14px;
+            line-height: 12px;
+            padding: 0;
+            border: 1px solid transparent;
+            background: transparent;
+            color: #cbd5e1;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            border-radius: 3px;
+            transition: all 0.15s;
+            opacity: 0;
+        }
+        td:hover > .exam-delete-x { opacity: 1; }
+        .exam-delete-x:hover {
+            background: #fee2e2;
+            color: #dc2626;
+            border-color: #fca5a5;
+        }
     </style>
 
     @php
@@ -1372,17 +1398,27 @@
                                                     ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiRounded !== null ? $oskiRounded : 'null') . ", 1, true)"
                                                     : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 1)";
                                                 $oski1DateStr = $oskiAttempt1DateMap[$student->hemis_id] ?? null;
+                                                $oski1Grader = $oskiAttempt1GraderMap[$student->hemis_id] ?? null;
                                                 $oskiBaseTitle = $isOskiSababli ? 'Sababli OSKI — bahoni kiriting'
-                                                    : ($isSuperAdmin ? 'Superadmin: OSKI bahosini o\'zgartirish'
+                                                    : ($isSuperAdmin ? 'Superadmin: OSKI bahosini o\'zgartirish (X — o\'chirish)'
                                                         : (!empty($other['oski_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
-                                                $oskiDatePart = ($canSeeExamDateTooltip && $oskiRounded !== null && $oski1DateStr) ? "Topshirilgan: {$oski1DateStr}" : '';
+                                                $oskiInfoParts = [];
+                                                if ($canSeeExamDateTooltip && $oskiRounded !== null) {
+                                                    if ($oski1DateStr) $oskiInfoParts[] = "Topshirilgan: {$oski1DateStr}";
+                                                    if ($oski1Grader) $oskiInfoParts[] = "Baholagan: {$oski1Grader}";
+                                                }
+                                                $oskiDatePart = implode(' · ', $oskiInfoParts);
                                                 $oskiTitle = trim($oskiDatePart && $oskiBaseTitle ? "{$oskiDatePart} | {$oskiBaseTitle}" : ($oskiDatePart ?: $oskiBaseTitle));
                                             @endphp
-                                            <td class="px-1 py-1 text-center {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
+                                            <td class="px-1 py-1 text-center relative {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
                                                 @if($oskiClickable) onclick="{{ $oskiClickHandler }}" @endif
                                                 @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
                                                     <span class="font-bold {{ $oskiRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isOskiSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $oskiRounded }}</span>
+                                                    @if($isSuperAdmin)
+                                                        <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
+                                                                onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 1, this)">×</button>
+                                                    @endif
                                                 @elseif($isSuperAdmin)
                                                     <span class="text-gray-300 text-xs">+</span>
                                                 @endif
@@ -1401,14 +1437,26 @@
                                                         ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiA2 !== null ? $oskiA2 : 'null') . ", 2, false)"
                                                         : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 2)";
                                                     $oski2DateStr = $oskiAttempt2DateMap[$student->hemis_id] ?? null;
-                                                    $oski2BaseTitle = $eligible12a ? '2-urinish OSKI' . ($oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish OSKI tahrirlash';
-                                                    $oski2DatePart = ($canSeeExamDateTooltip && $oskiA2 !== null && $oski2DateStr) ? "Topshirilgan: {$oski2DateStr}" : '';
+                                                    $oski2Grader = $oskiAttempt2GraderMap[$student->hemis_id] ?? null;
+                                                    $oski2BaseTitle = $eligible12a ? '2-urinish OSKI' . ($oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish OSKI tahrirlash (X — o\'chirish)';
+                                                    $oski2InfoParts = [];
+                                                    if ($canSeeExamDateTooltip && $oskiA2 !== null) {
+                                                        if ($oski2DateStr) $oski2InfoParts[] = "Topshirilgan: {$oski2DateStr}";
+                                                        if ($oski2Grader) $oski2InfoParts[] = "Baholagan: {$oski2Grader}";
+                                                    }
+                                                    $oski2DatePart = implode(' · ', $oski2InfoParts);
                                                     $oski2Title = trim($oski2DatePart ? "{$oski2DatePart} | {$oski2BaseTitle}" : $oski2BaseTitle);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $oski2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                <td class="px-1 py-1 text-center relative {{ $oski2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($oski2Clickable) onclick="{{ $oski2Handler }}" @endif
                                                     title="{{ $oski2Title }}">
-                                                    @if($oskiA2 !== null)<span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $oskiA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($oskiA2 !== null)
+                                                        <span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $oskiA2 }}</span>
+                                                        @if($isSuperAdmin)
+                                                            <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
+                                                                    onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 2, this)">×</button>
+                                                        @endif
+                                                    @elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 2-urinish qo'shimcha OSKI ustuni --}}
@@ -1425,14 +1473,26 @@
                                                         ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiA3 !== null ? $oskiA3 : 'null') . ", 3, false)"
                                                         : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 3)";
                                                     $oski3DateStr = $oskiAttempt3DateMap[$student->hemis_id] ?? null;
-                                                    $oski3BaseTitle = $eligible12b ? '3-urinish OSKI' . ($oski2ResitDate ? ' (' . \Carbon\Carbon::parse($oski2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish OSKI tahrirlash';
-                                                    $oski3DatePart = ($canSeeExamDateTooltip && $oskiA3 !== null && $oski3DateStr) ? "Topshirilgan: {$oski3DateStr}" : '';
+                                                    $oski3Grader = $oskiAttempt3GraderMap[$student->hemis_id] ?? null;
+                                                    $oski3BaseTitle = $eligible12b ? '3-urinish OSKI' . ($oski2ResitDate ? ' (' . \Carbon\Carbon::parse($oski2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish OSKI tahrirlash (X — o\'chirish)';
+                                                    $oski3InfoParts = [];
+                                                    if ($canSeeExamDateTooltip && $oskiA3 !== null) {
+                                                        if ($oski3DateStr) $oski3InfoParts[] = "Topshirilgan: {$oski3DateStr}";
+                                                        if ($oski3Grader) $oski3InfoParts[] = "Baholagan: {$oski3Grader}";
+                                                    }
+                                                    $oski3DatePart = implode(' · ', $oski3InfoParts);
                                                     $oski3Title = trim($oski3DatePart ? "{$oski3DatePart} | {$oski3BaseTitle}" : $oski3BaseTitle);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $oski3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                <td class="px-1 py-1 text-center relative {{ $oski3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($oski3Clickable) onclick="{{ $oski3Handler }}" @endif
                                                     title="{{ $oski3Title }}">
-                                                    @if($oskiA3 !== null)<span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $oskiA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($oskiA3 !== null)
+                                                        <span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $oskiA3 }}</span>
+                                                        @if($isSuperAdmin)
+                                                            <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
+                                                                    onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 3, this)">×</button>
+                                                        @endif
+                                                    @elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- Asosiy Test (1-urinish) yoki Sinov (test) bahosi --}}
@@ -1463,17 +1523,27 @@
                                                         ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
                                                         : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
                                                     $test1DateStr = $testAttempt1DateMap[$student->hemis_id] ?? null;
+                                                    $test1Grader = $testAttempt1GraderMap[$student->hemis_id] ?? null;
                                                     $testBaseTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
-                                                        : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish'
+                                                        : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish (X — o\'chirish)'
                                                             : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
-                                                    $testDatePart = ($canSeeExamDateTooltip && $testRounded !== null && $test1DateStr) ? "Topshirilgan: {$test1DateStr}" : '';
+                                                    $test1InfoParts = [];
+                                                    if ($canSeeExamDateTooltip && $testRounded !== null) {
+                                                        if ($test1DateStr) $test1InfoParts[] = "Topshirilgan: {$test1DateStr}";
+                                                        if ($test1Grader) $test1InfoParts[] = "Baholagan: {$test1Grader}";
+                                                    }
+                                                    $testDatePart = implode(' · ', $test1InfoParts);
                                                     $testTitle = trim($testDatePart && $testBaseTitle ? "{$testDatePart} | {$testBaseTitle}" : ($testDatePart ?: $testBaseTitle));
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
+                                                <td class="px-1 py-1 text-center relative {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
                                                     @if($testClickable) onclick="{{ $testClickHandler }}" @endif
                                                     @if($testTitle) title="{{ $testTitle }}" @endif>
                                                     @if($testRounded !== null)
                                                         <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
+                                                        @if($isSuperAdmin)
+                                                            <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
+                                                                    onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 1, this)">×</button>
+                                                        @endif
                                                     @elseif($isSuperAdmin)
                                                         <span class="text-gray-300 text-xs">+</span>
                                                     @endif
@@ -1493,14 +1563,26 @@
                                                         ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testA2 !== null ? $testA2 : 'null') . ", 2, false)"
                                                         : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 2)";
                                                     $test2DateStr = $testAttempt2DateMap[$student->hemis_id] ?? null;
-                                                    $test2BaseTitle = $eligible12a ? '2-urinish Test' . ($testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish Test tahrirlash';
-                                                    $test2DatePart = ($canSeeExamDateTooltip && $testA2 !== null && $test2DateStr) ? "Topshirilgan: {$test2DateStr}" : '';
+                                                    $test2Grader = $testAttempt2GraderMap[$student->hemis_id] ?? null;
+                                                    $test2BaseTitle = $eligible12a ? '2-urinish Test' . ($testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish Test tahrirlash (X — o\'chirish)';
+                                                    $test2InfoParts = [];
+                                                    if ($canSeeExamDateTooltip && $testA2 !== null) {
+                                                        if ($test2DateStr) $test2InfoParts[] = "Topshirilgan: {$test2DateStr}";
+                                                        if ($test2Grader) $test2InfoParts[] = "Baholagan: {$test2Grader}";
+                                                    }
+                                                    $test2DatePart = implode(' · ', $test2InfoParts);
                                                     $test2Title = trim($test2DatePart ? "{$test2DatePart} | {$test2BaseTitle}" : $test2BaseTitle);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $test2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                <td class="px-1 py-1 text-center relative {{ $test2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($test2Clickable) onclick="{{ $test2Handler }}" @endif
                                                     title="{{ $test2Title }}">
-                                                    @if($testA2 !== null)<span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $testA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($testA2 !== null)
+                                                        <span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $testA2 }}</span>
+                                                        @if($isSuperAdmin)
+                                                            <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
+                                                                    onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 2, this)">×</button>
+                                                        @endif
+                                                    @elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 2-urinish qo'shimcha Test ustuni --}}
@@ -1517,14 +1599,26 @@
                                                         ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testA3 !== null ? $testA3 : 'null') . ", 3, false)"
                                                         : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 3)";
                                                     $test3DateStr = $testAttempt3DateMap[$student->hemis_id] ?? null;
-                                                    $test3BaseTitle = $eligible12b ? '3-urinish Test' . ($test2ResitDate ? ' (' . \Carbon\Carbon::parse($test2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish Test tahrirlash';
-                                                    $test3DatePart = ($canSeeExamDateTooltip && $testA3 !== null && $test3DateStr) ? "Topshirilgan: {$test3DateStr}" : '';
+                                                    $test3Grader = $testAttempt3GraderMap[$student->hemis_id] ?? null;
+                                                    $test3BaseTitle = $eligible12b ? '3-urinish Test' . ($test2ResitDate ? ' (' . \Carbon\Carbon::parse($test2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish Test tahrirlash (X — o\'chirish)';
+                                                    $test3InfoParts = [];
+                                                    if ($canSeeExamDateTooltip && $testA3 !== null) {
+                                                        if ($test3DateStr) $test3InfoParts[] = "Topshirilgan: {$test3DateStr}";
+                                                        if ($test3Grader) $test3InfoParts[] = "Baholagan: {$test3Grader}";
+                                                    }
+                                                    $test3DatePart = implode(' · ', $test3InfoParts);
                                                     $test3Title = trim($test3DatePart ? "{$test3DatePart} | {$test3BaseTitle}" : $test3BaseTitle);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $test3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                <td class="px-1 py-1 text-center relative {{ $test3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($test3Clickable) onclick="{{ $test3Handler }}" @endif
                                                     title="{{ $test3Title }}">
-                                                    @if($testA3 !== null)<span class="font-bold {{ $testA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $testA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($testA3 !== null)
+                                                        <span class="font-bold {{ $testA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $testA3 }}</span>
+                                                        @if($isSuperAdmin)
+                                                            <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
+                                                                    onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 3, this)">×</button>
+                                                        @endif
+                                                    @elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
@@ -2063,17 +2157,27 @@
                                                     ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiRounded !== null ? $oskiRounded : 'null') . ", 1, true)"
                                                     : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 1)";
                                                 $oski1DateStr = $oskiAttempt1DateMap[$student->hemis_id] ?? null;
+                                                $oski1Grader = $oskiAttempt1GraderMap[$student->hemis_id] ?? null;
                                                 $oskiBaseTitle = $isOskiSababli ? 'Sababli OSKI — bahoni kiriting'
-                                                    : ($isSuperAdmin ? 'Superadmin: OSKI bahosini o\'zgartirish'
+                                                    : ($isSuperAdmin ? 'Superadmin: OSKI bahosini o\'zgartirish (X — o\'chirish)'
                                                         : (!empty($other['oski_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
-                                                $oskiDatePart = ($canSeeExamDateTooltip && $oskiRounded !== null && $oski1DateStr) ? "Topshirilgan: {$oski1DateStr}" : '';
+                                                $oskiInfoParts = [];
+                                                if ($canSeeExamDateTooltip && $oskiRounded !== null) {
+                                                    if ($oski1DateStr) $oskiInfoParts[] = "Topshirilgan: {$oski1DateStr}";
+                                                    if ($oski1Grader) $oskiInfoParts[] = "Baholagan: {$oski1Grader}";
+                                                }
+                                                $oskiDatePart = implode(' · ', $oskiInfoParts);
                                                 $oskiTitle = trim($oskiDatePart && $oskiBaseTitle ? "{$oskiDatePart} | {$oskiBaseTitle}" : ($oskiDatePart ?: $oskiBaseTitle));
                                             @endphp
-                                            <td class="px-1 py-1 text-center {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
+                                            <td class="px-1 py-1 text-center relative {{ $oskiClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['oski_sababli']) || $isOskiSababli) ? 'sababli-retake-cell' : '' }}"
                                                 @if($oskiClickable) onclick="{{ $oskiClickHandler }}" @endif
                                                 @if($oskiTitle) title="{{ $oskiTitle }}" @endif>
                                                 @if($oskiRounded !== null)
                                                     <span class="font-bold {{ $oskiRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isOskiSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $oskiRounded }}</span>
+                                                    @if($isSuperAdmin)
+                                                        <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
+                                                                onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 1, this)">×</button>
+                                                    @endif
                                                 @elseif($isSuperAdmin)
                                                     <span class="text-gray-300 text-xs">+</span>
                                                 @endif
@@ -2092,14 +2196,26 @@
                                                         ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiA2 !== null ? $oskiA2 : 'null') . ", 2, false)"
                                                         : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 2)";
                                                     $oski2DateStr = $oskiAttempt2DateMap[$student->hemis_id] ?? null;
-                                                    $oski2BaseTitle = $eligible12a ? '2-urinish OSKI' . ($oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish OSKI tahrirlash';
-                                                    $oski2DatePart = ($canSeeExamDateTooltip && $oskiA2 !== null && $oski2DateStr) ? "Topshirilgan: {$oski2DateStr}" : '';
+                                                    $oski2Grader = $oskiAttempt2GraderMap[$student->hemis_id] ?? null;
+                                                    $oski2BaseTitle = $eligible12a ? '2-urinish OSKI' . ($oskiResitDate ? ' (' . \Carbon\Carbon::parse($oskiResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish OSKI tahrirlash (X — o\'chirish)';
+                                                    $oski2InfoParts = [];
+                                                    if ($canSeeExamDateTooltip && $oskiA2 !== null) {
+                                                        if ($oski2DateStr) $oski2InfoParts[] = "Topshirilgan: {$oski2DateStr}";
+                                                        if ($oski2Grader) $oski2InfoParts[] = "Baholagan: {$oski2Grader}";
+                                                    }
+                                                    $oski2DatePart = implode(' · ', $oski2InfoParts);
                                                     $oski2Title = trim($oski2DatePart ? "{$oski2DatePart} | {$oski2BaseTitle}" : $oski2BaseTitle);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $oski2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                <td class="px-1 py-1 text-center relative {{ $oski2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($oski2Clickable) onclick="{{ $oski2Handler }}" @endif
                                                     title="{{ $oski2Title }}">
-                                                    @if($oskiA2 !== null)<span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $oskiA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($oskiA2 !== null)
+                                                        <span class="font-bold {{ $oskiA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $oskiA2 }}</span>
+                                                        @if($isSuperAdmin)
+                                                            <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
+                                                                    onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 2, this)">×</button>
+                                                        @endif
+                                                    @elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 2-urinish qo'shimcha OSKI ustuni --}}
@@ -2116,14 +2232,26 @@
                                                         ? "editExamGrade(this, '{$student->hemis_id}', 101, " . ($oskiA3 !== null ? $oskiA3 : 'null') . ", 3, false)"
                                                         : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 101, 3)";
                                                     $oski3DateStr = $oskiAttempt3DateMap[$student->hemis_id] ?? null;
-                                                    $oski3BaseTitle = $eligible12b ? '3-urinish OSKI' . ($oski2ResitDate ? ' (' . \Carbon\Carbon::parse($oski2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish OSKI tahrirlash';
-                                                    $oski3DatePart = ($canSeeExamDateTooltip && $oskiA3 !== null && $oski3DateStr) ? "Topshirilgan: {$oski3DateStr}" : '';
+                                                    $oski3Grader = $oskiAttempt3GraderMap[$student->hemis_id] ?? null;
+                                                    $oski3BaseTitle = $eligible12b ? '3-urinish OSKI' . ($oski2ResitDate ? ' (' . \Carbon\Carbon::parse($oski2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish OSKI tahrirlash (X — o\'chirish)';
+                                                    $oski3InfoParts = [];
+                                                    if ($canSeeExamDateTooltip && $oskiA3 !== null) {
+                                                        if ($oski3DateStr) $oski3InfoParts[] = "Topshirilgan: {$oski3DateStr}";
+                                                        if ($oski3Grader) $oski3InfoParts[] = "Baholagan: {$oski3Grader}";
+                                                    }
+                                                    $oski3DatePart = implode(' · ', $oski3InfoParts);
                                                     $oski3Title = trim($oski3DatePart ? "{$oski3DatePart} | {$oski3BaseTitle}" : $oski3BaseTitle);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $oski3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                <td class="px-1 py-1 text-center relative {{ $oski3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($oski3Clickable) onclick="{{ $oski3Handler }}" @endif
                                                     title="{{ $oski3Title }}">
-                                                    @if($oskiA3 !== null)<span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $oskiA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($oskiA3 !== null)
+                                                        <span class="font-bold {{ $oskiA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $oskiA3 }}</span>
+                                                        @if($isSuperAdmin)
+                                                            <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
+                                                                    onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 101, 3, this)">×</button>
+                                                        @endif
+                                                    @elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- Asosiy Test (1-urinish) yoki Sinov (test) bahosi --}}
@@ -2154,17 +2282,27 @@
                                                         ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testRounded !== null ? $testRounded : 'null') . ", 1, true)"
                                                         : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 1)";
                                                     $test1DateStr = $testAttempt1DateMap[$student->hemis_id] ?? null;
+                                                    $test1Grader = $testAttempt1GraderMap[$student->hemis_id] ?? null;
                                                     $testBaseTitle = $isTestSababli ? 'Sababli Test — bahoni kiriting'
-                                                        : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish'
+                                                        : ($isSuperAdmin ? 'Superadmin: Test bahosini o\'zgartirish (X — o\'chirish)'
                                                             : (!empty($other['test_sababli']) ? 'Sababli ariza — 12-qo\'shimcha shaklga tushadi' : ''));
-                                                    $testDatePart = ($canSeeExamDateTooltip && $testRounded !== null && $test1DateStr) ? "Topshirilgan: {$test1DateStr}" : '';
+                                                    $test1InfoParts = [];
+                                                    if ($canSeeExamDateTooltip && $testRounded !== null) {
+                                                        if ($test1DateStr) $test1InfoParts[] = "Topshirilgan: {$test1DateStr}";
+                                                        if ($test1Grader) $test1InfoParts[] = "Baholagan: {$test1Grader}";
+                                                    }
+                                                    $testDatePart = implode(' · ', $test1InfoParts);
                                                     $testTitle = trim($testDatePart && $testBaseTitle ? "{$testDatePart} | {$testBaseTitle}" : ($testDatePart ?: $testBaseTitle));
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
+                                                <td class="px-1 py-1 text-center relative {{ $testClickable ? 'cursor-pointer hover:bg-violet-50' : '' }} {{ (!empty($other['test_sababli']) || $isTestSababli) ? 'sababli-retake-cell' : '' }}"
                                                     @if($testClickable) onclick="{{ $testClickHandler }}" @endif
                                                     @if($testTitle) title="{{ $testTitle }}" @endif>
                                                     @if($testRounded !== null)
                                                         <span class="font-bold {{ $testRounded < ($minimumLimit ?? 60) ? 'text-red-600' : ($isTestSababli ? 'text-violet-700' : 'text-blue-600') }}">{{ $testRounded }}</span>
+                                                        @if($isSuperAdmin)
+                                                            <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
+                                                                    onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 1, this)">×</button>
+                                                        @endif
                                                     @elseif($isSuperAdmin)
                                                         <span class="text-gray-300 text-xs">+</span>
                                                     @endif
@@ -2184,14 +2322,26 @@
                                                         ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testA2 !== null ? $testA2 : 'null') . ", 2, false)"
                                                         : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 2)";
                                                     $test2DateStr = $testAttempt2DateMap[$student->hemis_id] ?? null;
-                                                    $test2BaseTitle = $eligible12a ? '2-urinish Test' . ($testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish Test tahrirlash';
-                                                    $test2DatePart = ($canSeeExamDateTooltip && $testA2 !== null && $test2DateStr) ? "Topshirilgan: {$test2DateStr}" : '';
+                                                    $test2Grader = $testAttempt2GraderMap[$student->hemis_id] ?? null;
+                                                    $test2BaseTitle = $eligible12a ? '2-urinish Test' . ($testResitDate ? ' (' . \Carbon\Carbon::parse($testResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 2-urinish Test tahrirlash (X — o\'chirish)';
+                                                    $test2InfoParts = [];
+                                                    if ($canSeeExamDateTooltip && $testA2 !== null) {
+                                                        if ($test2DateStr) $test2InfoParts[] = "Topshirilgan: {$test2DateStr}";
+                                                        if ($test2Grader) $test2InfoParts[] = "Baholagan: {$test2Grader}";
+                                                    }
+                                                    $test2DatePart = implode(' · ', $test2InfoParts);
                                                     $test2Title = trim($test2DatePart ? "{$test2DatePart} | {$test2BaseTitle}" : $test2BaseTitle);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $test2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                <td class="px-1 py-1 text-center relative {{ $test2Clickable ? ($eligible12a ? 'cursor-pointer hover:bg-amber-100 bg-amber-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($test2Clickable) onclick="{{ $test2Handler }}" @endif
                                                     title="{{ $test2Title }}">
-                                                    @if($testA2 !== null)<span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $testA2 }}</span>@elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($testA2 !== null)
+                                                        <span class="font-bold {{ $testA2 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-amber-700' }}">{{ $testA2 }}</span>
+                                                        @if($isSuperAdmin)
+                                                            <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
+                                                                    onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 2, this)">×</button>
+                                                        @endif
+                                                    @elseif(!$eligible12a && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             {{-- 2-urinish qo'shimcha Test ustuni --}}
@@ -2208,14 +2358,26 @@
                                                         ? "editExamGrade(this, '{$student->hemis_id}', 102, " . ($testA3 !== null ? $testA3 : 'null') . ", 3, false)"
                                                         : "superadminEditExam(this, '{$student->hemis_id}', '{$subjectId}', '{$semesterCode}', 102, 3)";
                                                     $test3DateStr = $testAttempt3DateMap[$student->hemis_id] ?? null;
-                                                    $test3BaseTitle = $eligible12b ? '3-urinish Test' . ($test2ResitDate ? ' (' . \Carbon\Carbon::parse($test2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish Test tahrirlash';
-                                                    $test3DatePart = ($canSeeExamDateTooltip && $testA3 !== null && $test3DateStr) ? "Topshirilgan: {$test3DateStr}" : '';
+                                                    $test3Grader = $testAttempt3GraderMap[$student->hemis_id] ?? null;
+                                                    $test3BaseTitle = $eligible12b ? '3-urinish Test' . ($test2ResitDate ? ' (' . \Carbon\Carbon::parse($test2ResitDate)->format('d.m.Y') . ')' : '') : 'Superadmin: 3-urinish Test tahrirlash (X — o\'chirish)';
+                                                    $test3InfoParts = [];
+                                                    if ($canSeeExamDateTooltip && $testA3 !== null) {
+                                                        if ($test3DateStr) $test3InfoParts[] = "Topshirilgan: {$test3DateStr}";
+                                                        if ($test3Grader) $test3InfoParts[] = "Baholagan: {$test3Grader}";
+                                                    }
+                                                    $test3DatePart = implode(' · ', $test3InfoParts);
                                                     $test3Title = trim($test3DatePart ? "{$test3DatePart} | {$test3BaseTitle}" : $test3BaseTitle);
                                                 @endphp
-                                                <td class="px-1 py-1 text-center {{ $test3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
+                                                <td class="px-1 py-1 text-center relative {{ $test3Clickable ? ($eligible12b ? 'cursor-pointer hover:bg-orange-100 bg-orange-50' : 'cursor-pointer hover:bg-violet-50') : 'bg-gray-50' }}"
                                                     @if($test3Clickable) onclick="{{ $test3Handler }}" @endif
                                                     title="{{ $test3Title }}">
-                                                    @if($testA3 !== null)<span class="font-bold {{ $testA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $testA3 }}</span>@elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
+                                                    @if($testA3 !== null)
+                                                        <span class="font-bold {{ $testA3 < ($minimumLimit ?? 60) ? 'text-red-600' : 'text-orange-700' }}">{{ $testA3 }}</span>
+                                                        @if($isSuperAdmin)
+                                                            <button type="button" class="exam-delete-x" title="Bahoni o'chirish"
+                                                                    onclick="event.stopPropagation(); superadminDeleteExam('{{ $student->hemis_id }}', '{{ $subjectId }}', '{{ $semesterCode }}', 102, 3, this)">×</button>
+                                                        @endif
+                                                    @elseif(!$eligible12b && !$isSuperAdmin)<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
                                             <td class="px-1 py-1 text-center" title="Qoldirgan: {{ $absentOff }} soat / Aud. soat: {{ $auditoriumHours }}"><span class="{{ $davomatPercent >= 25 ? 'grade-fail font-bold' : 'text-gray-900' }}">{{ number_format($davomatPercent, 2) }}%</span></td>
@@ -4635,6 +4797,45 @@
                 cellTd.innerHTML = originalHTML;
             })
             .finally(() => { currentEditingCell = null; });
+        }
+
+        // Superadmin: OSKI/Test bahosini butunlay o'chirish (X tugmasi)
+        function superadminDeleteExam(hemisId, subjectId, semesterCode, ttype, attempt, btn) {
+            const ynLabel = ttype == 101 ? 'OSKI' : 'Test';
+            const attLabel = attempt == 1 ? '' : ' (' + attempt + '-urinish)';
+            if (!confirm("Diqqat: bu " + ynLabel + attLabel + " bahosi DB dan o'chiriladi. Davom etilsinmi?")) return;
+
+            btn.disabled = true;
+            const cellTd = btn.closest('td');
+            const originalHTML = cellTd.innerHTML;
+            cellTd.innerHTML = '<span class="text-gray-400 text-xs">...</span>';
+
+            fetch('{{ route("admin.journal.superadmin-delete-exam-grade") }}', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json','X-CSRF-TOKEN':'{{ csrf_token() }}','Accept':'application/json'},
+                body: JSON.stringify({
+                    student_hemis_id: hemisId,
+                    subject_id: subjectId,
+                    semester_code: semesterCode,
+                    training_type_code: ttype,
+                    attempt: attempt,
+                }),
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    // O'chirish muvaffaqiyatli — bog'liq ustunlar (JN%/Dav%) qayta hisoblanishi
+                    // uchun sahifani yangilaymiz.
+                    setTimeout(() => window.location.reload(), 300);
+                } else {
+                    alert(data.message || 'Xatolik');
+                    cellTd.innerHTML = originalHTML;
+                }
+            })
+            .catch(() => {
+                alert("So'rovni yuborib bo'lmadi");
+                cellTd.innerHTML = originalHTML;
+            });
         }
 
         // Retake grade functionality - Excel-like inline editing

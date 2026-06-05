@@ -985,7 +985,8 @@ class JournalController extends Controller
             }))
             ->when($educationYearCode === null && $minScheduleDate !== null, fn($q) => $q->where('lesson_date', '>=', $minScheduleDate))
             ->select(array_merge(
-                ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'attempt', 'lesson_date'],
+                ['student_hemis_id', 'training_type_code', 'grade', 'retake_grade', 'status', 'reason', 'quiz_result_id', 'attempt', 'lesson_date',
+                 'graded_by_user_id', 'employee_id', 'employee_name', 'retake_by'],
                 $hasSababliCol ? ['retake_was_sababli'] : []
             ))
             ->get();
@@ -994,6 +995,8 @@ class JournalController extends Controller
         $otherGradesSababli = [];
         // Sana tooltip uchun: $otherGradeDates[hemis_id][ttc][attempt] = 'YYYY-MM-DD'
         $otherGradeDates = [];
+        // Tooltip uchun grader raw ma'lumotlari (keyin name lookup qilinadi)
+        $otherGradeGraderRaw = [];
         foreach ($otherGradesRaw as $g) {
             $effectiveGrade = $getEffectiveGrade($g);
             if ($effectiveGrade !== null) {
@@ -1018,6 +1021,13 @@ class JournalController extends Controller
                 if (!empty($g->lesson_date)) {
                     $otherGradeDates[$g->student_hemis_id][$typeCode][$attempt] = $g->lesson_date;
                 }
+                // Grader manbalari — tooltip uchun
+                $otherGradeGraderRaw[$g->student_hemis_id][$typeCode][$attempt] = [
+                    'graded_by_user_id' => $g->graded_by_user_id ?? null,
+                    'employee_id'       => $g->employee_id ?? null,
+                    'employee_name'     => $g->employee_name ?? null,
+                    'retake_by'         => $g->retake_by ?? null,
+                ];
             }
         }
         // Asosiy ustunda 1-urinish bahosi ko'rinadi (asosiy stsenariy uchun ham).
@@ -1062,6 +1072,51 @@ class JournalController extends Controller
             if (isset($byType[102][1])) $testAttempt1DateMap[$sid] = $formatDate($byType[102][1]);
             if (isset($byType[102][2])) $testAttempt2DateMap[$sid] = $formatDate($byType[102][2]);
             if (isset($byType[102][3])) $testAttempt3DateMap[$sid] = $formatDate($byType[102][3]);
+        }
+
+        // OSKI/Test grader nomlarini lookup qilish — tooltip uchun.
+        // Manbalar: graded_by_user_id → users.name; employee_id → teachers.full_name;
+        // Aks holda employee_name yoki retake_by satrlari ishlatiladi.
+        $examGraderUserIds = [];
+        $examGraderEmpIds = [];
+        foreach ($otherGradeGraderRaw as $sid => $byType) {
+            foreach ($byType as $ttc => $byAttempt) {
+                foreach ($byAttempt as $att => $info) {
+                    if (!empty($info['graded_by_user_id'])) $examGraderUserIds[$info['graded_by_user_id']] = true;
+                    if (!empty($info['employee_id'])) $examGraderEmpIds[$info['employee_id']] = true;
+                }
+            }
+        }
+        $examGraderUserNames = !empty($examGraderUserIds)
+            ? DB::table('users')->whereIn('id', array_keys($examGraderUserIds))->pluck('name', 'id')->toArray()
+            : [];
+        $examGraderEmpNames = !empty($examGraderEmpIds)
+            ? DB::table('teachers')->whereIn('hemis_id', array_keys($examGraderEmpIds))->pluck('full_name', 'hemis_id')->toArray()
+            : [];
+
+        // 6 ta xarita — har turdagi har urinish uchun
+        $oskiAttempt1GraderMap = [];
+        $oskiAttempt2GraderMap = [];
+        $oskiAttempt3GraderMap = [];
+        $testAttempt1GraderMap = [];
+        $testAttempt2GraderMap = [];
+        $testAttempt3GraderMap = [];
+        $resolveGrader = function ($info) use ($examGraderUserNames, $examGraderEmpNames) {
+            if (!empty($info['graded_by_user_id']) && isset($examGraderUserNames[$info['graded_by_user_id']])) {
+                return $examGraderUserNames[$info['graded_by_user_id']];
+            }
+            if (!empty($info['employee_id']) && isset($examGraderEmpNames[$info['employee_id']])) {
+                return $examGraderEmpNames[$info['employee_id']];
+            }
+            return $info['employee_name'] ?: ($info['retake_by'] ?: null);
+        };
+        foreach ($otherGradeGraderRaw as $sid => $byType) {
+            if (isset($byType[101][1])) $oskiAttempt1GraderMap[$sid] = $resolveGrader($byType[101][1]);
+            if (isset($byType[101][2])) $oskiAttempt2GraderMap[$sid] = $resolveGrader($byType[101][2]);
+            if (isset($byType[101][3])) $oskiAttempt3GraderMap[$sid] = $resolveGrader($byType[101][3]);
+            if (isset($byType[102][1])) $testAttempt1GraderMap[$sid] = $resolveGrader($byType[102][1]);
+            if (isset($byType[102][2])) $testAttempt2GraderMap[$sid] = $resolveGrader($byType[102][2]);
+            if (isset($byType[102][3])) $testAttempt3GraderMap[$sid] = $resolveGrader($byType[102][3]);
         }
 
         // Get attendance data for each student (auditorium types only: exclude MT, ON, OSKI, Test)
@@ -2073,6 +2128,12 @@ class JournalController extends Controller
             'testAttempt2DateMap',
             'oskiAttempt3DateMap',
             'testAttempt3DateMap',
+            'oskiAttempt1GraderMap',
+            'oskiAttempt2GraderMap',
+            'oskiAttempt3GraderMap',
+            'testAttempt1GraderMap',
+            'testAttempt2GraderMap',
+            'testAttempt3GraderMap',
             'isSinov',
             'sinovDefaults',
             'sinovOverrides',
@@ -3778,6 +3839,54 @@ class JournalController extends Controller
             'success' => true,
             'grade'   => (float) $data['grade'],
             'updated' => $rows->count(),
+        ]);
+    }
+
+    /**
+     * Superadmin/Admin: OSKI yoki Test bahosini butunlay o'chirish — feature
+     * `feature_superadmin_grade_edit` yoqilgan bo'lsa. Talaba+fan+semestr+yn_type+
+     * urinish bo'yicha barcha mos qator(lar) soft-delete qilinadi.
+     */
+    public function superadminDeleteExamGrade(Request $request)
+    {
+        if (!auth()->user()?->hasAnyRole(['superadmin', 'admin'])) {
+            return response()->json(['success' => false, 'message' => 'Faqat superadmin yoki admin uchun'], 403);
+        }
+
+        if (Setting::get('feature_superadmin_grade_edit', '0') !== '1') {
+            return response()->json(['success' => false, 'message' => 'Bu funksiya hozirda o\'chirilgan'], 403);
+        }
+
+        $data = $request->validate([
+            'student_hemis_id'   => 'required',
+            'subject_id'         => 'required',
+            'semester_code'      => 'required',
+            'training_type_code' => 'required|integer|in:101,102',
+            'attempt'            => 'required|integer|in:1,2,3',
+        ]);
+
+        $deleted = DB::table('student_grades')
+            ->where('student_hemis_id', $data['student_hemis_id'])
+            ->where('subject_id', $data['subject_id'])
+            ->where('semester_code', $data['semester_code'])
+            ->where('training_type_code', $data['training_type_code'])
+            ->where('attempt', $data['attempt'])
+            ->whereNull('deleted_at')
+            ->update([
+                'deleted_at' => now(),
+                'updated_at' => now(),
+            ]);
+
+        if ($deleted === 0) {
+            return response()->json([
+                'success' => false,
+                'message' => 'O\'chirish uchun mos yozuv topilmadi.',
+            ], 404);
+        }
+
+        return response()->json([
+            'success' => true,
+            'deleted' => $deleted,
         ]);
     }
 

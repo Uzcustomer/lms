@@ -202,7 +202,7 @@
                         </button>
                         @if(!$deadlinePassed)
                         <button type="button" onclick="svShowLaterWarning()"
-                                class="w-full py-3 text-sm font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 rounded-2xl transition">
+                                class="w-full py-3.5 text-sm font-semibold text-slate-600 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 rounded-2xl transition">
                             Keyinroq bajarish
                         </button>
                         @endif

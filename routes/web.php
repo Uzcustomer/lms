@@ -1143,6 +1143,9 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::post('/yn-consent', [StudentController::class, 'submitYnConsent'])->name('yn-consent');
         Route::get('/profile-my', [StudentController::class, 'profile'])->name('profile');
         Route::post('/profile-my/update-contact', [StudentController::class, 'updateContact'])->name('profile.update-contact');
+        // Anonim so'rovnoma (Registrator ofisi baholash) — bir martalik
+        Route::get('/survey',  [\App\Http\Controllers\Student\SurveyController::class, 'show'])->name('survey.show');
+        Route::post('/survey', [\App\Http\Controllers\Student\SurveyController::class, 'submit'])->name('survey.submit');
         Route::get('/exam-schedule', [StudentController::class, 'examSchedule'])->name('exam-schedule');
         Route::get('/exam/status', [\App\Http\Controllers\Student\StartExamController::class, 'status'])->name('exam.status');
         Route::post('/exam/start', [\App\Http\Controllers\Student\StartExamController::class, 'start'])

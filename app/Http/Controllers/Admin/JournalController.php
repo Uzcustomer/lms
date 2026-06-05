@@ -9698,7 +9698,7 @@ class JournalController extends Controller
                     $jn = $jnGradesByKey[$key] ?? '';
                     $mt = $mtGradesByKey[$key] ?? '';
                     $jnRound = ($jn !== '' && $jn !== null)
-                        ? (int) round((float) $jn, 0, PHP_ROUND_HALF_UP)
+                        ? (int) round((float) $jn, 0, PHP_ROUND_HALF_DOWN)
                         : '';
 
                     $sinovKey = $subj->subject_id . '|' . $subj->semester_code . '|' . $grp->group_hemis_id . '|' . $stu->hemis_id;

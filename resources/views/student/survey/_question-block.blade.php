@@ -29,7 +29,12 @@
                 @else
                     <input type="checkbox" name="q_{{ $q['id'] }}[]" value="{{ $opt['id'] }}" class="sr-only">
                 @endif
-                <span class="sv-text text-sm text-slate-700 leading-snug flex-1">{{ $opt['text'] }}</span>
+                <span class="sv-text text-sm text-slate-700 leading-snug flex-1">
+                    @if($opt['id'] !== 'other')
+                        <span class="sv-opt-letter font-bold text-indigo-600 mr-1">{{ $opt['id'] }})</span>
+                    @endif
+                    {{ $opt['text'] }}
+                </span>
             </div>
             @if(!empty($opt['has_other']))
                 <div class="sv-other-wrap hidden mt-3 ml-8">

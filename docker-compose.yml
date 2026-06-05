@@ -10,6 +10,10 @@ services:
       - ./:/var/www/html
       - ./storage:/var/www/html/storage
       - ./public:/var/www/html/public
+      # Tashqi data disk: shu joydagi barcha papkalar konteynerda ko'rinadi
+      # (admission fayllari, kelajakda student_photos, backups va h.k.).
+      # Yangi papka qo'shganda docker-compose'ni yangilash shart emas.
+      - /data:/data
     ports:
       - "9001:9000"
     networks:

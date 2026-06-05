@@ -275,8 +275,8 @@
                     </div>
 
                     {{-- NAVIGATSIYA --}}
-                    <div id="sv-nav" class="hidden border-t border-slate-200 px-4 sm:px-5 py-2.5 bg-gradient-to-b from-white to-slate-50/70">
-                        <div class="flex items-center gap-1.5 mb-1.5">
+                    <div id="sv-nav" class="hidden flex flex-col gap-[5px] border-t border-slate-200 px-4 sm:px-5 py-2.5 bg-gradient-to-b from-white to-slate-50/70">
+                        <div class="flex items-center gap-1.5">
                             <button id="sv-back" type="button" onclick="svBack()"
                                     class="flex-1 py-2 text-sm font-bold sv-btn-blue rounded-lg flex items-center justify-center gap-1.5 disabled:opacity-40 disabled:cursor-not-allowed">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">

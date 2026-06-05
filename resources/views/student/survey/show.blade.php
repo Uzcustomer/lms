@@ -210,60 +210,43 @@
 
                     {{-- SAVOLLAR --}}
                     <div id="sv-questions" class="hidden">
-                        @foreach($questionsForJs as $idx => $q)
+                        @php
+                            // show_if'li savollar — ota savolga nested qilib joylashtiriladi
+                            $childrenByParent = [];
+                            foreach ($questionsForJs as $cq) {
+                                if (!empty($cq['show_if']['question_id'])) {
+                                    $childrenByParent[$cq['show_if']['question_id']][] = $cq;
+                                }
+                            }
+                            $rootQuestions = array_values(array_filter($questionsForJs, fn($q) => empty($q['show_if'])));
+                        @endphp
+
+                        @foreach($rootQuestions as $idx => $q)
                             <div class="sv-question hidden px-5 sm:px-7 py-6"
                                  data-qid="{{ $q['id'] }}"
                                  data-type="{{ $q['type'] }}"
-                                 data-index="{{ $idx }}"
-                                 @if(!empty($q['show_if']))
-                                     data-show-if-qid="{{ $q['show_if']['question_id'] }}"
-                                     data-show-if-opt="{{ $q['show_if']['when_option'] }}"
-                                 @endif>
-                                <div class="mb-5">
-                                    <div class="inline-flex items-center gap-1.5 mb-2 px-2.5 py-1 bg-indigo-100 text-indigo-700 text-[10px] font-bold uppercase tracking-wide rounded-full">
-                                        Savol {{ $q['id'] }}
-                                    </div>
-                                    <h3 class="text-base sm:text-lg font-bold text-slate-800 leading-snug">{{ $q['text'] }}</h3>
-                                    @if($q['type'] === 'checkbox')
-                                        <p class="text-xs text-indigo-600 mt-2 font-medium flex items-center gap-1">
-                                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
-                                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                                            </svg>
-                                            Bir nechtasini tanlash mumkin
-                                        </p>
-                                    @endif
-                                </div>
+                                 data-index="{{ $idx }}">
 
-                                <div class="space-y-3">
-                                    @foreach($q['options'] as $opt)
-                                        <label class="sv-option flex flex-col">
-                                            <div class="flex items-start gap-3">
-                                                <span class="sv-dot {{ $q['type'] === 'checkbox' ? 'square' : '' }}"></span>
-                                                @if($q['type'] === 'radio')
-                                                    <input type="radio" name="q_{{ $q['id'] }}" value="{{ $opt['id'] }}" class="sr-only">
-                                                @else
-                                                    <input type="checkbox" name="q_{{ $q['id'] }}[]" value="{{ $opt['id'] }}" class="sr-only">
-                                                @endif
-                                                <span class="sv-text text-sm text-slate-700 leading-snug flex-1">{{ $opt['text'] }}</span>
-                                            </div>
-                                            @if(!empty($opt['has_other']))
-                                                <div class="sv-other-wrap hidden mt-3 ml-8">
-                                                    <input type="text"
-                                                           class="sv-other-input w-full px-3.5 py-2.5 text-sm bg-white border border-indigo-200 rounded-xl focus:border-indigo-500 focus:ring-4 focus:ring-indigo-100 outline-none transition"
-                                                           placeholder="Iltimos, izoh yozing..."
-                                                           data-opt="{{ $opt['id'] }}">
-                                                </div>
-                                            @endif
-                                        </label>
-                                    @endforeach
-                                </div>
+                                @include('student.survey._question-block', ['q' => $q, 'isChild' => false])
+
+                                {{-- Nested conditional bolalar (5.1 kabi) --}}
+                                @foreach($childrenByParent[$q['id']] ?? [] as $child)
+                                    <div class="sv-child-q hidden mt-5"
+                                         data-child-qid="{{ $child['id'] }}"
+                                         data-child-type="{{ $child['type'] }}"
+                                         data-show-when="{{ $child['show_if']['when_option'] }}">
+                                        <div class="bg-indigo-50/60 border-l-4 border-indigo-400 rounded-r-2xl rounded-l-lg p-4 sm:p-5">
+                                            @include('student.survey._question-block', ['q' => $child, 'isChild' => true])
+                                        </div>
+                                    </div>
+                                @endforeach
 
                                 <div class="sv-error hidden mt-4 p-3 bg-red-50 border border-red-200 rounded-xl">
                                     <p class="text-xs sm:text-sm text-red-700 font-semibold flex items-center gap-2">
                                         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                                         </svg>
-                                        <span>Iltimos, javob tanlang yoki to'ldiring</span>
+                                        <span class="sv-error-text">Iltimos, javob tanlang yoki to'ldiring</span>
                                     </p>
                                 </div>
                             </div>
@@ -386,17 +369,35 @@
         });
 
         function svRecomputeOrder() {
+            // Conditional savollar (show_if'li) alohida step emas — ota savolning
+            // ichida nested chiqadi. Bu yerda faqat root savollarni step sifatida
+            // ro'yxatga olamiz.
             const order = [];
             SV.questions.forEach((q, idx) => {
-                if (q.show_if) {
-                    const parentAns = SV.answers[q.show_if.question_id];
-                    if (typeof parentAns !== 'string' || !parentAns.startsWith(q.show_if.when_option)) {
-                        return;
-                    }
-                }
+                if (q.show_if) return;
                 order.push(idx);
             });
             SV.visibleOrder = order;
+        }
+
+        // Ota savolning tanlangan variantiga qarab bolalarni ko'rsatish/yashirish
+        function svToggleChildren(parentEl) {
+            const parentQid = parentEl.dataset.qid;
+            const selectedOpt = parentEl.querySelector('input[type=radio]:checked')?.value;
+            parentEl.querySelectorAll('.sv-child-q').forEach(child => {
+                const showWhen = child.dataset.showWhen;
+                if (selectedOpt && (selectedOpt === showWhen || (selectedOpt === 'other' && showWhen === 'other'))) {
+                    child.classList.remove('hidden');
+                } else {
+                    child.classList.add('hidden');
+                    // Yashiringan bola tanlovini tozalash
+                    child.querySelectorAll('input').forEach(inp => { if (inp.type !== 'text') inp.checked = false; });
+                    child.querySelectorAll('.sv-other-wrap').forEach(w => w.classList.add('hidden'));
+                    child.querySelectorAll('.sv-option').forEach(o => o.classList.remove('selected'));
+                    const childQid = child.dataset.childQid;
+                    if (childQid && SV.answers[childQid] !== undefined) delete SV.answers[childQid];
+                }
+            });
         }
 
         function svStart() {
@@ -406,6 +407,44 @@
             svRecomputeOrder();
             SV.currentIdx = 0;
             svRender();
+        }
+
+        function svRestoreAnswer(scopeEl, qid, qType) {
+            // Yagona savol uchun saqlangan javobni inputlarga qaytarish
+            const ans = SV.answers[qid];
+            if (qType === 'radio') {
+                scopeEl.querySelectorAll('input[type=radio][name="q_' + qid + '"]').forEach(inp => inp.checked = false);
+                if (typeof ans === 'string') {
+                    const optId = ans.startsWith('other:') ? 'other' : ans;
+                    const inp = scopeEl.querySelector('input[type=radio][name="q_' + qid + '"][value="' + optId + '"]');
+                    if (inp) inp.checked = true;
+                    if (ans.startsWith('other:')) {
+                        const wrap = inp?.closest('label')?.querySelector('.sv-other-wrap');
+                        if (wrap) {
+                            wrap.classList.remove('hidden');
+                            const oi = wrap.querySelector('.sv-other-input');
+                            if (oi) oi.value = ans.substring(6);
+                        }
+                    }
+                }
+            } else {
+                scopeEl.querySelectorAll('input[type=checkbox][name="q_' + qid + '[]"]').forEach(inp => inp.checked = false);
+                if (Array.isArray(ans)) {
+                    ans.forEach(v => {
+                        const optId = (typeof v === 'string' && v.startsWith('other:')) ? 'other' : v;
+                        const inp = scopeEl.querySelector('input[type=checkbox][name="q_' + qid + '[]"][value="' + optId + '"]');
+                        if (inp) inp.checked = true;
+                        if (typeof v === 'string' && v.startsWith('other:')) {
+                            const wrap = inp?.closest('label')?.querySelector('.sv-other-wrap');
+                            if (wrap) {
+                                wrap.classList.remove('hidden');
+                                const oi = wrap.querySelector('.sv-other-input');
+                                if (oi) oi.value = v.substring(6);
+                            }
+                        }
+                    });
+                }
+            }
         }
 
         function svRender() {
@@ -443,51 +482,66 @@
             }
 
             const q = SV.questions[qIdx];
-            const ans = SV.answers[q.id];
-            if (q.type === 'radio') {
-                el.querySelectorAll('input[type=radio]').forEach(inp => { inp.checked = false; });
-                if (typeof ans === 'string') {
-                    const optId = ans.startsWith('other:') ? 'other' : ans;
-                    const inp = el.querySelector('input[type=radio][value="' + optId + '"]');
-                    if (inp) inp.checked = true;
-                    if (ans.startsWith('other:')) {
-                        const wrap = inp?.closest('label')?.querySelector('.sv-other-wrap');
-                        if (wrap) {
-                            wrap.classList.remove('hidden');
-                            const oi = wrap.querySelector('.sv-other-input');
-                            if (oi) oi.value = ans.substring(6);
-                        }
-                    }
-                }
-            } else {
-                el.querySelectorAll('input[type=checkbox]').forEach(inp => { inp.checked = false; });
-                if (Array.isArray(ans)) {
-                    ans.forEach(v => {
-                        const optId = (typeof v === 'string' && v.startsWith('other:')) ? 'other' : v;
-                        const inp = el.querySelector('input[type=checkbox][value="' + optId + '"]');
-                        if (inp) inp.checked = true;
-                        if (typeof v === 'string' && v.startsWith('other:')) {
-                            const wrap = inp?.closest('label')?.querySelector('.sv-other-wrap');
-                            if (wrap) {
-                                wrap.classList.remove('hidden');
-                                const oi = wrap.querySelector('.sv-other-input');
-                                if (oi) oi.value = v.substring(6);
-                            }
-                        }
-                    });
-                }
-            }
+            svRestoreAnswer(el, q.id, q.type);
+            // Bolalar (5.1 kabi) — saqlangan javobini ko'rsatish va shartga qarab ochish
+            el.querySelectorAll('.sv-child-q').forEach(child => {
+                const cqid = child.dataset.childQid;
+                const ctype = child.dataset.childType;
+                svRestoreAnswer(child, cqid, ctype);
+            });
+            svToggleChildren(el);
+
             svPaintSelected(el);
             el.querySelector('.sv-error')?.classList.add('hidden');
             window.scrollTo({top: 0, behavior: 'smooth'});
         }
 
-        function svPaintSelected(qEl) {
-            qEl.querySelectorAll('.sv-option').forEach(lb => {
+        function svPaintSelected(scopeEl) {
+            // scopeEl ham .sv-question, ham .sv-child-q bo'lishi mumkin — barcha optionlarini
+            // tekshiramiz, lekin ichki child savollar o'z scope'iga ega bo'lganda alohida boshqariladi.
+            const options = scopeEl.classList.contains('sv-question')
+                ? Array.from(scopeEl.querySelectorAll(':scope > div > .sv-option, :scope > .space-y-3 > .sv-option, :scope .sv-option'))
+                : Array.from(scopeEl.querySelectorAll('.sv-option'));
+            options.forEach(lb => {
                 const inp = lb.querySelector('input');
                 if (inp?.checked) lb.classList.add('selected');
                 else lb.classList.remove('selected');
             });
+        }
+
+        // Bitta savol uchun javobni inputlardan yig'ish. Muvaffaqiyatda javobni
+        // SV.answers ga yozadi va true qaytaradi; bo'sh/noto'g'ri bo'lsa false.
+        function svCollectQuestion(scopeEl, qid, qType) {
+            if (qType === 'radio') {
+                const checked = scopeEl.querySelector('input[type=radio][name="q_' + qid + '"]:checked');
+                if (!checked) return false;
+                const optId = checked.value;
+                if (optId === 'other') {
+                    const wrap = checked.closest('label').querySelector('.sv-other-wrap');
+                    const txt = (wrap?.querySelector('.sv-other-input')?.value || '').trim();
+                    if (!txt) return false;
+                    SV.answers[qid] = 'other:' + txt;
+                } else {
+                    SV.answers[qid] = optId;
+                }
+                return true;
+            }
+            const checks = Array.from(scopeEl.querySelectorAll('input[type=checkbox][name="q_' + qid + '[]"]:checked'));
+            if (checks.length === 0) return false;
+            const vals = [];
+            for (const c of checks) {
+                const optId = c.value;
+                if (optId === 'other') {
+                    const wrap = c.closest('label').querySelector('.sv-other-wrap');
+                    const txt = (wrap?.querySelector('.sv-other-input')?.value || '').trim();
+                    if (!txt) return false;
+                    vals.push('other:' + txt);
+                } else {
+                    vals.push(optId);
+                }
+            }
+            SV.answers[qid] = vals;
+            return true;
         }
 
         function svCollect() {
@@ -495,34 +549,14 @@
             const q = SV.questions[qIdx];
             const el = document.querySelectorAll('.sv-question')[qIdx];
 
-            if (q.type === 'radio') {
-                const checked = el.querySelector('input[type=radio]:checked');
-                if (!checked) return false;
-                const optId = checked.value;
-                if (optId === 'other') {
-                    const wrap = checked.closest('label').querySelector('.sv-other-wrap');
-                    const txt = (wrap?.querySelector('.sv-other-input')?.value || '').trim();
-                    if (!txt) return false;
-                    SV.answers[q.id] = 'other:' + txt;
-                } else {
-                    SV.answers[q.id] = optId;
-                }
-            } else {
-                const checks = Array.from(el.querySelectorAll('input[type=checkbox]:checked'));
-                if (checks.length === 0) return false;
-                const vals = [];
-                for (const c of checks) {
-                    const optId = c.value;
-                    if (optId === 'other') {
-                        const wrap = c.closest('label').querySelector('.sv-other-wrap');
-                        const txt = (wrap?.querySelector('.sv-other-input')?.value || '').trim();
-                        if (!txt) return false;
-                        vals.push('other:' + txt);
-                    } else {
-                        vals.push(optId);
-                    }
-                }
-                SV.answers[q.id] = vals;
+            if (!svCollectQuestion(el, q.id, q.type)) return false;
+
+            // Ko'rinadigan bolalar — ularning javobi ham majburiy
+            const visibleChildren = el.querySelectorAll('.sv-child-q:not(.hidden)');
+            for (const child of visibleChildren) {
+                const cqid = child.dataset.childQid;
+                const ctype = child.dataset.childType;
+                if (!svCollectQuestion(child, cqid, ctype)) return false;
             }
             return true;
         }
@@ -591,7 +625,7 @@
         }
 
         document.addEventListener('change', function (e) {
-            if (e.target.matches('.sv-question input[type=radio], .sv-question input[type=checkbox]')) {
+            if (e.target.matches('.sv-question input[type=radio], .sv-question input[type=checkbox], .sv-child-q input[type=radio], .sv-child-q input[type=checkbox]')) {
                 const label = e.target.closest('label');
                 if (!label) return;
                 const wrap = label.querySelector('.sv-other-wrap');
@@ -600,12 +634,27 @@
                         wrap.classList.remove('hidden');
                         setTimeout(() => wrap.querySelector('.sv-other-input')?.focus(), 100);
                     } else if (e.target.type === 'radio') {
-                        label.closest('.sv-question').querySelectorAll('.sv-other-wrap').forEach(w => w.classList.add('hidden'));
+                        // Radio ichidagi boshqa "Boshqa" inputlarni yashirish — faqat shu savol uchun
+                        const scope = label.closest('.sv-child-q') || label.closest('.sv-question');
+                        const sameNameRadios = scope.querySelectorAll('input[type=radio][name="' + e.target.name + '"]');
+                        sameNameRadios.forEach(r => {
+                            const wp = r.closest('label').querySelector('.sv-other-wrap');
+                            if (wp && r !== e.target) wp.classList.add('hidden');
+                        });
                     } else if (!e.target.checked) {
                         wrap.classList.add('hidden');
                     }
                 }
-                svPaintSelected(label.closest('.sv-question'));
+
+                // Tanlangan vizual
+                const parentScope = label.closest('.sv-child-q') || label.closest('.sv-question');
+                svPaintSelected(parentScope);
+
+                // Ota savol radio'si o'zgardi → bolalarni qayta hisoblash
+                const rootQuestion = label.closest('.sv-question');
+                if (rootQuestion && !label.closest('.sv-child-q')) {
+                    svToggleChildren(rootQuestion);
+                }
             }
         });
     </script>

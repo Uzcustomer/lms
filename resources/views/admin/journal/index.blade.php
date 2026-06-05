@@ -4,6 +4,7 @@
             <h2 class="text-xl font-semibold leading-tight text-gray-800">
                 Jurnal
             </h2>
+            @if(is_active_registrator() || auth()->user()?->hasAnyRole(['admin', 'superadmin']))
             <button type="button" onclick="document.getElementById('jx-export-modal').style.display='flex'"
                     style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(217,119,6,0.3);">
                 <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -11,6 +12,7 @@
                 </svg>
                 OSKI / Test — Excel
             </button>
+            @endif
         </div>
     </x-slot>
 

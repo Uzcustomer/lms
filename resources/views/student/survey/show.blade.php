@@ -9,11 +9,9 @@
         $questionsForJs = $survey['questions'];
         $totalQuestions = count($questionsForJs);
         $deadlineFormatted = \Carbon\Carbon::parse($survey['deadline'])->format('d.m.Y H:i');
-        $svLocales = $survey['locales'] ?? ['uz'];
         $ui = $survey['ui'] ?? [];
-        $locale = 'uz'; // default — talaba intro'da almashtiradi
-        $localeNames = ['uz' => "O'zbekcha", 'ru' => "Русский", 'en' => "English"];
-        $localeFlags = ['uz' => '🇺🇿', 'ru' => '🇷🇺', 'en' => '🇬🇧'];
+        // Locale controller'dan keladi (URL ?lang=, sessiya yoki fakultet bo'yicha)
+        $locale = $survey['locale'] ?? 'uz';
     @endphp
 
     <style>
@@ -197,22 +195,6 @@
                 @else
                     {{-- KIRISH SAHIFA --}}
                     <div id="sv-intro" class="px-4 sm:px-5 py-4">
-                        {{-- Til tanlash chiplari --}}
-                        <div class="mb-3">
-                            <div class="text-xs text-slate-500 font-semibold mb-1.5" id="sv-lang-label">{{ sv_t($ui['select_language'] ?? "Tilni tanlang", $locale) }}</div>
-                            <div class="flex gap-2">
-                                @foreach($svLocales as $loc)
-                                    <button type="button" data-lang="{{ $loc }}" onclick="svSetLang('{{ $loc }}')"
-                                            class="sv-lang-chip flex-1 px-3 py-2 text-sm font-semibold rounded-lg border-2 transition flex items-center justify-center gap-1.5"
-                                            data-active="{{ $loc === $locale ? '1' : '0' }}"
-                                            style="border-color:{{ $loc === $locale ? '#6366f1' : '#e2e8f0' }};background:{{ $loc === $locale ? '#eef2ff' : '#fff' }};color:{{ $loc === $locale ? '#4338ca' : '#475569' }};">
-                                        <span>{{ $localeFlags[$loc] ?? '' }}</span>
-                                        <span>{{ $localeNames[$loc] ?? strtoupper($loc) }}</span>
-                                    </button>
-                                @endforeach
-                            </div>
-                        </div>
-
                         <div class="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-2.5 mb-3 flex items-start gap-2">
                             <div class="w-7 h-7 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
                                 <svg class="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">

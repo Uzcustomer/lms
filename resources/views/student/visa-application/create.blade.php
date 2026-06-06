@@ -264,29 +264,45 @@
 
                         <div>
                             <label class="va-label">Last name <span class="va-required">*</span></label>
-                            <input type="text" name="last_name" class="va-input" required>
+                            <input type="text" name="last_name" class="va-input" required
+                                   value="{{ old('last_name', mb_strtoupper($student->second_name ?? '')) }}">
                             <div class="va-hint">If you do not have a last name, write your father's name.</div>
                         </div>
 
                         <div>
                             <label class="va-label">First name <span class="va-required">*</span></label>
-                            <input type="text" name="first_name" class="va-input" required>
+                            <input type="text" name="first_name" class="va-input" required
+                                   value="{{ old('first_name', mb_strtoupper($student->first_name ?? '')) }}">
                         </div>
 
                         <div>
                             <label class="va-label">Middle name <span class="va-required">*</span></label>
-                            <input type="text" name="middle_name" class="va-input" required>
+                            <input type="text" name="middle_name" class="va-input" required
+                                   value="{{ old('middle_name', mb_strtoupper($student->third_name ?? '')) }}">
                             <div class="va-hint">Write "—" if you don't have one.</div>
                         </div>
 
                         <div>
                             <label class="va-label">Date of birth <span class="va-required">*</span></label>
-                            <input type="text" name="birth_date" id="birthdate" class="va-input" placeholder="dd.mm.yyyy" required>
+                            @php
+                                $birthVal = old('birth_date');
+                                if (!$birthVal && !empty($student->birth_date)) {
+                                    $birthVal = $student->birth_date instanceof \Carbon\Carbon
+                                        ? $student->birth_date->format('Y-m-d')
+                                        : (string) $student->birth_date;
+                                }
+                            @endphp
+                            <input type="text" name="birth_date" id="birthdate" class="va-input" placeholder="dd.mm.yyyy" required
+                                   value="{{ $birthVal }}">
                         </div>
 
                         <div class="sm:col-span-2">
                             <label class="va-label">Passport number <span class="va-required">*</span></label>
-                            <input type="text" name="passport_number" class="va-input" required>
+                            @php
+                                $passportVal = old('passport_number', trim(($student->passport_serial ?? '') . ($student->passport_number ?? '')));
+                            @endphp
+                            <input type="text" name="passport_number" class="va-input" required
+                                   value="{{ mb_strtoupper($passportVal) }}">
                         </div>
 
                         <div class="sm:col-span-2">

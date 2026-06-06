@@ -25,51 +25,6 @@
                 </div>
             @endif
 
-            {{-- TOGGLE: Survey ON/OFF --}}
-            <div class="bg-white rounded-xl border-2 shadow-sm overflow-hidden transition-all"
-                 id="sv-toggle-card"
-                 style="border-color: {{ $isActive ? '#10b981' : '#f59e0b' }};">
-                <div class="px-6 py-4 flex items-center justify-between gap-4 flex-wrap">
-                    <div class="flex items-center gap-3 flex-1 min-w-0">
-                        <div class="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 transition" id="sv-toggle-icon"
-                             style="background: {{ $isActive ? 'linear-gradient(135deg,#10b981,#059669)' : 'linear-gradient(135deg,#f59e0b,#d97706)' }};">
-                            <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                @if($isActive)
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
-                                @else
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728L5.636 5.636m12.728 12.728L18.364 5.636M5.636 18.364l12.728-12.728"/>
-                                @endif
-                            </svg>
-                        </div>
-                        <div class="min-w-0">
-                            <div class="font-bold text-gray-800 text-sm" id="sv-toggle-title">
-                                So'rovnoma {{ $isActive ? 'yoqilgan' : "o'chirilgan" }}
-                            </div>
-                            <div class="text-xs text-gray-500 mt-0.5" id="sv-toggle-sub">
-                                @if($isActive)
-                                    Talabalar uchun banner va popup ko'rinmoqda. Telegramga xabar yuborish mumkin.
-                                @else
-                                    Talabalarga ko'rinmaydi. Vaqti kelganda yoqib, e'lonni yuboring.
-                                @endif
-                            </div>
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-3 flex-shrink-0">
-                        <span class="text-xs font-semibold" id="sv-toggle-status"
-                              style="color: {{ $isActive ? '#059669' : '#9ca3af' }};">
-                            {{ $isActive ? 'YOQILGAN' : "O'CHIRILGAN" }}
-                        </span>
-                        <button type="button" id="sv-toggle-btn" onclick="svToggleActive(this)"
-                                class="relative inline-flex h-7 w-12 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                                data-enabled="{{ $isActive ? '1' : '0' }}"
-                                style="background: {{ $isActive ? '#10b981' : '#d1d5db' }};">
-                            <span class="inline-block h-5 w-5 rounded-full bg-white shadow transform transition-transform duration-200"
-                                  style="transform: translateX({{ $isActive ? '24px' : '4px' }});"></span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
             {{-- HEADER CARD --}}
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div class="px-6 py-4 border-b border-gray-100" style="background: linear-gradient(135deg, #e8edf5, #dbe4ef);">
@@ -85,7 +40,7 @@
                                 <div class="text-xs text-gray-500 mt-0.5">Survey key: <code class="bg-gray-100 px-1 rounded">{{ $config['key'] }}</code></div>
                             </div>
                         </div>
-                        <div class="flex items-center gap-2">
+                        <div class="flex items-center gap-4 flex-wrap">
                             <div class="text-xs">
                                 <div class="text-gray-500">Tugash muddati</div>
                                 <div class="font-semibold text-gray-800">{{ $deadlineFormatted }}</div>
@@ -95,6 +50,22 @@
                             @else
                                 <span class="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">Faol</span>
                             @endif
+
+                            {{-- Toggle: Survey ON/OFF (kichik, inline) --}}
+                            <div class="flex items-center gap-2 pl-3 ml-1 border-l border-gray-300">
+                                <span class="text-[11px] font-bold uppercase tracking-wide" id="sv-toggle-status"
+                                      style="color: {{ $isActive ? '#059669' : '#9ca3af' }};">
+                                    {{ $isActive ? 'Yoqilgan' : "O'chirilgan" }}
+                                </span>
+                                <button type="button" id="sv-toggle-btn" onclick="svToggleActive(this)"
+                                        class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500"
+                                        data-enabled="{{ $isActive ? '1' : '0' }}"
+                                        title="{{ $isActive ? "So'rovnomani o'chirish" : "So'rovnomani yoqish" }}"
+                                        style="background: {{ $isActive ? '#10b981' : '#d1d5db' }};">
+                                    <span class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow transform transition-transform duration-200"
+                                          style="transform: translateX({{ $isActive ? '19px' : '3px' }});"></span>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -127,7 +98,7 @@
             </div>
 
             {{-- TELEGRAM CARDS GRID --}}
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
                 {{-- 1. E'LON --}}
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
@@ -332,27 +303,11 @@
                 if (!data.success) { alert(data.message || 'Xatolik'); return; }
                 btn.dataset.enabled = newState ? '1' : '0';
                 btn.style.background = newState ? '#10b981' : '#d1d5db';
-                btn.querySelector('span').style.transform = newState ? 'translateX(24px)' : 'translateX(4px)';
-
-                const card = document.getElementById('sv-toggle-card');
-                card.style.borderColor = newState ? '#10b981' : '#f59e0b';
-
-                const icon = document.getElementById('sv-toggle-icon');
-                icon.style.background = newState
-                    ? 'linear-gradient(135deg,#10b981,#059669)'
-                    : 'linear-gradient(135deg,#f59e0b,#d97706)';
-                icon.innerHTML = newState
-                    ? '<svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>'
-                    : '<svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>';
-
-                document.getElementById('sv-toggle-title').textContent =
-                    newState ? "So'rovnoma yoqilgan" : "So'rovnoma o'chirilgan";
-                document.getElementById('sv-toggle-sub').textContent = newState
-                    ? "Talabalar uchun banner va popup ko'rinmoqda. Telegramga xabar yuborish mumkin."
-                    : "Talabalarga ko'rinmaydi. Vaqti kelganda yoqib, e'lonni yuboring.";
+                btn.title = newState ? "So'rovnomani o'chirish" : "So'rovnomani yoqish";
+                btn.querySelector('span').style.transform = newState ? 'translateX(19px)' : 'translateX(3px)';
 
                 const status = document.getElementById('sv-toggle-status');
-                status.textContent = newState ? 'YOQILGAN' : "O'CHIRILGAN";
+                status.textContent = newState ? 'Yoqilgan' : "O'chirilgan";
                 status.style.color = newState ? '#059669' : '#9ca3af';
             })
             .catch(() => { btn.disabled = false; alert('Tarmoq xatosi'); });

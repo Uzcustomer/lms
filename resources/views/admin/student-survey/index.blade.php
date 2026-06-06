@@ -60,39 +60,64 @@
                 </div>
             </div>
 
-            {{-- TELEGRAM YUBORISH --}}
-            <div class="bg-white shadow rounded-lg p-4 sm:p-6">
+            @php
+                $announcementText = (new \App\Http\Controllers\Admin\StudentSurveyController())
+                    ->buildAnnouncementMessage($config['title'], $deadlineFormatted);
+                $reminderText = (new \App\Http\Controllers\Admin\StudentSurveyController())
+                    ->buildReminderMessage($config['title'], $deadlineFormatted);
+            @endphp
+
+            {{-- 1. E'LON — barcha talabalarga --}}
+            <div class="bg-white shadow rounded-lg p-4 sm:p-6 border-l-4 border-emerald-400">
                 <div class="flex flex-wrap items-start justify-between gap-3">
                     <div class="flex-1 min-w-0">
-                        <h3 class="text-base font-bold text-gray-900">Telegramga eslatma yuborish</h3>
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">1-QADAM</span>
+                            <h3 class="text-base font-bold text-gray-900">E'lon: so'rovnoma boshlandi</h3>
+                        </div>
                         <p class="text-xs text-gray-600 mt-1 leading-relaxed">
-                            So'rovnomani hali bajarmagan, Telegram tasdiqlangan talabalarning botiga xabar yuboriladi:
-                            so'rov mavzusi, tugash muddati, ogohlantirish va shaxsiy ma'lumotlar yashirin ekani haqida.
+                            <strong>Barcha</strong> faol talabalarga (Telegram tasdiqlangan) bir martalik e'lon yuboriladi:
+                            so'rov mavzusi, tugash muddati, oqibatlari (profilga kira olmaslik) va anonimlik haqida.
                         </p>
                         <details class="mt-2 text-xs text-gray-600">
-                            <summary class="cursor-pointer text-indigo-600 font-semibold">Yuboriladigan matnni ko'rish</summary>
-                            <pre class="mt-2 p-3 bg-gray-50 border border-gray-200 rounded text-[11px] leading-snug whitespace-pre-wrap">🔔 <b>Eslatma — Talabalar so'rovnomasi</b>
+                            <summary class="cursor-pointer text-emerald-700 font-semibold">Yuboriladigan matnni ko'rish</summary>
+                            <pre class="mt-2 p-3 bg-emerald-50 border border-emerald-200 rounded text-[11px] leading-snug whitespace-pre-wrap">{!! $announcementText !!}</pre>
+                        </details>
+                    </div>
+                    <form method="POST" action="{{ route('admin.student-survey.send-announcement') }}"
+                          onsubmit="return confirm('Barcha faol talabalarga e\'lon yuborilsinmi?');">
+                        @csrf
+                        <button type="submit"
+                                class="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition">
+                            📣 E'lon yuborish
+                        </button>
+                    </form>
+                </div>
+            </div>
 
-<b>Mavzu:</b> {{ $config['title'] }}
-
-Hurmatli talaba, hozirgacha so'rovnomani to'ldirmagansiz. Iltimos, qisqa vaqt ajratib, tizimga kirib so'rovnomani bajaring.
-
-⏰ <b>Tugash muddati:</b> {{ $deadlineFormatted }}
-
-⚠️ <b>Diqqat:</b> Muddat o'tgandan keyin so'rovnomani bajarmagan talabalar profilga kira olmaydi.
-
-🔒 <b>Shaxsiy ma'lumotlaringiz yashirin:</b> Javoblaringiz mutlaqo anonim hisoblanadi va hech kimga ko'rinmaydi — ma'lumotlar faqat umumiy statistika uchun ishlatiladi. Iltimos, samimiy va xolis javob bering.</pre>
+            {{-- 2. ESLATMA — bajarmaganlarga --}}
+            <div class="bg-white shadow rounded-lg p-4 sm:p-6 border-l-4 border-indigo-400">
+                <div class="flex flex-wrap items-start justify-between gap-3">
+                    <div class="flex-1 min-w-0">
+                        <div class="flex items-center gap-2">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">2-QADAM</span>
+                            <h3 class="text-base font-bold text-gray-900">Eslatma: bajarmaganlarga</h3>
+                        </div>
+                        <p class="text-xs text-gray-600 mt-1 leading-relaxed">
+                            <strong>Faqat bajarmagan</strong> talabalarga eslatma yuboriladi. Bu tugma qo'lda. Avtomatik tarzda
+                            har kuni <strong>09:00 da</strong> ham yuboriladi (deadline tugamaguncha).
+                        </p>
+                        <details class="mt-2 text-xs text-gray-600">
+                            <summary class="cursor-pointer text-indigo-700 font-semibold">Yuboriladigan matnni ko'rish</summary>
+                            <pre class="mt-2 p-3 bg-indigo-50 border border-indigo-200 rounded text-[11px] leading-snug whitespace-pre-wrap">{!! $reminderText !!}</pre>
                         </details>
                     </div>
                     <form method="POST" action="{{ route('admin.student-survey.send-telegram') }}"
-                          onsubmit="return confirm('So\'rovnomani bajarmagan barcha talabalarga Telegramga eslatma yuborilsinmi?');">
+                          onsubmit="return confirm('Bajarmagan talabalarga eslatma yuborilsinmi?');">
                         @csrf
                         <button type="submit"
                                 class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition">
-                            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
-                                <path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/>
-                            </svg>
-                            Telegramga yuborish
+                            🔔 Eslatma yuborish
                         </button>
                     </form>
                 </div>

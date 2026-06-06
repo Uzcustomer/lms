@@ -86,6 +86,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // "kirsangiz bo'ladi", overflow → zahira, no-show holatlari.
         $schedule->job(new \App\Jobs\ExamScheduleTickJob())->everyMinute()->withoutOverlapping(2);
 
+        // Talabalar so'rovnomasi — har kuni 09:00 da bajarmaganlarga Telegram eslatma
+        $schedule->command('survey:remind-pending')->dailyAt('09:00')->withoutOverlapping(30);
+
         // Qayta o'qish: muddati o'tgan oynalardagi pending arizalar avtomatik
         // rad ETILMAYDI. Dekan/Registrator/O'quv bo'limi qo'lda tasdiqlaydi
         // yoki rad etadi. Avtomatik rad qilish o'chirildi (foydalanuvchi talabiga ko'ra) —

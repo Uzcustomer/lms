@@ -72,6 +72,34 @@ class StudentSurveyController extends Controller
     }
 
     /**
+     * Barcha faol talabalarga so'rovnoma boshlangani haqida e'lon — bir marta.
+     */
+    public function sendTelegramAnnouncement(Request $request, TelegramService $telegram)
+    {
+        $config = config('student_survey');
+        $deadlineFormatted = \Carbon\Carbon::parse($config['deadline'])->format('d.m.Y H:i');
+        $message = $this->buildAnnouncementMessage($config['title'], $deadlineFormatted);
+
+        $students = Student::query()
+            ->where('student_status_code', 11)
+            ->whereNotNull('telegram_chat_id')
+            ->where('telegram_chat_id', '!=', '')
+            ->select(['hemis_id', 'telegram_chat_id'])
+            ->get();
+
+        [$sent, $failed] = $this->bulkSend($telegram, $students, $message);
+
+        Log::info('Student survey announcement sent', [
+            'survey_key' => $config['key'],
+            'total'      => $students->count(),
+            'sent'       => $sent,
+            'failed'     => $failed,
+        ]);
+
+        return back()->with('success', "E'lon yuborildi: {$sent} ta. Xato: {$failed} ta. Jami: " . $students->count());
+    }
+
+    /**
      * Hozircha so'rovnomani bajarmagan, telegrami tasdiqlangan talabalarga
      * eslatma yuborish (so'rov mavzusi, deadline, anonimlik, ogohlantirish).
      */
@@ -91,24 +119,11 @@ class StudentSurveyController extends Controller
             ->whereNotNull('telegram_chat_id')
             ->where('telegram_chat_id', '!=', '')
             ->when(!empty($completedIds), fn($q) => $q->whereNotIn('hemis_id', $completedIds))
-            ->select(['hemis_id', 'full_name', 'telegram_chat_id'])
+            ->select(['hemis_id', 'telegram_chat_id'])
             ->get();
 
-        $title = $config['title'];
-        $message = $this->buildReminderMessage($title, $deadlineFormatted);
-
-        $sent = 0;
-        $failed = 0;
-        foreach ($pending as $student) {
-            $ok = $telegram->sendToUser((string) $student->telegram_chat_id, $message);
-            if ($ok) {
-                $sent++;
-            } else {
-                $failed++;
-            }
-            // Telegram bot API limiti — sekundiga ~30 xabar. Ehtiyot uchun mikro-pauza.
-            usleep(50_000);
-        }
+        $message = $this->buildReminderMessage($config['title'], $deadlineFormatted);
+        [$sent, $failed] = $this->bulkSend($telegram, $pending, $message);
 
         Log::info('Student survey telegram reminder sent', [
             'survey_key' => $surveyKey,
@@ -117,10 +132,48 @@ class StudentSurveyController extends Controller
             'failed'     => $failed,
         ]);
 
-        return back()->with('success', "Telegramga yuborildi: {$sent} ta. Xato: {$failed} ta. Jami so'rovnomani bajarmaganlar: " . $pending->count());
+        return back()->with('success', "Eslatma yuborildi: {$sent} ta. Xato: {$failed} ta. Jami bajarmaganlar: " . $pending->count());
     }
 
-    private function buildReminderMessage(string $title, string $deadlineFormatted): string
+    /**
+     * Bir guruh talabaga xabar yuborish — Telegram bot limiti uchun mikro-pauza bilan.
+     *
+     * @return array{0:int,1:int} [sent, failed]
+     */
+    private function bulkSend(TelegramService $telegram, $students, string $message): array
+    {
+        $sent = 0;
+        $failed = 0;
+        foreach ($students as $student) {
+            $ok = $telegram->sendToUser((string) $student->telegram_chat_id, $message);
+            if ($ok) $sent++; else $failed++;
+            usleep(50_000); // ~20 msg/sec — bot API limiti uchun xavfsiz
+        }
+        return [$sent, $failed];
+    }
+
+    public function buildAnnouncementMessage(string $title, string $deadlineFormatted): string
+    {
+        $lines = [
+            "📣 <b>So'rovnoma boshlandi</b>",
+            "",
+            "<b>Mavzu:</b> {$title}",
+            "",
+            "Hurmatli talaba! Universitetimizning Registrator ofisi xizmati va imtihon jarayonlarini yaxshilash bo'yicha qisqa so'rovnoma o'tkazilmoqda. Sizning fikringiz bizga qaror qabul qilishda yordam beradi.",
+            "",
+            "⏰ <b>Tugash muddati:</b> {$deadlineFormatted}",
+            "",
+            "⚠️ <b>Diqqat:</b> Muddat tugagandan keyin so'rovnomani bajarmagan talabalar tizim xizmatlaridan foydalana olmaydi — profilga kira olmaydi.",
+            "",
+            "🔒 <b>Anonimlik:</b> Javoblaringiz mutlaqo yashirin saqlanadi va hech kimga ko'rinmaydi. Ma'lumotlar faqat umumiy statistika uchun ishlatiladi. Iltimos, samimiy va xolis javob bering.",
+            "",
+            "Tizimga kirish: https://lms.tashmedunitf.uz",
+        ];
+
+        return implode("\n", $lines);
+    }
+
+    public function buildReminderMessage(string $title, string $deadlineFormatted): string
     {
         $lines = [
             "🔔 <b>Eslatma — Talabalar so'rovnomasi</b>",

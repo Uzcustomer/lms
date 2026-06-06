@@ -319,14 +319,25 @@
 
             fetch('{{ route("admin.student-survey.toggle") }}', {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                    'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json',
                 },
                 body: JSON.stringify({ enabled: newState }),
             })
-            .then(r => r.json())
+            .then(async r => {
+                const text = await r.text();
+                let data;
+                try { data = JSON.parse(text); }
+                catch (e) {
+                    throw new Error('Server javobi noto\'g\'ri (HTTP ' + r.status + '). ' + text.slice(0, 200));
+                }
+                if (!r.ok) throw new Error(data.message || ('HTTP ' + r.status));
+                return data;
+            })
             .then(data => {
                 btn.disabled = false;
                 if (!data.success) { alert(data.message || 'Xatolik'); return; }
@@ -355,7 +366,7 @@
                 status.textContent = newState ? 'YOQILGAN' : "O'CHIRILGAN";
                 status.style.color = newState ? '#059669' : '#9ca3af';
             })
-            .catch(() => { btn.disabled = false; alert('Tarmoq xatosi'); });
+            .catch(err => { btn.disabled = false; alert('Xato: ' + (err.message || 'Tarmoq xatosi')); });
         }
     </script>
 </x-app-layout>

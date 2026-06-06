@@ -111,19 +111,6 @@ class GraduatePassportController extends Controller
                 }
             }
 
-            if ($hasReviewFields && $request->filled('review_status')) {
-                $rs = $request->review_status;
-                // Tekshiruv statusi faqat to'ldirilgan passportlar uchun mavjud
-                $query->whereNotNull('gp.id');
-                if ($rs === 'pending') {
-                    $query->where(function ($q) {
-                        $q->whereNull('gp.status')->orWhere('gp.status', 'pending');
-                    });
-                } else {
-                    $query->where('gp.status', $rs);
-                }
-            }
-
             $columns = [
                 's.id', 's.hemis_id', 's.student_id_number', 's.full_name',
                 's.department_name', 's.group_name', 's.gender_code', 's.gender_name',
@@ -278,17 +265,6 @@ class GraduatePassportController extends Controller
         if ($request->filled('status')) {
             if ($request->status === 'filled') $query->whereNotNull('gp.id');
             elseif ($request->status === 'empty') $query->whereNull('gp.id');
-        }
-        if (Schema::hasColumn('graduate_student_passports', 'status') && $request->filled('review_status')) {
-            $rs = $request->review_status;
-            $query->whereNotNull('gp.id');
-            if ($rs === 'pending') {
-                $query->where(function ($q) {
-                    $q->whereNull('gp.status')->orWhere('gp.status', 'pending');
-                });
-            } else {
-                $query->where('gp.status', $rs);
-            }
         }
         if ($request->filled('search')) {
             $sv = trim($request->search);

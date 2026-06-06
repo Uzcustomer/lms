@@ -205,7 +205,7 @@ class SurveySendTelegram extends Command
         };
 
         $stopFlag = false;
-        $query->select(['hemis_id', 'full_name', 'telegram_chat_id', 'department_name'])
+        $query->select(['id', 'hemis_id', 'full_name', 'telegram_chat_id', 'department_name'])
             ->chunkById(500, function ($chunk) use (&$batch, $process, $concurrency, $limit, &$i, &$stopFlag) {
                 foreach ($chunk as $student) {
                     if ($limit && ($i + count($batch)) >= $limit) {

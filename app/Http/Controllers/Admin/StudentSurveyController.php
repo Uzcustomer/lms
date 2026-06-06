@@ -253,7 +253,7 @@ class StudentSurveyController extends Controller
         $failed = 0;
         $i = 0;
 
-        $query->select(['hemis_id', 'telegram_chat_id', 'department_name'])
+        $query->select(['id', 'hemis_id', 'telegram_chat_id', 'department_name'])
             ->chunkById(200, function ($chunk) use (&$sent, &$failed, &$i, $telegram, $messages) {
                 foreach ($chunk as $student) {
                     $loc = self::detectStudentLocale($student);

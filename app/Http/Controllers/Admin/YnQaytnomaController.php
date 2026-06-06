@@ -1255,15 +1255,15 @@ class YnQaytnomaController extends Controller
                        || ($wTest > 0 && $testVal !== null && $testVal < 60)) {
                     $v = 0;
                 } else {
-                    // JB+MT+ON qismi bir marta yaxlitlanadi, OSKI+Test ham bir
-                    // marta birga yaxlitlanadi (faqat vazni mavjudlari qo'shiladi).
-                    $jbMtOnSum = round($eBall + $hBall + $kBall, 1);
+                    // Har GURUH alohida butun songacha (half-up) yaxlitlanadi,
+                    // keyin qo'shiladi: round(JB+MT+ON) + round(OSKI+Test).
+                    $jbMtOnSum = (int) floor($eBall + $hBall + $kBall + 0.5);
                     if ($wOski > 0 && $wTest > 0) {
-                        $examSum = round($qBall + $tBall, 1);
+                        $examSum = (int) floor($qBall + $tBall + 0.5);
                     } elseif ($wOski > 0) {
-                        $examSum = round($qBall, 1);
+                        $examSum = (int) floor($qBall + 0.5);
                     } elseif ($wTest > 0) {
-                        $examSum = round($tBall, 1);
+                        $examSum = (int) floor($tBall + 0.5);
                     } else {
                         $examSum = 0;
                     }

@@ -1117,19 +1117,17 @@ class VedomostTekshirishController extends Controller
             return 0;
         }
 
-        // Yakuniy ball — ekranga chiqadigan ball'lardan hisoblanadi (4-5 kurs
-        // uchun butun songa yaxlitlangan JN/MT/ON, faqat bittasi vaznga ega
-        // OSKI/Test holatlarida butun songa yaxlitlangan ball). Oraliq
-        // yaxlitlash qilinmaydi — aks holda 12.45 → 12.5 ga aylanib, yakuniy
-        // qiymat bir birlikka oshib ketadi (89.45 → 90 emas, 89 chiqishi kerak).
-        $jbMtOnSum = $jnBall + $mtBall + $onBall;
+        // Yakuniy ball — har GURUH alohida butun songacha (half-up) yaxlitlanadi,
+        // keyin qo'shiladi: round(JN+MT+ON) + round(OSKI+Test). (4-5 kurs uchun
+        // JN/MT/ON allaqachon alohida butun songa yaxlitlangan — yuqoriga qarang.)
+        $jbMtOnSum = (int) floor($jnBall + $mtBall + $onBall + 0.5);
 
         if ($wOski > 0 && $wTest > 0) {
-            $examSum = $oskiBall + $testBall;
+            $examSum = (int) floor($oskiBall + $testBall + 0.5);
         } elseif ($wOski > 0) {
-            $examSum = $oskiBall;
+            $examSum = (int) floor($oskiBall + 0.5);
         } elseif ($wTest > 0) {
-            $examSum = $testBall;
+            $examSum = (int) floor($testBall + 0.5);
         } else {
             $examSum = 0;
         }

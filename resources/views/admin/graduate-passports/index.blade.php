@@ -51,7 +51,7 @@
                         </div>
                         <div class="filter-item" style="min-width:150px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Holat</label>
-                            <select id="status-select" class="filter-input">
+                            <select id="status-select" class="filter-input" onchange="applyFilter()">
                                 <option value="">Barchasi</option>
                                 <option value="filled">To'ldirgan</option>
                                 <option value="empty">To'ldirilmagan</option>
@@ -59,7 +59,7 @@
                         </div>
                         <div class="filter-item" style="min-width:160px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Tekshiruv</label>
-                            <select id="review-select" class="filter-input">
+                            <select id="review-select" class="filter-input" onchange="applyFilter()">
                                 <option value="">Barchasi</option>
                                 <option value="pending">Kutilmoqda</option>
                                 <option value="approved">Tasdiqlangan</option>

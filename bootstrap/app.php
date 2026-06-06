@@ -22,6 +22,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'force.password.change' => \App\Http\Middleware\ForcePasswordChange::class,
             'force.student.contact' => \App\Http\Middleware\ForceStudentContact::class,
+            'ensure.survey.completed' => \App\Http\Middleware\EnsureSurveyCompleted::class,
             'nazoratchi.readonly' => \App\Http\Middleware\NazoratchiReadOnly::class,
             'enforce.assigned.computer' => \App\Http\Middleware\EnforceAssignedComputer::class,
         ]);

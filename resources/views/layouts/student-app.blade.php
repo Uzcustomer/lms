@@ -385,6 +385,123 @@
         @endif
     @endauth
 
+    {{-- So'rovnoma banneri + popup --}}
+    @auth('student')
+        @php
+            $svConfig = config('student_survey');
+            $svStudent = auth()->guard('student')->user();
+            $svOnSurveyPage = request()->routeIs('student.survey.*');
+            $svShouldShow = false;
+            $svDeadlinePassed = false;
+            $svDeadlineFormatted = null;
+            if ($svConfig && !empty($svConfig['key']) && $svStudent && !$svOnSurveyPage) {
+                $svCompleted = \App\Models\StudentSurveyCompletion::where('survey_key', $svConfig['key'])
+                    ->where('student_hemis_id', $svStudent->hemis_id)
+                    ->exists();
+                if (!$svCompleted) {
+                    $svShouldShow = true;
+                    $svDeadlinePassed = strtotime($svConfig['deadline']) < time();
+                    $svDeadlineFormatted = \Carbon\Carbon::parse($svConfig['deadline'])->format('d.m.Y H:i');
+                }
+            }
+        @endphp
+
+        @if($svShouldShow)
+            {{-- Tepa kichik banner — har doim ko'rinadi survey tugagunicha --}}
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3">
+                <a href="{{ route('student.survey.show') }}"
+                   class="flex items-center justify-between px-3 py-2 rounded-lg border bg-indigo-50 border-indigo-200 hover:bg-indigo-100 transition group">
+                    <div class="flex items-center gap-2 min-w-0">
+                        <svg class="w-4 h-4 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                        </svg>
+                        <span class="text-xs sm:text-sm font-semibold text-indigo-800 truncate">{{ __("So'rovnomani bajarish") }}</span>
+                    </div>
+                    <span class="text-[10px] sm:text-xs font-bold text-white bg-indigo-600 group-hover:bg-indigo-700 px-2 py-1 rounded-md flex-shrink-0">
+                        {{ __('Davom etish') }} →
+                    </span>
+                </a>
+            </div>
+
+            {{-- Auto-popup CTA — profilga/sahifaga kirganda chiqadi --}}
+            <div id="sv-cta-modal" class="hidden" style="position:fixed;inset:0;z-index:99997;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,0.55);backdrop-filter:blur(4px);padding:16px;">
+                <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden" style="animation: sv-cta-in 0.3s ease;">
+                    <div style="background:linear-gradient(135deg,#6366f1,#4f46e5);" class="px-5 py-4 text-white">
+                        <div class="flex items-center gap-2.5">
+                            <div style="width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,0.2);" class="flex items-center justify-center flex-shrink-0">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                                </svg>
+                            </div>
+                            <h3 class="text-base font-bold leading-snug">{{ $svConfig['title'] }}</h3>
+                        </div>
+                    </div>
+                    <div class="px-5 py-4">
+                        <p class="text-sm text-slate-700 leading-snug mb-3">
+                            @if($svDeadlinePassed)
+                                {{ __("Muhlat tugadi. So'rovnomani bajarmaguncha boshqa xizmatlardan foydalana olmaysiz.") }}
+                            @else
+                                {{ __("Iltimos, qisqa so'rovnomani to'ldiring. Vaqtingiz oz bo'lsa, keyinroq ham bajarishingiz mumkin.") }}
+                            @endif
+                        </p>
+                        <div class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 mb-3 flex items-center gap-2 text-xs text-slate-600">
+                            <svg class="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                            <span>{{ __('Tugash muddati') }}: <strong class="text-slate-800">{{ $svDeadlineFormatted }}</strong></span>
+                        </div>
+                        <div class="flex flex-col" style="gap:8px;">
+                            <a href="{{ route('student.survey.show') }}"
+                               style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;text-decoration:none;display:block;">
+                                {{ __("So'rovnomani boshlash") }} →
+                            </a>
+                            @if(!$svDeadlinePassed)
+                                <button type="button" onclick="svCtaDismiss()"
+                                        style="padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;background:#fff;color:#475569;border:1px solid #e2e8f0;cursor:pointer;">
+                                    {{ __('Keyinroq bajarish') }}
+                                </button>
+                            @endif
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <style>
+                @keyframes sv-cta-in {
+                    from { opacity: 0; transform: translateY(20px) scale(0.96); }
+                    to   { opacity: 1; transform: translateY(0) scale(1); }
+                }
+            </style>
+
+            <script>
+                (function () {
+                    const m = document.getElementById('sv-cta-modal');
+                    if (!m) return;
+                    const dismissed = sessionStorage.getItem('sv_cta_dismissed');
+                    const blocking = @json($svDeadlinePassed);
+                    // Deadline o'tgan bo'lsa — har doim ochiladi. O'tmagan bo'lsa — sessionStorage tekshiriladi.
+                    if (blocking || !dismissed) {
+                        m.classList.remove('hidden');
+                        m.style.display = 'flex';
+                    }
+                    // Click-outside yopish faqat deadline o'tmagan bo'lsa
+                    if (!blocking) {
+                        m.addEventListener('click', function (e) {
+                            if (e.target === m) svCtaDismiss();
+                        });
+                    }
+                })();
+                function svCtaDismiss() {
+                    const m = document.getElementById('sv-cta-modal');
+                    if (!m) return;
+                    sessionStorage.setItem('sv_cta_dismissed', '1');
+                    m.style.display = 'none';
+                    m.classList.add('hidden');
+                }
+            </script>
+        @endif
+    @endauth
+
     {{-- Impersonatsiya banneri --}}
     @if(session('impersonating'))
         <div class="bg-red-600 text-white">

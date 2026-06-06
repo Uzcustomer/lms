@@ -155,9 +155,9 @@
                         </div>
 
                         <div>
-                            <label class="va-label">Middle name</label>
-                            <input type="text" name="middle_name" class="va-input">
-                            <div class="va-hint">If you have one.</div>
+                            <label class="va-label">Middle name <span class="va-required">*</span></label>
+                            <input type="text" name="middle_name" class="va-input" required>
+                            <div class="va-hint">Write "—" if you don't have one.</div>
                         </div>
 
                         <div>

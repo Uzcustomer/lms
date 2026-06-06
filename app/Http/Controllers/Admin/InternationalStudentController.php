@@ -254,7 +254,10 @@ class InternationalStudentController extends Controller
                 ->exists();
         }
 
-        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates'));
+        // Tepada "Viza arizalar" tugmasi uchun pending arizalar soni (badge)
+        $visaPendingCount = \App\Models\VisaApplication::where('status', 'pending')->count();
+
+        return view('admin.international-students.index', compact('students', 'firms', 'stats', 'countries', 'departments', 'isSubscribed', 'falseShowEnabled', 'visaEndDates', 'regEndDates', 'visaPendingCount'));
     }
 
     /**

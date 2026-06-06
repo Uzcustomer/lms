@@ -10003,6 +10003,39 @@ class JournalController extends Controller
             $sinovBy[$r->subject_id . '|' . $r->semester_code . '|' . $r->group_hemis_id . '|' . $r->student_hemis_id] = $r;
         }
 
+        // 4b) O'qituvchi va kafedra (schedules jadvalidan).
+        // Bir guruh+fan+semestrda ko'pincha bir o'qituvchi bo'ladi; ko'p bo'lsa eng
+        // ko'p mashg'ulot olib borgan kishi yutadi.
+        $teacherByKey = [];
+        $kafedraByKey = [];
+        $scheduleRows = DB::table('schedules')
+            ->whereIn('subject_id', $subjectIds)
+            ->whereIn('semester_code', $semesterCodes)
+            ->whereIn('group_id', $groupHids)
+            ->whereNull('deleted_at')
+            ->select(['subject_id', 'semester_code', 'group_id', 'employee_name', 'department_name'])
+            ->get();
+        $byTgKey = $scheduleRows->groupBy(
+            fn($s) => $s->subject_id . '|' . $s->semester_code . '|' . $s->group_id
+        );
+        foreach ($byTgKey as $key => $rows) {
+            // Eng ko'p uchragan o'qituvchi
+            $topTeacher = $rows->pluck('employee_name')
+                ->filter()
+                ->countBy()
+                ->sortDesc()
+                ->keys()
+                ->first() ?? '';
+            $topKafedra = $rows->pluck('department_name')
+                ->filter()
+                ->countBy()
+                ->sortDesc()
+                ->keys()
+                ->first() ?? '';
+            $teacherByKey[$key] = $topTeacher;
+            $kafedraByKey[$key] = $topKafedra;
+        }
+
         // 5) Barcha JN va MT baholari — bulk
         $studentHids = $students->collapse()->pluck('hemis_id')->unique()->values()->all();
         $excludeTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
@@ -10069,13 +10102,14 @@ class JournalController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sinov fanlar');
 
-        $headers = ['#', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh', 'F.I.O', 'Talaba ID',
-                    'Fan', 'MT bali', 'JN bali', 'Sinov (test)'];
+        $headers = ['#', 'Fakultet', 'Kafedra', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh',
+                    'Fan', 'O\'qituvchi F.I.O', 'Talaba F.I.O', 'Talaba ID',
+                    'MT bali', 'JN bali', 'Sinov (test)'];
         foreach ($headers as $col => $h) {
             $cell = chr(65 + $col) . '1';
             $sheet->setCellValue($cell, $h);
         }
-        $sheet->getStyle('A1:L1')->applyFromArray([
+        $sheet->getStyle('A1:N1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '7C3AED']],
             'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
@@ -10093,6 +10127,10 @@ class JournalController extends Controller
                 if ($subj->curricula_hemis_id != $grp->curriculum_hemis_id) continue;
                 $semLabel = $semesterNames[$subj->semester_code] ?? $subj->semester_code;
 
+                $tgKey = $subj->subject_id . '|' . $subj->semester_code . '|' . $grp->group_hemis_id;
+                $teacher = $teacherByKey[$tgKey] ?? '';
+                $kafedra = $kafedraByKey[$tgKey] ?? '';
+
                 foreach ($groupStudents as $stu) {
                     $rank++;
                     $key = $stu->hemis_id . '|' . $subj->subject_id . '|' . $subj->semester_code;
@@ -10106,20 +10144,20 @@ class JournalController extends Controller
                         : '';
 
                     $sheet->fromArray([
-                        $rank, $facName, $specName, $levelLabel, $semLabel,
-                        $grp->name, $stu->full_name, $stu->student_id_number,
-                        $subj->subject_name, $mt, $jn, $sinov,
+                        $rank, $facName, $kafedra, $specName, $levelLabel, $semLabel, $grp->name,
+                        $subj->subject_name, $teacher, $stu->full_name, $stu->student_id_number,
+                        $mt, $jn, $sinov,
                     ], null, 'A' . $row);
                     $row++;
                 }
             }
         }
 
-        foreach (range('A', 'L') as $col) {
+        foreach (range('A', 'N') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
         if ($row > 2) {
-            $sheet->setAutoFilter('A1:L' . ($row - 1));
+            $sheet->setAutoFilter('A1:N' . ($row - 1));
         }
 
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);

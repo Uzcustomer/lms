@@ -89,7 +89,7 @@ class SurveySendTelegram extends Command
             Setting::set('student_survey_tg_sent', '0');
             Setting::set('student_survey_tg_failed', '0');
             Setting::set('student_survey_tg_started_at', now()->toDateTimeString());
-            Setting::forget('student_survey_tg_last_error');
+            Setting::set('student_survey_tg_last_error', '');
         }
 
         // 3 ta tilda matn

@@ -1,145 +1,179 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="font-semibold text-sm text-gray-800 leading-tight">
-            {{ __("Talabalar so'rovnomasi natijalari") }}
-        </h2>
+        <h2 class="font-semibold text-xl text-gray-800 leading-tight">Talabalar so'rovnomasi</h2>
     </x-slot>
 
     @php
         $pct = $totalActive > 0 ? round($completedCount * 100 / $totalActive, 1) : 0;
+        $announcementText = (new \App\Http\Controllers\Admin\StudentSurveyController())
+            ->buildAnnouncementMessage($config['title'], $deadlineFormatted);
+        $reminderText = (new \App\Http\Controllers\Admin\StudentSurveyController())
+            ->buildReminderMessage($config['title'], $deadlineFormatted);
     @endphp
 
-    <div class="py-4">
-        <div class="max-w-7xl mx-auto sm:px-4 lg:px-6 space-y-4">
+    <div class="py-6">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
 
-            {{-- SARLAVHA + UMUMIY --}}
-            <div class="bg-white shadow rounded-lg p-4 sm:p-6">
-                <div class="flex flex-wrap items-start justify-between gap-3 mb-3">
-                    <div>
-                        <h3 class="text-lg font-bold text-gray-900">{{ $config['title'] }}</h3>
-                        <p class="text-xs text-gray-500 mt-1">Survey key: <code>{{ $config['key'] }}</code></p>
+            @if(session('success'))
+                <div class="bg-white rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
+                    <div class="px-5 py-3 flex items-center gap-3" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5);">
+                        <svg class="w-5 h-5 text-emerald-600 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                        </svg>
+                        <span class="text-sm font-semibold text-emerald-800">{{ session('success') }}</span>
                     </div>
-                    <div class="flex items-center gap-2">
-                        <span class="text-xs text-gray-500">Tugash:</span>
-                        <span class="text-xs font-bold {{ $deadlinePassed ? 'text-red-700' : 'text-emerald-700' }}">
-                            {{ $deadlineFormatted }}
-                            @if($deadlinePassed) <span class="ml-1 px-1.5 py-0.5 bg-red-100 text-red-700 rounded">Muddat tugadi</span>
-                            @else <span class="ml-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded">Faol</span>
+                </div>
+            @endif
+
+            {{-- HEADER CARD --}}
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div class="px-6 py-4 border-b border-gray-100" style="background: linear-gradient(135deg, #e8edf5, #dbe4ef);">
+                    <div class="flex items-start justify-between gap-3 flex-wrap">
+                        <div class="flex items-center gap-3">
+                            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #2b5ea7, #3b82f6);">
+                                <svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="font-bold text-gray-800 text-sm">{{ $config['title'] }}</div>
+                                <div class="text-xs text-gray-500 mt-0.5">Survey key: <code class="bg-gray-100 px-1 rounded">{{ $config['key'] }}</code></div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <div class="text-xs">
+                                <div class="text-gray-500">Tugash muddati</div>
+                                <div class="font-semibold text-gray-800">{{ $deadlineFormatted }}</div>
+                            </div>
+                            @if($deadlinePassed)
+                                <span class="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold">Tugadi</span>
+                            @else
+                                <span class="px-2 py-1 bg-emerald-100 text-emerald-700 rounded text-xs font-bold">Faol</span>
                             @endif
-                        </span>
+                        </div>
                     </div>
                 </div>
 
-                @if(session('success'))
-                    <div class="mb-3 px-3 py-2 bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm rounded">
-                        {{ session('success') }}
+                {{-- STATS GRID --}}
+                <div class="grid grid-cols-2 sm:grid-cols-4 divide-x divide-y sm:divide-y-0 divide-gray-100">
+                    <div class="px-5 py-4">
+                        <div class="text-[11px] text-gray-500 uppercase font-semibold tracking-wide">Faol talabalar</div>
+                        <div class="text-2xl font-bold text-gray-800 mt-1">{{ number_format($totalActive) }}</div>
                     </div>
-                @endif
-
-                <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                    <div class="border border-gray-200 rounded-lg p-3">
-                        <div class="text-[11px] text-gray-500 uppercase font-semibold">Faol talabalar</div>
-                        <div class="text-2xl font-bold text-gray-900 mt-1">{{ number_format($totalActive) }}</div>
+                    <div class="px-5 py-4">
+                        <div class="text-[11px] text-emerald-700 uppercase font-semibold tracking-wide">Bajargan</div>
+                        <div class="text-2xl font-bold text-emerald-600 mt-1">{{ number_format($completedCount) }}</div>
                     </div>
-                    <div class="border border-emerald-200 bg-emerald-50/40 rounded-lg p-3">
-                        <div class="text-[11px] text-emerald-700 uppercase font-semibold">Bajargan</div>
-                        <div class="text-2xl font-bold text-emerald-700 mt-1">{{ number_format($completedCount) }}</div>
+                    <div class="px-5 py-4">
+                        <div class="text-[11px] text-amber-700 uppercase font-semibold tracking-wide">Bajarmagan</div>
+                        <div class="text-2xl font-bold text-amber-600 mt-1">{{ number_format($pendingCount) }}</div>
                     </div>
-                    <div class="border border-amber-200 bg-amber-50/40 rounded-lg p-3">
-                        <div class="text-[11px] text-amber-700 uppercase font-semibold">Bajarmagan</div>
-                        <div class="text-2xl font-bold text-amber-700 mt-1">{{ number_format($pendingCount) }}</div>
-                    </div>
-                    <div class="border border-indigo-200 bg-indigo-50/40 rounded-lg p-3">
-                        <div class="text-[11px] text-indigo-700 uppercase font-semibold">Foiz</div>
-                        <div class="text-2xl font-bold text-indigo-700 mt-1">{{ $pct }}%</div>
+                    <div class="px-5 py-4">
+                        <div class="text-[11px] uppercase font-semibold tracking-wide" style="color:#2b5ea7;">Foiz</div>
+                        <div class="text-2xl font-bold mt-1" style="color:#2b5ea7;">{{ $pct }}%</div>
                     </div>
                 </div>
 
-                <div class="mt-3 h-2 w-full bg-gray-100 rounded-full overflow-hidden">
-                    <div class="h-full rounded-full" style="width:{{ $pct }}%;background:linear-gradient(90deg,#34d399,#10b981);"></div>
+                <div class="px-5 pb-4">
+                    <div class="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <div class="h-full rounded-full transition-all" style="width:{{ $pct }}%;background:linear-gradient(90deg,#10b981,#34d399);"></div>
+                    </div>
                 </div>
             </div>
 
-            @php
-                $announcementText = (new \App\Http\Controllers\Admin\StudentSurveyController())
-                    ->buildAnnouncementMessage($config['title'], $deadlineFormatted);
-                $reminderText = (new \App\Http\Controllers\Admin\StudentSurveyController())
-                    ->buildReminderMessage($config['title'], $deadlineFormatted);
-            @endphp
+            {{-- TELEGRAM CARDS GRID --}}
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
 
-            {{-- 1. E'LON — barcha talabalarga --}}
-            <div class="bg-white shadow rounded-lg p-4 sm:p-6 border-l-4 border-emerald-400">
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">1-QADAM</span>
-                            <h3 class="text-base font-bold text-gray-900">E'lon: so'rovnoma boshlandi</h3>
+                {{-- 1. E'LON --}}
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5);">
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #10b981, #059669);">
+                            <span class="text-white text-xs font-bold">1</span>
                         </div>
-                        <p class="text-xs text-gray-600 mt-1 leading-relaxed">
-                            <strong>Barcha</strong> faol talabalarga (Telegram tasdiqlangan) bir martalik e'lon yuboriladi:
-                            so'rov mavzusi, tugash muddati, oqibatlari (profilga kira olmaslik) va anonimlik haqida.
-                        </p>
-                        <details class="mt-2 text-xs text-gray-600">
-                            <summary class="cursor-pointer text-emerald-700 font-semibold">Yuboriladigan matnni ko'rish</summary>
-                            <pre class="mt-2 p-3 bg-emerald-50 border border-emerald-200 rounded text-[11px] leading-snug whitespace-pre-wrap">{!! $announcementText !!}</pre>
-                        </details>
+                        <div>
+                            <div class="font-bold text-gray-800 text-sm">E'lon yuborish</div>
+                            <div class="text-xs text-gray-500 mt-0.5">Bir martalik — barcha talabalarga</div>
+                        </div>
                     </div>
-                    <form method="POST" action="{{ route('admin.student-survey.send-announcement') }}"
-                          onsubmit="return confirm('Barcha faol talabalarga e\'lon yuborilsinmi?');">
-                        @csrf
-                        <button type="submit"
-                                class="inline-flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-lg transition">
-                            📣 E'lon yuborish
-                        </button>
-                    </form>
+                    <div class="p-5">
+                        <p class="text-xs text-gray-600 leading-relaxed mb-3">
+                            Barcha faol talabalarga (Telegram tasdiqlangan) so'rovnoma boshlangani,
+                            tugash muddati, oqibatlari (profilga kira olmaslik) va anonimlik haqida e'lon yuboriladi.
+                        </p>
+                        <details class="mb-4">
+                            <summary class="cursor-pointer text-xs text-emerald-700 font-semibold hover:underline">Yuboriladigan matnni ko'rish</summary>
+                            <pre class="mt-2 p-3 bg-emerald-50 border border-emerald-100 rounded-lg text-[11px] leading-snug whitespace-pre-wrap text-gray-700">{!! $announcementText !!}</pre>
+                        </details>
+                        <form method="POST" action="{{ route('admin.student-survey.send-announcement') }}"
+                              onsubmit="return confirm('Barcha faol talabalarga e\'lon yuborilsinmi?');">
+                            @csrf
+                            <button type="submit"
+                                    class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-white text-sm font-bold rounded-lg transition shadow-sm hover:shadow"
+                                    style="background: linear-gradient(135deg, #10b981, #059669);">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"/>
+                                </svg>
+                                E'lon yuborish
+                            </button>
+                        </form>
+                    </div>
                 </div>
-            </div>
 
-            {{-- 2. ESLATMA — bajarmaganlarga --}}
-            <div class="bg-white shadow rounded-lg p-4 sm:p-6 border-l-4 border-indigo-400">
-                <div class="flex flex-wrap items-start justify-between gap-3">
-                    <div class="flex-1 min-w-0">
-                        <div class="flex items-center gap-2">
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">2-QADAM</span>
-                            <h3 class="text-base font-bold text-gray-900">Eslatma: bajarmaganlarga</h3>
+                {{-- 2. ESLATMA --}}
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                    <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3" style="background: linear-gradient(135deg, #e8edf5, #dbe4ef);">
+                        <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #2b5ea7, #3b82f6);">
+                            <span class="text-white text-xs font-bold">2</span>
                         </div>
-                        <p class="text-xs text-gray-600 mt-1 leading-relaxed">
-                            <strong>Faqat bajarmagan</strong> talabalarga eslatma yuboriladi. Bu tugma qo'lda. Avtomatik tarzda
-                            har kuni <strong>09:00 da</strong> ham yuboriladi (deadline tugamaguncha).
-                        </p>
-                        <details class="mt-2 text-xs text-gray-600">
-                            <summary class="cursor-pointer text-indigo-700 font-semibold">Yuboriladigan matnni ko'rish</summary>
-                            <pre class="mt-2 p-3 bg-indigo-50 border border-indigo-200 rounded text-[11px] leading-snug whitespace-pre-wrap">{!! $reminderText !!}</pre>
-                        </details>
+                        <div>
+                            <div class="font-bold text-gray-800 text-sm">Eslatma yuborish</div>
+                            <div class="text-xs text-gray-500 mt-0.5">Faqat bajarmaganlarga + har kuni 09:00 avto</div>
+                        </div>
                     </div>
-                    <form method="POST" action="{{ route('admin.student-survey.send-telegram') }}"
-                          onsubmit="return confirm('Bajarmagan talabalarga eslatma yuborilsinmi?');">
-                        @csrf
-                        <button type="submit"
-                                class="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-lg transition">
-                            🔔 Eslatma yuborish
-                        </button>
-                    </form>
+                    <div class="p-5">
+                        <p class="text-xs text-gray-600 leading-relaxed mb-3">
+                            So'rovnomani bajarmagan talabalarga eslatma yuboriladi. Avtomatik tarzda
+                            <strong>har kuni 09:00 da</strong> bajaridi (deadline tugamaguncha).
+                        </p>
+                        <details class="mb-4">
+                            <summary class="cursor-pointer text-xs font-semibold hover:underline" style="color:#2b5ea7;">Yuboriladigan matnni ko'rish</summary>
+                            <pre class="mt-2 p-3 border rounded-lg text-[11px] leading-snug whitespace-pre-wrap text-gray-700" style="background:#f0f4fa;border-color:#dbe4ef;">{!! $reminderText !!}</pre>
+                        </details>
+                        <form method="POST" action="{{ route('admin.student-survey.send-telegram') }}"
+                              onsubmit="return confirm('Bajarmagan talabalarga eslatma yuborilsinmi?');">
+                            @csrf
+                            <button type="submit"
+                                    class="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 text-white text-sm font-bold rounded-lg transition shadow-sm hover:shadow"
+                                    style="background: linear-gradient(135deg, #2b5ea7, #3b82f6);">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                                </svg>
+                                Eslatma yuborish
+                            </button>
+                        </form>
+                    </div>
                 </div>
             </div>
 
             {{-- FAKULTET BO'YICHA --}}
             @if($facultyStats->isNotEmpty())
-            <div class="bg-white shadow rounded-lg p-4 sm:p-6">
-                <h3 class="text-base font-bold text-gray-900 mb-3">Fakultet bo'yicha bajarganlar</h3>
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div class="px-6 py-3 border-b border-gray-100" style="background: linear-gradient(135deg, #e8edf5, #dbe4ef);">
+                    <div class="font-bold text-gray-800 text-sm">Fakultet bo'yicha bajarganlar</div>
+                </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full text-sm">
                         <thead class="bg-gray-50">
                             <tr>
-                                <th class="text-left px-3 py-2 font-semibold text-gray-700">Fakultet</th>
-                                <th class="text-right px-3 py-2 font-semibold text-gray-700">Soni</th>
+                                <th class="text-left px-5 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Fakultet</th>
+                                <th class="text-right px-5 py-2.5 text-xs font-semibold text-gray-600 uppercase tracking-wide">Bajarganlar</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
                             @foreach($facultyStats as $row)
-                                <tr>
-                                    <td class="px-3 py-2 text-gray-800">{{ $row->fakultet ?: '—' }}</td>
-                                    <td class="px-3 py-2 text-right font-bold text-gray-900">{{ $row->soni }}</td>
+                                <tr class="hover:bg-gray-50 transition">
+                                    <td class="px-5 py-2.5 text-sm text-gray-800">{{ $row->fakultet ?: '—' }}</td>
+                                    <td class="px-5 py-2.5 text-right text-sm font-bold text-gray-900">{{ $row->soni }}</td>
                                 </tr>
                             @endforeach
                         </tbody>
@@ -148,16 +182,17 @@
             </div>
             @endif
 
-            {{-- HAR SAVOL TAQSIMOTI --}}
-            <div class="bg-white shadow rounded-lg p-4 sm:p-6">
-                <h3 class="text-base font-bold text-gray-900 mb-4">Savollar bo'yicha javoblar taqsimoti</h3>
-
-                <div class="space-y-5">
+            {{-- SAVOLLAR TAQSIMOTI --}}
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                <div class="px-6 py-3 border-b border-gray-100" style="background: linear-gradient(135deg, #e8edf5, #dbe4ef);">
+                    <div class="font-bold text-gray-800 text-sm">Savollar bo'yicha javoblar taqsimoti</div>
+                </div>
+                <div class="divide-y divide-gray-100">
                     @foreach($config['questions'] as $q)
                         @php $s = $stats[$q['id']]; @endphp
-                        <div class="border border-gray-200 rounded-lg p-3 sm:p-4">
-                            <div class="flex items-start gap-2 mb-2">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700 flex-shrink-0">
+                        <div class="px-5 py-4">
+                            <div class="flex items-start gap-2 mb-3">
+                                <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold flex-shrink-0" style="background:#e0e7ff;color:#3730a3;">
                                     SAVOL {{ $q['id'] }}
                                 </span>
                                 <h4 class="text-sm font-semibold text-gray-800 leading-snug">{{ $q['text'] }}</h4>
@@ -165,15 +200,15 @@
 
                             @if($s['type'] === 'text')
                                 <div class="text-xs text-gray-600">
-                                    Erkin matnli javoblar: <strong>{{ $s['count'] }}</strong> ta
+                                    Erkin matnli javoblar: <strong class="text-gray-800">{{ $s['count'] }}</strong> ta
                                     @if(isset($textAnswers[$q['id']]) && $textAnswers[$q['id']]->isNotEmpty())
                                     <details class="mt-2">
-                                        <summary class="cursor-pointer text-indigo-600 font-semibold">Javoblarni ko'rish</summary>
+                                        <summary class="cursor-pointer font-semibold hover:underline" style="color:#2b5ea7;">Javoblarni ko'rish</summary>
                                         <ul class="mt-2 space-y-1.5 max-h-72 overflow-y-auto">
                                             @foreach($textAnswers[$q['id']] as $t)
-                                                <li class="text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1.5">
+                                                <li class="text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded-lg px-3 py-2">
                                                     {{ $t->answer }}
-                                                    <span class="text-[10px] text-gray-400 ml-1">[{{ $t->created_at->format('d.m.Y H:i') }}]</span>
+                                                    <div class="text-[10px] text-gray-400 mt-1">{{ $t->created_at->format('d.m.Y H:i') }}</div>
                                                 </li>
                                             @endforeach
                                         </ul>
@@ -182,11 +217,10 @@
                                 </div>
                             @else
                                 @php
-                                    $respondersN = $s['responders'] ?: 1;
                                     $opts = $s['options'];
                                     if (!isset($opts['other'])) $opts['other'] = 'Boshqa';
                                 @endphp
-                                <div class="space-y-1.5">
+                                <div class="space-y-2">
                                     @foreach($opts as $optId => $optText)
                                         @php
                                             $cnt = $s['totals'][$optId] ?? 0;
@@ -196,24 +230,26 @@
                                             @continue
                                         @endif
                                         <div>
-                                            <div class="flex items-center justify-between text-xs">
+                                            <div class="flex items-center justify-between text-xs mb-1">
                                                 <span class="text-gray-700 flex-1 pr-2">
-                                                    @if($optId !== 'other')<strong class="text-indigo-600 mr-0.5">{{ $optId }})</strong>@endif
+                                                    @if($optId !== 'other')<strong class="mr-0.5" style="color:#2b5ea7;">{{ $optId }})</strong>@endif
                                                     {{ $optText }}
                                                 </span>
-                                                <span class="font-bold text-gray-900 whitespace-nowrap">{{ $cnt }} <span class="text-gray-500 font-normal">({{ $pctOpt }}%)</span></span>
+                                                <span class="font-bold text-gray-800 whitespace-nowrap">
+                                                    {{ $cnt }} <span class="text-gray-400 font-normal">({{ $pctOpt }}%)</span>
+                                                </span>
                                             </div>
-                                            <div class="h-1.5 mt-0.5 w-full bg-gray-100 rounded-full overflow-hidden">
-                                                <div class="h-full" style="width:{{ $pctOpt }}%;background:linear-gradient(90deg,#6366f1,#4f46e5);"></div>
+                                            <div class="h-1.5 w-full bg-gray-100 rounded-full overflow-hidden">
+                                                <div class="h-full" style="width:{{ $pctOpt }}%;background:linear-gradient(90deg,#2b5ea7,#3b82f6);"></div>
                                             </div>
                                         </div>
                                     @endforeach
                                 </div>
-                                <div class="mt-2 text-[11px] text-gray-500">
-                                    Javob berganlar: <strong>{{ $s['responders'] }}</strong>
+                                <div class="mt-3 text-[11px] text-gray-500">
+                                    Javob berganlar: <strong class="text-gray-700">{{ $s['responders'] }}</strong>
                                     @if(!empty($s['otherTexts']))
                                         · <details class="inline">
-                                            <summary class="cursor-pointer text-indigo-600 font-semibold">"Boshqa" matnlarini ko'rish ({{ count($s['otherTexts']) }})</summary>
+                                            <summary class="cursor-pointer font-semibold hover:underline" style="color:#2b5ea7;">"Boshqa" matnlarini ko'rish ({{ count($s['otherTexts']) }})</summary>
                                             <ul class="mt-2 space-y-1 ml-2">
                                                 @foreach($s['otherTexts'] as $ot)
                                                     <li class="text-xs text-gray-700 bg-gray-50 border border-gray-200 rounded px-2 py-1">{{ $ot }}</li>

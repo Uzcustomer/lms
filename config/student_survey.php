@@ -17,13 +17,13 @@ return [
     'title' => [
         'uz' => "Registrator ofisi faoliyatini baholash bo'yicha anonim so'rovnoma",
         'ru' => "Анонимный опрос об оценке деятельности офиса Регистратора",
-        'en' => "Anonymous survey on the Registrar's Office performance",
+        'en' => "Anonymous survey on the Registration Office performance",
     ],
 
     'description' => [
         'uz' => "Hurmatli talaba!\n\nUshbu so'rovnoma mutlaqo anonim bo'lib, undan maqsad — Registrator ofisi faoliyatidagi muammolarni aniqlash va xizmat ko'rsatish sifatini oshirishdir. Iltimos, savollarga samimiy va xolis javob bering.",
         'ru' => "Уважаемый студент!\n\nДанный опрос полностью анонимный. Его цель — выявить проблемы в работе офиса Регистратора и улучшить качество обслуживания. Пожалуйста, отвечайте искренне и беспристрастно.",
-        'en' => "Dear student!\n\nThis survey is completely anonymous. Its purpose is to identify issues in the Registrar's Office and improve the quality of service. Please answer sincerely and impartially.",
+        'en' => "Dear student!\n\nThis survey is completely anonymous. Its purpose is to identify issues in the Registration Office and improve the quality of service. Please answer sincerely and impartially.",
     ],
 
     // UI matnlari — show.blade.php va _question-block ishlatadi
@@ -158,7 +158,7 @@ return [
             'text' => [
                 'uz' => "Registrator ofisi nima, qanday xizmat ko'rsatishi va qayerda joylashganini bilasizmi?",
                 'ru' => "Знаете ли вы, что такое офис Регистратора, какие услуги он предоставляет и где он расположен?",
-                'en' => "Do you know what the Registrar's Office is, what services it provides, and where it is located?",
+                'en' => "Do you know what the Registration Office is, what services it provides, and where it is located?",
             ],
             'options' => [
                 ['id' => 'a', 'text' => [
@@ -186,7 +186,7 @@ return [
             'text' => [
                 'uz' => "Registrator ofisining hozirgi joylashuvi (lokatsiyasi) sizga qulaymi?",
                 'ru' => "Удобно ли вам нынешнее расположение офиса Регистратора?",
-                'en' => "Is the current location of the Registrar's Office convenient for you?",
+                'en' => "Is the current location of the Registration Office convenient for you?",
             ],
             'options' => [
                 ['id' => 'a', 'text' => [
@@ -214,7 +214,7 @@ return [
             'text' => [
                 'uz' => "Registrator ofisi xizmatlarining umumiy sifatini qanday baholaysiz?",
                 'ru' => "Как вы оцениваете общее качество услуг офиса Регистратора?",
-                'en' => "How would you rate the overall quality of the Registrar's Office services?",
+                'en' => "How would you rate the overall quality of the Registration Office services?",
             ],
             'options' => [
                 ['id' => 'a', 'text' => [
@@ -247,7 +247,7 @@ return [
             'text' => [
                 'uz' => "Registrator ofisi menejerlarining talabalarga bo'lgan munosabati va muomalasi qanday?",
                 'ru' => "Каково отношение и обращение менеджеров офиса Регистратора со студентами?",
-                'en' => "How would you describe the attitude and behaviour of the Registrar's Office managers towards students?",
+                'en' => "How would you describe the attitude and behaviour of the Registration Office managers towards students?",
             ],
             'options' => [
                 ['id' => 'a', 'text' => [
@@ -352,7 +352,7 @@ return [
             'text' => [
                 'uz' => "Siz o'z muammoingiz yoki arizangiz bo'yicha Registrator ofisiga necha marta qayta-qayta borishga majbur bo'lasiz?",
                 'ru' => "Сколько раз вам приходится повторно обращаться в офис Регистратора по своему вопросу или заявлению?",
-                'en' => "How many times do you typically have to return to the Registrar's Office for the same issue or application?",
+                'en' => "How many times do you typically have to return to the Registration Office for the same issue or application?",
             ],
             'options' => [
                 ['id' => 'a', 'text' => [
@@ -413,7 +413,7 @@ return [
             'text' => [
                 'uz' => "Registrator ofisi xodimlarini ish joyidan (belgilangan qabul vaqtida) topish darajasi qanday?",
                 'ru' => "Насколько легко застать сотрудников офиса Регистратора на рабочем месте в часы приёма?",
-                'en' => "How easy is it to find Registrar's Office staff at their workstation during the appointed hours?",
+                'en' => "How easy is it to find Registration Office staff at their workstation during the appointed hours?",
             ],
             'options' => [
                 ['id' => 'a', 'text' => [
@@ -502,7 +502,7 @@ return [
             'text' => [
                 'uz' => "Registrator ofisi tomonidan beriladigan ma'lumotlar, hujjatlar, buyruqlar va akademik qoidalarning shaffofligini (ochiqligini) qanday baholaysiz?",
                 'ru' => "Как вы оцениваете прозрачность (открытость) предоставляемой офисом Регистратора информации, документов, приказов и академических правил?",
-                'en' => "How would you rate the transparency (openness) of information, documents, orders, and academic rules provided by the Registrar's Office?",
+                'en' => "How would you rate the transparency (openness) of information, documents, orders, and academic rules provided by the Registration Office?",
             ],
             'options' => [
                 ['id' => 'a', 'text' => [
@@ -558,7 +558,7 @@ return [
             'text' => [
                 'uz' => "Registrator ofisi faoliyatini va xizmat ko'rsatish darajasini o'tgan yilgi holatga nisbatan qanday baholaysiz?",
                 'ru' => "Как вы оцениваете работу и уровень обслуживания офиса Регистратора по сравнению с прошлым годом?",
-                'en' => "How would you rate the Registrar's Office work and service level compared to last year?",
+                'en' => "How would you rate the Registration Office work and service level compared to last year?",
             ],
             'options' => [
                 ['id' => 'a', 'text' => [
@@ -685,7 +685,7 @@ return [
             'text' => [
                 'uz' => "Registrator ofisida arizalarni ko'rib chiqish, navbatni chetlab o'tish yoki hujjatlarni rasmiylashtirishda tanish-bilishchilik, adolatsizlik yoki kamsitish holatlariga duch kelganmisiz?",
                 'ru' => "Сталкивались ли вы со случаями кумовства, несправедливости или дискриминации при рассмотрении заявлений, обходе очереди или оформлении документов в офисе Регистратора?",
-                'en' => "Have you encountered cases of favouritism, unfairness, or discrimination when applications were reviewed, queues were skipped, or documents were processed at the Registrar's Office?",
+                'en' => "Have you encountered cases of favouritism, unfairness, or discrimination when applications were reviewed, queues were skipped, or documents were processed at the Registration Office?",
             ],
             'options' => [
                 ['id' => 'a', 'text' => [
@@ -713,7 +713,7 @@ return [
             'text' => [
                 'uz' => "Sizningcha, Registrator ofisi faoliyatidagi eng katta muammo nimada? (Bir nechtasini tanlash mumkin)",
                 'ru' => "По-вашему, в чём самая большая проблема в работе офиса Регистратора? (можно выбрать несколько)",
-                'en' => "In your view, what is the biggest issue with the Registrar's Office? (multiple choice)",
+                'en' => "In your view, what is the biggest issue with the Registration Office? (multiple choice)",
             ],
             'options' => [
                 ['id' => 'a', 'text' => [
@@ -796,7 +796,7 @@ return [
             'text' => [
                 'uz' => "Registrator ofisi faoliyatini tubdan yaxshilash, imtihon jarayonlari hamda yuzni tanish tizimini takomillashtirish bo'yicha qanday aniq takliflaringiz bor?",
                 'ru' => "Какие у вас конкретные предложения по коренному улучшению работы офиса Регистратора, экзаменационных процессов и совершенствованию системы распознавания лиц?",
-                'en' => "What specific suggestions do you have for fundamentally improving the Registrar's Office, exam processes, and the face-recognition system?",
+                'en' => "What specific suggestions do you have for fundamentally improving the Registration Office, exam processes, and the face-recognition system?",
             ],
             'placeholder' => [
                 'uz' => "Takliflaringizni yozing...",

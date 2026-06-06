@@ -114,6 +114,32 @@
                 </div>
             </div>
 
+            {{-- TELEGRAM PROGRESS (faqat ishlamoqda bo'lsa ko'rinadi) --}}
+            <div id="sv-tg-progress" class="bg-white rounded-xl border-2 border-amber-300 shadow-sm overflow-hidden hidden">
+                <div class="px-5 py-3 border-b border-gray-100 flex items-center gap-3" style="background: linear-gradient(135deg, #fef3c7, #fde68a);">
+                    <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                        <svg class="w-4 h-4 text-white animate-spin" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
+                        </svg>
+                    </div>
+                    <div class="flex-1">
+                        <div class="font-bold text-gray-800 text-sm" id="sv-tg-title">Telegramga yuborilmoqda...</div>
+                        <div class="text-xs text-gray-600 mt-0.5" id="sv-tg-detail">—</div>
+                    </div>
+                    <span id="sv-tg-percent" class="text-xl font-bold text-amber-700">0%</span>
+                </div>
+                <div class="px-5 py-3">
+                    <div class="h-2 w-full bg-gray-100 rounded-full overflow-hidden">
+                        <div id="sv-tg-bar" class="h-full rounded-full transition-all" style="width:0%;background:linear-gradient(90deg,#f59e0b,#d97706);"></div>
+                    </div>
+                    <div class="flex justify-between text-xs text-gray-600 mt-2">
+                        <span>Yuborildi: <strong class="text-emerald-700" id="sv-tg-sent">0</strong></span>
+                        <span>Xato: <strong class="text-red-600" id="sv-tg-failed">0</strong></span>
+                        <span>Jami: <strong id="sv-tg-total">0</strong></span>
+                    </div>
+                </div>
+            </div>
+
             {{-- TELEGRAM CARDS GRID --}}
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
 
@@ -329,5 +355,83 @@
             })
             .catch(() => { btn.disabled = false; alert('Tarmoq xatosi'); });
         }
+
+        // Telegram yuborish progress polling
+        (function () {
+            const card = document.getElementById('sv-tg-progress');
+            if (!card) return;
+            const url = '{{ route("admin.student-survey.telegram-status") }}';
+            let pollTimer = null;
+
+            function disableSendButtons(disable, kind) {
+                document.querySelectorAll('form[action*="send-telegram"], form[action*="send-announcement"]').forEach(f => {
+                    const b = f.querySelector('button[type=submit]');
+                    if (b) {
+                        b.disabled = disable;
+                        b.style.opacity = disable ? '0.5' : '1';
+                        b.style.cursor = disable ? 'not-allowed' : 'pointer';
+                    }
+                });
+            }
+
+            function render(data) {
+                const total = data.total || 0;
+                const done = (data.sent || 0) + (data.failed || 0);
+                const pct = total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0;
+                document.getElementById('sv-tg-percent').textContent = pct + '%';
+                document.getElementById('sv-tg-bar').style.width = pct + '%';
+                document.getElementById('sv-tg-sent').textContent = data.sent || 0;
+                document.getElementById('sv-tg-failed').textContent = data.failed || 0;
+                document.getElementById('sv-tg-total').textContent = total;
+                const kindText = data.kind === 'announcement' ? "E'lon yuborilmoqda..." : "Eslatma yuborilmoqda...";
+                document.getElementById('sv-tg-title').textContent = data.status === 'done'
+                    ? "Yuborish tugadi"
+                    : (data.status === 'failed' ? "Xato: " + (data.last_error || 'Noma\\'lum') : kindText);
+                document.getElementById('sv-tg-detail').textContent =
+                    'Boshlangan: ' + (data.started_at || '—') + (data.finished_at ? ' · Tugagan: ' + data.finished_at : '');
+            }
+
+            function poll() {
+                fetch(url, { headers: { 'Accept': 'application/json' } })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.status === 'idle') {
+                            card.classList.add('hidden');
+                            disableSendButtons(false);
+                            stopPoll();
+                            return;
+                        }
+                        card.classList.remove('hidden');
+                        render(data);
+                        if (data.status === 'running') {
+                            disableSendButtons(true);
+                        } else {
+                            // done / failed — disable bo'lganlarini ozod qil, lekin progress card qoldir
+                            disableSendButtons(false);
+                            stopPoll();
+                            // Sahifa qayta yuklanmaguncha card ko'rinib turadi
+                        }
+                    })
+                    .catch(() => {});
+            }
+            function startPoll() {
+                if (pollTimer) return;
+                poll();
+                pollTimer = setInterval(poll, 3000);
+            }
+            function stopPoll() {
+                if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+            }
+
+            // Boshlanish: sahifa ochilganda darhol bir marta tekshiramiz
+            startPoll();
+
+            // Tugma bosilganda — darhol polling boshlash (kechikishsiz progress ko'rinishi uchun)
+            document.querySelectorAll('form[action*="send-telegram"], form[action*="send-announcement"]').forEach(f => {
+                f.addEventListener('submit', () => {
+                    setTimeout(() => startPoll(), 1500);
+                });
+            });
+        })();
     </script>
 </x-app-layout>

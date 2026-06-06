@@ -111,6 +111,18 @@ class GraduatePassportController extends Controller
                 }
             }
 
+            if ($hasReviewFields && $request->filled('review_status')) {
+                $rs = $request->review_status;
+                if ($rs === 'pending') {
+                    $query->whereNotNull('gp.id')
+                          ->where(function ($q) {
+                              $q->whereNull('gp.status')->orWhere('gp.status', 'pending');
+                          });
+                } elseif (in_array($rs, ['approved', 'rejected', 'resubmitted'], true)) {
+                    $query->whereNotNull('gp.id')->where('gp.status', $rs);
+                }
+            }
+
             $columns = [
                 's.id', 's.hemis_id', 's.student_id_number', 's.full_name',
                 's.department_name', 's.group_name', 's.gender_code', 's.gender_name',
@@ -265,6 +277,17 @@ class GraduatePassportController extends Controller
         if ($request->filled('status')) {
             if ($request->status === 'filled') $query->whereNotNull('gp.id');
             elseif ($request->status === 'empty') $query->whereNull('gp.id');
+        }
+        if ($request->filled('review_status') && Schema::hasColumn('graduate_student_passports', 'status')) {
+            $rs = $request->review_status;
+            if ($rs === 'pending') {
+                $query->whereNotNull('gp.id')
+                      ->where(function ($q) {
+                          $q->whereNull('gp.status')->orWhere('gp.status', 'pending');
+                      });
+            } elseif (in_array($rs, ['approved', 'rejected', 'resubmitted'], true)) {
+                $query->whereNotNull('gp.id')->where('gp.status', $rs);
+            }
         }
         if ($request->filled('search')) {
             $sv = trim($request->search);

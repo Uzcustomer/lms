@@ -10035,7 +10035,9 @@ class JournalController extends Controller
                     $totalDaily += ($absentCount === $dayCount) ? 0 : round($dayTotal / $dayCount);
                     $daysCount++;
                 }
-                $jnGradesByKey[$key] = $daysCount > 0 ? round($totalDaily / $daysCount, 1) : null;
+                $jnGradesByKey[$key] = $daysCount > 0
+                    ? (int) round($totalDaily / $daysCount, 0, PHP_ROUND_HALF_UP)
+                    : null;
             }
         }
 
@@ -10052,7 +10054,9 @@ class JournalController extends Controller
             $mtGrouped = $mtRaw->groupBy(fn($g) => $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code);
             foreach ($mtGrouped as $key => $items) {
                 $vals = $items->map(fn($g) => (float) ($g->retake_grade ?? $g->grade))->filter(fn($v) => $v !== null);
-                $mtGradesByKey[$key] = $vals->isNotEmpty() ? round($vals->avg(), 1) : null;
+                $mtGradesByKey[$key] = $vals->isNotEmpty()
+                    ? (int) round($vals->avg(), 0, PHP_ROUND_HALF_UP)
+                    : null;
             }
         }
 
@@ -10094,7 +10098,7 @@ class JournalController extends Controller
                     $sinovKey = $subj->subject_id . '|' . $subj->semester_code . '|' . $grp->group_hemis_id . '|' . $stu->hemis_id;
                     $sinovOverride = $sinovBy[$sinovKey] ?? null;
                     $sinov = $sinovOverride && $sinovOverride->override_grade !== null
-                        ? (float) $sinovOverride->override_grade
+                        ? (int) round((float) $sinovOverride->override_grade, 0, PHP_ROUND_HALF_UP)
                         : '';
 
                     $sheet->fromArray([

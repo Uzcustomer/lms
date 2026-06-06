@@ -40,23 +40,77 @@
         .va-dropzone {
             border: 2px dashed #cbd5e1;
             border-radius: 12px;
-            padding: 16px;
-            text-align: center;
+            padding: 10px;
             cursor: pointer;
             transition: background 0.15s, border-color 0.15s;
             background: #f8fafc;
-            min-height: 200px;
+            height: 150px;
+            overflow: auto;
+            position: relative;
             display: flex;
             align-items: center;
             justify-content: center;
         }
+        .va-dropzone.has-file {
+            align-items: flex-start;
+            justify-content: flex-start;
+            padding: 6px;
+        }
         .va-dropzone:hover { background: #f1f5f9; border-color: #94a3b8; }
         .va-dropzone.has-file { border-color: #10b981; background: #ecfdf5; }
         .va-dropzone canvas, .va-dropzone img {
-            max-width: 100%;
-            max-height: 280px;
+            width: 100%;
+            height: auto;
+            display: block;
             border-radius: 6px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+        .va-dropzone-placeholder {
+            text-align: center;
+            color: #64748b;
+            font-size: 12px;
+        }
+        .va-dropzone-filename {
+            position: sticky;
+            top: 0;
+            background: rgba(236, 253, 245, 0.95);
+            padding: 4px 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: #047857;
+            border-bottom: 1px solid #a7f3d0;
+            margin: -6px -6px 6px -6px;
+            z-index: 1;
+        }
+        .va-file-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0,0,0,0);
+            white-space: nowrap;
+            border: 0;
+        }
+        .va-msg-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 999px;
+            border: 1.5px solid #e2e8f0;
+            background: #fff;
+            color: #475569;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+        .va-msg-chip[data-active="1"] {
+            border-color: #3b82f6;
+            background: #eff6ff;
+            color: #1e3a8a;
         }
         .va-btn-primary {
             background: linear-gradient(135deg,#2b5ea7,#3b82f6);
@@ -171,9 +225,27 @@
                         </div>
 
                         <div class="sm:col-span-2">
-                            <label class="va-label">Telegram number <span class="va-required">*</span></label>
+                            <label class="va-label">Phone number <span class="va-required">*</span></label>
                             <input type="tel" id="phone_number" name="phone_number" class="va-input" required style="text-transform:none;">
-                            <div class="va-hint">Enter the phone number that has a Telegram account.</div>
+                            <div class="va-hint">Enter your contact phone number.</div>
+                        </div>
+
+                        <div class="sm:col-span-2">
+                            <label class="va-label">Messenger username <span class="va-required">*</span></label>
+                            <div class="flex flex-wrap items-center gap-2 mb-2">
+                                <button type="button" class="va-msg-chip" data-msg="telegram" data-active="1" onclick="vaSetMessenger('telegram')">
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M11.944 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.056 0zm4.962 7.224c.1-.002.321.023.465.14a.506.506 0 0 1 .171.325c.016.093.036.306.02.472-.18 1.898-.962 6.502-1.36 8.627-.168.9-.499 1.201-.82 1.23-.696.065-1.225-.46-1.9-.902-1.056-.693-1.653-1.124-2.678-1.8-1.185-.78-.417-1.21.258-1.91.177-.184 3.247-2.977 3.307-3.23.007-.032.014-.15-.056-.212s-.174-.041-.249-.024c-.106.024-1.793 1.14-5.061 3.345-.48.33-.913.49-1.302.48-.428-.008-1.252-.241-1.865-.44-.752-.245-1.349-.374-1.297-.789.027-.216.325-.437.893-.663 3.498-1.524 5.83-2.529 6.998-3.014 3.332-1.386 4.025-1.627 4.476-1.635z"/></svg>
+                                    Telegram
+                                </button>
+                                <button type="button" class="va-msg-chip" data-msg="whatsapp" data-active="0" onclick="vaSetMessenger('whatsapp')">
+                                    <svg class="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><path d="M.057 24l1.687-6.163a11.867 11.867 0 01-1.587-5.946C.16 5.335 5.495 0 12.05 0a11.817 11.817 0 018.413 3.488 11.824 11.824 0 013.48 8.414c-.003 6.557-5.338 11.892-11.893 11.892a11.9 11.9 0 01-5.688-1.448L.057 24zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884a9.86 9.86 0 001.51 5.26l-.999 3.648 3.978-.607z"/></svg>
+                                    WhatsApp
+                                </button>
+                            </div>
+                            <input type="text" name="messenger_username" id="messenger_username" class="va-input" required
+                                   placeholder="@username" style="text-transform:none;">
+                            <input type="hidden" name="messenger_type" id="messenger_type" value="telegram">
+                            <div class="va-hint">Enter your Telegram or WhatsApp username (e.g. @yourname).</div>
                         </div>
                     </div>
 
@@ -181,21 +253,29 @@
                     <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div>
                             <label class="va-label">Passport Copies (PDF) <span class="va-required">*</span></label>
-                            <input type="file" name="passport_pdf" id="passport_pdf" class="va-input" accept="application/pdf" required>
+                            <div class="va-dropzone" id="passDropzone" onclick="document.getElementById('passport_pdf').click()">
+                                <div class="va-dropzone-placeholder">
+                                    <svg class="w-9 h-9 mx-auto mb-1 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 13.5l3 3m0 0l3-3m-3 3v-6m1.06-4.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
+                                    </svg>
+                                    Click to upload passport PDF
+                                </div>
+                            </div>
+                            <input type="file" name="passport_pdf" id="passport_pdf" accept="application/pdf" required class="va-file-hidden">
                             <div class="va-hint">First and last page (where your living address is written) in one PDF. Max 5 MB.</div>
                         </div>
 
                         <div>
                             <label class="va-label">Filled Application Form (PDF) <span class="va-required">*</span></label>
-                            <div class="va-dropzone" id="appDropzone">
-                                <div class="text-center text-slate-500 text-xs" id="appDropzoneText">
-                                    <svg class="w-10 h-10 mx-auto mb-2 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                            <div class="va-dropzone" id="appDropzone" onclick="document.getElementById('application_pdf').click()">
+                                <div class="va-dropzone-placeholder">
+                                    <svg class="w-9 h-9 mx-auto mb-1 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
                                         <path stroke-linecap="round" stroke-linejoin="round" d="M9 13.5l3 3m0 0l3-3m-3 3v-6m1.06-4.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
                                     </svg>
-                                    Click to upload filled application form
+                                    Click to upload application form
                                 </div>
                             </div>
-                            <input type="file" name="application_pdf" id="application_pdf" accept="application/pdf" required class="hidden">
+                            <input type="file" name="application_pdf" id="application_pdf" accept="application/pdf" required class="va-file-hidden">
                             <div class="va-hint">PDF only, max 256 KB.</div>
                         </div>
                     </div>
@@ -268,57 +348,64 @@
         // Date of birth
         flatpickr("#birthdate", { dateFormat: "Y-m-d", altInput: true, altFormat: "d.m.Y", allowInput: true });
 
-        // Dropzone for application PDF
-        const dropzone = document.getElementById('appDropzone');
-        const appInput = document.getElementById('application_pdf');
-        const appText = document.getElementById('appDropzoneText');
-        dropzone.addEventListener('click', () => appInput.click());
+        // Messenger toggle (Telegram / WhatsApp)
+        function vaSetMessenger(type) {
+            document.getElementById('messenger_type').value = type;
+            document.querySelectorAll('.va-msg-chip').forEach(b => {
+                b.dataset.active = b.dataset.msg === type ? '1' : '0';
+            });
+        }
 
-        appInput.addEventListener('change', function () {
-            const file = this.files[0];
-            if (!file) return;
-            if (file.size > 262144) {
-                vaToast('PDF must be smaller than 256 KB');
-                this.value = '';
-                return;
-            }
-            if (file.type !== 'application/pdf') {
-                vaToast('Only PDF files are allowed');
-                this.value = '';
-                return;
-            }
-            // Preview
-            const fr = new FileReader();
-            fr.onload = function () {
-                const arr = new Uint8Array(this.result);
-                pdfjsLib.getDocument(arr).promise.then(pdf => {
-                    pdf.getPage(1).then(page => {
-                        const viewport = page.getViewport({ scale: 1 });
-                        const canvas = document.createElement('canvas');
-                        canvas.width = viewport.width;
-                        canvas.height = viewport.height;
-                        page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise.then(() => {
-                            dropzone.classList.add('has-file');
-                            dropzone.innerHTML = '';
-                            dropzone.appendChild(canvas);
+        // PDF dropzone wiring — bir xil mantiq ikkala input uchun
+        function vaWireDropzone(zoneId, inputId, maxBytes) {
+            const zone = document.getElementById(zoneId);
+            const input = document.getElementById(inputId);
+            if (!zone || !input) return;
+
+            input.addEventListener('change', function () {
+                const file = this.files[0];
+                if (!file) {
+                    zone.classList.remove('has-file');
+                    return;
+                }
+                if (file.type !== 'application/pdf') {
+                    vaToast('Only PDF files are allowed');
+                    this.value = '';
+                    zone.classList.remove('has-file');
+                    return;
+                }
+                if (file.size > maxBytes) {
+                    vaToast('File too large. Max ' + Math.round(maxBytes / 1024) + ' KB allowed.');
+                    this.value = '';
+                    zone.classList.remove('has-file');
+                    return;
+                }
+                // Preview — pdf.js bilan
+                const fr = new FileReader();
+                fr.onload = function () {
+                    const arr = new Uint8Array(this.result);
+                    pdfjsLib.getDocument(arr).promise.then(pdf => {
+                        pdf.getPage(1).then(page => {
+                            const viewport = page.getViewport({ scale: 1.2 });
+                            const canvas = document.createElement('canvas');
+                            canvas.width = viewport.width;
+                            canvas.height = viewport.height;
+                            page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise.then(() => {
+                                zone.classList.add('has-file');
+                                zone.innerHTML = '<div class="va-dropzone-filename">✓ ' + file.name + '</div>';
+                                zone.appendChild(canvas);
+                            });
                         });
+                    }).catch(() => {
+                        zone.classList.add('has-file');
+                        zone.innerHTML = '<div class="va-dropzone-filename">✓ ' + file.name + '</div><div class="p-3 text-xs text-emerald-700 text-center w-full">PDF uploaded (preview unavailable)</div>';
                     });
-                }).catch(() => {
-                    dropzone.classList.add('has-file');
-                    appText.innerHTML = '<div class="text-emerald-700 font-semibold">✓ ' + file.name + '</div>';
-                });
-            };
-            fr.readAsArrayBuffer(file);
-        });
-
-        // Passport PDF size check
-        document.getElementById('passport_pdf').addEventListener('change', function () {
-            const file = this.files[0];
-            if (file && file.size > 5 * 1024 * 1024) {
-                vaToast('Passport PDF must be smaller than 5 MB');
-                this.value = '';
-            }
-        });
+                };
+                fr.readAsArrayBuffer(file);
+            });
+        }
+        vaWireDropzone('passDropzone', 'passport_pdf', 5 * 1024 * 1024);   // 5 MB
+        vaWireDropzone('appDropzone',  'application_pdf', 262144);          // 256 KB
 
         function vaToast(msg) {
             const t = document.getElementById('errorToast');
@@ -366,6 +453,8 @@
             const c = iti.getSelectedCountryData();
             fd.set('phone_dial_code', c.dialCode || '');
             fd.set('phone_country_iso2', c.iso2 || '');
+            const uname = (fd.get('messenger_username') || '').toString().trim().replace(/^@+/, '');
+            fd.set('messenger_username', uname);
 
             fetch(this.action, {
                 method: 'POST',

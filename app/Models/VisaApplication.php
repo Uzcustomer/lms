@@ -13,6 +13,7 @@ class VisaApplication extends Model
         'last_name', 'first_name', 'middle_name',
         'birth_date', 'passport_number',
         'phone_number', 'phone_dial_code', 'phone_country_iso2',
+        'messenger_type', 'messenger_username',
         'passport_pdf_path', 'application_pdf_path', 'receipt_pdf_path',
         'status', 'application_number',
         'admin_note', 'reviewed_at', 'reviewed_by',

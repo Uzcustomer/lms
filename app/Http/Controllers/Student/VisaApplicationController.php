@@ -57,6 +57,8 @@ class VisaApplicationController extends Controller
             'phone_number'    => 'required|string|max:30',
             'phone_dial_code' => 'required|string|max:8',
             'phone_country_iso2' => 'required|string|max:4',
+            'messenger_type'     => 'required|in:telegram,whatsapp',
+            'messenger_username' => 'required|string|max:100',
             'passport_pdf'    => 'required|file|mimes:pdf|max:5120',     // 5 MB
             'application_pdf' => 'required|file|mimes:pdf|max:256',      // 256 KB
         ], [
@@ -79,6 +81,8 @@ class VisaApplicationController extends Controller
             'phone_number'       => $data['phone_number'],
             'phone_dial_code'    => $data['phone_dial_code'] ?? null,
             'phone_country_iso2' => $data['phone_country_iso2'] ?? null,
+            'messenger_type'     => $data['messenger_type'],
+            'messenger_username' => ltrim($data['messenger_username'], '@'),
             'application_number' => $appNumber,
             'status'             => 'pending',
         ]);

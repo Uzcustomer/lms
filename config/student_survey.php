@@ -10,7 +10,7 @@
  */
 
 return [
-    'key'      => 'registrar_2026',
+    'key'      => 'students_survey26',
     'deadline' => '2026-06-08 23:59:59',
     'locales'  => ['uz', 'ru', 'en'],
 

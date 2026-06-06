@@ -26,7 +26,9 @@ class SurveySendTelegram extends Command
                             {kind : announcement | reminder}
                             {--dry-run : Faqat ko\'rsatadi, yubormaydi}
                             {--limit= : Faqat birinchi N talabaga yuborish (test uchun)}
-                            {--concurrency=25 : Parallel yuboriladigan xabarlar soni (1=serial, 25=tavsiya)}';
+                            {--concurrency=25 : Parallel yuboriladigan xabarlar soni (1=serial, 25=tavsiya)}
+                            {--continue : Avvalgi run qayerda to\'xtagan bo\'lsa, shu joydan davom ettirish}
+                            {--start-id= : Aniq student.id dan boshlash (qo\'lda override)}';
 
     protected $description = 'Send survey announcement / reminder via Telegram with live terminal progress';
 
@@ -47,6 +49,25 @@ class SurveySendTelegram extends Command
             return self::FAILURE;
         }
 
+        // Davom ettirish: avvalgi run oxirgi qaysi student.id'ni qayta ishlagan bo'lsa,
+        // shu id'dan keyingilarini olamiz.
+        $startId = null;
+        if ($this->option('start-id')) {
+            $startId = (int) $this->option('start-id');
+        } elseif ($this->option('continue')) {
+            $lastKind = Setting::get('student_survey_tg_kind');
+            $lastId = Setting::get('student_survey_tg_last_id');
+            if ($lastKind && $lastKind !== $this->argument('kind')) {
+                $this->warn("Diqqat: avvalgi run '{$lastKind}' kind edi, hozir '{$this->argument('kind')}' so'rayapsiz.");
+                if (!$this->confirm("Baribir davom ettirilsinmi?", false)) return self::SUCCESS;
+            }
+            if ($lastId !== null && $lastId !== '') {
+                $startId = (int) $lastId;
+            } else {
+                $this->warn("Avvalgi run topilmadi — boshidan boshlanadi.");
+            }
+        }
+
         if (!StudentSurveyController::isActive() && !$dryRun) {
             if (!$this->confirm("Survey OFF holatda. Baribir yuborilsinmi?", false)) {
                 $this->info('Bekor qilindi.');
@@ -63,6 +84,10 @@ class SurveySendTelegram extends Command
             ->where('student_status_code', 11)
             ->whereNotNull('telegram_chat_id')
             ->where('telegram_chat_id', '!=', '');
+
+        if ($startId !== null) {
+            $query->where('id', '>', $startId);
+        }
 
         if ($kind === 'reminder') {
             $completedIds = StudentSurveyCompletion::where('survey_key', $surveyKey)
@@ -82,6 +107,7 @@ class SurveySendTelegram extends Command
         $this->line("  Survey key: <fg=cyan>{$surveyKey}</>");
         $this->line("  Deadline:   <fg=cyan>{$deadlineFormatted}</>");
         $this->line("  Talabalar:  <fg=cyan>{$total}</>" . ($limit ? " (limit={$limit})" : ''));
+        if ($startId !== null) $this->line("  Davom etish: <fg=yellow>student.id > {$startId}</>");
         if ($dryRun) $this->warn("  DRY-RUN — xabar yuborilmaydi");
         $this->newLine();
 
@@ -90,14 +116,23 @@ class SurveySendTelegram extends Command
             return self::SUCCESS;
         }
 
-        // Status flag (UI'da ham ko'rinishi uchun)
+        // Status flag (UI'da ham ko'rinishi uchun). Continue rejimida sent/failed
+        // sonlarini saqlab qolamiz va total'ni qo'shib boramiz.
         if (!$dryRun) {
+            $isContinue = $startId !== null;
             Setting::set('student_survey_tg_status', 'running');
             Setting::set('student_survey_tg_kind', $kind);
-            Setting::set('student_survey_tg_total', (string) $total);
-            Setting::set('student_survey_tg_sent', '0');
-            Setting::set('student_survey_tg_failed', '0');
-            Setting::set('student_survey_tg_started_at', now()->toDateTimeString());
+            if (!$isContinue) {
+                Setting::set('student_survey_tg_total', (string) $total);
+                Setting::set('student_survey_tg_sent', '0');
+                Setting::set('student_survey_tg_failed', '0');
+                Setting::set('student_survey_tg_started_at', now()->toDateTimeString());
+                Setting::set('student_survey_tg_last_id', '');
+            } else {
+                // total — avvalgi + bu safar qoladigan
+                $prevTotal = (int) Setting::get('student_survey_tg_total', 0);
+                Setting::set('student_survey_tg_total', (string) max($prevTotal, $prevTotal + $total));
+            }
             Setting::set('student_survey_tg_last_error', '');
         }
 
@@ -115,8 +150,10 @@ class SurveySendTelegram extends Command
         $bar->setFormat(" %current%/%max% [%bar%] %percent:3s%%  %message%");
         $bar->setMessage('sent=0 failed=0');
 
-        $sent = 0;
-        $failed = 0;
+        // Continue rejimida hisoblagichlarni avvalgi qiymatdan boshlaymiz, shunday
+        // qilib UI/log umumiy progressni ko'rsatadi.
+        $sent = ($startId !== null) ? (int) Setting::get('student_survey_tg_sent', 0) : 0;
+        $failed = ($startId !== null) ? (int) Setting::get('student_survey_tg_failed', 0) : 0;
         $i = 0;
         $startTime = microtime(true);
         $sendUrl = "https://api.telegram.org/bot{$botToken}/sendMessage";
@@ -197,9 +234,13 @@ class SurveySendTelegram extends Command
                 usleep((int) (($minBatchTime - $elapsed) * 1_000_000));
             }
 
-            // Progress'ni status keylariga ham yozish (UI uchun)
+            // Progress'ni status keylariga ham yozish (UI + resume uchun)
             Setting::set('student_survey_tg_sent', (string) $sent);
             Setting::set('student_survey_tg_failed', (string) $failed);
+            $lastStudent = end($batch);
+            if ($lastStudent) {
+                Setting::set('student_survey_tg_last_id', (string) $lastStudent->id);
+            }
 
             $batch = [];
         };
@@ -234,10 +275,15 @@ class SurveySendTelegram extends Command
             Setting::set('student_survey_tg_finished_at', now()->toDateTimeString());
         }
 
+        $lastId = Setting::get('student_survey_tg_last_id');
         $this->line("<options=bold>Yakuniy holat:</>");
-        $this->line("  Yuborildi:   <fg=green>{$sent}</>");
-        $this->line("  Xato:        <fg=red>{$failed}</>");
-        $this->line("  Vaqt:        {$elapsed}s");
+        $this->line("  Yuborildi:    <fg=green>{$sent}</>");
+        $this->line("  Xato:         <fg=red>{$failed}</>");
+        $this->line("  Vaqt:         {$elapsed}s");
+        if ($lastId !== null && $lastId !== '') {
+            $this->line("  Oxirgi id:    <fg=yellow>{$lastId}</>");
+            $this->comment("  Davom ettirish: php artisan survey:send-telegram {$kind} --continue");
+        }
         $this->newLine();
 
         Log::info('Survey telegram CLI send finished', [

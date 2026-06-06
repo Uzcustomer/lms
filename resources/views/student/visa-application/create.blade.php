@@ -167,25 +167,75 @@
                     </div>
                 </div>
 
-                {{-- AVVALGI ARIZALAR --}}
-                @if($applications->isNotEmpty())
-                    <div class="px-5 py-3 bg-slate-50 border-b border-slate-200">
-                        <div class="text-xs font-semibold text-slate-600 uppercase tracking-wide mb-2">Your previous applications</div>
-                        <div class="space-y-1.5">
-                            @foreach($applications as $app)
-                                <div class="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-slate-200 text-xs">
-                                    <div class="flex items-center gap-2 min-w-0">
-                                        <span class="font-bold text-slate-800">#{{ $app->application_number }}</span>
-                                        <span class="text-slate-500 hidden sm:inline">·</span>
-                                        <span class="text-slate-600 truncate">{{ $app->created_at->format('d.m.Y H:i') }}</span>
-                                    </div>
-                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase va-status-{{ $app->status }}">{{ $app->status }}</span>
+                {{-- STATUS CARD (eng oxirgi arizam) --}}
+                @if($latest)
+                    @php
+                        $statusMeta = [
+                            'pending'   => ['label' => 'Pending review', 'icon_bg' => '#fef3c7', 'icon_fg' => '#92400e', 'desc' => 'Your application has been received and is waiting to be reviewed.'],
+                            'reviewing' => ['label' => 'Being reviewed', 'icon_bg' => '#dbeafe', 'icon_fg' => '#1e40af', 'desc' => 'Your application is currently being reviewed by the office.'],
+                            'approved'  => ['label' => 'Approved',       'icon_bg' => '#d1fae5', 'icon_fg' => '#065f46', 'desc' => 'Your application has been approved. Please follow the next steps from the office.'],
+                            'rejected'  => ['label' => 'Rejected',       'icon_bg' => '#fee2e2', 'icon_fg' => '#991b1b', 'desc' => 'Your application was rejected. See the note below and submit a new one if needed.'],
+                        ];
+                        $m = $statusMeta[$latest->status];
+                    @endphp
+                    <div class="px-5 py-4 border-b border-slate-200" style="background:#fafbff;">
+                        <div class="flex items-start gap-3">
+                            <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0" style="background:{{ $m['icon_bg'] }};color:{{ $m['icon_fg'] }};">
+                                @if($latest->status === 'approved')
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                @elseif($latest->status === 'rejected')
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                @elseif($latest->status === 'reviewing')
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/><path stroke-linecap="round" stroke-linejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/></svg>
+                                @else
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                                @endif
+                            </div>
+                            <div class="flex-1 min-w-0">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <span class="font-bold text-slate-800 text-base">{{ $m['label'] }}</span>
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase va-status-{{ $latest->status }}">#{{ $latest->application_number }}</span>
                                 </div>
-                            @endforeach
+                                <p class="text-xs sm:text-sm text-slate-600 mt-1 leading-snug">{{ $m['desc'] }}</p>
+                                <div class="text-[11px] text-slate-500 mt-2">Submitted: {{ $latest->created_at->format('d.m.Y H:i') }}</div>
+                            </div>
                         </div>
+
+                        @if($latest->admin_note)
+                            <div class="mt-3 bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                <div class="text-[11px] font-bold text-amber-800 uppercase tracking-wide mb-1">Office note</div>
+                                <div class="text-sm text-amber-900">{{ $latest->admin_note }}</div>
+                            </div>
+                        @endif
+
+                        {{-- Avvalgi arizalar tarixi (ixtiyoriy) --}}
+                        @if($applications->count() > 1)
+                            <details class="mt-3">
+                                <summary class="cursor-pointer text-xs font-semibold text-slate-600 hover:underline">Previous attempts ({{ $applications->count() - 1 }})</summary>
+                                <div class="mt-2 space-y-1.5">
+                                    @foreach($applications->skip(1) as $app)
+                                        <div class="flex items-center justify-between bg-white px-3 py-2 rounded-lg border border-slate-200 text-xs">
+                                            <div class="flex items-center gap-2 min-w-0">
+                                                <span class="font-bold text-slate-800">#{{ $app->application_number }}</span>
+                                                <span class="text-slate-500 hidden sm:inline">·</span>
+                                                <span class="text-slate-600">{{ $app->created_at->format('d.m.Y H:i') }}</span>
+                                            </div>
+                                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase va-status-{{ $app->status }}">{{ $app->status }}</span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </details>
+                        @endif
+
+                        @if($canSubmit && $latest->status === 'rejected')
+                            <div class="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-800">
+                                You can submit a new application below.
+                            </div>
+                        @endif
                     </div>
                 @endif
 
+                @if($canSubmit)
                 {{-- FORMA --}}
                 <form id="visaForm" method="POST" enctype="multipart/form-data" action="{{ route('student.visa-application.store') }}" class="px-5 py-5">
                     @csrf
@@ -262,7 +312,7 @@
                                 </div>
                             </div>
                             <input type="file" name="passport_pdf" id="passport_pdf" accept="application/pdf" required class="va-file-hidden">
-                            <div class="va-hint">First and last page (where your living address is written) in one PDF. Max 5 MB.</div>
+                            <div class="va-hint">First and last page (where your living address is written) in one PDF. Max 2 MB.</div>
                         </div>
 
                         <div>
@@ -276,7 +326,7 @@
                                 </div>
                             </div>
                             <input type="file" name="application_pdf" id="application_pdf" accept="application/pdf" required class="va-file-hidden">
-                            <div class="va-hint">PDF only, max 256 KB.</div>
+                            <div class="va-hint">PDF only, max 2 MB.</div>
                         </div>
                     </div>
 
@@ -286,6 +336,7 @@
                         </button>
                     </div>
                 </form>
+                @endif
             </div>
 
             {{-- SUCCESS MODAL --}}
@@ -304,11 +355,16 @@
                             </div>
                         </div>
                     </div>
-                    <div class="px-5 py-5 text-center">
-                        <div class="text-sm text-slate-700 mb-4" id="successName">—</div>
-                        <div id="qrContainer" class="flex justify-center mb-4"></div>
-                        <div class="text-xs text-slate-500 uppercase tracking-wide font-semibold">Application number</div>
-                        <div class="text-3xl font-extrabold text-slate-900 mt-1 tracking-wider" id="appNum">—</div>
+                    <div class="px-5 py-6 text-center">
+                        <div class="w-14 h-14 mx-auto rounded-full flex items-center justify-center mb-4" style="background:#d1fae5;">
+                            <svg class="w-8 h-8 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
+                            </svg>
+                        </div>
+                        <div class="text-base font-semibold text-slate-800">Application sent successfully</div>
+                        <p class="text-sm text-slate-600 mt-2 leading-snug">
+                            We have received your visa application. You can track its status on this page.
+                        </p>
                     </div>
                     <div class="px-5 pb-5">
                         <button type="button" onclick="vaCloseSuccess()" class="va-btn-primary w-full">Close</button>
@@ -328,9 +384,13 @@
     <script src="https://cdn.jsdelivr.net/npm/intl-tel-input@18.1.1/build/js/utils.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/flatpickr"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/qrcode-generator/qrcode.min.js"></script>
 
     <script>
+    (function () {
+        // Faqat forma mavjud bo'lsa ishlaymiz (canSubmit=true)
+        const form = document.getElementById('visaForm');
+        if (!form) return;
+
         // Phone — intl-tel-input
         const phoneEl = document.getElementById('phone_number');
         const iti = window.intlTelInput(phoneEl, {
@@ -404,8 +464,8 @@
                 fr.readAsArrayBuffer(file);
             });
         }
-        vaWireDropzone('passDropzone', 'passport_pdf', 5 * 1024 * 1024);   // 5 MB
-        vaWireDropzone('appDropzone',  'application_pdf', 262144);          // 256 KB
+        vaWireDropzone('passDropzone', 'passport_pdf', 2 * 1024 * 1024);   // 2 MB
+        vaWireDropzone('appDropzone',  'application_pdf', 2 * 1024 * 1024); // 2 MB
 
         function vaToast(msg) {
             const t = document.getElementById('errorToast');
@@ -414,25 +474,10 @@
             setTimeout(() => t.classList.add('hidden'), 4000);
         }
 
-        function vaShowSuccess(data, name) {
-            document.getElementById('successName').innerHTML =
-                '<strong>' + name + '</strong>, your application has been submitted.';
-            document.getElementById('appNum').textContent = data.application_number;
-            // QR
-            const qr = qrcode(0, 'M');
-            qr.addData(data.verify_url || (window.location.origin + '/visa-application/verify?app=' + data.application_number));
-            qr.make();
-            document.getElementById('qrContainer').innerHTML = qr.createImgTag(5);
+        function vaShowSuccess() {
             const m = document.getElementById('successModal');
             m.classList.remove('hidden');
             m.classList.add('flex');
-        }
-        function vaCloseSuccess() {
-            const m = document.getElementById('successModal');
-            m.classList.add('hidden');
-            m.classList.remove('flex');
-            // Optionally reset and reload list:
-            window.location.reload();
         }
 
         // Form submit
@@ -473,9 +518,7 @@
                     throw new Error(msg);
                 }
                 if (data.ok) {
-                    const fn = fd.get('first_name') || '';
-                    const ln = fd.get('last_name') || '';
-                    vaShowSuccess(data, (fn + ' ' + ln).toUpperCase());
+                    vaShowSuccess();
                 } else {
                     throw new Error(data.message || 'Unknown error');
                 }
@@ -485,5 +528,15 @@
                 btn.textContent = origText;
             });
         });
+    })();
+    // Modal va toast hammaga umumiy — formasiz ham vaCloseSuccess/vaToast kerak emas,
+    // shu sababli IIFE ichidan tashqariga global qilamiz:
+    function vaCloseSuccess() {
+        const m = document.getElementById('successModal');
+        if (!m) return;
+        m.classList.add('hidden');
+        m.classList.remove('flex');
+        window.location.reload();
+    }
     </script>
 </x-student-app-layout>

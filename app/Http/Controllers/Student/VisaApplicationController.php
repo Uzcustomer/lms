@@ -51,12 +51,12 @@ class VisaApplicationController extends Controller
             'student_number'  => 'required|string|max:50',
             'last_name'       => 'required|string|max:100',
             'first_name'      => 'required|string|max:100',
-            'middle_name'     => 'nullable|string|max:100',
+            'middle_name'     => 'required|string|max:100',
             'birth_date'      => 'required|date',
             'passport_number' => 'required|string|max:50',
             'phone_number'    => 'required|string|max:30',
-            'phone_dial_code' => 'nullable|string|max:8',
-            'phone_country_iso2' => 'nullable|string|max:4',
+            'phone_dial_code' => 'required|string|max:8',
+            'phone_country_iso2' => 'required|string|max:4',
             'passport_pdf'    => 'required|file|mimes:pdf|max:5120',     // 5 MB
             'application_pdf' => 'required|file|mimes:pdf|max:256',      // 256 KB
         ], [

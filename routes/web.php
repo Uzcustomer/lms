@@ -419,6 +419,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{student}/history/{historyId}/file/{field}', [\App\Http\Controllers\Admin\InternationalStudentController::class, 'showHistoryFile'])->name('history-file');
         });
 
+        // Viza arizalar (xalqaro talabalardan keladi)
+        Route::prefix('visa-applications')->name('visa-applications.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'index'])->name('index');
+            Route::post('/{application}/approve', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'approve'])->name('approve');
+            Route::post('/{application}/reject', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'reject'])->name('reject');
+            Route::delete('/{application}', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'destroy'])->name('destroy');
+            Route::get('/{application}/file/{kind}', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'file'])->name('file');
+        });
+
         // Javobgar firma talabalari (faqat o'qish)
         Route::prefix('firm-students')->name('firm-students.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'index'])->name('index');

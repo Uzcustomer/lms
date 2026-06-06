@@ -33,18 +33,39 @@
 
             {{-- FILTER + STATS --}}
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div class="px-6 py-3 border-b border-gray-100" style="background: linear-gradient(135deg, #e8edf5, #dbe4ef);">
+                <div class="px-6 py-3 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap" style="background: linear-gradient(135deg, #e8edf5, #dbe4ef);">
                     <div class="font-bold text-gray-800 text-sm">Holat bo'yicha filtr</div>
+                    <div class="flex items-center gap-2">
+                        {{-- Excel eksport --}}
+                        <a href="{{ route('admin.visa-applications.export', array_filter(['status' => $status])) }}"
+                           class="px-3 py-1.5 text-xs font-bold rounded-lg border flex items-center gap-1.5"
+                           style="background:#fff;border-color:#10b981;color:#047857;">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
+                            Excel
+                        </a>
+                        {{-- Hammasi / Faqat oxirgi toggle --}}
+                        @php
+                            $toggleParams = array_filter(['status' => $status]);
+                            if (!$showAll) $toggleParams['all'] = 1;
+                        @endphp
+                        <a href="{{ route('admin.visa-applications.index', $toggleParams) }}"
+                           title="{{ $showAll ? 'Faqat oxirgi arizalarni ko\'rsatish' : 'Talabaning oldingi qayta arizalarini ham ko\'rsatish' }}"
+                           class="px-3 py-1.5 text-xs font-bold rounded-lg border flex items-center gap-1.5"
+                           style="background:{{ $showAll ? '#fef3c7' : '#fff' }};border-color:{{ $showAll ? '#f59e0b' : '#cbd5e1' }};color:{{ $showAll ? '#92400e' : '#475569' }};">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            {{ $showAll ? 'Tarix bilan' : 'Faqat oxirgi' }}
+                        </a>
+                    </div>
                 </div>
                 <div class="p-3 flex flex-wrap gap-2">
-                    <a href="{{ route('admin.visa-applications.index') }}"
+                    <a href="{{ route('admin.visa-applications.index', array_filter(['all' => $showAll ? 1 : null])) }}"
                        class="px-3 py-1.5 text-xs font-bold rounded-lg border transition flex items-center gap-2"
                        style="background:{{ !$status ? '#2b5ea7' : '#fff' }};color:{{ !$status ? '#fff' : '#475569' }};border-color:{{ !$status ? '#2b5ea7' : '#e2e8f0' }};">
                         Hammasi
                         <span style="background:rgba(255,255,255,0.2);padding:1px 6px;border-radius:999px;{{ !$status ? '' : 'background:#f1f5f9;color:#475569;' }}">{{ $total }}</span>
                     </a>
                     @foreach($statusMeta as $key => $m)
-                        <a href="{{ route('admin.visa-applications.index', ['status' => $key]) }}"
+                        <a href="{{ route('admin.visa-applications.index', array_filter(['status' => $key, 'all' => $showAll ? 1 : null])) }}"
                            class="px-3 py-1.5 text-xs font-bold rounded-lg border transition flex items-center gap-2"
                            style="background:{{ $status === $key ? $m['fg'] : $m['bg'] }};color:{{ $status === $key ? '#fff' : $m['fg'] }};border-color:{{ $m['border'] }};">
                             {{ $m['label'] }}
@@ -53,6 +74,55 @@
                     @endforeach
                 </div>
             </div>
+
+            {{-- BULK TOOLBAR --}}
+            @if(!$applications->isEmpty())
+            <div id="bulkBar" x-data="{ count: 0 }"
+                 x-init="window.vaBulkUpdate = () => { count = document.querySelectorAll('.va-row-cb:checked').length };"
+                 x-show="count > 0" x-cloak
+                 class="bg-white rounded-xl border-2 shadow-sm overflow-hidden sticky top-2 z-20"
+                 style="border-color:#2b5ea7;">
+                <div class="px-4 py-2.5 flex items-center gap-2 flex-wrap" style="background: linear-gradient(135deg,#dbeafe,#bfdbfe);">
+                    <span class="text-xs font-bold text-blue-900">
+                        <span x-text="count"></span> ta tanlandi
+                    </span>
+                    <div class="flex-1"></div>
+
+                    {{-- Holatga ko'chirish --}}
+                    @foreach($statusMeta as $key => $m)
+                        <button type="button"
+                                onclick="vaBulkSubmit('{{ route('admin.visa-applications.bulk-update') }}', 'POST', '{{ $key }}', 'Tanlangan arizalarni \'{{ $m['label'] }}\' bosqichiga o\'tkazasizmi?');"
+                                class="px-2.5 py-1.5 text-[11px] font-bold rounded-lg border flex items-center gap-1"
+                                style="background:{{ $m['bg'] }};color:{{ $m['fg'] }};border-color:{{ $m['border'] }};">
+                            {{ $m['label'] }}
+                        </button>
+                    @endforeach
+
+                    {{-- Telex --}}
+                    <button type="button"
+                            onclick="vaBulkSubmit('{{ route('admin.visa-applications.telex') }}', 'POST', null, 'Tanlangan arizalar uchun telex hujjat yaratasizmi?');"
+                            class="px-2.5 py-1.5 text-[11px] font-bold text-white rounded-lg flex items-center gap-1"
+                            style="background:linear-gradient(135deg,#7c3aed,#5b21b6);">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        Telex
+                    </button>
+
+                    {{-- Excel (faqat tanlanganlar) --}}
+                    <button type="button"
+                            onclick="vaBulkSubmit('{{ route('admin.visa-applications.export') }}', 'GET');"
+                            class="px-2.5 py-1.5 text-[11px] font-bold rounded-lg border flex items-center gap-1"
+                            style="background:#fff;border-color:#10b981;color:#047857;">
+                        Excel
+                    </button>
+
+                    <button type="button" onclick="document.querySelectorAll('.va-row-cb').forEach(c=>c.checked=false); window.vaBulkUpdate && window.vaBulkUpdate();"
+                            class="px-2.5 py-1.5 text-[11px] font-bold rounded-lg border"
+                            style="background:#fff;border-color:#cbd5e1;color:#475569;">
+                        Bekor qilish
+                    </button>
+                </div>
+            </div>
+            @endif
 
             {{-- ARIZALAR --}}
             @if($applications->isEmpty())
@@ -66,7 +136,16 @@
                 <div class="space-y-2" x-data="{ open: null }">
                     @foreach($applications as $app)
                         @php $m = $statusMeta[$app->status] ?? $statusMeta['pending']; @endphp
-                        <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+                        <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex items-stretch">
+                            {{-- CHECKBOX --}}
+                            <label class="flex items-center justify-center px-3 border-r border-slate-100 bg-slate-50 cursor-pointer hover:bg-slate-100"
+                                   onclick="event.stopPropagation();">
+                                <input type="checkbox"
+                                       class="va-row-cb w-4 h-4 cursor-pointer accent-blue-600"
+                                       value="{{ $app->id }}"
+                                       onchange="window.vaBulkUpdate && window.vaBulkUpdate();">
+                            </label>
+                            <div class="flex-1 min-w-0">
                             {{-- ACCORDION HEADER --}}
                             <button type="button"
                                     @click="open = (open === {{ $app->id }}) ? null : {{ $app->id }}"
@@ -244,6 +323,7 @@
                                     </div>
                                 </div>
                             </div>
+                            </div>{{-- /flex-1 wrapper --}}
                         </div>
                     @endforeach
                 </div>
@@ -253,4 +333,52 @@
 
         </div>
     </div>
+
+    <script>
+        // Tanlangan id'lardan vaqtinchalik form yasab, kerakli URLga POST/GET qiladi.
+        function vaBulkSubmit(url, method, status = null, confirmMsg = null) {
+            const ids = Array.from(document.querySelectorAll('.va-row-cb:checked')).map(el => el.value);
+            if (ids.length === 0) {
+                alert('Avval kamida bitta arizani tanlang.');
+                return;
+            }
+            if (confirmMsg && !confirm(confirmMsg)) return;
+
+            const form = document.createElement('form');
+            form.method = method;
+            form.action = url;
+            form.style.display = 'none';
+
+            if (method.toUpperCase() === 'POST') {
+                const csrf = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content')
+                    || document.querySelector('input[name="_token"]')?.value;
+                if (csrf) {
+                    const t = document.createElement('input');
+                    t.type = 'hidden';
+                    t.name = '_token';
+                    t.value = csrf;
+                    form.appendChild(t);
+                }
+            }
+
+            ids.forEach(id => {
+                const i = document.createElement('input');
+                i.type = 'hidden';
+                i.name = 'ids[]';
+                i.value = id;
+                form.appendChild(i);
+            });
+
+            if (status) {
+                const a = document.createElement('input');
+                a.type = 'hidden';
+                a.name = 'action';
+                a.value = status;
+                form.appendChild(a);
+            }
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+    </script>
 </x-app-layout>

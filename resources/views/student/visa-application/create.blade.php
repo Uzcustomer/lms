@@ -131,6 +131,21 @@
         }
         .va-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
+        .va-input.va-input-error,
+        .iti.va-input-error input { /* ehtiyot uchun */
+            border-color: #ef4444 !important;
+            background: #fef2f2 !important;
+            box-shadow: 0 0 0 4px rgba(239,68,68,0.12) !important;
+        }
+        .va-error-text {
+            display: none;
+            font-size: 11px;
+            color: #dc2626;
+            font-weight: 600;
+            margin-top: 4px;
+        }
+        .va-error-text.show { display: block; }
+
         .iti { width: 100%; }
         .iti__selected-dial-code { font-size: 14px; }
         .iti__country { font-size: 14px; }
@@ -249,35 +264,52 @@
 
                         <div>
                             <label class="va-label">Last name <span class="va-required">*</span></label>
-                            <input type="text" name="last_name" class="va-input" required>
+                            <input type="text" name="last_name" class="va-input" required
+                                   value="{{ old('last_name', mb_strtoupper($student->second_name ?? '')) }}">
                             <div class="va-hint">If you do not have a last name, write your father's name.</div>
                         </div>
 
                         <div>
                             <label class="va-label">First name <span class="va-required">*</span></label>
-                            <input type="text" name="first_name" class="va-input" required>
+                            <input type="text" name="first_name" class="va-input" required
+                                   value="{{ old('first_name', mb_strtoupper($student->first_name ?? '')) }}">
                         </div>
 
                         <div>
                             <label class="va-label">Middle name <span class="va-required">*</span></label>
-                            <input type="text" name="middle_name" class="va-input" required>
+                            <input type="text" name="middle_name" class="va-input" required
+                                   value="{{ old('middle_name', mb_strtoupper($student->third_name ?? '')) }}">
                             <div class="va-hint">Write "—" if you don't have one.</div>
                         </div>
 
                         <div>
                             <label class="va-label">Date of birth <span class="va-required">*</span></label>
-                            <input type="text" name="birth_date" id="birthdate" class="va-input" placeholder="dd.mm.yyyy" required>
+                            @php
+                                $birthVal = old('birth_date');
+                                if (!$birthVal && !empty($student->birth_date)) {
+                                    $birthVal = $student->birth_date instanceof \Carbon\Carbon
+                                        ? $student->birth_date->format('Y-m-d')
+                                        : (string) $student->birth_date;
+                                }
+                            @endphp
+                            <input type="text" name="birth_date" id="birthdate" class="va-input" placeholder="dd.mm.yyyy" required
+                                   value="{{ $birthVal }}">
                         </div>
 
                         <div class="sm:col-span-2">
                             <label class="va-label">Passport number <span class="va-required">*</span></label>
-                            <input type="text" name="passport_number" class="va-input" required>
+                            @php
+                                $passportVal = old('passport_number', trim(($student->passport_serial ?? '') . ($student->passport_number ?? '')));
+                            @endphp
+                            <input type="text" name="passport_number" class="va-input" required
+                                   value="{{ mb_strtoupper($passportVal) }}">
                         </div>
 
                         <div class="sm:col-span-2">
                             <label class="va-label">Phone number <span class="va-required">*</span></label>
                             <input type="tel" id="phone_number" name="phone_number" class="va-input" required style="text-transform:none;">
-                            <div class="va-hint">Enter your contact phone number.</div>
+                            <div class="va-hint" id="phoneHint">Enter your contact phone number.</div>
+                            <div class="va-error-text" id="phoneError">Invalid phone number format.</div>
                         </div>
 
                         <div class="sm:col-span-2">
@@ -411,6 +443,45 @@
             if (k < 48 || k > 57) e.preventDefault();
         });
 
+        // Telefon raqamni real-time validatsiya — yozayotganda qizilga aylantirish
+        const phoneError = document.getElementById('phoneError');
+        const phoneHint = document.getElementById('phoneHint');
+        const errCodes = {
+            0: 'Invalid phone number format.',
+            1: 'Selected country does not match the number.',
+            2: 'Phone number is too short.',
+            3: 'Phone number is too long.',
+            4: 'Phone number is not valid.',
+            5: 'Invalid length.',
+        };
+        function vaCheckPhone() {
+            const raw = phoneEl.value.trim();
+            if (!raw) {
+                // Bo'sh — neyutral holat (require'da emas, blur'da emas)
+                phoneEl.classList.remove('va-input-error');
+                phoneError.classList.remove('show');
+                phoneHint.style.display = '';
+                return null;
+            }
+            const ok = iti.isValidNumber();
+            if (ok) {
+                phoneEl.classList.remove('va-input-error');
+                phoneError.classList.remove('show');
+                phoneHint.style.display = '';
+                return true;
+            }
+            const errCode = iti.getValidationError ? iti.getValidationError() : 0;
+            phoneError.textContent = errCodes[errCode] || errCodes[0];
+            phoneEl.classList.add('va-input-error');
+            phoneError.classList.add('show');
+            phoneHint.style.display = 'none';
+            return false;
+        }
+        phoneEl.addEventListener('input',  vaCheckPhone);
+        phoneEl.addEventListener('blur',   vaCheckPhone);
+        // Mamlakat o'zgartirilsa ham qayta tekshirish
+        phoneEl.addEventListener('countrychange', vaCheckPhone);
+
         // Date of birth
         flatpickr("#birthdate", { dateFormat: "Y-m-d", altInput: true, altFormat: "d.m.Y", allowInput: true });
 
@@ -530,7 +601,8 @@
                 return;
             }
             if (!iti.isValidNumber()) {
-                vaToast('Please enter a valid phone number.');
+                vaCheckPhone();
+                vaToast(phoneError.textContent || 'Please enter a valid phone number.');
                 phoneEl.focus();
                 return;
             }

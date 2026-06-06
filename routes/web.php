@@ -426,6 +426,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Viza arizalar (xalqaro talabalardan keladi)
         Route::prefix('visa-applications')->name('visa-applications.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'index'])->name('index');
+            Route::get('/export', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'export'])->name('export');
+            Route::post('/bulk-update', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'bulkUpdate'])->name('bulk-update');
+            Route::post('/telex', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'telex'])->name('telex');
             Route::post('/{application}/approve', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'approve'])->name('approve');
             Route::post('/{application}/reject', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'reject'])->name('reject');
             Route::delete('/{application}', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'destroy'])->name('destroy');

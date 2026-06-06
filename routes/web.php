@@ -1026,6 +1026,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/synchronize/curriculum-subject-teachers', [DashboardController::class, 'importCurriculumSubjectTeachers'])->name('synchronize.curriculum-subject-teachers');
         Route::post('/synchronize/academic-records', [DashboardController::class, 'importAcademicRecords'])->name('synchronize.academic-records');
         Route::post('/synchronize/marking-systems', [SettingsController::class, 'syncMarkingSystems'])->name('synchronize.marking-systems');
+
+        // Talabalar so'rovnomasi natijalari + Telegramga eslatma
+        Route::get('/student-survey', [\App\Http\Controllers\Admin\StudentSurveyController::class, 'index'])->name('student-survey.index');
+        Route::post('/student-survey/send-telegram', [\App\Http\Controllers\Admin\StudentSurveyController::class, 'sendTelegramReminder'])->name('student-survey.send-telegram');
     });
 
     // Faqat superadmin uchun — Xodimlarni baholash

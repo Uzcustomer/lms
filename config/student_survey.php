@@ -30,7 +30,7 @@ return [
     'key'         => 'registrar_2026',
     'title'       => "Registrator ofisi faoliyatini baholash bo'yicha anonim so'rovnoma",
     'description' => "Hurmatli talaba!\n\nUshbu so'rovnoma mutlaqo anonim bo'lib, undan maqsad — Registrator ofisi faoliyatidagi muammolarni aniqlash va xizmat ko'rsatish sifatini oshirishdir. Iltimos, savollarga samimiy va xolis javob bering.",
-    'deadline'   => '2026-06-06 10:30:00',
+    'deadline'   => '2026-06-08 23:59:59',
 
     'questions' => [
         [

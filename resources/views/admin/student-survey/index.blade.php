@@ -5,10 +5,11 @@
 
     @php
         $pct = $totalActive > 0 ? round($completedCount * 100 / $totalActive, 1) : 0;
+        $titleUz = sv_t($config['title'] ?? '', 'uz');
         $announcementText = (new \App\Http\Controllers\Admin\StudentSurveyController())
-            ->buildAnnouncementMessage($config['title'], $deadlineFormatted);
+            ->buildAnnouncementMessage($titleUz, $deadlineFormatted);
         $reminderText = (new \App\Http\Controllers\Admin\StudentSurveyController())
-            ->buildReminderMessage($config['title'], $deadlineFormatted);
+            ->buildReminderMessage($titleUz, $deadlineFormatted);
     @endphp
 
     <div class="py-6">
@@ -36,7 +37,7 @@
                                 </svg>
                             </div>
                             <div>
-                                <div class="font-bold text-gray-800 text-sm">{{ $config['title'] }}</div>
+                                <div class="font-bold text-gray-800 text-sm">{{ $titleUz }}</div>
                                 <div class="text-xs text-gray-500 mt-0.5">Survey key: <code class="bg-gray-100 px-1 rounded">{{ $config['key'] }}</code></div>
                             </div>
                         </div>
@@ -227,7 +228,7 @@
                                 <span class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold flex-shrink-0" style="background:#e0e7ff;color:#3730a3;">
                                     SAVOL {{ $q['id'] }}
                                 </span>
-                                <h4 class="text-sm font-semibold text-gray-800 leading-snug">{{ $q['text'] }}</h4>
+                                <h4 class="text-sm font-semibold text-gray-800 leading-snug">{{ sv_t($q['text'], 'uz') }}</h4>
                             </div>
 
                             @if($s['type'] === 'text')

@@ -276,7 +276,7 @@ class StudentSurveyController extends Controller
 
         $optionsById = [];
         foreach ($q['options'] ?? [] as $opt) {
-            $optionsById[$opt['id']] = $opt['text'];
+            $optionsById[$opt['id']] = sv_t($opt['text'], 'uz');
         }
 
         $totals = array_fill_keys(array_keys($optionsById), 0);

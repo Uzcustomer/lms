@@ -9,6 +9,11 @@
         $questionsForJs = $survey['questions'];
         $totalQuestions = count($questionsForJs);
         $deadlineFormatted = \Carbon\Carbon::parse($survey['deadline'])->format('d.m.Y H:i');
+        $svLocales = $survey['locales'] ?? ['uz'];
+        $ui = $survey['ui'] ?? [];
+        $locale = 'uz'; // default — talaba intro'da almashtiradi
+        $localeNames = ['uz' => "O'zbekcha", 'ru' => "Русский", 'en' => "English"];
+        $localeFlags = ['uz' => '🇺🇿', 'ru' => '🇷🇺', 'en' => '🇬🇧'];
     @endphp
 
     <style>
@@ -163,7 +168,7 @@
                 {{-- HEADER — gradient + counter + progress (har doim ko'rinadi) --}}
                 <div class="sv-card-header px-4 sm:px-5 pt-3 pb-2.5 text-white">
                     <div class="flex items-center justify-between gap-2 mb-2">
-                        <h1 class="text-sm sm:text-base font-bold leading-snug">{{ $survey['title'] }}</h1>
+                        <h1 id="sv-title" class="text-sm sm:text-base font-bold leading-snug">{{ sv_t($survey['title'], $locale) }}</h1>
                         <span id="sv-counter"
                               class="text-[11px] font-bold bg-white text-indigo-700 px-2.5 py-1 rounded-full whitespace-nowrap shadow-sm">
                             1/{{ $totalQuestions }}
@@ -182,40 +187,56 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                             </svg>
                         </div>
-                        <h3 class="text-xl font-bold text-slate-800 mb-2">Rahmat!</h3>
-                        <p class="text-sm text-slate-600 max-w-sm">Siz bu so'rovnomani allaqachon bajargansiz. Vaqtingiz uchun rahmat.</p>
+                        <h3 class="text-xl font-bold text-slate-800 mb-2">{{ sv_t($ui['thanks_title'] ?? "Rahmat!", $locale) }}</h3>
+                        <p class="text-sm text-slate-600 max-w-sm">{{ sv_t($ui['already_completed'] ?? '', $locale) }}</p>
                         <a href="{{ route('student.profile') }}"
                            class="mt-6 inline-flex items-center gap-2 px-6 py-3 sv-btn-primary text-sm font-bold rounded-xl">
-                            Profilga qaytish
+                            {{ sv_t($ui['profile_back'] ?? 'Profilga qaytish', $locale) }}
                         </a>
                     </div>
                 @else
                     {{-- KIRISH SAHIFA --}}
                     <div id="sv-intro" class="px-4 sm:px-5 py-4">
+                        {{-- Til tanlash chiplari --}}
+                        <div class="mb-3">
+                            <div class="text-xs text-slate-500 font-semibold mb-1.5" id="sv-lang-label">{{ sv_t($ui['select_language'] ?? "Tilni tanlang", $locale) }}</div>
+                            <div class="flex gap-2">
+                                @foreach($svLocales as $loc)
+                                    <button type="button" data-lang="{{ $loc }}" onclick="svSetLang('{{ $loc }}')"
+                                            class="sv-lang-chip flex-1 px-3 py-2 text-sm font-semibold rounded-lg border-2 transition flex items-center justify-center gap-1.5"
+                                            data-active="{{ $loc === $locale ? '1' : '0' }}"
+                                            style="border-color:{{ $loc === $locale ? '#6366f1' : '#e2e8f0' }};background:{{ $loc === $locale ? '#eef2ff' : '#fff' }};color:{{ $loc === $locale ? '#4338ca' : '#475569' }};">
+                                        <span>{{ $localeFlags[$loc] ?? '' }}</span>
+                                        <span>{{ $localeNames[$loc] ?? strtoupper($loc) }}</span>
+                                    </button>
+                                @endforeach
+                            </div>
+                        </div>
+
                         <div class="bg-gradient-to-r from-amber-50 to-yellow-50 border border-amber-200 rounded-xl p-2.5 mb-3 flex items-start gap-2">
                             <div class="w-7 h-7 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
                                 <svg class="w-4 h-4 text-amber-700" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
                                 </svg>
                             </div>
-                            <p class="text-xs sm:text-sm text-amber-900 leading-snug pt-0.5">
-                                Bu so'rovnoma <strong class="font-bold">anonim</strong> — javoblaringiz hech kimga ko'rinmaydi.
+                            <p id="sv-anon-note" class="text-xs sm:text-sm text-amber-900 leading-snug pt-0.5">
+                                {{ sv_t($ui['anonymous_note'] ?? '', $locale) }}
                             </p>
                         </div>
 
-                        <div class="text-sm text-slate-700 leading-snug whitespace-pre-line mb-3">{{ $survey['description'] }}</div>
+                        <div id="sv-description" class="text-sm text-slate-700 leading-snug whitespace-pre-line mb-3">{{ sv_t($survey['description'], $locale) }}</div>
 
                         <div class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 mb-3 flex items-center gap-2 text-xs text-slate-600">
                             <svg class="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
-                            <span>Tugash muddati: <strong class="text-slate-800">{{ $deadlineFormatted }}</strong></span>
+                            <span><span id="sv-deadline-label">{{ sv_t($ui['deadline_label'] ?? 'Tugash muddati', $locale) }}</span>: <strong class="text-slate-800">{{ $deadlineFormatted }}</strong></span>
                         </div>
 
                         <button type="button" onclick="svStart()"
                                 class="w-full sv-btn-primary text-sm font-bold rounded-xl mb-2 flex items-center justify-center gap-2"
                                 style="padding-top:10px;padding-bottom:10px;">
-                            <span>So'rovnomani boshlash</span>
+                            <span id="sv-start-label">{{ sv_t($ui['start_button'] ?? "So'rovnomani boshlash", $locale) }}</span>
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
                             </svg>
@@ -224,7 +245,7 @@
                         <button type="button" onclick="svShowLaterWarning()"
                                 class="w-full text-sm font-semibold text-slate-700 hover:text-slate-900 bg-white border border-slate-200 hover:border-slate-300 rounded-xl transition"
                                 style="padding-top:10px;padding-bottom:10px;">
-                            Keyinroq bajarish
+                            <span id="sv-later-label">{{ sv_t($ui['later_button'] ?? "Keyinroq bajarish", $locale) }}</span>
                         </button>
                         @endif
                     </div>
@@ -248,7 +269,7 @@
                                  data-type="{{ $q['type'] }}"
                                  data-index="{{ $idx }}">
 
-                                @include('student.survey._question-block', ['q' => $q, 'isChild' => false])
+                                @include('student.survey._question-block', ['q' => $q, 'isChild' => false, 'locale' => $locale, 'ui' => $ui])
 
                                 {{-- Nested conditional bolalar (5.1 kabi) --}}
                                 @foreach($childrenByParent[$q['id']] ?? [] as $child)
@@ -257,7 +278,7 @@
                                          data-child-type="{{ $child['type'] }}"
                                          data-show-when="{{ $child['show_if']['when_option'] }}">
                                         <div class="bg-indigo-50/60 border-l-4 border-indigo-400 rounded-r-xl rounded-l-lg p-3 sm:p-3.5">
-                                            @include('student.survey._question-block', ['q' => $child, 'isChild' => true])
+                                            @include('student.survey._question-block', ['q' => $child, 'isChild' => true, 'locale' => $locale, 'ui' => $ui])
                                         </div>
                                     </div>
                                 @endforeach
@@ -267,7 +288,7 @@
                                         <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                                         </svg>
-                                        <span class="sv-error-text">Iltimos, javob tanlang yoki to'ldiring</span>
+                                        <span class="sv-error-text">{{ sv_t($ui['validation_error'] ?? "Iltimos, javob tanlang yoki to'ldiring", $locale) }}</span>
                                     </p>
                                 </div>
                             </div>
@@ -283,11 +304,11 @@
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M11 17l-5-5m0 0l5-5m-5 5h12"/>
                                 </svg>
-                                Orqaga
+                                <span id="sv-back-label">{{ sv_t($ui['back_button'] ?? 'Orqaga', $locale) }}</span>
                             </button>
                             <button id="sv-next" type="button" onclick="svNext()"
                                     class="flex-1 py-2 text-sm font-bold sv-btn-success rounded-lg flex items-center justify-center gap-1.5">
-                                <span id="sv-next-text">Keyingisi</span>
+                                <span id="sv-next-text">{{ sv_t($ui['next_button'] ?? 'Keyingisi', $locale) }}</span>
                                 <svg id="sv-next-icon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
                                 </svg>
@@ -299,7 +320,7 @@
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
-                            Keyinroq bajarish
+                            <span id="sv-later-label-2">{{ sv_t($ui['later_button'] ?? "Keyinroq bajarish", $locale) }}</span>
                         </button>
                         @endif
                     </div>
@@ -307,8 +328,8 @@
                     {{-- YUBORISH OYNALARI --}}
                     <div id="sv-submitting" class="hidden px-8 py-10 flex flex-col items-center text-center">
                         <div class="w-14 h-14 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin mb-5"></div>
-                        <p class="text-sm font-medium text-slate-700">Javoblar yuborilmoqda...</p>
-                        <p class="text-xs text-slate-500 mt-1">Biroz kuting</p>
+                        <p id="sv-submitting-msg" class="text-sm font-medium text-slate-700">{{ sv_t($ui['submitting'] ?? "Javoblar yuborilmoqda...", $locale) }}</p>
+                        <p id="sv-submitting-wait" class="text-xs text-slate-500 mt-1">{{ sv_t($ui['submitting_wait'] ?? "Biroz kuting", $locale) }}</p>
                     </div>
 
                     <div id="sv-success" class="hidden px-8 py-10 flex flex-col items-center text-center">
@@ -317,11 +338,11 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>
                             </svg>
                         </div>
-                        <h3 class="text-xl font-bold text-slate-800 mb-2">Rahmat!</h3>
-                        <p class="text-sm text-slate-600 max-w-sm leading-relaxed" id="sv-success-msg">Javoblaringiz qabul qilindi.</p>
+                        <h3 id="sv-success-title" class="text-xl font-bold text-slate-800 mb-2">{{ sv_t($ui['thanks_title'] ?? "Rahmat!", $locale) }}</h3>
+                        <p class="text-sm text-slate-600 max-w-sm leading-relaxed" id="sv-success-msg">{{ sv_t($ui['thanks_message'] ?? "Javoblaringiz qabul qilindi.", $locale) }}</p>
                         <a href="{{ route('student.profile') }}"
                            class="mt-6 inline-flex items-center gap-2 px-6 py-3 sv-btn-primary text-sm font-bold rounded-xl">
-                            Profilga qaytish
+                            {{ sv_t($ui['profile_back'] ?? 'Profilga qaytish', $locale) }}
                         </a>
                     </div>
 
@@ -342,23 +363,19 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                     </svg>
                 </div>
-                <h3 class="text-lg font-bold text-slate-800 mb-2">E'tibor!</h3>
-                <p class="text-sm text-slate-600 leading-relaxed mb-3">
-                    Sizga <strong class="text-slate-800">{{ $deadlineFormatted }}</strong> gacha muhlat berilgan.
-                </p>
-                <p class="text-sm text-slate-600 leading-relaxed">
-                    Agar so'rovnomani belgilangan muddatda bajarmasangiz,
-                    <strong class="text-red-600">tizim xizmatlaridan foydalanish cheklanadi</strong>.
+                <h3 id="sv-later-title" class="text-lg font-bold text-slate-800 mb-2">{{ sv_t($ui['later_warning_title'] ?? "E'tibor!", $locale) }}</h3>
+                <p id="sv-later-msg" class="text-sm text-slate-600 leading-relaxed mb-3">
+                    {{ str_replace(':deadline', $deadlineFormatted, sv_t($ui['later_warning_msg'] ?? '', $locale)) }}
                 </p>
             </div>
             <div class="px-6 py-5 bg-slate-50/50 border-t border-slate-100 flex flex-col sm:flex-row gap-2.5">
                 <button type="button" onclick="svCloseLaterWarning()"
                         class="flex-1 py-3 text-sm font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl transition">
-                    Davom etish
+                    <span id="sv-continue-label">{{ sv_t($ui['continue'] ?? 'Davom etish', $locale) }}</span>
                 </button>
                 <a href="{{ route('student.profile') }}"
                    class="flex-1 py-3 text-sm font-bold text-center bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-xl transition">
-                    Profilga qaytish
+                    {{ sv_t($ui['profile_back'] ?? 'Profilga qaytish', $locale) }}
                 </a>
             </div>
         </div>
@@ -370,10 +387,110 @@
             csrf: '{{ csrf_token() }}',
             submitUrl: '{{ route("student.survey.submit") }}',
             questions: @json($questionsForJs),
+            ui: @json($ui),
+            title: @json($survey['title']),
+            description: @json($survey['description']),
+            locale: '{{ $locale }}',
             answers: {},
             currentIdx: 0,
             visibleOrder: [],
         };
+
+        function svT(val) {
+            if (typeof val === 'string') return val;
+            if (val && typeof val === 'object') {
+                return val[SV.locale] ?? val.uz ?? Object.values(val)[0] ?? '';
+            }
+            return '';
+        }
+
+        function svSetLang(lang) {
+            SV.locale = lang;
+            // chiplar holatini yangilash
+            document.querySelectorAll('.sv-lang-chip').forEach(btn => {
+                const active = btn.dataset.lang === lang;
+                btn.dataset.active = active ? '1' : '0';
+                btn.style.borderColor = active ? '#6366f1' : '#e2e8f0';
+                btn.style.background  = active ? '#eef2ff' : '#fff';
+                btn.style.color       = active ? '#4338ca' : '#475569';
+            });
+            // Intro matnlarini qayta render
+            const setText = (id, text) => { const el = document.getElementById(id); if (el) el.textContent = text; };
+            setText('sv-title', svT(SV.title));
+            setText('sv-description', svT(SV.description));
+            setText('sv-lang-label', svT(SV.ui.select_language));
+            setText('sv-anon-note', svT(SV.ui.anonymous_note));
+            setText('sv-deadline-label', svT(SV.ui.deadline_label));
+            setText('sv-start-label', svT(SV.ui.start_button));
+            setText('sv-later-label', svT(SV.ui.later_button));
+            setText('sv-later-label-2', svT(SV.ui.later_button));
+            setText('sv-back-label', svT(SV.ui.back_button));
+            setText('sv-continue-label', svT(SV.ui.continue));
+            setText('sv-later-title', svT(SV.ui.later_warning_title));
+            setText('sv-submitting-msg', svT(SV.ui.submitting));
+            setText('sv-submitting-wait', svT(SV.ui.submitting_wait));
+            setText('sv-success-title', svT(SV.ui.thanks_title));
+            setText('sv-success-msg', svT(SV.ui.thanks_message));
+            const lm = document.getElementById('sv-later-msg');
+            if (lm) {
+                const msg = svT(SV.ui.later_warning_msg).replace(':deadline', '{{ $deadlineFormatted }}');
+                lm.textContent = msg;
+            }
+            // Savol bloklari ham qayta render bo'lsin (DOM allaqachon qurilgan,
+            // shu sababli matnlarni qo'lda qayta yozamiz)
+            svRelabelQuestions();
+        }
+
+        function svRelabelQuestions() {
+            document.querySelectorAll('.sv-question, .sv-child-q').forEach(scope => {
+                const qid = scope.dataset.qid || scope.dataset.childQid;
+                if (!qid) return;
+                const q = SV.questions.find(x => String(x.id) === String(qid));
+                if (!q) return;
+
+                // "SAVOL N" chip
+                const chip = scope.querySelector('.inline-flex.items-center.gap-1\\.5');
+                if (chip) chip.textContent = svT(SV.ui.question_label) + ' ' + q.id;
+
+                // Savol matni
+                const h = scope.querySelector('h3');
+                if (h) h.textContent = svT(q.text);
+
+                // Checkbox hint / optional hint
+                const hint = scope.querySelector('p.text-xs');
+                if (hint && q.type === 'checkbox') {
+                    const last = hint.lastChild;
+                    if (last) last.textContent = ' ' + svT(SV.ui.multi_select_hint);
+                } else if (hint && q.type === 'text' && !q.required) {
+                    hint.textContent = svT(SV.ui.optional_hint);
+                }
+
+                // Option matnlari
+                if (q.options) {
+                    const labels = scope.querySelectorAll('.sv-option');
+                    labels.forEach((label, i) => {
+                        const opt = q.options[i];
+                        if (!opt) return;
+                        const span = label.querySelector('.sv-text');
+                        if (span) {
+                            const letterEl = span.querySelector('.sv-opt-letter');
+                            const letterHtml = letterEl ? letterEl.outerHTML : '';
+                            span.innerHTML = letterHtml + (letterHtml ? ' ' : '') + svT(opt.text).replace(/</g,'&lt;');
+                        }
+                        const otherInput = label.querySelector('.sv-other-input');
+                        if (otherInput) otherInput.placeholder = svT(SV.ui.other_placeholder);
+                    });
+                }
+                // Textarea placeholder
+                if (q.type === 'text') {
+                    const ta = scope.querySelector('textarea');
+                    if (ta) ta.placeholder = svT(q.placeholder || SV.ui.text_placeholder_default);
+                }
+                // Error matni
+                const errSpan = scope.querySelector('.sv-error-text');
+                if (errSpan) errSpan.textContent = svT(SV.ui.validation_error);
+            });
+        }
 
         function svShowLaterWarning() {
             const m = document.getElementById('sv-later-modal');
@@ -497,10 +614,10 @@
             const nextText = document.getElementById('sv-next-text');
             const nextIcon = document.getElementById('sv-next-icon');
             if (isLast) {
-                nextText.textContent = 'Yuborish';
+                nextText.textContent = svT(SV.ui.submit_button);
                 nextIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/>';
             } else {
-                nextText.textContent = 'Keyingisi';
+                nextText.textContent = svT(SV.ui.next_button);
                 nextIcon.innerHTML = '<path stroke-linecap="round" stroke-linejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/>';
             }
 
@@ -636,7 +753,7 @@
                     'X-CSRF-TOKEN': SV.csrf,
                     'Accept': 'application/json',
                 },
-                body: JSON.stringify({ answers: SV.answers }),
+                body: JSON.stringify({ answers: SV.answers, locale: SV.locale }),
             })
             .then(r => r.json().then(d => ({ status: r.status, data: d })))
             .then(({ status, data }) => {

@@ -217,6 +217,11 @@ class SurveyController extends Controller
      * Mavjud bo'lsa yuklanadi, oxiriga qator qo'shiladi, qayta saqlanadi.
      * Parallel yozishlar uchun alohida lock fayl orqali flock ishlatiladi.
      */
+    /**
+     * Bitta talabaning javobini XLSX'ga qator sifatida qo'shish.
+     * Admin tahlili uchun har doim O'zbek tilidagi savol va variant matnlari ishlatiladi
+     * (talaba qaysi tilda topshirgani muhim emas — option ID lar bir xil).
+     */
     private function appendToXlsx(array $config, $student, array $answers): void
     {
         $dir = storage_path('app/surveys');
@@ -228,7 +233,7 @@ class SurveyController extends Controller
 
         $headers = ['Talaba ID', 'F.I.SH', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Semestr'];
         foreach ($config['questions'] as $q) {
-            $headers[] = ($q['id']) . '. ' . $q['text'];
+            $headers[] = ($q['id']) . '. ' . sv_t($q['text'], 'uz');
         }
 
         $row = [
@@ -366,7 +371,7 @@ class SurveyController extends Controller
                 return "Boshqa: " . $txt;
             }
             if (is_string($v) && isset($optionsById[$v])) {
-                return $optionsById[$v]['text'];
+                return sv_t($optionsById[$v]['text'], 'uz');
             }
             return (string) $v;
         };

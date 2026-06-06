@@ -85,13 +85,15 @@ class VedomostGradeCalculator
                || ($wTest > 0 && $testVal !== null && $testVal < 60)) {
             $v = 0;
         } else {
-            $jbMtOnSum = round($eBall + $hBall + $kBall, 1);
+            // JB+MT+ON va OSKI+Test ALOHIDA butun songacha yaxlitlanadi (floor(x+0.5)),
+            // so'ng qo'shiladi: round(57.5)+round(27.9)=58+28=86.
+            $jbMtOnSum = (int) floor($eBall + $hBall + $kBall + 0.5);
             if ($wOski > 0 && $wTest > 0) {
-                $examSum = round($qBall + $tBall, 1);
+                $examSum = (int) floor($qBall + $tBall + 0.5);
             } elseif ($wOski > 0) {
-                $examSum = round($qBall, 1);
+                $examSum = (int) floor($qBall + 0.5);
             } elseif ($wTest > 0) {
-                $examSum = round($tBall, 1);
+                $examSum = (int) floor($tBall + 0.5);
             } else {
                 $examSum = 0;
             }

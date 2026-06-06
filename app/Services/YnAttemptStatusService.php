@@ -223,13 +223,14 @@ class YnAttemptStatusService
             || ($weightOski > 0 && $oskiVal < 60) || ($weightTest > 0 && $testVal < 60)) {
             $v = 0;
         } else {
-            $jbMtOnSum = round($eBall + $hBall + $kBall, 1);
+            // JB+MT+ON va OSKI+Test ALOHIDA butun songacha yaxlitlanadi (floor(x+0.5)).
+            $jbMtOnSum = (int) floor($eBall + $hBall + $kBall + 0.5);
             if ($weightOski > 0 && $weightTest > 0) {
-                $examSum = round($qBall + $tBall, 1);
+                $examSum = (int) floor($qBall + $tBall + 0.5);
             } elseif ($weightOski > 0) {
-                $examSum = round($qBall, 1);
+                $examSum = (int) floor($qBall + 0.5);
             } elseif ($weightTest > 0) {
-                $examSum = round($tBall, 1);
+                $examSum = (int) floor($tBall + 0.5);
             } else {
                 $examSum = 0;
             }

@@ -1165,6 +1165,10 @@ Route::prefix('student')->name('student.')->group(function () {
             return view('student.services');
         })->name('services');
 
+        // Visa application (xalqaro talabalar)
+        Route::get('/visa-application', [\App\Http\Controllers\Student\VisaApplicationController::class, 'create'])->name('visa-application.create');
+        Route::post('/visa-application', [\App\Http\Controllers\Student\VisaApplicationController::class, 'store'])->name('visa-application.store');
+
         // Ish e'lonlari
         Route::get('/job-listings', function () {
             return view('student.job-listings');

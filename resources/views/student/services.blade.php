@@ -104,6 +104,27 @@
                 <span class="text-[11px] text-gray-400 mt-1 text-center">Mashg'ulotlar jadvali</span>
             </a>
 
+            {{-- Visa services (faqat xalqaro talabalar uchun) --}}
+            @php
+                $svUser = Auth::guard('student')->user();
+                $isInternational = $svUser && (str_starts_with(strtolower($svUser->group_name ?? ''), 'xd')
+                    || str_contains(strtolower($svUser->citizenship_name ?? ''), 'orijiy')
+                    || str_contains(strtolower($svUser->department_name ?? ''), 'xalqaro'));
+            @endphp
+            @if($isInternational)
+            <a href="{{ route('student.visa-application.create') }}"
+               class="flex flex-col items-center bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-[0.98] transition-all duration-150"
+               style="padding:16px 10px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
+                <div class="w-14 h-14 rounded-2xl bg-blue-100 flex items-center justify-center mb-3">
+                    <svg class="w-7 h-7 text-blue-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/>
+                    </svg>
+                </div>
+                <span class="text-sm font-bold text-gray-800 text-center leading-tight">Visa services</span>
+                <span class="text-[11px] text-gray-400 mt-1 text-center">Visa application</span>
+            </a>
+            @endif
+
         </div>
     </div>
 </x-student-app-layout>

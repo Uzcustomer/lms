@@ -41,9 +41,25 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-4 flex-wrap">
-                            <div class="text-xs">
-                                <div class="text-gray-500">Tugash muddati</div>
-                                <div class="font-semibold text-gray-800">{{ $deadlineFormatted }}</div>
+                            <div class="text-xs" x-data="{ editing: false }">
+                                <div class="text-gray-500 flex items-center gap-1.5">
+                                    <span>Tugash muddati</span>
+                                    <button type="button" @click="editing = !editing"
+                                            class="text-blue-600 hover:text-blue-800" title="Tahrirlash">
+                                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+                                        </svg>
+                                    </button>
+                                </div>
+                                <div class="font-semibold text-gray-800" x-show="!editing">{{ $deadlineFormatted }}</div>
+                                <form method="POST" action="{{ route('admin.student-survey.deadline') }}"
+                                      class="flex items-center gap-1 mt-0.5" x-show="editing" x-cloak>
+                                    @csrf
+                                    <input type="datetime-local" name="deadline" value="{{ $deadlineForInput }}" required
+                                           class="text-xs border border-gray-300 rounded px-1.5 py-0.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                                    <button type="submit" class="px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded">Saqlash</button>
+                                    <button type="button" @click="editing = false" class="px-2 py-0.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs rounded">×</button>
+                                </form>
                             </div>
                             @if($deadlinePassed)
                                 <span class="px-2 py-1 bg-red-100 text-red-700 rounded text-xs font-bold">Tugadi</span>
@@ -58,12 +74,12 @@
                                     {{ $isActive ? 'Yoqilgan' : "O'chirilgan" }}
                                 </span>
                                 <button type="button" id="sv-toggle-btn" onclick="svToggleActive(this)"
-                                        class="relative inline-flex h-5 w-9 items-center rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500"
+                                        class="relative inline-block rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500"
                                         data-enabled="{{ $isActive ? '1' : '0' }}"
                                         title="{{ $isActive ? "So'rovnomani o'chirish" : "So'rovnomani yoqish" }}"
-                                        style="background: {{ $isActive ? '#10b981' : '#d1d5db' }};">
-                                    <span class="inline-block h-3.5 w-3.5 rounded-full bg-white shadow transform transition-transform duration-200"
-                                          style="transform: translateX({{ $isActive ? '19px' : '3px' }});"></span>
+                                        style="width:36px;height:20px;background: {{ $isActive ? '#10b981' : '#d1d5db' }};">
+                                    <span class="absolute rounded-full bg-white shadow"
+                                          style="width:14px;height:14px;top:3px;left:{{ $isActive ? '19px' : '3px' }};transition:left 0.2s;"></span>
                                 </button>
                             </div>
                         </div>
@@ -304,7 +320,7 @@
                 btn.dataset.enabled = newState ? '1' : '0';
                 btn.style.background = newState ? '#10b981' : '#d1d5db';
                 btn.title = newState ? "So'rovnomani o'chirish" : "So'rovnomani yoqish";
-                btn.querySelector('span').style.transform = newState ? 'translateX(19px)' : 'translateX(3px)';
+                btn.querySelector('span').style.left = newState ? '19px' : '3px';
 
                 const status = document.getElementById('sv-toggle-status');
                 status.textContent = newState ? 'Yoqilgan' : "O'chirilgan";

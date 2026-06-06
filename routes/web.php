@@ -1053,6 +1053,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Talabalar so'rovnomasi natijalari + Telegramga e'lon/eslatma
         Route::get('/student-survey', [\App\Http\Controllers\Admin\StudentSurveyController::class, 'index'])->name('student-survey.index');
         Route::post('/student-survey/toggle', [\App\Http\Controllers\Admin\StudentSurveyController::class, 'toggleActive'])->name('student-survey.toggle');
+        Route::post('/student-survey/deadline', [\App\Http\Controllers\Admin\StudentSurveyController::class, 'updateDeadline'])->name('student-survey.deadline');
         Route::post('/student-survey/send-telegram', [\App\Http\Controllers\Admin\StudentSurveyController::class, 'sendTelegramReminder'])->name('student-survey.send-telegram');
         Route::post('/student-survey/send-announcement', [\App\Http\Controllers\Admin\StudentSurveyController::class, 'sendTelegramAnnouncement'])->name('student-survey.send-announcement');
     });

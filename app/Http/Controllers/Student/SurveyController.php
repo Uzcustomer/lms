@@ -34,6 +34,7 @@ class SurveyController extends Controller
             ->where('student_hemis_id', $student->hemis_id)
             ->exists();
 
+        $config['deadline'] = \App\Http\Controllers\Admin\StudentSurveyController::currentDeadline();
         $deadlinePassed = strtotime($config['deadline']) < time();
 
         return view('student.survey.show', [

@@ -6366,6 +6366,7 @@ class JournalController extends Controller
         return $result;
     }
 
+
     /**
      * Standalone backfill — guruh+fan+semestr berilgan bo'lsa, eksport/qaydnoma
      * kontekstidan ham chaqirish mumkin. Sinov fanida YN yuborilgan lekin
@@ -10036,66 +10037,9 @@ class JournalController extends Controller
             $kafedraByKey[$key] = $topKafedra;
         }
 
-        // 5) Barcha JN va MT baholari — bulk
-        $studentHids = $students->collapse()->pluck('hemis_id')->unique()->values()->all();
-        $excludeTypes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
-
-        $jnGradesByKey = []; // hemis|subject|semester => avg
-        if (!empty($studentHids)) {
-            $jnRaw = DB::table('student_grades')
-                ->whereIn('student_hemis_id', $studentHids)
-                ->whereIn('subject_id', $subjectIds)
-                ->whereIn('semester_code', $semesterCodes)
-                ->whereNotIn('training_type_code', $excludeTypes)
-                ->whereNotNull('lesson_date')
-                ->whereNull('deleted_at')
-                ->select(['student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'grade', 'retake_grade', 'status', 'reason'])
-                ->get();
-
-            $grouped = $jnRaw->groupBy(fn($g) => $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code);
-            foreach ($grouped as $key => $items) {
-                $byDate = $items->groupBy(fn($g) => substr((string) $g->lesson_date, 0, 10));
-                $totalDaily = 0; $daysCount = 0;
-                foreach ($byDate as $dayGrades) {
-                    $dayTotal = 0; $dayCount = 0; $absentCount = 0;
-                    foreach ($dayGrades as $g) {
-                        if ($g->status === 'retake') {
-                            $dayTotal += $g->retake_grade ?? 0;
-                        } elseif ($g->status === 'pending' && $g->reason === 'absent') {
-                            $absentCount++;
-                        } else {
-                            $dayTotal += $g->grade ?? 0;
-                        }
-                        $dayCount++;
-                    }
-                    if ($dayCount === 0) continue;
-                    $totalDaily += ($absentCount === $dayCount) ? 0 : round($dayTotal / $dayCount);
-                    $daysCount++;
-                }
-                $jnGradesByKey[$key] = $daysCount > 0
-                    ? (int) round($totalDaily / $daysCount, 0, PHP_ROUND_HALF_UP)
-                    : null;
-            }
-        }
-
-        $mtGradesByKey = []; // hemis|subject|semester => avg
-        if (!empty($studentHids)) {
-            $mtRaw = DB::table('student_grades')
-                ->whereIn('student_hemis_id', $studentHids)
-                ->whereIn('subject_id', $subjectIds)
-                ->whereIn('semester_code', $semesterCodes)
-                ->where('training_type_code', 99)
-                ->whereNull('deleted_at')
-                ->select(['student_hemis_id', 'subject_id', 'semester_code', 'grade', 'retake_grade'])
-                ->get();
-            $mtGrouped = $mtRaw->groupBy(fn($g) => $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code);
-            foreach ($mtGrouped as $key => $items) {
-                $vals = $items->map(fn($g) => (float) ($g->retake_grade ?? $g->grade))->filter(fn($v) => $v !== null);
-                $mtGradesByKey[$key] = $vals->isNotEmpty()
-                    ? (int) round($vals->avg(), 0, PHP_ROUND_HALF_UP)
-                    : null;
-            }
-        }
+        // 5) JN/MT — jurnal sahifasi bilan bir xil formula bo'lishi uchun
+        // computeJnAveragesForGroup va computeMtAveragesForGroup'ni har bir
+        // (subject, group, semester) uchun chaqiramiz. Cache key: subject|semester|group.
 
         // 6) Excel yaratish
         $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
@@ -10131,11 +10075,22 @@ class JournalController extends Controller
                 $teacher = $teacherByKey[$tgKey] ?? '';
                 $kafedra = $kafedraByKey[$tgKey] ?? '';
 
+                // Jurnal sahifasi bilan bir xil JN va MT formulasi
+                $jnAvgs = $this->computeJnAveragesForGroup(
+                    (string) $subj->subject_id,
+                    (string) $subj->semester_code,
+                    (string) $grp->group_hemis_id
+                );
+                $mtAvgs = $this->computeMtAveragesForGroup(
+                    (string) $subj->subject_id,
+                    (string) $subj->semester_code,
+                    (string) $grp->group_hemis_id
+                );
+
                 foreach ($groupStudents as $stu) {
                     $rank++;
-                    $key = $stu->hemis_id . '|' . $subj->subject_id . '|' . $subj->semester_code;
-                    $jn = $jnGradesByKey[$key] ?? '';
-                    $mt = $mtGradesByKey[$key] ?? '';
+                    $jn = $jnAvgs[$stu->hemis_id] ?? '';
+                    $mt = $mtAvgs[$stu->hemis_id] ?? '';
 
                     $sinovKey = $subj->subject_id . '|' . $subj->semester_code . '|' . $grp->group_hemis_id . '|' . $stu->hemis_id;
                     $sinovOverride = $sinovBy[$sinovKey] ?? null;

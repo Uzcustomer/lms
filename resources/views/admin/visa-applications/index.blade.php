@@ -112,7 +112,21 @@
                                             <div><span class="text-slate-500">Tug'ilgan sana:</span> <strong class="text-slate-800">{{ optional($app->birth_date)->format('d.m.Y') ?? '—' }}</strong></div>
                                             <div><span class="text-slate-500">Pasport raqami:</span> <strong class="text-slate-800">{{ $app->passport_number }}</strong></div>
                                             <div><span class="text-slate-500">Student ID:</span> <strong class="text-slate-800">{{ $app->student_number }}</strong></div>
-                                            <div class="sm:col-span-2"><span class="text-slate-500">Telegram raqami:</span> <strong class="text-slate-800">{{ $app->phone_number }}</strong></div>
+                                            <div><span class="text-slate-500">Telefon raqami:</span> <strong class="text-slate-800">{{ $app->phone_number }}</strong></div>
+                                            <div>
+                                                <span class="text-slate-500">{{ ucfirst($app->messenger_type ?? 'telegram') }}:</span>
+                                                @php
+                                                    $uname = ltrim($app->messenger_username ?? '', '@');
+                                                    $tgLink = $uname ? 'https://t.me/' . $uname : null;
+                                                    $waLink = $uname && $app->phone_number ? 'https://wa.me/' . preg_replace('/\D/', '', $app->phone_number) : null;
+                                                    $link = ($app->messenger_type === 'whatsapp') ? $waLink : $tgLink;
+                                                @endphp
+                                                @if($link)
+                                                    <a href="{{ $link }}" target="_blank" rel="noopener" class="font-bold text-blue-600 hover:underline">@{{ $uname }}</a>
+                                                @else
+                                                    <strong class="text-slate-800">@{{ $uname ?: '—' }}</strong>
+                                                @endif
+                                            </div>
                                             <div class="sm:col-span-2"><span class="text-slate-500">Yuborilgan:</span> <strong class="text-slate-800">{{ $app->created_at->format('d.m.Y H:i') }}</strong></div>
                                         </div>
                                     </div>

@@ -57,6 +57,16 @@
                                 <option value="empty">To'ldirilmagan</option>
                             </select>
                         </div>
+                        <div class="filter-item" style="min-width:160px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Tekshiruv</label>
+                            <select id="review-select" class="filter-input">
+                                <option value="">Barchasi</option>
+                                <option value="pending">Kutilmoqda</option>
+                                <option value="approved">Tasdiqlangan</option>
+                                <option value="rejected">Rad etilgan</option>
+                                <option value="resubmitted">Qayta yukladi</option>
+                            </select>
+                        </div>
                         <div class="filter-item" style="flex:1; min-width:200px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> F.I.Sh / Student ID</label>
                             <input type="text" id="search-input" class="filter-input" placeholder="Ism yoki ID bo'yicha qidirish">
@@ -223,10 +233,12 @@
             var fac = $('#faculty-select').val();
             var grp = $('#group-select').val();
             var st = $('#status-select').val();
+            var rv = $('#review-select').val();
             var q = ($('#search-input').val() || '').trim();
             if (fac) params.push('faculty_id=' + encodeURIComponent(fac));
             if (grp) params.push('group_id=' + encodeURIComponent(grp));
             if (st) params.push('status=' + encodeURIComponent(st));
+            if (rv) params.push('review_status=' + encodeURIComponent(rv));
             if (q) params.push('search=' + encodeURIComponent(q));
             window.location.href = '{{ route("admin.graduate-passports.export-excel") }}' + (params.length ? '?' + params.join('&') : '');
         }
@@ -238,6 +250,7 @@
                 faculty_id: $('#faculty-select').val() || '',
                 group_id: $('#group-select').val() || '',
                 status: $('#status-select').val() || '',
+                review_status: $('#review-select').val() || '',
                 search: ($('#search-input').val() || '').trim(),
             };
 

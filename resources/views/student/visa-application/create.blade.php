@@ -373,8 +373,14 @@
             </div>
 
             {{-- ERROR TOAST --}}
-            <div id="errorToast" class="hidden fixed bottom-4 left-1/2 -translate-x-1/2 z-50 px-4 py-3 rounded-lg bg-red-600 text-white text-sm font-semibold shadow-xl">
-                <span id="errorToastText"></span>
+            <div id="errorToast" class="hidden fixed bottom-4 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2 sm:max-w-md z-50 px-4 py-3 rounded-lg bg-red-600 text-white text-sm font-semibold shadow-xl flex items-start gap-2">
+                <svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+                <span id="errorToastText" class="leading-snug flex-1"></span>
+                <button type="button" onclick="document.getElementById('errorToast').classList.add('hidden')" class="text-white/70 hover:text-white flex-shrink-0">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
             </div>
 
         </div>
@@ -469,9 +475,12 @@
 
         function vaToast(msg) {
             const t = document.getElementById('errorToast');
-            document.getElementById('errorToastText').textContent = msg;
+            const txt = document.getElementById('errorToastText');
+            txt.textContent = msg;
             t.classList.remove('hidden');
-            setTimeout(() => t.classList.add('hidden'), 4000);
+            // Avvalgi timerni bekor qilish, har gal yangi 6s
+            if (window.__vaToastTimer) clearTimeout(window.__vaToastTimer);
+            window.__vaToastTimer = setTimeout(() => t.classList.add('hidden'), 6000);
         }
 
         function vaShowSuccess() {
@@ -480,11 +489,48 @@
             m.classList.add('flex');
         }
 
+        // Forma tomonida nimadir yetishmasligini darhol tushunarli xabar bilan ko'rsatish.
+        // (HTML5 required visually-hidden file input'da silent qoladi)
+        function vaValidateForm(formEl) {
+            const get = name => (formEl.elements[name]?.value || '').trim();
+            const checks = [
+                ['student_number',     'Student ID is required.'],
+                ['last_name',          'Last name is required.'],
+                ['first_name',         'First name is required.'],
+                ['middle_name',        'Middle name is required (write "—" if you don\'t have one).'],
+                ['birth_date',         'Date of birth is required.'],
+                ['passport_number',    'Passport number is required.'],
+                ['messenger_username', 'Messenger username is required.'],
+            ];
+            for (const [name, msg] of checks) {
+                if (!get(name)) {
+                    formEl.elements[name]?.focus();
+                    return msg;
+                }
+            }
+            const passFile = document.getElementById('passport_pdf').files[0];
+            if (!passFile) return 'Please upload your passport copies (PDF).';
+            if (passFile.type !== 'application/pdf') return 'Passport file must be a PDF.';
+            if (passFile.size > 2 * 1024 * 1024) return 'Passport PDF is larger than 2 MB.';
+            const appFile = document.getElementById('application_pdf').files[0];
+            if (!appFile) return 'Please upload the filled application form (PDF).';
+            if (appFile.type !== 'application/pdf') return 'Application file must be a PDF.';
+            if (appFile.size > 2 * 1024 * 1024) return 'Application PDF is larger than 2 MB.';
+            return null;
+        }
+
         // Form submit
-        document.getElementById('visaForm').addEventListener('submit', function (e) {
+        form.setAttribute('novalidate', 'novalidate'); // O'zimiz validate qilamiz
+        form.addEventListener('submit', function (e) {
             e.preventDefault();
+
+            const localErr = vaValidateForm(this);
+            if (localErr) {
+                vaToast(localErr);
+                return;
+            }
             if (!iti.isValidNumber()) {
-                vaToast('Please enter a valid Telegram phone number');
+                vaToast('Please enter a valid phone number.');
                 phoneEl.focus();
                 return;
             }
@@ -503,24 +549,30 @@
 
             fetch(this.action, {
                 method: 'POST',
-                headers: { 'Accept': 'application/json' },
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 body: fd,
             }).then(async r => {
                 const text = await r.text();
                 let data;
-                try { data = JSON.parse(text); } catch (e) { throw new Error('Server error (HTTP ' + r.status + ')'); }
-                if (!r.ok) {
-                    const msg = data && data.message ? data.message : ('Validation failed');
-                    if (data.errors) {
-                        const first = Object.values(data.errors)[0];
-                        throw new Error(Array.isArray(first) ? first[0] : msg);
-                    }
-                    throw new Error(msg);
+                try { data = JSON.parse(text); } catch (e) {
+                    throw new Error('Server error (HTTP ' + r.status + '). Please try again.');
                 }
-                if (data.ok) {
+                if (!r.ok) {
+                    // Laravel 422 — barcha field xatolarini yig'amiz
+                    if (data && data.errors && typeof data.errors === 'object') {
+                        const msgs = [];
+                        for (const k of Object.keys(data.errors)) {
+                            const arr = data.errors[k];
+                            msgs.push(Array.isArray(arr) ? arr[0] : String(arr));
+                        }
+                        throw new Error(msgs.join(' · '));
+                    }
+                    throw new Error((data && (data.message || data.error)) || ('HTTP ' + r.status));
+                }
+                if (data && data.ok) {
                     vaShowSuccess();
                 } else {
-                    throw new Error(data.message || 'Unknown error');
+                    throw new Error((data && data.message) || 'Unknown error');
                 }
             }).catch(err => {
                 vaToast(err.message || 'System error');

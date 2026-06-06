@@ -391,7 +391,11 @@
             $svConfig = config('student_survey');
             $svStudent = auth()->guard('student')->user();
             $svOnSurveyPage = request()->routeIs('student.survey.*');
+            // Popup faqat profile/dashboard sahifasida chiqadi — har safar shu yerga
+            // kirganda eslatish uchun. Banner esa hamma sahifada ko'rinadi.
+            $svIsHomePage = request()->routeIs('student.dashboard') || request()->routeIs('student.profile');
             $svShouldShow = false;
+            $svShowPopup = false;
             $svDeadlinePassed = false;
             $svDeadlineFormatted = null;
             if ($svConfig && !empty($svConfig['key']) && $svStudent && !$svOnSurveyPage) {
@@ -400,6 +404,7 @@
                     ->exists();
                 if (!$svCompleted) {
                     $svShouldShow = true;
+                    $svShowPopup = $svIsHomePage;
                     $svDeadlinePassed = strtotime($svConfig['deadline']) < time();
                     $svDeadlineFormatted = \Carbon\Carbon::parse($svConfig['deadline'])->format('d.m.Y H:i');
                 }
@@ -423,7 +428,8 @@
                 </a>
             </div>
 
-            {{-- Auto-popup CTA — profilga/sahifaga kirganda chiqadi --}}
+            @if($svShowPopup)
+            {{-- Auto-popup CTA — profilga/dashboard sahifasiga kirganda chiqadi (har safar) --}}
             <div id="sv-cta-modal" class="hidden" style="position:fixed;inset:0;z-index:99997;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,0.55);backdrop-filter:blur(4px);padding:16px;">
                 <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden" style="animation: sv-cta-in 0.3s ease;">
                     <div style="background:linear-gradient(135deg,#6366f1,#4f46e5);" class="px-5 py-4 text-white">
@@ -477,13 +483,10 @@
                 (function () {
                     const m = document.getElementById('sv-cta-modal');
                     if (!m) return;
-                    const dismissed = sessionStorage.getItem('sv_cta_dismissed');
                     const blocking = @json($svDeadlinePassed);
-                    // Deadline o'tgan bo'lsa — har doim ochiladi. O'tmagan bo'lsa — sessionStorage tekshiriladi.
-                    if (blocking || !dismissed) {
-                        m.classList.remove('hidden');
-                        m.style.display = 'flex';
-                    }
+                    // Har safar profile/dashboard sahifasiga kirganda ochiladi.
+                    m.classList.remove('hidden');
+                    m.style.display = 'flex';
                     // Click-outside yopish faqat deadline o'tmagan bo'lsa
                     if (!blocking) {
                         m.addEventListener('click', function (e) {
@@ -494,11 +497,11 @@
                 function svCtaDismiss() {
                     const m = document.getElementById('sv-cta-modal');
                     if (!m) return;
-                    sessionStorage.setItem('sv_cta_dismissed', '1');
                     m.style.display = 'none';
                     m.classList.add('hidden');
                 }
             </script>
+            @endif
         @endif
     @endauth
 

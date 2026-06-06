@@ -1,8 +1,19 @@
 <x-app-layout>
     <x-slot name="header">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            {{ __('Jurnal') }}
-        </h2>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <h2 class="text-xl font-semibold leading-tight text-gray-800">
+                {{ __('Jurnal') }}
+            </h2>
+            @if(is_active_registrator())
+            <button type="button" onclick="document.getElementById('jx-sinov-modal').style.display='flex'"
+                    style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#7c3aed,#a855f7);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px rgba(124,58,237,0.3);">
+                <svg width="16" height="16" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
+                </svg>
+                Sinov fanlar
+            </button>
+            @endif
+        </div>
     </x-slot>
 
     @if(session('error'))

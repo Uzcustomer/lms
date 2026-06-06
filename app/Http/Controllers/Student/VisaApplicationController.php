@@ -35,9 +35,18 @@ class VisaApplicationController extends Controller
             ->latest()
             ->get();
 
+        // Talaba qayta ariza topshirishi mumkinmi?
+        // - Hech qanday ariza yo'q → topshirsa bo'ladi
+        // - Eng oxirgi ariza "rejected" → qayta topshirsa bo'ladi
+        // - Aks holda (pending/reviewing/approved) → forma yashirin
+        $latest = $applications->first();
+        $canSubmit = !$latest || $latest->status === 'rejected';
+
         return view('student.visa-application.create', [
             'student'      => $student,
             'applications' => $applications,
+            'latest'       => $latest,
+            'canSubmit'    => $canSubmit,
         ]);
     }
 
@@ -46,6 +55,15 @@ class VisaApplicationController extends Controller
         $student = auth('student')->user();
         if (!$student) abort(401);
         $this->ensureInternational($student);
+
+        // Faqat rejected yoki yangi talaba topshirishi mumkin
+        $latest = VisaApplication::where('student_hemis_id', $student->hemis_id)->latest()->first();
+        if ($latest && $latest->status !== 'rejected') {
+            return response()->json([
+                'ok' => false,
+                'message' => "You already have an active application. Please wait for review.",
+            ], 409);
+        }
 
         $data = $request->validate([
             'student_number'  => 'required|string|max:50',
@@ -59,11 +77,11 @@ class VisaApplicationController extends Controller
             'phone_country_iso2' => 'required|string|max:4',
             'messenger_type'     => 'required|in:telegram,whatsapp',
             'messenger_username' => 'required|string|max:100',
-            'passport_pdf'    => 'required|file|mimes:pdf|max:5120',     // 5 MB
-            'application_pdf' => 'required|file|mimes:pdf|max:256',      // 256 KB
+            'passport_pdf'    => 'required|file|mimes:pdf|max:2048',     // 2 MB
+            'application_pdf' => 'required|file|mimes:pdf|max:2048',     // 2 MB
         ], [
-            'passport_pdf.max'    => 'Passport PDF must not exceed 5 MB.',
-            'application_pdf.max' => 'Application PDF must not exceed 256 KB.',
+            'passport_pdf.max'    => 'Passport PDF must not exceed 2 MB.',
+            'application_pdf.max' => 'Application PDF must not exceed 2 MB.',
         ]);
 
         // Application number — 4 xonali, unique

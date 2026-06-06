@@ -41,7 +41,10 @@ class VisaApplicationController extends Controller
             'reviewed_at' => now(),
             'reviewed_by' => auth()->id(),
         ]);
-        return back()->with('success', "Ariza #{$application->application_number} qabul qilindi.");
+        // Yangi statusga mos tab'ga o'tkazamiz, shunda admin "Qabul qilingan"
+        // ro'yxatida ko'radi.
+        return redirect()->route('admin.visa-applications.index', ['status' => 'approved'])
+            ->with('success', "Ariza #{$application->application_number} qabul qilindi.");
     }
 
     public function reject(VisaApplication $application, Request $request)
@@ -52,7 +55,8 @@ class VisaApplicationController extends Controller
             'reviewed_at' => now(),
             'reviewed_by' => auth()->id(),
         ]);
-        return back()->with('success', "Ariza #{$application->application_number} rad etildi.");
+        return redirect()->route('admin.visa-applications.index', ['status' => 'rejected'])
+            ->with('success', "Ariza #{$application->application_number} rad etildi.");
     }
 
     public function destroy(VisaApplication $application)

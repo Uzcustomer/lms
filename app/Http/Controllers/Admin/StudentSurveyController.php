@@ -139,17 +139,16 @@ class StudentSurveyController extends Controller
     public function sendTelegramAnnouncement(Request $request, TelegramService $telegram)
     {
         $config = config('student_survey');
-        $deadlineFormatted = \Carbon\Carbon::parse($config['deadline'])->format('d.m.Y H:i');
-        $message = $this->buildAnnouncementMessage($config['title'], $deadlineFormatted);
+        $deadlineFormatted = \Carbon\Carbon::parse(self::currentDeadline())->format('d.m.Y H:i');
 
         $students = Student::query()
             ->where('student_status_code', 11)
             ->whereNotNull('telegram_chat_id')
             ->where('telegram_chat_id', '!=', '')
-            ->select(['hemis_id', 'telegram_chat_id'])
+            ->select(['hemis_id', 'telegram_chat_id', 'department_name'])
             ->get();
 
-        [$sent, $failed] = $this->bulkSend($telegram, $students, $message);
+        [$sent, $failed] = $this->bulkSendLocalized($telegram, $students, $config['title'] ?? [], $deadlineFormatted, 'announcement');
 
         Log::info('Student survey announcement sent', [
             'survey_key' => $config['key'],
@@ -170,7 +169,7 @@ class StudentSurveyController extends Controller
         $config = config('student_survey');
         $surveyKey = $config['key'];
 
-        $deadlineFormatted = \Carbon\Carbon::parse($config['deadline'])->format('d.m.Y H:i');
+        $deadlineFormatted = \Carbon\Carbon::parse(self::currentDeadline())->format('d.m.Y H:i');
 
         $completedIds = StudentSurveyCompletion::where('survey_key', $surveyKey)
             ->pluck('student_hemis_id')
@@ -181,11 +180,10 @@ class StudentSurveyController extends Controller
             ->whereNotNull('telegram_chat_id')
             ->where('telegram_chat_id', '!=', '')
             ->when(!empty($completedIds), fn($q) => $q->whereNotIn('hemis_id', $completedIds))
-            ->select(['hemis_id', 'telegram_chat_id'])
+            ->select(['hemis_id', 'telegram_chat_id', 'department_name'])
             ->get();
 
-        $message = $this->buildReminderMessage($config['title'], $deadlineFormatted);
-        [$sent, $failed] = $this->bulkSend($telegram, $pending, $message);
+        [$sent, $failed] = $this->bulkSendLocalized($telegram, $pending, $config['title'] ?? [], $deadlineFormatted, 'reminder');
 
         Log::info('Student survey telegram reminder sent', [
             'survey_key' => $surveyKey,
@@ -198,9 +196,48 @@ class StudentSurveyController extends Controller
     }
 
     /**
-     * Bir guruh talabaga xabar yuborish — Telegram bot limiti uchun mikro-pauza bilan.
+     * Talabaning fakulteti nomidan tilni aniqlash — xalqaro fakultet → en, aks holda uz.
+     */
+    public static function detectStudentLocale($student): string
+    {
+        $dept = mb_strtolower((string) ($student->department_name ?? ''));
+        if (str_contains($dept, 'xalqaro') || str_contains($dept, 'international') || str_contains($dept, 'международ')) {
+            return 'en';
+        }
+        return 'uz';
+    }
+
+    /**
+     * Har talabaga uning tiliga mos xabar yuborish.
      *
-     * @return array{0:int,1:int} [sent, failed]
+     * @return array{0:int,1:int}
+     */
+    private function bulkSendLocalized(TelegramService $telegram, $students, $titleArr, string $deadlineFormatted, string $kind): array
+    {
+        // 3 ta tilda matnlarni oldindan tayyorlab qo'yish
+        $messages = [];
+        foreach (['uz', 'ru', 'en'] as $loc) {
+            $title = sv_t($titleArr, $loc);
+            $messages[$loc] = $kind === 'announcement'
+                ? $this->buildAnnouncementMessage($title, $deadlineFormatted, $loc)
+                : $this->buildReminderMessage($title, $deadlineFormatted, $loc);
+        }
+
+        $sent = 0;
+        $failed = 0;
+        foreach ($students as $student) {
+            $loc = self::detectStudentLocale($student);
+            $ok = $telegram->sendToUser((string) $student->telegram_chat_id, $messages[$loc]);
+            if ($ok) $sent++; else $failed++;
+            usleep(50_000);
+        }
+        return [$sent, $failed];
+    }
+
+    /**
+     * Bir guruh talabaga bitta xabar yuborish (eski signature — boshqa joyda qolgan bo'lsa).
+     *
+     * @return array{0:int,1:int}
      */
     private function bulkSend(TelegramService $telegram, $students, string $message): array
     {
@@ -209,51 +246,115 @@ class StudentSurveyController extends Controller
         foreach ($students as $student) {
             $ok = $telegram->sendToUser((string) $student->telegram_chat_id, $message);
             if ($ok) $sent++; else $failed++;
-            usleep(50_000); // ~20 msg/sec — bot API limiti uchun xavfsiz
+            usleep(50_000);
         }
         return [$sent, $failed];
     }
 
-    public function buildAnnouncementMessage(string $title, string $deadlineFormatted): string
+    public function buildAnnouncementMessage(string $title, string $deadlineFormatted, string $locale = 'uz'): string
     {
-        $lines = [
-            "📣 <b>So'rovnoma boshlandi</b>",
-            "",
-            "<b>Mavzu:</b> {$title}",
-            "",
-            "Hurmatli talaba! Universitetimizning Registrator ofisi xizmati va imtihon jarayonlarini yaxshilash bo'yicha qisqa so'rovnoma o'tkazilmoqda. Sizning fikringiz bizga qaror qabul qilishda yordam beradi.",
-            "",
-            "⏰ <b>Tugash muddati:</b> {$deadlineFormatted}",
-            "",
-            "⚠️ <b>Diqqat:</b> Muddat tugagandan keyin so'rovnomani bajarmagan talabalar tizim xizmatlaridan foydalana olmaydi — profilga kira olmaydi.",
-            "",
-            "🔒 <b>Anonimlik:</b> Javoblaringiz mutlaqo yashirin saqlanadi va hech kimga ko'rinmaydi. Ma'lumotlar faqat umumiy statistika uchun ishlatiladi. Iltimos, samimiy va xolis javob bering.",
-            "",
-            "Tizimga kirish: https://lms.tashmedunitf.uz",
+        $tpl = [
+            'uz' => [
+                "📣 <b>So'rovnoma boshlandi</b>",
+                "",
+                "<b>Mavzu:</b> {$title}",
+                "",
+                "Hurmatli talaba! Universitetimizning Registrator ofisi xizmati va imtihon jarayonlarini yaxshilash bo'yicha qisqa so'rovnoma o'tkazilmoqda. Sizning fikringiz bizga qaror qabul qilishda yordam beradi.",
+                "",
+                "⏰ <b>Tugash muddati:</b> {$deadlineFormatted}",
+                "",
+                "⚠️ <b>Diqqat:</b> Muddat tugagandan keyin so'rovnomani bajarmagan talabalar tizim xizmatlaridan foydalana olmaydi — profilga kira olmaydi.",
+                "",
+                "🔒 <b>Anonimlik:</b> Javoblaringiz mutlaqo yashirin saqlanadi va hech kimga ko'rinmaydi. Ma'lumotlar faqat umumiy statistika uchun ishlatiladi. Iltimos, samimiy va xolis javob bering.",
+                "",
+                "Tizimga kirish: https://mark.tashmedunitf.uz",
+            ],
+            'ru' => [
+                "📣 <b>Опрос начался</b>",
+                "",
+                "<b>Тема:</b> {$title}",
+                "",
+                "Уважаемый студент! В нашем университете проводится короткий опрос для улучшения работы офиса Регистратора и экзаменационных процессов. Ваше мнение поможет нам в принятии решений.",
+                "",
+                "⏰ <b>Срок окончания:</b> {$deadlineFormatted}",
+                "",
+                "⚠️ <b>Внимание:</b> После истечения срока студенты, не прошедшие опрос, не смогут пользоваться сервисами платформы — вход в профиль будет закрыт.",
+                "",
+                "🔒 <b>Анонимность:</b> Ваши ответы полностью конфиденциальны и никому не видны. Данные используются только для общей статистики. Пожалуйста, отвечайте искренне и беспристрастно.",
+                "",
+                "Войти в систему: https://mark.tashmedunitf.uz",
+            ],
+            'en' => [
+                "📣 <b>Survey is now open</b>",
+                "",
+                "<b>Topic:</b> {$title}",
+                "",
+                "Dear student! Our university is conducting a short survey to improve the Registration Office services and exam processes. Your opinion will help us make better decisions.",
+                "",
+                "⏰ <b>Deadline:</b> {$deadlineFormatted}",
+                "",
+                "⚠️ <b>Attention:</b> Once the deadline passes, students who haven't completed the survey will lose access to platform services — profile entry will be blocked.",
+                "",
+                "🔒 <b>Anonymity:</b> Your answers are kept completely private and are not shown to anyone. The data is used only for aggregate statistics. Please answer sincerely and impartially.",
+                "",
+                "Open the platform: https://mark.tashmedunitf.uz",
+            ],
         ];
 
-        return implode("\n", $lines);
+        return implode("\n", $tpl[$locale] ?? $tpl['uz']);
     }
 
-    public function buildReminderMessage(string $title, string $deadlineFormatted): string
+    public function buildReminderMessage(string $title, string $deadlineFormatted, string $locale = 'uz'): string
     {
-        $lines = [
-            "🔔 <b>Eslatma — Talabalar so'rovnomasi</b>",
-            "",
-            "<b>Mavzu:</b> {$title}",
-            "",
-            "Hurmatli talaba, hozirgacha so'rovnomani to'ldirmagansiz. Iltimos, qisqa vaqt ajratib, tizimga kirib so'rovnomani bajaring.",
-            "",
-            "⏰ <b>Tugash muddati:</b> {$deadlineFormatted}",
-            "",
-            "⚠️ <b>Diqqat:</b> Muddat o'tgandan keyin so'rovnomani bajarmagan talabalar profilga kira olmaydi.",
-            "",
-            "🔒 <b>Shaxsiy ma'lumotlaringiz yashirin:</b> Javoblaringiz mutlaqo anonim hisoblanadi va hech kimga ko'rinmaydi — ma'lumotlar faqat umumiy statistika uchun ishlatiladi. Iltimos, samimiy va xolis javob bering.",
-            "",
-            "Tizimga kirish: https://lms.tashmedunitf.uz",
+        $tpl = [
+            'uz' => [
+                "🔔 <b>Eslatma — Talabalar so'rovnomasi</b>",
+                "",
+                "<b>Mavzu:</b> {$title}",
+                "",
+                "Hurmatli talaba, hozirgacha so'rovnomani to'ldirmagansiz. Iltimos, qisqa vaqt ajratib, tizimga kirib so'rovnomani bajaring.",
+                "",
+                "⏰ <b>Tugash muddati:</b> {$deadlineFormatted}",
+                "",
+                "⚠️ <b>Diqqat:</b> Muddat o'tgandan keyin so'rovnomani bajarmagan talabalar profilga kira olmaydi.",
+                "",
+                "🔒 <b>Shaxsiy ma'lumotlaringiz yashirin:</b> Javoblaringiz mutlaqo anonim hisoblanadi va hech kimga ko'rinmaydi — ma'lumotlar faqat umumiy statistika uchun ishlatiladi. Iltimos, samimiy va xolis javob bering.",
+                "",
+                "Tizimga kirish: https://mark.tashmedunitf.uz",
+            ],
+            'ru' => [
+                "🔔 <b>Напоминание — опрос для студентов</b>",
+                "",
+                "<b>Тема:</b> {$title}",
+                "",
+                "Уважаемый студент, вы ещё не прошли опрос. Пожалуйста, уделите немного времени, войдите в систему и заполните его.",
+                "",
+                "⏰ <b>Срок окончания:</b> {$deadlineFormatted}",
+                "",
+                "⚠️ <b>Внимание:</b> После истечения срока студенты, не прошедшие опрос, не смогут войти в профиль.",
+                "",
+                "🔒 <b>Конфиденциальность:</b> Ваши ответы полностью анонимны и никому не видны — данные используются только для общей статистики. Пожалуйста, отвечайте искренне.",
+                "",
+                "Войти в систему: https://mark.tashmedunitf.uz",
+            ],
+            'en' => [
+                "🔔 <b>Reminder — Student survey</b>",
+                "",
+                "<b>Topic:</b> {$title}",
+                "",
+                "Dear student, you haven't completed the survey yet. Please take a few minutes to log in and fill it out.",
+                "",
+                "⏰ <b>Deadline:</b> {$deadlineFormatted}",
+                "",
+                "⚠️ <b>Attention:</b> After the deadline, students who haven't completed the survey won't be able to access their profile.",
+                "",
+                "🔒 <b>Privacy:</b> Your answers are completely anonymous and not shown to anyone — the data is used only for aggregate statistics. Please answer sincerely and impartially.",
+                "",
+                "Open the platform: https://mark.tashmedunitf.uz",
+            ],
         ];
 
-        return implode("\n", $lines);
+        return implode("\n", $tpl[$locale] ?? $tpl['uz']);
     }
 
     /**

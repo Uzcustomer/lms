@@ -3,6 +3,22 @@
 use App\Models\Department;
 use Carbon\Carbon;
 
+if (!function_exists('sv_t')) {
+    /**
+     * Survey config'idagi ko'p tilli matnni tilga ko'ra qaytaradi.
+     * $value array bo'lsa locale kalitidan, bo'lmasa o'zicha. Fallback: uz → birinchi mavjud.
+     */
+    function sv_t($value, ?string $locale = null): string
+    {
+        if (is_string($value)) return $value;
+        if (!is_array($value)) return '';
+        $locale = $locale ?: 'uz';
+        if (isset($value[$locale])) return (string) $value[$locale];
+        if (isset($value['uz'])) return (string) $value['uz'];
+        return (string) reset($value);
+    }
+}
+
 if (!function_exists('is_active_dekan')) {
     /**
      * Joriy foydalanuvchining faol roli dekan ekanligini tekshirish

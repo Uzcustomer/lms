@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Http\Controllers\Admin\StudentSurveyController;
 use App\Models\StudentSurveyCompletion;
 use Closure;
 use Illuminate\Http\Request;
@@ -25,6 +26,11 @@ class EnsureSurveyCompleted
 
         // Survey va logout sahifalari har doim ochiq
         if ($request->routeIs('student.survey.*') || $request->routeIs('student.logout')) {
+            return $next($request);
+        }
+
+        // Survey o'chirilgan bo'lsa hech narsa qilmaymiz
+        if (!StudentSurveyController::isActive()) {
             return $next($request);
         }
 

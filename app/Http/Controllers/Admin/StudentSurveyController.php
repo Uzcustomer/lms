@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\Setting;
 use App\Models\Student;
 use App\Models\StudentSurveyAnswer;
 use App\Models\StudentSurveyCompletion;
@@ -16,6 +17,15 @@ use Illuminate\Support\Facades\Log;
  */
 class StudentSurveyController extends Controller
 {
+    /**
+     * Survey faolligi — admin toggle. Off bo'lsa talabaga banner/popup ko'rinmaydi,
+     * middleware ham bloklamaydi, submit ham qabul qilinmaydi.
+     */
+    public static function isActive(): bool
+    {
+        return Setting::get('student_survey_active', '0') === '1';
+    }
+
     public function index()
     {
         $config = config('student_survey');
@@ -60,6 +70,7 @@ class StudentSurveyController extends Controller
 
         return view('admin.student-survey.index', [
             'config'           => $config,
+            'isActive'         => self::isActive(),
             'totalActive'      => $totalActive,
             'completedCount'   => $completedCount,
             'pendingCount'     => $pendingCount,
@@ -68,6 +79,25 @@ class StudentSurveyController extends Controller
             'facultyStats'     => $facultyStats,
             'deadlineFormatted' => $deadlineFormatted,
             'deadlinePassed'   => $deadlinePassed,
+        ]);
+    }
+
+    /**
+     * Survey faollik holatini almashtirish (admin toggle).
+     */
+    public function toggleActive(Request $request)
+    {
+        $enabled = $request->boolean('enabled');
+        Setting::set('student_survey_active', $enabled ? '1' : '0');
+
+        Log::info('Student survey toggled', ['enabled' => $enabled, 'by' => auth()->id()]);
+
+        return response()->json([
+            'success' => true,
+            'enabled' => $enabled,
+            'message' => $enabled
+                ? "So'rovnoma yoqildi — talabalar uchun ko'rinadi."
+                : "So'rovnoma o'chirildi — talabalarga ko'rinmaydi.",
         ]);
     }
 

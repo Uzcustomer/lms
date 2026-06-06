@@ -1104,7 +1104,7 @@ Route::prefix('student')->name('student.')->group(function () {
         }
     })->name('login');
 
-    Route::middleware(['auth:student', 'force.student.contact'])->group(function () {
+    Route::middleware(['auth:student', 'force.student.contact', 'ensure.survey.completed'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('student.dashboard');
         });

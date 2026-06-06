@@ -26,9 +26,21 @@ class StudentSurveyController extends Controller
         return Setting::get('student_survey_active', '0') === '1';
     }
 
+    /**
+     * Joriy deadline — Setting bo'lsa undan, bo'lmasa config faylidan.
+     * Format: 'Y-m-d H:i:s'.
+     */
+    public static function currentDeadline(): string
+    {
+        $override = Setting::get('student_survey_deadline');
+        if ($override) return $override;
+        return (string) config('student_survey.deadline');
+    }
+
     public function index()
     {
         $config = config('student_survey');
+        $config['deadline'] = self::currentDeadline();
         $surveyKey = $config['key'];
 
         $totalActive = Student::where('student_status_code', 11)->count();
@@ -67,10 +79,12 @@ class StudentSurveyController extends Controller
 
         $deadlineFormatted = \Carbon\Carbon::parse($config['deadline'])->format('d.m.Y H:i');
         $deadlinePassed = strtotime($config['deadline']) < time();
+        $deadlineForInput = \Carbon\Carbon::parse($config['deadline'])->format('Y-m-d\TH:i');
 
         return view('admin.student-survey.index', [
             'config'           => $config,
             'isActive'         => self::isActive(),
+            'deadlineForInput' => $deadlineForInput,
             'totalActive'      => $totalActive,
             'completedCount'   => $completedCount,
             'pendingCount'     => $pendingCount,
@@ -80,6 +94,24 @@ class StudentSurveyController extends Controller
             'deadlineFormatted' => $deadlineFormatted,
             'deadlinePassed'   => $deadlinePassed,
         ]);
+    }
+
+    /**
+     * Deadline'ni admin tomondan o'zgartirish.
+     * Format: ISO-like "Y-m-d\TH:i" (HTML datetime-local input).
+     */
+    public function updateDeadline(Request $request)
+    {
+        $request->validate([
+            'deadline' => 'required|date',
+        ]);
+
+        $dt = \Carbon\Carbon::parse($request->input('deadline'))->format('Y-m-d H:i:s');
+        Setting::set('student_survey_deadline', $dt);
+
+        Log::info('Student survey deadline updated', ['deadline' => $dt, 'by' => auth()->id()]);
+
+        return back()->with('success', "Yangi tugash muddati saqlandi: " . \Carbon\Carbon::parse($dt)->format('d.m.Y H:i'));
     }
 
     /**

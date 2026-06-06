@@ -27,18 +27,19 @@ class SurveyRemindPending extends Command
         }
 
         $config = config('student_survey');
-        if (!$config || empty($config['key']) || empty($config['deadline'])) {
+        if (!$config || empty($config['key'])) {
             $this->warn('Survey config not set; skipping.');
             return self::SUCCESS;
         }
 
-        if (strtotime($config['deadline']) < time()) {
-            $this->info('Deadline already passed; skipping.');
+        $deadline = StudentSurveyController::currentDeadline();
+        if (!$deadline || strtotime($deadline) < time()) {
+            $this->info('Deadline already passed or missing; skipping.');
             return self::SUCCESS;
         }
 
         $surveyKey = $config['key'];
-        $deadlineFormatted = \Carbon\Carbon::parse($config['deadline'])->format('d.m.Y H:i');
+        $deadlineFormatted = \Carbon\Carbon::parse($deadline)->format('d.m.Y H:i');
 
         $completedIds = StudentSurveyCompletion::where('survey_key', $surveyKey)
             ->pluck('student_hemis_id')

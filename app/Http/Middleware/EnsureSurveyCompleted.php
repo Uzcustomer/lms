@@ -35,11 +35,13 @@ class EnsureSurveyCompleted
         }
 
         $config = config('student_survey');
-        if (!$config || empty($config['key']) || empty($config['deadline'])) {
+        if (!$config || empty($config['key'])) {
             return $next($request);
         }
+        $deadline = StudentSurveyController::currentDeadline();
+        if (!$deadline) return $next($request);
 
-        $deadlinePassed = strtotime($config['deadline']) < time();
+        $deadlinePassed = strtotime($deadline) < time();
         if (!$deadlinePassed) {
             return $next($request);
         }

@@ -406,8 +406,9 @@
                 if (!$svCompleted) {
                     $svShouldShow = true;
                     $svShowPopup = $svIsHomePage;
-                    $svDeadlinePassed = strtotime($svConfig['deadline']) < time();
-                    $svDeadlineFormatted = \Carbon\Carbon::parse($svConfig['deadline'])->format('d.m.Y H:i');
+                    $svDeadline = \App\Http\Controllers\Admin\StudentSurveyController::currentDeadline();
+                    $svDeadlinePassed = strtotime($svDeadline) < time();
+                    $svDeadlineFormatted = \Carbon\Carbon::parse($svDeadline)->format('d.m.Y H:i');
                 }
             }
         @endphp

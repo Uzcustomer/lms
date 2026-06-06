@@ -176,23 +176,35 @@
                                     @endif
 
                                     {{-- HARAKATLAR --}}
+                                    @php $isProcessed = in_array($app->status, ['approved', 'rejected']); @endphp
                                     <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
                                         <div x-data="{ showApprove: false, showReject: false }" class="flex flex-wrap gap-2 w-full">
-                                            {{-- Qabul qilish --}}
-                                            <button type="button" @click="showApprove = !showApprove; showReject = false"
-                                                    class="px-3 py-2 text-xs font-bold text-white rounded-lg transition flex items-center gap-1.5"
-                                                    style="background:linear-gradient(135deg,#10b981,#059669);">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                                                Qabul qilish
-                                            </button>
-                                            {{-- Rad etish --}}
-                                            <button type="button" @click="showReject = !showReject; showApprove = false"
-                                                    class="px-3 py-2 text-xs font-bold text-white rounded-lg transition flex items-center gap-1.5"
-                                                    style="background:linear-gradient(135deg,#ef4444,#dc2626);">
-                                                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                                                Rad etish
-                                            </button>
-                                            {{-- O'chirish --}}
+                                            @if(!$isProcessed)
+                                                {{-- Qabul qilish --}}
+                                                <button type="button" @click="showApprove = !showApprove; showReject = false"
+                                                        class="px-3 py-2 text-xs font-bold text-white rounded-lg transition flex items-center gap-1.5"
+                                                        style="background:linear-gradient(135deg,#10b981,#059669);">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+                                                    Qabul qilish
+                                                </button>
+                                                {{-- Rad etish --}}
+                                                <button type="button" @click="showReject = !showReject; showApprove = false"
+                                                        class="px-3 py-2 text-xs font-bold text-white rounded-lg transition flex items-center gap-1.5"
+                                                        style="background:linear-gradient(135deg,#ef4444,#dc2626);">
+                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                                                    Rad etish
+                                                </button>
+                                            @else
+                                                {{-- Ko'rilib chiqilgan ariza — qisqa kim/qachon yorlig'i --}}
+                                                <div class="flex-1 text-xs text-slate-500 italic">
+                                                    Ko'rib chiqilgan
+                                                    @if($app->reviewed_at)
+                                                        · <strong class="text-slate-700">{{ $app->reviewed_at->format('d.m.Y H:i') }}</strong>
+                                                    @endif
+                                                </div>
+                                            @endif
+
+                                            {{-- O'chirish (har doim) --}}
                                             <form method="POST" action="{{ route('admin.visa-applications.destroy', $app) }}"
                                                   onsubmit="return confirm('Arizani butunlay o\'chirishni tasdiqlaysizmi?');"
                                                   class="inline-block">
@@ -205,25 +217,29 @@
                                                 </button>
                                             </form>
 
-                                            {{-- Approve form (collapse) --}}
-                                            <form x-show="showApprove" x-cloak method="POST" action="{{ route('admin.visa-applications.approve', $app) }}"
-                                                  class="w-full bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-2 flex flex-col sm:flex-row gap-2">
-                                                @csrf
-                                                <input type="text" name="admin_note" placeholder="Izoh (ixtiyoriy)"
-                                                       class="flex-1 px-3 py-2 text-sm border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none">
-                                                <button type="submit" class="px-4 py-2 text-sm font-bold text-white rounded-lg whitespace-nowrap"
-                                                        style="background:linear-gradient(135deg,#10b981,#059669);">Tasdiqlash</button>
-                                            </form>
+                                            @if(!$isProcessed)
+                                                {{-- Approve form (collapse) --}}
+                                                <form x-show="showApprove" x-cloak method="POST" action="{{ route('admin.visa-applications.approve', $app) }}"
+                                                      class="w-full bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-2 flex flex-col sm:flex-row gap-2">
+                                                    @csrf
+                                                    <input type="hidden" name="redirect_status" value="approved">
+                                                    <input type="text" name="admin_note" placeholder="Izoh (ixtiyoriy)"
+                                                           class="flex-1 px-3 py-2 text-sm border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none">
+                                                    <button type="submit" class="px-4 py-2 text-sm font-bold text-white rounded-lg whitespace-nowrap"
+                                                            style="background:linear-gradient(135deg,#10b981,#059669);">Tasdiqlash</button>
+                                                </form>
 
-                                            {{-- Reject form (collapse) --}}
-                                            <form x-show="showReject" x-cloak method="POST" action="{{ route('admin.visa-applications.reject', $app) }}"
-                                                  class="w-full bg-red-50 border border-red-200 rounded-lg p-3 mt-2 flex flex-col sm:flex-row gap-2">
-                                                @csrf
-                                                <input type="text" name="admin_note" placeholder="Sabab (tavsiya etiladi)"
-                                                       class="flex-1 px-3 py-2 text-sm border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none">
-                                                <button type="submit" class="px-4 py-2 text-sm font-bold text-white rounded-lg whitespace-nowrap"
-                                                        style="background:linear-gradient(135deg,#ef4444,#dc2626);">Tasdiqlash</button>
-                                            </form>
+                                                {{-- Reject form (collapse) --}}
+                                                <form x-show="showReject" x-cloak method="POST" action="{{ route('admin.visa-applications.reject', $app) }}"
+                                                      class="w-full bg-red-50 border border-red-200 rounded-lg p-3 mt-2 flex flex-col sm:flex-row gap-2">
+                                                    @csrf
+                                                    <input type="hidden" name="redirect_status" value="rejected">
+                                                    <input type="text" name="admin_note" placeholder="Sabab (tavsiya etiladi)"
+                                                           class="flex-1 px-3 py-2 text-sm border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none">
+                                                    <button type="submit" class="px-4 py-2 text-sm font-bold text-white rounded-lg whitespace-nowrap"
+                                                            style="background:linear-gradient(135deg,#ef4444,#dc2626);">Tasdiqlash</button>
+                                                </form>
+                                            @endif
                                         </div>
                                     </div>
                                 </div>

@@ -17,7 +17,7 @@ class SurveyController extends Controller
      * So'rovnoma modalini ko'rsatish — talaba "So'rovnoma" tugmasini bosganda
      * yoki muddat tugagandan keyin majburiy holatda.
      */
-    public function show()
+    public function show(Request $request)
     {
         $student = auth('student')->user();
         if (!$student) abort(401);
@@ -28,6 +28,23 @@ class SurveyController extends Controller
         }
 
         $config = config('student_survey');
+
+        // Tilni aniqlash: URL ?lang=, keyin sessiya, keyin xalqaro fakultetga avtomatik
+        $allowedLocales = $config['locales'] ?? ['uz'];
+        $locale = $request->query('lang');
+        if (!in_array($locale, $allowedLocales, true)) {
+            $locale = session('student_survey_locale');
+        }
+        if (!in_array($locale, $allowedLocales, true)) {
+            $deptLower = mb_strtolower((string) ($student->department_name ?? ''));
+            if (str_contains($deptLower, 'xalqaro') || str_contains($deptLower, 'international') || str_contains($deptLower, 'международ')) {
+                $locale = 'en';
+            } else {
+                $locale = 'uz';
+            }
+        }
+        session(['student_survey_locale' => $locale]);
+        $config['locale'] = $locale;
 
         // Allaqachon bajarganmi?
         $alreadyCompleted = StudentSurveyCompletion::where('survey_key', $config['key'])

@@ -399,6 +399,9 @@
             $svDeadlinePassed = false;
             $svDeadlineFormatted = null;
             $svIsActive = \App\Http\Controllers\Admin\StudentSurveyController::isActive();
+            $svDefaultLocale = 'uz';
+            $svUi = [];
+            $svTitleArr = [];
             if ($svIsActive && $svConfig && !empty($svConfig['key']) && $svStudent && !$svOnSurveyPage) {
                 $svCompleted = \App\Models\StudentSurveyCompletion::where('survey_key', $svConfig['key'])
                     ->where('student_hemis_id', $svStudent->hemis_id)
@@ -409,6 +412,15 @@
                     $svDeadline = \App\Http\Controllers\Admin\StudentSurveyController::currentDeadline();
                     $svDeadlinePassed = strtotime($svDeadline) < time();
                     $svDeadlineFormatted = \Carbon\Carbon::parse($svDeadline)->format('d.m.Y H:i');
+                    $svUi = $svConfig['ui'] ?? [];
+                    $svTitleArr = $svConfig['title'] ?? [];
+                    // Xalqaro ta'lim fakulteti talabalariga default — EN
+                    $deptLower = mb_strtolower((string) ($svStudent->department_name ?? ''));
+                    if (str_contains($deptLower, 'xalqaro') || str_contains($deptLower, 'international') || str_contains($deptLower, 'международ')) {
+                        $svDefaultLocale = 'en';
+                    }
+                    // Sessiyada tanlangan til bo'lsa, undan ustun
+                    $svDefaultLocale = session('student_survey_locale', $svDefaultLocale);
                 }
             }
         @endphp
@@ -416,21 +428,30 @@
         @if($svShouldShow)
             {{-- Tepa kichik banner — har doim ko'rinadi survey tugagunicha --}}
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-3">
-                <a href="{{ route('student.survey.show') }}"
+                <a href="{{ route('student.survey.show') }}?lang={{ $svDefaultLocale }}"
                    class="flex items-center justify-between px-3 py-2 rounded-lg border bg-indigo-50 border-indigo-200 hover:bg-indigo-100 transition group">
                     <div class="flex items-center gap-2 min-w-0">
                         <svg class="w-4 h-4 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
                         </svg>
-                        <span class="text-xs sm:text-sm font-semibold text-indigo-800 truncate">{{ __("So'rovnomani bajarish") }}</span>
+                        <span class="text-xs sm:text-sm font-semibold text-indigo-800 truncate">{{ sv_t($svUi['start_button'] ?? "So'rovnomani bajarish", $svDefaultLocale) }}</span>
                     </div>
                     <span class="text-[10px] sm:text-xs font-bold text-white bg-indigo-600 group-hover:bg-indigo-700 px-2 py-1 rounded-md flex-shrink-0">
-                        {{ __('Davom etish') }} →
+                        {{ sv_t($svUi['continue'] ?? 'Davom etish', $svDefaultLocale) }} →
                     </span>
                 </a>
             </div>
 
             @if($svShowPopup)
+            @php
+                $svPopupIntroUz = "Iltimos, qisqa so'rovnomani to'ldiring. Vaqtingiz oz bo'lsa, keyinroq ham bajarishingiz mumkin.";
+                $svPopupIntroExpiredUz = "Muhlat tugadi. So'rovnomani bajarmaguncha boshqa xizmatlardan foydalana olmaysiz.";
+                $svPopupTexts = [
+                    'intro' => $svDeadlinePassed
+                        ? ($svUi['popup_intro_expired'] ?? ['uz' => $svPopupIntroExpiredUz, 'ru' => "Срок истёк. До прохождения опроса другие сервисы недоступны.", 'en' => "The deadline has passed. You can't use other services until you complete the survey."])
+                        : ($svUi['popup_intro'] ?? ['uz' => $svPopupIntroUz, 'ru' => "Пожалуйста, пройдите короткий опрос. Если сейчас некогда, можно вернуться позже.", 'en' => "Please complete this short survey. If you're busy now, you can come back later."]),
+                ];
+            @endphp
             {{-- Auto-popup CTA — profilga/dashboard sahifasiga kirganda chiqadi (har safar) --}}
             <div id="sv-cta-modal" class="hidden" style="position:fixed;inset:0;z-index:99997;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,0.55);backdrop-filter:blur(4px);padding:16px;">
                 <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden" style="animation: sv-cta-in 0.3s ease;">
@@ -441,32 +462,44 @@
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4"/>
                                 </svg>
                             </div>
-                            <h3 class="text-base font-bold leading-snug">{{ sv_t($svConfig['title'], app()->getLocale()) }}</h3>
+                            <h3 id="sv-cta-title" class="text-base font-bold leading-snug">{{ sv_t($svTitleArr, $svDefaultLocale) }}</h3>
                         </div>
                     </div>
                     <div class="px-5 py-4">
-                        <p class="text-sm text-slate-700 leading-snug mb-3">
-                            @if($svDeadlinePassed)
-                                {{ __("Muhlat tugadi. So'rovnomani bajarmaguncha boshqa xizmatlardan foydalana olmaysiz.") }}
-                            @else
-                                {{ __("Iltimos, qisqa so'rovnomani to'ldiring. Vaqtingiz oz bo'lsa, keyinroq ham bajarishingiz mumkin.") }}
-                            @endif
-                        </p>
+                        {{-- Til tanlash chiplari --}}
+                        <div class="flex gap-1.5 mb-3">
+                            @foreach(['uz', 'ru', 'en'] as $loc)
+                                @php
+                                    $flag = ['uz' => '🇺🇿', 'ru' => '🇷🇺', 'en' => '🇬🇧'][$loc];
+                                    $name = ['uz' => "O'z", 'ru' => "Рус", 'en' => "Eng"][$loc];
+                                    $isActive = $loc === $svDefaultLocale;
+                                @endphp
+                                <button type="button" data-lang="{{ $loc }}" onclick="svCtaSetLang('{{ $loc }}')"
+                                        class="sv-cta-lang flex-1 px-2 py-1.5 text-xs font-bold rounded-lg border-2 transition flex items-center justify-center gap-1"
+                                        data-active="{{ $isActive ? '1' : '0' }}"
+                                        style="border-color:{{ $isActive ? '#6366f1' : '#e2e8f0' }};background:{{ $isActive ? '#eef2ff' : '#fff' }};color:{{ $isActive ? '#4338ca' : '#475569' }};">
+                                    <span>{{ $flag }}</span><span>{{ $name }}</span>
+                                </button>
+                            @endforeach
+                        </div>
+
+                        <p id="sv-cta-intro" class="text-sm text-slate-700 leading-snug mb-3">{{ sv_t($svPopupTexts['intro'], $svDefaultLocale) }}</p>
+
                         <div class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-2 mb-3 flex items-center gap-2 text-xs text-slate-600">
                             <svg class="w-3.5 h-3.5 text-indigo-600 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
-                            <span>{{ __('Tugash muddati') }}: <strong class="text-slate-800">{{ $svDeadlineFormatted }}</strong></span>
+                            <span><span id="sv-cta-deadline-label">{{ sv_t($svUi['deadline_label'] ?? 'Tugash muddati', $svDefaultLocale) }}</span>: <strong class="text-slate-800">{{ $svDeadlineFormatted }}</strong></span>
                         </div>
                         <div class="flex flex-col" style="gap:8px;">
-                            <a href="{{ route('student.survey.show') }}"
+                            <a id="sv-cta-start" href="{{ route('student.survey.show') }}?lang={{ $svDefaultLocale }}"
                                style="background:linear-gradient(135deg,#10b981,#059669);color:#fff;padding:10px 16px;border-radius:10px;text-align:center;font-weight:700;font-size:14px;text-decoration:none;display:block;">
-                                {{ __("So'rovnomani boshlash") }} →
+                                <span id="sv-cta-start-label">{{ sv_t($svUi['start_button'] ?? "So'rovnomani boshlash", $svDefaultLocale) }}</span> →
                             </a>
                             @if(!$svDeadlinePassed)
-                                <button type="button" onclick="svCtaDismiss()"
+                                <button id="sv-cta-later" type="button" onclick="svCtaDismiss()"
                                         style="padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;background:#fff;color:#475569;border:1px solid #e2e8f0;cursor:pointer;">
-                                    {{ __('Keyinroq bajarish') }}
+                                    {{ sv_t($svUi['later_button'] ?? 'Keyinroq bajarish', $svDefaultLocale) }}
                                 </button>
                             @endif
                         </div>
@@ -482,14 +515,48 @@
             </style>
 
             <script>
+                window.SV_CTA = {
+                    title: @json($svTitleArr),
+                    ui: @json($svUi),
+                    intro: @json($svPopupTexts['intro']),
+                    locale: @json($svDefaultLocale),
+                };
+                function svCtaT(val) {
+                    if (typeof val === 'string') return val;
+                    if (val && typeof val === 'object') return val[SV_CTA.locale] ?? val.uz ?? Object.values(val)[0] ?? '';
+                    return '';
+                }
+                function svCtaSetLang(lang) {
+                    SV_CTA.locale = lang;
+                    document.querySelectorAll('.sv-cta-lang').forEach(b => {
+                        const active = b.dataset.lang === lang;
+                        b.dataset.active = active ? '1' : '0';
+                        b.style.borderColor = active ? '#6366f1' : '#e2e8f0';
+                        b.style.background  = active ? '#eef2ff' : '#fff';
+                        b.style.color       = active ? '#4338ca' : '#475569';
+                    });
+                    const set = (id, txt) => { const el = document.getElementById(id); if (el) el.textContent = txt; };
+                    set('sv-cta-title', svCtaT(SV_CTA.title));
+                    set('sv-cta-intro', svCtaT(SV_CTA.intro));
+                    set('sv-cta-deadline-label', svCtaT(SV_CTA.ui.deadline_label));
+                    set('sv-cta-start-label', svCtaT(SV_CTA.ui.start_button));
+                    const later = document.getElementById('sv-cta-later');
+                    if (later) later.textContent = svCtaT(SV_CTA.ui.later_button);
+                    const start = document.getElementById('sv-cta-start');
+                    if (start) {
+                        const url = new URL(start.href, window.location.origin);
+                        url.searchParams.set('lang', lang);
+                        start.href = url.toString();
+                        // span'ni saqlab, faqat URL'ni o'zgartirish uchun innerHTML qayta yozamiz:
+                        start.innerHTML = '<span id="sv-cta-start-label">' + svCtaT(SV_CTA.ui.start_button) + '</span> →';
+                    }
+                }
                 (function () {
                     const m = document.getElementById('sv-cta-modal');
                     if (!m) return;
                     const blocking = @json($svDeadlinePassed);
-                    // Har safar profile/dashboard sahifasiga kirganda ochiladi.
                     m.classList.remove('hidden');
                     m.style.display = 'flex';
-                    // Click-outside yopish faqat deadline o'tmagan bo'lsa
                     if (!blocking) {
                         m.addEventListener('click', function (e) {
                             if (e.target === m) svCtaDismiss();

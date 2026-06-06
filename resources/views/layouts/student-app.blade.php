@@ -398,7 +398,8 @@
             $svShowPopup = false;
             $svDeadlinePassed = false;
             $svDeadlineFormatted = null;
-            if ($svConfig && !empty($svConfig['key']) && $svStudent && !$svOnSurveyPage) {
+            $svIsActive = \App\Http\Controllers\Admin\StudentSurveyController::isActive();
+            if ($svIsActive && $svConfig && !empty($svConfig['key']) && $svStudent && !$svOnSurveyPage) {
                 $svCompleted = \App\Models\StudentSurveyCompletion::where('survey_key', $svConfig['key'])
                     ->where('student_hemis_id', $svStudent->hemis_id)
                     ->exists();

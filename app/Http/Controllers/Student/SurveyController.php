@@ -22,6 +22,11 @@ class SurveyController extends Controller
         $student = auth('student')->user();
         if (!$student) abort(401);
 
+        // Admin survey'ni o'chirib qo'ygan bo'lsa, dashboard'ga yo'naltiramiz
+        if (!\App\Http\Controllers\Admin\StudentSurveyController::isActive()) {
+            return redirect()->route('student.dashboard');
+        }
+
         $config = config('student_survey');
 
         // Allaqachon bajarganmi?
@@ -46,6 +51,13 @@ class SurveyController extends Controller
     {
         $student = auth('student')->user();
         if (!$student) abort(401);
+
+        if (!\App\Http\Controllers\Admin\StudentSurveyController::isActive()) {
+            return response()->json([
+                'success' => false,
+                'message' => "So'rovnoma hozircha faol emas.",
+            ], 403);
+        }
 
         $config = config('student_survey');
         $surveyKey = $config['key'];

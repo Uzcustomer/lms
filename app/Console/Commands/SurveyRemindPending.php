@@ -21,6 +21,11 @@ class SurveyRemindPending extends Command
 
     public function handle(TelegramService $telegram, StudentSurveyController $ctrl): int
     {
+        if (!StudentSurveyController::isActive()) {
+            $this->info('Survey is disabled by admin; skipping.');
+            return self::SUCCESS;
+        }
+
         $config = config('student_survey');
         if (!$config || empty($config['key']) || empty($config['deadline'])) {
             $this->warn('Survey config not set; skipping.');

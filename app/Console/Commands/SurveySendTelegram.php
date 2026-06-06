@@ -8,6 +8,8 @@ use App\Models\Student;
 use App\Models\StudentSurveyCompletion;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
+use Illuminate\Http\Client\Pool;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -23,7 +25,8 @@ class SurveySendTelegram extends Command
     protected $signature = 'survey:send-telegram
                             {kind : announcement | reminder}
                             {--dry-run : Faqat ko\'rsatadi, yubormaydi}
-                            {--limit= : Faqat birinchi N talabaga yuborish (test uchun)}';
+                            {--limit= : Faqat birinchi N talabaga yuborish (test uchun)}
+                            {--concurrency=25 : Parallel yuboriladigan xabarlar soni (1=serial, 25=tavsiya)}';
 
     protected $description = 'Send survey announcement / reminder via Telegram with live terminal progress';
 
@@ -37,6 +40,12 @@ class SurveySendTelegram extends Command
 
         $dryRun = (bool) $this->option('dry-run');
         $limit = $this->option('limit') ? (int) $this->option('limit') : null;
+        $concurrency = max(1, min(30, (int) $this->option('concurrency')));
+        $botToken = config('services.telegram.bot_token');
+        if (!$dryRun && !$botToken) {
+            $this->error('Telegram bot token sozlanmagan (config/services.php).');
+            return self::FAILURE;
+        }
 
         if (!StudentSurveyController::isActive() && !$dryRun) {
             if (!$this->confirm("Survey OFF holatda. Baribir yuborilsinmi?", false)) {
@@ -103,50 +112,115 @@ class SurveySendTelegram extends Command
         }
 
         $bar = $this->output->createProgressBar($total);
-        $bar->setFormat(" %current%/%max% [%bar%] %percent:3s%%  ✓%message%");
-        $bar->setMessage('0');
+        $bar->setFormat(" %current%/%max% [%bar%] %percent:3s%%  %message%");
+        $bar->setMessage('sent=0 failed=0');
 
         $sent = 0;
         $failed = 0;
         $i = 0;
         $startTime = microtime(true);
+        $sendUrl = "https://api.telegram.org/bot{$botToken}/sendMessage";
 
-        $query->select(['hemis_id', 'full_name', 'telegram_chat_id', 'department_name'])
-            ->chunkById(200, function ($chunk) use (&$sent, &$failed, &$i, $telegram, $messages, $dryRun, $bar, $limit) {
-                foreach ($chunk as $student) {
-                    if ($limit && $i >= $limit) return false;
+        // Talabalarni batchlarga ajratib, har batch'ni parallel yuborish.
+        // Telegram limit ~30 msg/sec — batchSize=$concurrency, batchdan keyin
+        // kerak bo'lsa biroz to'xtab turamiz, lekin batchni iloji boricha to'liq.
+        $batch = [];
+        $process = function () use (&$batch, &$sent, &$failed, &$i, $bar, $messages, $dryRun, $sendUrl, $concurrency) {
+            if (empty($batch)) return;
+
+            if ($dryRun) {
+                foreach ($batch as $s) {
                     $i++;
-
-                    $loc = StudentSurveyController::detectStudentLocale($student);
-                    $name = mb_substr($student->full_name ?? '—', 0, 30);
-                    $chatId = $student->telegram_chat_id;
-
-                    if ($dryRun) {
-                        $this->line("  [DRY] #{$i} {$name} ({$chatId}) → <fg=yellow>{$loc}</>");
-                        $sent++;
-                    } else {
-                        $ok = $telegram->sendToUser((string) $chatId, $messages[$loc]);
-                        if ($ok) {
-                            $sent++;
-                            $this->line("  <fg=green>✓</> #{$i} {$name} ({$chatId}) → {$loc}");
-                        } else {
-                            $failed++;
-                            $this->line("  <fg=red>✗</> #{$i} {$name} ({$chatId}) → {$loc}");
-                        }
-                    }
-
+                    $loc = StudentSurveyController::detectStudentLocale($s);
+                    $name = mb_substr($s->full_name ?? '—', 0, 30);
+                    $this->line("  [DRY] #{$i} {$name} ({$s->telegram_chat_id}) → <fg=yellow>{$loc}</>");
+                    $sent++;
                     $bar->setMessage("sent={$sent} failed={$failed}");
                     $bar->advance();
+                }
+                $batch = [];
+                return;
+            }
 
-                    // Har 25 ta yozuvdan keyin status yangilanadi
-                    if (!$dryRun && $i % 25 === 0) {
-                        Setting::set('student_survey_tg_sent', (string) $sent);
-                        Setting::set('student_survey_tg_failed', (string) $failed);
+            // Parallel pool — har batchda barcha so'rovlar bir vaqtda jo'naydi.
+            $batchStart = microtime(true);
+            $responses = Http::pool(function (Pool $pool) use ($batch, $messages, $sendUrl) {
+                $reqs = [];
+                foreach ($batch as $idx => $s) {
+                    $loc = StudentSurveyController::detectStudentLocale($s);
+                    $reqs[] = $pool->as((string) $idx)
+                        ->timeout(15)
+                        ->post($sendUrl, [
+                            'chat_id'    => (string) $s->telegram_chat_id,
+                            'text'       => $messages[$loc],
+                            'parse_mode' => 'HTML',
+                        ]);
+                }
+                return $reqs;
+            });
+
+            foreach ($batch as $idx => $s) {
+                $i++;
+                $loc = StudentSurveyController::detectStudentLocale($s);
+                $name = mb_substr($s->full_name ?? '—', 0, 30);
+                $resp = $responses[$idx] ?? null;
+
+                $ok = false;
+                $note = '';
+                if ($resp instanceof \Illuminate\Http\Client\ConnectionException || $resp instanceof \Throwable) {
+                    $note = 'conn-error';
+                } elseif ($resp && method_exists($resp, 'successful') && $resp->successful()) {
+                    $ok = true;
+                } else {
+                    $status = $resp && method_exists($resp, 'status') ? $resp->status() : '???';
+                    $body = $resp && method_exists($resp, 'json') ? ($resp->json('description') ?? '') : '';
+                    $note = "HTTP {$status} {$body}";
+                }
+
+                if ($ok) {
+                    $sent++;
+                    $this->line("  <fg=green>✓</> #{$i} {$name} ({$s->telegram_chat_id}) → {$loc}");
+                } else {
+                    $failed++;
+                    $this->line("  <fg=red>✗</> #{$i} {$name} ({$s->telegram_chat_id}) → {$loc}  <fg=gray>[{$note}]</>");
+                }
+
+                $bar->setMessage("sent={$sent} failed={$failed}");
+                $bar->advance();
+            }
+
+            // Telegram limit: 30 msg/sec. Agar batch 1s'dan tezroq bajarilgan
+            // bo'lsa, qolgan vaqtni kutamiz (xavfsiz pacing).
+            $elapsed = microtime(true) - $batchStart;
+            $minBatchTime = $concurrency / 28.0; // ~28 msg/sec — limit ostida
+            if ($elapsed < $minBatchTime) {
+                usleep((int) (($minBatchTime - $elapsed) * 1_000_000));
+            }
+
+            // Progress'ni status keylariga ham yozish (UI uchun)
+            Setting::set('student_survey_tg_sent', (string) $sent);
+            Setting::set('student_survey_tg_failed', (string) $failed);
+
+            $batch = [];
+        };
+
+        $stopFlag = false;
+        $query->select(['hemis_id', 'full_name', 'telegram_chat_id', 'department_name'])
+            ->chunkById(500, function ($chunk) use (&$batch, $process, $concurrency, $limit, &$i, &$stopFlag) {
+                foreach ($chunk as $student) {
+                    if ($limit && ($i + count($batch)) >= $limit) {
+                        $process();
+                        $stopFlag = true;
+                        return false;
                     }
-
-                    if (!$dryRun) usleep(50_000);
+                    $batch[] = $student;
+                    if (count($batch) >= $concurrency) {
+                        $process();
+                    }
                 }
             }, 'id');
+
+        if (!$stopFlag && !empty($batch)) $process();
 
         $bar->finish();
         $this->newLine(2);

@@ -135,64 +135,169 @@ class StudentSurveyController extends Controller
 
     /**
      * Barcha faol talabalarga so'rovnoma boshlangani haqida e'lon — bir marta.
+     * Fon'da ishga tushadi: javob darhol qaytadi, admin sahifada progress
+     * polling orqali ko'rinadi.
      */
     public function sendTelegramAnnouncement(Request $request, TelegramService $telegram)
     {
-        $config = config('student_survey');
-        $deadlineFormatted = \Carbon\Carbon::parse(self::currentDeadline())->format('d.m.Y H:i');
-
-        $students = Student::query()
-            ->where('student_status_code', 11)
-            ->whereNotNull('telegram_chat_id')
-            ->where('telegram_chat_id', '!=', '')
-            ->select(['hemis_id', 'telegram_chat_id', 'department_name'])
-            ->get();
-
-        [$sent, $failed] = $this->bulkSendLocalized($telegram, $students, $config['title'] ?? [], $deadlineFormatted, 'announcement');
-
-        Log::info('Student survey announcement sent', [
-            'survey_key' => $config['key'],
-            'total'      => $students->count(),
-            'sent'       => $sent,
-            'failed'     => $failed,
-        ]);
-
-        return back()->with('success', "E'lon yuborildi: {$sent} ta. Xato: {$failed} ta. Jami: " . $students->count());
+        return $this->dispatchTelegramSend('announcement', $telegram);
     }
 
     /**
-     * Hozircha so'rovnomani bajarmagan, telegrami tasdiqlangan talabalarga
-     * eslatma yuborish (so'rov mavzusi, deadline, anonimlik, ogohlantirish).
+     * So'rovnomani bajarmagan talabalarga eslatma. Fon'da ishlaydi (504'ga yo'l qo'ymaydi).
      */
     public function sendTelegramReminder(Request $request, TelegramService $telegram)
     {
+        return $this->dispatchTelegramSend('reminder', $telegram);
+    }
+
+    /**
+     * Telegram yuborishni fon'da boshlash. fastcgi_finish_request() bilan
+     * javob darhol qaytadi, qolgan jarayon PHP-FPM da davom etadi.
+     */
+    private function dispatchTelegramSend(string $kind, TelegramService $telegram)
+    {
+        $status = Setting::get('student_survey_tg_status', 'idle');
+        if ($status === 'running') {
+            // Stale: agar 60 daqiqadan ko'p oldin boshlangan bo'lsa, reset qilamiz
+            $startedAt = Setting::get('student_survey_tg_started_at');
+            $stale = $startedAt && (time() - strtotime($startedAt) > 60 * 60);
+            if (!$stale) {
+                return back()->with('success', "Avvalgi yuborish hali davom etmoqda — progress'ni kuting.");
+            }
+            Log::warning('Resetting stale telegram send', ['started_at' => $startedAt]);
+        }
+
+        // Status flagini darhol "running" qilib qo'yamiz — dublikat click'lardan himoya
+        Setting::set('student_survey_tg_status', 'running');
+        Setting::set('student_survey_tg_kind', $kind);
+        Setting::set('student_survey_tg_total', '0');
+        Setting::set('student_survey_tg_sent', '0');
+        Setting::set('student_survey_tg_failed', '0');
+        Setting::set('student_survey_tg_started_at', now()->toDateTimeString());
+
+        $kindLabel = $kind === 'announcement' ? "E'lon" : "Eslatma";
+
+        // Foydalanuvchiga darhol javob qaytarish — keyin fon'da davom etamiz
+        $response = back()->with('success', "{$kindLabel} fon'da yuborilmoqda. Progress sahifadan kuzatish mumkin.")
+            ->setStatusCode(303);
+
+        // Brauzerga javob yuborish va ulanishni yopish
+        if (function_exists('fastcgi_finish_request')) {
+            // Bu PHP-FPM ostida ishlatiladi (nginx + php-fpm)
+            $response->send();
+            session()->save();
+            fastcgi_finish_request();
+        } else {
+            // Fallback — flush + ignore_user_abort
+            $response->send();
+            if (session()->isStarted()) session()->save();
+            @ob_end_flush();
+            @flush();
+        }
+
+        // Endi fon'da ishlaymiz — admin allaqachon sahifani ko'rmoqda
+        ignore_user_abort(true);
+        @set_time_limit(0);
+
+        try {
+            $this->runTelegramSend($kind, $telegram);
+        } catch (\Throwable $e) {
+            Log::error('Survey telegram background send failed', ['error' => $e->getMessage(), 'kind' => $kind]);
+            Setting::set('student_survey_tg_status', 'failed');
+            Setting::set('student_survey_tg_last_error', mb_substr($e->getMessage(), 0, 500));
+        }
+
+        // PHP-FPM ostida bu yerga javob yetib bormaydi (client allaqachon yopilgan),
+        // lekin testlash uchun qaytaramiz.
+        return $response;
+    }
+
+    /**
+     * Asosiy yuborish jarayoni — chunklar bilan, har 50 talabadan keyin progress yangilanadi.
+     */
+    private function runTelegramSend(string $kind, TelegramService $telegram): void
+    {
         $config = config('student_survey');
         $surveyKey = $config['key'];
-
         $deadlineFormatted = \Carbon\Carbon::parse(self::currentDeadline())->format('d.m.Y H:i');
 
-        $completedIds = StudentSurveyCompletion::where('survey_key', $surveyKey)
-            ->pluck('student_hemis_id')
-            ->all();
-
-        $pending = Student::query()
+        $query = Student::query()
             ->where('student_status_code', 11)
             ->whereNotNull('telegram_chat_id')
-            ->where('telegram_chat_id', '!=', '')
-            ->when(!empty($completedIds), fn($q) => $q->whereNotIn('hemis_id', $completedIds))
-            ->select(['hemis_id', 'telegram_chat_id', 'department_name'])
-            ->get();
+            ->where('telegram_chat_id', '!=', '');
 
-        [$sent, $failed] = $this->bulkSendLocalized($telegram, $pending, $config['title'] ?? [], $deadlineFormatted, 'reminder');
+        if ($kind === 'reminder') {
+            $completedIds = StudentSurveyCompletion::where('survey_key', $surveyKey)
+                ->pluck('student_hemis_id')
+                ->all();
+            if (!empty($completedIds)) {
+                $query->whereNotIn('hemis_id', $completedIds);
+            }
+        }
 
-        Log::info('Student survey telegram reminder sent', [
-            'survey_key' => $surveyKey,
-            'pending'    => $pending->count(),
-            'sent'       => $sent,
-            'failed'     => $failed,
+        $total = (clone $query)->count();
+        Setting::set('student_survey_tg_total', (string) $total);
+
+        // 3 tilda matnlar oldindan
+        $titleArr = $config['title'] ?? [];
+        $messages = [];
+        foreach (['uz', 'ru', 'en'] as $loc) {
+            $title = sv_t($titleArr, $loc);
+            $messages[$loc] = $kind === 'announcement'
+                ? $this->buildAnnouncementMessage($title, $deadlineFormatted, $loc)
+                : $this->buildReminderMessage($title, $deadlineFormatted, $loc);
+        }
+
+        $sent = 0;
+        $failed = 0;
+        $i = 0;
+
+        $query->select(['hemis_id', 'telegram_chat_id', 'department_name'])
+            ->chunkById(200, function ($chunk) use (&$sent, &$failed, &$i, $telegram, $messages) {
+                foreach ($chunk as $student) {
+                    $loc = self::detectStudentLocale($student);
+                    $ok = $telegram->sendToUser((string) $student->telegram_chat_id, $messages[$loc]);
+                    if ($ok) $sent++; else $failed++;
+                    $i++;
+                    // Har 25 talabadan keyin progress yozish — DB'ga ortiqcha yozish bo'lmasin
+                    if ($i % 25 === 0) {
+                        Setting::set('student_survey_tg_sent', (string) $sent);
+                        Setting::set('student_survey_tg_failed', (string) $failed);
+                    }
+                    usleep(50_000);
+                }
+            }, 'id');
+
+        // Yakuniy holatni yozish
+        Setting::set('student_survey_tg_sent', (string) $sent);
+        Setting::set('student_survey_tg_failed', (string) $failed);
+        Setting::set('student_survey_tg_status', 'done');
+        Setting::set('student_survey_tg_finished_at', now()->toDateTimeString());
+
+        Log::info('Survey telegram bulk send finished', [
+            'kind'   => $kind,
+            'total'  => $i,
+            'sent'   => $sent,
+            'failed' => $failed,
         ]);
+    }
 
-        return back()->with('success', "Eslatma yuborildi: {$sent} ta. Xato: {$failed} ta. Jami bajarmaganlar: " . $pending->count());
+    /**
+     * Progress holatini AJAX uchun JSON qaytaradi.
+     */
+    public function telegramStatus()
+    {
+        return response()->json([
+            'status'   => Setting::get('student_survey_tg_status', 'idle'),
+            'kind'     => Setting::get('student_survey_tg_kind'),
+            'total'    => (int) Setting::get('student_survey_tg_total', 0),
+            'sent'     => (int) Setting::get('student_survey_tg_sent', 0),
+            'failed'   => (int) Setting::get('student_survey_tg_failed', 0),
+            'started_at'  => Setting::get('student_survey_tg_started_at'),
+            'finished_at' => Setting::get('student_survey_tg_finished_at'),
+            'last_error'  => Setting::get('student_survey_tg_last_error'),
+        ]);
     }
 
     /**

@@ -1056,6 +1056,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/student-survey/deadline', [\App\Http\Controllers\Admin\StudentSurveyController::class, 'updateDeadline'])->name('student-survey.deadline');
         Route::post('/student-survey/send-telegram', [\App\Http\Controllers\Admin\StudentSurveyController::class, 'sendTelegramReminder'])->name('student-survey.send-telegram');
         Route::post('/student-survey/send-announcement', [\App\Http\Controllers\Admin\StudentSurveyController::class, 'sendTelegramAnnouncement'])->name('student-survey.send-announcement');
+        Route::get('/student-survey/telegram-status', [\App\Http\Controllers\Admin\StudentSurveyController::class, 'telegramStatus'])->name('student-survey.telegram-status');
     });
 
     // Faqat superadmin uchun — Xodimlarni baholash

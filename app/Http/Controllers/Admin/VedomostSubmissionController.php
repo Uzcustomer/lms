@@ -423,7 +423,8 @@ class VedomostSubmissionController extends Controller
             'reviewed_by_name' => null,
             'reviewed_at' => null,
             // Fayl almashtirilsa eski AI tekshiruv natijasi eskiradi — tozalaymiz.
-            'ai_check_status' => null,
+            // (ai_check_status NOT NULL, default 'none' — null EMAS!)
+            'ai_check_status' => 'none',
             'ai_verdict' => null,
             'ai_summary' => null,
             'ai_result' => null,

@@ -10098,14 +10098,14 @@ class JournalController extends Controller
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Sinov fanlar');
 
-        $headers = ['#', 'Fakultet', 'Kafedra', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh',
-                    'Fan', 'O\'qituvchi F.I.O', 'Talaba F.I.O', 'Talaba ID',
-                    'MT bali', 'JN bali', 'Sinov (test)'];
+        $headers = ['#', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh',
+                    'Talaba', 'Fan', 'O\'qituvchi', 'Kafedra',
+                    'JN', 'MT', 'Sinov (test)'];
         foreach ($headers as $col => $h) {
             $cell = chr(65 + $col) . '1';
             $sheet->setCellValue($cell, $h);
         }
-        $sheet->getStyle('A1:N1')->applyFromArray([
+        $sheet->getStyle('A1:M1')->applyFromArray([
             'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
             'fill' => ['fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID, 'startColor' => ['rgb' => '7C3AED']],
             'alignment' => ['horizontal' => \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER],
@@ -10140,20 +10140,20 @@ class JournalController extends Controller
                         : '';
 
                     $sheet->fromArray([
-                        $rank, $facName, $kafedra, $specName, $levelLabel, $semLabel, $grp->name,
-                        $subj->subject_name, $teacher, $stu->full_name, $stu->student_id_number,
-                        $mt, $jn, $sinov,
+                        $rank, $facName, $specName, $levelLabel, $semLabel, $grp->name,
+                        $stu->full_name, $subj->subject_name, $teacher, $kafedra,
+                        $jn, $mt, $sinov,
                     ], null, 'A' . $row);
                     $row++;
                 }
             }
         }
 
-        foreach (range('A', 'N') as $col) {
+        foreach (range('A', 'M') as $col) {
             $sheet->getColumnDimension($col)->setAutoSize(true);
         }
         if ($row > 2) {
-            $sheet->setAutoFilter('A1:N' . ($row - 1));
+            $sheet->setAutoFilter('A1:M' . ($row - 1));
         }
 
         $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);

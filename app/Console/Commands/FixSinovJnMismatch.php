@@ -73,6 +73,7 @@ class FixSinovJnMismatch extends Command
         $calculator = new JnMtCalculator();
         $rows        = [];
         $fixedCount    = 0;
+        $dryFixCount   = 0;
         $skippedManual = 0;
         $skippedLocked = 0;
         $noChange      = 0;
@@ -163,6 +164,7 @@ class FixSinovJnMismatch extends Command
                             'HA',
                             $dryRun ? '[DRY] TUZATILADI (locked)' : 'TUZATILDI (locked)',
                         ];
+                        $dryFixCount++;
                         if (!$dryRun) {
                             $sinovRow->default_grade  = $correctGrade;
                             $sinovRow->override_grade = $correctGrade;
@@ -198,6 +200,7 @@ class FixSinovJnMismatch extends Command
                     'YO\'Q',
                     $dryRun ? '[DRY] TUZATILADI' : 'TUZATILDI',
                 ];
+                $dryFixCount++;
                 if (!$dryRun) {
                     $sinovRow->default_grade  = $correctGrade;
                     $sinovRow->override_grade = $correctGrade;
@@ -225,7 +228,11 @@ class FixSinovJnMismatch extends Command
         }
 
         $this->newLine();
-        $this->info("Tuzatildi:            {$fixedCount}");
+        if ($dryRun) {
+            $this->info("Tuzatiladi (dry-run): {$dryFixCount}");
+        } else {
+            $this->info("Tuzatildi:            {$fixedCount}");
+        }
         $this->warn("Qulflangan (skip):    {$skippedLocked}");
         $this->warn("Qo'lda edit (skip):   {$skippedManual}");
         $this->line("O'zgarmagan:          {$noChange}");

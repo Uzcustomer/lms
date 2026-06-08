@@ -65,12 +65,28 @@ class VisaApplicationController extends Controller
             ], 409);
         }
 
+        $passportSeries = mb_strtoupper(preg_replace('/\s+/', '', (string) $request->input('passport_series', '')));
+        $passportNumberValue = mb_strtoupper(preg_replace('/\s+/', '', (string) $request->input('passport_number_value', '')));
+        $passportCombined = mb_strtoupper(preg_replace('/\s+/', '', (string) $request->input('passport_number', '')));
+
+        if ($passportCombined === '' && ($passportSeries !== '' || $passportNumberValue !== '')) {
+            $passportCombined = $passportSeries . $passportNumberValue;
+        }
+
+        $request->merge([
+            'passport_series' => $passportSeries,
+            'passport_number_value' => $passportNumberValue,
+            'passport_number' => $passportCombined,
+        ]);
+
         $data = $request->validate([
             'student_number'  => 'required|string|max:50',
             'last_name'       => 'required|string|max:100',
             'first_name'      => 'required|string|max:100',
             'middle_name'     => 'required|string|max:100',
             'birth_date'      => 'required|date',
+            'passport_series' => 'required|string|max:10',
+            'passport_number_value' => 'required|string|max:40',
             'passport_number' => 'required|string|max:50',
             'phone_number'    => 'required|string|max:30',
             'phone_dial_code' => 'required|string|max:8',

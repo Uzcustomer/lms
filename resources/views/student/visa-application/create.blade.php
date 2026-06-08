@@ -297,12 +297,37 @@
                         </div>
 
                         <div class="sm:col-span-2">
-                            <label class="va-label">Passport number <span class="va-required">*</span></label>
                             @php
-                                $passportVal = old('passport_number', trim(($student->passport_serial ?? '') . ($student->passport_number ?? '')));
+                                $passportCombined = mb_strtoupper(trim((string) old('passport_number', trim(($student->passport_serial ?? '') . ($student->passport_number ?? '')))));
+                                $passportSeries = old('passport_series', mb_strtoupper((string) ($student->passport_serial ?? '')));
+                                $passportNumberValue = old('passport_number_value', (string) ($student->passport_number ?? ''));
+
+                                if (($passportSeries === '' || $passportNumberValue === '') && $passportCombined !== '') {
+                                    if (preg_match('/^([A-Z]+)\s*([0-9A-Z]+)?$/u', $passportCombined, $matches)) {
+                                        if ($passportSeries === '' && !empty($matches[1])) {
+                                            $passportSeries = $matches[1];
+                                        }
+                                        if ($passportNumberValue === '' && !empty($matches[2])) {
+                                            $passportNumberValue = $matches[2];
+                                        }
+                                    }
+                                }
                             @endphp
-                            <input type="text" name="passport_number" class="va-input" required
-                                   value="{{ mb_strtoupper($passportVal) }}">
+                            <label class="va-label">Passport details <span class="va-required">*</span></label>
+                            <div class="grid grid-cols-3 gap-3">
+                                <div class="col-span-1">
+                                    <label class="va-label">Passport series <span class="va-required">*</span></label>
+                                    <input type="text" name="passport_series" id="passport_series" class="va-input" required maxlength="10"
+                                           value="{{ mb_strtoupper($passportSeries) }}" placeholder="AA">
+                                </div>
+                                <div class="col-span-2">
+                                    <label class="va-label">Passport number <span class="va-required">*</span></label>
+                                    <input type="text" name="passport_number_value" id="passport_number_value" class="va-input" required maxlength="40"
+                                           value="{{ mb_strtoupper($passportNumberValue) }}" placeholder="1234567">
+                                </div>
+                            </div>
+                            <input type="hidden" name="passport_number" id="passport_number"
+                                   value="{{ mb_strtoupper($passportCombined !== '' ? $passportCombined : trim($passportSeries . $passportNumberValue)) }}">
                         </div>
 
                         <div class="sm:col-span-2">
@@ -494,6 +519,21 @@
         };
 
         // PDF dropzone wiring — bir xil mantiq ikkala input uchun
+        const passportSeriesEl = document.getElementById('passport_series');
+        const passportNumberValueEl = document.getElementById('passport_number_value');
+        const passportHiddenEl = document.getElementById('passport_number');
+        function vaSyncPassportNumber() {
+            if (!passportHiddenEl) return;
+            const series = (passportSeriesEl?.value || '').toUpperCase().replace(/\s+/g, '');
+            const number = (passportNumberValueEl?.value || '').toUpperCase().replace(/\s+/g, '');
+            if (passportSeriesEl) passportSeriesEl.value = series;
+            if (passportNumberValueEl) passportNumberValueEl.value = number;
+            passportHiddenEl.value = (series + number).trim();
+        }
+        passportSeriesEl?.addEventListener('input', vaSyncPassportNumber);
+        passportNumberValueEl?.addEventListener('input', vaSyncPassportNumber);
+        vaSyncPassportNumber();
+
         function vaWireDropzone(zoneId, inputId, maxBytes) {
             const zone = document.getElementById(zoneId);
             const input = document.getElementById(inputId);
@@ -570,7 +610,8 @@
                 ['first_name',         'First name is required.'],
                 ['middle_name',        'Middle name is required (write "—" if you don\'t have one).'],
                 ['birth_date',         'Date of birth is required.'],
-                ['passport_number',    'Passport number is required.'],
+                ['passport_series',    'Passport series is required.'],
+                ['passport_number_value', 'Passport number is required.'],
                 ['messenger_username', 'Messenger username is required.'],
             ];
             for (const [name, msg] of checks) {
@@ -612,6 +653,7 @@
             btn.textContent = 'Submitting...';
 
             const fd = new FormData(this);
+            vaSyncPassportNumber();
             fd.set('phone_number', iti.getNumber());
             const c = iti.getSelectedCountryData();
             fd.set('phone_dial_code', c.dialCode || '');

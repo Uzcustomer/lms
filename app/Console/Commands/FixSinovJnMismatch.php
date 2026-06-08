@@ -59,14 +59,16 @@ class FixSinovJnMismatch extends Command
             return self::SUCCESS;
         }
 
-        $submissions = YnSubmission::whereIn('subject_id', $sinovSubjectIds)
+        // yn_submissions ba'zi sinov fanlarida o'chirilgan bo'lishi mumkin,
+        // shuning uchun sinov_test_grades dan to'g'ridan-to'g'ri olamiz.
+        $submissions = SinovTestGrade::whereIn('subject_id', $sinovSubjectIds)
             ->when($filterGroup, fn($q) => $q->where('group_hemis_id', $filterGroup))
             ->select('subject_id', 'semester_code', 'group_hemis_id')
             ->distinct()
             ->get();
 
         if ($submissions->isEmpty()) {
-            $this->warn('Mos YN submission topilmadi.');
+            $this->warn('Mos sinov_test_grades yozuvi topilmadi.');
             return self::SUCCESS;
         }
 

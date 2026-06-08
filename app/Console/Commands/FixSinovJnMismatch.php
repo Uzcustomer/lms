@@ -13,27 +13,35 @@ use Illuminate\Support\Facades\DB;
  * Diagnostika + tuzatish:
  *   - Eski JN hisoblashda training_type_name filtri yo'qligi sababli
  *     sinov_test_grades.override_grade noto'g'ri hisoblangan bo'lishi mumkin.
- *   - default_grade == override_grade  → dastur avtomatik o'rnatgan → tuzatiladi
- *   - default_grade != override_grade  → o'qituvchi qo'lda edit qilgan → TEGMAYDI
- *   - is_locked = true AND YN yuborilgan → faqat ko'rsatiladi, tuzatilmaydi
+ *
+ *   Xavfsizlik qoidalari:
+ *   - default_grade == override_grade  → avtomatik o'rnatilgan → tuzatiladi
+ *   - default_grade != override_grade  → o'qituvchi qo'lda edit qilgan → HECH QACHON TEGMAYDI
+ *   - is_locked = true, default==override → --fix-locked bilan tuzatiladi
+ *     (locked = jurnalga ko'chirilgan, lekin bug sababli noto'g'ri qiymat)
  */
 class FixSinovJnMismatch extends Command
 {
     protected $signature = 'sinov:fix-jn-mismatch
-        {--dry-run : Faqat ko\'rib chiqish, DB ga yozmaslik}
-        {--group= : Faqat shu guruh uchun (group_hemis_id)}
-        {--subject= : Faqat shu fan uchun (subject_id)}';
+        {--dry-run    : Faqat ko\'rib chiqish, DB ga yozmaslik}
+        {--fix-locked : Qulflangan (is_locked=true) lekin avtomatik o\'rnatilgan yozuvlarni ham tuzatish}
+        {--group=     : Faqat shu guruh uchun (group_hemis_id)}
+        {--subject=   : Faqat shu fan uchun (subject_id)}';
 
-    protected $description = 'sinov_test_grades da JN o\'rtachasi bilan mos kelmaydigan (va qo\'lda edit qilinmagan) yozuvlarni tuzatadi.';
+    protected $description = 'sinov_test_grades da JN o\'rtachasi bilan mos kelmaydigan va qo\'lda edit qilinmagan yozuvlarni tuzatadi.';
 
     public function handle(): int
     {
-        $dryRun  = (bool) $this->option('dry-run');
+        $dryRun      = (bool) $this->option('dry-run');
+        $fixLocked   = (bool) $this->option('fix-locked');
         $filterGroup   = $this->option('group');
         $filterSubject = $this->option('subject');
 
         if ($dryRun) {
             $this->warn('DRY-RUN rejim — DB ga hech narsa yozilmaydi.');
+        }
+        if ($fixLocked) {
+            $this->warn('--fix-locked: qulflangan avtomatik yozuvlar ham tuzatiladi.');
         }
 
         // Yopilish shakli 'sinov' bo'lgan fanlar
@@ -62,7 +70,7 @@ class FixSinovJnMismatch extends Command
 
         $calculator = new JnMtCalculator();
 
-        $rows = []; // table output uchun
+        $rows = [];
 
         $fixedCount    = 0;
         $skippedManual = 0;
@@ -70,13 +78,14 @@ class FixSinovJnMismatch extends Command
         $noChange      = 0;
 
         foreach ($submissions as $sub) {
-            $jnMap = $calculator->computeForGroup(
-                $sub->group_hemis_id,
+            // computeForGroup qaytaradi: hemis_id => ['jn' => int, 'mt' => int]
+            $jnMtMap = $calculator->computeForGroup(
+                (string) $sub->group_hemis_id,
                 (int) $sub->subject_id,
-                $sub->semester_code
+                (string) $sub->semester_code
             );
 
-            if (empty($jnMap)) {
+            if (empty($jnMtMap)) {
                 continue;
             }
 
@@ -86,90 +95,98 @@ class FixSinovJnMismatch extends Command
                 ->get()
                 ->keyBy('student_hemis_id');
 
-            // Talaba ismlarini olish
             $studentNames = DB::table('students')
                 ->where('group_id', $sub->group_hemis_id)
                 ->pluck('full_name', 'hemis_id');
 
-            // Guruh nomi
             $groupName = DB::table('groups')
                 ->where('group_hemis_id', $sub->group_hemis_id)
                 ->value('name') ?? $sub->group_hemis_id;
 
-            // Fan nomi
             $subjectName = DB::table('curriculum_subjects')
                 ->where('subject_id', $sub->subject_id)
                 ->where('semester_code', $sub->semester_code)
                 ->value('subject_name') ?? $sub->subject_id;
 
-            foreach ($jnMap as $hemisId => $correctJn) {
+            foreach ($jnMtMap as $hemisId => $jnMt) {
+                // MUHIM: computeForGroup massiv qaytaradi — ['jn' => x, 'mt' => y]
+                $correctJnInt = (int) ($jnMt['jn'] ?? 0);
+
                 $sinovRow = $sinovRows[$hemisId] ?? null;
                 if (!$sinovRow) {
-                    continue; // yozuv yo'q — backfill boshqa komanda
+                    continue;
                 }
 
                 $storedDefault  = (int) round((float) $sinovRow->default_grade);
                 $storedOverride = (int) round((float) $sinovRow->override_grade);
                 $isLocked       = (bool) $sinovRow->is_locked;
-                $correctJnInt   = (int) $correctJn;
+                $studentName    = $studentNames[$hemisId] ?? $hemisId;
 
+                // O'zgarmagan — hech narsa qilmaymiz
                 if ($storedDefault === $correctJnInt && $storedOverride === $correctJnInt) {
                     $noChange++;
                     continue;
                 }
 
-                $studentName = $studentNames[$hemisId] ?? $hemisId;
-
-                // O'qituvchi qo'lda edit qilgan (override != default)
+                // O'qituvchi qo'lda edit qilgan (override != default) → hech qachon tegmaymiz
                 if ($storedDefault !== $storedOverride) {
                     $skippedManual++;
                     $rows[] = [
-                        $groupName,
-                        $subjectName,
-                        $studentName,
-                        $storedDefault,
-                        $storedOverride,
-                        $correctJnInt,
+                        $groupName, $subjectName, $studentName,
+                        $storedDefault, $storedOverride, $correctJnInt,
                         $isLocked ? 'HA' : 'YO\'Q',
-                        '<-- QOLDIRILDI (qo\'lda edit)',
+                        'QOLDIRILDI (qo\'lda edit)',
                     ];
                     continue;
                 }
 
-                // Qulflangan (jurnalga ko'chirilgan) — faqat xabar berish
+                // default == override (avtomatik), lekin qulflangan
                 if ($isLocked) {
-                    $skippedLocked++;
-                    $rows[] = [
-                        $groupName,
-                        $subjectName,
-                        $studentName,
-                        $storedDefault,
-                        $storedOverride,
-                        $correctJnInt,
-                        'HA',
-                        '<-- DIQQAT: qulflangan, tuzatilmadi',
-                    ];
+                    if ($fixLocked) {
+                        // --fix-locked: tuzatamiz
+                        $rows[] = [
+                            $groupName, $subjectName, $studentName,
+                            $storedDefault, $storedOverride, $correctJnInt,
+                            'HA',
+                            $dryRun ? '[DRY] TUZATILADI (locked)' : 'TUZATILDI (locked)',
+                        ];
+                        if (!$dryRun) {
+                            $sinovRow->default_grade  = $correctJnInt;
+                            $sinovRow->override_grade = $correctJnInt;
+                            $sinovRow->save();
+                            DB::table('student_grades')
+                                ->whereNull('deleted_at')
+                                ->where('student_hemis_id', $hemisId)
+                                ->where('subject_id', $sub->subject_id)
+                                ->where('semester_code', $sub->semester_code)
+                                ->where('training_type_code', 102)
+                                ->where('reason', 'sinov_yn_test')
+                                ->update(['grade' => $correctJnInt, 'updated_at' => now()]);
+                        }
+                        $fixedCount++;
+                    } else {
+                        $skippedLocked++;
+                        $rows[] = [
+                            $groupName, $subjectName, $studentName,
+                            $storedDefault, $storedOverride, $correctJnInt,
+                            'HA',
+                            'DIQQAT: qulflangan (--fix-locked bilan tuzating)',
+                        ];
+                    }
                     continue;
                 }
 
-                // Avtomatik o'rnatilgan va to'g'ri emas → tuzatish
+                // Qulflanmagan, avtomatik → tuzatamiz
                 $rows[] = [
-                    $groupName,
-                    $subjectName,
-                    $studentName,
-                    $storedDefault,
-                    $storedOverride,
-                    $correctJnInt,
+                    $groupName, $subjectName, $studentName,
+                    $storedDefault, $storedOverride, $correctJnInt,
                     'YO\'Q',
-                    $dryRun ? '[DRY] tuzatiladi' : 'TUZATILDI',
+                    $dryRun ? '[DRY] TUZATILADI' : 'TUZATILDI',
                 ];
-
                 if (!$dryRun) {
                     $sinovRow->default_grade  = $correctJnInt;
                     $sinovRow->override_grade = $correctJnInt;
                     $sinovRow->save();
-
-                    // student_grades sinov_yn_test yozuvini ham yangilash
                     DB::table('student_grades')
                         ->whereNull('deleted_at')
                         ->where('student_hemis_id', $hemisId)
@@ -179,30 +196,30 @@ class FixSinovJnMismatch extends Command
                         ->where('reason', 'sinov_yn_test')
                         ->update(['grade' => $correctJnInt, 'updated_at' => now()]);
                 }
-
                 $fixedCount++;
             }
         }
 
         if (!empty($rows)) {
             $this->table(
-                ['Guruh', 'Fan', 'Talaba', 'Eski default', 'Eski override', 'To\'g\'ri JN', 'Qulflangan', 'Holat'],
+                ['Guruh', 'Fan', 'Talaba', 'Eski', 'Override', 'To\'g\'ri JN', 'Qulf', 'Holat'],
                 $rows
             );
         } else {
-            $this->info('Hech qanday farqli yozuv topilmadi.');
+            $this->info('Hech qanday farqli yozuv topilmadi — hammasi to\'g\'ri.');
         }
 
         $this->newLine();
-        $this->info("Tuzatildi:         {$fixedCount}");
-        $this->warn("Qulflangan (DIQQAT): {$skippedLocked}");
-        $this->warn("Qo'lda edit (skip):  {$skippedManual}");
-        $this->line("O'zgarmagan:       {$noChange}");
+        $this->info("Tuzatildi:            {$fixedCount}");
+        $this->warn("Qulflangan (skip):    {$skippedLocked}");
+        $this->warn("Qo'lda edit (skip):   {$skippedManual}");
+        $this->line("O'zgarmagan:          {$noChange}");
 
-        if ($skippedLocked > 0) {
+        if ($skippedLocked > 0 && !$fixLocked) {
             $this->newLine();
-            $this->warn('DIQQAT: Qulflangan yozuvlar YN ga yuborilgan va jurnalda saqlanib qolgan.');
-            $this->warn('Ularni tuzatish uchun admin panelida "Sinov baholarini o\'zgartirish" toggle\'ini yoqib, qo\'lda to\'g\'rilash kerak.');
+            $this->warn("Qulflangan lekin avtomatik o'rnatilgan {$skippedLocked} ta yozuv topildi.");
+            $this->warn('Ularni tuzatish uchun: php artisan sinov:fix-jn-mismatch --fix-locked --dry-run');
+            $this->warn('Ko\'rib chiqqandan keyin: php artisan sinov:fix-jn-mismatch --fix-locked');
         }
 
         return self::SUCCESS;

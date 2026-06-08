@@ -162,8 +162,8 @@ class FixSinovJnMismatch extends Command
                                 ->where('training_type_code', 102)
                                 ->where('reason', 'sinov_yn_test')
                                 ->update(['grade' => $correctJnInt, 'updated_at' => now()]);
+                            $fixedCount++;
                         }
-                        $fixedCount++;
                     } else {
                         $skippedLocked++;
                         $rows[] = [
@@ -195,8 +195,8 @@ class FixSinovJnMismatch extends Command
                         ->where('training_type_code', 102)
                         ->where('reason', 'sinov_yn_test')
                         ->update(['grade' => $correctJnInt, 'updated_at' => now()]);
+                    $fixedCount++;
                 }
-                $fixedCount++;
             }
         }
 

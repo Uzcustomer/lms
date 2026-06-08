@@ -6273,6 +6273,7 @@ class JournalController extends Controller
         }
 
         $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
+        $excludedTrainingTypeNames = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
 
         $jbScheduleRows = DB::table('schedules')
             ->where('group_id', $groupHemisId)
@@ -6280,6 +6281,7 @@ class JournalController extends Controller
             ->where('semester_code', $semesterCode)
             ->whereNull('deleted_at')
             ->whereNotIn('training_type_code', $excludedTrainingCodes)
+            ->whereNotIn('training_type_name', $excludedTrainingTypeNames)
             ->whereNotNull('lesson_date')
             ->select('lesson_date', 'lesson_pair_code')
             ->get();

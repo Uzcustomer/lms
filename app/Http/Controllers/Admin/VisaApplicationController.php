@@ -11,7 +11,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
-use PhpOffice\PhpWord\Element\Table;
 use PhpOffice\PhpWord\TemplateProcessor;
 
 class VisaApplicationController extends Controller
@@ -186,53 +185,43 @@ class VisaApplicationController extends Controller
 
         $processor = new TemplateProcessor($templatePath);
 
-        $table = new Table([
-            'borderSize' => 0,
-            'borderColor' => 'FFFFFF',
-            'cellMarginTop' => 0,
-            'cellMarginBottom' => 0,
-            'cellMarginLeft' => 0,
-            'cellMarginRight' => 0,
-        ]);
+        $paragraphs = $apps
+            ->values()
+            ->map(function (VisaApplication $app, int $index) {
+                $fullName = trim(implode(' ', array_filter([
+                    $app->last_name,
+                    $app->first_name,
+                    $app->middle_name,
+                ])));
 
-        foreach ($apps->values() as $index => $app) {
-            $fullName = trim(implode(' ', array_filter([
-                $app->last_name,
-                $app->first_name,
-                $app->middle_name,
-            ])));
+                $details = array_filter([
+                    $app->passport_number ? 'passport raqami ' . $app->passport_number : null,
+                    optional($app->birth_date)->format('d.m.Y'),
+                ]);
 
-            $details = array_filter([
-                $app->passport_number ? 'passport raqami ' . $app->passport_number : null,
-                optional($app->birth_date)->format('d.m.Y'),
-            ]);
+                $line = ($index + 1) . '. ' . $fullName
+                    . ($details ? ' (' . implode(', ', $details) . ')' : '');
 
-            $line = ($index + 1) . '. ' . $fullName
-                . ($details ? ' (' . implode(', ', $details) . ')' : '');
+                $text = htmlspecialchars($line, ENT_XML1 | ENT_COMPAT, 'UTF-8');
 
-            $table->addRow();
-            $cell = $table->addCell(null, [
-                'borderSize' => 0,
-                'marginTop' => 0,
-                'marginBottom' => 0,
-                'marginLeft' => 0,
-                'marginRight' => 0,
-            ]);
-            $cell->addText($line, [
-                'name' => 'Times New Roman',
-                'size' => 12,
-            ], [
-                'spaceBefore' => 0,
-                'spaceAfter' => 0,
-                'spacing' => 240,
-                'indentation' => [
-                    'left' => 720,
-                    'hanging' => 360,
-                ],
-            ]);
-        }
+                return '<w:p>'
+                    . '<w:pPr>'
+                    . '<w:spacing w:before="0" w:after="0" w:line="240" w:lineRule="auto"/>'
+                    . '<w:ind w:left="360" w:hanging="360"/>'
+                    . '</w:pPr>'
+                    . '<w:r>'
+                    . '<w:rPr>'
+                    . '<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Times New Roman"/>'
+                    . '<w:sz w:val="24"/>'
+                    . '<w:szCs w:val="24"/>'
+                    . '</w:rPr>'
+                    . '<w:t xml:space="preserve">' . $text . '</w:t>'
+                    . '</w:r>'
+                    . '</w:p>';
+            })
+            ->implode('');
 
-        $processor->setComplexBlock('applicants_list', $table);
+        $processor->replaceXmlBlock('applicants_list', $paragraphs, 'w:p');
 
         $tmp = tempnam(sys_get_temp_dir(), 'telex_') . '.docx';
         $processor->saveAs($tmp);

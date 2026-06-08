@@ -486,12 +486,12 @@
         flatpickr("#birthdate", { dateFormat: "Y-m-d", altInput: true, altFormat: "d.m.Y", allowInput: true });
 
         // Messenger toggle (Telegram / WhatsApp)
-        function vaSetMessenger(type) {
+        window.vaSetMessenger = function (type) {
             document.getElementById('messenger_type').value = type;
             document.querySelectorAll('.va-msg-chip').forEach(b => {
                 b.dataset.active = b.dataset.msg === type ? '1' : '0';
             });
-        }
+        };
 
         // PDF dropzone wiring — bir xil mantiq ikkala input uchun
         function vaWireDropzone(zoneId, inputId, maxBytes) {

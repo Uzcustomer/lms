@@ -260,7 +260,7 @@ class FixSinovJnMismatch extends Command
         if ($group) {
             $subj = DB::table('curriculum_subjects')
                 ->where('subject_id', $subjectId)
-                ->where('curriculum_hemis_id', $group->curriculum_hemis_id)
+                ->where('curricula_hemis_id', $group->curriculum_hemis_id)
                 ->where('semester_code', $semesterCode)
                 ->value('total_acload');
             $auditoriumHours = (float) ($subj ?? 0);

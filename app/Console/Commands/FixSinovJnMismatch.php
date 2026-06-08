@@ -3,6 +3,8 @@
 namespace App\Console\Commands;
 
 use App\Models\CurriculumSubject;
+use App\Models\Group;
+use App\Models\MarkingSystemScore;
 use App\Models\SinovTestGrade;
 use App\Models\YnSubmission;
 use App\Services\JnMtCalculator;
@@ -14,17 +16,19 @@ use Illuminate\Support\Facades\DB;
  *   - Eski JN hisoblashda training_type_name filtri yo'qligi sababli
  *     sinov_test_grades.override_grade noto'g'ri hisoblangan bo'lishi mumkin.
  *
+ *   Eligibility (bulkCopySinovFromJn bilan bir xil):
+ *     grade = (JN >= minLimit AND MT >= minLimit AND sababsiz davomat < 25%) ? JN : 0
+ *
  *   Xavfsizlik qoidalari:
  *   - default_grade == override_grade  → avtomatik o'rnatilgan → tuzatiladi
  *   - default_grade != override_grade  → o'qituvchi qo'lda edit qilgan → HECH QACHON TEGMAYDI
- *   - is_locked = true, default==override → --fix-locked bilan tuzatiladi
- *     (locked = jurnalga ko'chirilgan, lekin bug sababli noto'g'ri qiymat)
+ *   - is_locked = true                 → --fix-locked bilan tuzatiladi
  */
 class FixSinovJnMismatch extends Command
 {
     protected $signature = 'sinov:fix-jn-mismatch
         {--dry-run    : Faqat ko\'rib chiqish, DB ga yozmaslik}
-        {--fix-locked : Qulflangan (is_locked=true) lekin avtomatik o\'rnatilgan yozuvlarni ham tuzatish}
+        {--fix-locked : Qulflangan lekin avtomatik o\'rnatilgan yozuvlarni ham tuzatish}
         {--group=     : Faqat shu guruh uchun (group_hemis_id)}
         {--subject=   : Faqat shu fan uchun (subject_id)}';
 
@@ -44,7 +48,6 @@ class FixSinovJnMismatch extends Command
             $this->warn('--fix-locked: qulflangan avtomatik yozuvlar ham tuzatiladi.');
         }
 
-        // Yopilish shakli 'sinov' bo'lgan fanlar
         $sinovSubjectIds = CurriculumSubject::where('closing_form', 'sinov')
             ->when($filterSubject, fn($q) => $q->where('subject_id', $filterSubject))
             ->distinct()
@@ -56,9 +59,8 @@ class FixSinovJnMismatch extends Command
             return self::SUCCESS;
         }
 
-        // YN yuborilgan guruh+fan+semestr'lar
         $submissions = YnSubmission::whereIn('subject_id', $sinovSubjectIds)
-            ->when($filterGroup,   fn($q) => $q->where('group_hemis_id', $filterGroup))
+            ->when($filterGroup, fn($q) => $q->where('group_hemis_id', $filterGroup))
             ->select('subject_id', 'semester_code', 'group_hemis_id')
             ->distinct()
             ->get();
@@ -69,16 +71,14 @@ class FixSinovJnMismatch extends Command
         }
 
         $calculator = new JnMtCalculator();
-
-        $rows = [];
-
+        $rows        = [];
         $fixedCount    = 0;
         $skippedManual = 0;
         $skippedLocked = 0;
         $noChange      = 0;
 
         foreach ($submissions as $sub) {
-            // computeForGroup qaytaradi: hemis_id => ['jn' => int, 'mt' => int]
+            // JN va MT ni birga olamiz
             $jnMtMap = $calculator->computeForGroup(
                 (string) $sub->group_hemis_id,
                 (int) $sub->subject_id,
@@ -88,6 +88,13 @@ class FixSinovJnMismatch extends Command
             if (empty($jnMtMap)) {
                 continue;
             }
+
+            // Sababsiz davomat foizini hisoblash (bulkCopySinovFromJn mantig'i)
+            $absPctMap = $this->computeAbsence(
+                (string) $sub->subject_id,
+                (string) $sub->semester_code,
+                (string) $sub->group_hemis_id
+            );
 
             $sinovRows = SinovTestGrade::where('subject_id', $sub->subject_id)
                 ->where('semester_code', $sub->semester_code)
@@ -109,8 +116,13 @@ class FixSinovJnMismatch extends Command
                 ->value('subject_name') ?? $sub->subject_id;
 
             foreach ($jnMtMap as $hemisId => $jnMt) {
-                // MUHIM: computeForGroup massiv qaytaradi — ['jn' => x, 'mt' => y]
-                $correctJnInt = (int) ($jnMt['jn'] ?? 0);
+                $jnInt  = (int) ($jnMt['jn'] ?? 0);
+                $mtInt  = (int) ($jnMt['mt'] ?? 0);
+                $absPct = (float) ($absPctMap[$hemisId] ?? 0);
+
+                $minLimit = (int) (MarkingSystemScore::getByStudentHemisId($hemisId)->minimum_limit ?? 60);
+                $eligible = ($jnInt >= $minLimit) && ($mtInt >= $minLimit) && ($absPct < 25.0);
+                $correctGrade = $eligible ? $jnInt : 0;
 
                 $sinovRow = $sinovRows[$hemisId] ?? null;
                 if (!$sinovRow) {
@@ -122,37 +134,38 @@ class FixSinovJnMismatch extends Command
                 $isLocked       = (bool) $sinovRow->is_locked;
                 $studentName    = $studentNames[$hemisId] ?? $hemisId;
 
-                // O'zgarmagan — hech narsa qilmaymiz
-                if ($storedDefault === $correctJnInt && $storedOverride === $correctJnInt) {
+                // O'zgarmagan
+                if ($storedDefault === $correctGrade && $storedOverride === $correctGrade) {
                     $noChange++;
                     continue;
                 }
 
-                // O'qituvchi qo'lda edit qilgan (override != default) → hech qachon tegmaymiz
+                // O'qituvchi qo'lda edit qilgan → hech qachon tegmaymiz
                 if ($storedDefault !== $storedOverride) {
                     $skippedManual++;
                     $rows[] = [
                         $groupName, $subjectName, $studentName,
-                        $storedDefault, $storedOverride, $correctJnInt,
+                        $storedDefault, $storedOverride, $correctGrade,
+                        $eligible ? "JN={$jnInt} MT={$mtInt}" : "JN={$jnInt} MT={$mtInt} abs={$absPct}%",
                         $isLocked ? 'HA' : 'YO\'Q',
                         'QOLDIRILDI (qo\'lda edit)',
                     ];
                     continue;
                 }
 
-                // default == override (avtomatik), lekin qulflangan
+                // default == override (avtomatik), qulflangan
                 if ($isLocked) {
                     if ($fixLocked) {
-                        // --fix-locked: tuzatamiz
                         $rows[] = [
                             $groupName, $subjectName, $studentName,
-                            $storedDefault, $storedOverride, $correctJnInt,
+                            $storedDefault, $storedOverride, $correctGrade,
+                            $eligible ? "JN={$jnInt} MT={$mtInt}" : "JN={$jnInt} MT={$mtInt} abs={$absPct}%",
                             'HA',
                             $dryRun ? '[DRY] TUZATILADI (locked)' : 'TUZATILDI (locked)',
                         ];
                         if (!$dryRun) {
-                            $sinovRow->default_grade  = $correctJnInt;
-                            $sinovRow->override_grade = $correctJnInt;
+                            $sinovRow->default_grade  = $correctGrade;
+                            $sinovRow->override_grade = $correctGrade;
                             $sinovRow->save();
                             DB::table('student_grades')
                                 ->whereNull('deleted_at')
@@ -161,14 +174,15 @@ class FixSinovJnMismatch extends Command
                                 ->where('semester_code', $sub->semester_code)
                                 ->where('training_type_code', 102)
                                 ->where('reason', 'sinov_yn_test')
-                                ->update(['grade' => $correctJnInt, 'updated_at' => now()]);
+                                ->update(['grade' => $correctGrade, 'updated_at' => now()]);
                             $fixedCount++;
                         }
                     } else {
                         $skippedLocked++;
                         $rows[] = [
                             $groupName, $subjectName, $studentName,
-                            $storedDefault, $storedOverride, $correctJnInt,
+                            $storedDefault, $storedOverride, $correctGrade,
+                            $eligible ? "JN={$jnInt} MT={$mtInt}" : "JN={$jnInt} MT={$mtInt} abs={$absPct}%",
                             'HA',
                             'DIQQAT: qulflangan (--fix-locked bilan tuzating)',
                         ];
@@ -179,13 +193,14 @@ class FixSinovJnMismatch extends Command
                 // Qulflanmagan, avtomatik → tuzatamiz
                 $rows[] = [
                     $groupName, $subjectName, $studentName,
-                    $storedDefault, $storedOverride, $correctJnInt,
+                    $storedDefault, $storedOverride, $correctGrade,
+                    $eligible ? "JN={$jnInt} MT={$mtInt}" : "JN={$jnInt} MT={$mtInt} abs={$absPct}%",
                     'YO\'Q',
                     $dryRun ? '[DRY] TUZATILADI' : 'TUZATILDI',
                 ];
                 if (!$dryRun) {
-                    $sinovRow->default_grade  = $correctJnInt;
-                    $sinovRow->override_grade = $correctJnInt;
+                    $sinovRow->default_grade  = $correctGrade;
+                    $sinovRow->override_grade = $correctGrade;
                     $sinovRow->save();
                     DB::table('student_grades')
                         ->whereNull('deleted_at')
@@ -194,7 +209,7 @@ class FixSinovJnMismatch extends Command
                         ->where('semester_code', $sub->semester_code)
                         ->where('training_type_code', 102)
                         ->where('reason', 'sinov_yn_test')
-                        ->update(['grade' => $correctJnInt, 'updated_at' => now()]);
+                        ->update(['grade' => $correctGrade, 'updated_at' => now()]);
                     $fixedCount++;
                 }
             }
@@ -202,7 +217,7 @@ class FixSinovJnMismatch extends Command
 
         if (!empty($rows)) {
             $this->table(
-                ['Guruh', 'Fan', 'Talaba', 'Eski', 'Override', 'To\'g\'ri JN', 'Qulf', 'Holat'],
+                ['Guruh', 'Fan', 'Talaba', 'Eski', 'Override', 'To\'g\'ri', 'Eligibility', 'Qulf', 'Holat'],
                 $rows
             );
         } else {
@@ -223,5 +238,51 @@ class FixSinovJnMismatch extends Command
         }
 
         return self::SUCCESS;
+    }
+
+    /**
+     * bulkCopySinovFromJn::computeAbsenceForGroup bilan bir xil mantiq.
+     * hemis_id => sababsiz davomat foizi (0..100)
+     */
+    private function computeAbsence(string $subjectId, string $semesterCode, string $groupHemisId): array
+    {
+        $studentHemisIds = DB::table('students')
+            ->where('group_id', $groupHemisId)
+            ->pluck('hemis_id')
+            ->toArray();
+
+        if (empty($studentHemisIds)) {
+            return [];
+        }
+
+        $group = Group::where('group_hemis_id', $groupHemisId)->first();
+        $auditoriumHours = 0.0;
+        if ($group) {
+            $subj = DB::table('curriculum_subjects')
+                ->where('subject_id', $subjectId)
+                ->where('curriculum_hemis_id', $group->curriculum_hemis_id)
+                ->where('semester_code', $semesterCode)
+                ->value('total_acload');
+            $auditoriumHours = (float) ($subj ?? 0);
+        }
+
+        $absences = DB::table('attendances')
+            ->whereIn('student_hemis_id', $studentHemisIds)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->selectRaw('student_hemis_id, SUM(absent_off) as total_absent_off')
+            ->groupBy('student_hemis_id')
+            ->pluck('total_absent_off', 'student_hemis_id')
+            ->toArray();
+
+        $result = [];
+        foreach ($studentHemisIds as $hemisId) {
+            $absent = (float) ($absences[$hemisId] ?? 0);
+            $result[$hemisId] = $auditoriumHours > 0
+                ? round(($absent / $auditoriumHours) * 100, 2)
+                : 0.0;
+        }
+
+        return $result;
     }
 }

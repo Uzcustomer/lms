@@ -30,7 +30,8 @@ class FixSinovJnMismatch extends Command
         {--dry-run    : Faqat ko\'rib chiqish, DB ga yozmaslik}
         {--fix-locked : Qulflangan lekin avtomatik o\'rnatilgan yozuvlarni ham tuzatish}
         {--group=     : Faqat shu guruh uchun (group_hemis_id)}
-        {--subject=   : Faqat shu fan uchun (subject_id)}';
+        {--subject=   : Faqat shu fan uchun (subject_id)}
+        {--export=    : Natijani CSV faylga saqlash (masalan: --export=sinov.csv)}';
 
     protected $description = 'sinov_test_grades da JN o\'rtachasi bilan mos kelmaydigan va qo\'lda edit qilinmagan yozuvlarni tuzatadi.';
 
@@ -220,11 +221,22 @@ class FixSinovJnMismatch extends Command
             }
         }
 
+        $headers = ['Guruh', 'Fan', 'Talaba', 'Eski', 'Override', 'To\'g\'ri', 'Eligibility', 'Qulf', 'Holat'];
+
         if (!empty($rows)) {
-            $this->table(
-                ['Guruh', 'Fan', 'Talaba', 'Eski', 'Override', 'To\'g\'ri', 'Eligibility', 'Qulf', 'Holat'],
-                $rows
-            );
+            $exportFile = $this->option('export');
+            if ($exportFile) {
+                $fp = fopen($exportFile, 'w');
+                fprintf($fp, "\xEF\xBB\xBF"); // UTF-8 BOM for Excel
+                fputcsv($fp, $headers, ';');
+                foreach ($rows as $row) {
+                    fputcsv($fp, $row, ';');
+                }
+                fclose($fp);
+                $this->info("CSV saqlandi: {$exportFile}");
+            } else {
+                $this->table($headers, $rows);
+            }
         } else {
             $this->info('Hech qanday farqli yozuv topilmadi — hammasi to\'g\'ri.');
         }

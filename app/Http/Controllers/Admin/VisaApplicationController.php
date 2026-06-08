@@ -185,18 +185,18 @@ class VisaApplicationController extends Controller
 
         $processor = new TemplateProcessor($templatePath);
 
-        $lines = [];
-        foreach ($apps as $i => $app) {
-            $fio = trim(implode(' ', array_filter([$app->last_name, $app->first_name, $app->middle_name])));
-            $birth = optional($app->birth_date)->format('d.m.Y');
-            $passport = $app->passport_number;
-            $lines[] = ($i + 1) . '. ' . $fio
-                . ($birth ? ', ' . $birth . " y. tug'ilgan" : '')
-                . ($passport ? ', pasport: ' . $passport : '');
-        }
-        $list = implode("\n", $lines);
+        $fullNames = $apps
+            ->map(function (VisaApplication $app) {
+                return trim(implode(' ', array_filter([
+                    $app->last_name,
+                    $app->first_name,
+                    $app->middle_name,
+                ])));
+            })
+            ->filter()
+            ->values();
 
-        $processor->setValue('applicants_list', $list);
+        $processor->setValue('applicants_list', $fullNames->implode("\n"));
 
         $tmp = tempnam(sys_get_temp_dir(), 'telex_') . '.docx';
         $processor->saveAs($tmp);

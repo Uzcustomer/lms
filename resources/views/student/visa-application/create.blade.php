@@ -303,7 +303,7 @@
                                 $passportNumberValue = old('passport_number_value', (string) ($student->passport_number ?? ''));
 
                                 if (($passportSeries === '' || $passportNumberValue === '') && $passportCombined !== '') {
-                                    if (preg_match('/^([A-Z]+)\s*([0-9A-Z]+)?$/u', $passportCombined, $matches)) {
+                                    if (preg_match('/^([A-Z]*)\s*([0-9]*)$/u', $passportCombined, $matches)) {
                                         if ($passportSeries === '' && !empty($matches[1])) {
                                             $passportSeries = $matches[1];
                                         }
@@ -313,17 +313,16 @@
                                     }
                                 }
                             @endphp
-                            <label class="va-label">Passport details <span class="va-required">*</span></label>
-                            <div class="grid grid-cols-3 gap-3">
-                                <div class="col-span-1">
+                            <div class="grid grid-cols-10 gap-3">
+                                <div class="col-span-3">
                                     <label class="va-label">Passport series <span class="va-required">*</span></label>
                                     <input type="text" name="passport_series" id="passport_series" class="va-input" required maxlength="10"
                                            value="{{ mb_strtoupper($passportSeries) }}" placeholder="AA">
                                 </div>
-                                <div class="col-span-2">
+                                <div class="col-span-7">
                                     <label class="va-label">Passport number <span class="va-required">*</span></label>
                                     <input type="text" name="passport_number_value" id="passport_number_value" class="va-input" required maxlength="40"
-                                           value="{{ mb_strtoupper($passportNumberValue) }}" placeholder="1234567">
+                                           value="{{ preg_replace('/\D+/', '', (string) $passportNumberValue) }}" placeholder="1234567" inputmode="numeric">
                                 </div>
                             </div>
                             <input type="hidden" name="passport_number" id="passport_number"
@@ -524,8 +523,8 @@
         const passportHiddenEl = document.getElementById('passport_number');
         function vaSyncPassportNumber() {
             if (!passportHiddenEl) return;
-            const series = (passportSeriesEl?.value || '').toUpperCase().replace(/\s+/g, '');
-            const number = (passportNumberValueEl?.value || '').toUpperCase().replace(/\s+/g, '');
+            const series = (passportSeriesEl?.value || '').toUpperCase().replace(/[^A-Z]/g, '');
+            const number = (passportNumberValueEl?.value || '').replace(/\D+/g, '');
             if (passportSeriesEl) passportSeriesEl.value = series;
             if (passportNumberValueEl) passportNumberValueEl.value = number;
             passportHiddenEl.value = (series + number).trim();

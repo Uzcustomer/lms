@@ -1039,31 +1039,6 @@ class AcademicScheduleController extends Controller
                     }
                     usort($currentDebts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
                     $admission = $admissionByStudent[$stu->hemis_id] ?? null;
-                    if ((int) $stu->hemis_id === 4789 && (int) $subjectId === 89 && (int) $semCode === 20) {
-                        \Log::info('YN_DEBUG_4789_ROW', [
-                            'group' => (int) $gHid,
-                            'student' => (int) $stu->hemis_id,
-                            'subject' => (int) $subjectId,
-                            'semester' => (int) $semCode,
-                            'stat' => $stat,
-                            'missed_oski' => $missedOski,
-                            'missed_test' => $missedTest,
-                            'did_not_attend' => $didNotAttend,
-                            'has_attempt2' => $hasAttempt2,
-                            'has_attempt3' => $hasAttempt3,
-                            'effective_failed1' => $effectiveFailed1,
-                            'effective_failed2' => $effectiveFailed2,
-                            'admission_status' => $admission['status'] ?? null,
-                            'admission_reasons' => $admission['reasons'] ?? [],
-                            'group_oski_date' => $groupOskiDate,
-                            'group_test_date' => $groupTestDate,
-                            'lesson_end' => $lessonEnd,
-                            'oski_passed' => $oskiPassed,
-                            'test_passed' => $testPassed,
-                            'has_group_oski_grade' => !empty($oskiGradeMap[$stu->hemis_id]),
-                            'has_group_test_grade' => !empty($testGradeMap[$stu->hemis_id]),
-                        ]);
-                    }
                     $rows[] = [
                         'hemis_id' => $stu->hemis_id,
                         'student_id_number' => $stu->student_id_number ?? null,
@@ -1471,9 +1446,7 @@ class AcademicScheduleController extends Controller
                     $mtInt = (int) $r->mt;
                     $jnMtMap[$k] = [
                         'jn' => $jnInt > 0 ? $jnInt : null,
-                        'jn_source' => $jnInt > 0 ? 'yn_snapshot' : null,
                         'mt' => $mtInt > 0 ? $mtInt : null,
-                        'mt_source' => $mtInt > 0 ? 'yn_snapshot' : null,
                     ];
                 }
             }
@@ -1501,16 +1474,12 @@ class AcademicScheduleController extends Controller
                 [$g, $s, $sem] = $parts;
                 foreach ($perStudent as $hid => $vals) {
                     $k = $hid . '|' . $s . '|' . $sem;
-                    if (!isset($jnMtMap[$k])) {
-                        $jnMtMap[$k] = ['jn' => null, 'jn_source' => null, 'mt' => null, 'mt_source' => null];
-                    }
+                    if (!isset($jnMtMap[$k])) $jnMtMap[$k] = ['jn' => null, 'mt' => null];
                     if ($jnMtMap[$k]['jn'] === null && $vals['jn'] !== null) {
                         $jnMtMap[$k]['jn'] = $vals['jn'];
-                        $jnMtMap[$k]['jn_source'] = 'journal_live';
                     }
                     if ($jnMtMap[$k]['mt'] === null && $vals['mt'] !== null) {
                         $jnMtMap[$k]['mt'] = $vals['mt'];
-                        $jnMtMap[$k]['mt_source'] = 'journal_live';
                     }
                 }
             }
@@ -1744,9 +1713,7 @@ class AcademicScheduleController extends Controller
                 $jnMtKey = $hid . '|' . $s . '|' . $sem;
                 // Snapshot bo'lmasa null — "yiqilgan" deb hisoblamaymiz, fallback yo'q
                 $jn = $jnMtMap[$jnMtKey]['jn'] ?? null;
-                $jnSource = $jnMtMap[$jnMtKey]['jn_source'] ?? null;
                 $mt = $jnMtMap[$jnMtKey]['mt'] ?? null;
-                $mtSource = $jnMtMap[$jnMtKey]['mt_source'] ?? null;
 
                 $oski = $examMap[$hid . '|' . $s . '|' . $sem . '|101'] ?? null;
                 $test = $examMap[$hid . '|' . $s . '|' . $sem . '|102'] ?? null;
@@ -1889,38 +1856,6 @@ class AcademicScheduleController extends Controller
                     'held_back' => false,
                     'passed' => $fullyPassed,
                 ];
-                if ((int) $hid === 4789 && (int) $s === 89 && (int) $sem === 20) {
-                    \Log::info('YN_DEBUG_4789_STATUS', [
-                        'group' => (int) $g,
-                        'student' => (int) $hid,
-                        'subject' => (int) $s,
-                        'semester' => (int) $sem,
-                        'jn' => $jn,
-                        'jn_source' => $jnSource,
-                        'mt' => $mt,
-                        'mt_source' => $mtSource,
-                        'absent_off' => $absentOff,
-                        'davomat_pct' => $davomatPct,
-                        'oski_required' => $oskiRequired,
-                        'test_required' => $testRequired,
-                        'oski_date' => $oskiDate,
-                        'test_date' => $testDate,
-                        'oski_resit_date' => $oskiResitDate,
-                        'test_resit_date' => $testResitDate,
-                        'oski' => $oskiNum,
-                        'test' => $testNum,
-                        'oski2' => isset($oski2Num) ? $oski2Num : null,
-                        'test2' => isset($test2Num) ? $test2Num : null,
-                        'jn_low' => $jnLow,
-                        'mt_low' => $mtLow,
-                        'is_pullik' => $isPullik,
-                        'oski_failed1' => $oskiFailed1,
-                        'test_failed1' => $testFailed1,
-                        'failed1' => $failed1,
-                        'failed2' => $failed2,
-                        'fully_passed' => $fullyPassed,
-                    ]);
-                }
             }
         }
 

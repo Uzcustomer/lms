@@ -1297,16 +1297,6 @@ class AcademicScheduleController extends Controller
         $allSubjectIds = array_unique(array_column($triples, 1));
         $allSemCodes = array_unique(array_column($triples, 2));
 
-        // Har bir guruh uchun JORIY o'quv yili boshlanish sanasi — o'quv reja
-        // bo'yicha ALOHIDA (HEMIS curriculum_weeks dan). Bir o'quv yili 2
-        // semestr; chegara — yilning 1-semestri boshlanishi. Tiklangan/transfer
-        // talabaning eski o'qishidagi baholarini aniq ajratish uchun. Reja
-        // topilmasa — global o'quv yili boshi (zaxira).
-        $yearStartFallback = \App\Services\JournalGradeService::currentAcademicYearStart();
-        $yearStartByGroup = \App\Services\JournalGradeService::academicYearStartByGroup(
-            array_values($allGroupHids)
-        );
-
         // Ko'rinadigan triples (status qaytarish uchun) va kengaytirilgan triples
         // (4+ qarz qoidasi uchun, butun o'quv yili bo'yicha sanash kerak).
         $visibleTriples = $triples;
@@ -1321,6 +1311,16 @@ class AcademicScheduleController extends Controller
             foreach ($rows as $r) $semYearMap[$r->semester_code] = $r->education_year;
         } catch (\Throwable $e) {}
         $relevantYears = array_values(array_unique(array_filter($semYearMap)));
+
+        // O'quv yili oynasi endi joriy yil bo'yicha emas, aynan ko'rilayotgan
+        // semester_code'larning education_year'i bo'yicha olinadi. Aks holda
+        // bahorgi 2026 semestri ko'rilayotganda 2026-09-14 kabi joriy yil
+        // boshlanishi cutoff bo'lib, haqiqiy attempt=1 baholar kesilib qoladi.
+        $yearStartByYear = \App\Services\JournalGradeService::academicYearStartMap($relevantYears);
+        $yearStartByGroupYear = \App\Services\JournalGradeService::academicYearStartByGroupAndYears(
+            array_values($allGroupHids),
+            $relevantYears
+        );
 
         // O'quv yiliga kiruvchi BARCHA semesterlarni olish (boshqa semestrlardagi
         // qarzlarni hisoblash uchun)
@@ -1513,12 +1513,12 @@ class AcademicScheduleController extends Controller
             $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
 
             foreach ($rows as $r) {
-                // O'quv yili ajratish — dars/imtihon sanasi shu semestr (o'quv
-                // reja) boshlanishidan oldin bo'lsa: tiklangan talabaning eski
-                // o'qishidagi yozuvi, hisobga olinmaydi.
                 $rg = $studentGroup[$r->student_hemis_id] ?? null;
-                $rStart = ($rg !== null ? ($yearStartByGroup[(string) $rg] ?? null) : null)
-                    ?? $yearStartFallback;
+                $rowYear = $semYearMap[$r->semester_code] ?? null;
+                $rStart = $rowYear !== null
+                    ? (($rg !== null ? ($yearStartByGroupYear[(string) $rg . '|' . $rowYear] ?? null) : null)
+                        ?? ($yearStartByYear[(string) $rowYear] ?? null))
+                    : null;
                 if ($rStart && $r->lesson_date
                     && substr((string) $r->lesson_date, 0, 10) < substr((string) $rStart, 0, 10)) {
                     continue;
@@ -1591,11 +1591,12 @@ class AcademicScheduleController extends Controller
                 $testTypes2 = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
 
                 foreach ($rows as $r) {
-                    // O'quv yili ajratish — eski o'qishidagi attempt=2 yozuvi
-                    // (eski sana) joriy hisobga kirmaydi.
                     $rg = $studentGroup[$r->student_hemis_id] ?? null;
-                    $rStart = ($rg !== null ? ($yearStartByGroup[(string) $rg] ?? null) : null)
-                        ?? $yearStartFallback;
+                    $rowYear = $semYearMap[$r->semester_code] ?? null;
+                    $rStart = $rowYear !== null
+                        ? (($rg !== null ? ($yearStartByGroupYear[(string) $rg . '|' . $rowYear] ?? null) : null)
+                            ?? ($yearStartByYear[(string) $rowYear] ?? null))
+                        : null;
                     if ($rStart && $r->lesson_date
                         && substr((string) $r->lesson_date, 0, 10) < substr((string) $rStart, 0, 10)) {
                         continue;

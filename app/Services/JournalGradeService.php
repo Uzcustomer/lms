@@ -43,6 +43,31 @@ class JournalGradeService
      *         ["groupHid|subjectId|semesterCode" => [hemis_id => ['jn'=>?int,'mt'=>?int]]]
      */
     /**
+     * Berilgan o'quv yilining boshlanish sanasi (global zaxira qiymat).
+     *
+     * curriculum_weeks dan: shu education_year ga tegishli BARCHA semestrlari
+     * (kuzgi + bahorgi) haftalaridan eng ertasi olinadi.
+     */
+    public static function academicYearStartForYear($educationYear): ?string
+    {
+        if (!$educationYear) {
+            return null;
+        }
+        try {
+            $start = DB::table('curriculum_weeks as cw')
+                ->join('semesters as s', 's.semester_hemis_id', '=', 'cw.semester_hemis_id')
+                ->where('s.education_year', $educationYear)
+                ->min('cw.start_date');
+            return $start ?: (((int) $educationYear) . '-08-01 00:00:00');
+        } catch (\Throwable $e) {
+            Log::warning('JournalGradeService academicYearStartForYear failed: ' . $e->getMessage(), [
+                'education_year' => $educationYear,
+            ]);
+            return null;
+        }
+    }
+
+    /**
      * Joriy o'quv yili boshlanish sanasi (global zaxira qiymat).
      *
      * curriculum_weeks dan: joriy o'quv yili (semesters.current=1 dagi eng
@@ -54,18 +79,53 @@ class JournalGradeService
     {
         try {
             $cy = \App\Models\Semester::where('current', true)->max('education_year');
-            if (!$cy) {
-                return null;
-            }
-            $start = DB::table('curriculum_weeks as cw')
-                ->join('semesters as s', 's.semester_hemis_id', '=', 'cw.semester_hemis_id')
-                ->where('s.education_year', $cy)
-                ->min('cw.start_date');
-            return $start ?: (((int) $cy) . '-08-01 00:00:00');
+            return self::academicYearStartForYear($cy);
         } catch (\Throwable $e) {
             Log::warning('JournalGradeService currentAcademicYearStart failed: ' . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Bir nechta o'quv yili uchun global boshlanish sanalari.
+     *
+     * @param array<int|string> $educationYears
+     * @return array<string,string> [education_year => "Y-m-d H:i:s"]
+     */
+    public static function academicYearStartMap(array $educationYears): array
+    {
+        $map = [];
+        $years = array_values(array_unique(array_filter(array_map('strval', $educationYears), fn ($y) => $y !== '')));
+        if (empty($years)) {
+            return $map;
+        }
+
+        try {
+            $rows = DB::table('curriculum_weeks as cw')
+                ->join('semesters as s', 's.semester_hemis_id', '=', 'cw.semester_hemis_id')
+                ->whereIn('s.education_year', $years)
+                ->groupBy('s.education_year')
+                ->selectRaw('s.education_year, MIN(cw.start_date) as ms')
+                ->get();
+
+            foreach ($rows as $r) {
+                if (!empty($r->education_year) && !empty($r->ms)) {
+                    $map[(string) $r->education_year] = $r->ms;
+                }
+            }
+
+            foreach ($years as $year) {
+                if (!isset($map[$year])) {
+                    $map[$year] = (((int) $year) . '-08-01 00:00:00');
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('JournalGradeService academicYearStartMap failed: ' . $e->getMessage(), [
+                'education_years' => $years,
+            ]);
+        }
+
+        return $map;
     }
 
     /**
@@ -92,42 +152,70 @@ class JournalGradeService
             if (!$cy) {
                 return $map;
             }
+            $groupYearMap = self::academicYearStartByGroupAndYears($groupHids, [$cy]);
+            foreach ($groupHids as $gHid) {
+                $key = (string) $gHid . '|' . (string) $cy;
+                if (isset($groupYearMap[$key])) {
+                    $map[(string) $gHid] = $groupYearMap[$key];
+                }
+            }
+        } catch (\Throwable $e) {
+            Log::warning('JournalGradeService academicYearStartByGroup failed: ' . $e->getMessage());
+        }
+        return $map;
+    }
 
+    /**
+     * Har bir guruh va o'quv yili uchun academic year start xaritasi.
+     *
+     * @param array<int|string> $groupHids
+     * @param array<int|string> $educationYears
+     * @return array<string,string> ["group_hemis_id|education_year" => "Y-m-d H:i:s"]
+     */
+    public static function academicYearStartByGroupAndYears(array $groupHids, array $educationYears): array
+    {
+        $map = [];
+        $groups = array_values(array_unique(array_filter(array_map('strval', $groupHids), fn ($g) => $g !== '')));
+        $years = array_values(array_unique(array_filter(array_map('strval', $educationYears), fn ($y) => $y !== '')));
+        if (empty($groups) || empty($years)) {
+            return $map;
+        }
+
+        try {
             $groupCurr = DB::table('groups')
-                ->whereIn('group_hemis_id', $groupHids)
+                ->whereIn('group_hemis_id', $groups)
                 ->whereNotNull('curriculum_hemis_id')
                 ->pluck('curriculum_hemis_id', 'group_hemis_id');
             if ($groupCurr->isEmpty()) {
                 return $map;
             }
-            $currIds = array_values(array_unique($groupCurr->all()));
 
-            // Joriy o'quv yili (education_year = $cy) semestrlari — har curriculum uchun
+            $currIds = array_values(array_unique($groupCurr->all()));
             $sems = DB::table('semesters')
                 ->whereIn('curriculum_hemis_id', $currIds)
-                ->where('education_year', $cy)
-                ->select('curriculum_hemis_id', 'semester_hemis_id')
+                ->whereIn('education_year', $years)
+                ->select('curriculum_hemis_id', 'education_year', 'semester_hemis_id')
                 ->get();
-            $semHidsByCurr = [];
+
+            $semHidsByCurrYear = [];
             $allSemHids = [];
             foreach ($sems as $s) {
-                $semHidsByCurr[$s->curriculum_hemis_id][] = $s->semester_hemis_id;
+                $currYearKey = $s->curriculum_hemis_id . '|' . $s->education_year;
+                $semHidsByCurrYear[$currYearKey][] = $s->semester_hemis_id;
                 $allSemHids[] = $s->semester_hemis_id;
             }
             if (empty($allSemHids)) {
                 return $map;
             }
 
-            // Har semestr uchun eng erta hafta
             $weekMin = DB::table('curriculum_weeks')
                 ->whereIn('semester_hemis_id', $allSemHids)
                 ->groupBy('semester_hemis_id')
                 ->selectRaw('semester_hemis_id, MIN(start_date) as ms')
                 ->pluck('ms', 'semester_hemis_id');
 
-            // Har curriculum uchun — semestrlari ichidan eng erta (= 1-semestr boshi)
-            $currStart = [];
-            foreach ($semHidsByCurr as $curr => $hids) {
+            $currYearStart = [];
+            foreach ($semHidsByCurrYear as $currYearKey => $hids) {
                 $dates = [];
                 foreach ($hids as $h) {
                     if (isset($weekMin[$h])) {
@@ -135,18 +223,29 @@ class JournalGradeService
                     }
                 }
                 if (!empty($dates)) {
-                    $currStart[$curr] = min($dates);
+                    $currYearStart[$currYearKey] = min($dates);
                 }
             }
 
+            $yearFallback = self::academicYearStartMap($years);
             foreach ($groupCurr as $gHid => $curr) {
-                if (isset($currStart[$curr])) {
-                    $map[(string) $gHid] = $currStart[$curr];
+                foreach ($years as $year) {
+                    $currYearKey = $curr . '|' . $year;
+                    $groupYearKey = (string) $gHid . '|' . $year;
+                    if (isset($currYearStart[$currYearKey])) {
+                        $map[$groupYearKey] = $currYearStart[$currYearKey];
+                    } elseif (isset($yearFallback[$year])) {
+                        $map[$groupYearKey] = $yearFallback[$year];
+                    }
                 }
             }
         } catch (\Throwable $e) {
-            Log::warning('JournalGradeService academicYearStartByGroup failed: ' . $e->getMessage());
+            Log::warning('JournalGradeService academicYearStartByGroupAndYears failed: ' . $e->getMessage(), [
+                'groups' => $groups,
+                'education_years' => $years,
+            ]);
         }
+
         return $map;
     }
 
@@ -162,11 +261,25 @@ class JournalGradeService
         $semCodes    = array_values(array_unique(array_map(fn ($t) => (string) $t[2], $triples)));
         $studentHids = array_map('strval', array_keys($studentGroup));
 
-        // O'quv yili ajratish — kunlik baholar (lesson_date bor) har bir
-        // guruhning o'z o'quv-yili boshlanish sanasi (1-semestr) bo'yicha;
-        // manual MT (lesson_date NULL) global o'quv yili boshi (created_at).
-        $yearStart = self::currentAcademicYearStart();
-        $yearStartByGroup = self::academicYearStartByGroup($groupHids);
+        $semYearMap = [];
+        try {
+            $rows = DB::table('semesters')
+                ->whereIn('semester_code', $semCodes)
+                ->select('semester_code', 'education_year')
+                ->get();
+            foreach ($rows as $r) {
+                $semYearMap[(string) $r->semester_code] = (string) $r->education_year;
+            }
+        } catch (\Throwable $e) {
+            Log::warning('JournalGradeService semester-year map failed: ' . $e->getMessage());
+        }
+        $relevantYears = array_values(array_unique(array_filter(array_values($semYearMap))));
+
+        // O'quv yili ajratish — endi "joriy" yil bo'yicha emas, triple'dagi
+        // semester_code ning education_year'i bo'yicha. Shunda eski/bahorgi
+        // semestrni ko'rayotganda uning haqiqiy baholari kesilib ketmaydi.
+        $yearStartByYear = self::academicYearStartMap($relevantYears);
+        $yearStartByGroupYear = self::academicYearStartByGroupAndYears($groupHids, $relevantYears);
 
         // Talabalarni guruh bo'yicha indekslaymiz
         $studentsByGroup = [];
@@ -189,6 +302,13 @@ class JournalGradeService
                     'training_type_code', 'lesson_date', 'lesson_pair_code')
                 ->get();
             foreach ($rows as $r) {
+                $rowYear = $semYearMap[(string) $r->semester_code] ?? null;
+                $rStart = $rowYear !== null
+                    ? ($yearStartByGroupYear[(string) $r->group_id . '|' . $rowYear] ?? ($yearStartByYear[$rowYear] ?? null))
+                    : null;
+                if ($rStart && substr((string) $r->lesson_date, 0, 10) < substr((string) $rStart, 0, 10)) {
+                    continue;
+                }
                 $key = $r->group_id . '|' . $r->subject_id . '|' . $r->semester_code;
                 $d = Carbon::parse($r->lesson_date)->format('Y-m-d');
                 $dp = $d . '_' . $r->lesson_pair_code;
@@ -231,9 +351,10 @@ class JournalGradeService
                 if ($gHid === null) {
                     continue;
                 }
-                // O'quv yili ajratish — dars sanasi joriy o'quv yili (1-semestr)
-                // boshlanishidan oldin bo'lsa: eski o'qishidagi yozuv, o'tkazamiz.
-                $rStart = $yearStartByGroup[(string) $gHid] ?? $yearStart;
+                $rowYear = $semYearMap[(string) $r->semester_code] ?? null;
+                $rStart = $rowYear !== null
+                    ? ($yearStartByGroupYear[(string) $gHid . '|' . $rowYear] ?? ($yearStartByYear[$rowYear] ?? null))
+                    : null;
                 if ($rStart && substr((string) $r->lesson_date, 0, 10) < substr((string) $rStart, 0, 10)) {
                     continue;
                 }
@@ -266,12 +387,23 @@ class JournalGradeService
                 ->whereIn('subject_id', $subjectIds)
                 ->whereIn('semester_code', $semCodes)
                 ->where('training_type_code', 99)
-                ->when($yearStart, fn ($q) => $q->where('created_at', '>=', $yearStart))
                 ->whereNull('lesson_date')
                 ->whereNotNull('grade')
-                ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade')
+                ->select('student_hemis_id', 'subject_id', 'semester_code', 'grade', 'created_at', 'id')
+                ->orderBy('created_at')
+                ->orderBy('id')
                 ->get();
             foreach ($rows as $r) {
+                $hemis = (string) $r->student_hemis_id;
+                $gHid = $studentGroup[$hemis] ?? ($studentGroup[(int) $hemis] ?? null);
+                $rowYear = $semYearMap[(string) $r->semester_code] ?? null;
+                $rStart = $rowYear !== null
+                    ? (($gHid !== null ? ($yearStartByGroupYear[(string) $gHid . '|' . $rowYear] ?? null) : null)
+                        ?? ($yearStartByYear[$rowYear] ?? null))
+                    : null;
+                if ($rStart && substr((string) $r->created_at, 0, 10) < substr((string) $rStart, 0, 10)) {
+                    continue;
+                }
                 $manualMt[$r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code] = (float) $r->grade;
             }
         } catch (\Throwable $e) {

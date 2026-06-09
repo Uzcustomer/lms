@@ -1297,6 +1297,45 @@ class AcademicScheduleController extends Controller
         $allSubjectIds = array_unique(array_column($triples, 1));
         $allSemCodes = array_unique(array_column($triples, 2));
 
+        // Har bir (group, subject, semester) uchun curriculum_subjects.closing_form
+        // ni aniqlab olamiz. Faqat OSKI / Faqat Test fanlarda bu maydon muhim:
+        // exam_schedules.test_na/oski_na to'liq to'ldirilmagan bo'lsa ham,
+        // urinish statusi aynan closing_form bo'yicha hisoblanishi kerak.
+        $groupCurriculumMap = [];
+        $closingFormMap = [];
+        try {
+            $groupCurriculumMap = DB::table('groups')
+                ->whereIn('group_hemis_id', $allGroupHids)
+                ->pluck('curriculum_hemis_id', 'group_hemis_id')
+                ->toArray();
+
+            $curriculumIds = array_values(array_unique(array_filter(array_values($groupCurriculumMap))));
+            if (!empty($curriculumIds)) {
+                $subjectMetaRows = DB::table('curriculum_subjects')
+                    ->whereIn('curricula_hemis_id', $curriculumIds)
+                    ->whereIn('subject_id', $allSubjectIds)
+                    ->whereIn('semester_code', $allSemCodes)
+                    ->select('curricula_hemis_id', 'subject_id', 'semester_code', 'closing_form')
+                    ->get();
+
+                $subjectMetaMap = [];
+                foreach ($subjectMetaRows as $row) {
+                    $subjectMetaMap[$row->curricula_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code] = $row->closing_form;
+                }
+
+                foreach ($triples as $triple) {
+                    [$g, $s, $sem] = $triple;
+                    $curriculumId = $groupCurriculumMap[$g] ?? null;
+                    if (!$curriculumId) continue;
+
+                    $metaKey = $curriculumId . '|' . $s . '|' . $sem;
+                    if (array_key_exists($metaKey, $subjectMetaMap)) {
+                        $closingFormMap[$g . '|' . $s . '|' . $sem] = $subjectMetaMap[$metaKey];
+                    }
+                }
+            }
+        } catch (\Throwable $e) {}
+
         // Har bir guruh uchun JORIY o'quv yili boshlanish sanasi — o'quv reja
         // bo'yicha ALOHIDA (HEMIS curriculum_weeks dan). Bir o'quv yili 2
         // semestr; chegara — yilning 1-semestri boshlanishi. Tiklangan/transfer
@@ -1745,10 +1784,18 @@ class AcademicScheduleController extends Controller
                     continue;
                 }
 
-                // OSKI/Test fan uchun talab qilinadimi? (exam_schedules.oski_na/test_na)
+                // OSKI/Test fan uchun talab qilinadimi?
+                // closing_form birlamchi manba; oski_na/test_na esa qo'shimcha override.
+                $closingForm = $closingFormMap[$g . '|' . $s . '|' . $sem] ?? null;
                 $naKey = $g . '|' . $s . '|' . $sem;
-                $oskiRequired = !($naMap[$naKey]['oski_na'] ?? false);
-                $testRequired = !($naMap[$naKey]['test_na'] ?? false);
+                $needsOski = $closingForm === null || in_array($closingForm, ['oski', 'oski_test'], true);
+                $needsTest = $closingForm === null || in_array($closingForm, ['test', 'oski_test'], true);
+                if (in_array($closingForm, ['normativ', 'sinov', 'none'], true)) {
+                    $needsOski = false;
+                    $needsTest = false;
+                }
+                $oskiRequired = $needsOski && !($naMap[$naKey]['oski_na'] ?? false);
+                $testRequired = $needsTest && !($naMap[$naKey]['test_na'] ?? false);
 
                 // 1/2-urinish sanalari — muddati tugaganmi tekshirish uchun
                 $oskiDate = $naMap[$naKey]['oski_date'] ?? null;

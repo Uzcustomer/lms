@@ -979,15 +979,10 @@ class AcademicScheduleController extends Controller
                 $groupOskiDate = $item['oski_date'] ?? null;
                 $groupTestDate = $item['test_date'] ?? null;
                 $lessonEnd = $item['lesson_end_date'] ?? null;
-                [$needsOski, $needsTest] = $this->resolveAttemptRequirements(
-                    $item['closing_form'] ?? null,
-                    !($item['oski_na'] ?? false),
-                    !($item['test_na'] ?? false)
-                );
                 $effOskiDate = $groupOskiDate ?: $lessonEnd;
                 $effTestDate = $groupTestDate ?: $lessonEnd;
-                $oskiPassed = $needsOski && $effOskiDate && $effOskiDate < $today && !empty($oskiGradeMap);
-                $testPassed = $needsTest && $effTestDate && $effTestDate < $today && !empty($testGradeMap);
+                $oskiPassed = $effOskiDate && $effOskiDate < $today && !empty($oskiGradeMap);
+                $testPassed = $effTestDate && $effTestDate < $today && !empty($testGradeMap);
 
                 $rows = [];
                 foreach ($studentList as $stu) {
@@ -1402,25 +1397,6 @@ class AcademicScheduleController extends Controller
         // Per-student exam_schedules — alohida belgilangan individual 2-urinish
         // sanalari (admin SAIDMURODOVA kabi yolg'iz 2-urinishchiga sana
         // qo'ygan holatlar). Group naMap'da bo'lmasa shu yerdan olamiz.
-        // Talabaning o'z o'quv rejasidagi yopilish shakli — urinish hisobi uchun
-        // kanonik manba. exam_schedules oski_na/test_na eskirib qolgan bo'lsa ham
-        // "Faqat OSKI" / "Faqat Test" fanlarni noto'g'ri 2-urinishga og'dirmaymiz.
-        $closingFormByCurr = []; // curr|subj|sem => closing_form
-        try {
-            $curriculaIds = array_values(array_unique(array_filter($studentCurriculum)));
-            if (!empty($curriculaIds)) {
-                $rows = DB::table('curriculum_subjects')
-                    ->whereIn('curricula_hemis_id', $curriculaIds)
-                    ->whereIn('subject_id', $allSubjectIds)
-                    ->whereIn('semester_code', $allSemCodes)
-                    ->select('curricula_hemis_id', 'subject_id', 'semester_code', 'closing_form')
-                    ->get();
-                foreach ($rows as $r) {
-                    $closingFormByCurr[$r->curricula_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code] = $r->closing_form;
-                }
-            }
-        } catch (\Throwable $e) {}
-
         $perStudentResitMap = []; // hemis|subj|sem => ['oski_resit_date', 'test_resit_date']
         try {
             $rows = DB::table('exam_schedules')
@@ -1769,21 +1745,10 @@ class AcademicScheduleController extends Controller
                     continue;
                 }
 
-                // closing_form mavjud bo'lsa, u kanonik manba. Shunda saqlangan
-                // oski_na/test_na eskirib qolgan bo'lsa ham "Faqat OSKI" fanlar
-                // test sababli noto'g'ri yiqilib ketmaydi.
+                // OSKI/Test fan uchun talab qilinadimi? (exam_schedules.oski_na/test_na)
                 $naKey = $g . '|' . $s . '|' . $sem;
-                $fallbackOskiRequired = !($naMap[$naKey]['oski_na'] ?? false);
-                $fallbackTestRequired = !($naMap[$naKey]['test_na'] ?? false);
-                $stuCurr = $studentCurriculum[$hid] ?? null;
-                $closingForm = $stuCurr !== null
-                    ? ($closingFormByCurr[$stuCurr . '|' . $s . '|' . $sem] ?? null)
-                    : null;
-                [$oskiRequired, $testRequired] = $this->resolveAttemptRequirements(
-                    $closingForm,
-                    $fallbackOskiRequired,
-                    $fallbackTestRequired
-                );
+                $oskiRequired = !($naMap[$naKey]['oski_na'] ?? false);
+                $testRequired = !($naMap[$naKey]['test_na'] ?? false);
 
                 // 1/2-urinish sanalari — muddati tugaganmi tekshirish uchun
                 $oskiDate = $naMap[$naKey]['oski_date'] ?? null;
@@ -3682,23 +3647,16 @@ class AcademicScheduleController extends Controller
                     $newTestDate = null;
                     $newTestNa = true;
                 }
-                [$needsOski, $needsTest] = $this->resolveAttemptRequirements($cf, !$newOskiNa, !$newTestNa);
 
                 if ($record->exists && !$canEditSaved && $rowUrinish === 1) {
                     // Faqat 1-urinish uchun mavjud sanani himoya qilamiz
-                    if ($needsOski && ($record->oski_date || $record->oski_na)) {
+                    if ($record->oski_date || $record->oski_na) {
                         $newOskiDate = $record->oski_date?->format('Y-m-d');
                         $newOskiNa = (bool) $record->oski_na;
-                    } elseif (!$needsOski) {
-                        $newOskiDate = null;
-                        $newOskiNa = true;
                     }
-                    if ($needsTest && ($record->test_date || $record->test_na)) {
+                    if ($record->test_date || $record->test_na) {
                         $newTestDate = $record->test_date?->format('Y-m-d');
                         $newTestNa = (bool) $record->test_na;
-                    } elseif (!$needsTest) {
-                        $newTestDate = null;
-                        $newTestNa = true;
                     }
                 }
 
@@ -9415,24 +9373,6 @@ class AcademicScheduleController extends Controller
             }
             return $expanded;
         })->filter(fn($items) => $items->isNotEmpty());
-    }
-
-    /**
-     * closing_form bo'yicha qaysi imtihon turi talab qilinishini aniqlaydi.
-     * closing_form mavjud bo'lsa kanonik manba shu; bo'lmasa eski oski_na/test_na
-     * bayroqlariga tayanamiz.
-     *
-     * @return array{0: bool, 1: bool} [needsOski, needsTest]
-     */
-    private function resolveAttemptRequirements(?string $closingForm, bool $fallbackOskiRequired = true, bool $fallbackTestRequired = true): array
-    {
-        return match ($closingForm) {
-            'oski' => [true, false],
-            'test' => [false, true],
-            'oski_test' => [true, true],
-            'normativ', 'sinov', 'none' => [false, false],
-            default => [$fallbackOskiRequired, $fallbackTestRequired],
-        };
     }
 
     /**

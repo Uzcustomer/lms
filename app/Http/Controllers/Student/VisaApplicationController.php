@@ -96,7 +96,18 @@ class VisaApplicationController extends Controller
             'passport_pdf'    => 'required|file|mimes:pdf|max:2048',     // 2 MB
             'application_pdf' => 'required|file|mimes:pdf|max:2048',     // 2 MB
         ], [
+            'birth_date.date'       => 'Date of birth is not valid.',
+            'passport_series.required' => 'Passport series is required.',
+            'passport_series.regex' => 'Passport series must contain only letters.',
+            'passport_number_value.required' => 'Passport number is required.',
+            'passport_number_value.regex' => 'Passport number must contain only digits.',
+            'phone_number.required' => 'Phone number is required.',
+            'messenger_username.required' => 'Messenger username is required.',
+            'passport_pdf.required' => 'Please upload your passport copies (PDF).',
+            'passport_pdf.mimes'    => 'Passport file must be a PDF.',
             'passport_pdf.max'    => 'Passport PDF must not exceed 2 MB.',
+            'application_pdf.required' => 'Please upload the filled application form (PDF).',
+            'application_pdf.mimes' => 'Application file must be a PDF.',
             'application_pdf.max' => 'Application PDF must not exceed 2 MB.',
         ]);
 

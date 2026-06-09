@@ -132,7 +132,8 @@
         .va-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
 
         .va-input.va-input-error,
-        .iti.va-input-error input { /* ehtiyot uchun */
+        .iti.va-input-error input,
+        .va-dropzone.va-input-error { /* ehtiyot uchun */
             border-color: #ef4444 !important;
             background: #fef2f2 !important;
             box-shadow: 0 0 0 4px rgba(239,68,68,0.12) !important;
@@ -260,6 +261,7 @@
                             <label class="va-label">Student ID <span class="va-required">*</span></label>
                             <input type="text" name="student_number" class="va-input" required
                                    value="{{ $student->student_id_number ?? '' }}">
+                            <div class="va-error-text @if($errors->has('student_number')) show @endif" data-error-for="student_number">{{ $errors->first('student_number') }}</div>
                         </div>
 
                         <div>
@@ -267,12 +269,14 @@
                             <input type="text" name="last_name" class="va-input" required
                                    value="{{ old('last_name', mb_strtoupper($student->second_name ?? '')) }}">
                             <div class="va-hint">If you do not have a last name, write your father's name.</div>
+                            <div class="va-error-text @if($errors->has('last_name')) show @endif" data-error-for="last_name">{{ $errors->first('last_name') }}</div>
                         </div>
 
                         <div>
                             <label class="va-label">First name <span class="va-required">*</span></label>
                             <input type="text" name="first_name" class="va-input" required
                                    value="{{ old('first_name', mb_strtoupper($student->first_name ?? '')) }}">
+                            <div class="va-error-text @if($errors->has('first_name')) show @endif" data-error-for="first_name">{{ $errors->first('first_name') }}</div>
                         </div>
 
                         <div>
@@ -280,6 +284,7 @@
                             <input type="text" name="middle_name" class="va-input" required
                                    value="{{ old('middle_name', mb_strtoupper($student->third_name ?? '')) }}">
                             <div class="va-hint">Write "—" if you don't have one.</div>
+                            <div class="va-error-text @if($errors->has('middle_name')) show @endif" data-error-for="middle_name">{{ $errors->first('middle_name') }}</div>
                         </div>
 
                         <div>
@@ -294,6 +299,7 @@
                             @endphp
                             <input type="text" name="birth_date" id="birthdate" class="va-input" placeholder="dd.mm.yyyy" required
                                    value="{{ $birthVal }}">
+                            <div class="va-error-text @if($errors->has('birth_date')) show @endif" data-error-for="birth_date">{{ $errors->first('birth_date') }}</div>
                         </div>
 
                         <div class="sm:col-span-2">
@@ -318,11 +324,13 @@
                                     <label class="va-label">Passport series <span class="va-required">*</span></label>
                                     <input type="text" name="passport_series" id="passport_series" class="va-input" required maxlength="10"
                                            value="{{ mb_strtoupper($passportSeries) }}" placeholder="AA">
+                                    <div class="va-error-text @if($errors->has('passport_series')) show @endif" data-error-for="passport_series">{{ $errors->first('passport_series') }}</div>
                                 </div>
                                 <div class="col-span-7">
                                     <label class="va-label">Passport number <span class="va-required">*</span></label>
                                     <input type="text" name="passport_number_value" id="passport_number_value" class="va-input" required maxlength="40"
                                            value="{{ preg_replace('/\D+/', '', (string) $passportNumberValue) }}" placeholder="1234567" inputmode="numeric">
+                                    <div class="va-error-text @if($errors->has('passport_number_value')) show @endif" data-error-for="passport_number_value">{{ $errors->first('passport_number_value') }}</div>
                                 </div>
                             </div>
                             <input type="hidden" name="passport_number" id="passport_number"
@@ -333,7 +341,7 @@
                             <label class="va-label">Phone number <span class="va-required">*</span></label>
                             <input type="tel" id="phone_number" name="phone_number" class="va-input" required style="text-transform:none;">
                             <div class="va-hint" id="phoneHint">Enter your contact phone number.</div>
-                            <div class="va-error-text" id="phoneError">Invalid phone number format.</div>
+                            <div class="va-error-text @if($errors->has('phone_number')) show @endif" id="phoneError" data-error-for="phone_number">{{ $errors->first('phone_number') ?: 'Invalid phone number format.' }}</div>
                         </div>
 
                         <div class="sm:col-span-2">
@@ -352,6 +360,7 @@
                                    placeholder="@username" style="text-transform:none;">
                             <input type="hidden" name="messenger_type" id="messenger_type" value="telegram">
                             <div class="va-hint">Enter your Telegram or WhatsApp username (e.g. @yourname).</div>
+                            <div class="va-error-text @if($errors->has('messenger_username')) show @endif" data-error-for="messenger_username">{{ $errors->first('messenger_username') }}</div>
                         </div>
                     </div>
 
@@ -369,6 +378,7 @@
                             </div>
                             <input type="file" name="passport_pdf" id="passport_pdf" accept="application/pdf" required class="va-file-hidden">
                             <div class="va-hint">First and last page (where your living address is written) in one PDF. Max 2 MB.</div>
+                            <div class="va-error-text @if($errors->has('passport_pdf')) show @endif" data-error-for="passport_pdf">{{ $errors->first('passport_pdf') }}</div>
                         </div>
 
                         <div>
@@ -383,6 +393,7 @@
                             </div>
                             <input type="file" name="application_pdf" id="application_pdf" accept="application/pdf" required class="va-file-hidden">
                             <div class="va-hint">PDF only, max 2 MB.</div>
+                            <div class="va-error-text @if($errors->has('application_pdf')) show @endif" data-error-for="application_pdf">{{ $errors->first('application_pdf') }}</div>
                         </div>
                     </div>
 
@@ -455,6 +466,14 @@
 
         // Phone — intl-tel-input
         const phoneEl = document.getElementById('phone_number');
+        const phoneError = document.getElementById('phoneError');
+        const phoneHint = document.getElementById('phoneHint');
+        const passDropzone = document.getElementById('passDropzone');
+        const appDropzone = document.getElementById('appDropzone');
+        const passportSeriesEl = document.getElementById('passport_series');
+        const passportNumberValueEl = document.getElementById('passport_number_value');
+        const passportHiddenEl = document.getElementById('passport_number');
+        const initialErrors = @json($errors->toArray());
         const iti = window.intlTelInput(phoneEl, {
             initialCountry: "uz",
             separateDialCode: true,
@@ -468,8 +487,6 @@
         });
 
         // Telefon raqamni real-time validatsiya — yozayotganda qizilga aylantirish
-        const phoneError = document.getElementById('phoneError');
-        const phoneHint = document.getElementById('phoneHint');
         const errCodes = {
             0: 'Invalid phone number format.',
             1: 'Selected country does not match the number.',
@@ -507,7 +524,7 @@
         phoneEl.addEventListener('countrychange', vaCheckPhone);
 
         // Date of birth
-        flatpickr("#birthdate", { dateFormat: "Y-m-d", altInput: true, altFormat: "d.m.Y", allowInput: true });
+        const birthdatePicker = flatpickr("#birthdate", { dateFormat: "Y-m-d", altInput: true, altFormat: "d.m.Y", allowInput: true });
 
         // Messenger toggle (Telegram / WhatsApp)
         window.vaSetMessenger = function (type) {
@@ -518,9 +535,6 @@
         };
 
         // PDF dropzone wiring — bir xil mantiq ikkala input uchun
-        const passportSeriesEl = document.getElementById('passport_series');
-        const passportNumberValueEl = document.getElementById('passport_number_value');
-        const passportHiddenEl = document.getElementById('passport_number');
         function vaSyncPassportNumber() {
             if (!passportHiddenEl) return;
             const series = (passportSeriesEl?.value || '').toUpperCase().replace(/[^A-Z]/g, '');
@@ -529,34 +543,47 @@
             if (passportNumberValueEl) passportNumberValueEl.value = number;
             passportHiddenEl.value = (series + number).trim();
         }
-        passportSeriesEl?.addEventListener('input', vaSyncPassportNumber);
-        passportNumberValueEl?.addEventListener('input', vaSyncPassportNumber);
+        passportSeriesEl?.addEventListener('input', function () {
+            vaSyncPassportNumber();
+            clearFieldError('passport_series');
+        });
+        passportNumberValueEl?.addEventListener('input', function () {
+            vaSyncPassportNumber();
+            clearFieldError('passport_number_value');
+        });
         vaSyncPassportNumber();
 
         function vaWireDropzone(zoneId, inputId, maxBytes) {
             const zone = document.getElementById(zoneId);
             const input = document.getElementById(inputId);
             if (!zone || !input) return;
+            const defaultMarkup = zone.innerHTML;
+            const fieldName = input.name;
 
             input.addEventListener('change', function () {
                 const file = this.files[0];
                 if (!file) {
                     zone.classList.remove('has-file');
+                    zone.innerHTML = defaultMarkup;
+                    clearFieldError(fieldName);
                     return;
                 }
                 if (file.type !== 'application/pdf') {
-                    vaToast('Only PDF files are allowed');
+                    setFieldError(fieldName, 'Only PDF files are allowed.');
                     this.value = '';
                     zone.classList.remove('has-file');
+                    zone.innerHTML = defaultMarkup;
                     return;
                 }
                 if (file.size > maxBytes) {
-                    vaToast('File too large. Max ' + Math.round(maxBytes / 1024) + ' KB allowed.');
+                    setFieldError(fieldName, 'File too large. Max ' + Math.round(maxBytes / 1024) + ' KB allowed.');
                     this.value = '';
                     zone.classList.remove('has-file');
+                    zone.innerHTML = defaultMarkup;
                     return;
                 }
                 // Preview — pdf.js bilan
+                clearFieldError(fieldName);
                 const fr = new FileReader();
                 fr.onload = function () {
                     const arr = new Uint8Array(this.result);
@@ -582,6 +609,109 @@
         }
         vaWireDropzone('passDropzone', 'passport_pdf', 2 * 1024 * 1024);   // 2 MB
         vaWireDropzone('appDropzone',  'application_pdf', 2 * 1024 * 1024); // 2 MB
+
+        function getErrorEl(name) {
+            return form.querySelector('[data-error-for="' + name + '"]');
+        }
+
+        function getFieldTarget(name) {
+            if (name === 'birth_date') {
+                return birthdatePicker?.altInput || form.elements[name];
+            }
+            return form.elements[name] || document.getElementById(name);
+        }
+
+        function getFieldFocusTarget(name) {
+            if (name === 'birth_date') {
+                return birthdatePicker?.altInput || form.elements[name];
+            }
+            if (name === 'passport_pdf') {
+                return passDropzone;
+            }
+            if (name === 'application_pdf') {
+                return appDropzone;
+            }
+            return getFieldTarget(name);
+        }
+
+        function clearFieldError(name) {
+            const target = getFieldTarget(name);
+            const errorEl = getErrorEl(name);
+            target?.classList.remove('va-input-error');
+            if (name === 'passport_pdf') {
+                passDropzone?.classList.remove('va-input-error');
+            }
+            if (name === 'application_pdf') {
+                appDropzone?.classList.remove('va-input-error');
+            }
+            if (errorEl) {
+                errorEl.classList.remove('show');
+                errorEl.textContent = name === 'phone_number' ? 'Invalid phone number format.' : '';
+            }
+            if (name === 'phone_number') {
+                phoneHint.style.display = '';
+            }
+        }
+
+        function setFieldError(name, message) {
+            const target = getFieldTarget(name);
+            const errorEl = getErrorEl(name);
+            if (name === 'passport_pdf') {
+                passDropzone?.classList.add('va-input-error');
+            } else if (name === 'application_pdf') {
+                appDropzone?.classList.add('va-input-error');
+            } else {
+                target?.classList.add('va-input-error');
+            }
+            if (errorEl) {
+                errorEl.textContent = message;
+                errorEl.classList.add('show');
+            }
+            if (name === 'phone_number') {
+                phoneHint.style.display = 'none';
+            }
+        }
+
+        function clearAllFieldErrors() {
+            [
+                'student_number',
+                'last_name',
+                'first_name',
+                'middle_name',
+                'birth_date',
+                'passport_series',
+                'passport_number_value',
+                'phone_number',
+                'messenger_username',
+                'passport_pdf',
+                'application_pdf'
+            ].forEach(clearFieldError);
+        }
+
+        function applyErrors(errors) {
+            Object.entries(errors).forEach(([name, message]) => {
+                if (!message) return;
+                setFieldError(name, Array.isArray(message) ? message[0] : String(message));
+            });
+        }
+
+        function focusFirstError(errors) {
+            const firstField = Object.keys(errors)[0];
+            if (!firstField) return;
+            const target = getFieldFocusTarget(firstField);
+            target?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            if (typeof target?.focus === 'function') {
+                target.focus({ preventScroll: true });
+            }
+        }
+
+        function getPhoneValidationMessage() {
+            const raw = phoneEl.value.trim();
+            if (!raw) return null;
+            if (iti.isValidNumber()) return null;
+            const errCode = iti.getValidationError ? iti.getValidationError() : 0;
+            return errCodes[errCode] || errCodes[0];
+        }
 
         function vaToast(msg) {
             const t = document.getElementById('errorToast');
@@ -630,20 +760,82 @@
             return null;
         }
 
+        function vaValidateForm(formEl) {
+            const get = name => (formEl.elements[name]?.value || '').trim();
+            const errors = {};
+            const addError = (name, message) => {
+                if (!errors[name]) errors[name] = message;
+            };
+
+            [
+                ['student_number', 'Student ID is required.'],
+                ['last_name', 'Last name is required.'],
+                ['first_name', 'First name is required.'],
+                ['middle_name', 'Middle name is required (write "—" if you do not have one).'],
+                ['birth_date', 'Date of birth is required.'],
+            ].forEach(([name, message]) => {
+                if (!get(name)) addError(name, message);
+            });
+
+            const passportSeries = (get('passport_series') || '').toUpperCase().replace(/[^A-Z]/g, '');
+            const passportNumber = (get('passport_number_value') || '').replace(/\D+/g, '');
+            const messengerUsername = (get('messenger_username') || '').replace(/^@+/, '').trim();
+
+            if (!passportSeries) addError('passport_series', 'Passport series is required.');
+            else if (!/^[A-Z]+$/.test(passportSeries)) addError('passport_series', 'Passport series must contain only letters.');
+
+            if (!passportNumber) addError('passport_number_value', 'Passport number is required.');
+            else if (!/^[0-9]+$/.test(passportNumber)) addError('passport_number_value', 'Passport number must contain only digits.');
+
+            if (!messengerUsername) addError('messenger_username', 'Messenger username is required.');
+
+            const phoneMessage = !phoneEl.value.trim() ? 'Phone number is required.' : getPhoneValidationMessage();
+            if (phoneMessage) addError('phone_number', phoneMessage);
+
+            const passFile = document.getElementById('passport_pdf').files[0];
+            if (!passFile) addError('passport_pdf', 'Please upload your passport copies (PDF).');
+            else if (passFile.type !== 'application/pdf') addError('passport_pdf', 'Passport file must be a PDF.');
+            else if (passFile.size > 2 * 1024 * 1024) addError('passport_pdf', 'Passport PDF is larger than 2 MB.');
+
+            const appFile = document.getElementById('application_pdf').files[0];
+            if (!appFile) addError('application_pdf', 'Please upload the filled application form (PDF).');
+            else if (appFile.type !== 'application/pdf') addError('application_pdf', 'Application file must be a PDF.');
+            else if (appFile.size > 2 * 1024 * 1024) addError('application_pdf', 'Application PDF is larger than 2 MB.');
+
+            return errors;
+        }
+
+        ['student_number', 'last_name', 'first_name', 'middle_name', 'messenger_username'].forEach(name => {
+            form.elements[name]?.addEventListener('input', function () {
+                clearFieldError(name);
+            });
+        });
+        form.elements.birth_date?.addEventListener('change', function () {
+            clearFieldError('birth_date');
+        });
+        birthdatePicker?.altInput?.addEventListener('input', function () {
+            clearFieldError('birth_date');
+        });
+        birthdatePicker?.altInput?.addEventListener('blur', function () {
+            clearFieldError('birth_date');
+        });
+        phoneEl.addEventListener('input', function () {
+            if (!phoneEl.value.trim()) {
+                clearFieldError('phone_number');
+            }
+        });
+
         // Form submit
         form.setAttribute('novalidate', 'novalidate'); // O'zimiz validate qilamiz
         form.addEventListener('submit', function (e) {
             e.preventDefault();
+            clearAllFieldErrors();
 
-            const localErr = vaValidateForm(this);
-            if (localErr) {
-                vaToast(localErr);
-                return;
-            }
-            if (!iti.isValidNumber()) {
-                vaCheckPhone();
-                vaToast(phoneError.textContent || 'Please enter a valid phone number.');
-                phoneEl.focus();
+            const localErrors = vaValidateForm(this);
+            if (Object.keys(localErrors).length > 0) {
+                applyErrors(localErrors);
+                focusFirstError(localErrors);
+                vaToast('Please fix the highlighted fields.');
                 return;
             }
             const btn = document.getElementById('submitBtn');
@@ -673,12 +865,15 @@
                 if (!r.ok) {
                     // Laravel 422 — barcha field xatolarini yig'amiz
                     if (data && data.errors && typeof data.errors === 'object') {
-                        const msgs = [];
+                        clearAllFieldErrors();
+                        const inlineErrors = {};
                         for (const k of Object.keys(data.errors)) {
                             const arr = data.errors[k];
-                            msgs.push(Array.isArray(arr) ? arr[0] : String(arr));
+                            inlineErrors[k] = Array.isArray(arr) ? arr[0] : String(arr);
                         }
-                        throw new Error(msgs.join(' · '));
+                        applyErrors(inlineErrors);
+                        focusFirstError(inlineErrors);
+                        throw new Error('Please fix the highlighted fields.');
                     }
                     throw new Error((data && (data.message || data.error)) || ('HTTP ' + r.status));
                 }
@@ -693,6 +888,10 @@
                 btn.textContent = origText;
             });
         });
+
+        if (initialErrors && Object.keys(initialErrors).length > 0) {
+            applyErrors(initialErrors);
+        }
     })();
     // Modal va toast hammaga umumiy — formasiz ham vaCloseSuccess/vaToast kerak emas,
     // shu sababli IIFE ichidan tashqariga global qilamiz:

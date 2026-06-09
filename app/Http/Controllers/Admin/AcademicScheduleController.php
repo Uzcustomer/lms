@@ -1313,16 +1313,12 @@ class AcademicScheduleController extends Controller
 
         // semester_code → education_year xaritasi
         $semYearMap = [];
-        $semLevelMap = [];
         try {
             $rows = DB::table('semesters')
                 ->whereIn('semester_code', $allSemCodes)
-                ->select('semester_code', 'education_year', 'level_code')
+                ->select('semester_code', 'education_year')
                 ->get();
-            foreach ($rows as $r) {
-                $semYearMap[$r->semester_code] = $r->education_year;
-                $semLevelMap[$r->semester_code] = (string) ($r->level_code ?? '');
-            }
+            foreach ($rows as $r) $semYearMap[$r->semester_code] = $r->education_year;
         } catch (\Throwable $e) {}
         $relevantYears = array_values(array_unique(array_filter($semYearMap)));
 
@@ -1345,12 +1341,9 @@ class AcademicScheduleController extends Controller
                 // Aniq xaritalash uchun yana bir marta o'qiymiz
                 $rows = DB::table('semesters')
                     ->whereIn('semester_code', $yearSemCodes)
-                    ->select('semester_code', 'education_year', 'level_code')
+                    ->select('semester_code', 'education_year')
                     ->get();
-                foreach ($rows as $r) {
-                    $semYearMap[$r->semester_code] = $r->education_year;
-                    $semLevelMap[$r->semester_code] = (string) ($r->level_code ?? '');
-                }
+                foreach ($rows as $r) $semYearMap[$r->semester_code] = $r->education_year;
             } catch (\Throwable $e) {}
         }
 
@@ -1651,62 +1644,6 @@ class AcademicScheduleController extends Controller
                 foreach ($examLists2 as $k => $list) {
                     $examMap2[$k] = count($list) ? array_sum($list) / count($list) : null;
                 }
-        }
-        } catch (\Throwable $e) {}
-
-        // 2c) OSKI / Test attempt=3 baholari (12b) — jurnaldagi 3-urinish ✓
-        // badge'ini YN sahifasida ham "o'tgan" deb tanish uchun kerak.
-        $examMap3 = [];
-        $examLists3 = [];
-        try {
-            if ($hasAttemptCol) {
-                $rows = DB::table('student_grades')
-                    ->whereNull('deleted_at')
-                    ->whereIn('student_hemis_id', $allStudentHids)
-                    ->whereIn('subject_id', $allSubjectIds)
-                    ->whereIn('semester_code', $allSemCodes)
-                    ->whereIn('training_type_code', [101, 102, 103])
-                    ->where('attempt', 3)
-                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'training_type_code', 'grade', 'retake_grade', 'quiz_result_id', 'lesson_date')
-                    ->get();
-
-                $quizIds3 = $rows->where('training_type_code', 103)->pluck('quiz_result_id')->filter()->unique()->values()->all();
-                $quizTypeMap3 = [];
-                if (!empty($quizIds3)) {
-                    $quizTypeMap3 = DB::table('hemis_quiz_results')->whereIn('id', $quizIds3)->pluck('quiz_type', 'id')->toArray();
-                }
-                $oskiTypes3 = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
-                $testTypes3 = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
-
-                foreach ($rows as $r) {
-                    $rg = $studentGroup[$r->student_hemis_id] ?? null;
-                    $rStart = ($rg !== null ? ($yearStartByGroup[(string) $rg] ?? null) : null)
-                        ?? $yearStartFallback;
-                    if ($rStart && $r->lesson_date
-                        && substr((string) $r->lesson_date, 0, 10) < substr((string) $rStart, 0, 10)) {
-                        continue;
-                    }
-                    $typeCode = (int) $r->training_type_code;
-                    if ($typeCode === 103) {
-                        if (!$r->quiz_result_id) continue;
-                        $quizType = $quizTypeMap3[$r->quiz_result_id] ?? null;
-                        if (in_array($quizType, $oskiTypes3, true)) {
-                            $typeCode = 101;
-                        } elseif (in_array($quizType, $testTypes3, true)) {
-                            $typeCode = 102;
-                        } else {
-                            continue;
-                        }
-                    }
-
-                    $effective = $r->retake_grade ?? $r->grade;
-                    if ($effective === null) continue;
-                    $k = $r->student_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code . '|' . $typeCode;
-                    $examLists3[$k][] = (float) $effective;
-                }
-                foreach ($examLists3 as $k => $list) {
-                    $examMap3[$k] = count($list) ? array_sum($list) / count($list) : null;
-                }
             }
         } catch (\Throwable $e) {}
 
@@ -1782,8 +1719,6 @@ class AcademicScheduleController extends Controller
                 $test = $examMap[$hid . '|' . $s . '|' . $sem . '|102'] ?? null;
                 $oski2 = $examMap2[$hid . '|' . $s . '|' . $sem . '|101'] ?? null;
                 $test2 = $examMap2[$hid . '|' . $s . '|' . $sem . '|102'] ?? null;
-                $oski3 = $examMap3[$hid . '|' . $s . '|' . $sem . '|101'] ?? null;
-                $test3 = $examMap3[$hid . '|' . $s . '|' . $sem . '|102'] ?? null;
 
                 $absentOff = $davomatMap[$hid . '|' . $s . '|' . $sem] ?? 0;
                 // Auditoriya soatini talabaning o'z o'quv rejasidan olamiz —
@@ -1898,85 +1833,16 @@ class AcademicScheduleController extends Controller
                 // talaba xato 2/3-urinishga (qarzga) tushib qolardi.
                 $oskiBest = max(
                     $oskiNum !== null ? $oskiNum : -1.0,
-                    (isset($oski2Num) && $oski2Num !== null) ? $oski2Num : -1.0,
-                    $oski3 !== null ? (float) $oski3 : -1.0
+                    (isset($oski2Num) && $oski2Num !== null) ? $oski2Num : -1.0
                 );
                 $testBest = max(
                     $testNum !== null ? $testNum : -1.0,
-                    (isset($test2Num) && $test2Num !== null) ? $test2Num : -1.0,
-                    $test3 !== null ? (float) $test3 : -1.0
+                    (isset($test2Num) && $test2Num !== null) ? $test2Num : -1.0
                 );
                 $oskiOk = !$oskiRequired || $oskiBest >= $minLimit;
                 $testOk = !$testRequired || $testBest >= $minLimit;
                 $fullyPassed = !$isPullik && $oskiOk && $testOk;
-
-                // Jurnaldagi badge bilan sinxron "o'tgan" aniqlash: 1/2/3-urinish
-                // stsenariylarini quramiz va ✓ badge bo'ladigan stage'larni
-                // YN sahifasida ham "imtihondan o'tgan" deb hisoblaymiz.
-                $weights = match (true) {
-                    $oskiRequired && $testRequired => ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15],
-                    $oskiRequired => ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 30, 'test' => 0],
-                    $testRequired => ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30],
-                    default => ['jn' => 80, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 0],
-                };
-                $svc = \App\Services\YnAttemptStatusService::class;
-                $jnForStage = (int) ($jn ?? 0);
-                $mtForStage = (int) ($mt ?? 0);
-                $levelCode = $semLevelMap[$sem] ?? '';
-                $mainScenario = $svc::buildScenario(
-                    $jnForStage, $mtForStage, null, $oskiNum, $testNum, $davomatPct,
-                    $weights['jn'], $weights['mt'], $weights['on'], $weights['oski'], $weights['test'], $levelCode
-                );
-                $aScenario = ($oski2 !== null || $test2 !== null)
-                    ? $svc::buildScenario(
-                        $jnForStage, $mtForStage, null,
-                        $oski2 !== null ? (float) $oski2 : $oskiNum,
-                        $test2 !== null ? (float) $test2 : $testNum,
-                        $davomatPct,
-                        $weights['jn'], $weights['mt'], $weights['on'], $weights['oski'], $weights['test'], $levelCode
-                    )
-                    : null;
-                $bScenario = ($oski3 !== null || $test3 !== null)
-                    ? $svc::buildScenario(
-                        $jnForStage, $mtForStage, null,
-                        $oski3 !== null ? (float) $oski3 : ($oski2 !== null ? (float) $oski2 : $oskiNum),
-                        $test3 !== null ? (float) $test3 : ($test2 !== null ? (float) $test2 : $testNum),
-                        $davomatPct,
-                        $weights['jn'], $weights['mt'], $weights['on'], $weights['oski'], $weights['test'], $levelCode
-                    )
-                    : null;
-                $stageKey = $svc::determineStage($mainScenario, null, $aScenario, null, $bScenario, null)['stage'];
-                $oneUrinishEnded = (!$oskiRequired || ($oskiDate !== null && (string) $oskiDate < $today))
-                    && (!$testRequired || ($testDate !== null && (string) $testDate < $today));
-                $isDavomatFail = ($mainScenario['v'] ?? null) === -3;
-                if (
-                    !$oneUrinishEnded
-                    && !$isDavomatFail
-                    && !in_array($stageKey, [$svc::STAGE_ASOSIY_PASSED, $svc::STAGE_QOSHIMCHA_PASSED], true)
-                ) {
-                    $stageKey = $svc::STAGE_IN_PROGRESS;
-                }
-                $oskiResitDone = !$oskiRequired || ($oskiResitDate !== null && (string) $oskiResitDate <= $today);
-                $testResitDone = !$testRequired || ($testResitDate !== null && (string) $testResitDate <= $today);
-                $twoUrinishEnded = $oskiResitDone && $testResitDone;
-                $hasAttempt2Stage = $aScenario !== null;
-                if ($hasAttempt2Stage || $twoUrinishEnded) {
-                    if ($stageKey === $svc::STAGE_IN_12A) {
-                        $stageKey = $svc::STAGE_IN_12B;
-                    } elseif ($stageKey === $svc::STAGE_IN_12A_PULLIK) {
-                        $stageKey = $svc::STAGE_IN_12B_PULLIK;
-                    }
-                }
-                $badgePassed = in_array($stageKey, [
-                    $svc::STAGE_ASOSIY_PASSED,
-                    $svc::STAGE_QOSHIMCHA_PASSED,
-                    $svc::STAGE_12A_PASSED,
-                    $svc::STAGE_12A_QOSHIMCHA_PASSED,
-                    $svc::STAGE_12B_PASSED,
-                    $svc::STAGE_12B_QOSHIMCHA_PASSED,
-                ], true);
-                $passedByBadge = $fullyPassed || $badgePassed;
-                if ($passedByBadge) {
+                if ($fullyPassed) {
                     $failed1 = false;
                     $failed2 = false;
                 }
@@ -1988,7 +1854,7 @@ class AcademicScheduleController extends Controller
                     'failed2' => $failed2,
                     'pullik' => $isPullik,
                     'held_back' => false,
-                    'passed' => $passedByBadge,
+                    'passed' => $fullyPassed,
                 ];
             }
         }

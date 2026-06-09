@@ -3955,11 +3955,15 @@
                     populateSelect('filter-specialty', data.specialties, values.specialty_id, true);
                     populateSelect('filter-level', data.levels, values.level_code, true);
                     populateSelect('filter-semester', data.semesters, values.semester_code, true);
-                    // Guruh va fan — AJAX natijasida joriy qiymat yo'q bo'lsa, qo'shib qo'yish
-                    if (currentGroupId && currentGroupName && !data.groups[currentGroupId]) {
+                    // Faqat HAQIQATDAN tanlangan joriy qiymatni saqlab qolamiz.
+                    // Aks holda kurs/semestr o'zgarganda eski guruh/fan sun'iy ravishda
+                    // ro'yxatda qolib, 2-kurs kabi filtrlar "ishlamayotgandek" ko'rinadi.
+                    if (values.group_id && String(values.group_id) === String(currentGroupId)
+                        && currentGroupName && !data.groups[currentGroupId]) {
                         data.groups[currentGroupId] = currentGroupName;
                     }
-                    if (currentSubjectId && currentSubjectName && !data.subjects[currentSubjectId]) {
+                    if (values.subject_id && String(values.subject_id) === String(currentSubjectId)
+                        && currentSubjectName && !data.subjects[currentSubjectId]) {
                         data.subjects[currentSubjectId] = currentSubjectName;
                     }
                     populateSelect('filter-group', data.groups, values.group_id, false);

@@ -4483,32 +4483,109 @@ class JournalController extends Controller
             ->pluck('name', 'specialty_hemis_id');
     }
 
+    /**
+     * Jurnal sahifasi uchun "joriy semestr" oynasi.
+     * HEMIS current flagidan ko'ra curriculum_weeks sanalari ishonchliroq.
+     */
+    private function journalCurrentSemesterWindowQuery()
+    {
+        return DB::table('curriculum_weeks')
+            ->select('semester_hemis_id')
+            ->groupBy('semester_hemis_id')
+            ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
+    }
+
     public function getLevelCodes(Request $request)
     {
-        $query = Semester::query();
+        $query = DB::table('semesters as s')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 's.curriculum_hemis_id')
+            ->join('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
 
+        $isOqituvchi = is_active_oqituvchi();
+        $teacherHemisId = $isOqituvchi ? get_teacher_hemis_id() : null;
+
+        if (!$isOqituvchi && $request->filled('education_type')) {
+            $query->where('c.education_type_code', $request->education_type);
+        }
         if ($request->filled('education_year')) {
-            $query->where('education_year', $request->education_year);
+            $query->where('c.education_year_code', $request->education_year);
+        }
+        if ($request->filled('faculty_id')) {
+            $facultyDeptHemisId = Department::where('id', $request->faculty_id)->value('department_hemis_id');
+            if ($facultyDeptHemisId) {
+                $query->where('g.department_hemis_id', $facultyDeptHemisId);
+            }
+        }
+        if ($request->filled('specialty_id')) {
+            $query->where('g.specialty_hemis_id', $request->specialty_id);
+        }
+        if ($request->get('current_semester') == '1') {
+            $query->whereIn('s.semester_hemis_id', $this->journalCurrentSemesterWindowQuery());
+        }
+        if ($isOqituvchi && $teacherHemisId) {
+            $query->whereIn('g.group_hemis_id', function ($sub) use ($teacherHemisId) {
+                $sub->select('group_id')
+                    ->from('schedules')
+                    ->where('employee_id', $teacherHemisId)
+                    ->where('education_year_current', true)
+                    ->whereNull('deleted_at');
+            });
         }
 
-        return $query->select('level_code', 'level_name')
-            ->groupBy('level_code', 'level_name')
-            ->orderBy('level_code')
+        return $query->select('s.level_code', 's.level_name')
+            ->groupBy('s.level_code', 's.level_name')
+            ->orderBy('s.level_code')
             ->get()
             ->pluck('level_name', 'level_code');
     }
 
     public function getSemesters(Request $request)
     {
-        $query = Semester::query();
+        $query = DB::table('semesters as s')
+            ->join('groups as g', 'g.curriculum_hemis_id', '=', 's.curriculum_hemis_id')
+            ->join('curricula as c', 'c.curricula_hemis_id', '=', 'g.curriculum_hemis_id')
+            ->where('g.department_active', true)
+            ->where('g.active', true);
+
+        $isOqituvchi = is_active_oqituvchi();
+        $teacherHemisId = $isOqituvchi ? get_teacher_hemis_id() : null;
 
         if ($request->filled('level_code')) {
-            $query->where('level_code', $request->level_code);
+            $query->where('s.level_code', $request->level_code);
+        }
+        if (!$isOqituvchi && $request->filled('education_type')) {
+            $query->where('c.education_type_code', $request->education_type);
+        }
+        if ($request->filled('education_year')) {
+            $query->where('c.education_year_code', $request->education_year);
+        }
+        if ($request->filled('faculty_id')) {
+            $facultyDeptHemisId = Department::where('id', $request->faculty_id)->value('department_hemis_id');
+            if ($facultyDeptHemisId) {
+                $query->where('g.department_hemis_id', $facultyDeptHemisId);
+            }
+        }
+        if ($request->filled('specialty_id')) {
+            $query->where('g.specialty_hemis_id', $request->specialty_id);
+        }
+        if ($request->get('current_semester') == '1') {
+            $query->whereIn('s.semester_hemis_id', $this->journalCurrentSemesterWindowQuery());
+        }
+        if ($isOqituvchi && $teacherHemisId) {
+            $query->whereIn('g.group_hemis_id', function ($sub) use ($teacherHemisId) {
+                $sub->select('group_id')
+                    ->from('schedules')
+                    ->where('employee_id', $teacherHemisId)
+                    ->where('education_year_current', true)
+                    ->whereNull('deleted_at');
+            });
         }
 
-        return $query->select('code', 'name')
-            ->groupBy('code', 'name')
-            ->orderBy('code')
+        return $query->select('s.code', 's.name')
+            ->groupBy('s.code', 's.name')
+            ->orderBy('s.code')
             ->get()
             ->pluck('name', 'code');
     }
@@ -4692,11 +4769,7 @@ class JournalController extends Controller
 
         // Joriy semestr bo'yicha filtrlash (curriculum_weeks sanalariga asoslangan)
         if ($request->get('current_semester') == '1') {
-            $currentSemesterHemisIds = DB::table('curriculum_weeks')
-                ->select('semester_hemis_id')
-                ->groupBy('semester_hemis_id')
-                ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= DATE_SUB(NOW(), INTERVAL 30 DAY)')
-                ->pluck('semester_hemis_id');
+            $currentSemesterHemisIds = $this->journalCurrentSemesterWindowQuery()->pluck('semester_hemis_id');
             $curriculaIds = Semester::whereIn('semester_hemis_id', $currentSemesterHemisIds)
                 ->pluck('curriculum_hemis_id');
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
@@ -4712,7 +4785,7 @@ class JournalController extends Controller
                 $semesterFilter->where('level_code', $request->level_code);
             }
             if ($request->get('current_semester') == '1') {
-                $semesterFilter->where('current', true);
+                $semesterFilter->whereIn('semester_hemis_id', $this->journalCurrentSemesterWindowQuery());
             }
             $curriculaIds = $semesterFilter->pluck('curriculum_hemis_id')->unique()->toArray();
 
@@ -5279,26 +5352,23 @@ class JournalController extends Controller
             ->orderBy('s.code')
             ->pluck('s.name', 's.code');
 
-        // 6. Guruh - semestr + yo'nalish + fakultet + fan (ikki tomonlama)
+        // 6. Guruh - kurs/semestr + yo'nalish + fakultet + fan (ikki tomonlama)
         $groupsQuery = DB::table('groups as g')
             ->where('g.department_active', true)
             ->where('g.active', true);
-        if ($request->filled('semester_code')) {
-            // Tanlangan semestr guruhning curriculumida current bo'lishi shart
+
+        if ($request->filled('semester_code') || $request->filled('level_code')) {
             $groupsQuery->whereExists(function ($sub) use ($request) {
                 $sub->select(DB::raw(1))
                     ->from('semesters as s2')
-                    ->whereColumn('s2.curriculum_hemis_id', 'g.curriculum_hemis_id')
-                    ->where('s2.code', $request->semester_code)
-                    ->where('s2.current', true);
-            });
-        } else {
-            // Semestr tanlanmagan - ixtiyoriy joriy semestri bor guruhlar
-            $groupsQuery->whereExists(function ($sub) {
-                $sub->select(DB::raw(1))
-                    ->from('semesters as s_cur')
-                    ->whereColumn('s_cur.curriculum_hemis_id', 'g.curriculum_hemis_id')
-                    ->where('s_cur.current', true);
+                    ->whereColumn('s2.curriculum_hemis_id', 'g.curriculum_hemis_id');
+
+                if ($request->filled('semester_code')) {
+                    $sub->where('s2.code', $request->semester_code);
+                }
+                if ($request->filled('level_code')) {
+                    $sub->where('s2.level_code', $request->level_code);
+                }
             });
         }
         if ($request->filled('specialty_id')) {
@@ -5327,21 +5397,20 @@ class JournalController extends Controller
             ->orderBy('g.name')
             ->pluck('g.name', 'g.id');
 
-        // 7. Fan - semestr + guruh (ikki tomonlama) + yo'nalish kontekst
+        // 7. Fan - kurs/semestr + guruh (ikki tomonlama) + yo'nalish kontekst
         $subjectsQuery = DB::table('curriculum_subjects as cs')
             ->join('groups as g', 'g.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+            ->join('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'cs.curricula_hemis_id')
+                    ->on('s.code', '=', 'cs.semester_code');
+            })
             ->where('g.department_active', true)
             ->where('g.active', true);
         if ($request->filled('semester_code')) {
             $subjectsQuery->where('cs.semester_code', $request->semester_code);
-            // Faqat joriy semestr fanlari (eski curriculumlarni chiqarmaslik uchun)
-            $subjectsQuery->whereExists(function ($sub) use ($request) {
-                $sub->select(DB::raw(1))
-                    ->from('semesters as s3')
-                    ->whereColumn('s3.curriculum_hemis_id', 'cs.curricula_hemis_id')
-                    ->where('s3.code', $request->semester_code)
-                    ->where('s3.current', true);
-            });
+        }
+        if ($request->filled('level_code')) {
+            $subjectsQuery->where('s.level_code', $request->level_code);
         }
         // Ikki tomonlama: guruh tanlansa, faqat o'sha guruh fanlari
         if ($request->filled('group_id')) {

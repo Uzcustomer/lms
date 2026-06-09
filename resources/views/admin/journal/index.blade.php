@@ -473,6 +473,22 @@
                 };
             }
 
+            function cascadeResetIndex(from) {
+                const chains = {
+                    education_type: ['specialty', 'level_code', 'semester_code', 'subject'],
+                    faculty: ['specialty', 'level_code', 'semester_code', 'subject'],
+                    specialty: ['level_code', 'semester_code', 'subject'],
+                    level_code: ['semester_code', 'subject'],
+                    semester_code: ['subject'],
+                };
+
+                (chains[from] || []).forEach(id => {
+                    if (id === 'specialty' || id === 'level_code' || id === 'semester_code' || id === 'subject') {
+                        resetDropdown('#' + id, 'Barchasi');
+                    }
+                });
+            }
+
             function refreshGroups() {
                 // Guruh AJAX select2 — har safar ochilganda yangi qidiruv
                 $('#group').val(null).trigger('change');
@@ -485,19 +501,56 @@
                 resetDropdown('#specialty', 'Barchasi');
                 populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', getFilterParams(), '#specialty');
             }
-
-            $('#education_type').change(function () { refreshSpecialties(); refreshSubjects(); refreshGroups(); autoSubmitForm(); });
-            $('#per_page').on('change', function() { autoSubmitForm(); });
-            $('#faculty').change(function () { refreshSpecialties(); refreshSubjects(); refreshGroups(); autoSubmitForm(); });
-            $('#department').change(function () { refreshSubjects(); refreshGroups(); autoSubmitForm(); });
-            $('#specialty').change(function () { refreshGroups(); autoSubmitForm(); });
-            $('#level_code').change(function () {
-                var lc = $(this).val();
+            function refreshLevels() {
+                resetDropdown('#level_code', 'Barchasi');
+                populateDropdown('{{ route("admin.journal.get-level-codes") }}', getFilterParams(), '#level_code');
+            }
+            function refreshSemesters() {
                 resetDropdown('#semester_code', 'Barchasi');
-                if (lc) populateDropdown('{{ route("admin.journal.get-semesters") }}', { level_code: lc }, '#semester_code');
-                refreshSubjects(); refreshGroups(); autoSubmitForm();
+                populateDropdown('{{ route("admin.journal.get-semesters") }}', getFilterParams(), '#semester_code');
+            }
+
+            $('#education_type').change(function () {
+                cascadeResetIndex('education_type');
+                refreshSpecialties();
+                refreshLevels();
+                refreshSemesters();
+                refreshSubjects();
+                refreshGroups();
+                autoSubmitForm();
             });
-            $('#semester_code').change(function () { refreshSubjects(); refreshGroups(); autoSubmitForm(); });
+            $('#per_page').on('change', function() { autoSubmitForm(); });
+            $('#faculty').change(function () {
+                cascadeResetIndex('faculty');
+                refreshSpecialties();
+                refreshLevels();
+                refreshSemesters();
+                refreshSubjects();
+                refreshGroups();
+                autoSubmitForm();
+            });
+            $('#department').change(function () { refreshSubjects(); refreshGroups(); autoSubmitForm(); });
+            $('#specialty').change(function () {
+                cascadeResetIndex('specialty');
+                refreshLevels();
+                refreshSemesters();
+                refreshSubjects();
+                refreshGroups();
+                autoSubmitForm();
+            });
+            $('#level_code').change(function () {
+                cascadeResetIndex('level_code');
+                refreshSemesters();
+                refreshSubjects();
+                refreshGroups();
+                autoSubmitForm();
+            });
+            $('#semester_code').change(function () {
+                cascadeResetIndex('semester_code');
+                refreshSubjects();
+                refreshGroups();
+                autoSubmitForm();
+            });
             $('#group').change(function () { autoSubmitForm(); });
             $('#subject').change(function () { refreshGroups(); autoSubmitForm(); });
 
@@ -506,10 +559,10 @@
                 populateDropdownUnique('{{ route("admin.journal.get-specialties") }}', p, '#specialty', () => {
                     if (selectedSpecialty) $('#specialty').val(selectedSpecialty).trigger('change.select2');
                 });
-                populateDropdown('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code', () => {
+                populateDropdown('{{ route("admin.journal.get-level-codes") }}', p, '#level_code', () => {
                     if (selectedLevelCode) $('#level_code').val(selectedLevelCode).trigger('change.select2');
                 });
-                populateDropdown('{{ route("admin.journal.get-semesters") }}', {}, '#semester_code', () => {
+                populateDropdown('{{ route("admin.journal.get-semesters") }}', p, '#semester_code', () => {
                     if (selectedSemesterCode) $('#semester_code').val(selectedSemesterCode).trigger('change.select2');
                 });
                 populateDropdownUnique('{{ route("admin.journal.get-subjects") }}', p, '#subject', () => {

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpWord\TemplateProcessor;
+use ZipArchive;
 
 class VisaApplicationController extends Controller
 {
@@ -45,11 +46,25 @@ class VisaApplicationController extends Controller
             ->pluck('c', 'status')
             ->all();
 
+        $internationalStudents = $this->internationalStudentsQuery()->whereNotNull('hemis_id');
+        $totalForeignCitizens = (clone $internationalStudents)->count();
+        $submittedApplications = VisaApplication::query()
+            ->whereNotNull('student_hemis_id')
+            ->whereIn('student_hemis_id', (clone $internationalStudents)->select('hemis_id'))
+            ->distinct()
+            ->count('student_hemis_id');
+        $notSubmittedApplications = max($totalForeignCitizens - $submittedApplications, 0);
+
         return view('admin.visa-applications.index', [
             'applications' => $applications,
             'counts'       => $counts,
             'status'       => $status,
             'showAll'      => $showAll,
+            'visaStats'    => [
+                'total_foreign_citizens' => $totalForeignCitizens,
+                'submitted_applications' => $submittedApplications,
+                'not_submitted'          => $notSubmittedApplications,
+            ],
         ]);
     }
 
@@ -156,6 +171,85 @@ class VisaApplicationController extends Controller
         $name .= '-' . now()->format('Ymd_His') . '.xlsx';
 
         return Excel::download(new VisaApplicationsExport($status, $ids), $name);
+    }
+
+    public function downloadDocuments(Request $request)
+    {
+        $data = $request->validate([
+            'ids'   => 'required|array|min:1',
+            'ids.*' => 'integer|exists:visa_applications,id',
+        ]);
+
+        if (!class_exists(ZipArchive::class)) {
+            abort(500, 'ZipArchive extension is not available on the server.');
+        }
+
+        $apps = VisaApplication::whereIn('id', $data['ids'])
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get();
+
+        if ($apps->isEmpty()) {
+            return back()->with('error', 'Tanlangan arizalar topilmadi.');
+        }
+
+        $tmp = tempnam(sys_get_temp_dir(), 'visa_docs_');
+        if ($tmp === false) {
+            abort(500, 'Temporary file could not be created.');
+        }
+
+        $zipPath = $tmp . '.zip';
+        @unlink($tmp);
+
+        $zip = new ZipArchive();
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            abort(500, 'ZIP file could not be created.');
+        }
+
+        $addedFiles = 0;
+        $folderCounts = [];
+
+        foreach ($apps as $app) {
+            $fullName = trim(implode(' ', array_filter([
+                $app->last_name,
+                $app->first_name,
+                $app->middle_name,
+            ])));
+
+            $baseFolder = $this->zipSafeName($fullName, 'student-' . $app->application_number);
+            $folderCounts[$baseFolder] = ($folderCounts[$baseFolder] ?? 0) + 1;
+            $folder = $folderCounts[$baseFolder] > 1
+                ? $baseFolder . ' (' . $folderCounts[$baseFolder] . ')'
+                : $baseFolder;
+
+            $documents = [
+                'passport.pdf'    => $app->passport_pdf_path,
+                'application.pdf' => $app->application_pdf_path,
+                'receipt.pdf'     => $app->receipt_pdf_path,
+            ];
+
+            foreach ($documents as $targetName => $path) {
+                if (!$path || !Storage::disk('local')->exists($path)) {
+                    continue;
+                }
+
+                $zip->addFile(Storage::disk('local')->path($path), $folder . '/' . $targetName);
+                $addedFiles++;
+            }
+        }
+
+        $zip->close();
+
+        if ($addedFiles === 0) {
+            @unlink($zipPath);
+            return back()->with('error', 'Tanlangan arizalarda yuklab olinadigan hujjatlar topilmadi.');
+        }
+
+        $filename = 'visa-documents-' . now()->format('Ymd_His') . '.zip';
+
+        return response()->download($zipPath, $filename, [
+            'Content-Type' => 'application/zip',
+        ])->deleteFileAfterSend(true);
     }
 
     /**
@@ -275,5 +369,21 @@ class VisaApplicationController extends Controller
                 'student_id'     => $student->id,
             ]);
         }
+    }
+
+    private function internationalStudentsQuery()
+    {
+        return Student::query()->where(function ($q) {
+            $q->where('group_name', 'like', 'xd%')
+                ->orWhere('citizenship_name', 'like', '%orijiy%');
+        });
+    }
+
+    private function zipSafeName(string $value, string $fallback): string
+    {
+        $value = preg_replace('/[\\\\\/:*?"<>|]+/u', ' ', $value);
+        $value = preg_replace('/\s+/u', ' ', trim((string) $value));
+
+        return $value !== '' ? $value : $fallback;
     }
 }

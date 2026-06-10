@@ -151,6 +151,109 @@ class VisaApplicationController extends Controller
             ->with('success', "Ariza #{$application->application_number} rad etildi.");
     }
 
+    public function statsList(string $type)
+    {
+        abort_unless(in_array($type, ['total', 'submitted', 'not_submitted'], true), 404);
+
+        $latestIds = VisaApplication::query()
+            ->selectRaw('MAX(id) as id')
+            ->groupBy('student_hemis_id')
+            ->pluck('id');
+
+        $internationalStudents = (clone $this->internationalStudentsQuery())
+            ->whereNotNull('hemis_id')
+            ->select(
+                'hemis_id',
+                'full_name',
+                'group_name',
+                'student_id_number',
+                'department_name',
+                'specialty_name',
+                'level_code',
+                'level_name'
+            )
+            ->orderBy('full_name')
+            ->get();
+
+        $latestApplications = VisaApplication::query()
+            ->whereIn('id', $latestIds)
+            ->whereNotNull('student_hemis_id')
+            ->get()
+            ->keyBy(fn (VisaApplication $app) => (string) $app->student_hemis_id);
+
+        $submittedHemisIds = VisaApplication::query()
+            ->whereNotNull('student_hemis_id')
+            ->whereIn('student_hemis_id', $internationalStudents->pluck('hemis_id'))
+            ->distinct()
+            ->pluck('student_hemis_id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+
+        $submittedLookup = array_fill_keys($submittedHemisIds, true);
+
+        $studentList = $internationalStudents->map(function (Student $student) use ($latestApplications) {
+            $latestApplication = $latestApplications->get((string) $student->hemis_id);
+
+            return [
+                'hemis_id'           => $student->hemis_id,
+                'full_name'          => $student->full_name,
+                'group_name'         => $student->group_name,
+                'student_id_number'  => $student->student_id_number,
+                'department_name'    => $student->department_name,
+                'specialty_name'     => $student->specialty_name,
+                'course_name'        => $student->level_name ?: ($student->level_code ? $student->level_code . '-kurs' : '—'),
+                'application_number' => $latestApplication?->application_number,
+                'application_status' => $latestApplication?->status,
+                'submitted_at'       => $latestApplication?->created_at?->format('d.m.Y H:i'),
+            ];
+        })->values();
+
+        $submittedStudents = $studentList
+            ->filter(fn (array $student) => isset($submittedLookup[(string) $student['hemis_id']]))
+            ->values();
+
+        $notSubmittedStudents = $studentList
+            ->filter(fn (array $student) => !isset($submittedLookup[(string) $student['hemis_id']]))
+            ->values();
+
+        $meta = [
+            'total' => [
+                'title' => 'Xorijiy fuqarolar umumiy ro‘yxati',
+                'count' => $studentList->count(),
+                'rows' => $studentList,
+                'theme' => ['bg' => '#eff6ff', 'fg' => '#0c4a6e', 'border' => '#bae6fd', 'table' => '#0f172a'],
+            ],
+            'submitted' => [
+                'title' => 'Visa application topshirganlar',
+                'count' => $submittedStudents->count(),
+                'rows' => $submittedStudents,
+                'theme' => ['bg' => '#ecfdf5', 'fg' => '#065f46', 'border' => '#a7f3d0', 'table' => '#047857'],
+            ],
+            'not_submitted' => [
+                'title' => 'Visa application topshirmaganlar',
+                'count' => $notSubmittedStudents->count(),
+                'rows' => $notSubmittedStudents,
+                'theme' => ['bg' => '#fff7ed', 'fg' => '#92400e', 'border' => '#fcd34d', 'table' => '#d97706'],
+            ],
+        ];
+
+        $statusMeta = [
+            'pending'   => ['label' => 'Kutilmoqda', 'bg' => '#fef3c7', 'fg' => '#92400e', 'border' => '#fde68a'],
+            'reviewing' => ['label' => 'Ko‘rilmoqda', 'bg' => '#dbeafe', 'fg' => '#1e40af', 'border' => '#bfdbfe'],
+            'approved'  => ['label' => 'Qabul qilindi', 'bg' => '#d1fae5', 'fg' => '#065f46', 'border' => '#a7f3d0'],
+            'rejected'  => ['label' => 'Rad etilgan', 'bg' => '#fee2e2', 'fg' => '#991b1b', 'border' => '#fecaca'],
+        ];
+
+        return view('admin.visa-applications.stats-list', [
+            'type' => $type,
+            'title' => $meta[$type]['title'],
+            'count' => $meta[$type]['count'],
+            'rows' => $meta[$type]['rows'],
+            'theme' => $meta[$type]['theme'],
+            'statusMeta' => $statusMeta,
+        ]);
+    }
+
     /**
      * Bir nechta arizani bir vaqtning o'zida boshqa bosqichga ko'chirish.
      */

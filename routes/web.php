@@ -427,6 +427,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('visa-applications')->name('visa-applications.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'index'])->name('index');
             Route::get('/export', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'export'])->name('export');
+            Route::get('/stats/{type}', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'statsList'])->name('stats-list');
             Route::post('/bulk-update', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'bulkUpdate'])->name('bulk-update');
             Route::post('/telex', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'telex'])->name('telex');
             Route::post('/download-documents', [\App\Http\Controllers\Admin\VisaApplicationController::class, 'downloadDocuments'])->name('download-documents');

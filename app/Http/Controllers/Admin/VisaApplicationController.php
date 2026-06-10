@@ -48,7 +48,16 @@ class VisaApplicationController extends Controller
 
         $internationalStudents = (clone $this->internationalStudentsQuery())
             ->whereNotNull('hemis_id')
-            ->select('hemis_id', 'full_name', 'group_name', 'student_id_number', 'department_name')
+            ->select(
+                'hemis_id',
+                'full_name',
+                'group_name',
+                'student_id_number',
+                'department_name',
+                'specialty_name',
+                'level_code',
+                'level_name'
+            )
             ->orderBy('full_name')
             ->get();
 
@@ -79,6 +88,8 @@ class VisaApplicationController extends Controller
                 'group_name'         => $student->group_name,
                 'student_id_number'  => $student->student_id_number,
                 'department_name'    => $student->department_name,
+                'specialty_name'     => $student->specialty_name,
+                'course_name'        => $student->level_name ?: ($student->level_code ? $student->level_code . '-kurs' : '—'),
                 'application_number' => $latestApplication?->application_number,
                 'application_status' => $latestApplication?->status,
                 'submitted_at'       => $latestApplication?->created_at?->format('d.m.Y H:i'),

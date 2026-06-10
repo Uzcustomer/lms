@@ -101,7 +101,7 @@
                      style="background:rgba(15,23,42,0.55);backdrop-filter:blur(5px);"
                      @click.self="statsModal = null">
                     <div class="h-screen w-full flex items-start justify-center p-4 sm:p-6">
-                        <div class="max-w-6xl w-full max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)] bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
+                        <div class="max-w-6xl w-full h-[calc(100vh-2rem)] sm:h-[calc(100vh-3rem)] min-h-0 bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col">
                     <div class="px-5 sm:px-6 py-4 border-b border-slate-200 flex items-start justify-between gap-4"
                          x-show="statsModal === 'total'"
                          style="background:linear-gradient(135deg,#eff6ff,#dbeafe);">

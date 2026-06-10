@@ -20,10 +20,7 @@
     @endphp
 
     <div class="py-6">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4"
-             x-data="{ statsModal: null }"
-             x-effect="document.documentElement.classList.toggle('overflow-hidden', !!statsModal); document.body.classList.toggle('overflow-hidden', !!statsModal);"
-             @keydown.escape.window="statsModal = null">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
 
             @if(session('success'))
                 <div class="bg-white rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
@@ -44,11 +41,9 @@
             @endif
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <button type="button"
-                        @click="statsModal = 'total'"
-                        :class="statsModal === 'total' ? 'ring-2 ring-sky-300 ring-offset-2' : ''"
-                        class="text-left rounded-2xl shadow-sm border border-sky-200 p-4 transition hover:-translate-y-0.5"
-                        style="background:linear-gradient(135deg,#eff6ff,#dbeafe);">
+                <a href="{{ route('admin.visa-applications.stats-list', ['type' => 'total']) }}"
+                   class="block text-left rounded-2xl shadow-sm border border-sky-200 p-4 transition hover:-translate-y-0.5"
+                   style="background:linear-gradient(135deg,#eff6ff,#dbeafe);">
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <div class="text-[11px] font-bold uppercase tracking-wide text-sky-700">Xorijiy fuqarolar jami</div>
@@ -56,15 +51,13 @@
                             <div class="mt-2 text-xs text-slate-600">Bosib umumiy ro'yxatni oching</div>
                         </div>
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-sky-700" style="background:rgba(255,255,255,0.7);">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 17L17 7M17 7H9M17 7v8"/></svg>
                         </div>
                     </div>
-                </button>
-                <button type="button"
-                        @click="statsModal = 'submitted'"
-                        :class="statsModal === 'submitted' ? 'ring-2 ring-emerald-300 ring-offset-2' : ''"
-                        class="text-left rounded-2xl shadow-sm border border-emerald-200 p-4 transition hover:-translate-y-0.5"
-                        style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);">
+                </a>
+                <a href="{{ route('admin.visa-applications.stats-list', ['type' => 'submitted']) }}"
+                   class="block text-left rounded-2xl shadow-sm border border-emerald-200 p-4 transition hover:-translate-y-0.5"
+                   style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);">
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <div class="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Ariza topshirganlar</div>
@@ -72,15 +65,13 @@
                             <div class="mt-2 text-xs text-slate-600">Bosib topshirganlar ro'yxatini oching</div>
                         </div>
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-emerald-700" style="background:rgba(255,255,255,0.7);">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 17L17 7M17 7H9M17 7v8"/></svg>
                         </div>
                     </div>
-                </button>
-                <button type="button"
-                        @click="statsModal = 'not_submitted'"
-                        :class="statsModal === 'not_submitted' ? 'ring-2 ring-amber-300 ring-offset-2' : ''"
-                        class="text-left rounded-2xl shadow-sm border border-amber-200 p-4 transition hover:-translate-y-0.5"
-                        style="background:linear-gradient(135deg,#fff7ed,#fde68a);">
+                </a>
+                <a href="{{ route('admin.visa-applications.stats-list', ['type' => 'not_submitted']) }}"
+                   class="block text-left rounded-2xl shadow-sm border border-amber-200 p-4 transition hover:-translate-y-0.5"
+                   style="background:linear-gradient(135deg,#fff7ed,#fde68a);">
                     <div class="flex items-start justify-between gap-3">
                         <div>
                             <div class="text-[11px] font-bold uppercase tracking-wide text-amber-700">Farqi</div>
@@ -88,12 +79,13 @@
                             <div class="mt-2 text-xs text-slate-600">Bosib topshirmaganlar ro'yxatini oching</div>
                         </div>
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-amber-700" style="background:rgba(255,255,255,0.7);">
-                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 17L17 7M17 7H9M17 7v8"/></svg>
                         </div>
                     </div>
-                </button>
+                </a>
             </div>
 
+            {{--
             <template x-teleport="body">
                 <div x-show="statsModal"
                      x-cloak
@@ -276,6 +268,7 @@
                     </div>
                 </div>
             </template>
+            --}}
 
             {{-- FILTER + STATS --}}
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">

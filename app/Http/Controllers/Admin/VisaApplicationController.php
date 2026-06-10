@@ -46,14 +46,55 @@ class VisaApplicationController extends Controller
             ->pluck('c', 'status')
             ->all();
 
-        $internationalStudents = $this->internationalStudentsQuery()->whereNotNull('hemis_id');
-        $totalForeignCitizens = (clone $internationalStudents)->count();
-        $submittedApplications = VisaApplication::query()
+        $internationalStudents = (clone $this->internationalStudentsQuery())
+            ->whereNotNull('hemis_id')
+            ->select('hemis_id', 'full_name', 'group_name', 'student_id_number', 'department_name')
+            ->orderBy('full_name')
+            ->get();
+
+        $totalForeignCitizens = $internationalStudents->count();
+
+        $latestApplications = VisaApplication::query()
+            ->whereIn('id', $latestIds)
             ->whereNotNull('student_hemis_id')
-            ->whereIn('student_hemis_id', (clone $internationalStudents)->select('hemis_id'))
+            ->get()
+            ->keyBy(fn (VisaApplication $app) => (string) $app->student_hemis_id);
+
+        $submittedHemisIds = VisaApplication::query()
+            ->whereNotNull('student_hemis_id')
+            ->whereIn('student_hemis_id', $internationalStudents->pluck('hemis_id'))
             ->distinct()
-            ->count('student_hemis_id');
-        $notSubmittedApplications = max($totalForeignCitizens - $submittedApplications, 0);
+            ->pluck('student_hemis_id')
+            ->map(fn ($id) => (string) $id)
+            ->all();
+
+        $submittedLookup = array_fill_keys($submittedHemisIds, true);
+
+        $studentList = $internationalStudents->map(function (Student $student) use ($latestApplications) {
+            $latestApplication = $latestApplications->get((string) $student->hemis_id);
+
+            return [
+                'hemis_id'           => $student->hemis_id,
+                'full_name'          => $student->full_name,
+                'group_name'         => $student->group_name,
+                'student_id_number'  => $student->student_id_number,
+                'department_name'    => $student->department_name,
+                'application_number' => $latestApplication?->application_number,
+                'application_status' => $latestApplication?->status,
+                'submitted_at'       => $latestApplication?->created_at?->format('d.m.Y H:i'),
+            ];
+        });
+
+        $submittedStudents = $studentList
+            ->filter(fn (array $student) => isset($submittedLookup[(string) $student['hemis_id']]))
+            ->values();
+
+        $notSubmittedStudents = $studentList
+            ->filter(fn (array $student) => !isset($submittedLookup[(string) $student['hemis_id']]))
+            ->values();
+
+        $submittedApplications = $submittedStudents->count();
+        $notSubmittedApplications = $notSubmittedStudents->count();
 
         return view('admin.visa-applications.index', [
             'applications' => $applications,
@@ -64,6 +105,11 @@ class VisaApplicationController extends Controller
                 'total_foreign_citizens' => $totalForeignCitizens,
                 'submitted_applications' => $submittedApplications,
                 'not_submitted'          => $notSubmittedApplications,
+                'lists'                  => [
+                    'total'         => $studentList->values(),
+                    'submitted'     => $submittedStudents,
+                    'not_submitted' => $notSubmittedStudents,
+                ],
             ],
         ]);
     }

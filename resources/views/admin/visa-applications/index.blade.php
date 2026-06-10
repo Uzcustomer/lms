@@ -20,7 +20,7 @@
     @endphp
 
     <div class="py-6">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4" x-data="{ statsOpen: null }">
 
             @if(session('success'))
                 <div class="bg-white rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
@@ -41,20 +41,163 @@
             @endif
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div class="bg-white rounded-xl border border-sky-200 shadow-sm p-4">
-                    <div class="text-[11px] font-bold uppercase tracking-wide text-sky-700">Xorijiy fuqarolar jami</div>
-                    <div class="mt-2 text-2xl font-bold text-slate-800">{{ number_format($visaStats['total_foreign_citizens'] ?? 0) }}</div>
-                    <div class="mt-1 text-xs text-slate-500">Xalqaro ta'lim bo'yicha umumiy son</div>
+                <button type="button"
+                        @click="statsOpen = statsOpen === 'total' ? null : 'total'"
+                        :class="statsOpen === 'total' ? 'ring-2 ring-sky-300 ring-offset-2' : ''"
+                        class="text-left rounded-2xl shadow-sm border border-sky-200 p-4 transition hover:-translate-y-0.5"
+                        style="background:linear-gradient(135deg,#eff6ff,#dbeafe);">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <div class="text-[11px] font-bold uppercase tracking-wide text-sky-700">Xorijiy fuqarolar jami</div>
+                            <div class="mt-2 text-3xl font-black text-slate-800">{{ number_format($visaStats['total_foreign_citizens'] ?? 0) }}</div>
+                            <div class="mt-2 text-xs text-slate-600">Bosib umumiy ro'yxatni oching</div>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-sky-700" style="background:rgba(255,255,255,0.7);">
+                            <svg class="w-5 h-5 transition-transform" :class="statsOpen === 'total' ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                        </div>
+                    </div>
+                </button>
+                <button type="button"
+                        @click="statsOpen = statsOpen === 'submitted' ? null : 'submitted'"
+                        :class="statsOpen === 'submitted' ? 'ring-2 ring-emerald-300 ring-offset-2' : ''"
+                        class="text-left rounded-2xl shadow-sm border border-emerald-200 p-4 transition hover:-translate-y-0.5"
+                        style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <div class="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Ariza topshirganlar</div>
+                            <div class="mt-2 text-3xl font-black text-slate-800">{{ number_format($visaStats['submitted_applications'] ?? 0) }}</div>
+                            <div class="mt-2 text-xs text-slate-600">Bosib topshirganlar ro'yxatini oching</div>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-emerald-700" style="background:rgba(255,255,255,0.7);">
+                            <svg class="w-5 h-5 transition-transform" :class="statsOpen === 'submitted' ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                        </div>
+                    </div>
+                </button>
+                <button type="button"
+                        @click="statsOpen = statsOpen === 'not_submitted' ? null : 'not_submitted'"
+                        :class="statsOpen === 'not_submitted' ? 'ring-2 ring-amber-300 ring-offset-2' : ''"
+                        class="text-left rounded-2xl shadow-sm border border-amber-200 p-4 transition hover:-translate-y-0.5"
+                        style="background:linear-gradient(135deg,#fff7ed,#fde68a);">
+                    <div class="flex items-start justify-between gap-3">
+                        <div>
+                            <div class="text-[11px] font-bold uppercase tracking-wide text-amber-700">Farqi</div>
+                            <div class="mt-2 text-3xl font-black text-slate-800">{{ number_format($visaStats['not_submitted'] ?? 0) }}</div>
+                            <div class="mt-2 text-xs text-slate-600">Bosib topshirmaganlar ro'yxatini oching</div>
+                        </div>
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center text-amber-700" style="background:rgba(255,255,255,0.7);">
+                            <svg class="w-5 h-5 transition-transform" :class="statsOpen === 'not_submitted' ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                        </div>
+                    </div>
+                </button>
+            </div>
+
+            <div x-show="statsOpen" x-collapse x-cloak class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3"
+                     x-show="statsOpen === 'total'"
+                     style="background:linear-gradient(135deg,#eff6ff,#dbeafe);">
+                    <div>
+                        <div class="text-sm font-bold text-sky-900">Xorijiy fuqarolar umumiy ro'yxati</div>
+                        <div class="text-xs text-sky-700 mt-0.5">{{ number_format($visaStats['total_foreign_citizens'] ?? 0) }} ta talaba</div>
+                    </div>
+                    <button type="button" @click="statsOpen = null" class="text-sky-700 text-xs font-bold">Yopish</button>
                 </div>
-                <div class="bg-white rounded-xl border border-emerald-200 shadow-sm p-4">
-                    <div class="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Ariza topshirganlar</div>
-                    <div class="mt-2 text-2xl font-bold text-slate-800">{{ number_format($visaStats['submitted_applications'] ?? 0) }}</div>
-                    <div class="mt-1 text-xs text-slate-500">Kamida bitta visa application yuborgan talabalar</div>
+                <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3"
+                     x-show="statsOpen === 'submitted'"
+                     style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);">
+                    <div>
+                        <div class="text-sm font-bold text-emerald-900">Visa application topshirganlar</div>
+                        <div class="text-xs text-emerald-700 mt-0.5">{{ number_format($visaStats['submitted_applications'] ?? 0) }} ta talaba</div>
+                    </div>
+                    <button type="button" @click="statsOpen = null" class="text-emerald-700 text-xs font-bold">Yopish</button>
                 </div>
-                <div class="bg-white rounded-xl border border-amber-200 shadow-sm p-4">
-                    <div class="text-[11px] font-bold uppercase tracking-wide text-amber-700">Farqi</div>
-                    <div class="mt-2 text-2xl font-bold text-slate-800">{{ number_format($visaStats['not_submitted'] ?? 0) }}</div>
-                    <div class="mt-1 text-xs text-slate-500">Hali visa application topshirmaganlar</div>
+                <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3"
+                     x-show="statsOpen === 'not_submitted'"
+                     style="background:linear-gradient(135deg,#fff7ed,#fde68a);">
+                    <div>
+                        <div class="text-sm font-bold text-amber-900">Visa application topshirmaganlar</div>
+                        <div class="text-xs text-amber-700 mt-0.5">{{ number_format($visaStats['not_submitted'] ?? 0) }} ta talaba</div>
+                    </div>
+                    <button type="button" @click="statsOpen = null" class="text-amber-700 text-xs font-bold">Yopish</button>
+                </div>
+
+                <div class="max-h-[28rem] overflow-y-auto">
+                    <div x-show="statsOpen === 'total'" class="divide-y divide-slate-100">
+                        @forelse($visaStats['lists']['total'] ?? [] as $student)
+                            <div class="px-5 py-3 flex items-center justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="text-sm font-semibold text-slate-800 truncate">{{ $student['full_name'] }}</div>
+                                    <div class="mt-0.5 text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                        <span>{{ $student['group_name'] ?: 'Guruh yo\'q' }}</span>
+                                        <span>Student ID: <strong>{{ $student['student_id_number'] ?: '—' }}</strong></span>
+                                    </div>
+                                </div>
+                                @if(!empty($student['application_number']))
+                                    @php $studentStatusMeta = $statusMeta[$student['application_status'] ?? 'pending'] ?? $statusMeta['pending']; @endphp
+                                    <div class="flex items-center gap-2 flex-shrink-0">
+                                        <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase"
+                                              style="background:{{ $studentStatusMeta['bg'] }};color:{{ $studentStatusMeta['fg'] }};border:1px solid {{ $studentStatusMeta['border'] }};">
+                                            {{ $studentStatusMeta['label'] }}
+                                        </span>
+                                        <span class="text-xs font-bold text-slate-600">#{{ $student['application_number'] }}</span>
+                                    </div>
+                                @else
+                                    <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase flex-shrink-0"
+                                          style="background:#fff7ed;color:#b45309;border:1px solid #fcd34d;">
+                                        Topshirmagan
+                                    </span>
+                                @endif
+                            </div>
+                        @empty
+                            <div class="px-5 py-8 text-center text-sm text-slate-500">Ro'yxat bo'sh.</div>
+                        @endforelse
+                    </div>
+
+                    <div x-show="statsOpen === 'submitted'" class="divide-y divide-slate-100">
+                        @forelse($visaStats['lists']['submitted'] ?? [] as $student)
+                            @php $studentStatusMeta = $statusMeta[$student['application_status'] ?? 'pending'] ?? $statusMeta['pending']; @endphp
+                            <div class="px-5 py-3 flex items-center justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="text-sm font-semibold text-slate-800 truncate">{{ $student['full_name'] }}</div>
+                                    <div class="mt-0.5 text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                        <span>{{ $student['group_name'] ?: 'Guruh yo\'q' }}</span>
+                                        <span>Student ID: <strong>{{ $student['student_id_number'] ?: '—' }}</strong></span>
+                                        @if(!empty($student['submitted_at']))
+                                            <span>Yuborgan: <strong>{{ $student['submitted_at'] }}</strong></span>
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="flex items-center gap-2 flex-shrink-0">
+                                    <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase"
+                                          style="background:{{ $studentStatusMeta['bg'] }};color:{{ $studentStatusMeta['fg'] }};border:1px solid {{ $studentStatusMeta['border'] }};">
+                                        {{ $studentStatusMeta['label'] }}
+                                    </span>
+                                    <span class="text-xs font-bold text-slate-600">#{{ $student['application_number'] }}</span>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="px-5 py-8 text-center text-sm text-slate-500">Ro'yxat bo'sh.</div>
+                        @endforelse
+                    </div>
+
+                    <div x-show="statsOpen === 'not_submitted'" class="divide-y divide-slate-100">
+                        @forelse($visaStats['lists']['not_submitted'] ?? [] as $student)
+                            <div class="px-5 py-3 flex items-center justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="text-sm font-semibold text-slate-800 truncate">{{ $student['full_name'] }}</div>
+                                    <div class="mt-0.5 text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
+                                        <span>{{ $student['group_name'] ?: 'Guruh yo\'q' }}</span>
+                                        <span>Student ID: <strong>{{ $student['student_id_number'] ?: '—' }}</strong></span>
+                                    </div>
+                                </div>
+                                <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase flex-shrink-0"
+                                      style="background:#fff7ed;color:#b45309;border:1px solid #fcd34d;">
+                                    Topshirmagan
+                                </span>
+                            </div>
+                        @empty
+                            <div class="px-5 py-8 text-center text-sm text-slate-500">Ro'yxat bo'sh.</div>
+                        @endforelse
+                    </div>
                 </div>
             </div>
 
@@ -103,17 +246,18 @@
             </div>
 
             @if(!$applications->isEmpty())
-                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-3 flex items-center justify-between gap-3 flex-wrap">
-                    <div class="text-sm font-semibold text-slate-700">
-                        Joriy sahifadagi arizalarni ommaviy tanlash
-                    </div>
+                <div class="bg-white rounded-xl border border-emerald-200 shadow-sm p-3 flex items-center justify-start gap-3 flex-wrap">
                     <button type="button"
                             id="vaCheckAllBtn"
                             onclick="vaToggleCheckAll();"
-                            class="px-3 py-2 text-xs font-bold rounded-lg border flex items-center gap-1.5"
-                            style="background:#fff;border-color:#2b5ea7;color:#2b5ea7;">
+                            class="px-3 py-2 text-xs font-bold rounded-lg border flex items-center gap-1.5 text-white"
+                            style="background:linear-gradient(135deg,#16a34a,#22c55e);border-color:#16a34a;">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7"/></svg>
                         Hammasini belgilash
                     </button>
+                    <div class="text-sm font-semibold text-slate-700">
+                        Joriy sahifadagi arizalarni ommaviy tanlash
+                    </div>
                 </div>
             @endif
 

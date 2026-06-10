@@ -13,7 +13,7 @@
     </x-slot>
 
     <div class="py-6">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+        <div class="w-full max-w-full px-4 sm:px-6 lg:px-8 space-y-4">
             <div class="rounded-3xl border shadow-sm overflow-hidden" style="border-color: {{ $theme['border'] }}; background: linear-gradient(135deg, {{ $theme['bg'] }}, #ffffff);">
                 <div class="px-5 py-4 flex items-center justify-between gap-3 flex-wrap">
                     <div>

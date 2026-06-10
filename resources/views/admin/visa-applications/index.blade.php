@@ -20,7 +20,7 @@
     @endphp
 
     <div class="py-6">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4" x-data="{ statsOpen: null }">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4" x-data="{ statsModal: null }" @keydown.escape.window="statsModal = null">
 
             @if(session('success'))
                 <div class="bg-white rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
@@ -42,8 +42,8 @@
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <button type="button"
-                        @click="statsOpen = statsOpen === 'total' ? null : 'total'"
-                        :class="statsOpen === 'total' ? 'ring-2 ring-sky-300 ring-offset-2' : ''"
+                        @click="statsModal = 'total'"
+                        :class="statsModal === 'total' ? 'ring-2 ring-sky-300 ring-offset-2' : ''"
                         class="text-left rounded-2xl shadow-sm border border-sky-200 p-4 transition hover:-translate-y-0.5"
                         style="background:linear-gradient(135deg,#eff6ff,#dbeafe);">
                     <div class="flex items-start justify-between gap-3">
@@ -53,13 +53,13 @@
                             <div class="mt-2 text-xs text-slate-600">Bosib umumiy ro'yxatni oching</div>
                         </div>
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-sky-700" style="background:rgba(255,255,255,0.7);">
-                            <svg class="w-5 h-5 transition-transform" :class="statsOpen === 'total' ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
                         </div>
                     </div>
                 </button>
                 <button type="button"
-                        @click="statsOpen = statsOpen === 'submitted' ? null : 'submitted'"
-                        :class="statsOpen === 'submitted' ? 'ring-2 ring-emerald-300 ring-offset-2' : ''"
+                        @click="statsModal = 'submitted'"
+                        :class="statsModal === 'submitted' ? 'ring-2 ring-emerald-300 ring-offset-2' : ''"
                         class="text-left rounded-2xl shadow-sm border border-emerald-200 p-4 transition hover:-translate-y-0.5"
                         style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);">
                     <div class="flex items-start justify-between gap-3">
@@ -69,13 +69,13 @@
                             <div class="mt-2 text-xs text-slate-600">Bosib topshirganlar ro'yxatini oching</div>
                         </div>
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-emerald-700" style="background:rgba(255,255,255,0.7);">
-                            <svg class="w-5 h-5 transition-transform" :class="statsOpen === 'submitted' ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
                         </div>
                     </div>
                 </button>
                 <button type="button"
-                        @click="statsOpen = statsOpen === 'not_submitted' ? null : 'not_submitted'"
-                        :class="statsOpen === 'not_submitted' ? 'ring-2 ring-amber-300 ring-offset-2' : ''"
+                        @click="statsModal = 'not_submitted'"
+                        :class="statsModal === 'not_submitted' ? 'ring-2 ring-amber-300 ring-offset-2' : ''"
                         class="text-left rounded-2xl shadow-sm border border-amber-200 p-4 transition hover:-translate-y-0.5"
                         style="background:linear-gradient(135deg,#fff7ed,#fde68a);">
                     <div class="flex items-start justify-between gap-3">
@@ -85,118 +85,183 @@
                             <div class="mt-2 text-xs text-slate-600">Bosib topshirmaganlar ro'yxatini oching</div>
                         </div>
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center text-amber-700" style="background:rgba(255,255,255,0.7);">
-                            <svg class="w-5 h-5 transition-transform" :class="statsOpen === 'not_submitted' ? 'rotate-180' : ''" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/></svg>
                         </div>
                     </div>
                 </button>
             </div>
 
-            <div x-show="statsOpen" x-collapse x-cloak class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-                <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3"
-                     x-show="statsOpen === 'total'"
-                     style="background:linear-gradient(135deg,#eff6ff,#dbeafe);">
-                    <div>
-                        <div class="text-sm font-bold text-sky-900">Xorijiy fuqarolar umumiy ro'yxati</div>
-                        <div class="text-xs text-sky-700 mt-0.5">{{ number_format($visaStats['total_foreign_citizens'] ?? 0) }} ta talaba</div>
+            <div x-show="statsModal" x-cloak class="fixed inset-0 z-50 p-4 sm:p-6" style="background:rgba(15,23,42,0.55);backdrop-filter:blur(5px);" @click.self="statsModal = null">
+                <div class="max-w-6xl mx-auto bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden">
+                    <div class="px-5 sm:px-6 py-4 border-b border-slate-200 flex items-start justify-between gap-4"
+                         x-show="statsModal === 'total'"
+                         style="background:linear-gradient(135deg,#eff6ff,#dbeafe);">
+                        <div>
+                            <div class="text-lg font-bold text-sky-900">Xorijiy fuqarolar umumiy ro'yxati</div>
+                            <div class="text-sm text-sky-700 mt-1">{{ number_format($visaStats['total_foreign_citizens'] ?? 0) }} ta talaba</div>
+                        </div>
+                        <button type="button" @click="statsModal = null" class="w-10 h-10 rounded-xl flex items-center justify-center bg-white/80 text-sky-800 hover:bg-white">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
                     </div>
-                    <button type="button" @click="statsOpen = null" class="text-sky-700 text-xs font-bold">Yopish</button>
-                </div>
-                <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3"
-                     x-show="statsOpen === 'submitted'"
-                     style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);">
-                    <div>
-                        <div class="text-sm font-bold text-emerald-900">Visa application topshirganlar</div>
-                        <div class="text-xs text-emerald-700 mt-0.5">{{ number_format($visaStats['submitted_applications'] ?? 0) }} ta talaba</div>
+                    <div class="px-5 sm:px-6 py-4 border-b border-slate-200 flex items-start justify-between gap-4"
+                         x-show="statsModal === 'submitted'"
+                         style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);">
+                        <div>
+                            <div class="text-lg font-bold text-emerald-900">Visa application topshirganlar</div>
+                            <div class="text-sm text-emerald-700 mt-1">{{ number_format($visaStats['submitted_applications'] ?? 0) }} ta talaba</div>
+                        </div>
+                        <button type="button" @click="statsModal = null" class="w-10 h-10 rounded-xl flex items-center justify-center bg-white/80 text-emerald-800 hover:bg-white">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
                     </div>
-                    <button type="button" @click="statsOpen = null" class="text-emerald-700 text-xs font-bold">Yopish</button>
-                </div>
-                <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between gap-3"
-                     x-show="statsOpen === 'not_submitted'"
-                     style="background:linear-gradient(135deg,#fff7ed,#fde68a);">
-                    <div>
-                        <div class="text-sm font-bold text-amber-900">Visa application topshirmaganlar</div>
-                        <div class="text-xs text-amber-700 mt-0.5">{{ number_format($visaStats['not_submitted'] ?? 0) }} ta talaba</div>
-                    </div>
-                    <button type="button" @click="statsOpen = null" class="text-amber-700 text-xs font-bold">Yopish</button>
-                </div>
-
-                <div class="max-h-[28rem] overflow-y-auto">
-                    <div x-show="statsOpen === 'total'" class="divide-y divide-slate-100">
-                        @forelse($visaStats['lists']['total'] ?? [] as $student)
-                            <div class="px-5 py-3 flex items-center justify-between gap-3">
-                                <div class="min-w-0">
-                                    <div class="text-sm font-semibold text-slate-800 truncate">{{ $student['full_name'] }}</div>
-                                    <div class="mt-0.5 text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                        <span>{{ $student['group_name'] ?: 'Guruh yo\'q' }}</span>
-                                        <span>Student ID: <strong>{{ $student['student_id_number'] ?: '—' }}</strong></span>
-                                    </div>
-                                </div>
-                                @if(!empty($student['application_number']))
-                                    @php $studentStatusMeta = $statusMeta[$student['application_status'] ?? 'pending'] ?? $statusMeta['pending']; @endphp
-                                    <div class="flex items-center gap-2 flex-shrink-0">
-                                        <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase"
-                                              style="background:{{ $studentStatusMeta['bg'] }};color:{{ $studentStatusMeta['fg'] }};border:1px solid {{ $studentStatusMeta['border'] }};">
-                                            {{ $studentStatusMeta['label'] }}
-                                        </span>
-                                        <span class="text-xs font-bold text-slate-600">#{{ $student['application_number'] }}</span>
-                                    </div>
-                                @else
-                                    <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase flex-shrink-0"
-                                          style="background:#fff7ed;color:#b45309;border:1px solid #fcd34d;">
-                                        Topshirmagan
-                                    </span>
-                                @endif
-                            </div>
-                        @empty
-                            <div class="px-5 py-8 text-center text-sm text-slate-500">Ro'yxat bo'sh.</div>
-                        @endforelse
+                    <div class="px-5 sm:px-6 py-4 border-b border-slate-200 flex items-start justify-between gap-4"
+                         x-show="statsModal === 'not_submitted'"
+                         style="background:linear-gradient(135deg,#fff7ed,#fde68a);">
+                        <div>
+                            <div class="text-lg font-bold text-amber-900">Visa application topshirmaganlar</div>
+                            <div class="text-sm text-amber-700 mt-1">{{ number_format($visaStats['not_submitted'] ?? 0) }} ta talaba</div>
+                        </div>
+                        <button type="button" @click="statsModal = null" class="w-10 h-10 rounded-xl flex items-center justify-center bg-white/80 text-amber-800 hover:bg-white">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
                     </div>
 
-                    <div x-show="statsOpen === 'submitted'" class="divide-y divide-slate-100">
-                        @forelse($visaStats['lists']['submitted'] ?? [] as $student)
-                            @php $studentStatusMeta = $statusMeta[$student['application_status'] ?? 'pending'] ?? $statusMeta['pending']; @endphp
-                            <div class="px-5 py-3 flex items-center justify-between gap-3">
-                                <div class="min-w-0">
-                                    <div class="text-sm font-semibold text-slate-800 truncate">{{ $student['full_name'] }}</div>
-                                    <div class="mt-0.5 text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                        <span>{{ $student['group_name'] ?: 'Guruh yo\'q' }}</span>
-                                        <span>Student ID: <strong>{{ $student['student_id_number'] ?: '—' }}</strong></span>
-                                        @if(!empty($student['submitted_at']))
-                                            <span>Yuborgan: <strong>{{ $student['submitted_at'] }}</strong></span>
-                                        @endif
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-2 flex-shrink-0">
-                                    <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase"
-                                          style="background:{{ $studentStatusMeta['bg'] }};color:{{ $studentStatusMeta['fg'] }};border:1px solid {{ $studentStatusMeta['border'] }};">
-                                        {{ $studentStatusMeta['label'] }}
-                                    </span>
-                                    <span class="text-xs font-bold text-slate-600">#{{ $student['application_number'] }}</span>
-                                </div>
+                    <div class="max-h-[78vh] overflow-y-auto">
+                        <div x-show="statsModal === 'total'" class="p-4 sm:p-6">
+                            <div class="overflow-x-auto rounded-2xl border border-slate-200">
+                                <table class="min-w-full text-sm">
+                                    <thead class="sticky top-0 z-10 bg-slate-900 text-white">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left font-semibold">#</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Talaba</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Kurs</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Yo'nalish</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Guruh</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Holati</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 bg-white">
+                                        @forelse($visaStats['lists']['total'] ?? [] as $index => $student)
+                                            @php $studentStatusMeta = $statusMeta[$student['application_status'] ?? 'pending'] ?? $statusMeta['pending']; @endphp
+                                            <tr class="hover:bg-slate-50">
+                                                <td class="px-4 py-3 text-slate-500">{{ $index + 1 }}</td>
+                                                <td class="px-4 py-3">
+                                                    <div class="font-semibold text-slate-800">{{ $student['full_name'] }}</div>
+                                                    <div class="mt-1 text-xs text-slate-500">Student ID: {{ $student['student_id_number'] ?: '—' }}</div>
+                                                </td>
+                                                <td class="px-4 py-3 text-slate-700">{{ $student['course_name'] ?: '—' }}</td>
+                                                <td class="px-4 py-3 text-slate-700">{{ $student['specialty_name'] ?: ($student['department_name'] ?: '—') }}</td>
+                                                <td class="px-4 py-3 text-slate-700">{{ $student['group_name'] ?: '—' }}</td>
+                                                <td class="px-4 py-3">
+                                                    @if(!empty($student['application_number']))
+                                                        <div class="flex flex-wrap items-center gap-2">
+                                                            <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase"
+                                                                  style="background:{{ $studentStatusMeta['bg'] }};color:{{ $studentStatusMeta['fg'] }};border:1px solid {{ $studentStatusMeta['border'] }};">
+                                                                {{ $studentStatusMeta['label'] }}
+                                                            </span>
+                                                            <span class="text-xs font-bold text-slate-600">#{{ $student['application_number'] }}</span>
+                                                        </div>
+                                                    @else
+                                                        <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase"
+                                                              style="background:#fff7ed;color:#b45309;border:1px solid #fcd34d;">
+                                                            Topshirmagan
+                                                        </span>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr><td colspan="6" class="px-4 py-10 text-center text-slate-500">Ro'yxat bo'sh.</td></tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
                             </div>
-                        @empty
-                            <div class="px-5 py-8 text-center text-sm text-slate-500">Ro'yxat bo'sh.</div>
-                        @endforelse
-                    </div>
+                        </div>
 
-                    <div x-show="statsOpen === 'not_submitted'" class="divide-y divide-slate-100">
-                        @forelse($visaStats['lists']['not_submitted'] ?? [] as $student)
-                            <div class="px-5 py-3 flex items-center justify-between gap-3">
-                                <div class="min-w-0">
-                                    <div class="text-sm font-semibold text-slate-800 truncate">{{ $student['full_name'] }}</div>
-                                    <div class="mt-0.5 text-xs text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1">
-                                        <span>{{ $student['group_name'] ?: 'Guruh yo\'q' }}</span>
-                                        <span>Student ID: <strong>{{ $student['student_id_number'] ?: '—' }}</strong></span>
-                                    </div>
-                                </div>
-                                <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase flex-shrink-0"
-                                      style="background:#fff7ed;color:#b45309;border:1px solid #fcd34d;">
-                                    Topshirmagan
-                                </span>
+                        <div x-show="statsModal === 'submitted'" class="p-4 sm:p-6">
+                            <div class="overflow-x-auto rounded-2xl border border-slate-200">
+                                <table class="min-w-full text-sm">
+                                    <thead class="sticky top-0 z-10 bg-emerald-700 text-white">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left font-semibold">#</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Talaba</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Kurs</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Yo'nalish</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Guruh</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Ariza</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 bg-white">
+                                        @forelse($visaStats['lists']['submitted'] ?? [] as $index => $student)
+                                            @php $studentStatusMeta = $statusMeta[$student['application_status'] ?? 'pending'] ?? $statusMeta['pending']; @endphp
+                                            <tr class="hover:bg-emerald-50/50">
+                                                <td class="px-4 py-3 text-slate-500">{{ $index + 1 }}</td>
+                                                <td class="px-4 py-3">
+                                                    <div class="font-semibold text-slate-800">{{ $student['full_name'] }}</div>
+                                                    <div class="mt-1 text-xs text-slate-500">Student ID: {{ $student['student_id_number'] ?: '—' }}</div>
+                                                </td>
+                                                <td class="px-4 py-3 text-slate-700">{{ $student['course_name'] ?: '—' }}</td>
+                                                <td class="px-4 py-3 text-slate-700">{{ $student['specialty_name'] ?: ($student['department_name'] ?: '—') }}</td>
+                                                <td class="px-4 py-3 text-slate-700">{{ $student['group_name'] ?: '—' }}</td>
+                                                <td class="px-4 py-3">
+                                                    <div class="flex flex-col gap-1">
+                                                        <div class="flex flex-wrap items-center gap-2">
+                                                            <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase"
+                                                                  style="background:{{ $studentStatusMeta['bg'] }};color:{{ $studentStatusMeta['fg'] }};border:1px solid {{ $studentStatusMeta['border'] }};">
+                                                                {{ $studentStatusMeta['label'] }}
+                                                            </span>
+                                                            <span class="text-xs font-bold text-slate-600">#{{ $student['application_number'] }}</span>
+                                                        </div>
+                                                        <div class="text-xs text-slate-500">Yuborgan: {{ $student['submitted_at'] ?: '—' }}</div>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr><td colspan="6" class="px-4 py-10 text-center text-slate-500">Ro'yxat bo'sh.</td></tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
                             </div>
-                        @empty
-                            <div class="px-5 py-8 text-center text-sm text-slate-500">Ro'yxat bo'sh.</div>
-                        @endforelse
+                        </div>
+
+                        <div x-show="statsModal === 'not_submitted'" class="p-4 sm:p-6">
+                            <div class="overflow-x-auto rounded-2xl border border-slate-200">
+                                <table class="min-w-full text-sm">
+                                    <thead class="sticky top-0 z-10 bg-amber-600 text-white">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left font-semibold">#</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Talaba</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Kurs</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Yo'nalish</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Guruh</th>
+                                            <th class="px-4 py-3 text-left font-semibold">Holati</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 bg-white">
+                                        @forelse($visaStats['lists']['not_submitted'] ?? [] as $index => $student)
+                                            <tr class="hover:bg-amber-50/50">
+                                                <td class="px-4 py-3 text-slate-500">{{ $index + 1 }}</td>
+                                                <td class="px-4 py-3">
+                                                    <div class="font-semibold text-slate-800">{{ $student['full_name'] }}</div>
+                                                    <div class="mt-1 text-xs text-slate-500">Student ID: {{ $student['student_id_number'] ?: '—' }}</div>
+                                                </td>
+                                                <td class="px-4 py-3 text-slate-700">{{ $student['course_name'] ?: '—' }}</td>
+                                                <td class="px-4 py-3 text-slate-700">{{ $student['specialty_name'] ?: ($student['department_name'] ?: '—') }}</td>
+                                                <td class="px-4 py-3 text-slate-700">{{ $student['group_name'] ?: '—' }}</td>
+                                                <td class="px-4 py-3">
+                                                    <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase"
+                                                          style="background:#fff7ed;color:#b45309;border:1px solid #fcd34d;">
+                                                        Topshirmagan
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        @empty
+                                            <tr><td colspan="6" class="px-4 py-10 text-center text-slate-500">Ro'yxat bo'sh.</td></tr>
+                                        @endforelse
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

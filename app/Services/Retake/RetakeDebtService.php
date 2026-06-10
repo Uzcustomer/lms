@@ -10,85 +10,108 @@ use Illuminate\Support\Facades\DB;
  * Talabaning akademik qarzdor fanlari ro'yxati.
  *
  * Mantiq:
- *  - student_subjects (o'quv rejasi) — talaba o'qishi shart bo'lgan fanlar
- *  - academic_records — HEMIS'dan kelgan baholar
- *  - LEFT JOIN: o'quv rejasidagi fan academic_records'da bahosiz bo'lsa →
- *    talaba shu fan bo'yicha qarzdor.
+ * - student_subjects: talabaga biriktirilgan fanlar
+ * - curriculum_subjects: talabaning curriculumidagi aktiv fanlar
+ * - academic_records: HEMIS'dan kelgan natijalar
  *
- * StudentApiController.php (55-93-qatorlar) dagi pattern bilan mos.
- * HEMIS API ga real-time chaqiruv qilinmaydi — faqat lokal jadvallar.
+ * Qarzdorlikni hisoblashda student_subjects va curriculum_subjects birlashtiriladi,
+ * keyin academic_records bilan solishtirib bahosi yo'q, past yoki retraining
+ * holatdagi fanlar qaytariladi.
  */
 class RetakeDebtService
 {
     /**
      * Talaba qarzdor bo'lgan fanlar ro'yxati.
      *
-     * Qarzdor: o'quv rejasida bor, lekin academic_records'da bahosi yo'q yoki
-     * past (NULL/2/0/retraining_status=1). Joriy semestr istisno.
-     *
-     * @return Collection<\stdClass>  Har element: subject_id, subject_name,
-     *         semester_id, semester_name, credit, grade, retraining_status,
-     *         debt_reason
+     * @return Collection<\stdClass>
      */
     public function debts(Student $student): Collection
     {
-        $currentSemesterId = $student->semester_id;
+        $currentSemesterId = $student->semester_id ? (string) $student->semester_id : null;
 
-        $rows = DB::table('student_subjects as ss')
+        $subjects = $this->plannedSubjects($student)
+            ->when($currentSemesterId !== null, fn (Collection $items) => $items->where('semester_id', '!=', $currentSemesterId))
+            ->values();
+
+        if ($subjects->isEmpty()) {
+            return collect();
+        }
+
+        $subjectIds = $subjects->pluck('subject_id')->filter()->unique()->values()->all();
+        $semesterIds = $subjects->pluck('semester_id')->filter()->unique()->values()->all();
+
+        $academicRecords = DB::table('academic_records')
+            ->where('student_id', $student->hemis_id)
+            ->whereIn('subject_id', $subjectIds)
+            ->whereIn('semester_id', $semesterIds)
             ->select([
-                'ss.subject_id',
-                'ss.subject_name',
-                'ss.semester_id',
-                'ss.curriculum_subject_hemis_id',
-                DB::raw('COALESCE(ar.semester_name, sem.name, cs.semester_name) as semester_name'),
-                'ar.id as ar_id',
-                DB::raw('COALESCE(ar.credit, cs.credit) as credit'),
-                'ar.grade',
-                'ar.retraining_status',
+                'id',
+                'subject_id',
+                'semester_id',
+                'semester_name',
+                'credit',
+                'grade',
+                'retraining_status',
             ])
-            ->leftJoin('academic_records as ar', function ($join) use ($student) {
-                $join->on('ar.student_id', '=', DB::raw((int) $student->hemis_id))
-                     ->on('ar.subject_id', '=', 'ss.subject_id')
-                     ->on('ar.semester_id', '=', 'ss.semester_id');
-            })
-            ->leftJoin('curriculum_subjects as cs', 'cs.curriculum_subject_hemis_id', '=', 'ss.curriculum_subject_hemis_id')
-            ->leftJoin('semesters as sem', 'sem.code', '=', 'ss.semester_id')
-            ->where('ss.student_hemis_id', $student->hemis_id)
-            ->when($currentSemesterId, fn ($q) => $q->where('ss.semester_id', '!=', $currentSemesterId))
-            ->where(function ($q) {
-                $q->whereNull('ar.id')                       // o'quv rejada bor, academic_records'da yo'q
-                  ->orWhereNull('ar.grade')                  // baho qo'yilmagan
-                  ->orWhereIn('ar.grade', ['2', '0'])        // past baho
-                  ->orWhere('ar.retraining_status', true);   // qayta o'qish kerak
-            })
-            ->orderBy('ss.semester_id')
-            ->orderBy('ss.subject_name')
+            ->orderByDesc('id')
             ->get();
 
-        return $rows->map(function ($r) {
-            // Qarzdorlik sababini aniqlash
-            if (!$r->ar_id) {
-                $r->debt_reason = 'no_record';   // academic_records yozuvi yo'q
-            } elseif ($r->grade === null) {
-                $r->debt_reason = 'no_grade';
-            } elseif (in_array((string) $r->grade, ['2', '0'], true)) {
-                $r->debt_reason = 'low_grade';
-            } elseif ((bool) $r->retraining_status) {
-                $r->debt_reason = 'retraining';
+        $academicLookup = [];
+        foreach ($academicRecords as $record) {
+            $key = (string) $record->subject_id . '|' . (string) $record->semester_id;
+            $academicLookup[$key] ??= $record;
+        }
+
+        $rows = $subjects
+            ->map(function ($subject) use ($academicLookup) {
+                $key = $subject->subject_id . '|' . $subject->semester_id;
+                $record = $academicLookup[$key] ?? null;
+
+                return (object) [
+                    'subject_id' => $subject->subject_id,
+                    'subject_name' => $subject->subject_name,
+                    'semester_id' => $subject->semester_id,
+                    'curriculum_subject_hemis_id' => $subject->curriculum_subject_hemis_id,
+                    'semester_name' => $record->semester_name ?? $subject->semester_name,
+                    'ar_id' => $record->id ?? null,
+                    'credit' => $record->credit ?? $subject->credit,
+                    'grade' => $record->grade ?? null,
+                    'retraining_status' => $record->retraining_status ?? null,
+                ];
+            })
+            ->filter(function ($row) {
+                return !$row->ar_id
+                    || $row->grade === null
+                    || in_array((string) $row->grade, ['2', '0'], true)
+                    || (bool) $row->retraining_status;
+            })
+            ->sortBy([
+                ['semester_id', 'asc'],
+                ['subject_name', 'asc'],
+            ])
+            ->values();
+
+        return $rows->map(function ($row) {
+            if (!$row->ar_id) {
+                $row->debt_reason = 'no_record';
+            } elseif ($row->grade === null) {
+                $row->debt_reason = 'no_grade';
+            } elseif (in_array((string) $row->grade, ['2', '0'], true)) {
+                $row->debt_reason = 'low_grade';
+            } elseif ((bool) $row->retraining_status) {
+                $row->debt_reason = 'retraining';
             } else {
-                $r->debt_reason = 'unknown';
+                $row->debt_reason = 'unknown';
             }
 
-            // credit bo'lmasa default qiymat (kvitansiya hisobi uchun)
-            $r->credit = $r->credit !== null ? (float) $r->credit : 0.0;
+            $row->credit = $row->credit !== null ? (float) $row->credit : 0.0;
 
-            return $r;
+            return $row;
         });
     }
 
     /**
-     * Talaba berilgan fan bo'yicha hali ham qarzdormi (HEMIS sync'dan keyin
-     * auto-cancel uchun).
+     * Talaba berilgan fan bo'yicha hali ham qarzdormi.
      */
     public function isStillDebtor(int $studentHemisId, string $subjectId, string $semesterId): bool
     {
@@ -98,20 +121,130 @@ class RetakeDebtService
             ->where('semester_id', $semesterId)
             ->first(['grade', 'retraining_status']);
 
-        if (!$record) {
-            // O'quv rejasida bo'lsa-yu, academic_records'da yozuv yo'q bo'lsa →
-            // hali ham qarzdor (academic_records dan boshqa joydan kelgan
-            // tasdiqdan keyin auto-cancel qilmaymiz).
-            $inCurriculum = DB::table('student_subjects')
-                ->where('student_hemis_id', $studentHemisId)
-                ->where('subject_id', $subjectId)
-                ->where('semester_id', $semesterId)
-                ->exists();
-            return $inCurriculum;
+        if ($record) {
+            return $record->grade === null
+                || in_array((string) $record->grade, ['2', '0'], true)
+                || (bool) $record->retraining_status;
         }
 
-        return $record->grade === null
-            || in_array((string) $record->grade, ['2', '0'], true)
-            || (bool) $record->retraining_status;
+        $inStudentSubjects = DB::table('student_subjects')
+            ->where('student_hemis_id', $studentHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_id', $semesterId)
+            ->exists();
+
+        if ($inStudentSubjects) {
+            return true;
+        }
+
+        $student = Student::query()
+            ->where('hemis_id', $studentHemisId)
+            ->first(['curriculum_id', 'group_name']);
+
+        if (!$student?->curriculum_id) {
+            return false;
+        }
+
+        $curriculumRows = DB::table('curriculum_subjects')
+            ->where('curricula_hemis_id', $student->curriculum_id)
+            ->where('is_active', true)
+            ->where('subject_code', 'not like', '%/%')
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterId)
+            ->select(['subject_name'])
+            ->get();
+
+        return $this->filterSubjectsByGroupSuffix($curriculumRows, (string) ($student->group_name ?? ''))->isNotEmpty();
+    }
+
+    private function plannedSubjects(Student $student): Collection
+    {
+        $studentSubjects = DB::table('student_subjects as ss')
+            ->leftJoin('curriculum_subjects as cs', 'cs.curriculum_subject_hemis_id', '=', 'ss.curriculum_subject_hemis_id')
+            ->leftJoin('semesters as sem', 'sem.code', '=', 'ss.semester_id')
+            ->where('ss.student_hemis_id', $student->hemis_id)
+            ->select([
+                'ss.subject_id',
+                'ss.subject_name',
+                DB::raw('CAST(ss.semester_id as char) as semester_id'),
+                'ss.curriculum_subject_hemis_id',
+                DB::raw('COALESCE(sem.name, cs.semester_name) as semester_name'),
+                DB::raw('COALESCE(cs.credit, 0) as credit'),
+            ])
+            ->get();
+
+        $curriculumSubjects = collect();
+        if (!empty($student->curriculum_id)) {
+            $curriculumSubjects = DB::table('curriculum_subjects')
+                ->where('curricula_hemis_id', $student->curriculum_id)
+                ->where('is_active', true)
+                ->where('subject_code', 'not like', '%/%')
+                ->select([
+                    'subject_id',
+                    'subject_name',
+                    DB::raw('CAST(semester_code as char) as semester_id'),
+                    'curriculum_subject_hemis_id',
+                    'semester_name',
+                    'credit',
+                ])
+                ->orderBy('semester_code')
+                ->orderBy('subject_name')
+                ->get();
+
+            $curriculumSubjects = $this->filterSubjectsByGroupSuffix($curriculumSubjects, (string) ($student->group_name ?? ''));
+        }
+
+        return $studentSubjects
+            ->concat($curriculumSubjects)
+            ->map(function ($row) {
+                return (object) [
+                    'subject_id' => trim((string) ($row->subject_id ?? '')),
+                    'subject_name' => $row->subject_name,
+                    'semester_id' => trim((string) ($row->semester_id ?? '')),
+                    'curriculum_subject_hemis_id' => $row->curriculum_subject_hemis_id,
+                    'semester_name' => $row->semester_name,
+                    'credit' => $row->credit !== null ? (float) $row->credit : 0.0,
+                ];
+            })
+            ->filter(fn ($row) => $row->subject_id !== '' && $row->semester_id !== '')
+            ->groupBy(fn ($row) => $row->subject_id . '|' . $row->semester_id)
+            ->map(function (Collection $group) {
+                $picked = $group->firstWhere('curriculum_subject_hemis_id', '!=', null) ?? $group->first();
+
+                foreach ($group as $candidate) {
+                    $picked->subject_name = $picked->subject_name ?: $candidate->subject_name;
+                    $picked->semester_name = $picked->semester_name ?: $candidate->semester_name;
+                    $picked->credit = $picked->credit ?: $candidate->credit;
+                    $picked->curriculum_subject_hemis_id = $picked->curriculum_subject_hemis_id ?: $candidate->curriculum_subject_hemis_id;
+                }
+
+                return $picked;
+            })
+            ->values();
+    }
+
+    private function filterSubjectsByGroupSuffix(Collection $records, string $groupName): Collection
+    {
+        if ($groupName === '') {
+            return $records;
+        }
+
+        $groupSuffix = '';
+        if (preg_match('/(\d+)([a-zA-Z])$/', trim($groupName), $matches)) {
+            $groupSuffix = mb_strtolower($matches[2]);
+        }
+
+        if ($groupSuffix === '') {
+            return $records;
+        }
+
+        return $records->filter(function ($record) use ($groupSuffix) {
+            $name = $record->subject_name ?? '';
+            if (preg_match('/\(([a-zA-Z])\)\s*$/u', $name, $matches)) {
+                return mb_strtolower($matches[1]) === $groupSuffix;
+            }
+
+            return true;
+        })->values();
     }
 }

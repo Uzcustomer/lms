@@ -31,6 +31,33 @@
                 </div>
             @endif
 
+            @if(session('error'))
+                <div class="bg-white rounded-xl border border-red-200 shadow-sm overflow-hidden">
+                    <div class="px-5 py-3 flex items-center gap-3" style="background: linear-gradient(135deg, #fef2f2, #fee2e2);">
+                        <svg class="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12v-.008Zm8.25-.75a8.25 8.25 0 11-16.5 0 8.25 8.25 0 0116.5 0Z"/></svg>
+                        <span class="text-sm font-semibold text-red-800">{{ session('error') }}</span>
+                    </div>
+                </div>
+            @endif
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div class="bg-white rounded-xl border border-sky-200 shadow-sm p-4">
+                    <div class="text-[11px] font-bold uppercase tracking-wide text-sky-700">Xorijiy fuqarolar jami</div>
+                    <div class="mt-2 text-2xl font-bold text-slate-800">{{ number_format($visaStats['total_foreign_citizens'] ?? 0) }}</div>
+                    <div class="mt-1 text-xs text-slate-500">Xalqaro ta'lim bo'yicha umumiy son</div>
+                </div>
+                <div class="bg-white rounded-xl border border-emerald-200 shadow-sm p-4">
+                    <div class="text-[11px] font-bold uppercase tracking-wide text-emerald-700">Ariza topshirganlar</div>
+                    <div class="mt-2 text-2xl font-bold text-slate-800">{{ number_format($visaStats['submitted_applications'] ?? 0) }}</div>
+                    <div class="mt-1 text-xs text-slate-500">Kamida bitta visa application yuborgan talabalar</div>
+                </div>
+                <div class="bg-white rounded-xl border border-amber-200 shadow-sm p-4">
+                    <div class="text-[11px] font-bold uppercase tracking-wide text-amber-700">Farqi</div>
+                    <div class="mt-2 text-2xl font-bold text-slate-800">{{ number_format($visaStats['not_submitted'] ?? 0) }}</div>
+                    <div class="mt-1 text-xs text-slate-500">Hali visa application topshirmaganlar</div>
+                </div>
+            </div>
+
             {{-- FILTER + STATS --}}
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div class="px-6 py-3 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap" style="background: linear-gradient(135deg, #e8edf5, #dbe4ef);">
@@ -75,10 +102,25 @@
                 </div>
             </div>
 
+            @if(!$applications->isEmpty())
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-3 flex items-center justify-between gap-3 flex-wrap">
+                    <div class="text-sm font-semibold text-slate-700">
+                        Joriy sahifadagi arizalarni ommaviy tanlash
+                    </div>
+                    <button type="button"
+                            id="vaCheckAllBtn"
+                            onclick="vaToggleCheckAll();"
+                            class="px-3 py-2 text-xs font-bold rounded-lg border flex items-center gap-1.5"
+                            style="background:#fff;border-color:#2b5ea7;color:#2b5ea7;">
+                        Hammasini belgilash
+                    </button>
+                </div>
+            @endif
+
             {{-- BULK TOOLBAR --}}
             @if(!$applications->isEmpty())
             <div id="bulkBar" x-data="{ count: 0 }"
-                 x-init="window.vaBulkUpdate = () => { count = document.querySelectorAll('.va-row-cb:checked').length };"
+                 x-init="window.vaBulkUpdate = () => { count = document.querySelectorAll('.va-row-cb:checked').length; window.vaSyncCheckAllButton && window.vaSyncCheckAllButton(); };"
                  x-show="count > 0" x-cloak
                  class="bg-white rounded-xl border-2 shadow-sm overflow-hidden sticky top-2 z-20"
                  style="border-color:#2b5ea7;">
@@ -106,6 +148,16 @@
                         <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                         Telex
                     </button>
+
+                    @if($status === 'approved')
+                        <button type="button"
+                                onclick="vaBulkSubmit('{{ route('admin.visa-applications.download-documents') }}', 'POST', null, 'Tanlangan arizalarning hujjatlarini bitta ZIP qilib yuklab olasizmi?');"
+                                class="px-2.5 py-1.5 text-[11px] font-bold text-white rounded-lg flex items-center gap-1"
+                                style="background:linear-gradient(135deg,#0f766e,#0d9488);">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16.5V4.5m0 12 4.5-4.5M12 16.5l-4.5-4.5M4.5 19.5h15"/></svg>
+                            Hujjatlarni yuklash
+                        </button>
+                    @endif
 
                     {{-- Excel (faqat tanlanganlar) --}}
                     <button type="button"
@@ -335,6 +387,34 @@
     </div>
 
     <script>
+        function vaSelectedCheckboxes() {
+            return Array.from(document.querySelectorAll('.va-row-cb'));
+        }
+
+        function vaSyncCheckAllButton() {
+            const btn = document.getElementById('vaCheckAllBtn');
+            if (!btn) return;
+
+            const checkboxes = vaSelectedCheckboxes();
+            const allChecked = checkboxes.length > 0 && checkboxes.every(cb => cb.checked);
+
+            btn.textContent = allChecked ? 'Belgilashni bekor qilish' : 'Hammasini belgilash';
+            btn.dataset.checked = allChecked ? '1' : '0';
+        }
+
+        function vaToggleCheckAll() {
+            const checkboxes = vaSelectedCheckboxes();
+            if (checkboxes.length === 0) return;
+
+            const shouldCheck = checkboxes.some(cb => !cb.checked);
+            checkboxes.forEach(cb => {
+                cb.checked = shouldCheck;
+            });
+
+            window.vaBulkUpdate && window.vaBulkUpdate();
+            vaSyncCheckAllButton();
+        }
+
         // Tanlangan id'lardan vaqtinchalik form yasab, kerakli URLga POST/GET qiladi.
         function vaBulkSubmit(url, method, status = null, confirmMsg = null) {
             const ids = Array.from(document.querySelectorAll('.va-row-cb:checked')).map(el => el.value);
@@ -380,5 +460,9 @@
             document.body.appendChild(form);
             form.submit();
         }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            vaSyncCheckAllButton();
+        });
     </script>
 </x-app-layout>

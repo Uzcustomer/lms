@@ -221,7 +221,7 @@ class CurriculumCheckController extends Controller
 
         $typeLabel = $request->type === 'namunaviy' ? 'namunaviy' : 'ishchi';
         $name = $hemisCurriculum->name . ' — ' . $typeLabel;
-        if ($request->filled('semester_code')) {
+        if ($request->type === 'ishchi' && $request->filled('semester_code')) {
             $semesterName = Semester::where('curriculum_hemis_id', $hemisCurriculum->curricula_hemis_id)
                 ->where('code', $request->semester_code)
                 ->value('name');

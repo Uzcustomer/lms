@@ -118,14 +118,14 @@
                                 </td>
                                 <td class="px-3 py-2 text-right">{{ $subject->kurs }}</td>
                                 <td class="px-3 py-2 text-right font-medium {{ $cont ? 'text-blue-600' : '' }}">{{ $subject->semester }}</td>
-                                <td class="px-3 py-2 text-right">{{ $cont ? '' : $fmt($subject->total_hours) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $cont ? '' : $fmt($subject->lecture) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $cont ? '' : $fmt($subject->practice) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $cont ? '' : $fmt($subject->laboratory) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $cont ? '' : $fmt($subject->seminar) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $cont ? '' : $fmt($subject->independent) }}</td>
+                                <td class="px-3 py-2 text-right">{{ $fmt($subject->total_hours) }}</td>
+                                <td class="px-3 py-2 text-right">{{ $fmt($subject->lecture) }}</td>
+                                <td class="px-3 py-2 text-right">{{ $fmt($subject->practice) }}</td>
+                                <td class="px-3 py-2 text-right">{{ $fmt($subject->laboratory) }}</td>
+                                <td class="px-3 py-2 text-right">{{ $fmt($subject->seminar) }}</td>
+                                <td class="px-3 py-2 text-right">{{ $fmt($subject->independent) }}</td>
                                 <td class="px-3 py-2 text-right font-medium">{{ $fmt($subject->credit) }}</td>
-                                <td class="px-3 py-2 text-gray-500 text-xs">{{ $cont ? '' : $subject->note }}</td>
+                                <td class="px-3 py-2 text-gray-500 text-xs">{{ $subject->note }}</td>
                             </tr>
                         @endforeach
                         </tbody>

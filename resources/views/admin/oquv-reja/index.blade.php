@@ -171,7 +171,7 @@
                                 const p = new URLSearchParams();
                                 if (selects.educationType.value) p.set('education_type_code', selects.educationType.value);
                                 if (selects.faculty.value) p.set('department_id', selects.faculty.value);
-                                if (selects.specialty.value) p.set('specialty_id', selects.specialty.value);
+                                if (selects.specialty.value) p.set('specialty_code', selects.specialty.value);
                                 if (selects.level.value) p.set('level_code', selects.level.value);
                                 if (selects.semester.value) p.set('semester_code', selects.semester.value);
                                 if (document.getElementById('cascade-current-toggle').checked) p.set('current_only', '1');
@@ -223,7 +223,7 @@
                             });
                             selects.faculty.addEventListener('change', function () {
                                 if (!this.value) return reset('specialty', 'Avval fakultetni tanlang');
-                                load('specialties', 'specialty', i => (i.code ? i.code + ' — ' : '') + i.name, i => i.id);
+                                load('specialties', 'specialty', i => (i.code ? i.code + ' — ' : '') + i.name, i => i.code || i.name);
                             });
                             selects.specialty.addEventListener('change', async function () {
                                 if (!this.value) return reset('level', "Avval yo'nalishni tanlang");

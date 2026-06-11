@@ -49,6 +49,12 @@ class CurriculumCheckController extends Controller
     public function options(Request $request)
     {
         $curricula = Curriculum::query();
+        // Joriy rejimda butun zanjir (fakultet, yo'nalish, kurs...) faqat
+        // hozir joriy semestri bor rejalar bilan cheklanadi — shu tufayli
+        // bitirgan kohortlar va reja biriktirilmagan dublikat yo'nalishlar chiqmaydi
+        if ($request->boolean('current_only')) {
+            $curricula->whereIn('curricula_hemis_id', Semester::where('current', true)->select('curriculum_hemis_id'));
+        }
         if ($request->filled('education_type_code')) {
             $curricula->where('education_type_code', $request->education_type_code);
         }

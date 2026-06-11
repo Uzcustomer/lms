@@ -268,7 +268,9 @@ class ManualCurriculumExport implements FromArray, ShouldAutoSize, WithStrictNul
 
         foreach ($this->curriculum->subjects->sortBy('id') as $subject) {
             $key = ($subject->block ?? '') . '||' . ($subject->subject_code ?? '') . '||' . $subject->subject_name;
-            if ($key !== $prevKey) {
+            $isNewGroup = ($key !== $prevKey)
+                || ($subject->note && str_starts_with((string) $subject->note, 'Jami'));
+            if ($isNewGroup) {
                 $groups[] = [
                     'block' => $subject->block,
                     'subject_code' => $subject->subject_code,
@@ -360,6 +362,14 @@ class ManualCurriculumExport implements FromArray, ShouldAutoSize, WithStrictNul
                     ->setHorizontal(Alignment::HORIZONTAL_CENTER)
                     ->setWrapText(true);
             }
+
+            // Rotate narrow header columns upward (D and J span rows 2-4; E-I row 3)
+            foreach (['D', 'J'] as $col) {
+                $a = $sheet->getStyle("{$col}2")->getAlignment();
+                $a->setTextRotation(90);
+                $a->setWrapText(false);
+            }
+            $sheet->getStyle('E3:I3')->getAlignment()->setTextRotation(90)->setWrapText(false);
 
             // Row 3: kurs pairs (K3:L3, M3:N3, ...)
             for ($k = 0; $k < $kursCount; $k++) {

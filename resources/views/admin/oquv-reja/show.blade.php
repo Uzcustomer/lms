@@ -12,8 +12,18 @@
                 <div class="mb-4 p-4 bg-green-100 border border-green-300 text-green-800 rounded-lg">{{ session('success') }}</div>
             @endif
 
-            <div class="mb-4">
+            <div class="mb-4 flex items-center justify-between">
                 <a href="{{ route('admin.oquv-reja.index') }}" class="text-blue-600 hover:underline text-sm">&larr; Barcha o'quv rejalar</a>
+                <div class="flex gap-2">
+                    <a href="{{ route('admin.oquv-reja.export', [$curriculum, 'format' => 'jadval']) }}"
+                       class="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700">
+                        ⬇ Jadval (xlsx)
+                    </a>
+                    <a href="{{ route('admin.oquv-reja.export', [$curriculum, 'format' => 'setka']) }}"
+                       class="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700">
+                        ⬇ Setka (xlsx)
+                    </a>
+                </div>
             </div>
 
             @php

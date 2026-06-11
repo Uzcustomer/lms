@@ -61,7 +61,14 @@ class CurriculumCheckController extends Controller
         if ($request->filled('department_id')) {
             $curricula->where('department_hemis_id', $request->department_id);
         }
-        if ($request->filled('specialty_id')) {
+        // Yo'nalish kod bo'yicha filtrlanadi: HEMIS'da bir xil kodli dublikat
+        // yo'nalish yozuvlari bo'lsa, ularning barcha rejalari birgalikda olinadi
+        if ($request->filled('specialty_code')) {
+            $curricula->whereIn(
+                'specialty_hemis_id',
+                Specialty::where('code', $request->specialty_code)->pluck('specialty_hemis_id')
+            );
+        } elseif ($request->filled('specialty_id')) {
             $curricula->where('specialty_hemis_id', $request->specialty_id);
         }
 
@@ -73,12 +80,15 @@ class CurriculumCheckController extends Controller
                 ->orderBy('name')
                 ->get(['department_hemis_id as id', 'name']),
 
+            // Bir xil kod+nomli dublikat yozuvlar bitta variantga jamlanadi
             'specialties' => Specialty::whereIn(
                     'specialty_hemis_id',
                     $curricula->clone()->select('specialty_hemis_id')->distinct()->pluck('specialty_hemis_id')
                 )
+                ->select('code', 'name')
+                ->distinct()
                 ->orderBy('code')
-                ->get(['specialty_hemis_id as id', 'code', 'name']),
+                ->get(),
 
             'levels' => Semester::whereIn(
                     'curriculum_hemis_id',

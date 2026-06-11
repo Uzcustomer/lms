@@ -160,6 +160,14 @@ class ManualCurriculumImport implements ToCollection
                 $record[$field] = $this->toNumber($values[$this->columns[$field]] ?? null);
             }
         }
+        // D ustuni topilmagan yoki bo'sh bo'lsa, audit + mustaqil dan hisoblash
+        if (($record['total_hours'] ?? null) === null) {
+            $a = (float) ($record['audit_total'] ?? 0);
+            $i = (float) ($record['independent'] ?? 0);
+            if ($a > 0 || $i > 0) {
+                $record['total_hours'] = $a + $i;
+            }
+        }
 
         $credits = [];
         foreach ($this->semesterCols as $col => $semester) {

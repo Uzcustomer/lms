@@ -27,7 +27,8 @@
             </div>
 
             @php
-                $totalHours  = $curriculum->subjects->sum(fn($s) => (float) $s->total_hours);
+                $totalHours  = $curriculum->subjects->sum(fn($s) =>
+                    (float) ($s->total_hours ?? ((float)($s->audit_total ?? 0) + (float)($s->independent ?? 0))));
                 $totalCredit = $curriculum->subjects->sum(fn($s) => (float) $s->credit);
                 $fmt = fn($v) => $v === null ? '' : rtrim(rtrim(number_format((float) $v, 2, '.', ' '), '0'), '.');
 

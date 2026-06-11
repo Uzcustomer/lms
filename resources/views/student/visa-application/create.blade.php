@@ -452,6 +452,28 @@
                 </button>
             </div>
 
+            <div id="debugModal" class="fixed inset-0 z-[60] hidden items-center justify-center p-4" style="background:rgba(15,23,42,0.68);backdrop-filter:blur(4px);">
+                <div class="bg-white rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl border border-slate-200">
+                    <div class="px-5 py-4 flex items-start justify-between gap-3 text-white" style="background:linear-gradient(135deg,#b91c1c,#ef4444);">
+                        <div>
+                            <div class="font-bold text-base">Submit debug</div>
+                            <div class="text-xs text-white/90 mt-1">Forma nima sababdan yuborilmaganini ko'rsatadi</div>
+                        </div>
+                        <button type="button" onclick="vaCloseDebug()" class="text-white/80 hover:text-white">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+                        </button>
+                    </div>
+                    <div class="px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
+                        <div id="debugSummary" class="text-sm font-semibold text-slate-800"></div>
+                        <div id="debugSource" class="text-xs font-medium text-slate-500 uppercase tracking-wide"></div>
+                        <pre id="debugDetails" class="text-xs leading-6 whitespace-pre-wrap break-words bg-slate-50 border border-slate-200 rounded-xl p-4 text-slate-800 overflow-x-auto"></pre>
+                    </div>
+                    <div class="px-5 pb-5">
+                        <button type="button" onclick="vaCloseDebug()" class="va-btn-primary w-full">Yopish</button>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
@@ -777,6 +799,28 @@
             m.classList.add('flex');
         }
 
+        function vaShowDebug(summary, details, source) {
+            const modal = document.getElementById('debugModal');
+            const summaryEl = document.getElementById('debugSummary');
+            const sourceEl = document.getElementById('debugSource');
+            const detailsEl = document.getElementById('debugDetails');
+            if (!modal || !summaryEl || !sourceEl || !detailsEl) return;
+            summaryEl.textContent = summary || 'Submit blocked';
+            sourceEl.textContent = source || 'debug';
+            detailsEl.textContent = details || 'No details';
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function formatDebugErrors(errors) {
+            return Object.entries(errors)
+                .map(([key, value]) => {
+                    const text = Array.isArray(value) ? value.join(' | ') : String(value);
+                    return key + ': ' + text;
+                })
+                .join('\n');
+        }
+
         // Forma tomonida nimadir yetishmasligini darhol tushunarli xabar bilan ko'rsatish.
         // (HTML5 required visually-hidden file input'da silent qoladi)
         function vaValidateForm(formEl) {
@@ -888,6 +932,11 @@
                 applyErrors(localErrors);
                 focusFirstError(localErrors);
                 vaToast('Please fix the highlighted fields.');
+                vaShowDebug(
+                    'Client-side validation stopped submit',
+                    formatDebugErrors(localErrors),
+                    'frontend validation'
+                );
                 return;
             }
             const btn = document.getElementById('submitBtn');
@@ -926,16 +975,38 @@
                         }
                         applyErrors(inlineErrors);
                         focusFirstError(inlineErrors);
+                        vaShowDebug(
+                            'Server validation rejected submit',
+                            'HTTP ' + r.status + '\n' + formatDebugErrors(inlineErrors),
+                            'backend validation'
+                        );
                         throw new Error('Please fix the highlighted fields.');
                     }
+                    vaShowDebug(
+                        'Server returned an error',
+                        'HTTP ' + r.status + '\n' + ((data && (data.message || data.error)) || text || 'Unknown server error'),
+                        'server response'
+                    );
                     throw new Error((data && (data.message || data.error)) || ('HTTP ' + r.status));
                 }
                 if (data && data.ok) {
                     vaShowSuccess();
                 } else {
+                    vaShowDebug(
+                        'Unexpected response payload',
+                        JSON.stringify(data, null, 2),
+                        'response parsing'
+                    );
                     throw new Error((data && data.message) || 'Unknown error');
                 }
             }).catch(err => {
+                if (err && err.message) {
+                    vaShowDebug(
+                        'Submit request failed',
+                        err.message,
+                        'fetch/catch'
+                    );
+                }
                 vaToast(err.message || 'System error');
                 btn.disabled = false;
                 btn.textContent = origText;
@@ -944,7 +1015,34 @@
 
         if (initialErrors && Object.keys(initialErrors).length > 0) {
             applyErrors(initialErrors);
+            vaShowDebug(
+                'Page loaded with validation errors',
+                formatDebugErrors(initialErrors),
+                'initial errors'
+            );
         }
+
+        window.addEventListener('error', function (event) {
+            vaShowDebug(
+                'JavaScript runtime error',
+                (event.message || 'Unknown JS error')
+                    + (event.filename ? '\nFile: ' + event.filename : '')
+                    + (event.lineno ? '\nLine: ' + event.lineno : '')
+                    + (event.colno ? '\nColumn: ' + event.colno : ''),
+                'window.onerror'
+            );
+        });
+
+        window.addEventListener('unhandledrejection', function (event) {
+            const reason = event.reason;
+            vaShowDebug(
+                'Unhandled promise rejection',
+                typeof reason === 'string'
+                    ? reason
+                    : (reason?.message || JSON.stringify(reason, null, 2) || 'Unknown promise rejection'),
+                'unhandledrejection'
+            );
+        });
     })();
     // Modal va toast hammaga umumiy — formasiz ham vaCloseSuccess/vaToast kerak emas,
     // shu sababli IIFE ichidan tashqariga global qilamiz:
@@ -954,6 +1052,12 @@
         m.classList.add('hidden');
         m.classList.remove('flex');
         window.location.reload();
+    }
+    function vaCloseDebug() {
+        const m = document.getElementById('debugModal');
+        if (!m) return;
+        m.classList.add('hidden');
+        m.classList.remove('flex');
     }
     </script>
 </x-student-app-layout>

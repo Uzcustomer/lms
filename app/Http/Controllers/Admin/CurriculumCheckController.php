@@ -78,6 +78,7 @@ class CurriculumCheckController extends Controller
                     'curriculum_hemis_id',
                     $curricula->clone()->select('curricula_hemis_id')->pluck('curricula_hemis_id')
                 )
+                ->when($request->boolean('current_only'), fn($q) => $q->where('current', true))
                 ->select('level_code', 'level_name')
                 ->distinct()
                 ->orderBy('level_code')
@@ -87,6 +88,7 @@ class CurriculumCheckController extends Controller
                     'curriculum_hemis_id',
                     $curricula->clone()->select('curricula_hemis_id')->pluck('curricula_hemis_id')
                 )
+                ->when($request->boolean('current_only'), fn($q) => $q->where('current', true))
                 ->when($request->filled('level_code'), fn($q) => $q->where('level_code', $request->level_code))
                 ->select('code', 'name', 'current')
                 ->distinct()
@@ -105,10 +107,13 @@ class CurriculumCheckController extends Controller
                 ->orderBy('level_code')
                 ->get(),
 
+            // Joriy rejimda faqat tanlangan semestri hozir joriy bo'lgan rejalar
+            // chiqadi — bitirib ketgan kohortalarning eski rejalari ko'rinmaydi
             'curricula' => $curricula->clone()
                 ->when($request->filled('semester_code'), fn($q) => $q->whereIn(
                     'curricula_hemis_id',
                     Semester::where('code', $request->semester_code)
+                        ->when($request->boolean('current_only'), fn($s) => $s->where('current', true))
                         ->when($request->filled('level_code'), fn($s) => $s->where('level_code', $request->level_code))
                         ->pluck('curriculum_hemis_id')
                 ))

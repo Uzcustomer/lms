@@ -174,6 +174,7 @@
                                 if (selects.specialty.value) p.set('specialty_id', selects.specialty.value);
                                 if (selects.level.value) p.set('level_code', selects.level.value);
                                 if (selects.semester.value) p.set('semester_code', selects.semester.value);
+                                if (document.getElementById('cascade-current-toggle').checked) p.set('current_only', '1');
                                 return p;
                             }
 

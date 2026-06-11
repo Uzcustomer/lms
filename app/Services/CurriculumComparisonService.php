@@ -1,0 +1,155 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\ManualCurriculum;
+use Illuminate\Support\Collection;
+
+/**
+ * Namunaviy o'quv reja bilan ishchi o'quv rejani fanlar kesimida solishtiradi.
+ *
+ * Fanlar normalizatsiya qilingan nom bo'yicha moslanadi (katta-kichik harf,
+ * apostrof turlari va tinish belgilaridagi farqlar e'tiborga olinmaydi).
+ * Ishchi rejada nom boshqacha bo'lsa, Excel'dagi "Namunaviy rejadagi nomi"
+ * ustuni (reference_name) orqali aniq bog'lanadi. Bir fan bir nechta
+ * semestrda o'tilsa, soat va kreditlari jamlab solishtiriladi.
+ */
+class CurriculumComparisonService
+{
+    public const STATUS_OK = "To'g'ri";
+    public const STATUS_NAME = 'Nom farqi';
+    public const STATUS_HOURS = 'Soat farqi';
+    public const STATUS_CREDIT = 'Kredit farqi';
+    public const STATUS_HOURS_CREDIT = 'Soat va kredit farqi';
+    public const STATUS_MISSING_IN_WORKING = "Ishchi rejada yo'q";
+    public const STATUS_MISSING_IN_REFERENCE = "Namunaviy rejada yo'q";
+
+    public function compare(ManualCurriculum $reference, ManualCurriculum $working): array
+    {
+        $refGroups = $this->groupSubjects($reference->subjects()->orderBy('id')->get(), false);
+        $workGroups = $this->groupSubjects($working->subjects()->orderBy('id')->get(), true);
+
+        $rows = [];
+        foreach ($refGroups as $key => $ref) {
+            $work = $workGroups[$key] ?? null;
+            unset($workGroups[$key]);
+            $rows[] = $this->buildRow($ref, $work);
+        }
+        foreach ($workGroups as $work) {
+            $rows[] = $this->buildRow(null, $work);
+        }
+
+        $stats = collect($rows)->countBy('status')->all();
+        $totals = [
+            'ref_hours' => collect($rows)->sum(fn($r) => $r['ref_hours'] ?? 0),
+            'work_hours' => collect($rows)->sum(fn($r) => $r['work_hours'] ?? 0),
+            'ref_credit' => collect($rows)->sum(fn($r) => $r['ref_credit'] ?? 0),
+            'work_credit' => collect($rows)->sum(fn($r) => $r['work_credit'] ?? 0),
+        ];
+        $totals['hours_diff'] = round($totals['work_hours'] - $totals['ref_hours'], 2);
+        $totals['credit_diff'] = round($totals['work_credit'] - $totals['ref_credit'], 2);
+
+        return ['rows' => $rows, 'totals' => $totals, 'stats' => $stats];
+    }
+
+    private function buildRow(?array $ref, ?array $work): array
+    {
+        $notes = array_filter(array_merge($ref['notes'] ?? [], $work['notes'] ?? []));
+
+        if ($ref === null) {
+            $status = self::STATUS_MISSING_IN_REFERENCE;
+        } elseif ($work === null) {
+            $status = self::STATUS_MISSING_IN_WORKING;
+        } else {
+            $hoursDiff = $this->diff($ref['hours'], $work['hours']);
+            $creditDiff = $this->diff($ref['credit'], $work['credit']);
+            $nameDiffers = $this->collapse($ref['name']) !== $this->collapse($work['name']);
+            $status = match (true) {
+                $hoursDiff && $creditDiff => self::STATUS_HOURS_CREDIT,
+                $hoursDiff => self::STATUS_HOURS,
+                $creditDiff => self::STATUS_CREDIT,
+                $nameDiffers => self::STATUS_NAME,
+                default => self::STATUS_OK,
+            };
+            if ($nameDiffers && $status !== self::STATUS_NAME) {
+                $notes[] = 'Nomda ham farq bor';
+            }
+        }
+
+        return [
+            'block' => $ref['block'] ?? $work['block'] ?? null,
+            'ref_name' => $ref['name'] ?? null,
+            'work_name' => $work['name'] ?? null,
+            'name_differs' => $ref && $work && $this->collapse($ref['name']) !== $this->collapse($work['name']),
+            'ref_hours' => $ref['hours'] ?? null,
+            'work_hours' => $work['hours'] ?? null,
+            'hours_diff' => ($ref && $work) ? round(($work['hours'] ?? 0) - ($ref['hours'] ?? 0), 2) : null,
+            'ref_credit' => $ref['credit'] ?? null,
+            'work_credit' => $work['credit'] ?? null,
+            'credit_diff' => ($ref && $work) ? round(($work['credit'] ?? 0) - ($ref['credit'] ?? 0), 2) : null,
+            'kurslar' => implode(',', $work['kurslar'] ?? []),
+            'semestrlar' => implode(',', collect(array_merge($ref['semestrlar'] ?? [], $work['semestrlar'] ?? []))->unique()->sort()->values()->all()),
+            'status' => $status,
+            'note' => implode('; ', array_unique($notes)),
+        ];
+    }
+
+    private function groupSubjects(Collection $subjects, bool $useReferenceName): array
+    {
+        $groups = [];
+        foreach ($subjects as $subject) {
+            $key = $this->normalize($useReferenceName && $subject->reference_name
+                ? $subject->reference_name
+                : $subject->subject_name);
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'name' => trim($subject->subject_name),
+                    'block' => $subject->block,
+                    'hours' => null,
+                    'credit' => null,
+                    'kurslar' => [],
+                    'semestrlar' => [],
+                    'notes' => [],
+                ];
+            }
+            $group = &$groups[$key];
+            if ($subject->total_hours !== null) {
+                $group['hours'] = round(($group['hours'] ?? 0) + (float) $subject->total_hours, 2);
+            }
+            if ($subject->credit !== null) {
+                $group['credit'] = round(($group['credit'] ?? 0) + (float) $subject->credit, 2);
+            }
+            if ($subject->kurs && !in_array($subject->kurs, $group['kurslar'])) {
+                $group['kurslar'][] = $subject->kurs;
+            }
+            if ($subject->semester && !in_array($subject->semester, $group['semestrlar'])) {
+                $group['semestrlar'][] = $subject->semester;
+            }
+            if ($subject->note) {
+                $group['notes'][] = $subject->note;
+            }
+            unset($group);
+        }
+        foreach ($groups as &$group) {
+            sort($group['kurslar']);
+            sort($group['semestrlar']);
+        }
+        return $groups;
+    }
+
+    private function diff(?float $a, ?float $b): bool
+    {
+        return abs(($b ?? 0) - ($a ?? 0)) > 0.011;
+    }
+
+    private function collapse(string $value): string
+    {
+        return trim(preg_replace('/\s+/u', ' ', $value));
+    }
+
+    public function normalize(string $value): string
+    {
+        $value = mb_strtolower(trim($value));
+        return preg_replace('/[^\p{L}\p{N}]+/u', '', $value);
+    }
+}

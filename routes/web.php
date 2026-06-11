@@ -773,6 +773,18 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [GradeHistoryController::class, 'index'])->name('index');
         });
 
+        // O'quv reja to'g'riligi (akkreditatsiya): namunaviy <-> ishchi reja solishtirish
+        Route::prefix('oquv-reja')->name('oquv-reja.')
+            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'index'])->name('index');
+                Route::post('/', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'store'])->name('store');
+                Route::get('/compare', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compare'])->name('compare');
+                Route::get('/compare/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compareExport'])->name('compare-export');
+                Route::get('/{curriculum}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'show'])->name('show');
+                Route::delete('/{curriculum}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroy'])->name('destroy');
+            });
+
         Route::prefix('student-photos')->name('student-photos.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'index'])->name('index');
             Route::get('/pending-ids', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'pendingIds'])->name('pending-ids');

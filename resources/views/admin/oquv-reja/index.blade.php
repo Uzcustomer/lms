@@ -259,41 +259,50 @@
                                 }
                             });
                             // ===== Diagnostika =====
-                            // Tanlangan fakultet (+ ixtiyoriy yo'nalish) bo'yicha talabalar
-                            // qaysi kurs/semestr/rejaga biriktirilganini xom holda ko'rsatadi
-                            const diagBtn = document.getElementById('diagnose-btn');
-                            const diagBox = document.getElementById('diagnose-result');
-                            diagBtn.addEventListener('click', async function () {
-                                if (!selects.faculty.value) {
-                                    diagBox.innerHTML = '<div class="text-sm text-red-600 p-3">Avval ta\'lim turi va fakultetni tanlang.</div>';
-                                    return;
-                                }
-                                diagBox.innerHTML = '<div class="text-sm text-gray-500 p-3">Yuklanmoqda...</div>';
-                                const rows = await fetchItems('diagnose');
-                                if (!rows.length) {
-                                    diagBox.innerHTML = '<div class="text-sm text-gray-500 p-3">Bu fakultetda talaba topilmadi.</div>';
-                                    return;
-                                }
-                                let html = '<div class="overflow-x-auto"><table class="min-w-full text-xs border"><thead class="bg-gray-100"><tr>' +
-                                    ['Yo\'nalish', 'spec_id', 'Kurs', 'Semestr', 'Talaba', 'Status', 'Reja ID', 'Reja nomi', 'Semestr "current"?']
-                                        .map(h => '<th class="px-2 py-1 text-left border">' + h + '</th>').join('') +
-                                    '</tr></thead><tbody>';
-                                for (const r of rows) {
-                                    const bad = !r.curriculum_exists;
-                                    html += '<tr class="' + (bad ? 'bg-red-50' : '') + '">' +
-                                        '<td class="px-2 py-1 border">' + r.specialty + '</td>' +
-                                        '<td class="px-2 py-1 border">' + (r.specialty_id ?? '') + '</td>' +
-                                        '<td class="px-2 py-1 border">' + (r.level_name ?? '') + '</td>' +
-                                        '<td class="px-2 py-1 border">' + (r.semester ?? '') + '</td>' +
-                                        '<td class="px-2 py-1 border text-right">' + r.student_count + '</td>' +
-                                        '<td class="px-2 py-1 border">' + (r.status_code ?? '') + '</td>' +
-                                        '<td class="px-2 py-1 border">' + (r.curriculum_id ?? '') + '</td>' +
-                                        '<td class="px-2 py-1 border">' + r.curriculum_name + '</td>' +
-                                        '<td class="px-2 py-1 border">' + (r.semester_is_current ? '✅' : '—') + '</td>' +
-                                        '</tr>';
-                                }
-                                html += '</tbody></table></div>';
-                                diagBox.innerHTML = html;
+                            // Tugma script'dan keyin DOM'ga qo'shiladi, shuning uchun
+                            // handler DOM to'liq yuklangach ulanadi
+                            document.addEventListener('DOMContentLoaded', function () {
+                                const diagBtn = document.getElementById('diagnose-btn');
+                                const diagBox = document.getElementById('diagnose-result');
+                                if (!diagBtn || !diagBox) return;
+                                diagBtn.addEventListener('click', async function () {
+                                    if (!selects.faculty.value) {
+                                        diagBox.innerHTML = '<div class="text-sm text-red-600 p-3">Avval ta\'lim turi va fakultetni tanlang.</div>';
+                                        return;
+                                    }
+                                    diagBox.innerHTML = '<div class="text-sm text-gray-500 p-3">Yuklanmoqda...</div>';
+                                    let rows;
+                                    try {
+                                        rows = await fetchItems('diagnose');
+                                    } catch (e) {
+                                        diagBox.innerHTML = '<div class="text-sm text-red-600 p-3">Xatolik: ' + e + '</div>';
+                                        return;
+                                    }
+                                    if (!rows.length) {
+                                        diagBox.innerHTML = '<div class="text-sm text-gray-500 p-3">Bu fakultetda talaba topilmadi.</div>';
+                                        return;
+                                    }
+                                    let html = '<div class="overflow-x-auto"><table class="min-w-full text-xs border"><thead class="bg-gray-100"><tr>' +
+                                        ['Yo\'nalish', 'spec_id', 'Kurs', 'Semestr', 'Talaba', 'Status', 'Reja ID', 'Reja nomi', 'Semestr "current"?']
+                                            .map(h => '<th class="px-2 py-1 text-left border">' + h + '</th>').join('') +
+                                        '</tr></thead><tbody>';
+                                    for (const r of rows) {
+                                        const bad = !r.curriculum_exists;
+                                        html += '<tr class="' + (bad ? 'bg-red-50' : '') + '">' +
+                                            '<td class="px-2 py-1 border">' + r.specialty + '</td>' +
+                                            '<td class="px-2 py-1 border">' + (r.specialty_id ?? '') + '</td>' +
+                                            '<td class="px-2 py-1 border">' + (r.level_name ?? '') + '</td>' +
+                                            '<td class="px-2 py-1 border">' + (r.semester ?? '') + '</td>' +
+                                            '<td class="px-2 py-1 border text-right">' + r.student_count + '</td>' +
+                                            '<td class="px-2 py-1 border">' + (r.status_code ?? '') + '</td>' +
+                                            '<td class="px-2 py-1 border">' + (r.curriculum_id ?? '') + '</td>' +
+                                            '<td class="px-2 py-1 border">' + r.curriculum_name + '</td>' +
+                                            '<td class="px-2 py-1 border">' + (r.semester_is_current ? '✅' : '—') + '</td>' +
+                                            '</tr>';
+                                    }
+                                    html += '</tbody></table></div>';
+                                    diagBox.innerHTML = html;
+                                });
                             });
                         })();
                     </script>

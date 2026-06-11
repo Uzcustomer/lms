@@ -6,6 +6,7 @@ use App\Models\ManualCurriculum;
 use App\Models\ManualCurriculumSubject;
 use Illuminate\Support\Collection;
 use Maatwebsite\Excel\Concerns\ToCollection;
+use Maatwebsite\Excel\Concerns\WithCalculatedFormulas;
 
 /**
  * Namunaviy yoki ishchi o'quv reja Excel faylini o'qiydi.
@@ -23,7 +24,7 @@ use Maatwebsite\Excel\Concerns\ToCollection;
  *    T/r ustunidagi sarlavha qatorlaridan olinadi, "jami"/"HAMMASI"
  *    yig'indi qatorlari va "Izoh" o'tkazib yuboriladi.
  */
-class ManualCurriculumImport implements ToCollection
+class ManualCurriculumImport implements ToCollection, WithCalculatedFormulas
 {
     public array $errors = [];
     public int $imported = 0;

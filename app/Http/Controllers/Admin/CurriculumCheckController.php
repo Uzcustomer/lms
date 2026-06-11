@@ -162,10 +162,8 @@ class CurriculumCheckController extends Controller
      */
     private function diagnose(Request $request)
     {
-        // Diagnostika status bo'yicha filtrlamaydi — barcha talabalar
-        // ko'rinadi (status_code ustuni orqali kim aktiv ekani bilinadi),
-        // shunda biror kurs nega cascade'da yo'qligi to'liq ochiladi
         $rows = $this->students($request->merge(['current_only' => false]))
+            ->where('student_status_code', '!=', 60)
             ->selectRaw('specialty_id, specialty_code, specialty_name, level_code, level_name,
                 semester_code, semester_name, curriculum_id, student_status_code, count(*) as student_count')
             ->groupBy('specialty_id', 'specialty_code', 'specialty_name', 'level_code', 'level_name',

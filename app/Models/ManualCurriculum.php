@@ -14,6 +14,10 @@ class ManualCurriculum extends Model
         'specialty_code',
         'specialty_name',
         'plan_year',
+        'curricula_hemis_id',
+        'level_code',
+        'semester_code',
+        'education_type_name',
         'education_period',
         'file_original_name',
         'file_path',
@@ -24,6 +28,11 @@ class ManualCurriculum extends Model
     public function subjects()
     {
         return $this->hasMany(ManualCurriculumSubject::class);
+    }
+
+    public function hemisCurriculum()
+    {
+        return $this->belongsTo(Curriculum::class, 'curricula_hemis_id', 'curricula_hemis_id');
     }
 
     public function typeLabel(): string

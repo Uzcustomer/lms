@@ -80,25 +80,50 @@
                             </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Nomi</label>
-                            <input type="text" name="name" required value="{{ old('name') }}"
-                                   placeholder="Masalan: 5510100 Davolash ishi (2020) namunaviy"
-                                   class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Ta'lim turi</label>
+                            <select id="cascade-education-type" required class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                <option value="">Tanlang</option>
+                                @foreach($educationTypes as $et)
+                                    <option value="{{ $et->education_type_code }}">{{ $et->education_type_name }}</option>
+                                @endforeach
+                            </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Yo'nalish kodi</label>
-                            <input type="text" name="specialty_code" value="{{ old('specialty_code') }}"
-                                   placeholder="5510100" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Fakultet</label>
+                            <select id="cascade-faculty" required disabled class="w-full rounded-md border-gray-300 shadow-sm text-sm disabled:bg-gray-100">
+                                <option value="">Avval ta'lim turini tanlang</option>
+                            </select>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Yo'nalish nomi</label>
-                            <input type="text" name="specialty_name" value="{{ old('specialty_name') }}"
-                                   placeholder="Davolash ishi" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Yo'nalish</label>
+                            <select id="cascade-specialty" required disabled class="w-full rounded-md border-gray-300 shadow-sm text-sm disabled:bg-gray-100">
+                                <option value="">Avval fakultetni tanlang</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-3 flex items-center gap-2">
+                            <input type="checkbox" id="cascade-current-toggle" checked
+                                   class="rounded border-gray-300 text-blue-600 shadow-sm">
+                            <label for="cascade-current-toggle" class="text-sm font-medium text-gray-700">
+                                Joriy kurs va semestr avtomatik tanlansin
+                            </label>
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">O'quv reja yili</label>
-                            <input type="text" name="plan_year" value="{{ old('plan_year') }}"
-                                   placeholder="2021/2022" class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Kurs</label>
+                            <select id="cascade-level" name="level_code" required disabled class="w-full rounded-md border-gray-300 shadow-sm text-sm disabled:bg-gray-100">
+                                <option value="">Avval yo'nalishni tanlang</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-1">Semestr</label>
+                            <select id="cascade-semester" name="semester_code" required disabled class="w-full rounded-md border-gray-300 shadow-sm text-sm disabled:bg-gray-100">
+                                <option value="">Avval kursni tanlang</option>
+                            </select>
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-sm font-medium text-gray-700 mb-1">O'quv reja (HEMIS)</label>
+                            <select id="cascade-curriculum" name="curricula_hemis_id" required disabled class="w-full rounded-md border-gray-300 shadow-sm text-sm disabled:bg-gray-100">
+                                <option value="">Avval semestrni tanlang</option>
+                            </select>
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">Excel fayl (.xlsx)</label>
@@ -116,6 +141,121 @@
                             </span>
                         </div>
                     </form>
+
+                    <script>
+                        (function () {
+                            const optionsUrl = @json(route('admin.oquv-reja.options'));
+                            const selects = {
+                                educationType: document.getElementById('cascade-education-type'),
+                                faculty: document.getElementById('cascade-faculty'),
+                                specialty: document.getElementById('cascade-specialty'),
+                                level: document.getElementById('cascade-level'),
+                                semester: document.getElementById('cascade-semester'),
+                                curriculum: document.getElementById('cascade-curriculum'),
+                            };
+                            // Tanlov o'zgarganda o'zidan keyingilarini tozalash tartibi
+                            const chain = ['faculty', 'specialty', 'level', 'semester', 'curriculum'];
+
+                            function reset(fromKey, placeholder) {
+                                let clearing = false;
+                                for (const key of chain) {
+                                    if (key === fromKey) clearing = true;
+                                    if (!clearing) continue;
+                                    const select = selects[key];
+                                    select.innerHTML = '<option value="">' + (key === fromKey ? placeholder : 'Avval oldingi maydonni tanlang') + '</option>';
+                                    select.disabled = true;
+                                }
+                            }
+
+                            function params() {
+                                const p = new URLSearchParams();
+                                if (selects.educationType.value) p.set('education_type_code', selects.educationType.value);
+                                if (selects.faculty.value) p.set('department_id', selects.faculty.value);
+                                if (selects.specialty.value) p.set('specialty_id', selects.specialty.value);
+                                if (selects.level.value) p.set('level_code', selects.level.value);
+                                if (selects.semester.value) p.set('semester_code', selects.semester.value);
+                                return p;
+                            }
+
+                            const currentToggle = document.getElementById('cascade-current-toggle');
+
+                            async function fetchItems(list, extra = {}) {
+                                const p = params();
+                                p.set('list', list);
+                                for (const [k, v] of Object.entries(extra)) p.set(k, v);
+                                const response = await fetch(optionsUrl + '?' + p.toString(), {headers: {'Accept': 'application/json'}});
+                                return response.json();
+                            }
+
+                            async function load(list, targetKey, labelFn, valueFn, autoSelect = null) {
+                                const target = selects[targetKey];
+                                reset(targetKey, 'Yuklanmoqda...');
+                                try {
+                                    const items = await fetchItems(list);
+                                    target.innerHTML = '<option value="">Tanlang</option>';
+                                    for (const item of items) {
+                                        const opt = document.createElement('option');
+                                        opt.value = valueFn(item);
+                                        opt.textContent = labelFn(item);
+                                        target.appendChild(opt);
+                                    }
+                                    target.disabled = false;
+                                    if (items.length === 0) {
+                                        target.innerHTML = '<option value="">Ma\'lumot topilmadi</option>';
+                                    } else if (autoSelect !== null && items.some(i => String(valueFn(i)) === String(autoSelect))) {
+                                        target.value = String(autoSelect);
+                                        target.dispatchEvent(new Event('change'));
+                                    }
+                                    return items;
+                                } catch (e) {
+                                    target.innerHTML = '<option value="">Xatolik, qayta urinib ko\'ring</option>';
+                                    return [];
+                                }
+                            }
+
+                            const semesterLabel = i => (i.name || i.code) + (i.current ? ' (joriy)' : '');
+                            const curriculumLabel = i => i.name + (i.education_year_name ? ' [' + i.education_year_name + ']' : '');
+
+                            selects.educationType.addEventListener('change', function () {
+                                if (!this.value) return reset('faculty', "Avval ta'lim turini tanlang");
+                                load('faculties', 'faculty', i => i.name, i => i.id);
+                            });
+                            selects.faculty.addEventListener('change', function () {
+                                if (!this.value) return reset('specialty', 'Avval fakultetni tanlang');
+                                load('specialties', 'specialty', i => (i.code ? i.code + ' — ' : '') + i.name, i => i.id);
+                            });
+                            selects.specialty.addEventListener('change', async function () {
+                                if (!this.value) return reset('level', "Avval yo'nalishni tanlang");
+                                let autoLevel = null;
+                                if (currentToggle.checked) {
+                                    // Joriy semestrning kursi yagona bo'lsa, avtomatik tanlanadi
+                                    const current = await fetchItems('current');
+                                    const levels = [...new Set(current.map(i => String(i.level_code)))];
+                                    if (levels.length === 1) autoLevel = levels[0];
+                                }
+                                load('levels', 'level', i => i.level_name || i.level_code, i => i.level_code, autoLevel);
+                            });
+                            selects.level.addEventListener('change', async function () {
+                                if (!this.value) return reset('semester', 'Avval kursni tanlang');
+                                let autoSemester = null;
+                                if (currentToggle.checked) {
+                                    const current = await fetchItems('current', {level_code: this.value});
+                                    if (current.length > 0) autoSemester = current[0].code;
+                                }
+                                load('semesters', 'semester', semesterLabel, i => i.code, autoSemester);
+                            });
+                            selects.semester.addEventListener('change', function () {
+                                if (!this.value) return reset('curriculum', 'Avval semestrni tanlang');
+                                load('curricula', 'curriculum', curriculumLabel, i => i.id);
+                            });
+                            currentToggle.addEventListener('change', function () {
+                                // Toggle holati o'zgarsa, yo'nalishdan boshlab qayta hisoblanadi
+                                if (selects.specialty.value) {
+                                    selects.specialty.dispatchEvent(new Event('change'));
+                                }
+                            });
+                        })();
+                    </script>
                 </div>
             </div>
 

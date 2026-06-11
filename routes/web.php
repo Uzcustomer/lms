@@ -779,6 +779,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->group(function () {
                 Route::get('/', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'index'])->name('index');
                 Route::post('/', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'store'])->name('store');
+                Route::get('/options', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'options'])->name('options');
                 Route::get('/compare', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compare'])->name('compare');
                 Route::get('/compare/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compareExport'])->name('compare-export');
                 Route::get('/{curriculum}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'show'])->name('show');

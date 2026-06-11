@@ -105,7 +105,14 @@ class ManualCurriculumImport implements ToCollection, WithCalculatedFormulas
         }
         foreach (['kurs', 'semester'] as $field) {
             if (isset($this->columns[$field])) {
-                $value = $this->toNumber($values[$this->columns[$field]] ?? null);
+                $raw = $values[$this->columns[$field]] ?? null;
+                $value = $this->toNumber($raw);
+                if ($value === null && $raw !== null && $raw !== '') {
+                    // Handle "2-semestr", "3-kurs", "I-semestr" etc.
+                    if (preg_match('/^(\d+)/', trim((string) $raw), $m)) {
+                        $value = (float) $m[1];
+                    }
+                }
                 $record[$field] = $value !== null ? (int) $value : null;
             }
         }

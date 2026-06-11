@@ -177,21 +177,45 @@ class ManualCurriculumImport implements ToCollection
             return;
         }
 
-        if ($credits !== []) {
-            ksort($credits);
-            if (count($credits) === 1) {
-                $record['semester'] = array_key_first($credits);
-                $record['kurs'] = (int) ceil($record['semester'] / 2);
-            }
-            $record['note'] = 'Kredit taqsimoti: ' . implode(', ', array_map(
-                fn($semester, $credit) => "{$semester}-sem " . $this->formatNumber($credit),
-                array_keys($credits),
-                $credits
-            ));
+        if ($credits === []) {
+            ManualCurriculumSubject::create($record);
+            $this->imported++;
+            return;
         }
 
-        ManualCurriculumSubject::create($record);
-        $this->imported++;
+        ksort($credits);
+
+        if (count($credits) === 1) {
+            $record['semester'] = array_key_first($credits);
+            $record['kurs'] = (int) ceil($record['semester'] / 2);
+            ManualCurriculumSubject::create($record);
+            $this->imported++;
+            return;
+        }
+
+        // Bir nechta semestrda o'tiluvchi fan: har semestr uchun alohida qator.
+        // Birinchi qatorda soat ma'lumotlari + jami kredit izohda, keyingilarida faqat semestr/kredit.
+        $semList = implode(', ', array_map(
+            fn($s, $c) => "{$s}-sem " . $this->formatNumber($c),
+            array_keys($credits), $credits
+        ));
+        $isFirst = true;
+        foreach ($credits as $semester => $credit) {
+            $row = $isFirst
+                ? array_merge($record, ['note' => "Jami {$record['credit']} kredit: {$semList}"])
+                : [
+                    'manual_curriculum_id' => $this->curriculum->id,
+                    'block' => $this->currentBlock,
+                    'subject_name' => $record['subject_name'],
+                    'subject_code' => $record['subject_code'] ?? null,
+                ];
+            $row['semester'] = $semester;
+            $row['kurs'] = (int) ceil($semester / 2);
+            $row['credit'] = $credit;
+            ManualCurriculumSubject::create($row);
+            $this->imported++;
+            $isFirst = false;
+        }
     }
 
     /**

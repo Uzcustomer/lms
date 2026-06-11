@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Exports\CurriculumComparisonExport;
+use App\Exports\ManualCurriculumExport;
 use App\Http\Controllers\Controller;
 use App\Imports\ManualCurriculumImport;
 use App\Models\Curriculum;
@@ -263,6 +264,15 @@ class CurriculumCheckController extends Controller
             Log::error("O'quv reja import xatolik: " . $e->getMessage());
             return back()->with('error', "Faylni o'qishda xatolik: " . $e->getMessage());
         }
+    }
+
+    public function export(Request $request, ManualCurriculum $curriculum)
+    {
+        $format = in_array($request->input('format'), ['jadval', 'setka']) ? $request->input('format') : 'jadval';
+        $curriculum->load(['subjects' => fn($q) => $q->orderBy('id')]);
+        $slug = \Illuminate\Support\Str::slug($curriculum->name);
+        $fileName = "{$slug}-{$format}-" . now()->format('Y-m-d') . '.xlsx';
+        return \Maatwebsite\Excel\Facades\Excel::download(new ManualCurriculumExport($curriculum, $format), $fileName);
     }
 
     public function show(ManualCurriculum $curriculum)

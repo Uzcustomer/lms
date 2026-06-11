@@ -12,14 +12,38 @@
                 <div class="mb-4 p-4 bg-green-100 border border-green-300 text-green-800 rounded-lg">{{ session('success') }}</div>
             @endif
 
-            <div class="mb-4">
+            <div class="mb-4 flex items-center justify-between">
                 <a href="{{ route('admin.oquv-reja.index') }}" class="text-blue-600 hover:underline text-sm">&larr; Barcha o'quv rejalar</a>
+                <div class="flex gap-2">
+                    <a href="{{ route('admin.oquv-reja.export', [$curriculum, 'format' => 'jadval']) }}"
+                       class="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700">
+                        ⬇ Jadval (xlsx)
+                    </a>
+                    <a href="{{ route('admin.oquv-reja.export', [$curriculum, 'format' => 'setka']) }}"
+                       class="inline-flex items-center gap-1 px-3 py-1.5 text-sm bg-white border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-700">
+                        ⬇ Setka (xlsx)
+                    </a>
+                </div>
             </div>
 
             @php
-                $totalHours = $curriculum->subjects->sum(fn($s) => (float) $s->total_hours);
+                $totalHours  = $curriculum->subjects->sum(fn($s) => (float) $s->total_hours);
                 $totalCredit = $curriculum->subjects->sum(fn($s) => (float) $s->credit);
                 $fmt = fn($v) => $v === null ? '' : rtrim(rtrim(number_format((float) $v, 2, '.', ' '), '0'), '.');
+
+                // Vizual guruhlash: ketma-ket bir xil (blok+kod+nom) qatorlarni birlashtirib ko'rsat
+                $rows = [];
+                $prevKey = null;
+                $subjectNum = 0;
+                foreach ($curriculum->subjects as $subject) {
+                    $key = ($subject->block ?? '') . '|' . ($subject->subject_code ?? '') . '|' . $subject->subject_name;
+                    $isContinuation = ($key === $prevKey);
+                    if (!$isContinuation) {
+                        $subjectNum++;
+                    }
+                    $rows[] = ['subject' => $subject, 'continuation' => $isContinuation, 'num' => $subjectNum];
+                    $prevKey = $key;
+                }
             @endphp
 
             <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
@@ -64,23 +88,43 @@
                         </tr>
                         </thead>
                         <tbody class="divide-y divide-gray-100">
-                        @foreach($curriculum->subjects as $subject)
-                            <tr class="hover:bg-gray-50">
-                                <td class="px-3 py-2">{{ $loop->iteration }}</td>
-                                <td class="px-3 py-2">{{ $subject->block }}</td>
-                                <td class="px-3 py-2">{{ $subject->subject_code }}</td>
-                                <td class="px-3 py-2">{{ $subject->subject_name }}</td>
-                                <td class="px-3 py-2 text-amber-700">{{ $subject->reference_name }}</td>
+                        @foreach($rows as $item)
+                            @php $subject = $item['subject']; $cont = $item['continuation']; @endphp
+                            <tr class="{{ $cont ? 'bg-blue-50/40' : 'hover:bg-gray-50' }}
+                                       {{ $cont ? 'border-l-2 border-blue-300' : '' }}">
+                                {{-- # --}}
+                                <td class="px-3 py-2 text-gray-400">
+                                    @if(!$cont) {{ $item['num'] }} @else <span class="text-blue-400 pl-1">↳</span> @endif
+                                </td>
+                                {{-- Blok --}}
+                                <td class="px-3 py-2 {{ $cont ? 'text-gray-300' : '' }}">
+                                    @if(!$cont) {{ $subject->block }} @endif
+                                </td>
+                                {{-- Fan kodi --}}
+                                <td class="px-3 py-2 {{ $cont ? 'text-gray-300' : '' }}">
+                                    @if(!$cont) {{ $subject->subject_code }} @endif
+                                </td>
+                                {{-- Fan nomi --}}
+                                <td class="px-3 py-2 {{ $cont ? 'text-gray-400 italic pl-6' : '' }}">
+                                    @if(!$cont)
+                                        {{ $subject->subject_name }}
+                                    @else
+                                        {{ $subject->subject_name }}
+                                    @endif
+                                </td>
+                                <td class="px-3 py-2 text-amber-700">
+                                    @if(!$cont) {{ $subject->reference_name }} @endif
+                                </td>
                                 <td class="px-3 py-2 text-right">{{ $subject->kurs }}</td>
-                                <td class="px-3 py-2 text-right">{{ $subject->semester }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($subject->total_hours) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($subject->lecture) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($subject->practice) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($subject->laboratory) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($subject->seminar) }}</td>
-                                <td class="px-3 py-2 text-right">{{ $fmt($subject->independent) }}</td>
+                                <td class="px-3 py-2 text-right font-medium {{ $cont ? 'text-blue-600' : '' }}">{{ $subject->semester }}</td>
+                                <td class="px-3 py-2 text-right">{{ $cont ? '' : $fmt($subject->total_hours) }}</td>
+                                <td class="px-3 py-2 text-right">{{ $cont ? '' : $fmt($subject->lecture) }}</td>
+                                <td class="px-3 py-2 text-right">{{ $cont ? '' : $fmt($subject->practice) }}</td>
+                                <td class="px-3 py-2 text-right">{{ $cont ? '' : $fmt($subject->laboratory) }}</td>
+                                <td class="px-3 py-2 text-right">{{ $cont ? '' : $fmt($subject->seminar) }}</td>
+                                <td class="px-3 py-2 text-right">{{ $cont ? '' : $fmt($subject->independent) }}</td>
                                 <td class="px-3 py-2 text-right font-medium">{{ $fmt($subject->credit) }}</td>
-                                <td class="px-3 py-2 text-gray-500">{{ $subject->note }}</td>
+                                <td class="px-3 py-2 text-gray-500 text-xs">{{ $cont ? '' : $subject->note }}</td>
                             </tr>
                         @endforeach
                         </tbody>

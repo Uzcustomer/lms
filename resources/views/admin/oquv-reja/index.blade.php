@@ -171,7 +171,7 @@
                                 const p = new URLSearchParams();
                                 if (selects.educationType.value) p.set('education_type_code', selects.educationType.value);
                                 if (selects.faculty.value) p.set('department_id', selects.faculty.value);
-                                if (selects.specialty.value) p.set('specialty_code', selects.specialty.value);
+                                if (selects.specialty.value) p.set('specialty_id', selects.specialty.value);
                                 if (selects.level.value) p.set('level_code', selects.level.value);
                                 if (selects.semester.value) p.set('semester_code', selects.semester.value);
                                 if (document.getElementById('cascade-current-toggle').checked) p.set('current_only', '1');
@@ -214,8 +214,9 @@
                                 }
                             }
 
-                            const semesterLabel = i => (i.name || i.code) + (i.current ? ' (joriy)' : '');
-                            const curriculumLabel = i => i.name + (i.education_year_name ? ' [' + i.education_year_name + ']' : '');
+                            const cnt = i => i.student_count ? ' (' + i.student_count + ' ta talaba)' : '';
+                            const semesterLabel = i => (i.name || i.code) + cnt(i);
+                            const curriculumLabel = i => (i.name || ('Reja #' + i.id)) + (i.exists ? '' : ' ❌ (curricula jadvalida yo\'q)') + cnt(i);
 
                             selects.educationType.addEventListener('change', function () {
                                 if (!this.value) return reset('faculty', "Avval ta'lim turini tanlang");
@@ -223,25 +224,27 @@
                             });
                             selects.faculty.addEventListener('change', function () {
                                 if (!this.value) return reset('specialty', 'Avval fakultetni tanlang');
-                                load('specialties', 'specialty', i => (i.code ? i.code + ' — ' : '') + i.name, i => i.code || i.name);
+                                load('specialties', 'specialty', i => (i.code ? i.code + ' — ' : '') + i.name + cnt(i), i => i.id);
                             });
                             selects.specialty.addEventListener('change', async function () {
                                 if (!this.value) return reset('level', "Avval yo'nalishni tanlang");
                                 let autoLevel = null;
                                 if (currentToggle.checked) {
-                                    // Joriy semestrning kursi yagona bo'lsa, avtomatik tanlanadi
-                                    const current = await fetchItems('current');
-                                    const levels = [...new Set(current.map(i => String(i.level_code)))];
-                                    if (levels.length === 1) autoLevel = levels[0];
+                                    // Yo'nalishda yagona kurs bo'lsa, avtomatik tanlanadi
+                                    const levels = await fetchItems('levels');
+                                    if (levels.length === 1) autoLevel = levels[0].level_code;
                                 }
-                                load('levels', 'level', i => i.level_name || i.level_code, i => i.level_code, autoLevel);
+                                load('levels', 'level', i => (i.level_name || i.level_code) + cnt(i), i => i.level_code, autoLevel);
                             });
                             selects.level.addEventListener('change', async function () {
                                 if (!this.value) return reset('semester', 'Avval kursni tanlang');
                                 let autoSemester = null;
                                 if (currentToggle.checked) {
-                                    const current = await fetchItems('current', {level_code: this.value});
-                                    if (current.length > 0) autoSemester = current[0].code;
+                                    // Active talabalar joriy semestrida — eng ko'p talabali semestr tanlanadi
+                                    const semesters = await fetchItems('semesters', {level_code: this.value});
+                                    if (semesters.length > 0) {
+                                        autoSemester = semesters.reduce((a, b) => (b.student_count > a.student_count ? b : a)).code;
+                                    }
                                 }
                                 load('semesters', 'semester', semesterLabel, i => i.code, autoSemester);
                             });
@@ -255,8 +258,67 @@
                                     selects.specialty.dispatchEvent(new Event('change'));
                                 }
                             });
+                            // ===== Diagnostika =====
+                            // Tanlangan fakultet (+ ixtiyoriy yo'nalish) bo'yicha talabalar
+                            // qaysi kurs/semestr/rejaga biriktirilganini xom holda ko'rsatadi
+                            const diagBtn = document.getElementById('diagnose-btn');
+                            const diagBox = document.getElementById('diagnose-result');
+                            diagBtn.addEventListener('click', async function () {
+                                if (!selects.faculty.value) {
+                                    diagBox.innerHTML = '<div class="text-sm text-red-600 p-3">Avval ta\'lim turi va fakultetni tanlang.</div>';
+                                    return;
+                                }
+                                diagBox.innerHTML = '<div class="text-sm text-gray-500 p-3">Yuklanmoqda...</div>';
+                                const rows = await fetchItems('diagnose');
+                                if (!rows.length) {
+                                    diagBox.innerHTML = '<div class="text-sm text-gray-500 p-3">Bu fakultetda talaba topilmadi.</div>';
+                                    return;
+                                }
+                                let html = '<div class="overflow-x-auto"><table class="min-w-full text-xs border"><thead class="bg-gray-100"><tr>' +
+                                    ['Yo\'nalish', 'spec_id', 'Kurs', 'Semestr', 'Talaba', 'Status', 'Reja ID', 'Reja nomi', 'Semestr "current"?']
+                                        .map(h => '<th class="px-2 py-1 text-left border">' + h + '</th>').join('') +
+                                    '</tr></thead><tbody>';
+                                for (const r of rows) {
+                                    const bad = !r.curriculum_exists;
+                                    html += '<tr class="' + (bad ? 'bg-red-50' : '') + '">' +
+                                        '<td class="px-2 py-1 border">' + r.specialty + '</td>' +
+                                        '<td class="px-2 py-1 border">' + (r.specialty_id ?? '') + '</td>' +
+                                        '<td class="px-2 py-1 border">' + (r.level_name ?? '') + '</td>' +
+                                        '<td class="px-2 py-1 border">' + (r.semester ?? '') + '</td>' +
+                                        '<td class="px-2 py-1 border text-right">' + r.student_count + '</td>' +
+                                        '<td class="px-2 py-1 border">' + (r.status_code ?? '') + '</td>' +
+                                        '<td class="px-2 py-1 border">' + (r.curriculum_id ?? '') + '</td>' +
+                                        '<td class="px-2 py-1 border">' + r.curriculum_name + '</td>' +
+                                        '<td class="px-2 py-1 border">' + (r.semester_is_current ? '✅' : '—') + '</td>' +
+                                        '</tr>';
+                                }
+                                html += '</tbody></table></div>';
+                                diagBox.innerHTML = html;
+                            });
                         })();
                     </script>
+                </div>
+            </div>
+
+            {{-- Diagnostika --}}
+            <div class="bg-white shadow-sm sm:rounded-lg mb-6">
+                <div class="p-6">
+                    <div class="flex items-center justify-between flex-wrap gap-3">
+                        <div>
+                            <h3 class="text-lg font-semibold text-gray-800">Diagnostika</h3>
+                            <p class="text-sm text-gray-500">
+                                Yuqorida ta'lim turi va fakultetni (kerak bo'lsa yo'nalishni) tanlab,
+                                tugmani bosing — talabalar qaysi kurs/semestr/rejaga biriktirilgani,
+                                reja HEMIS bazasida bor-yo'qligi xom holda ko'rinadi. Qaysidir kurs yoki
+                                reja cascade'da chiqmasa, sababi shu jadvalda aniqlanadi.
+                            </p>
+                        </div>
+                        <button type="button" id="diagnose-btn"
+                                class="px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 whitespace-nowrap">
+                            Diagnostikani ko'rsatish
+                        </button>
+                    </div>
+                    <div id="diagnose-result" class="mt-4"></div>
                 </div>
             </div>
 

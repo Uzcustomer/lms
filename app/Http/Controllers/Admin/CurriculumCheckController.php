@@ -6,10 +6,9 @@ use App\Exports\CurriculumComparisonExport;
 use App\Http\Controllers\Controller;
 use App\Imports\ManualCurriculumImport;
 use App\Models\Curriculum;
-use App\Models\Department;
 use App\Models\ManualCurriculum;
 use App\Models\Semester;
-use App\Models\Specialty;
+use App\Models\Student;
 use App\Services\CurriculumComparisonService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -32,7 +31,7 @@ class CurriculumCheckController extends Controller
             ->orderByDesc('id')
             ->get();
 
-        $educationTypes = Curriculum::query()
+        $educationTypes = Student::query()
             ->whereNotNull('education_type_code')
             ->select('education_type_code', 'education_type_name')
             ->distinct()
@@ -43,101 +42,164 @@ class CurriculumCheckController extends Controller
     }
 
     /**
-     * HEMIS ma'lumotlari asosida cascade tanlov ro'yxatlari:
+     * Cascade tanlov ro'yxatlari TALABALAR jadvali asosida quriladi
+     * (HEMIS'dagi semestr "current" flagi ishonchsiz bo'lgani uchun).
+     * Active talaba = student_status_code 11. Har bir tanlov o'sha yo'nalishga
+     * haqiqatan biriktirilgan talabalar bo'yicha aniqlanadi:
      * ta'lim turi -> fakultet -> yo'nalish -> kurs -> semestr -> o'quv reja
      */
     public function options(Request $request)
     {
-        $curricula = Curriculum::query();
-        // Joriy rejimda butun zanjir (fakultet, yo'nalish, kurs...) faqat
-        // hozir joriy semestri bor rejalar bilan cheklanadi — shu tufayli
-        // bitirgan kohortlar va reja biriktirilmagan dublikat yo'nalishlar chiqmaydi
-        if ($request->boolean('current_only')) {
-            $curricula->whereIn('curricula_hemis_id', Semester::where('current', true)->select('curriculum_hemis_id'));
-        }
-        if ($request->filled('education_type_code')) {
-            $curricula->where('education_type_code', $request->education_type_code);
-        }
-        if ($request->filled('department_id')) {
-            $curricula->where('department_hemis_id', $request->department_id);
-        }
-        // Yo'nalish kod bo'yicha filtrlanadi: HEMIS'da bir xil kodli dublikat
-        // yo'nalish yozuvlari bo'lsa, ularning barcha rejalari birgalikda olinadi
-        if ($request->filled('specialty_code')) {
-            $curricula->whereIn(
-                'specialty_hemis_id',
-                Specialty::where('code', $request->specialty_code)->pluck('specialty_hemis_id')
-            );
-        } elseif ($request->filled('specialty_id')) {
-            $curricula->where('specialty_hemis_id', $request->specialty_id);
-        }
-
         return response()->json(match ($request->input('list')) {
-            'faculties' => Department::whereIn(
-                    'department_hemis_id',
-                    $curricula->clone()->select('department_hemis_id')->distinct()->pluck('department_hemis_id')
-                )
-                ->orderBy('name')
-                ->get(['department_hemis_id as id', 'name']),
-
-            // Bir xil kod+nomli dublikat yozuvlar bitta variantga jamlanadi
-            'specialties' => Specialty::whereIn(
-                    'specialty_hemis_id',
-                    $curricula->clone()->select('specialty_hemis_id')->distinct()->pluck('specialty_hemis_id')
-                )
-                ->select('code', 'name')
+            'faculties' => $this->students($request)
+                ->whereNotNull('department_id')
+                ->select('department_id as id', 'department_name as name')
                 ->distinct()
-                ->orderBy('code')
+                ->orderBy('department_name')
                 ->get(),
 
-            'levels' => Semester::whereIn(
-                    'curriculum_hemis_id',
-                    $curricula->clone()->select('curricula_hemis_id')->pluck('curricula_hemis_id')
-                )
-                ->when($request->boolean('current_only'), fn($q) => $q->where('current', true))
-                ->select('level_code', 'level_name')
-                ->distinct()
+            // Yo'nalishlar alohida yozuv (specialty_id) bo'yicha ko'rsatiladi:
+            // bir xil kodli dublikatlar ham alohida turadi, qaysi biriga
+            // talaba biriktirilgani talaba soni orqali bilinadi
+            'specialties' => $this->students($request)
+                ->whereNotNull('specialty_id')
+                ->selectRaw('specialty_id as id, specialty_code as code, specialty_name as name, count(*) as student_count')
+                ->groupBy('specialty_id', 'specialty_code', 'specialty_name')
+                ->orderBy('specialty_code')
+                ->get(),
+
+            'levels' => $this->students($request)
+                ->whereNotNull('level_code')
+                ->selectRaw('level_code, level_name, count(*) as student_count')
+                ->groupBy('level_code', 'level_name')
                 ->orderBy('level_code')
                 ->get(),
 
-            'semesters' => Semester::whereIn(
-                    'curriculum_hemis_id',
-                    $curricula->clone()->select('curricula_hemis_id')->pluck('curricula_hemis_id')
-                )
-                ->when($request->boolean('current_only'), fn($q) => $q->where('current', true))
-                ->when($request->filled('level_code'), fn($q) => $q->where('level_code', $request->level_code))
-                ->select('code', 'name', 'current')
-                ->distinct()
-                ->orderBy('code')
+            'semesters' => $this->students($request)
+                ->whereNotNull('semester_code')
+                ->selectRaw('semester_code as code, semester_name as name, count(*) as student_count')
+                ->groupBy('semester_code', 'semester_name')
+                ->orderBy('semester_code')
                 ->get(),
 
-            // Joriy semestr(lar): toggle yoqilganda kurs/semestrni avtomatik tanlash uchun
-            'current' => Semester::whereIn(
-                    'curriculum_hemis_id',
-                    $curricula->clone()->select('curricula_hemis_id')->pluck('curricula_hemis_id')
-                )
-                ->where('current', true)
-                ->when($request->filled('level_code'), fn($q) => $q->where('level_code', $request->level_code))
-                ->select('level_code', 'level_name', 'code', 'name')
-                ->distinct()
-                ->orderBy('level_code')
+            // Active talaba o'z joriy semestrida bo'ladi — kursdagi yagona
+            // (yoki eng ko'p talabali) semestr avtomatik tanlash uchun
+            'current' => $this->students($request)
+                ->whereNotNull('level_code')
+                ->selectRaw('level_code, level_name, semester_code as code, semester_name as name, count(*) as student_count')
+                ->groupBy('level_code', 'level_name', 'semester_code', 'semester_name')
+                ->orderByDesc('student_count')
                 ->get(),
 
-            // Joriy rejimda faqat tanlangan semestri hozir joriy bo'lgan rejalar
-            // chiqadi — bitirib ketgan kohortalarning eski rejalari ko'rinmaydi
-            'curricula' => $curricula->clone()
-                ->when($request->filled('semester_code'), fn($q) => $q->whereIn(
-                    'curricula_hemis_id',
-                    Semester::where('code', $request->semester_code)
-                        ->when($request->boolean('current_only'), fn($s) => $s->where('current', true))
-                        ->when($request->filled('level_code'), fn($s) => $s->where('level_code', $request->level_code))
-                        ->pluck('curriculum_hemis_id')
-                ))
-                ->orderBy('name')
-                ->get(['curricula_hemis_id as id', 'name', 'education_year_name']),
+            // O'quv rejalar — shu kurs/semestrdagi talabalar biriktirilgan
+            // rejalar. curricula jadvalida bor-yo'qligi alohida belgilanadi
+            'curricula' => $this->curriculaForStudents($request),
+
+            // Diagnostika: tanlangan fakultet bo'yicha xom ma'lumot
+            'diagnose' => $this->diagnose($request),
 
             default => [],
         });
+    }
+
+    /**
+     * Cascade va diagnostika uchun umumiy talaba so'rovi.
+     * current_only yoqilganda faqat o'qiyotgan talabalar (status 11).
+     */
+    private function students(Request $request)
+    {
+        $query = Student::query();
+
+        if ($request->boolean('current_only')) {
+            $query->where('student_status_code', 11);
+        }
+        if ($request->filled('education_type_code')) {
+            $query->where('education_type_code', $request->education_type_code);
+        }
+        if ($request->filled('department_id')) {
+            $query->where('department_id', $request->department_id);
+        }
+        if ($request->filled('specialty_id')) {
+            $query->where('specialty_id', $request->specialty_id);
+        } elseif ($request->filled('specialty_code')) {
+            $query->where('specialty_code', $request->specialty_code);
+        }
+        if ($request->filled('level_code')) {
+            $query->where('level_code', $request->level_code);
+        }
+        if ($request->filled('semester_code')) {
+            $query->where('semester_code', $request->semester_code);
+        }
+
+        return $query;
+    }
+
+    private function curriculaForStudents(Request $request)
+    {
+        $rows = $this->students($request)
+            ->whereNotNull('curriculum_id')
+            ->selectRaw('curriculum_id, count(*) as student_count')
+            ->groupBy('curriculum_id')
+            ->orderByDesc('student_count')
+            ->get();
+
+        $names = Curriculum::whereIn('curricula_hemis_id', $rows->pluck('curriculum_id'))
+            ->pluck('name', 'curricula_hemis_id');
+
+        return $rows->map(fn($row) => [
+            'id' => $row->curriculum_id,
+            'name' => $names[$row->curriculum_id] ?? null,
+            'exists' => isset($names[$row->curriculum_id]),
+            'student_count' => $row->student_count,
+        ])->values();
+    }
+
+    /**
+     * Tanlangan fakultet (va ixtiyoriy yo'nalish) bo'yicha to'liq xom kesim:
+     * har bir yo'nalish-kurs-semestr-reja kombinatsiyasida nechta talaba bor,
+     * reja curricula jadvalida bormi, semestri "current" deb belgilanganmi.
+     * Bu nima uchun biror kurs/reja cascade'da ko'rinmayotganini ko'rsatadi.
+     */
+    private function diagnose(Request $request)
+    {
+        // Diagnostika status bo'yicha filtrlamaydi — barcha talabalar
+        // ko'rinadi (status_code ustuni orqali kim aktiv ekani bilinadi),
+        // shunda biror kurs nega cascade'da yo'qligi to'liq ochiladi
+        $rows = $this->students($request->merge(['current_only' => false]))
+            ->selectRaw('specialty_id, specialty_code, specialty_name, level_code, level_name,
+                semester_code, semester_name, curriculum_id, student_status_code, count(*) as student_count')
+            ->groupBy('specialty_id', 'specialty_code', 'specialty_name', 'level_code', 'level_name',
+                'semester_code', 'semester_name', 'curriculum_id', 'student_status_code')
+            ->orderBy('specialty_code')
+            ->orderBy('level_code')
+            ->orderBy('semester_code')
+            ->get();
+
+        $curriculumNames = Curriculum::whereIn('curricula_hemis_id', $rows->pluck('curriculum_id')->filter())
+            ->pluck('name', 'curricula_hemis_id');
+
+        // Reja semestri HEMIS'da "current" deb belgilanganmi
+        $currentSemesters = Semester::whereIn('curriculum_hemis_id', $rows->pluck('curriculum_id')->filter())
+            ->where('current', true)
+            ->get(['curriculum_hemis_id', 'code'])
+            ->groupBy('curriculum_hemis_id')
+            ->map(fn($g) => $g->pluck('code')->all());
+
+        return $rows->map(fn($row) => [
+            'specialty' => trim(($row->specialty_code ?? '') . ' — ' . ($row->specialty_name ?? '')),
+            'specialty_id' => $row->specialty_id,
+            'level_name' => $row->level_name,
+            'semester' => $row->semester_name ?: $row->semester_code,
+            'student_count' => $row->student_count,
+            'status_code' => $row->student_status_code,
+            'curriculum_id' => $row->curriculum_id,
+            'curriculum_name' => $row->curriculum_id
+                ? ($curriculumNames[$row->curriculum_id] ?? "❌ curricula jadvalida YO'Q")
+                : "❌ talabaga reja biriktirilmagan",
+            'curriculum_exists' => $row->curriculum_id && isset($curriculumNames[$row->curriculum_id]),
+            'semester_is_current' => $row->curriculum_id
+                && in_array($row->semester_code, $currentSemesters[$row->curriculum_id] ?? []),
+        ])->values();
     }
 
     public function store(Request $request)
@@ -151,7 +213,12 @@ class CurriculumCheckController extends Controller
         ]);
 
         $hemisCurriculum = Curriculum::where('curricula_hemis_id', $request->curricula_hemis_id)->first();
-        $specialty = Specialty::where('specialty_hemis_id', $hemisCurriculum->specialty_hemis_id)->first();
+        // Yo'nalish kodi/nomini shu rejaga biriktirilgan talabadan olamiz
+        // (HEMIS specialty yozuvlari ba'zan dublikat/nomuvofiq bo'lgani uchun)
+        $specialty = Student::where('curriculum_id', $hemisCurriculum->curricula_hemis_id)
+            ->whereNotNull('specialty_code')
+            ->select('specialty_code as code', 'specialty_name as name')
+            ->first();
 
         $typeLabel = $request->type === 'namunaviy' ? 'namunaviy' : 'ishchi';
         $name = $hemisCurriculum->name . ' — ' . $typeLabel;

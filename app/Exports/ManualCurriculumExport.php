@@ -136,7 +136,7 @@ class ManualCurriculumExport implements FromArray, ShouldAutoSize, WithStrictNul
             $col = 10 + ($k - 1) * 2; // 0-based: K=10, M=12, O=14...
             $semStart = ($k - 1) * 2 + 1;
             $semEnd = $k * 2;
-            $h3[$col] = "{$k}-kurs\n(сем {$semStart}-{$semEnd})";
+            $h3[$col] = "{$k}-kurs\n(sem {$semStart}-{$semEnd})";
         }
         $this->rowMeta[3] = 'header';
 

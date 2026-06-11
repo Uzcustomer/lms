@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use Carbon\Carbon;
+use App\Models\SinovTestGrade;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
@@ -678,6 +679,24 @@ class JournalGradeService
                 $vals = array_map(fn ($i) => $i['grade'], $list);
                 $out[$key][(string) $hemis] = (int) round(array_sum($vals) / count($vals), 0, PHP_ROUND_HALF_UP);
             }
+        }
+
+        // Sinov fanlarida jurnal katagi SinovTestGrade.override_grade'dan chiziladi.
+        // Jurnal badge, vedomost va eksport ham aynan shu qiymatga teng bo'lishi
+        // uchun test bahosida override_grade (yoki default_grade) ustun turadi.
+        $sinovGrades = SinovTestGrade::query()
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->whereIn('student_hemis_id', $studentHids)
+            ->get(['student_hemis_id', 'override_grade', 'default_grade']);
+
+        foreach ($sinovGrades as $sinovRow) {
+            $value = $sinovRow->override_grade ?? $sinovRow->default_grade;
+            if ($value === null) {
+                continue;
+            }
+            $out['test'][(string) $sinovRow->student_hemis_id] = (int) round((float) $value, 0, PHP_ROUND_HALF_UP);
         }
 
         return $out;

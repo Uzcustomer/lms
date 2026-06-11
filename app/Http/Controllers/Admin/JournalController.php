@@ -1057,6 +1057,36 @@ class JournalController extends Controller
             $otherGrades[$studentId] = $result;
         }
 
+        // Sinov fanlarida jurnal katagi SinovTestGrade.override_grade'dan chiziladi.
+        // Badge/stage hisobi ham o'sha qiymatga tayanishi uchun test bahosini shu
+        // yerning o'zida override qilamiz.
+        if (($subject->closing_form ?? null) === 'sinov') {
+            $sinovStageOverrides = SinovTestGrade::query()
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('group_hemis_id', $group->group_hemis_id)
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->get(['student_hemis_id', 'override_grade', 'default_grade']);
+
+            foreach ($sinovStageOverrides as $sinovStageRow) {
+                $value = $sinovStageRow->override_grade ?? $sinovStageRow->default_grade;
+                if ($value === null) {
+                    continue;
+                }
+                $sid = (string) $sinovStageRow->student_hemis_id;
+                $otherGrades[$sid] = array_merge([
+                    'on' => null,
+                    'oski' => null,
+                    'test' => null,
+                    'on_sababli' => false,
+                    'oski_sababli' => false,
+                    'test_sababli' => false,
+                ], $otherGrades[$sid] ?? []);
+                $otherGrades[$sid]['test'] = (int) round((float) $value, 0, PHP_ROUND_HALF_UP);
+                $otherGrades[$sid]['test_sababli'] = false;
+            }
+        }
+
         // Sana xaritalari (Carbon orqali UI formati) — admin/registrator_ofisi tooltipi uchun.
         $formatDate = fn($d) => $d ? \Carbon\Carbon::parse($d)->format('d.m.Y') : null;
         $oskiAttempt1DateMap = [];
@@ -6525,7 +6555,10 @@ class JournalController extends Controller
 
         $touched = 0;
         foreach ($studentHemisIds as $h) {
-            $fallback = $sgRows->get($h)?->grade ?? ($jnMap[$h] ?? null);
+            $existingOverride = $sinovOverrides->get($h);
+            $fallback = $existingOverride
+                ? ($existingOverride->override_grade ?? $existingOverride->default_grade)
+                : ($sgRows->get($h)?->grade ?? ($jnMap[$h] ?? null));
             if ($fallback === null) continue;
             $finalGrade = (int) round((float) $fallback, 0, PHP_ROUND_HALF_UP);
 
@@ -6655,14 +6688,15 @@ class JournalController extends Controller
 
         foreach ($students as $stuRow) {
             $h = $stuRow->hemis_id;
-            if ($sinovOverrides->has($h)) continue;
-
-            $fallback = $sgRows->get($h)?->grade ?? ($sinovJnMap[$h] ?? null);
+            $existingOverride = $sinovOverrides->get($h);
+            $fallback = $existingOverride
+                ? ($existingOverride->override_grade ?? $existingOverride->default_grade)
+                : ($sgRows->get($h)?->grade ?? ($sinovJnMap[$h] ?? null));
             if ($fallback === null) continue;
             $finalGrade = (int) round((float) $fallback, 0, PHP_ROUND_HALF_UP);
 
             // 1) SinovTestGrade backfill (DB)
-            $stg = SinovTestGrade::updateOrCreate(
+            $stg = $existingOverride ?: SinovTestGrade::updateOrCreate(
                 [
                     'subject_id' => $subjectId,
                     'semester_code' => $semesterCode,

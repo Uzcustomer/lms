@@ -89,8 +89,8 @@ class VisaApplicationController extends Controller
             'passport_number_value' => ['required', 'string', 'max:40', 'regex:/^[0-9]+$/'],
             'passport_number' => 'required|string|max:50',
             'phone_number'    => 'required|string|max:30',
-            'phone_dial_code' => 'required|string|max:8',
-            'phone_country_iso2' => 'required|string|max:4',
+            'phone_dial_code' => 'nullable|string|max:8',
+            'phone_country_iso2' => 'nullable|string|max:4',
             'messenger_type'     => 'required|in:telegram,whatsapp',
             'messenger_username' => 'required|string|max:100',
             'passport_pdf'    => 'required|file|mimes:pdf|max:2048',     // 2 MB

@@ -339,7 +339,8 @@
 
                         <div class="sm:col-span-2">
                             <label class="va-label">Phone number <span class="va-required">*</span></label>
-                            <input type="tel" id="phone_number" name="phone_number" class="va-input" required style="text-transform:none;">
+                            <input type="tel" id="phone_number" name="phone_number" class="va-input" required style="text-transform:none;"
+                                   value="{{ old('phone_number') }}">
                             <div class="va-hint" id="phoneHint">Enter your contact phone number.</div>
                             <div class="va-error-text @if($errors->has('phone_number')) show @endif" id="phoneError" data-error-for="phone_number">{{ $errors->first('phone_number') ?: 'Invalid phone number format.' }}</div>
                         </div>
@@ -357,8 +358,9 @@
                                 </button>
                             </div>
                             <input type="text" name="messenger_username" id="messenger_username" class="va-input" required
+                                   value="{{ old('messenger_username') }}"
                                    placeholder="@username" style="text-transform:none;">
-                            <input type="hidden" name="messenger_type" id="messenger_type" value="telegram">
+                            <input type="hidden" name="messenger_type" id="messenger_type" value="{{ old('messenger_type', 'telegram') }}">
                             <div class="va-hint">Enter your Telegram or WhatsApp username (e.g. @yourname).</div>
                             <div class="va-error-text @if($errors->has('messenger_username')) show @endif" data-error-for="messenger_username">{{ $errors->first('messenger_username') }}</div>
                         </div>
@@ -463,6 +465,7 @@
         // Faqat forma mavjud bo'lsa ishlaymiz (canSubmit=true)
         const form = document.getElementById('visaForm');
         if (!form) return;
+        form.setAttribute('novalidate', 'novalidate'); // tashqi script yiqilsa ham native silent-block bo'lmasin
 
         // Phone — intl-tel-input
         const phoneEl = document.getElementById('phone_number');
@@ -474,14 +477,22 @@
         const passportNumberValueEl = document.getElementById('passport_number_value');
         const passportHiddenEl = document.getElementById('passport_number');
         const initialErrors = @json($errors->toArray());
-        const iti = window.intlTelInput(phoneEl, {
-            initialCountry: "uz",
-            separateDialCode: true,
-            nationalMode: false,
-            formatOnDisplay: true,
-            utilsScript: "https://cdn.jsdelivr.net/npm/intl-tel-input@18.1.1/build/js/utils.js"
-        });
+        const initialMessengerType = document.getElementById('messenger_type')?.value || 'telegram';
+        let iti = null;
+        if (window.intlTelInput) {
+            iti = window.intlTelInput(phoneEl, {
+                initialCountry: "uz",
+                separateDialCode: true,
+                nationalMode: false,
+                formatOnDisplay: true,
+                utilsScript: "https://cdn.jsdelivr.net/npm/intl-tel-input@18.1.1/build/js/utils.js"
+            });
+        } else {
+            phoneHint.textContent = 'Phone plugin could not load. Enter the full phone number manually.';
+        }
         phoneEl.addEventListener('keypress', e => {
+            const allowed = ['+', '(', ')', '-', ' '];
+            if (allowed.includes(e.key)) return;
             const k = e.which || e.keyCode;
             if (k < 48 || k > 57) e.preventDefault();
         });
@@ -504,15 +515,22 @@
                 phoneHint.style.display = '';
                 return null;
             }
-            const ok = iti.isValidNumber();
+            const digitsCount = (raw.match(/\d/g) || []).length;
+            const ok = iti ? iti.isValidNumber() : (digitsCount >= 7 && digitsCount <= 15);
             if (ok) {
                 phoneEl.classList.remove('va-input-error');
                 phoneError.classList.remove('show');
                 phoneHint.style.display = '';
                 return true;
             }
-            const errCode = iti.getValidationError ? iti.getValidationError() : 0;
-            phoneError.textContent = errCodes[errCode] || errCodes[0];
+            if (digitsCount >= 7 && digitsCount <= 15) {
+                phoneEl.classList.remove('va-input-error');
+                phoneError.classList.remove('show');
+                phoneHint.style.display = '';
+                return true;
+            }
+            const errCode = iti && iti.getValidationError ? iti.getValidationError() : 0;
+            phoneError.textContent = iti ? (errCodes[errCode] || errCodes[0]) : 'Phone number is too short or invalid.';
             phoneEl.classList.add('va-input-error');
             phoneError.classList.add('show');
             phoneHint.style.display = 'none';
@@ -521,10 +539,15 @@
         phoneEl.addEventListener('input',  vaCheckPhone);
         phoneEl.addEventListener('blur',   vaCheckPhone);
         // Mamlakat o'zgartirilsa ham qayta tekshirish
-        phoneEl.addEventListener('countrychange', vaCheckPhone);
+        if (iti) {
+            phoneEl.addEventListener('countrychange', vaCheckPhone);
+        }
 
         // Date of birth
-        const birthdatePicker = flatpickr("#birthdate", { dateFormat: "Y-m-d", altInput: true, altFormat: "d.m.Y", allowInput: true });
+        let birthdatePicker = null;
+        if (window.flatpickr) {
+            birthdatePicker = flatpickr("#birthdate", { dateFormat: "Y-m-d", altInput: true, altFormat: "d.m.Y", allowInput: true });
+        }
 
         // Messenger toggle (Telegram / WhatsApp)
         window.vaSetMessenger = function (type) {
@@ -533,6 +556,7 @@
                 b.dataset.active = b.dataset.msg === type ? '1' : '0';
             });
         };
+        window.vaSetMessenger(initialMessengerType);
 
         // PDF dropzone wiring — bir xil mantiq ikkala input uchun
         function vaSyncPassportNumber() {
@@ -542,6 +566,24 @@
             if (passportSeriesEl) passportSeriesEl.value = series;
             if (passportNumberValueEl) passportNumberValueEl.value = number;
             passportHiddenEl.value = (series + number).trim();
+        }
+        function vaSyncBirthDate() {
+            const birthInput = form.elements['birth_date'];
+            if (!birthInput) return;
+            if (!birthdatePicker || !birthdatePicker.altInput) return;
+            const raw = (birthdatePicker.altInput.value || '').trim();
+            if (raw === '') {
+                birthInput.value = '';
+                return;
+            }
+            const parsed = birthdatePicker.selectedDates?.[0]
+                || flatpickr.parseDate(raw, 'd.m.Y')
+                || flatpickr.parseDate(raw, 'Y-m-d');
+            if (parsed) {
+                birthInput.value = flatpickr.formatDate(parsed, 'Y-m-d');
+            } else {
+                birthInput.value = raw;
+            }
         }
         passportSeriesEl?.addEventListener('input', function () {
             vaSyncPassportNumber();
@@ -584,6 +626,11 @@
                 }
                 // Preview — pdf.js bilan
                 clearFieldError(fieldName);
+                if (!window.pdfjsLib) {
+                    zone.classList.add('has-file');
+                    zone.innerHTML = '<div class="va-dropzone-filename">✓ ' + file.name + '</div><div class="p-3 text-xs text-emerald-700 text-center w-full">PDF uploaded</div>';
+                    return;
+                }
                 const fr = new FileReader();
                 fr.onload = function () {
                     const arr = new Uint8Array(this.result);
@@ -812,12 +859,15 @@
             });
         });
         form.elements.birth_date?.addEventListener('change', function () {
+            vaSyncBirthDate();
             clearFieldError('birth_date');
         });
         birthdatePicker?.altInput?.addEventListener('input', function () {
+            vaSyncBirthDate();
             clearFieldError('birth_date');
         });
         birthdatePicker?.altInput?.addEventListener('blur', function () {
+            vaSyncBirthDate();
             clearFieldError('birth_date');
         });
         phoneEl.addEventListener('input', function () {
@@ -827,11 +877,11 @@
         });
 
         // Form submit
-        form.setAttribute('novalidate', 'novalidate'); // O'zimiz validate qilamiz
         form.addEventListener('submit', function (e) {
             e.preventDefault();
             clearAllFieldErrors();
             vaSyncPassportNumber();
+            vaSyncBirthDate();
 
             const localErrors = vaValidateForm(this);
             if (Object.keys(localErrors).length > 0) {
@@ -847,8 +897,9 @@
 
             const fd = new FormData(this);
             fd.set('passport_number', passportHiddenEl?.value || '');
-            fd.set('phone_number', iti.getNumber());
-            const c = iti.getSelectedCountryData();
+            const normalizedPhone = (iti && iti.isValidNumber()) ? iti.getNumber() : phoneEl.value.trim();
+            fd.set('phone_number', normalizedPhone);
+            const c = iti ? iti.getSelectedCountryData() : { dialCode: '', iso2: '' };
             fd.set('phone_dial_code', c.dialCode || '');
             fd.set('phone_country_iso2', c.iso2 || '');
             const uname = (fd.get('messenger_username') || '').toString().trim().replace(/^@+/, '');

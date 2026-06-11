@@ -691,7 +691,8 @@
         function applyErrors(errors) {
             Object.entries(errors).forEach(([name, message]) => {
                 if (!message) return;
-                setFieldError(name, Array.isArray(message) ? message[0] : String(message));
+                const targetName = name === 'passport_number' ? 'passport_number_value' : name;
+                setFieldError(targetName, Array.isArray(message) ? message[0] : String(message));
             });
         }
 
@@ -830,6 +831,7 @@
         form.addEventListener('submit', function (e) {
             e.preventDefault();
             clearAllFieldErrors();
+            vaSyncPassportNumber();
 
             const localErrors = vaValidateForm(this);
             if (Object.keys(localErrors).length > 0) {
@@ -844,7 +846,7 @@
             btn.textContent = 'Submitting...';
 
             const fd = new FormData(this);
-            vaSyncPassportNumber();
+            fd.set('passport_number', passportHiddenEl?.value || '');
             fd.set('phone_number', iti.getNumber());
             const c = iti.getSelectedCountryData();
             fd.set('phone_dial_code', c.dialCode || '');

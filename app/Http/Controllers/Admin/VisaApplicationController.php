@@ -367,7 +367,7 @@ class VisaApplicationController extends Controller
         }
 
         $addedFiles = 0;
-        $folderCounts = [];
+        $fileCounts = [];
 
         foreach ($apps as $app) {
             $fullName = trim(implode(' ', array_filter([
@@ -375,25 +375,25 @@ class VisaApplicationController extends Controller
                 $app->first_name,
                 $app->middle_name,
             ])));
-
-            $baseFolder = $this->zipSafeName($fullName, 'student-' . $app->application_number);
-            $folderCounts[$baseFolder] = ($folderCounts[$baseFolder] ?? 0) + 1;
-            $folder = $folderCounts[$baseFolder] > 1
-                ? $baseFolder . ' (' . $folderCounts[$baseFolder] . ')'
-                : $baseFolder;
+            $baseName = $this->zipSafeName($fullName, 'student-' . $app->application_number);
 
             $documents = [
-                'passport.pdf'    => $app->passport_pdf_path,
-                'application.pdf' => $app->application_pdf_path,
-                'receipt.pdf'     => $app->receipt_pdf_path,
+                'passport'    => $app->passport_pdf_path,
+                'application' => $app->application_pdf_path,
+                'receipt'     => $app->receipt_pdf_path,
             ];
 
-            foreach ($documents as $targetName => $path) {
+            foreach ($documents as $label => $path) {
                 if (!$path || !Storage::disk('local')->exists($path)) {
                     continue;
                 }
 
-                $zip->addFile(Storage::disk('local')->path($path), $folder . '/' . $targetName);
+                $extension = strtolower((string) pathinfo($path, PATHINFO_EXTENSION));
+                $extension = $extension !== '' ? $extension : 'pdf';
+                $rawName = $baseName . '_' . $label . '.' . $extension;
+                $targetName = $this->uniqueZipFileName($rawName, $fileCounts);
+
+                $zip->addFile(Storage::disk('local')->path($path), $targetName);
                 $addedFiles++;
             }
         }
@@ -545,5 +545,19 @@ class VisaApplicationController extends Controller
         $value = preg_replace('/\s+/u', ' ', trim((string) $value));
 
         return $value !== '' ? $value : $fallback;
+    }
+
+    private function uniqueZipFileName(string $filename, array &$counts): string
+    {
+        $counts[$filename] = ($counts[$filename] ?? 0) + 1;
+
+        if ($counts[$filename] === 1) {
+            return $filename;
+        }
+
+        $ext = pathinfo($filename, PATHINFO_EXTENSION);
+        $name = pathinfo($filename, PATHINFO_FILENAME);
+
+        return $name . ' (' . $counts[$filename] . ')' . ($ext !== '' ? '.' . $ext : '');
     }
 }

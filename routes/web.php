@@ -100,13 +100,18 @@ Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->n
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {
-        Route::post('/login', function () {
-            return redirect('/');
-        })->name('login.post');
+        Route::post('/login', [AdminAuthController::class, 'login'])->name('login.post');
     });
 
     Route::get('/login', function () {
-        return redirect('/');
+        if (Auth::guard('web')->check() || Auth::guard('teacher')->check()) {
+            return redirect()->route('admin.dashboard');
+        }
+        return response()
+            ->view('auth.login')
+            ->header('Cache-Control', 'no-cache, no-store, must-revalidate')
+            ->header('Pragma', 'no-cache')
+            ->header('Expires', '0');
     })->name('login');
 
 
@@ -1291,12 +1296,8 @@ Route::prefix('student')->name('student.')->group(function () {
 });
 
 Route::prefix('teacher')->name('teacher.')->group(function () {
-    Route::post('/login', function () {
-        return redirect('/');
-    })->name('login.post');
-    Route::get('/login', function () {
-        return redirect('/');
-    })->name('login');
+    Route::post('/login', [TeacherAuthController::class, 'login'])->name('login.post');
+    Route::get('/login', [TeacherAuthController::class, 'showLoginForm'])->name('login');
 
     // Telegram 2FA login tasdiqlash (auth kerak emas)
     Route::get('/verify-login', [TeacherAuthController::class, 'showVerifyLogin'])->name('verify-login');

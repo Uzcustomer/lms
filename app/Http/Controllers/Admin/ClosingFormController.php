@@ -28,39 +28,40 @@ class ClosingFormController extends Controller
     /**
      * Joriy semestrlarning semester_hemis_id ro'yxati.
      *
-     * Har bir o'quv reja uchun joriy o'quv yili ichida bugungi kungacha BOSHLANGAN
-     * semestrlardan eng oxirgi boshlanganini tanlaydi. Faqat MIN(start_date) ga
-     * tayanadi — shu sabab HEMIS'dagi noto'g'ri end_date'lar (keyingi semestr
-     * haftalari xato semestrga biriktirilgan holatlar) natijaga ta'sir qilmaydi.
+     * Joriy semestr TALABALAR jadvalidan aniqlanadi: faol (status 11) talaba
+     * HEMIS'da doim o'z joriy semestrida turadi. curriculum_weeks sanalariga
+     * tayanilmaydi — xalqaro ta'lim fakulteti kabi bahorda o'qish boshlagan
+     * kohortalar (toq semestr bahorda) ham ko'rinishi uchun.
+     *
+     * Bitta o'quv rejada bir nechta kohorta (masalan 7- va 8-semestr) bo'lishi
+     * mumkin — bularning HAMMASI kiritiladi, chunki har bir semestr fanlariga
+     * yopilish shakli belgilanishi kerak.
      */
     private function currentSemesterHemisIds(): array
     {
-        // Joriy o'quv yili (HEMIS "current" bayrog'i butun yilni belgilaydi)
-        $currentYear = DB::table('semesters')->where('current', true)->max('education_year');
-        if (!$currentYear) {
+        // Faol talabalar haqiqatan turgan (reja, semestr) juftliklari.
+        $pairs = DB::table('students')
+            ->where('student_status_code', 11)
+            ->whereNotNull('curriculum_id')
+            ->whereNotNull('semester_code')
+            ->select('curriculum_id', 'semester_code')
+            ->distinct()
+            ->get();
+
+        if ($pairs->isEmpty()) {
             return [];
         }
 
-        // Joriy o'quv yili semestrlari + boshlanish sanasi (eng erta hafta),
-        // faqat bugungi kungacha boshlanganlari.
-        $sems = DB::table('semesters as s')
-            ->join('curriculum_weeks as w', 'w.semester_hemis_id', '=', 's.semester_hemis_id')
-            ->where('s.education_year', $currentYear)
-            ->groupBy('s.semester_hemis_id', 's.curriculum_hemis_id')
-            ->havingRaw('MIN(w.start_date) <= ?', [now()->toDateString() . ' 23:59:59'])
-            ->get([
-                's.semester_hemis_id',
-                's.curriculum_hemis_id',
-                DB::raw('MIN(w.start_date) as start_date'),
-            ]);
+        $wanted = $pairs->map(fn($p) => $p->curriculum_id . '|' . $p->semester_code)->flip();
+        $currIds = $pairs->pluck('curriculum_id')->unique()->all();
 
-        // Har bir o'quv reja uchun eng oxirgi boshlangan semestr — joriy semestr.
-        $ids = [];
-        foreach ($sems->groupBy('curriculum_hemis_id') as $group) {
-            $ids[] = $group->sortByDesc('start_date')->first()->semester_hemis_id;
-        }
-
-        return $ids;
+        // (reja, semestr kodi) juftliklarini semester_hemis_id ga aylantiramiz.
+        return DB::table('semesters')
+            ->whereIn('curriculum_hemis_id', $currIds)
+            ->get(['semester_hemis_id', 'curriculum_hemis_id', 'code'])
+            ->filter(fn($s) => $wanted->has($s->curriculum_hemis_id . '|' . $s->code))
+            ->pluck('semester_hemis_id')
+            ->all();
     }
 
     public function index(Request $request)

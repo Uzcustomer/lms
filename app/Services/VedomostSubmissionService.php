@@ -34,28 +34,32 @@ class VedomostSubmissionService
     }
 
     /**
-     * Har bir o'quv reja uchun joriy semestrni qaytaradi.
+     * Har bir GURUH uchun joriy semestrni qaytaradi.
      *
      * Joriy semestr TALABALAR jadvalidan aniqlanadi: faol (status 11) talaba
      * HEMIS'da doim o'z joriy semestrida turadi. curriculum_weeks sanalariga
      * tayanilmaydi — xalqaro ta'lim fakulteti kabi bahorda o'qish boshlagan
      * kohortalar (toq semestr bahorda) ham to'g'ri chiqishi uchun.
-     * Reja bo'yicha bir nechta semestr uchrasa, eng ko'p talabalisi olinadi.
      *
-     * @return Collection<int, object{curriculum_hemis_id:int, code:string}>
+     * Reja bo'yicha emas, guruh bo'yicha: bitta o'quv rejada ikki kohorta
+     * (masalan 48 talaba 7-semestrda, 24 talaba 8-semestrda) bo'lishi mumkin —
+     * har bir guruh o'z talabalari turgan semestrni oladi. Guruh ichida
+     * bir nechta semestr uchrasa (akademik qarzdor va h.k.), eng ko'p
+     * talabalisi olinadi.
+     *
+     * @return Collection<int, object{code:string, student_count:int}> group_hemis_id => semestr
      */
-    public function currentSemesters(?string $currentYear = null): Collection
+    public function currentSemestersByGroup(): Collection
     {
         return DB::table('students')
             ->where('student_status_code', 11)
-            ->whereNotNull('curriculum_id')
+            ->whereNotNull('group_id')
             ->whereNotNull('semester_code')
-            ->selectRaw('curriculum_id as curriculum_hemis_id, semester_code as code, count(*) as student_count')
-            ->groupBy('curriculum_id', 'semester_code')
+            ->selectRaw('group_id, semester_code as code, count(*) as student_count')
+            ->groupBy('group_id', 'semester_code')
             ->get()
-            ->groupBy('curriculum_hemis_id')
-            ->map(fn($g) => $g->sortByDesc('student_count')->first())
-            ->values();
+            ->groupBy('group_id')
+            ->map(fn($g) => $g->sortByDesc('student_count')->first());
     }
 
     /**
@@ -71,12 +75,17 @@ class VedomostSubmissionService
             return 0;
         }
 
-        $semByCurriculum = $this->currentSemesters($currentYear)->keyBy('curriculum_hemis_id');
-        if ($semByCurriculum->isEmpty()) {
+        $semByGroup = $this->currentSemestersByGroup();
+        if ($semByGroup->isEmpty()) {
             return 0;
         }
 
-        $curriculumIds = $semByCurriculum->keys()->all();
+        $groups = Group::where('active', true)
+            ->whereIn('group_hemis_id', $semByGroup->keys()->all())
+            ->whereNotNull('curriculum_hemis_id')
+            ->get();
+
+        $curriculumIds = $groups->pluck('curriculum_hemis_id')->unique()->all();
 
         // Har reja+semestr uchun o'quv yili — semesters jadvalidan (global
         // max emas: xalqaro fakultet kohortalarining yili farq qilishi mumkin)
@@ -93,13 +102,9 @@ class VedomostSubmissionService
             ->get()
             ->keyBy('curriculum_subject_id');
 
-        $groups = Group::where('active', true)
-            ->whereIn('curriculum_hemis_id', $curriculumIds)
-            ->get();
-
         $count = 0;
         foreach ($groups as $group) {
-            $sem = $semByCurriculum->get($group->curriculum_hemis_id);
+            $sem = $semByGroup->get($group->group_hemis_id);
             if (!$sem) {
                 continue;
             }

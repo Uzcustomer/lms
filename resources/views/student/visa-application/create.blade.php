@@ -367,7 +367,7 @@
                     </div>
 
                     {{-- FAYL YUKLASH --}}
-                    <div class="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                    <div class="mt-5 grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                         <div>
                             <label class="va-label">Passport Copies (PDF) <span class="va-required">*</span></label>
                             <div class="va-dropzone" id="passDropzone" onclick="document.getElementById('passport_pdf').click()">
@@ -396,6 +396,21 @@
                             <input type="file" name="application_pdf" id="application_pdf" accept="application/pdf" required class="va-file-hidden">
                             <div class="va-hint">PDF only, max 2 MB.</div>
                             <div class="va-error-text @if($errors->has('application_pdf')) show @endif" data-error-for="application_pdf">{{ $errors->first('application_pdf') }}</div>
+                        </div>
+
+                        <div>
+                            <label class="va-label">Billing Document (PDF) <span class="va-required">*</span></label>
+                            <div class="va-dropzone" id="billingDropzone" onclick="document.getElementById('billing_document_pdf').click()">
+                                <div class="va-dropzone-placeholder">
+                                    <svg class="w-9 h-9 mx-auto mb-1 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 13.5l3 3m0 0l3-3m-3 3v-6m1.06-4.19l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"/>
+                                    </svg>
+                                    Click to upload billing document
+                                </div>
+                            </div>
+                            <input type="file" name="billing_document_pdf" id="billing_document_pdf" accept="application/pdf" required class="va-file-hidden">
+                            <div class="va-hint">PDF only, max 2 MB.</div>
+                            <div class="va-error-text @if($errors->has('billing_document_pdf')) show @endif" data-error-for="billing_document_pdf">{{ $errors->first('billing_document_pdf') }}</div>
                         </div>
                     </div>
 
@@ -495,6 +510,7 @@
         const phoneHint = document.getElementById('phoneHint');
         const passDropzone = document.getElementById('passDropzone');
         const appDropzone = document.getElementById('appDropzone');
+        const billingDropzone = document.getElementById('billingDropzone');
         const passportSeriesEl = document.getElementById('passport_series');
         const passportNumberValueEl = document.getElementById('passport_number_value');
         const passportHiddenEl = document.getElementById('passport_number');
@@ -678,6 +694,7 @@
         }
         vaWireDropzone('passDropzone', 'passport_pdf', 2 * 1024 * 1024);   // 2 MB
         vaWireDropzone('appDropzone',  'application_pdf', 2 * 1024 * 1024); // 2 MB
+        vaWireDropzone('billingDropzone', 'billing_document_pdf', 2 * 1024 * 1024); // 2 MB
 
         function getErrorEl(name) {
             return form.querySelector('[data-error-for="' + name + '"]');
@@ -700,6 +717,9 @@
             if (name === 'application_pdf') {
                 return appDropzone;
             }
+            if (name === 'billing_document_pdf') {
+                return billingDropzone;
+            }
             return getFieldTarget(name);
         }
 
@@ -712,6 +732,9 @@
             }
             if (name === 'application_pdf') {
                 appDropzone?.classList.remove('va-input-error');
+            }
+            if (name === 'billing_document_pdf') {
+                billingDropzone?.classList.remove('va-input-error');
             }
             if (errorEl) {
                 errorEl.classList.remove('show');
@@ -729,6 +752,8 @@
                 passDropzone?.classList.add('va-input-error');
             } else if (name === 'application_pdf') {
                 appDropzone?.classList.add('va-input-error');
+            } else if (name === 'billing_document_pdf') {
+                billingDropzone?.classList.add('va-input-error');
             } else {
                 target?.classList.add('va-input-error');
             }
@@ -753,7 +778,8 @@
                 'phone_number',
                 'messenger_username',
                 'passport_pdf',
-                'application_pdf'
+                'application_pdf',
+                'billing_document_pdf'
             ].forEach(clearFieldError);
         }
 
@@ -849,6 +875,10 @@
             if (!appFile) return 'Please upload the filled application form (PDF).';
             if (appFile.type !== 'application/pdf') return 'Application file must be a PDF.';
             if (appFile.size > 2 * 1024 * 1024) return 'Application PDF is larger than 2 MB.';
+            const billingFile = document.getElementById('billing_document_pdf').files[0];
+            if (!billingFile) return 'Please upload your billing document (PDF).';
+            if (billingFile.type !== 'application/pdf') return 'Billing document must be a PDF.';
+            if (billingFile.size > 2 * 1024 * 1024) return 'Billing document PDF is larger than 2 MB.';
             return null;
         }
 
@@ -893,6 +923,11 @@
             if (!appFile) addError('application_pdf', 'Please upload the filled application form (PDF).');
             else if (appFile.type !== 'application/pdf') addError('application_pdf', 'Application file must be a PDF.');
             else if (appFile.size > 2 * 1024 * 1024) addError('application_pdf', 'Application PDF is larger than 2 MB.');
+
+            const billingFile = document.getElementById('billing_document_pdf').files[0];
+            if (!billingFile) addError('billing_document_pdf', 'Please upload your billing document (PDF).');
+            else if (billingFile.type !== 'application/pdf') addError('billing_document_pdf', 'Billing document must be a PDF.');
+            else if (billingFile.size > 2 * 1024 * 1024) addError('billing_document_pdf', 'Billing document PDF is larger than 2 MB.');
 
             return errors;
         }

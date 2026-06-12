@@ -95,6 +95,7 @@ class VisaApplicationController extends Controller
             'messenger_username' => 'required|string|max:100',
             'passport_pdf'    => 'required|file|mimes:pdf|max:2048',     // 2 MB
             'application_pdf' => 'required|file|mimes:pdf|max:2048',     // 2 MB
+            'billing_document_pdf' => 'required|file|mimes:pdf|max:2048', // 2 MB
         ], [
             'birth_date.date'       => 'Date of birth is not valid.',
             'passport_series.required' => 'Passport series is required.',
@@ -109,6 +110,9 @@ class VisaApplicationController extends Controller
             'application_pdf.required' => 'Please upload the filled application form (PDF).',
             'application_pdf.mimes' => 'Application file must be a PDF.',
             'application_pdf.max' => 'Application PDF must not exceed 2 MB.',
+            'billing_document_pdf.required' => 'Please upload your billing document (PDF).',
+            'billing_document_pdf.mimes' => 'Billing document must be a PDF.',
+            'billing_document_pdf.max' => 'Billing document PDF must not exceed 2 MB.',
         ]);
 
         // Application number — 4 xonali, unique
@@ -142,10 +146,15 @@ class VisaApplicationController extends Controller
             $dir,
             "application_{$appNumber}." . $request->file('application_pdf')->getClientOriginalExtension()
         );
+        $billingDocumentPath = $request->file('billing_document_pdf')->storeAs(
+            $dir,
+            "billing_document_{$appNumber}." . $request->file('billing_document_pdf')->getClientOriginalExtension()
+        );
 
         $app->update([
             'passport_pdf_path'    => $passportPath,
             'application_pdf_path' => $applicationPath,
+            'receipt_pdf_path'     => $billingDocumentPath,
         ]);
 
         return response()->json([

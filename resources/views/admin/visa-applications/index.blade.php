@@ -505,6 +505,19 @@
                                                     <svg class="w-4 h-4 text-slate-400 group-hover:text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
                                                 </a>
                                             @endif
+                                            @if($app->receipt_pdf_path)
+                                                <a href="{{ route('admin.visa-applications.file', [$app, 'billing-document']) }}" target="_blank" rel="noopener"
+                                                   class="flex items-center gap-3 p-3 bg-white border-2 border-slate-200 hover:border-blue-400 rounded-lg transition group">
+                                                    <div class="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                                                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 7.5h7.5m-7.5 4.5h7.5m-7.5 4.5h4.5M6 3.75h12A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6A2.25 2.25 0 016 3.75z"/></svg>
+                                                    </div>
+                                                    <div class="flex-1 min-w-0">
+                                                        <div class="text-sm font-semibold text-slate-800">Billing document</div>
+                                                        <div class="text-[11px] text-slate-500 truncate">PDF · yangi tabda ochiladi</div>
+                                                    </div>
+                                                    <svg class="w-4 h-4 text-slate-400 group-hover:text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
+                                                </a>
+                                            @endif
                                         </div>
                                     </div>
 

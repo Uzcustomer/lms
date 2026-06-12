@@ -78,6 +78,14 @@ class VedomostSubmissionService
 
         $curriculumIds = $semByCurriculum->keys()->all();
 
+        // Har reja+semestr uchun o'quv yili — semesters jadvalidan (global
+        // max emas: xalqaro fakultet kohortalarining yili farq qilishi mumkin)
+        $semesterYears = DB::table('semesters')
+            ->whereIn('curriculum_hemis_id', $curriculumIds)
+            ->get(['curriculum_hemis_id', 'code', 'education_year'])
+            ->keyBy(fn($s) => $s->curriculum_hemis_id . '|' . $s->code)
+            ->map(fn($s) => $s->education_year);
+
         // Fan mas'ullarini oldindan yuklab olamiz (har qator uchun alohida so'rov bermaslik uchun)
         $this->fanMasuliMap = DB::table('teacher_responsible_subjects as trs')
             ->join('teachers as t', 't.id', '=', 'trs.teacher_id')
@@ -120,9 +128,9 @@ class VedomostSubmissionService
                         'group_hemis_id' => $group->group_hemis_id,
                         'subject_id' => $subject->subject_id,
                         'semester_code' => $semCode,
-                        'education_year' => $currentYear,
                     ],
                     [
+                        'education_year' => $semesterYears["{$group->curriculum_hemis_id}|{$semCode}"] ?? $currentYear,
                         'group_name' => $group->name,
                         'curriculum_hemis_id' => $group->curriculum_hemis_id,
                         'curriculum_subject_id' => $subject->id,

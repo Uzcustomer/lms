@@ -302,6 +302,7 @@ class VisaApplicationController extends Controller
             'passport'    => $application->passport_pdf_path,
             'application' => $application->application_pdf_path,
             'receipt'     => $application->receipt_pdf_path,
+            'billing-document' => $application->receipt_pdf_path,
         ];
         $path = $map[$kind] ?? null;
         if (!$path || !Storage::disk('local')->exists($path)) {
@@ -380,7 +381,7 @@ class VisaApplicationController extends Controller
             $documents = [
                 'passport'    => $app->passport_pdf_path,
                 'application' => $app->application_pdf_path,
-                'receipt'     => $app->receipt_pdf_path,
+                'billing_document' => $app->receipt_pdf_path,
             ];
 
             foreach ($documents as $label => $path) {

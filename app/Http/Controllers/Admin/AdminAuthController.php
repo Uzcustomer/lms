@@ -179,6 +179,6 @@ class AdminAuthController extends Controller
 
         Log::channel('daily')->info("🚪 ADMIN LOGOUT: Tugadi, redirect qilinmoqda");
 
-        return redirect($isTeacher ? route('teacher.login') : '/');
+        return redirect('/');
     }
 }

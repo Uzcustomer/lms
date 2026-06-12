@@ -400,7 +400,7 @@
 
                         <div>
                             <label class="va-label">Billing Document (PDF) <span class="va-required">*</span></label>
-                            <div class="va-hint mb-2">Contact your contractor to get your visa payment receipt and upload it here.</div>
+                            <div class="va-hint mb-2" style="background: lightgoldenrodyellow; padding: 5px; color: black; font-size: 12px;">Contact your contractor to get your visa payment receipt and upload it here.</div>
                             <div class="va-dropzone" id="billingDropzone" onclick="document.getElementById('billing_document_pdf').click()">
                                 <div class="va-dropzone-placeholder">
                                     <svg class="w-9 h-9 mx-auto mb-1 text-slate-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">

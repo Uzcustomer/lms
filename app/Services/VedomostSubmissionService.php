@@ -35,34 +35,26 @@ class VedomostSubmissionService
 
     /**
      * Har bir o'quv reja uchun joriy semestrni qaytaradi.
-     * (ClosingFormController bilan bir xil mantiq — MIN(start_date) asosida,
-     * iflos end_date'larga bardoshli.)
+     *
+     * Joriy semestr TALABALAR jadvalidan aniqlanadi: faol (status 11) talaba
+     * HEMIS'da doim o'z joriy semestrida turadi. curriculum_weeks sanalariga
+     * tayanilmaydi — xalqaro ta'lim fakulteti kabi bahorda o'qish boshlagan
+     * kohortalar (toq semestr bahorda) ham to'g'ri chiqishi uchun.
+     * Reja bo'yicha bir nechta semestr uchrasa, eng ko'p talabalisi olinadi.
      *
      * @return Collection<int, object{curriculum_hemis_id:int, code:string}>
      */
     public function currentSemesters(?string $currentYear = null): Collection
     {
-        $currentYear ??= $this->currentEducationYear();
-        if (!$currentYear) {
-            return collect();
-        }
-
-        $today = now()->toDateString();
-
-        $sems = DB::table('semesters as s')
-            ->join('curriculum_weeks as w', 'w.semester_hemis_id', '=', 's.semester_hemis_id')
-            ->where('s.education_year', $currentYear)
-            ->groupBy('s.semester_hemis_id', 's.curriculum_hemis_id', 's.code')
-            ->havingRaw('MIN(w.start_date) <= ?', [$today . ' 23:59:59'])
-            ->get([
-                's.semester_hemis_id',
-                's.curriculum_hemis_id',
-                's.code',
-                DB::raw('MIN(w.start_date) as start_date'),
-            ]);
-
-        return $sems->groupBy('curriculum_hemis_id')
-            ->map(fn($g) => $g->sortByDesc('start_date')->first())
+        return DB::table('students')
+            ->where('student_status_code', 11)
+            ->whereNotNull('curriculum_id')
+            ->whereNotNull('semester_code')
+            ->selectRaw('curriculum_id as curriculum_hemis_id, semester_code as code, count(*) as student_count')
+            ->groupBy('curriculum_id', 'semester_code')
+            ->get()
+            ->groupBy('curriculum_hemis_id')
+            ->map(fn($g) => $g->sortByDesc('student_count')->first())
             ->values();
     }
 

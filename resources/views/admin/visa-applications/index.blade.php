@@ -17,6 +17,18 @@
             'rejected'  => ['label' => 'Rad etilgan',   'bg' => '#fee2e2', 'fg' => '#991b1b', 'border' => '#fecaca'],
         ];
         $total = array_sum($counts);
+        $hasActiveFilters = collect([
+            request('student_id_number'),
+            request('full_name'),
+            request('country_name'),
+            request('course_name'),
+            request('department_name'),
+            request('specialty_name'),
+            request('group_name'),
+            request('firm_display'),
+            $applicationPresence ?? null,
+            $status ?? null,
+        ])->contains(fn ($value) => filled($value));
     @endphp
 
     <div class="py-6">
@@ -353,19 +365,11 @@
             @endif
 
             {{-- ARIZALAR --}}
-            @if($applications->isEmpty())
-                <div class="bg-white rounded-xl border border-gray-200 shadow-sm p-10 text-center">
-                    <svg class="w-14 h-14 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 21h16.5M4.5 3h15M5.25 3v18m13.5-18v18M9 6.75h1.5m-1.5 3h1.5m-1.5 3h1.5m3-6H15m-1.5 3H15m-1.5 3H15M9 21v-3.375c0-.621.504-1.125 1.125-1.125h3.75c.621 0 1.125.504 1.125 1.125V21"/>
-                    </svg>
-                    <div class="text-sm font-semibold text-slate-600">Bu holatda arizalar yo'q</div>
-                </div>
-            @else
-                <form id="vaColumnFiltersForm" method="GET" action="{{ route('admin.visa-applications.index') }}" class="hidden"></form>
-                <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden" x-data="{ open: null }">
-                    <div class="overflow-x-auto">
-                        <table class="va-table">
-                            <thead>
+            <form id="vaColumnFiltersForm" method="GET" action="{{ route('admin.visa-applications.index') }}" class="hidden"></form>
+            <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden" x-data="{ open: null }">
+                <div class="overflow-x-auto">
+                    <table class="va-table">
+                        <thead>
                                 <tr>
                                     <th style="width:48px;text-align:center;"></th>
                                     <th>Talaba ID</th>
@@ -457,9 +461,9 @@
                                         </select>
                                     </th>
                                 </tr>
-                            </thead>
-                            <tbody>
-                                @foreach($applications as $row)
+                        </thead>
+                        <tbody>
+                                @forelse($applications as $row)
                                     @php
                                         $student = $row->student;
                                         $app = $row->application;
@@ -666,12 +670,21 @@
                                             </div>
                                         </td>
                                     </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
+                                @empty
+                                    <tr>
+                                        <td colspan="11" style="padding:16px 14px;">
+                                            <div style="font-size:13px;font-weight:600;color:#64748b;">
+                                                {{ $hasActiveFilters ? 'Bunday talaba topilmadi.' : 'Hozircha ma\'lumot topilmadi.' }}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endforelse
+                        </tbody>
+                    </table>
                 </div>
+            </div>
 
+            @if($applications->hasPages())
                 <div class="mt-4">{{ $applications->links() }}</div>
             @endif
 

@@ -241,6 +241,7 @@ class VisaApplicationController extends Controller
             'showAll'      => false,
             'applicationPresence' => $applicationPresence,
             'filterOptions' => $filterOptions,
+            'statsQuery'   => $hemisStatusFilter ? ['hemis_status' => $hemisStatusFilter] : [],
             'visaStats'    => [
                 'total_foreign_citizens' => $totalForeignCitizens,
                 'submitted_applications' => $submittedApplications,

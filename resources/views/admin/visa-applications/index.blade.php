@@ -270,10 +270,13 @@
             </template>
             --}}
 
-            {{-- FILTER + STATS --}}
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-                <div class="px-6 py-3 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap" style="background: linear-gradient(135deg, #e8edf5, #dbe4ef);">
-                    <div class="font-bold text-gray-800 text-sm">Jadval filtrlari</div>
+                <div class="px-4 py-3 flex items-center justify-between gap-3 flex-wrap" style="background: linear-gradient(135deg, #f8fafc, #eef2f7);">
+                    <div class="flex flex-wrap gap-2">
+                        <span class="px-3 py-1.5 text-xs font-bold rounded-lg" style="background:#eff6ff;color:#1d4ed8;">Jami: {{ $visaStats['total_foreign_citizens'] ?? 0 }}</span>
+                        <span class="px-3 py-1.5 text-xs font-bold rounded-lg" style="background:#ecfdf5;color:#047857;">Berilgan: {{ $visaStats['submitted_applications'] ?? 0 }}</span>
+                        <span class="px-3 py-1.5 text-xs font-bold rounded-lg" style="background:#fff7ed;color:#b45309;">Berilmagan: {{ $visaStats['not_submitted'] ?? 0 }}</span>
+                    </div>
                     <div class="flex items-center gap-2">
                         <a href="{{ route('admin.visa-applications.export', request()->query()) }}"
                            class="px-3 py-1.5 text-xs font-bold rounded-lg border flex items-center gap-1.5"
@@ -287,108 +290,6 @@
                             Tozalash
                         </a>
                     </div>
-                </div>
-                <form method="GET" action="{{ route('admin.visa-applications.index') }}" class="p-4 border-t border-slate-100">
-                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
-                        <div>
-                            <label class="va-filter-label">Talaba ID</label>
-                            <input type="text" name="student_id_number" value="{{ request('student_id_number') }}" class="va-filter-input" placeholder="Talaba ID">
-                        </div>
-                        <div>
-                            <label class="va-filter-label">F.I.Sh</label>
-                            <input type="text" name="full_name" value="{{ request('full_name') }}" class="va-filter-input" placeholder="F.I.Sh">
-                        </div>
-                        <div>
-                            <label class="va-filter-label">Davlati</label>
-                            <select name="country_name" class="va-filter-input">
-                                <option value="">Barchasi</option>
-                                @foreach($filterOptions['countries'] as $value)
-                                    <option value="{{ $value }}" @selected(request('country_name') === $value)>{{ $value }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="va-filter-label">Kurs</label>
-                            <select name="course_name" class="va-filter-input">
-                                <option value="">Barchasi</option>
-                                @foreach($filterOptions['courses'] as $value)
-                                    <option value="{{ $value }}" @selected(request('course_name') === $value)>{{ $value }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="va-filter-label">Fakultet</label>
-                            <select name="department_name" class="va-filter-input">
-                                <option value="">Barchasi</option>
-                                @foreach($filterOptions['departments'] as $value)
-                                    <option value="{{ $value }}" @selected(request('department_name') === $value)>{{ $value }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="va-filter-label">Yo'nalish</label>
-                            <select name="specialty_name" class="va-filter-input">
-                                <option value="">Barchasi</option>
-                                @foreach($filterOptions['specialties'] as $value)
-                                    <option value="{{ $value }}" @selected(request('specialty_name') === $value)>{{ $value }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="va-filter-label">Guruh</label>
-                            <select name="group_name" class="va-filter-input">
-                                <option value="">Barchasi</option>
-                                @foreach($filterOptions['groups'] as $value)
-                                    <option value="{{ $value }}" @selected(request('group_name') === $value)>{{ $value }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="va-filter-label">Firma</label>
-                            <select name="firm_display" class="va-filter-input">
-                                <option value="">Barchasi</option>
-                                @foreach($filterOptions['firms'] as $value)
-                                    <option value="{{ $value }}" @selected(request('firm_display') === $value)>{{ $value }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="va-filter-label">Ariza berganligi</label>
-                            <select name="application_presence" class="va-filter-input">
-                                <option value="">Barchasi</option>
-                                <option value="submitted" @selected(($applicationPresence ?? '') === 'submitted')>Berilgan</option>
-                                <option value="not_submitted" @selected(($applicationPresence ?? '') === 'not_submitted')>Berilmagan</option>
-                            </select>
-                        </div>
-                        <div>
-                            <label class="va-filter-label">Holat</label>
-                            <select name="status" class="va-filter-input">
-                                <option value="">Barchasi</option>
-                                @foreach($statusMeta as $key => $m)
-                                    <option value="{{ $key }}" @selected(($status ?? '') === $key)>{{ $m['label'] }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                    </div>
-                    <div class="mt-3 flex items-center justify-between gap-3 flex-wrap">
-                        <div class="flex flex-wrap gap-2">
-                            <span class="px-3 py-1.5 text-xs font-bold rounded-lg" style="background:#eff6ff;color:#1d4ed8;">Jami: {{ $visaStats['total_foreign_citizens'] ?? 0 }}</span>
-                            <span class="px-3 py-1.5 text-xs font-bold rounded-lg" style="background:#ecfdf5;color:#047857;">Berilgan: {{ $visaStats['submitted_applications'] ?? 0 }}</span>
-                            <span class="px-3 py-1.5 text-xs font-bold rounded-lg" style="background:#fff7ed;color:#b45309;">Berilmagan: {{ $visaStats['not_submitted'] ?? 0 }}</span>
-                        </div>
-                        <button type="submit" class="px-4 py-2 text-xs font-bold rounded-lg text-white" style="background:linear-gradient(135deg,#2b5ea7,#3b7ddb);">
-                            Filtrlash
-                        </button>
-                    </div>
-                </form>
-                <div class="px-4 py-2 border-t border-slate-100 text-xs text-slate-500">
-                    Holat hisoblagichlari:
-                    @foreach($statusMeta as $key => $m)
-                        <span class="inline-flex items-center gap-1 mr-3">
-                            <span class="w-2 h-2 rounded-full" style="background:{{ $m['fg'] }};"></span>
-                            {{ $m['label'] }}: {{ $counts[$key] ?? 0 }}
-                        </span>
-                    @endforeach
                 </div>
             </div>
 
@@ -476,6 +377,7 @@
                     <div class="text-sm font-semibold text-slate-600">Bu holatda arizalar yo'q</div>
                 </div>
             @else
+                <form id="vaColumnFiltersForm" method="GET" action="{{ route('admin.visa-applications.index') }}" class="hidden"></form>
                 <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden" x-data="{ open: null }">
                     <div class="overflow-x-auto">
                         <table class="va-table">
@@ -492,6 +394,78 @@
                                     <th>Firma</th>
                                     <th>Ariza berganligi</th>
                                     <th>Holat</th>
+                                </tr>
+                                <tr class="va-filter-row">
+                                    <th></th>
+                                    <th>
+                                        <input form="vaColumnFiltersForm" type="text" name="student_id_number" value="{{ request('student_id_number') }}" class="va-col-filter-input" placeholder="ID..." onkeydown="if(event.key==='Enter'){ this.form.submit(); }">
+                                    </th>
+                                    <th>
+                                        <input form="vaColumnFiltersForm" type="text" name="full_name" value="{{ request('full_name') }}" class="va-col-filter-input" placeholder="Ism..." onkeydown="if(event.key==='Enter'){ this.form.submit(); }">
+                                    </th>
+                                    <th>
+                                        <select form="vaColumnFiltersForm" name="country_name" class="va-col-filter-input" onchange="this.form.submit()">
+                                            <option value="">Barchasi</option>
+                                            @foreach($filterOptions['countries'] as $value)
+                                                <option value="{{ $value }}" @selected(request('country_name') === $value)>{{ $value }}</option>
+                                            @endforeach
+                                        </select>
+                                    </th>
+                                    <th>
+                                        <select form="vaColumnFiltersForm" name="course_name" class="va-col-filter-input" onchange="this.form.submit()">
+                                            <option value="">Barchasi</option>
+                                            @foreach($filterOptions['courses'] as $value)
+                                                <option value="{{ $value }}" @selected(request('course_name') === $value)>{{ $value }}</option>
+                                            @endforeach
+                                        </select>
+                                    </th>
+                                    <th>
+                                        <select form="vaColumnFiltersForm" name="department_name" class="va-col-filter-input" onchange="this.form.submit()">
+                                            <option value="">Barchasi</option>
+                                            @foreach($filterOptions['departments'] as $value)
+                                                <option value="{{ $value }}" @selected(request('department_name') === $value)>{{ $value }}</option>
+                                            @endforeach
+                                        </select>
+                                    </th>
+                                    <th>
+                                        <select form="vaColumnFiltersForm" name="specialty_name" class="va-col-filter-input" onchange="this.form.submit()">
+                                            <option value="">Barchasi</option>
+                                            @foreach($filterOptions['specialties'] as $value)
+                                                <option value="{{ $value }}" @selected(request('specialty_name') === $value)>{{ $value }}</option>
+                                            @endforeach
+                                        </select>
+                                    </th>
+                                    <th>
+                                        <select form="vaColumnFiltersForm" name="group_name" class="va-col-filter-input" onchange="this.form.submit()">
+                                            <option value="">Barchasi</option>
+                                            @foreach($filterOptions['groups'] as $value)
+                                                <option value="{{ $value }}" @selected(request('group_name') === $value)>{{ $value }}</option>
+                                            @endforeach
+                                        </select>
+                                    </th>
+                                    <th>
+                                        <select form="vaColumnFiltersForm" name="firm_display" class="va-col-filter-input" onchange="this.form.submit()">
+                                            <option value="">Barchasi</option>
+                                            @foreach($filterOptions['firms'] as $value)
+                                                <option value="{{ $value }}" @selected(request('firm_display') === $value)>{{ $value }}</option>
+                                            @endforeach
+                                        </select>
+                                    </th>
+                                    <th>
+                                        <select form="vaColumnFiltersForm" name="application_presence" class="va-col-filter-input" onchange="this.form.submit()">
+                                            <option value="">Barchasi</option>
+                                            <option value="submitted" @selected(($applicationPresence ?? '') === 'submitted')>Berilgan</option>
+                                            <option value="not_submitted" @selected(($applicationPresence ?? '') === 'not_submitted')>Berilmagan</option>
+                                        </select>
+                                    </th>
+                                    <th>
+                                        <select form="vaColumnFiltersForm" name="status" class="va-col-filter-input" onchange="this.form.submit()">
+                                            <option value="">Barchasi</option>
+                                            @foreach($statusMeta as $key => $m)
+                                                <option value="{{ $key }}" @selected(($status ?? '') === $key)>{{ $m['label'] }}</option>
+                                            @endforeach
+                                        </select>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -715,13 +689,13 @@
     </div>
 
     <style>
-        .va-filter-label { display: block; margin-bottom: 6px; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; }
-        .va-filter-input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; font-size: 13px; color: #0f172a; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-        .va-filter-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
         .va-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .va-table thead { position: sticky; top: 0; z-index: 10; }
         .va-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
         .va-table th { padding: 12px 10px; text-align: left; font-weight: 700; font-size: 11px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
+        .va-filter-row th { padding: 8px 10px; background: linear-gradient(135deg, #f8fafc, #eef2f7); border-bottom: 1px solid #d7dee8; }
+        .va-col-filter-input { width: 100%; min-width: 84px; height: 34px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 12px; font-weight: 500; color: #0f172a; text-transform: none; letter-spacing: normal; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+        .va-col-filter-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
         .va-table td { padding: 10px 10px; vertical-align: middle; line-height: 1.4; border-bottom: 1px solid #eef2f7; }
         .va-main-row { cursor: pointer; transition: all 0.15s; }
         .va-main-row:nth-child(4n-3),

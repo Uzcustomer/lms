@@ -34,8 +34,6 @@
 
     <div class="py-6">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
-            @php($statsQuery = array_filter(request()->only(['hemis_status']), fn ($value) => filled($value)))
-
             @if(session('success'))
                 <div class="bg-white rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
                     <div class="px-5 py-3 flex items-center gap-3" style="background: linear-gradient(135deg, #ecfdf5, #d1fae5);">

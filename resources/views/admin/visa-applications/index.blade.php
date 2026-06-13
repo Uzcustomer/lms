@@ -26,6 +26,7 @@
             request('specialty_name'),
             request('group_name'),
             request('firm_display'),
+            request('hemis_status'),
             $applicationPresence ?? null,
             $status ?? null,
         ])->contains(fn ($value) => filled($value));
@@ -380,6 +381,7 @@
                                     <th>Yo'nalish</th>
                                     <th>Guruh</th>
                                     <th>Firma</th>
+                                    <th>HEMIS</th>
                                     <th>Ariza berganligi</th>
                                     <th>Holat</th>
                                 </tr>
@@ -446,6 +448,13 @@
                                         </select>
                                     </th>
                                     <th>
+                                        <select form="vaColumnFiltersForm" name="hemis_status" class="va-col-filter-input" onchange="this.form.submit()">
+                                            <option value="">Barchasi</option>
+                                            <option value="active" @selected(request('hemis_status') === 'active')>Faol</option>
+                                            <option value="inactive" @selected(request('hemis_status') === 'inactive')>HEMIS'da yo'q</option>
+                                        </select>
+                                    </th>
+                                    <th>
                                         <select form="vaColumnFiltersForm" name="application_presence" class="va-col-filter-input" onchange="this.form.submit()">
                                             <option value="">Barchasi</option>
                                             <option value="submitted" @selected(($applicationPresence ?? '') === 'submitted')>Berilgan</option>
@@ -509,6 +518,13 @@
                                         <td><span class="va-chip va-chip-indigo">{{ $profile['group_name'] ?? '—' }}</span></td>
                                         <td><span class="va-firm-text">{{ $profile['firm_display'] ?? '—' }}</span></td>
                                         <td>
+                                            @if(($row->hemis_status ?? 'active') === 'inactive')
+                                                <span class="va-status-pill" style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;">HEMIS'da yo'q</span>
+                                            @else
+                                                <span class="va-status-pill" style="background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe;">Faol</span>
+                                            @endif
+                                        </td>
+                                        <td>
                                             @if($row->submitted)
                                                 <span class="va-status-pill" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;">Berilgan</span>
                                             @else
@@ -532,7 +548,7 @@
                                         </td>
                                     </tr>
                                     <tr x-show="open === 'row-{{ $student->id }}'" x-cloak class="va-detail-row">
-                                        <td colspan="11" class="p-0">
+                                        <td colspan="12" class="p-0">
                                             <div class="va-detail-wrap" @click.stop>
                                                 <div class="p-4 sm:p-5 space-y-4">
                                                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -672,7 +688,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="11" style="padding:16px 14px;">
+                                        <td colspan="12" style="padding:16px 14px;">
                                             <div style="font-size:13px;font-weight:600;color:#64748b;">
                                                 {{ $hasActiveFilters ? 'Bunday talaba topilmadi.' : 'Hozircha ma\'lumot topilmadi.' }}
                                             </div>

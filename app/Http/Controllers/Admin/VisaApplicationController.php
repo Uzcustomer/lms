@@ -29,6 +29,7 @@ class VisaApplicationController extends Controller
         $specialtyFilter = $request->input('specialty_name');
         $groupFilter = $request->input('group_name');
         $firmFilter = $request->input('firm_display');
+        $hemisStatusFilter = $request->input('hemis_status');
 
         $latestIds = VisaApplication::query()
             ->selectRaw('MAX(id) as id')
@@ -61,7 +62,8 @@ class VisaApplicationController extends Controller
                 'department_name',
                 'specialty_name',
                 'level_code',
-                'level_name'
+                'level_name',
+                'student_status_code'
             )
             ->orderBy('full_name')
             ->get();
@@ -90,6 +92,7 @@ class VisaApplicationController extends Controller
                 'reviewed_at' => $application?->reviewed_at,
                 'created_at' => $application?->created_at,
                 'student_profile' => $profile,
+                'hemis_status' => (string) $student?->student_status_code === '60' ? 'inactive' : 'active',
             ];
         });
 
@@ -143,7 +146,8 @@ class VisaApplicationController extends Controller
             $departmentFilter,
             $specialtyFilter,
             $groupFilter,
-            $firmFilter
+            $firmFilter,
+            $hemisStatusFilter
         ) {
             $profile = $row->student_profile ?? [];
             $student = $row->student;
@@ -177,6 +181,10 @@ class VisaApplicationController extends Controller
             }
 
             if ($firmFilter && ($profile['firm_display'] ?? null) !== $firmFilter) {
+                return false;
+            }
+
+            if ($hemisStatusFilter && ($row->hemis_status ?? null) !== $hemisStatusFilter) {
                 return false;
             }
 

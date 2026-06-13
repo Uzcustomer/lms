@@ -8,6 +8,7 @@ use App\Models\Student;
 use App\Models\VisaApplication;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
@@ -18,32 +19,32 @@ class VisaApplicationController extends Controller
 {
     public function index(Request $request)
     {
-        $status = $request->input('status'); // filter
-        // Default: faqat har bir talabaning eng oxirgi arizasi. Admin "Hammasi"
-        // tugmasini bossa, eski (qayta topshirilgan) arizalarni ham ko'rsatamiz.
-        $showAll = $request->boolean('all');
+        $status = $request->input('status');
+        $applicationPresence = $request->input('application_presence');
+        $studentIdFilter = trim((string) $request->input('student_id_number'));
+        $fullNameFilter = trim((string) $request->input('full_name'));
+        $countryFilter = $request->input('country_name');
+        $courseFilter = $request->input('course_name');
+        $departmentFilter = $request->input('department_name');
+        $specialtyFilter = $request->input('specialty_name');
+        $groupFilter = $request->input('group_name');
+        $firmFilter = $request->input('firm_display');
 
-        // Har bir hemis_id bo'yicha eng oxirgi (eng katta id) arizaning idsi
         $latestIds = VisaApplication::query()
             ->selectRaw('MAX(id) as id')
             ->groupBy('student_hemis_id')
             ->pluck('id');
 
-        $base = VisaApplication::query();
-        if (!$showAll) {
-            $base->whereIn('id', $latestIds);
-        }
+        $latestApplications = VisaApplication::query()
+            ->whereIn('id', $latestIds)
+            ->whereNotNull('student_hemis_id')
+            ->latest()
+            ->get()
+            ->keyBy(fn (VisaApplication $app) => (string) $app->student_hemis_id);
 
-        $query = (clone $base)->latest();
-        if ($status && in_array($status, ['pending', 'reviewing', 'approved', 'rejected'])) {
-            $query->where('status', $status);
-        }
-        $applications = $query->paginate(50)->withQueryString();
-
-        $counts = (clone $base)
-            ->selectRaw('status, COUNT(*) as c')
+        $counts = $latestApplications
             ->groupBy('status')
-            ->pluck('c', 'status')
+            ->map(fn ($items) => $items->count())
             ->all();
 
         $internationalStudents = (clone $this->internationalStudentsQuery())
@@ -65,15 +66,12 @@ class VisaApplicationController extends Controller
             ->orderBy('full_name')
             ->get();
 
-        $studentLookup = $internationalStudents->keyBy(fn (Student $student) => (string) $student->hemis_id);
-
-        $applications->getCollection()->transform(function (VisaApplication $app) use ($studentLookup) {
-            /** @var \App\Models\Student|null $student */
-            $student = $studentLookup->get((string) $app->student_hemis_id);
+        $rows = $internationalStudents->map(function (Student $student) use ($latestApplications) {
+            $application = $latestApplications->get((string) $student->hemis_id);
             $visaInfo = $student?->visaInfo;
 
-            $app->setAttribute('student_profile', [
-                'student_id_number' => $student?->student_id_number ?: $app->student_number,
+            $profile = [
+                'student_id_number' => $student->student_id_number,
                 'country_name'      => $student?->country_name ?: ($student?->citizenship_name ?: null),
                 'citizenship_name'  => $student?->citizenship_name,
                 'department_name'   => $student?->department_name,
@@ -81,18 +79,21 @@ class VisaApplicationController extends Controller
                 'course_name'       => $student?->level_name ?: ($student?->level_code ? $student->level_code . '-kurs' : null),
                 'group_name'        => $student?->group_name,
                 'firm_display'      => $visaInfo?->firm_display ?: '—',
-            ]);
+            ];
 
-            return $app;
+            return (object) [
+                'student' => $student,
+                'application' => $application,
+                'submitted' => $application !== null,
+                'application_status' => $application?->status,
+                'application_number' => $application?->application_number,
+                'reviewed_at' => $application?->reviewed_at,
+                'created_at' => $application?->created_at,
+                'student_profile' => $profile,
+            ];
         });
 
         $totalForeignCitizens = $internationalStudents->count();
-
-        $latestApplications = VisaApplication::query()
-            ->whereIn('id', $latestIds)
-            ->whereNotNull('student_hemis_id')
-            ->get()
-            ->keyBy(fn (VisaApplication $app) => (string) $app->student_hemis_id);
 
         $submittedHemisIds = VisaApplication::query()
             ->whereNotNull('student_hemis_id')
@@ -132,11 +133,98 @@ class VisaApplicationController extends Controller
         $submittedApplications = $submittedStudents->count();
         $notSubmittedApplications = $notSubmittedStudents->count();
 
+        $rows = $rows->filter(function (object $row) use (
+            $status,
+            $applicationPresence,
+            $studentIdFilter,
+            $fullNameFilter,
+            $countryFilter,
+            $courseFilter,
+            $departmentFilter,
+            $specialtyFilter,
+            $groupFilter,
+            $firmFilter
+        ) {
+            $profile = $row->student_profile ?? [];
+            $student = $row->student;
+
+            if ($studentIdFilter !== '' && stripos((string) ($profile['student_id_number'] ?? ''), $studentIdFilter) === false) {
+                return false;
+            }
+
+            if ($fullNameFilter !== '' && stripos((string) ($student->full_name ?? ''), $fullNameFilter) === false) {
+                return false;
+            }
+
+            if ($countryFilter && ($profile['country_name'] ?? null) !== $countryFilter) {
+                return false;
+            }
+
+            if ($courseFilter && ($profile['course_name'] ?? null) !== $courseFilter) {
+                return false;
+            }
+
+            if ($departmentFilter && ($profile['department_name'] ?? null) !== $departmentFilter) {
+                return false;
+            }
+
+            if ($specialtyFilter && ($profile['specialty_name'] ?? null) !== $specialtyFilter) {
+                return false;
+            }
+
+            if ($groupFilter && ($profile['group_name'] ?? null) !== $groupFilter) {
+                return false;
+            }
+
+            if ($firmFilter && ($profile['firm_display'] ?? null) !== $firmFilter) {
+                return false;
+            }
+
+            if ($applicationPresence === 'submitted' && !$row->submitted) {
+                return false;
+            }
+
+            if ($applicationPresence === 'not_submitted' && $row->submitted) {
+                return false;
+            }
+
+            if ($status && $row->application_status !== $status) {
+                return false;
+            }
+
+            return true;
+        })->values();
+
+        $perPage = 50;
+        $currentPage = LengthAwarePaginator::resolveCurrentPage();
+        $pagedRows = $rows->slice(($currentPage - 1) * $perPage, $perPage)->values();
+        $applications = new LengthAwarePaginator(
+            $pagedRows,
+            $rows->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => $request->url(),
+                'query' => $request->query(),
+            ]
+        );
+
+        $filterOptions = [
+            'countries' => $internationalStudents->map(fn (Student $student) => $student->country_name ?: $student->citizenship_name)->filter()->unique()->sort()->values(),
+            'courses' => $internationalStudents->map(fn (Student $student) => $student->level_name ?: ($student->level_code ? $student->level_code . '-kurs' : null))->filter()->unique()->sort()->values(),
+            'departments' => $internationalStudents->pluck('department_name')->filter()->unique()->sort()->values(),
+            'specialties' => $internationalStudents->pluck('specialty_name')->filter()->unique()->sort()->values(),
+            'groups' => $internationalStudents->pluck('group_name')->filter()->unique()->sort()->values(),
+            'firms' => $internationalStudents->map(fn (Student $student) => $student->visaInfo?->firm_display)->filter()->unique()->sort()->values(),
+        ];
+
         return view('admin.visa-applications.index', [
             'applications' => $applications,
             'counts'       => $counts,
             'status'       => $status,
-            'showAll'      => $showAll,
+            'showAll'      => false,
+            'applicationPresence' => $applicationPresence,
+            'filterOptions' => $filterOptions,
             'visaStats'    => [
                 'total_foreign_citizens' => $totalForeignCitizens,
                 'submitted_applications' => $submittedApplications,

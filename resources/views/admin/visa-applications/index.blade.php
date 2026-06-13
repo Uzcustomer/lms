@@ -273,43 +273,121 @@
             {{-- FILTER + STATS --}}
             <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
                 <div class="px-6 py-3 border-b border-gray-100 flex items-center justify-between gap-2 flex-wrap" style="background: linear-gradient(135deg, #e8edf5, #dbe4ef);">
-                    <div class="font-bold text-gray-800 text-sm">Holat bo'yicha filtr</div>
+                    <div class="font-bold text-gray-800 text-sm">Jadval filtrlari</div>
                     <div class="flex items-center gap-2">
-                        {{-- Excel eksport --}}
-                        <a href="{{ route('admin.visa-applications.export', array_filter(['status' => $status])) }}"
+                        <a href="{{ route('admin.visa-applications.export', request()->query()) }}"
                            class="px-3 py-1.5 text-xs font-bold rounded-lg border flex items-center gap-1.5"
                            style="background:#fff;border-color:#10b981;color:#047857;">
                             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"/></svg>
                             Excel
                         </a>
-                        {{-- Hammasi / Faqat oxirgi toggle --}}
-                        @php
-                            $toggleParams = array_filter(['status' => $status]);
-                            if (!$showAll) $toggleParams['all'] = 1;
-                        @endphp
-                        <a href="{{ route('admin.visa-applications.index', $toggleParams) }}"
-                           title="{{ $showAll ? 'Faqat oxirgi arizalarni ko\'rsatish' : 'Talabaning oldingi qayta arizalarini ham ko\'rsatish' }}"
+                        <a href="{{ route('admin.visa-applications.index') }}"
                            class="px-3 py-1.5 text-xs font-bold rounded-lg border flex items-center gap-1.5"
-                           style="background:{{ $showAll ? '#fef3c7' : '#fff' }};border-color:{{ $showAll ? '#f59e0b' : '#cbd5e1' }};color:{{ $showAll ? '#92400e' : '#475569' }};">
-                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                            {{ $showAll ? 'Tarix bilan' : 'Faqat oxirgi' }}
+                           style="background:#fff;border-color:#cbd5e1;color:#475569;">
+                            Tozalash
                         </a>
                     </div>
                 </div>
-                <div class="p-3 flex flex-wrap gap-2">
-                    <a href="{{ route('admin.visa-applications.index', array_filter(['all' => $showAll ? 1 : null])) }}"
-                       class="px-3 py-1.5 text-xs font-bold rounded-lg border transition flex items-center gap-2"
-                       style="background:{{ !$status ? '#2b5ea7' : '#fff' }};color:{{ !$status ? '#fff' : '#475569' }};border-color:{{ !$status ? '#2b5ea7' : '#e2e8f0' }};">
-                        Hammasi
-                        <span style="background:rgba(255,255,255,0.2);padding:1px 6px;border-radius:999px;{{ !$status ? '' : 'background:#f1f5f9;color:#475569;' }}">{{ $total }}</span>
-                    </a>
+                <form method="GET" action="{{ route('admin.visa-applications.index') }}" class="p-4 border-t border-slate-100">
+                    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-3">
+                        <div>
+                            <label class="va-filter-label">Talaba ID</label>
+                            <input type="text" name="student_id_number" value="{{ request('student_id_number') }}" class="va-filter-input" placeholder="Talaba ID">
+                        </div>
+                        <div>
+                            <label class="va-filter-label">F.I.Sh</label>
+                            <input type="text" name="full_name" value="{{ request('full_name') }}" class="va-filter-input" placeholder="F.I.Sh">
+                        </div>
+                        <div>
+                            <label class="va-filter-label">Davlati</label>
+                            <select name="country_name" class="va-filter-input">
+                                <option value="">Barchasi</option>
+                                @foreach($filterOptions['countries'] as $value)
+                                    <option value="{{ $value }}" @selected(request('country_name') === $value)>{{ $value }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="va-filter-label">Kurs</label>
+                            <select name="course_name" class="va-filter-input">
+                                <option value="">Barchasi</option>
+                                @foreach($filterOptions['courses'] as $value)
+                                    <option value="{{ $value }}" @selected(request('course_name') === $value)>{{ $value }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="va-filter-label">Fakultet</label>
+                            <select name="department_name" class="va-filter-input">
+                                <option value="">Barchasi</option>
+                                @foreach($filterOptions['departments'] as $value)
+                                    <option value="{{ $value }}" @selected(request('department_name') === $value)>{{ $value }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="va-filter-label">Yo'nalish</label>
+                            <select name="specialty_name" class="va-filter-input">
+                                <option value="">Barchasi</option>
+                                @foreach($filterOptions['specialties'] as $value)
+                                    <option value="{{ $value }}" @selected(request('specialty_name') === $value)>{{ $value }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="va-filter-label">Guruh</label>
+                            <select name="group_name" class="va-filter-input">
+                                <option value="">Barchasi</option>
+                                @foreach($filterOptions['groups'] as $value)
+                                    <option value="{{ $value }}" @selected(request('group_name') === $value)>{{ $value }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="va-filter-label">Firma</label>
+                            <select name="firm_display" class="va-filter-input">
+                                <option value="">Barchasi</option>
+                                @foreach($filterOptions['firms'] as $value)
+                                    <option value="{{ $value }}" @selected(request('firm_display') === $value)>{{ $value }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div>
+                            <label class="va-filter-label">Ariza berganligi</label>
+                            <select name="application_presence" class="va-filter-input">
+                                <option value="">Barchasi</option>
+                                <option value="submitted" @selected(($applicationPresence ?? '') === 'submitted')>Berilgan</option>
+                                <option value="not_submitted" @selected(($applicationPresence ?? '') === 'not_submitted')>Berilmagan</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="va-filter-label">Holat</label>
+                            <select name="status" class="va-filter-input">
+                                <option value="">Barchasi</option>
+                                @foreach($statusMeta as $key => $m)
+                                    <option value="{{ $key }}" @selected(($status ?? '') === $key)>{{ $m['label'] }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mt-3 flex items-center justify-between gap-3 flex-wrap">
+                        <div class="flex flex-wrap gap-2">
+                            <span class="px-3 py-1.5 text-xs font-bold rounded-lg" style="background:#eff6ff;color:#1d4ed8;">Jami: {{ $visaStats['total_foreign_citizens'] ?? 0 }}</span>
+                            <span class="px-3 py-1.5 text-xs font-bold rounded-lg" style="background:#ecfdf5;color:#047857;">Berilgan: {{ $visaStats['submitted_applications'] ?? 0 }}</span>
+                            <span class="px-3 py-1.5 text-xs font-bold rounded-lg" style="background:#fff7ed;color:#b45309;">Berilmagan: {{ $visaStats['not_submitted'] ?? 0 }}</span>
+                        </div>
+                        <button type="submit" class="px-4 py-2 text-xs font-bold rounded-lg text-white" style="background:linear-gradient(135deg,#2b5ea7,#3b7ddb);">
+                            Filtrlash
+                        </button>
+                    </div>
+                </form>
+                <div class="px-4 py-2 border-t border-slate-100 text-xs text-slate-500">
+                    Holat hisoblagichlari:
                     @foreach($statusMeta as $key => $m)
-                        <a href="{{ route('admin.visa-applications.index', array_filter(['status' => $key, 'all' => $showAll ? 1 : null])) }}"
-                           class="px-3 py-1.5 text-xs font-bold rounded-lg border transition flex items-center gap-2"
-                           style="background:{{ $status === $key ? $m['fg'] : $m['bg'] }};color:{{ $status === $key ? '#fff' : $m['fg'] }};border-color:{{ $m['border'] }};">
-                            {{ $m['label'] }}
-                            <span style="background:rgba(255,255,255,0.2);padding:1px 6px;border-radius:999px;{{ $status === $key ? '' : 'background:rgba(0,0,0,0.08);' }}">{{ $counts[$key] ?? 0 }}</span>
-                        </a>
+                        <span class="inline-flex items-center gap-1 mr-3">
+                            <span class="w-2 h-2 rounded-full" style="background:{{ $m['fg'] }};"></span>
+                            {{ $m['label'] }}: {{ $counts[$key] ?? 0 }}
+                        </span>
                     @endforeach
                 </div>
             </div>
@@ -412,28 +490,41 @@
                                     <th>Yo'nalish</th>
                                     <th>Guruh</th>
                                     <th>Firma</th>
+                                    <th>Ariza berganligi</th>
                                     <th>Holat</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                @foreach($applications as $app)
+                                @foreach($applications as $row)
                                     @php
-                                        $m = $statusMeta[$app->status] ?? $statusMeta['pending'];
-                                        $profile = $app->student_profile ?? [];
-                                        $isProcessed = in_array($app->status, ['approved', 'rejected']);
+                                        $student = $row->student;
+                                        $app = $row->application;
+                                        $profile = $row->student_profile ?? [];
+                                        $m = $statusMeta[$row->application_status ?? 'pending'] ?? $statusMeta['pending'];
+                                        $isProcessed = $app ? in_array($app->status, ['approved', 'rejected']) : false;
                                     @endphp
-                                    <tr class="va-main-row" @click="open = open === {{ $app->id }} ? null : {{ $app->id }}">
+                                    <tr class="va-main-row" @click="open = open === 'row-{{ $student->id }}' ? null : 'row-{{ $student->id }}'">
                                         <td style="text-align:center;" @click.stop>
-                                            <input type="checkbox"
-                                                   class="va-row-cb w-4 h-4 cursor-pointer accent-blue-600"
-                                                   value="{{ $app->id }}"
-                                                   onchange="window.vaBulkUpdate && window.vaBulkUpdate();">
+                                            @if($app)
+                                                <input type="checkbox"
+                                                       class="va-row-cb w-4 h-4 cursor-pointer accent-blue-600"
+                                                       value="{{ $app->id }}"
+                                                       onchange="window.vaBulkUpdate && window.vaBulkUpdate();">
+                                            @else
+                                                <span class="va-empty-mark">—</span>
+                                            @endif
                                         </td>
-                                        <td class="va-muted-cell">{{ $profile['student_id_number'] ?? $app->student_number ?? '—' }}</td>
+                                        <td class="va-muted-cell">{{ $profile['student_id_number'] ?? '—' }}</td>
                                         <td>
                                             <div class="va-name-cell">
-                                                <div class="va-name-text">{{ $app->last_name }} {{ $app->first_name }} {{ $app->middle_name }}</div>
-                                                <div class="va-subtext">Ariza #{{ $app->application_number }} · {{ $app->created_at->format('d.m.Y H:i') }}</div>
+                                                <div class="va-name-text">{{ $student->full_name }}</div>
+                                                <div class="va-subtext">
+                                                    @if($app)
+                                                        Ariza #{{ $row->application_number }} · {{ optional($row->created_at)->format('d.m.Y H:i') ?? '—' }}
+                                                    @else
+                                                        Hali ariza topshirmagan
+                                                    @endif
+                                                </div>
                                             </div>
                                         </td>
                                         <td>
@@ -450,56 +541,69 @@
                                         <td><span class="va-chip va-chip-indigo">{{ $profile['group_name'] ?? '—' }}</span></td>
                                         <td><span class="va-firm-text">{{ $profile['firm_display'] ?? '—' }}</span></td>
                                         <td>
-                                            <div class="flex flex-col gap-1">
-                                                <span class="va-status-pill"
-                                                      style="background:{{ $m['bg'] }};color:{{ $m['fg'] }};border:1px solid {{ $m['border'] }};">
-                                                    {{ $m['label'] }}
-                                                </span>
-                                                @if($app->reviewed_at)
-                                                    <span class="va-subtext">{{ $app->reviewed_at->format('d.m.Y H:i') }}</span>
-                                                @endif
-                                            </div>
+                                            @if($row->submitted)
+                                                <span class="va-status-pill" style="background:#dcfce7;color:#166534;border:1px solid #bbf7d0;">Berilgan</span>
+                                            @else
+                                                <span class="va-status-pill" style="background:#fff7ed;color:#b45309;border:1px solid #fcd34d;">Berilmagan</span>
+                                            @endif
+                                        </td>
+                                        <td>
+                                            @if($app)
+                                                <div class="flex flex-col gap-1">
+                                                    <span class="va-status-pill"
+                                                          style="background:{{ $m['bg'] }};color:{{ $m['fg'] }};border:1px solid {{ $m['border'] }};">
+                                                        {{ $m['label'] }}
+                                                    </span>
+                                                    @if($row->reviewed_at)
+                                                        <span class="va-subtext">{{ $row->reviewed_at->format('d.m.Y H:i') }}</span>
+                                                    @endif
+                                                </div>
+                                            @else
+                                                <span class="va-empty-mark">—</span>
+                                            @endif
                                         </td>
                                     </tr>
-                                    <tr x-show="open === {{ $app->id }}" x-cloak class="va-detail-row">
-                                        <td colspan="10" class="p-0">
+                                    <tr x-show="open === 'row-{{ $student->id }}'" x-cloak class="va-detail-row">
+                                        <td colspan="11" class="p-0">
                                             <div class="va-detail-wrap" @click.stop>
                                                 <div class="p-4 sm:p-5 space-y-4">
                                                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                                                         <div>
                                                             <div class="va-section-title">Talaba ma'lumotlari</div>
                                                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm bg-slate-50 rounded-lg p-3 border border-slate-200">
-                                                                <div><span class="text-slate-500">Familiya:</span> <strong class="text-slate-800">{{ $app->last_name }}</strong></div>
-                                                                <div><span class="text-slate-500">Ism:</span> <strong class="text-slate-800">{{ $app->first_name }}</strong></div>
-                                                                <div><span class="text-slate-500">Otasining ismi:</span> <strong class="text-slate-800">{{ $app->middle_name ?: '—' }}</strong></div>
-                                                                <div><span class="text-slate-500">Tug'ilgan sana:</span> <strong class="text-slate-800">{{ optional($app->birth_date)->format('d.m.Y') ?? '—' }}</strong></div>
-                                                                <div><span class="text-slate-500">Pasport raqami:</span> <strong class="text-slate-800">{{ $app->passport_number }}</strong></div>
-                                                                <div><span class="text-slate-500">Student ID:</span> <strong class="text-slate-800">{{ $profile['student_id_number'] ?? $app->student_number ?? '—' }}</strong></div>
-                                                                <div><span class="text-slate-500">Telefon:</span> <strong class="text-slate-800">{{ $app->phone_number }}</strong></div>
-                                                                <div>
-                                                                    <span class="text-slate-500">{{ ucfirst($app->messenger_type ?? 'telegram') }}:</span>
-                                                                    @php
-                                                                        $uname = ltrim($app->messenger_username ?? '', '@');
-                                                                        $tgLink = $uname ? 'https://t.me/' . $uname : null;
-                                                                        $waLink = $uname && $app->phone_number ? 'https://wa.me/' . preg_replace('/\D/', '', $app->phone_number) : null;
-                                                                        $link = ($app->messenger_type === 'whatsapp') ? $waLink : $tgLink;
-                                                                    @endphp
-                                                                    @if($link)
-                                                                        <a href="{{ $link }}" target="_blank" rel="noopener" class="font-bold text-blue-600 hover:underline">@{{ $uname }}</a>
-                                                                    @else
-                                                                        <strong class="text-slate-800">@{{ $uname ?: '—' }}</strong>
-                                                                    @endif
-                                                                </div>
+                                                                <div><span class="text-slate-500">F.I.Sh:</span> <strong class="text-slate-800">{{ $student->full_name }}</strong></div>
+                                                                <div><span class="text-slate-500">Talaba ID:</span> <strong class="text-slate-800">{{ $profile['student_id_number'] ?? '—' }}</strong></div>
+                                                                <div><span class="text-slate-500">Davlati:</span> <strong class="text-slate-800">{{ $profile['country_name'] ?? '—' }}</strong></div>
+                                                                <div><span class="text-slate-500">Fuqaroligi:</span> <strong class="text-slate-800">{{ $profile['citizenship_name'] ?? '—' }}</strong></div>
                                                                 <div><span class="text-slate-500">Fakultet:</span> <strong class="text-slate-800">{{ $profile['department_name'] ?? '—' }}</strong></div>
                                                                 <div><span class="text-slate-500">Yo'nalish:</span> <strong class="text-slate-800">{{ $profile['specialty_name'] ?? '—' }}</strong></div>
                                                                 <div><span class="text-slate-500">Guruh:</span> <strong class="text-slate-800">{{ $profile['group_name'] ?? '—' }}</strong></div>
                                                                 <div><span class="text-slate-500">Firma:</span> <strong class="text-slate-800">{{ $profile['firm_display'] ?? '—' }}</strong></div>
+                                                                @if($app)
+                                                                    <div><span class="text-slate-500">Tug'ilgan sana:</span> <strong class="text-slate-800">{{ optional($app->birth_date)->format('d.m.Y') ?? '—' }}</strong></div>
+                                                                    <div><span class="text-slate-500">Pasport raqami:</span> <strong class="text-slate-800">{{ $app->passport_number }}</strong></div>
+                                                                    <div><span class="text-slate-500">Telefon:</span> <strong class="text-slate-800">{{ $app->phone_number }}</strong></div>
+                                                                    <div>
+                                                                        <span class="text-slate-500">{{ ucfirst($app->messenger_type ?? 'telegram') }}:</span>
+                                                                        @php
+                                                                            $uname = ltrim($app->messenger_username ?? '', '@');
+                                                                            $tgLink = $uname ? 'https://t.me/' . $uname : null;
+                                                                            $waLink = $uname && $app->phone_number ? 'https://wa.me/' . preg_replace('/\D/', '', $app->phone_number) : null;
+                                                                            $link = ($app->messenger_type === 'whatsapp') ? $waLink : $tgLink;
+                                                                        @endphp
+                                                                        @if($link)
+                                                                            <a href="{{ $link }}" target="_blank" rel="noopener" class="font-bold text-blue-600 hover:underline">@{{ $uname }}</a>
+                                                                        @else
+                                                                            <strong class="text-slate-800">@{{ $uname ?: '—' }}</strong>
+                                                                        @endif
+                                                                    </div>
+                                                                @endif
                                                             </div>
                                                         </div>
                                                         <div>
                                                             <div class="va-section-title">Yuklangan fayllar</div>
                                                             <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                                                @if($app->passport_pdf_path)
+                                                                @if($app && $app->passport_pdf_path)
                                                                     <a href="{{ route('admin.visa-applications.file', [$app, 'passport']) }}" target="_blank" rel="noopener" class="va-doc-card">
                                                                         <div class="va-doc-icon" style="background:#fee2e2;color:#dc2626;">PDF</div>
                                                                         <div class="flex-1 min-w-0">
@@ -508,7 +612,7 @@
                                                                         </div>
                                                                     </a>
                                                                 @endif
-                                                                @if($app->application_pdf_path)
+                                                                @if($app && $app->application_pdf_path)
                                                                     <a href="{{ route('admin.visa-applications.file', [$app, 'application']) }}" target="_blank" rel="noopener" class="va-doc-card">
                                                                         <div class="va-doc-icon" style="background:#dbeafe;color:#2563eb;">PDF</div>
                                                                         <div class="flex-1 min-w-0">
@@ -517,7 +621,7 @@
                                                                         </div>
                                                                     </a>
                                                                 @endif
-                                                                @if($app->receipt_pdf_path)
+                                                                @if($app && $app->receipt_pdf_path)
                                                                     <a href="{{ route('admin.visa-applications.file', [$app, 'billing-document']) }}" target="_blank" rel="noopener" class="va-doc-card">
                                                                         <div class="va-doc-icon" style="background:#d1fae5;color:#059669;">PDF</div>
                                                                         <div class="flex-1 min-w-0">
@@ -526,11 +630,16 @@
                                                                         </div>
                                                                     </a>
                                                                 @endif
+                                                                @if(!$app)
+                                                                    <div class="sm:col-span-3 rounded-lg border border-dashed border-amber-300 bg-amber-50 px-4 py-6 text-sm text-amber-700">
+                                                                        Bu talaba hali visa application topshirmagan.
+                                                                    </div>
+                                                                @endif
                                                             </div>
                                                         </div>
                                                     </div>
 
-                                                    @if($app->admin_note || $app->reviewed_at)
+                                                    @if($app && ($app->admin_note || $app->reviewed_at))
                                                         <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
                                                             <div class="text-[11px] font-bold text-amber-700 uppercase tracking-wide mb-1">Admin izoh</div>
                                                             <div class="text-sm text-amber-900">{{ $app->admin_note ?: '—' }}</div>
@@ -541,7 +650,7 @@
                                                     @endif
 
                                                     <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100" x-data="{ showApprove: false, showReject: false }">
-                                                        @if(!$isProcessed)
+                                                        @if($app && !$isProcessed)
                                                             <button type="button" @click="showApprove = !showApprove; showReject = false"
                                                                     class="px-3 py-2 text-xs font-bold text-white rounded-lg transition flex items-center gap-1.5"
                                                                     style="background:linear-gradient(135deg,#10b981,#059669);">
@@ -554,6 +663,7 @@
                                                             </button>
                                                         @endif
 
+                                                        @if($app)
                                                         <form method="POST" action="{{ route('admin.visa-applications.destroy', $app) }}"
                                                               onsubmit="return confirm('Arizani butunlay o\'chirishni tasdiqlaysizmi?');"
                                                               class="inline-block">
@@ -564,8 +674,9 @@
                                                                 O'chirish
                                                             </button>
                                                         </form>
+                                                        @endif
 
-                                                        @if(!$isProcessed)
+                                                        @if($app && !$isProcessed)
                                                             <form x-show="showApprove" x-cloak method="POST" action="{{ route('admin.visa-applications.approve', $app) }}"
                                                                   class="w-full bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-2 flex flex-col sm:flex-row gap-2">
                                                                 @csrf
@@ -604,6 +715,9 @@
     </div>
 
     <style>
+        .va-filter-label { display: block; margin-bottom: 6px; font-size: 11px; font-weight: 700; color: #475569; text-transform: uppercase; letter-spacing: 0.04em; }
+        .va-filter-input { width: 100%; height: 38px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; font-size: 13px; color: #0f172a; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .va-filter-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
         .va-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
         .va-table thead { position: sticky; top: 0; z-index: 10; }
         .va-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
@@ -630,6 +744,7 @@
         .va-firm-text { color: #1f2937; font-size: 12.5px; font-weight: 500; }
         .va-status-pill { display: inline-flex; align-items: center; justify-content: center; padding: 4px 11px; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
         .va-section-title { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+        .va-empty-mark { color: #cbd5e1; font-size: 14px; font-weight: 700; }
         .va-doc-card { display: flex; align-items: center; gap: 10px; padding: 12px; background: #fff; border: 2px solid #e2e8f0; border-radius: 12px; transition: all 0.15s; }
         .va-doc-card:hover { border-color: #60a5fa; }
         .va-doc-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0; }

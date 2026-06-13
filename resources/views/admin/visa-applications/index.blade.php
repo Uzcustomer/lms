@@ -799,6 +799,11 @@
 
         document.addEventListener('DOMContentLoaded', function () {
             vaSyncCheckAllButton();
+
+            if (window.location.search) {
+                const cleanUrl = `${window.location.origin}${window.location.pathname}`;
+                window.history.replaceState({}, document.title, cleanUrl);
+            }
         });
     </script>
 </x-app-layout>

@@ -96,11 +96,19 @@ class VisaApplicationController extends Controller
             ];
         });
 
-        $totalForeignCitizens = $internationalStudents->count();
+        $statsStudents = $hemisStatusFilter
+            ? $internationalStudents->filter(function (Student $student) use ($hemisStatusFilter) {
+                $studentHemisStatus = (string) $student->student_status_code === '60' ? 'inactive' : 'active';
+
+                return $studentHemisStatus === $hemisStatusFilter;
+            })->values()
+            : $internationalStudents;
+
+        $totalForeignCitizens = $statsStudents->count();
 
         $submittedHemisIds = VisaApplication::query()
             ->whereNotNull('student_hemis_id')
-            ->whereIn('student_hemis_id', $internationalStudents->pluck('hemis_id'))
+            ->whereIn('student_hemis_id', $statsStudents->pluck('hemis_id'))
             ->distinct()
             ->pluck('student_hemis_id')
             ->map(fn ($id) => (string) $id)
@@ -108,7 +116,7 @@ class VisaApplicationController extends Controller
 
         $submittedLookup = array_fill_keys($submittedHemisIds, true);
 
-        $studentList = $internationalStudents->map(function (Student $student) use ($latestApplications) {
+        $studentList = $statsStudents->map(function (Student $student) use ($latestApplications) {
             $latestApplication = $latestApplications->get((string) $student->hemis_id);
 
             return [
@@ -272,9 +280,11 @@ class VisaApplicationController extends Controller
             ->with('success', "Ariza #{$application->application_number} rad etildi.");
     }
 
-    public function statsList(string $type)
+    public function statsList(Request $request, string $type)
     {
         abort_unless(in_array($type, ['total', 'submitted', 'not_submitted'], true), 404);
+
+        $hemisStatusFilter = $request->input('hemis_status');
 
         $latestIds = VisaApplication::query()
             ->selectRaw('MAX(id) as id')
@@ -291,10 +301,19 @@ class VisaApplicationController extends Controller
                 'department_name',
                 'specialty_name',
                 'level_code',
-                'level_name'
+                'level_name',
+                'student_status_code'
             )
             ->orderBy('full_name')
             ->get();
+
+        if ($hemisStatusFilter) {
+            $internationalStudents = $internationalStudents->filter(function (Student $student) use ($hemisStatusFilter) {
+                $studentHemisStatus = (string) $student->student_status_code === '60' ? 'inactive' : 'active';
+
+                return $studentHemisStatus === $hemisStatusFilter;
+            })->values();
+        }
 
         $latestApplications = VisaApplication::query()
             ->whereIn('id', $latestIds)

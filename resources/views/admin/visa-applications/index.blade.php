@@ -34,6 +34,7 @@
 
     <div class="py-6">
         <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+            @php($statsQuery = array_filter(request()->only(['hemis_status']), fn ($value) => filled($value)))
 
             @if(session('success'))
                 <div class="bg-white rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
@@ -54,7 +55,7 @@
             @endif
 
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <a href="{{ route('admin.visa-applications.stats-list', ['type' => 'total']) }}"
+                <a href="{{ route('admin.visa-applications.stats-list', array_merge(['type' => 'total'], $statsQuery)) }}"
                    class="block text-left rounded-2xl shadow-sm border border-sky-200 p-4 transition hover:-translate-y-0.5"
                    style="background:linear-gradient(135deg,#eff6ff,#dbeafe);">
                     <div class="flex items-start justify-between gap-3">
@@ -68,7 +69,7 @@
                         </div>
                     </div>
                 </a>
-                <a href="{{ route('admin.visa-applications.stats-list', ['type' => 'submitted']) }}"
+                <a href="{{ route('admin.visa-applications.stats-list', array_merge(['type' => 'submitted'], $statsQuery)) }}"
                    class="block text-left rounded-2xl shadow-sm border border-emerald-200 p-4 transition hover:-translate-y-0.5"
                    style="background:linear-gradient(135deg,#ecfdf5,#d1fae5);">
                     <div class="flex items-start justify-between gap-3">
@@ -82,7 +83,7 @@
                         </div>
                     </div>
                 </a>
-                <a href="{{ route('admin.visa-applications.stats-list', ['type' => 'not_submitted']) }}"
+                <a href="{{ route('admin.visa-applications.stats-list', array_merge(['type' => 'not_submitted'], $statsQuery)) }}"
                    class="block text-left rounded-2xl shadow-sm border border-amber-200 p-4 transition hover:-translate-y-0.5"
                    style="background:linear-gradient(135deg,#fff7ed,#fde68a);">
                     <div class="flex items-start justify-between gap-3">

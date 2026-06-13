@@ -48,11 +48,15 @@ class VisaApplicationController extends Controller
 
         $internationalStudents = (clone $this->internationalStudentsQuery())
             ->whereNotNull('hemis_id')
+            ->with('visaInfo')
             ->select(
+                'id',
                 'hemis_id',
                 'full_name',
                 'group_name',
                 'student_id_number',
+                'country_name',
+                'citizenship_name',
                 'department_name',
                 'specialty_name',
                 'level_code',
@@ -60,6 +64,27 @@ class VisaApplicationController extends Controller
             )
             ->orderBy('full_name')
             ->get();
+
+        $studentLookup = $internationalStudents->keyBy(fn (Student $student) => (string) $student->hemis_id);
+
+        $applications->getCollection()->transform(function (VisaApplication $app) use ($studentLookup) {
+            /** @var \App\Models\Student|null $student */
+            $student = $studentLookup->get((string) $app->student_hemis_id);
+            $visaInfo = $student?->visaInfo;
+
+            $app->setAttribute('student_profile', [
+                'student_id_number' => $student?->student_id_number ?: $app->student_number,
+                'country_name'      => $student?->country_name ?: ($student?->citizenship_name ?: null),
+                'citizenship_name'  => $student?->citizenship_name,
+                'department_name'   => $student?->department_name,
+                'specialty_name'    => $student?->specialty_name,
+                'course_name'       => $student?->level_name ?: ($student?->level_code ? $student->level_code . '-kurs' : null),
+                'group_name'        => $student?->group_name,
+                'firm_display'      => $visaInfo?->firm_display ?: '—',
+            ]);
+
+            return $app;
+        });
 
         $totalForeignCitizens = $internationalStudents->count();
 

@@ -20,7 +20,7 @@
     @endphp
 
     <div class="py-6">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
+        <div class="max-w-full mx-auto px-4 sm:px-6 lg:px-8 space-y-4">
 
             @if(session('success'))
                 <div class="bg-white rounded-xl border border-emerald-200 shadow-sm overflow-hidden">
@@ -398,212 +398,203 @@
                     <div class="text-sm font-semibold text-slate-600">Bu holatda arizalar yo'q</div>
                 </div>
             @else
-                <div class="space-y-2" x-data="{ open: null }">
-                    @foreach($applications as $app)
-                        @php $m = $statusMeta[$app->status] ?? $statusMeta['pending']; @endphp
-                        <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex items-stretch">
-                            {{-- CHECKBOX --}}
-                            <label class="flex items-center justify-center px-3 border-r border-slate-100 bg-slate-50 cursor-pointer hover:bg-slate-100"
-                                   onclick="event.stopPropagation();">
-                                <input type="checkbox"
-                                       class="va-row-cb w-4 h-4 cursor-pointer accent-blue-600"
-                                       value="{{ $app->id }}"
-                                       onchange="window.vaBulkUpdate && window.vaBulkUpdate();">
-                            </label>
-                            <div class="flex-1 min-w-0">
-                            {{-- ACCORDION HEADER --}}
-                            <button type="button"
-                                    @click="open = (open === {{ $app->id }}) ? null : {{ $app->id }}"
-                                    class="w-full px-4 sm:px-5 py-3 flex items-center justify-between gap-3 hover:bg-slate-50 transition text-left">
-                                <div class="flex items-center gap-3 min-w-0 flex-1">
-                                    <div class="flex flex-col items-center w-12 flex-shrink-0">
-                                        <span class="text-[10px] font-semibold text-slate-500 uppercase tracking-wide">№</span>
-                                        <span class="text-base font-bold text-slate-800">{{ $app->application_number }}</span>
-                                    </div>
-                                    <div class="flex-1 min-w-0">
-                                        <div class="font-semibold text-sm text-slate-800 truncate">
-                                            {{ $app->last_name }} {{ $app->first_name }} {{ $app->middle_name }}
-                                        </div>
-                                        <div class="text-xs text-slate-500 mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
-                                            <span>Student ID: <strong>{{ $app->student_number }}</strong></span>
-                                            <span class="hidden sm:inline">·</span>
-                                            <span>{{ $app->created_at->format('d.m.Y H:i') }}</span>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-2 flex-shrink-0">
-                                    <span class="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wide"
-                                          style="background:{{ $m['bg'] }};color:{{ $m['fg'] }};border:1px solid {{ $m['border'] }};">
-                                        {{ $m['label'] }}
-                                    </span>
-                                    <svg class="w-4 h-4 text-slate-400 transition-transform" :class="open === {{ $app->id }} ? 'rotate-180' : ''"
-                                         fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                                        <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5"/>
-                                    </svg>
-                                </div>
-                            </button>
-
-                            {{-- ACCORDION BODY --}}
-                            <div x-show="open === {{ $app->id }}" x-collapse class="border-t border-gray-100">
-                                <div class="p-4 sm:p-5 space-y-4">
-                                    {{-- TALABA MA'LUMOTLARI --}}
-                                    <div>
-                                        <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">Talaba ma'lumotlari</div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm bg-slate-50 rounded-lg p-3 border border-slate-200">
-                                            <div><span class="text-slate-500">Familiya:</span> <strong class="text-slate-800">{{ $app->last_name }}</strong></div>
-                                            <div><span class="text-slate-500">Ism:</span> <strong class="text-slate-800">{{ $app->first_name }}</strong></div>
-                                            <div><span class="text-slate-500">Otasining ismi:</span> <strong class="text-slate-800">{{ $app->middle_name ?: '—' }}</strong></div>
-                                            <div><span class="text-slate-500">Tug'ilgan sana:</span> <strong class="text-slate-800">{{ optional($app->birth_date)->format('d.m.Y') ?? '—' }}</strong></div>
-                                            <div><span class="text-slate-500">Pasport raqami:</span> <strong class="text-slate-800">{{ $app->passport_number }}</strong></div>
-                                            <div><span class="text-slate-500">Student ID:</span> <strong class="text-slate-800">{{ $app->student_number }}</strong></div>
-                                            <div><span class="text-slate-500">Telefon raqami:</span> <strong class="text-slate-800">{{ $app->phone_number }}</strong></div>
-                                            <div>
-                                                <span class="text-slate-500">{{ ucfirst($app->messenger_type ?? 'telegram') }}:</span>
-                                                @php
-                                                    $uname = ltrim($app->messenger_username ?? '', '@');
-                                                    $tgLink = $uname ? 'https://t.me/' . $uname : null;
-                                                    $waLink = $uname && $app->phone_number ? 'https://wa.me/' . preg_replace('/\D/', '', $app->phone_number) : null;
-                                                    $link = ($app->messenger_type === 'whatsapp') ? $waLink : $tgLink;
-                                                @endphp
-                                                @if($link)
-                                                    <a href="{{ $link }}" target="_blank" rel="noopener" class="font-bold text-blue-600 hover:underline">@{{ $uname }}</a>
-                                                @else
-                                                    <strong class="text-slate-800">@{{ $uname ?: '—' }}</strong>
+                <div class="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden" x-data="{ open: null }">
+                    <div class="overflow-x-auto">
+                        <table class="va-table">
+                            <thead>
+                                <tr>
+                                    <th style="width:48px;text-align:center;"></th>
+                                    <th>Talaba ID</th>
+                                    <th>F.I.Sh</th>
+                                    <th>Davlati</th>
+                                    <th>Kurs</th>
+                                    <th>Fakultet</th>
+                                    <th>Yo'nalish</th>
+                                    <th>Guruh</th>
+                                    <th>Firma</th>
+                                    <th>Holat</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach($applications as $app)
+                                    @php
+                                        $m = $statusMeta[$app->status] ?? $statusMeta['pending'];
+                                        $profile = $app->student_profile ?? [];
+                                        $isProcessed = in_array($app->status, ['approved', 'rejected']);
+                                    @endphp
+                                    <tr class="va-main-row" @click="open = open === {{ $app->id }} ? null : {{ $app->id }}">
+                                        <td style="text-align:center;" @click.stop>
+                                            <input type="checkbox"
+                                                   class="va-row-cb w-4 h-4 cursor-pointer accent-blue-600"
+                                                   value="{{ $app->id }}"
+                                                   onchange="window.vaBulkUpdate && window.vaBulkUpdate();">
+                                        </td>
+                                        <td class="va-muted-cell">{{ $profile['student_id_number'] ?? $app->student_number ?? '—' }}</td>
+                                        <td>
+                                            <div class="va-name-cell">
+                                                <div class="va-name-text">{{ $app->last_name }} {{ $app->first_name }} {{ $app->middle_name }}</div>
+                                                <div class="va-subtext">Ariza #{{ $app->application_number }} · {{ $app->created_at->format('d.m.Y H:i') }}</div>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            <div class="va-country-cell">
+                                                <div class="va-country-main">{{ $profile['country_name'] ?? '—' }}</div>
+                                                @if(!empty($profile['citizenship_name']) && ($profile['citizenship_name'] !== ($profile['country_name'] ?? null)))
+                                                    <div class="va-subtext">{{ $profile['citizenship_name'] }}</div>
                                                 @endif
                                             </div>
-                                            <div class="sm:col-span-2"><span class="text-slate-500">Yuborilgan:</span> <strong class="text-slate-800">{{ $app->created_at->format('d.m.Y H:i') }}</strong></div>
-                                        </div>
-                                    </div>
+                                        </td>
+                                        <td><span class="va-chip va-chip-violet">{{ $profile['course_name'] ?? '—' }}</span></td>
+                                        <td><span class="va-text-emerald">{{ $profile['department_name'] ?? '—' }}</span></td>
+                                        <td><span class="va-text-cyan" title="{{ $profile['specialty_name'] ?? '' }}">{{ \Illuminate\Support\Str::limit($profile['specialty_name'] ?? '—', 28) }}</span></td>
+                                        <td><span class="va-chip va-chip-indigo">{{ $profile['group_name'] ?? '—' }}</span></td>
+                                        <td><span class="va-firm-text">{{ $profile['firm_display'] ?? '—' }}</span></td>
+                                        <td>
+                                            <div class="flex flex-col gap-1">
+                                                <span class="va-status-pill"
+                                                      style="background:{{ $m['bg'] }};color:{{ $m['fg'] }};border:1px solid {{ $m['border'] }};">
+                                                    {{ $m['label'] }}
+                                                </span>
+                                                @if($app->reviewed_at)
+                                                    <span class="va-subtext">{{ $app->reviewed_at->format('d.m.Y H:i') }}</span>
+                                                @endif
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    <tr x-show="open === {{ $app->id }}" x-cloak class="va-detail-row">
+                                        <td colspan="10" class="p-0">
+                                            <div class="va-detail-wrap" @click.stop>
+                                                <div class="p-4 sm:p-5 space-y-4">
+                                                    <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                                        <div>
+                                                            <div class="va-section-title">Talaba ma'lumotlari</div>
+                                                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-sm bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                                                <div><span class="text-slate-500">Familiya:</span> <strong class="text-slate-800">{{ $app->last_name }}</strong></div>
+                                                                <div><span class="text-slate-500">Ism:</span> <strong class="text-slate-800">{{ $app->first_name }}</strong></div>
+                                                                <div><span class="text-slate-500">Otasining ismi:</span> <strong class="text-slate-800">{{ $app->middle_name ?: '—' }}</strong></div>
+                                                                <div><span class="text-slate-500">Tug'ilgan sana:</span> <strong class="text-slate-800">{{ optional($app->birth_date)->format('d.m.Y') ?? '—' }}</strong></div>
+                                                                <div><span class="text-slate-500">Pasport raqami:</span> <strong class="text-slate-800">{{ $app->passport_number }}</strong></div>
+                                                                <div><span class="text-slate-500">Student ID:</span> <strong class="text-slate-800">{{ $profile['student_id_number'] ?? $app->student_number ?? '—' }}</strong></div>
+                                                                <div><span class="text-slate-500">Telefon:</span> <strong class="text-slate-800">{{ $app->phone_number }}</strong></div>
+                                                                <div>
+                                                                    <span class="text-slate-500">{{ ucfirst($app->messenger_type ?? 'telegram') }}:</span>
+                                                                    @php
+                                                                        $uname = ltrim($app->messenger_username ?? '', '@');
+                                                                        $tgLink = $uname ? 'https://t.me/' . $uname : null;
+                                                                        $waLink = $uname && $app->phone_number ? 'https://wa.me/' . preg_replace('/\D/', '', $app->phone_number) : null;
+                                                                        $link = ($app->messenger_type === 'whatsapp') ? $waLink : $tgLink;
+                                                                    @endphp
+                                                                    @if($link)
+                                                                        <a href="{{ $link }}" target="_blank" rel="noopener" class="font-bold text-blue-600 hover:underline">@{{ $uname }}</a>
+                                                                    @else
+                                                                        <strong class="text-slate-800">@{{ $uname ?: '—' }}</strong>
+                                                                    @endif
+                                                                </div>
+                                                                <div><span class="text-slate-500">Fakultet:</span> <strong class="text-slate-800">{{ $profile['department_name'] ?? '—' }}</strong></div>
+                                                                <div><span class="text-slate-500">Yo'nalish:</span> <strong class="text-slate-800">{{ $profile['specialty_name'] ?? '—' }}</strong></div>
+                                                                <div><span class="text-slate-500">Guruh:</span> <strong class="text-slate-800">{{ $profile['group_name'] ?? '—' }}</strong></div>
+                                                                <div><span class="text-slate-500">Firma:</span> <strong class="text-slate-800">{{ $profile['firm_display'] ?? '—' }}</strong></div>
+                                                            </div>
+                                                        </div>
+                                                        <div>
+                                                            <div class="va-section-title">Yuklangan fayllar</div>
+                                                            <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                                                @if($app->passport_pdf_path)
+                                                                    <a href="{{ route('admin.visa-applications.file', [$app, 'passport']) }}" target="_blank" rel="noopener" class="va-doc-card">
+                                                                        <div class="va-doc-icon" style="background:#fee2e2;color:#dc2626;">PDF</div>
+                                                                        <div class="flex-1 min-w-0">
+                                                                            <div class="va-doc-title">Passport copies</div>
+                                                                            <div class="va-doc-subtitle">Yangi tabda ochiladi</div>
+                                                                        </div>
+                                                                    </a>
+                                                                @endif
+                                                                @if($app->application_pdf_path)
+                                                                    <a href="{{ route('admin.visa-applications.file', [$app, 'application']) }}" target="_blank" rel="noopener" class="va-doc-card">
+                                                                        <div class="va-doc-icon" style="background:#dbeafe;color:#2563eb;">PDF</div>
+                                                                        <div class="flex-1 min-w-0">
+                                                                            <div class="va-doc-title">Application</div>
+                                                                            <div class="va-doc-subtitle">Yangi tabda ochiladi</div>
+                                                                        </div>
+                                                                    </a>
+                                                                @endif
+                                                                @if($app->receipt_pdf_path)
+                                                                    <a href="{{ route('admin.visa-applications.file', [$app, 'billing-document']) }}" target="_blank" rel="noopener" class="va-doc-card">
+                                                                        <div class="va-doc-icon" style="background:#d1fae5;color:#059669;">PDF</div>
+                                                                        <div class="flex-1 min-w-0">
+                                                                            <div class="va-doc-title">Billing document</div>
+                                                                            <div class="va-doc-subtitle">Yangi tabda ochiladi</div>
+                                                                        </div>
+                                                                    </a>
+                                                                @endif
+                                                            </div>
+                                                        </div>
+                                                    </div>
 
-                                    {{-- FAYLLAR --}}
-                                    <div>
-                                        <div class="text-[11px] font-bold text-slate-500 uppercase tracking-wide mb-2">Yuklangan fayllar</div>
-                                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                            @if($app->passport_pdf_path)
-                                                <a href="{{ route('admin.visa-applications.file', [$app, 'passport']) }}" target="_blank" rel="noopener"
-                                                   class="flex items-center gap-3 p-3 bg-white border-2 border-slate-200 hover:border-blue-400 rounded-lg transition group">
-                                                    <div class="w-9 h-9 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
-                                                        <svg class="w-5 h-5 text-red-600" fill="currentColor" viewBox="0 0 24 24"><path d="M9 0a2 2 0 0 0-2 2v2H3v18h18V4H9V2a2 2 0 0 0 2-2H9zm2 7h2v2h2v2h-2v6h-2v-6H9V9h2V7z"/></svg>
-                                                    </div>
-                                                    <div class="flex-1 min-w-0">
-                                                        <div class="text-sm font-semibold text-slate-800">Passport copies</div>
-                                                        <div class="text-[11px] text-slate-500 truncate">PDF · yangi tabda ochiladi</div>
-                                                    </div>
-                                                    <svg class="w-4 h-4 text-slate-400 group-hover:text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
-                                                </a>
-                                            @endif
-                                            @if($app->application_pdf_path)
-                                                <a href="{{ route('admin.visa-applications.file', [$app, 'application']) }}" target="_blank" rel="noopener"
-                                                   class="flex items-center gap-3 p-3 bg-white border-2 border-slate-200 hover:border-blue-400 rounded-lg transition group">
-                                                    <div class="w-9 h-9 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
-                                                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                                    </div>
-                                                    <div class="flex-1 min-w-0">
-                                                        <div class="text-sm font-semibold text-slate-800">Filled application</div>
-                                                        <div class="text-[11px] text-slate-500 truncate">PDF · yangi tabda ochiladi</div>
-                                                    </div>
-                                                    <svg class="w-4 h-4 text-slate-400 group-hover:text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
-                                                </a>
-                                            @endif
-                                            @if($app->receipt_pdf_path)
-                                                <a href="{{ route('admin.visa-applications.file', [$app, 'billing-document']) }}" target="_blank" rel="noopener"
-                                                   class="flex items-center gap-3 p-3 bg-white border-2 border-slate-200 hover:border-blue-400 rounded-lg transition group">
-                                                    <div class="w-9 h-9 rounded-lg bg-emerald-100 flex items-center justify-center flex-shrink-0">
-                                                        <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M8.25 7.5h7.5m-7.5 4.5h7.5m-7.5 4.5h4.5M6 3.75h12A2.25 2.25 0 0120.25 6v12A2.25 2.25 0 0118 20.25H6A2.25 2.25 0 013.75 18V6A2.25 2.25 0 016 3.75z"/></svg>
-                                                    </div>
-                                                    <div class="flex-1 min-w-0">
-                                                        <div class="text-sm font-semibold text-slate-800">Billing document</div>
-                                                        <div class="text-[11px] text-slate-500 truncate">PDF · yangi tabda ochiladi</div>
-                                                    </div>
-                                                    <svg class="w-4 h-4 text-slate-400 group-hover:text-blue-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25"/></svg>
-                                                </a>
-                                            @endif
-                                        </div>
-                                    </div>
-
-                                    {{-- ADMIN NOTE (mavjud bo'lsa) --}}
-                                    @if($app->admin_note || $app->reviewed_at)
-                                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                                            <div class="text-[11px] font-bold text-amber-700 uppercase tracking-wide mb-1">Admin izoh</div>
-                                            <div class="text-sm text-amber-900">{{ $app->admin_note ?: '—' }}</div>
-                                            @if($app->reviewed_at)
-                                                <div class="text-[11px] text-amber-700 mt-1">Ko'rib chiqilgan: {{ $app->reviewed_at->format('d.m.Y H:i') }}</div>
-                                            @endif
-                                        </div>
-                                    @endif
-
-                                    {{-- HARAKATLAR --}}
-                                    @php $isProcessed = in_array($app->status, ['approved', 'rejected']); @endphp
-                                    <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-                                        <div x-data="{ showApprove: false, showReject: false }" class="flex flex-wrap gap-2 w-full">
-                                            @if(!$isProcessed)
-                                                {{-- Qabul qilish --}}
-                                                <button type="button" @click="showApprove = !showApprove; showReject = false"
-                                                        class="px-3 py-2 text-xs font-bold text-white rounded-lg transition flex items-center gap-1.5"
-                                                        style="background:linear-gradient(135deg,#10b981,#059669);">
-                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
-                                                    Qabul qilish
-                                                </button>
-                                                {{-- Rad etish --}}
-                                                <button type="button" @click="showReject = !showReject; showApprove = false"
-                                                        class="px-3 py-2 text-xs font-bold text-white rounded-lg transition flex items-center gap-1.5"
-                                                        style="background:linear-gradient(135deg,#ef4444,#dc2626);">
-                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
-                                                    Rad etish
-                                                </button>
-                                            @else
-                                                {{-- Ko'rilib chiqilgan ariza — qisqa kim/qachon yorlig'i --}}
-                                                <div class="flex-1 text-xs text-slate-500 italic">
-                                                    Ko'rib chiqilgan
-                                                    @if($app->reviewed_at)
-                                                        · <strong class="text-slate-700">{{ $app->reviewed_at->format('d.m.Y H:i') }}</strong>
+                                                    @if($app->admin_note || $app->reviewed_at)
+                                                        <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                                                            <div class="text-[11px] font-bold text-amber-700 uppercase tracking-wide mb-1">Admin izoh</div>
+                                                            <div class="text-sm text-amber-900">{{ $app->admin_note ?: '—' }}</div>
+                                                            @if($app->reviewed_at)
+                                                                <div class="text-[11px] text-amber-700 mt-1">Ko'rib chiqilgan: {{ $app->reviewed_at->format('d.m.Y H:i') }}</div>
+                                                            @endif
+                                                        </div>
                                                     @endif
+
+                                                    <div class="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100" x-data="{ showApprove: false, showReject: false }">
+                                                        @if(!$isProcessed)
+                                                            <button type="button" @click="showApprove = !showApprove; showReject = false"
+                                                                    class="px-3 py-2 text-xs font-bold text-white rounded-lg transition flex items-center gap-1.5"
+                                                                    style="background:linear-gradient(135deg,#10b981,#059669);">
+                                                                Qabul qilish
+                                                            </button>
+                                                            <button type="button" @click="showReject = !showReject; showApprove = false"
+                                                                    class="px-3 py-2 text-xs font-bold text-white rounded-lg transition flex items-center gap-1.5"
+                                                                    style="background:linear-gradient(135deg,#ef4444,#dc2626);">
+                                                                Rad etish
+                                                            </button>
+                                                        @endif
+
+                                                        <form method="POST" action="{{ route('admin.visa-applications.destroy', $app) }}"
+                                                              onsubmit="return confirm('Arizani butunlay o\'chirishni tasdiqlaysizmi?');"
+                                                              class="inline-block">
+                                                            @csrf @method('DELETE')
+                                                            <button type="submit"
+                                                                    class="px-3 py-2 text-xs font-bold rounded-lg transition"
+                                                                    style="background:#fff;border:1px solid #cbd5e1;color:#475569;">
+                                                                O'chirish
+                                                            </button>
+                                                        </form>
+
+                                                        @if(!$isProcessed)
+                                                            <form x-show="showApprove" x-cloak method="POST" action="{{ route('admin.visa-applications.approve', $app) }}"
+                                                                  class="w-full bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-2 flex flex-col sm:flex-row gap-2">
+                                                                @csrf
+                                                                <input type="hidden" name="redirect_status" value="approved">
+                                                                <input type="text" name="admin_note" placeholder="Izoh (ixtiyoriy)"
+                                                                       class="flex-1 px-3 py-2 text-sm border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none">
+                                                                <button type="submit" class="px-4 py-2 text-sm font-bold text-white rounded-lg whitespace-nowrap"
+                                                                        style="background:linear-gradient(135deg,#10b981,#059669);">Tasdiqlash</button>
+                                                            </form>
+
+                                                            <form x-show="showReject" x-cloak method="POST" action="{{ route('admin.visa-applications.reject', $app) }}"
+                                                                  class="w-full bg-red-50 border border-red-200 rounded-lg p-3 mt-2 flex flex-col sm:flex-row gap-2">
+                                                                @csrf
+                                                                <input type="hidden" name="redirect_status" value="rejected">
+                                                                <input type="text" name="admin_note" placeholder="Sabab (tavsiya etiladi)"
+                                                                       class="flex-1 px-3 py-2 text-sm border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none">
+                                                                <button type="submit" class="px-4 py-2 text-sm font-bold text-white rounded-lg whitespace-nowrap"
+                                                                        style="background:linear-gradient(135deg,#ef4444,#dc2626);">Tasdiqlash</button>
+                                                            </form>
+                                                        @endif
+                                                    </div>
                                                 </div>
-                                            @endif
-
-                                            {{-- O'chirish (har doim) --}}
-                                            <form method="POST" action="{{ route('admin.visa-applications.destroy', $app) }}"
-                                                  onsubmit="return confirm('Arizani butunlay o\'chirishni tasdiqlaysizmi?');"
-                                                  class="inline-block">
-                                                @csrf @method('DELETE')
-                                                <button type="submit"
-                                                        class="px-3 py-2 text-xs font-bold rounded-lg transition flex items-center gap-1.5"
-                                                        style="background:#fff;border:1px solid #cbd5e1;color:#475569;">
-                                                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M14.74 9l-.346 9m-4.788 0L9.26 9m9.968-3.21c.342.052.682.107 1.022.166m-1.022-.165L18.16 19.673a2.25 2.25 0 01-2.244 2.077H8.084a2.25 2.25 0 01-2.244-2.077L4.772 5.79m14.456 0a48.108 48.108 0 00-3.478-.397m-12 .562c.34-.059.68-.114 1.022-.165m0 0a48.11 48.11 0 013.478-.397m7.5 0v-.916c0-1.18-.91-2.164-2.09-2.201a51.964 51.964 0 00-3.32 0c-1.18.037-2.09 1.022-2.09 2.201v.916m7.5 0a48.667 48.667 0 00-7.5 0"/></svg>
-                                                    O'chirish
-                                                </button>
-                                            </form>
-
-                                            @if(!$isProcessed)
-                                                {{-- Approve form (collapse) --}}
-                                                <form x-show="showApprove" x-cloak method="POST" action="{{ route('admin.visa-applications.approve', $app) }}"
-                                                      class="w-full bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-2 flex flex-col sm:flex-row gap-2">
-                                                    @csrf
-                                                    <input type="hidden" name="redirect_status" value="approved">
-                                                    <input type="text" name="admin_note" placeholder="Izoh (ixtiyoriy)"
-                                                           class="flex-1 px-3 py-2 text-sm border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none">
-                                                    <button type="submit" class="px-4 py-2 text-sm font-bold text-white rounded-lg whitespace-nowrap"
-                                                            style="background:linear-gradient(135deg,#10b981,#059669);">Tasdiqlash</button>
-                                                </form>
-
-                                                {{-- Reject form (collapse) --}}
-                                                <form x-show="showReject" x-cloak method="POST" action="{{ route('admin.visa-applications.reject', $app) }}"
-                                                      class="w-full bg-red-50 border border-red-200 rounded-lg p-3 mt-2 flex flex-col sm:flex-row gap-2">
-                                                    @csrf
-                                                    <input type="hidden" name="redirect_status" value="rejected">
-                                                    <input type="text" name="admin_note" placeholder="Sabab (tavsiya etiladi)"
-                                                           class="flex-1 px-3 py-2 text-sm border border-red-300 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none">
-                                                    <button type="submit" class="px-4 py-2 text-sm font-bold text-white rounded-lg whitespace-nowrap"
-                                                            style="background:linear-gradient(135deg,#ef4444,#dc2626);">Tasdiqlash</button>
-                                                </form>
-                                            @endif
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            </div>{{-- /flex-1 wrapper --}}
-                        </div>
-                    @endforeach
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 <div class="mt-4">{{ $applications->links() }}</div>
@@ -611,6 +602,45 @@
 
         </div>
     </div>
+
+    <style>
+        .va-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+        .va-table thead { position: sticky; top: 0; z-index: 10; }
+        .va-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
+        .va-table th { padding: 12px 10px; text-align: left; font-weight: 700; font-size: 11px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
+        .va-table td { padding: 10px 10px; vertical-align: middle; line-height: 1.4; border-bottom: 1px solid #eef2f7; }
+        .va-main-row { cursor: pointer; transition: all 0.15s; }
+        .va-main-row:nth-child(4n-3),
+        .va-main-row:nth-child(4n-2) { background: #fff; }
+        .va-main-row:nth-child(4n-1),
+        .va-main-row:nth-child(4n) { background: #f8fafc; }
+        .va-main-row:hover { background: #eff6ff !important; box-shadow: inset 4px 0 0 #2b5ea7; }
+        .va-main-row td:first-child { background: inherit; }
+        .va-detail-row td { background: #f8fbff; border-bottom: 1px solid #dbe4ef; }
+        .va-detail-wrap { border-top: 1px solid #dbe4ef; }
+        .va-name-text { color: #1e40af; font-weight: 800; font-size: 13px; }
+        .va-subtext { font-size: 11px; color: #94a3b8; margin-top: 2px; }
+        .va-muted-cell { color: #64748b; font-size: 12px; }
+        .va-country-main { color: #0f172a; font-weight: 600; font-size: 12.5px; }
+        .va-chip { display: inline-block; padding: 3px 9px; border-radius: 7px; font-size: 11.5px; font-weight: 700; line-height: 1.4; white-space: nowrap; }
+        .va-chip-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
+        .va-chip-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; }
+        .va-text-emerald { color: #047857; font-size: 12.5px; font-weight: 600; }
+        .va-text-cyan { color: #0e7490; font-size: 12.5px; font-weight: 600; display: inline-block; max-width: 220px; white-space: normal; word-break: break-word; }
+        .va-firm-text { color: #1f2937; font-size: 12.5px; font-weight: 500; }
+        .va-status-pill { display: inline-flex; align-items: center; justify-content: center; padding: 4px 11px; border-radius: 999px; font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.04em; white-space: nowrap; }
+        .va-section-title { font-size: 11px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+        .va-doc-card { display: flex; align-items: center; gap: 10px; padding: 12px; background: #fff; border: 2px solid #e2e8f0; border-radius: 12px; transition: all 0.15s; }
+        .va-doc-card:hover { border-color: #60a5fa; }
+        .va-doc-icon { width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; flex-shrink: 0; }
+        .va-doc-title { font-size: 13px; font-weight: 700; color: #0f172a; }
+        .va-doc-subtitle { font-size: 11px; color: #94a3b8; margin-top: 1px; }
+
+        @media (max-width: 1024px) {
+            .va-table th, .va-table td { padding: 9px 8px; }
+            .va-text-cyan { max-width: 180px; }
+        }
+    </style>
 
     <script>
         function vaSelectedCheckboxes() {

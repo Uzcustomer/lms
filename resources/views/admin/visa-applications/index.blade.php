@@ -293,22 +293,6 @@
                 </div>
             </div>
 
-            @if(!$applications->isEmpty())
-                <div class="bg-white rounded-xl border border-emerald-200 shadow-sm p-3 flex items-center justify-start gap-3 flex-wrap">
-                    <button type="button"
-                            id="vaCheckAllBtn"
-                            onclick="vaToggleCheckAll();"
-                            class="px-3 py-2 text-xs font-bold rounded-lg border flex items-center gap-1.5 text-white"
-                            style="background:linear-gradient(135deg,#16a34a,#22c55e);border-color:#16a34a;">
-                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14M12 5l7 7-7 7"/></svg>
-                        Hammasini belgilash
-                    </button>
-                    <div class="text-sm font-semibold text-slate-700">
-                        Joriy sahifadagi arizalarni ommaviy tanlash
-                    </div>
-                </div>
-            @endif
-
             {{-- BULK TOOLBAR --}}
             @if(!$applications->isEmpty())
             <div id="bulkBar" x-data="{ count: 0 }"
@@ -359,7 +343,7 @@
                         Excel
                     </button>
 
-                    <button type="button" onclick="document.querySelectorAll('.va-row-cb').forEach(c=>c.checked=false); window.vaBulkUpdate && window.vaBulkUpdate();"
+                    <button type="button" onclick="vaToggleCheckAll(false);"
                             class="px-2.5 py-1.5 text-[11px] font-bold rounded-lg border"
                             style="background:#fff;border-color:#cbd5e1;color:#475569;">
                         Bekor qilish
@@ -396,7 +380,13 @@
                                     <th>Holat</th>
                                 </tr>
                                 <tr class="va-filter-row">
-                                    <th></th>
+                                    <th style="text-align:center;">
+                                        <input type="checkbox"
+                                               id="vaCheckAllInput"
+                                               class="w-4 h-4 cursor-pointer accent-blue-600"
+                                               title="Joriy sahifadagi arizalarni belgilash"
+                                               onchange="vaToggleCheckAll(this.checked)">
+                                    </th>
                                     <th>
                                         <input form="vaColumnFiltersForm" type="text" name="student_id_number" value="{{ request('student_id_number') }}" class="va-col-filter-input" placeholder="ID..." onkeydown="if(event.key==='Enter'){ this.form.submit(); }">
                                     </th>
@@ -737,21 +727,22 @@
         }
 
         function vaSyncCheckAllButton() {
-            const btn = document.getElementById('vaCheckAllBtn');
-            if (!btn) return;
+            const input = document.getElementById('vaCheckAllInput');
+            if (!input) return;
 
             const checkboxes = vaSelectedCheckboxes();
             const allChecked = checkboxes.length > 0 && checkboxes.every(cb => cb.checked);
-
-            btn.textContent = allChecked ? 'Belgilashni bekor qilish' : 'Hammasini belgilash';
-            btn.dataset.checked = allChecked ? '1' : '0';
+            input.checked = allChecked;
+            input.indeterminate = !allChecked && checkboxes.some(cb => cb.checked);
         }
 
-        function vaToggleCheckAll() {
+        function vaToggleCheckAll(forceState = null) {
             const checkboxes = vaSelectedCheckboxes();
             if (checkboxes.length === 0) return;
 
-            const shouldCheck = checkboxes.some(cb => !cb.checked);
+            const shouldCheck = typeof forceState === 'boolean'
+                ? forceState
+                : checkboxes.some(cb => !cb.checked);
             checkboxes.forEach(cb => {
                 cb.checked = shouldCheck;
             });

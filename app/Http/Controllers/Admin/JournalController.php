@@ -4092,6 +4092,40 @@ class JournalController extends Controller
                 return response()->json(['success' => false, 'message' => 'Baho yozuvi topilmadi: id=' . $gradeId], 404);
             }
 
+            // ─── Dublikat slot himoyasi ──────────────────────────────────────
+            // Agar shu dars uchun (talaba + fan + semestr + sana + juftlik) allaqachon
+            // o'tilgan (passing) baho mavjud bo'lsa, otrabotka qo'yishga yo'l qo'yilmaydi.
+            // Aks holda dublikat absent qatorga otrabotka tushib, jurnal va vedomost
+            // o'rtasida JN nomuvofiqligi yuzaga keladi (passing baho mavjud bo'lsa
+            // talaba o'sha kuni darsda bo'lib baho olgan — qayta topshirish o'rinsiz).
+            $lessonDateStr = \Carbon\Carbon::parse($studentGrade->lesson_date)->format('Y-m-d');
+            $existingPassing = DB::table('student_grades')
+                ->where('student_hemis_id', $studentGrade->student_hemis_id)
+                ->where('subject_id', $studentGrade->subject_id)
+                ->where('semester_code', $studentGrade->semester_code)
+                ->whereRaw('DATE(lesson_date) = ?', [$lessonDateStr])
+                ->where('lesson_pair_code', $studentGrade->lesson_pair_code)
+                ->where('id', '!=', $gradeId)
+                ->whereNull('deleted_at')
+                ->where('grade', '>=', 60)
+                ->whereIn('status', ['recorded', 'closed'])
+                ->first();
+
+            if ($existingPassing) {
+                // Superadmin/Admin uchun toggle yoqilgan bo'lsa override mavjud
+                // (boshqa lock'lar bilan bir xil mantiq — pastdagi YN/retake tekshiruvlari kabi).
+                $isPrivileged = auth()->user()?->hasAnyRole(['superadmin', 'admin']) ?? false;
+                $superToggleOn = Setting::get('feature_superadmin_grade_edit', '0') === '1';
+                if (!($isPrivileged && $superToggleOn)) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Bu dars uchun allaqachon baho qo'yilgan ({$existingPassing->grade}). Otrabotka qo'yishga ruxsat yo'q.",
+                        'existing_grade' => $existingPassing->grade,
+                        'duplicate_slot' => true,
+                    ], 400);
+                }
+            }
+
             // O'qituvchi uchun: biriktirilgan + Deadline sozlamasi + faqat NB/<60
             if ($isTeacher && !$isAdmin) {
                 // Faqat NB (absent) yoki past baho (<60) larga ruxsat

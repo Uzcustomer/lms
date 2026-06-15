@@ -264,7 +264,8 @@ class VisaApplicationController extends Controller
             'reviewed_by' => auth()->id(),
         ]);
         $this->notifyStudent($application);
-        return redirect()->route('admin.visa-applications.index', ['status' => 'approved'])
+
+        return redirect()->route('admin.visa-applications.index', $this->preservedIndexQuery($request))
             ->with('success', "Ariza #{$application->application_number} qabul qilindi.");
     }
 
@@ -277,7 +278,8 @@ class VisaApplicationController extends Controller
             'reviewed_by' => auth()->id(),
         ]);
         $this->notifyStudent($application);
-        return redirect()->route('admin.visa-applications.index', ['status' => 'rejected'])
+
+        return redirect()->route('admin.visa-applications.index', $this->preservedIndexQuery($request))
             ->with('success', "Ariza #{$application->application_number} rad etildi.");
     }
 
@@ -420,11 +422,11 @@ class VisaApplicationController extends Controller
             $updated++;
         }
 
-        return redirect()->route('admin.visa-applications.index', ['status' => $data['action']])
+        return redirect()->route('admin.visa-applications.index', $this->preservedIndexQuery($request))
             ->with('success', "{$updated} ta ariza '{$data['action']}' bosqichiga ko'chirildi.");
     }
 
-    public function destroy(VisaApplication $application)
+    public function destroy(VisaApplication $application, Request $request)
     {
         foreach ([$application->passport_pdf_path, $application->application_pdf_path, $application->receipt_pdf_path] as $path) {
             if ($path && Storage::disk('local')->exists($path)) {
@@ -434,7 +436,8 @@ class VisaApplicationController extends Controller
         $num = $application->application_number;
         $application->delete();
 
-        return back()->with('success', "Ariza #{$num} o'chirildi.");
+        return redirect()->route('admin.visa-applications.index', $this->preservedIndexQuery($request))
+            ->with('success', "Ariza #{$num} o'chirildi.");
     }
 
     public function file(VisaApplication $application, string $kind)
@@ -701,5 +704,13 @@ class VisaApplicationController extends Controller
         $name = pathinfo($filename, PATHINFO_FILENAME);
 
         return $name . ' (' . $counts[$filename] . ')' . ($ext !== '' ? '.' . $ext : '');
+    }
+
+    private function preservedIndexQuery(Request $request): array
+    {
+        return array_filter(
+            $request->except(['_token', '_method', 'admin_note', 'ids', 'ids.*', 'action', 'redirect_status']),
+            fn ($value) => $value !== null && $value !== ''
+        );
     }
 }

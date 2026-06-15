@@ -237,6 +237,8 @@ class ImportAdmissionJson extends Command
                 }
             }
 
+            $storageFullName = (string) ($payload['full_name'] ?? $applicant ?: ('student-' . $student->id));
+
             $filesCopied = 0;
             if (!$dryRun && $existingColumns->has('files') && !empty($json['files']) && is_array($json['files'])) {
                 $copyResult = $this->copyApplicationFiles($json['files'], $jsonPath, $student->id);
@@ -244,6 +246,10 @@ class ImportAdmissionJson extends Command
                 $filesCopied = $copyResult['copied'];
                 $stats['files_copied'] += $copyResult['copied'];
                 $stats['files_missing'] += $copyResult['missing'];
+            }
+
+            if (!$dryRun) {
+                $this->storeAdmissionSnapshot($json, $student->id, $storageFullName);
             }
 
             if ($dryRun) {
@@ -476,6 +482,37 @@ class ImportAdmissionJson extends Command
     }
 
     /**
+     * Import qilingan JSON'ning o'zini ham student papkasiga saqlab qo'yamiz:
+     *   {diskRoot}/{student_id}/{FULL_NAME}.json
+     */
+    private function storeAdmissionSnapshot(array $json, int $studentId, string $fullName): void
+    {
+        $diskRoot = rtrim(config('filesystems.disks.admission.root', storage_path('app/public/admission')), '/');
+        $studentDir = "{$diskRoot}/{$studentId}";
+
+        if (!is_dir($studentDir) && !mkdir($studentDir, 0755, true) && !is_dir($studentDir)) {
+            Log::warning('ImportAdmissionJson: failed to create student snapshot dir', ['dir' => $studentDir]);
+            return;
+        }
+
+        $safeName = $this->safeFileName($fullName);
+        $snapshotPath = "{$studentDir}/{$safeName}.json";
+        $encoded = json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+
+        if ($encoded === false) {
+            Log::warning('ImportAdmissionJson: failed to encode snapshot json', ['student_id' => $studentId]);
+            return;
+        }
+
+        if (@file_put_contents($snapshotPath, $encoded) === false) {
+            Log::warning('ImportAdmissionJson: failed to write snapshot file', ['path' => $snapshotPath]);
+            return;
+        }
+
+        @chmod($snapshotPath, 0644);
+    }
+
+    /**
      * Manba fayl yo'lini bir nechta variantda qidirish (papka nomi farqli bo'lishi mumkin).
      */
     private function resolveSourceFile(string $studentFolder, string $category, string $filename, string $savedPath): ?string
@@ -516,6 +553,19 @@ class ImportAdmissionJson extends Command
             return in_array($v, ['1', 'true', 'yes', 'ha', 'on'], true);
         }
         return false;
+    }
+
+    private function safeFileName(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return 'student_admission_data';
+        }
+
+        $value = preg_replace('/\s+/u', '_', $value);
+        $value = preg_replace('/[^\pL\pN_\-]+/u', '', $value);
+
+        return $value !== '' ? $value : 'student_admission_data';
     }
 
     private function norm(string $s): string

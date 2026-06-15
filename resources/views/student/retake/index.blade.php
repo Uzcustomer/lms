@@ -59,7 +59,7 @@
                     </div>
                 </div>
                 <a href="{{ route('student.retake-journal.index') }}"
-                   class="inline-flex items-center justify-center px-3 py-2 text-xs font-semibold text-blue-900 bg-white rounded-lg hover:bg-blue-50 transition whitespace-nowrap shadow-sm">
+                   class="inline-flex items-center justify-center px-3 py-2 text-xs font-bold text-black bg-white rounded-lg hover:bg-blue-50 transition whitespace-nowrap shadow-sm">
                     {{ __("Jurnalni ochish") }}
                 </a>
             </div>

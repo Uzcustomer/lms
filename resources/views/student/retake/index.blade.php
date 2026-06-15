@@ -42,6 +42,28 @@
             <p class="text-xs text-gray-500">{{ __("Akkreditatsiya bahosi mavjud bo'lmagan fanlar uchun ariza yuboring") }}</p>
         </div>
 
+        <div class="bg-gradient-to-r from-blue-50 to-cyan-50 border border-blue-200 rounded-xl p-4 mb-4">
+            <div class="flex items-start justify-between gap-3">
+                <div class="flex items-start gap-3 min-w-0">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+                        </svg>
+                    </div>
+                    <div class="min-w-0">
+                        <h2 class="text-sm font-semibold text-gray-900">{{ __("Qayta o'qish jurnali") }}</h2>
+                        <p class="text-xs text-gray-600 mt-1">
+                            {{ __("Tasdiqlangan qayta o'qish fanlaringiz bo'yicha baholar, guruh, o'qituvchi va mustaqil ta'lim topshiriqlarini shu yerda ko'rishingiz mumkin.") }}
+                        </p>
+                    </div>
+                </div>
+                <a href="{{ route('student.retake-journal.index') }}"
+                   class="inline-flex items-center justify-center px-3 py-2 text-xs font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition whitespace-nowrap">
+                    {{ __("Jurnalni ochish") }}
+                </a>
+            </div>
+        </div>
+
         {{-- Cheklov haqida ogohlantirish --}}
         <div class="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 flex items-start gap-3">
             <div class="flex-shrink-0 w-8 h-8 rounded-full bg-amber-100 flex items-center justify-center">

@@ -1107,18 +1107,20 @@ class TutorReportController extends Controller
 
         if ($grades->isEmpty()) return [];
 
-        // Sababli absent'lar (AbsenceExcuse)
+        // Sababli absent oralilqlari (AbsenceExcuse — sana oralig'i bo'yicha, fan emas)
         $hasExcuseTable = \Illuminate\Support\Facades\Schema::hasTable('absence_excuses');
-        $excusedKeys = [];
+        $excuseRanges = [];
         if ($hasExcuseTable) {
             $excused = DB::table('absence_excuses')
                 ->whereIn('student_hemis_id', $studentHemisIds)
-                ->whereIn('semester_code', $currentSemesterCodes)
-                ->whereNull('deleted_at')
-                ->select('student_hemis_id', 'subject_id', 'lesson_date')
+                ->where('status', 'approved')
+                ->select('student_hemis_id', 'start_date', 'end_date')
                 ->get();
             foreach ($excused as $e) {
-                $excusedKeys[$e->student_hemis_id . '|' . $e->subject_id . '|' . $e->lesson_date] = true;
+                $excuseRanges[$e->student_hemis_id][] = [
+                    'start' => substr((string) $e->start_date, 0, 10),
+                    'end' => substr((string) $e->end_date, 0, 10),
+                ];
             }
         }
 
@@ -1202,8 +1204,15 @@ class TutorReportController extends Controller
                 $absentCount = 0;
                 foreach ($lessonRows as $r) {
                     if ($r->reason === 'absent') {
-                        $excuseKey = $hemisId . '|' . $subjectId . '|' . $r->lesson_date;
-                        if (!isset($excusedKeys[$excuseKey])) {
+                        $lessonDate = substr((string) $r->lesson_date, 0, 10);
+                        $isExcused = false;
+                        foreach ($excuseRanges[$hemisId] ?? [] as $range) {
+                            if ($range['start'] <= $lessonDate && $range['end'] >= $lessonDate) {
+                                $isExcused = true;
+                                break;
+                            }
+                        }
+                        if (!$isExcused) {
                             $absentCount++;
                         }
                     }

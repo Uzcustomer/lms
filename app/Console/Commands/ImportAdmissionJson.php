@@ -695,6 +695,7 @@ class ImportAdmissionJson extends Command
             [' ', "'", "'", "'", "'", "'", "'", "'", "'", "'", "'", "'"],
             $value,
         );
+        $value = preg_replace("/['`´’‘ʼʻʹ]+/u", '', $value);
         $value = preg_replace('/\s+/u', ' ', $value);
 
         $rawWords = preg_split('/[^\pL\pN]+/u', $value) ?: [];

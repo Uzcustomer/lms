@@ -59,6 +59,9 @@ class VedomostSubmission extends Model
         'reviewed_by_name',
         'reviewed_at',
         'rejection_reason',
+        'reupload_allowed_at',
+        'reupload_allowed_by',
+        'reupload_allowed_by_name',
         'ai_check_status',
         'ai_verdict',
         'ai_summary',
@@ -75,6 +78,7 @@ class VedomostSubmission extends Model
         'deadline' => 'date',
         'uploaded_at' => 'datetime',
         'reviewed_at' => 'datetime',
+        'reupload_allowed_at' => 'datetime',
         'ai_checked_at' => 'datetime',
         'ai_result' => 'array',
         'prorektor_notified_at' => 'datetime',
@@ -140,6 +144,15 @@ class VedomostSubmission extends Model
     public function isCombinedForm(): bool
     {
         return in_array($this->form_type, self::COMBINED_FORMS, true);
+    }
+
+    /**
+     * Rad etilgan vedomostni qayta yuklash mumkinmi?
+     * Faqat o'quv prorektori ruxsat bergan (reupload_allowed_at to'ldirilgan) bo'lsa.
+     */
+    public function reuploadPermitted(): bool
+    {
+        return $this->status === self::STATUS_REJECTED && $this->reupload_allowed_at !== null;
     }
 
     /**

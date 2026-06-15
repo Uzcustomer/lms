@@ -22,6 +22,12 @@ class VedomostSubmissionController extends Controller
 {
     private const ALLOWED_ROLES = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi'];
 
+    /** Ko'rish (index/show/export/file) — admin + o'quv prorektori. */
+    private const VIEW_ROLES = ['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi', 'oquv_prorektori'];
+
+    /** Rad etilgan vedomostni qayta yuklashga ruxsat bera oladigan rollar. */
+    private const REUPLOAD_PERMIT_ROLES = ['superadmin', 'oquv_prorektori'];
+
     /** Telegram/bildirishnoma toggle'ini boshqara oladigan rollar (admin). */
     private const NOTIFY_TOGGLE_ROLES = ['superadmin', 'admin', 'kichik_admin'];
 
@@ -82,6 +88,33 @@ class VedomostSubmissionController extends Controller
         $activeRole = session('active_role', '');
         if (!in_array($activeRole, self::ALLOWED_ROLES, true)) {
             abort(403, "Vedomost hisobotini faqat admin va registrator ofisi ko'ra oladi.");
+        }
+    }
+
+    /**
+     * Ko'rish huquqi — admin/registrator + o'quv prorektori (faqat o'qish va
+     * "qayta yuklashga ruxsat" amali uchun).
+     */
+    private function checkViewAccess(): void
+    {
+        if (!auth()->user()) {
+            abort(403);
+        }
+        if (!in_array(session('active_role', ''), self::VIEW_ROLES, true)) {
+            abort(403, "Bu sahifani ko'rish huquqi yo'q.");
+        }
+    }
+
+    /**
+     * Rad etilgan vedomostni qayta yuklashga ruxsat berish huquqi — o'quv prorektori.
+     */
+    private function checkReuploadPermitAccess(): void
+    {
+        if (!auth()->user()) {
+            abort(403);
+        }
+        if (!in_array(session('active_role', ''), self::REUPLOAD_PERMIT_ROLES, true)) {
+            abort(403, "Qayta yuklashga ruxsatni faqat o'quv prorektori bera oladi.");
         }
     }
 
@@ -171,7 +204,7 @@ class VedomostSubmissionController extends Controller
 
     public function index(Request $request)
     {
-        $this->checkAccess();
+        $this->checkViewAccess();
 
         [$query, $educationTypes, $selectedEducationType] = $this->filteredQuery($request);
 
@@ -246,7 +279,7 @@ class VedomostSubmissionController extends Controller
 
     public function export(Request $request)
     {
-        $this->checkAccess();
+        $this->checkViewAccess();
 
         [$query] = $this->filteredQuery($request);
 
@@ -327,7 +360,7 @@ class VedomostSubmissionController extends Controller
 
     public function show($id)
     {
-        $this->checkAccess();
+        $this->checkViewAccess();
         $submission = VedomostSubmission::with('logs')->findOrFail($id);
         $aiConfigured = \App\Services\VedomostAiChecker::isConfigured();
 
@@ -368,7 +401,7 @@ class VedomostSubmissionController extends Controller
      */
     public function aiStatus($id)
     {
-        $this->checkAccess();
+        $this->checkViewAccess();
         $v = VedomostSubmission::findOrFail($id);
 
         return response()->json([
@@ -386,14 +419,18 @@ class VedomostSubmissionController extends Controller
         $this->checkAccess();
         $v = VedomostSubmission::findOrFail($id);
 
-        // Tekshirishga OLINMAGUNCHA (pending/rejected/received) fayl yuklash/almashtirish
-        // mumkin. Tekshirilmoqda yoki tasdiqlangan bo'lsa — yo'q.
-        $canUpload = in_array($v->status, [
+        // Pending (hali yuklanmagan) yoki received (tekshirishga olinmagan) — erkin
+        // yuklash/almashtirish mumkin. Rad etilgan (rejected) bo'lsa — faqat o'quv
+        // prorektori "qayta yuklashga ruxsat" bergan bo'lsa. Tekshirilmoqda yoki
+        // tasdiqlangan bo'lsa — umuman mumkin emas.
+        if ($v->status === VedomostSubmission::STATUS_REJECTED) {
+            if (!$v->reupload_allowed_at) {
+                return back()->with('error', "Rad etilgan vedomostni qayta yuklash uchun avval o'quv prorektori ruxsat berishi kerak.");
+            }
+        } elseif (!in_array($v->status, [
             VedomostSubmission::STATUS_PENDING,
-            VedomostSubmission::STATUS_REJECTED,
             VedomostSubmission::STATUS_RECEIVED,
-        ], true);
-        if (!$canUpload) {
+        ], true)) {
             return back()->with('error', "Bu vedomost tekshirishga olingan yoki tasdiqlangan — faylni almashtirib bo'lmaydi.");
         }
 
@@ -428,6 +465,10 @@ class VedomostSubmissionController extends Controller
             'reviewed_by' => null,
             'reviewed_by_name' => null,
             'reviewed_at' => null,
+            // Qayta yuklash ruxsati bir martalik — yuklab bo'lingach iste'mol qilinadi.
+            'reupload_allowed_at' => null,
+            'reupload_allowed_by' => null,
+            'reupload_allowed_by_name' => null,
             // Fayl almashtirilsa eski AI tekshiruv natijasi eskiradi — tozalaymiz.
             // (ai_check_status NOT NULL, default 'none' — null EMAS!)
             'ai_check_status' => 'none',
@@ -547,9 +588,40 @@ class VedomostSubmissionController extends Controller
         return back()->with('success', 'Vedomost rad etildi va tegishli shaxslarga xabar yuborildi.');
     }
 
+    /**
+     * Rad etilgan vedomostni qayta yuklashga ruxsat berish (faqat o'quv prorektori).
+     * Ruxsat berilgach o'qituvchi/admin faylni qayta yuklay oladi; yuklab bo'lingach
+     * ruxsat bir martalik bo'lib iste'mol qilinadi.
+     */
+    public function allowReupload($id)
+    {
+        $this->checkReuploadPermitAccess();
+        $v = VedomostSubmission::findOrFail($id);
+
+        if ($v->status !== VedomostSubmission::STATUS_REJECTED) {
+            return back()->with('error', "Faqat rad etilgan vedomostga qayta yuklash ruxsatini berish mumkin.");
+        }
+        if ($v->reupload_allowed_at) {
+            return back()->with('error', 'Bu vedomostga qayta yuklash ruxsati allaqachon berilgan.');
+        }
+
+        $permit = [
+            'reupload_allowed_at' => now(),
+            'reupload_allowed_by' => auth()->id(),
+            'reupload_allowed_by_name' => $this->userName(),
+        ];
+        foreach ($this->merge->siblingsOf($v) as $sib) {
+            $sib->update($permit);
+        }
+        $v->refresh();
+        $this->log($v, 'reupload_permit', $v->status, $v->status);
+
+        return back()->with('success', "Qayta yuklashga ruxsat berildi. Endi vedomostni qayta yuklash mumkin.");
+    }
+
     public function downloadFile($id, $type)
     {
-        $this->checkAccess();
+        $this->checkViewAccess();
         $v = VedomostSubmission::findOrFail($id);
 
         $path = $type === 'excel' ? $v->excel_path : $v->pdf_path;

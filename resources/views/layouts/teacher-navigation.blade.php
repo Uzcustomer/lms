@@ -33,13 +33,11 @@
                     </x-nav-link>
                 </div>
                 @endif
-                @if($navActiveRole !== 'tyutor')
                 <div class="hidden space-x-8 sm:-my-px sm:ms-10 sm:flex">
                     <x-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
                         {{ __('Jurnal') }}
                     </x-nav-link>
                 </div>
-                @endif
                 @php
                     $hasTutorGroups = auth()->guard('teacher')->user()->groups()->where('active', true)->count() > 0
                         || auth()->guard('teacher')->user()->nazoratchiGroups()->where('active', true)->count() > 0;
@@ -545,11 +543,9 @@
                     {{ __('Baholar') }}
                 </x-responsive-nav-link>
                 @endif
-                @if($navActiveRole !== 'tyutor')
                 <x-responsive-nav-link :href="route('admin.journal.index')" :active="request()->routeIs('admin.journal.*')">
                     {{ __('Jurnal') }}
                 </x-responsive-nav-link>
-                @endif
 
                 @if($navActiveRole === 'nazoratchi')
                 <div class="border-t border-gray-200 pt-2 mt-2">

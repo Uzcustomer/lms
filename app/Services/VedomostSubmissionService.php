@@ -17,6 +17,12 @@ class VedomostSubmissionService
     /** Yopilish shakllari — vedomost topshirilishi kerak bo'lganlar. */
     public const CLOSING_FORMS_WITH_VEDOMOST = ['oski', 'test', 'oski_test', 'sinov', 'normativ'];
 
+    /** 12a/12b (qayta topshirish) ochiladigan yopilish shakllari — OSKI/Test imtihonli fanlar. */
+    public const RESIT_CLOSING_FORMS = ['oski', 'test', 'oski_test'];
+
+    /** Yiqilgan deb hisoblanadigan chegara (V < 60). */
+    public const PASS_GRADE = 60;
+
     /** Deadline: base sanadan necha ish kuni keyin. */
     public const DEADLINE_WORKDAYS = 3;
 
@@ -24,6 +30,11 @@ class VedomostSubmissionService
     private array $teacherCache = [];
     private array $mudiriCache = [];
     private ?\Illuminate\Support\Collection $fanMasuliMap = null;
+    private ?bool $studentGradeAttemptCol = null;
+
+    public function __construct(private VedomostMergeService $merge)
+    {
+    }
 
     /**
      * Joriy o'quv yili kodi (HEMIS "current" bayrog'idan).
@@ -103,6 +114,7 @@ class VedomostSubmissionService
             ->keyBy('curriculum_subject_id');
 
         $count = 0;
+        $units = []; // 12a/12b uchun yo'nalish × fan × semestr birliklari
         foreach ($groups as $group) {
             $sem = $semByGroup->get($group->group_hemis_id);
             if (!$sem) {
@@ -127,15 +139,17 @@ class VedomostSubmissionService
                 $teacherInfo = $teacher ? $this->teacherInfo($teacher->employee_id) : null;
                 $fanMasuli = $this->fanMasuli($subject->id);
                 $kafedraMudiri = $this->kafedraMudiri($deptHemisId);
+                $educationYear = $semesterYears["{$group->curriculum_hemis_id}|{$semCode}"] ?? $currentYear;
 
                 VedomostSubmission::updateOrCreate(
                     [
                         'group_hemis_id' => $group->group_hemis_id,
                         'subject_id' => $subject->subject_id,
                         'semester_code' => $semCode,
+                        'form_type' => VedomostSubmission::FORM_12,
                     ],
                     [
-                        'education_year' => $semesterYears["{$group->curriculum_hemis_id}|{$semCode}"] ?? $currentYear,
+                        'education_year' => $educationYear,
                         'group_name' => $group->name,
                         'curriculum_hemis_id' => $group->curriculum_hemis_id,
                         'curriculum_subject_id' => $subject->id,
@@ -160,10 +174,270 @@ class VedomostSubmissionService
                     ]
                 );
                 $count++;
+
+                // 12a/12b — faqat OSKI/Test imtihonli fanlar uchun birlik to'playmiz.
+                if (in_array($subject->closing_form, self::RESIT_CLOSING_FORMS, true)) {
+                    $rootSubject = $this->merge->rootSubjectName($subject->subject_name);
+                    $unitKey = implode('|', [
+                        $educationYear, $semCode, (string) $group->specialty_name,
+                        $subject->closing_form, $rootSubject,
+                    ]);
+                    if (!isset($units[$unitKey])) {
+                        $units[$unitKey] = [
+                            'education_year' => $educationYear,
+                            'semester_code' => $semCode,
+                            'specialty_name' => $group->specialty_name,
+                            'closing_form' => $subject->closing_form,
+                            'subject_id' => $subject->subject_id,
+                            'subject_name' => $rootSubject,
+                            'curriculum_hemis_id' => $group->curriculum_hemis_id,
+                            'department_hemis_id' => $deptHemisId,
+                            'department_name' => $subject->department_name ?: $group->department_name,
+                            'fan_masuli_hemis_id' => $fanMasuli?->hemis_id,
+                            'fan_masuli_name' => $fanMasuli?->full_name,
+                            'fan_masuli_phone' => $fanMasuli?->phone,
+                            'kafedra_mudiri_hemis_id' => $kafedraMudiri?->hemis_id,
+                            'kafedra_mudiri_name' => $kafedraMudiri?->full_name,
+                            'kafedra_mudiri_phone' => $kafedraMudiri?->phone,
+                            'group_ids' => [],
+                            'subject_keys' => [],
+                        ];
+                    }
+                    $units[$unitKey]['group_ids'][] = (int) $group->group_hemis_id;
+                    foreach ([$subject->subject_id, $subject->curriculum_subject_hemis_id] as $sk) {
+                        if ($sk && !in_array($sk, $units[$unitKey]['subject_keys'], true)) {
+                            $units[$unitKey]['subject_keys'][] = $sk;
+                        }
+                    }
+                }
             }
         }
 
+        $this->syncResitForms($units);
+
         return $count;
+    }
+
+    /**
+     * 12a/12b (qayta topshirish) umumiy varaqlarini natijaga qarab ochadi/yopadi.
+     *
+     * Har bir yo'nalish × fan × semestr birligi uchun (BARCHA guruhlar bitta varaq):
+     *  - 12a : 1-urinish (oski/test) sanasi o'tgan VA 1-urinishda yiqilganlar bo'lsa.
+     *  - 12b : 2-urinish (resit) sanasi o'tgan VA 2-urinishda yiqilganlar bo'lsa.
+     * Yiqilgan/o'tgan aniqlash individual-exam-schedule logikasiga mos
+     * (student_grades: training_type 101/102, attempt, retake_grade ?? grade < 60).
+     */
+    private function syncResitForms(array $units): void
+    {
+        $today = Carbon::today()->toDateString();
+
+        foreach ($units as $unit) {
+            $groupIds = array_values(array_unique($unit['group_ids']));
+            $subjectKeys = $unit['subject_keys'] ?: [$unit['subject_id']];
+
+            $failures = $this->detectFailures($groupIds, $subjectKeys, $unit['semester_code']);
+            $dates = $this->examDates($groupIds, $subjectKeys, $unit['semester_code'], $unit['closing_form']);
+
+            // 12a — 1-urinish tugagan (sana o'tgan) va 1-urinishda yiqilganlar bor.
+            $open12a = $failures['failed1'] > 0
+                && $dates['attempt1'] !== null
+                && $dates['attempt1'] < $today;
+            $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12A, $open12a, $dates['resit']);
+
+            // 12b — 2-urinish (resit) tugagan va 2-urinishda yiqilganlar bor.
+            $open12b = $failures['failed2'] > 0
+                && $dates['resit'] !== null
+                && $dates['resit'] < $today;
+            $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12B, $open12b, $dates['resit2']);
+        }
+    }
+
+    /**
+     * Shart bajarilsa 12a/12b umumiy qatorini yaratadi/yangilaydi; aks holda
+     * (hali yuklanmagan, status pending) bo'lsa olib tashlaydi.
+     */
+    private function upsertOrCleanResitRow(array $unit, array $groupIds, string $formType, bool $shouldOpen, ?string $baseDate): void
+    {
+        $repGroupId = !empty($groupIds) ? min($groupIds) : null;
+        if (!$repGroupId) {
+            return;
+        }
+
+        $keys = [
+            'group_hemis_id' => $repGroupId,
+            'subject_id' => $unit['subject_id'],
+            'semester_code' => $unit['semester_code'],
+            'form_type' => $formType,
+        ];
+
+        if (!$shouldOpen) {
+            // Faqat hali ishlatilmagan (pending, fayl yo'q) qatorni tozalaymiz —
+            // yuklangan/tasdiqlangan vedomostga tegmaymiz.
+            VedomostSubmission::where($keys)
+                ->where('status', VedomostSubmission::STATUS_PENDING)
+                ->whereNull('pdf_path')
+                ->delete();
+            return;
+        }
+
+        $deadline = $baseDate
+            ? WorkdayCalculator::addWorkdays(Carbon::parse($baseDate), self::DEADLINE_WORKDAYS)->toDateString()
+            : null;
+
+        VedomostSubmission::updateOrCreate($keys, [
+            'education_year' => $unit['education_year'],
+            'group_name' => 'Barcha guruhlar (' . count($groupIds) . ' ta)',
+            'curriculum_hemis_id' => $unit['curriculum_hemis_id'],
+            'curriculum_subject_id' => null,
+            'subject_name' => $unit['subject_name'],
+            'department_hemis_id' => $unit['department_hemis_id'],
+            'department_name' => $unit['department_name'],
+            'specialty_name' => $unit['specialty_name'],
+            'closing_form' => $unit['closing_form'],
+            // 12a/12b — umumiy varaq, alohida o'qituvchi yo'q (fan mas'uli javobgar).
+            'teacher_hemis_id' => null,
+            'teacher_name' => null,
+            'teacher_phone' => null,
+            'fan_masuli_hemis_id' => $unit['fan_masuli_hemis_id'],
+            'fan_masuli_name' => $unit['fan_masuli_name'],
+            'fan_masuli_phone' => $unit['fan_masuli_phone'],
+            'kafedra_mudiri_hemis_id' => $unit['kafedra_mudiri_hemis_id'],
+            'kafedra_mudiri_name' => $unit['kafedra_mudiri_name'],
+            'kafedra_mudiri_phone' => $unit['kafedra_mudiri_phone'],
+            'base_type' => 'exam',
+            'base_date' => $baseDate,
+            'deadline' => $deadline,
+            // status / fayllar / tekshiruv — atayin yangilanmaydi (oqim saqlanadi)
+        ]);
+    }
+
+    /**
+     * Birlikdagi (guruhlar) talabalardan 1- va 2-urinishda yiqilganlar sonini
+     * aniqlaydi. individual-exam-schedule eligibility logikasi bilan bir xil.
+     *
+     * @return array{failed1:int, failed2:int}
+     */
+    private function detectFailures(array $groupIds, array $subjectKeys, string $semCode): array
+    {
+        if (empty($groupIds) || empty($subjectKeys)) {
+            return ['failed1' => 0, 'failed2' => 0];
+        }
+
+        $hasAttempt = $this->studentGradeAttemptColumn();
+
+        $rows = DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereIn('st.group_id', $groupIds)
+            ->whereIn('sg.subject_id', $subjectKeys)
+            ->where('sg.semester_code', $semCode)
+            ->whereIn('sg.training_type_code', [101, 102])
+            ->whereNull('sg.deleted_at')
+            ->select(
+                'sg.student_hemis_id',
+                'sg.grade',
+                'sg.retake_grade',
+                $hasAttempt ? 'sg.attempt' : DB::raw('1 as attempt')
+            )
+            ->get();
+
+        $failed1 = 0;
+        $failed2 = 0;
+        foreach ($rows->groupBy('student_hemis_id') as $studentRows) {
+            $f1 = false;
+            $f2 = false;
+            foreach ($studentRows as $r) {
+                $att = (int) ($r->attempt ?? 1);
+                $val = $r->retake_grade ?? $r->grade;
+                if ($val === null) {
+                    continue;
+                }
+                if ($att <= 1 && (float) $val < self::PASS_GRADE) {
+                    $f1 = true;
+                } elseif ($att === 2 && (float) $val < self::PASS_GRADE) {
+                    $f2 = true;
+                }
+            }
+            if ($f1) {
+                $failed1++;
+            }
+            if ($f2) {
+                $failed2++;
+            }
+        }
+
+        return ['failed1' => $failed1, 'failed2' => $failed2];
+    }
+
+    /**
+     * Birlik uchun urinish sanalari (eng kech sana) — yopilish shakliga qarab
+     * OSKI va/yoki Test ustunlaridan olinadi.
+     *
+     * @return array{attempt1:?string, resit:?string, resit2:?string}
+     */
+    private function examDates(array $groupIds, array $subjectKeys, string $semCode, string $closingForm): array
+    {
+        if (empty($groupIds) || empty($subjectKeys)) {
+            return ['attempt1' => null, 'resit' => null, 'resit2' => null];
+        }
+
+        $rows = ExamSchedule::whereNull('student_hemis_id')
+            ->whereIn('group_hemis_id', $groupIds)
+            ->whereIn('subject_id', $subjectKeys)
+            ->where('semester_code', $semCode)
+            ->get();
+
+        $wantOski = in_array($closingForm, ['oski', 'oski_test'], true);
+        $wantTest = in_array($closingForm, ['test', 'oski_test'], true);
+
+        $attempt1 = [];
+        $resit = [];
+        $resit2 = [];
+        foreach ($rows as $r) {
+            if ($wantOski) {
+                if (!$r->oski_na && $r->oski_date) {
+                    $attempt1[] = $r->oski_date->toDateString();
+                }
+                if ($r->oski_resit_date) {
+                    $resit[] = $r->oski_resit_date->toDateString();
+                }
+                if ($r->oski_resit2_date) {
+                    $resit2[] = $r->oski_resit2_date->toDateString();
+                }
+            }
+            if ($wantTest) {
+                if (!$r->test_na && $r->test_date) {
+                    $attempt1[] = $r->test_date->toDateString();
+                }
+                if ($r->test_resit_date) {
+                    $resit[] = $r->test_resit_date->toDateString();
+                }
+                if ($r->test_resit2_date) {
+                    $resit2[] = $r->test_resit2_date->toDateString();
+                }
+            }
+        }
+
+        return [
+            'attempt1' => !empty($attempt1) ? max($attempt1) : null,
+            'resit' => !empty($resit) ? max($resit) : null,
+            'resit2' => !empty($resit2) ? max($resit2) : null,
+        ];
+    }
+
+    /**
+     * student_grades.attempt ustuni mavjudmi (bir marta tekshirilib keshlanadi).
+     */
+    private function studentGradeAttemptColumn(): bool
+    {
+        if ($this->studentGradeAttemptCol === null) {
+            try {
+                $this->studentGradeAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+            } catch (\Throwable $e) {
+                $this->studentGradeAttemptCol = false;
+            }
+        }
+
+        return $this->studentGradeAttemptCol;
     }
 
     /**

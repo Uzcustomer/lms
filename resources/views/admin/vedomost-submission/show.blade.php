@@ -57,6 +57,7 @@
                     <div><span style="color:#94a3b8;">Yo'nalish:</span> {{ $v->specialty_name }}</div>
                     <div><span style="color:#94a3b8;">Kafedra:</span> {{ $m->department_name ?? $v->department_name }}</div>
                     <div><span style="color:#94a3b8;">Yopilish shakli:</span> {{ $closingFormLabels[$v->closing_form] ?? $v->closing_form }}</div>
+                    <div><span style="color:#94a3b8;">Shakl:</span> <b>{{ \App\Models\VedomostSubmission::formLabel($v->form_type ?? '12') }}</b></div>
                     <div><span style="color:#94a3b8;">O'qituvchi(lar):</span> {{ $m->teacher_name ?? '—' }} <span style="color:#94a3b8;">{{ $m->teacher_phone ? '('.$m->teacher_phone.')' : '' }}</span></div>
                     <div><span style="color:#94a3b8;">Fan mas'uli:</span> {{ $m->fan_masuli_name ?? '—' }} <span style="color:#94a3b8;">{{ $m->fan_masuli_phone ? '('.$m->fan_masuli_phone.')' : '' }}</span></div>
                     <div><span style="color:#94a3b8;">Kafedra mudiri:</span> {{ $m->kafedra_mudiri_name ?? '—' }} <span style="color:#94a3b8;">{{ $m->kafedra_mudiri_phone ? '('.$m->kafedra_mudiri_phone.')' : '' }}</span></div>

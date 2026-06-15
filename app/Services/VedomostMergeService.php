@@ -165,6 +165,14 @@ class VedomostMergeService
             'base_date' => $deadlineRep->base_date,
             'deadline' => $deadlineRep->deadline,
 
+            // Rad etilish bildirgilari (inbox) uchun — vakil yozuv qiymatlari.
+            // Rad etishda barcha guruhchalarga bir xil reviewed_at/sabab yoziladi.
+            'reviewed_at' => $rep->reviewed_at ?? null,
+            'reviewed_by_name' => $rep->reviewed_by_name ?? null,
+            'rejection_reason' => $rep->rejection_reason ?? null,
+            'reupload_allowed_at' => $rep->reupload_allowed_at ?? null,
+            'reupload_allowed_by_name' => $rep->reupload_allowed_by_name ?? null,
+
             'status' => $status,
             'status_counts' => $statusCounts->all(),
             'is_mixed_status' => $statusCounts->count() > 1,

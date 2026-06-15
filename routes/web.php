@@ -628,9 +628,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/review', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'review'])->whereNumber('id')->name('review');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'approve'])->whereNumber('id')->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'reject'])->whereNumber('id')->name('reject');
+            Route::post('/{id}/allow-reupload', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'allowReupload'])->whereNumber('id')->name('allow-reupload');
             Route::post('/{id}/ai-check', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'aiCheck'])->whereNumber('id')->name('ai-check');
             Route::get('/{id}/ai-status', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'aiStatus'])->whereNumber('id')->name('ai-status');
             Route::get('/{id}/file/{type}', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'downloadFile'])->whereNumber('id')->name('file');
+        });
+
+        // Vedomost rad etilish bildirgilari (Gmail uslubidagi inbox — o'quv prorektori)
+        Route::prefix('vedomost-rejections')->name('vedomost-rejections.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\VedomostRejectionInboxController::class, 'index'])->name('index');
+            Route::post('/read-all', [\App\Http\Controllers\Admin\VedomostRejectionInboxController::class, 'markAllRead'])->name('read-all');
+            Route::post('/{id}/read', [\App\Http\Controllers\Admin\VedomostRejectionInboxController::class, 'markRead'])->whereNumber('id')->name('read');
         });
 
         // To'garak arizalari

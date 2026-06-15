@@ -121,6 +121,10 @@ class ImportAdmissionJson extends Command
      */
     private array $studentsByNorm = [];
     private array $studentsBySortedNorm = [];
+    private array $studentsByExactProfile = [];
+    private array $studentsByLooseProfile = [];
+    private array $studentsByPhone = [];
+    private array $studentsById = [];
 
     public function handle(): int
     {
@@ -312,17 +316,45 @@ class ImportAdmissionJson extends Command
     private function buildStudentIndex(): void
     {
         Student::query()
-            ->select(['id', 'full_name'])
-            ->whereNotNull('full_name')
+            ->select(['id', 'full_name', 'first_name', 'second_name', 'third_name', 'birth_date', 'phone'])
             ->orderBy('id')
             ->chunk(2000, function ($students) {
                 foreach ($students as $s) {
-                    $norm = $this->norm($s->full_name);
-                    if ($norm === '') continue;
-                    $this->studentsByNorm[$norm][] = $s->id;
+                    $this->studentsById[$s->id] = $s;
 
-                    $sortedNorm = $this->normSorted($s->full_name);
-                    $this->studentsBySortedNorm[$sortedNorm][] = $s->id;
+                    $norm = $this->strongNorm((string) $s->full_name);
+                    if ($norm !== '') {
+                        $this->studentsByNorm[$norm][] = $s->id;
+
+                        $sortedNorm = $this->strongNormSorted((string) $s->full_name);
+                        $this->studentsBySortedNorm[$sortedNorm][] = $s->id;
+                    }
+
+                    $birthDate = $this->normalizeBirthDate($s->birth_date);
+
+                    $exactKey = $this->makeStructuredKey(
+                        (string) $s->second_name,
+                        (string) $s->first_name,
+                        (string) $s->third_name,
+                        $birthDate,
+                    );
+                    if ($exactKey !== null) {
+                        $this->studentsByExactProfile[$exactKey][] = $s->id;
+                    }
+
+                    $looseKey = $this->makeStructuredKey(
+                        (string) $s->second_name,
+                        (string) $s->first_name,
+                        '',
+                        $birthDate,
+                    );
+                    if ($looseKey !== null) {
+                        $this->studentsByLooseProfile[$looseKey][] = $s->id;
+                    }
+
+                    foreach ($this->extractPhones(['phone' => $s->phone]) as $phone) {
+                        $this->studentsByPhone[$phone][] = $s->id;
+                    }
                 }
             });
     }
@@ -341,6 +373,38 @@ class ImportAdmissionJson extends Command
      */
     private function findStudent(array $applicant, array $fields): ?Student
     {
+        $birthDate = $this->parseDate((string) ($fields['tugilgan_sana'] ?? ''));
+        $phones = $this->extractPhones([
+            'tel1' => $fields['tel1'] ?? null,
+            'tel2' => $fields['tel2'] ?? null,
+        ]);
+
+        $exactKey = $this->makeStructuredKey(
+            (string) ($fields['familya'] ?? ''),
+            (string) ($fields['ism'] ?? ''),
+            (string) ($fields['otasining_ismi'] ?? ''),
+            $birthDate,
+        );
+        if ($exactKey !== null) {
+            $student = $this->resolveCandidateIds($this->studentsByExactProfile[$exactKey] ?? [], $phones);
+            if ($student) {
+                return $student;
+            }
+        }
+
+        $looseKey = $this->makeStructuredKey(
+            (string) ($fields['familya'] ?? ''),
+            (string) ($fields['ism'] ?? ''),
+            '',
+            $birthDate,
+        );
+        if ($looseKey !== null) {
+            $student = $this->resolveCandidateIds($this->studentsByLooseProfile[$looseKey] ?? [], $phones);
+            if ($student) {
+                return $student;
+            }
+        }
+
         $full = trim((string)($applicant['full'] ?? ''));
         if ($full === '') {
             $full = trim(
@@ -351,14 +415,47 @@ class ImportAdmissionJson extends Command
         }
         if ($full === '') return null;
 
-        $norm = $this->norm($full);
-        if (isset($this->studentsByNorm[$norm]) && count($this->studentsByNorm[$norm]) === 1) {
-            return Student::find($this->studentsByNorm[$norm][0]);
+        $norm = $this->strongNorm($full);
+        if (isset($this->studentsByNorm[$norm])) {
+            $student = $this->resolveCandidateIds($this->studentsByNorm[$norm], $phones);
+            if ($student) {
+                return $student;
+            }
         }
 
-        $sortedNorm = $this->normSorted($full);
-        if (isset($this->studentsBySortedNorm[$sortedNorm]) && count($this->studentsBySortedNorm[$sortedNorm]) === 1) {
-            return Student::find($this->studentsBySortedNorm[$sortedNorm][0]);
+        $sortedNorm = $this->strongNormSorted($full);
+        if (isset($this->studentsBySortedNorm[$sortedNorm])) {
+            $student = $this->resolveCandidateIds($this->studentsBySortedNorm[$sortedNorm], $phones);
+            if ($student) {
+                return $student;
+            }
+        }
+
+        return null;
+    }
+
+    private function resolveCandidateIds(array $candidateIds, array $phones = []): ?Student
+    {
+        $candidateIds = array_values(array_unique(array_map('intval', $candidateIds)));
+        if (count($candidateIds) === 1) {
+            return $this->studentsById[$candidateIds[0]] ?? null;
+        }
+
+        if (count($candidateIds) > 1 && !empty($phones)) {
+            $phoneMatched = [];
+
+            foreach ($phones as $phone) {
+                foreach ($this->studentsByPhone[$phone] ?? [] as $studentId) {
+                    if (in_array($studentId, $candidateIds, true)) {
+                        $phoneMatched[$studentId] = true;
+                    }
+                }
+            }
+
+            if (count($phoneMatched) === 1) {
+                $studentId = (int) array_key_first($phoneMatched);
+                return $this->studentsById[$studentId] ?? null;
+            }
         }
 
         return null;
@@ -572,6 +669,141 @@ class ImportAdmissionJson extends Command
         $value = preg_replace('/[^\pL\pN_\-]+/u', '', $value);
 
         return $value !== '' ? $value : 'student_admission_data';
+    }
+
+    private function strongNorm(string $value): string
+    {
+        return implode(' ', $this->normalizeNameWords($value));
+    }
+
+    private function strongNormSorted(string $value): string
+    {
+        $words = $this->normalizeNameWords($value);
+        sort($words);
+        return implode(' ', $words);
+    }
+
+    private function normalizeNameWords(string $value): array
+    {
+        $value = mb_strtolower(trim($value));
+        if ($value === '') {
+            return [];
+        }
+
+        $value = str_replace(
+            ["\u{00A0}", '`', '´', '’', '‘', 'ʼ', 'ʻ', 'ʹ', 'вЂ', 'вЂ™', 'К»', 'Кј'],
+            [' ', "'", "'", "'", "'", "'", "'", "'", "'", "'", "'", "'"],
+            $value,
+        );
+        $value = preg_replace("/['`´’‘ʼʻʹ]+/u", '', $value);
+        $value = preg_replace('/\s+/u', ' ', $value);
+
+        $rawWords = preg_split('/[^\pL\pN]+/u', $value) ?: [];
+        $words = [];
+
+        foreach ($rawWords as $word) {
+            $word = trim($word);
+            if ($word === '') {
+                continue;
+            }
+
+            $word = preg_replace('/(.)\1{3,}/u', '$1', $word);
+            $word = $this->canonicalizeNameToken($word);
+            if ($word === '') {
+                continue;
+            }
+
+            $words[] = $word;
+        }
+
+        return $words;
+    }
+
+    private function canonicalizeNameToken(string $word): string
+    {
+        if (preg_match('/^(x+|w+|_+|-+|\.)$/u', $word)) {
+            return '';
+        }
+
+        if (preg_match('/^o.*g.*li$/u', $word) || preg_match('/^o.*k.*li$/u', $word)) {
+            return 'ogli';
+        }
+
+        if (preg_match('/^u.*li$/u', $word)) {
+            return 'uli';
+        }
+
+        if (preg_match('/^[qk].*izi$/u', $word)) {
+            return 'qizi';
+        }
+
+        if (preg_match('/^(ogli|ugli)$/u', $word)) {
+            return 'ogli';
+        }
+
+        if (preg_match('/^(kizi|qizi)$/u', $word)) {
+            return 'qizi';
+        }
+
+        return $word;
+    }
+
+    private function makeStructuredKey(string $secondName, string $firstName, string $thirdName, ?string $birthDate): ?string
+    {
+        if (!$birthDate) {
+            return null;
+        }
+
+        $second = $this->strongNorm($secondName);
+        $first = $this->strongNorm($firstName);
+        $third = $this->strongNorm($thirdName);
+
+        if ($second === '' || $first === '') {
+            return null;
+        }
+
+        return implode('|', [$second, $first, $third, $birthDate]);
+    }
+
+    private function extractPhones(array $source): array
+    {
+        $phones = [];
+
+        foreach (['phone', 'tel1', 'tel2'] as $field) {
+            $digits = $this->normalizePhone((string) ($source[$field] ?? ''));
+            if ($digits !== null) {
+                $phones[$digits] = true;
+            }
+        }
+
+        return array_keys($phones);
+    }
+
+    private function normalizePhone(string $value): ?string
+    {
+        $digits = preg_replace('/\D+/', '', $value);
+        if ($digits === null || $digits === '') {
+            return null;
+        }
+
+        if (strlen($digits) > 9) {
+            return substr($digits, -9);
+        }
+
+        return $digits;
+    }
+
+    private function normalizeBirthDate($value): ?string
+    {
+        if ($value instanceof \DateTimeInterface) {
+            return $value->format('Y-m-d');
+        }
+
+        if (is_string($value) && trim($value) !== '') {
+            return $this->parseDate($value);
+        }
+
+        return null;
     }
 
     private function norm(string $s): string

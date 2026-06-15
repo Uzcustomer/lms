@@ -371,6 +371,7 @@
                     <table class="va-table">
                         <thead>
                                 <tr>
+                                    <th style="width:56px;text-align:center;">#</th>
                                     <th style="width:48px;text-align:center;"></th>
                                     <th>Talaba ID</th>
                                     <th>F.I.Sh</th>
@@ -385,6 +386,7 @@
                                     <th>Holat</th>
                                 </tr>
                                 <tr class="va-filter-row">
+                                    <th></th>
                                     <th style="text-align:center;">
                                         <input type="checkbox"
                                                id="vaCheckAllInput"
@@ -478,8 +480,10 @@
                                         $profile = $row->student_profile ?? [];
                                         $m = $statusMeta[$row->application_status ?? 'pending'] ?? $statusMeta['pending'];
                                         $isProcessed = $app ? in_array($app->status, ['approved', 'rejected']) : false;
+                                        $rowNumber = ($applications->currentPage() - 1) * $applications->perPage() + $loop->iteration;
                                     @endphp
                                     <tr class="va-main-row" @click="open = open === 'row-{{ $student->id }}' ? null : 'row-{{ $student->id }}'">
+                                        <td class="va-row-number">{{ $rowNumber }}</td>
                                         <td style="text-align:center;" @click.stop>
                                             @if($app)
                                                 <input type="checkbox"
@@ -547,7 +551,7 @@
                                         </td>
                                     </tr>
                                     <tr x-show="open === 'row-{{ $student->id }}'" x-cloak class="va-detail-row">
-                                        <td colspan="12" class="p-0">
+                                        <td colspan="13" class="p-0">
                                             <div class="va-detail-wrap" @click.stop>
                                                 <div class="p-4 sm:p-5 space-y-4">
                                                     <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
@@ -647,7 +651,7 @@
                                                         @endif
 
                                                         @if($app)
-                                                        <form method="POST" action="{{ route('admin.visa-applications.destroy', $app) }}"
+                                                        <form method="POST" action="{{ route('admin.visa-applications.destroy', array_merge(['application' => $app], request()->query())) }}"
                                                               onsubmit="return confirm('Arizani butunlay o\'chirishni tasdiqlaysizmi?');"
                                                               class="inline-block">
                                                             @csrf @method('DELETE')
@@ -660,7 +664,7 @@
                                                         @endif
 
                                                         @if($app && !$isProcessed)
-                                                            <form x-show="showApprove" x-cloak method="POST" action="{{ route('admin.visa-applications.approve', $app) }}"
+                                                            <form x-show="showApprove" x-cloak method="POST" action="{{ route('admin.visa-applications.approve', array_merge(['application' => $app], request()->query())) }}"
                                                                   class="w-full bg-emerald-50 border border-emerald-200 rounded-lg p-3 mt-2 flex flex-col sm:flex-row gap-2">
                                                                 @csrf
                                                                 <input type="hidden" name="redirect_status" value="approved">
@@ -670,7 +674,7 @@
                                                                         style="background:linear-gradient(135deg,#10b981,#059669);">Tasdiqlash</button>
                                                             </form>
 
-                                                            <form x-show="showReject" x-cloak method="POST" action="{{ route('admin.visa-applications.reject', $app) }}"
+                                                            <form x-show="showReject" x-cloak method="POST" action="{{ route('admin.visa-applications.reject', array_merge(['application' => $app], request()->query())) }}"
                                                                   class="w-full bg-red-50 border border-red-200 rounded-lg p-3 mt-2 flex flex-col sm:flex-row gap-2">
                                                                 @csrf
                                                                 <input type="hidden" name="redirect_status" value="rejected">
@@ -687,7 +691,7 @@
                                     </tr>
                                 @empty
                                     <tr>
-                                        <td colspan="12" style="padding:16px 14px;">
+                                        <td colspan="13" style="padding:16px 14px;">
                                             <div style="font-size:13px;font-weight:600;color:#64748b;">
                                                 {{ $hasActiveFilters ? 'Bunday talaba topilmadi.' : 'Hozircha ma\'lumot topilmadi.' }}
                                             </div>
@@ -703,6 +707,10 @@
                 <div class="mt-4">{{ $applications->links() }}</div>
             @endif
 
+            <div class="mt-3 text-sm font-semibold text-slate-600">
+                Jami: {{ $applications->total() }} ta ariza
+            </div>
+
         </div>
     </div>
 
@@ -715,6 +723,7 @@
         .va-col-filter-input { width: 100%; min-width: 84px; height: 34px; padding: 0 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; font-size: 12px; font-weight: 500; color: #0f172a; text-transform: none; letter-spacing: normal; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
         .va-col-filter-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15); }
         .va-table td { padding: 10px 10px; vertical-align: middle; line-height: 1.4; border-bottom: 1px solid #eef2f7; }
+        .va-row-number { text-align: center; color: #475569; font-size: 12px; font-weight: 700; }
         .va-main-row { cursor: pointer; transition: all 0.15s; }
         .va-main-row:nth-child(4n-3),
         .va-main-row:nth-child(4n-2) { background: #fff; }

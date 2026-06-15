@@ -238,10 +238,11 @@ class ImportAdmissionJson extends Command
             }
 
             $storageFullName = (string) ($payload['full_name'] ?? $applicant ?: ('student-' . $student->id));
+            $storageFolder = $this->safeFolderName($storageFullName);
 
             $filesCopied = 0;
             if (!$dryRun && $existingColumns->has('files') && !empty($json['files']) && is_array($json['files'])) {
-                $copyResult = $this->copyApplicationFiles($json['files'], $jsonPath, $student->id);
+                $copyResult = $this->copyApplicationFiles($json['files'], $jsonPath, $storageFolder);
                 $payload['files'] = $copyResult['files'];
                 $filesCopied = $copyResult['copied'];
                 $stats['files_copied'] += $copyResult['copied'];
@@ -249,7 +250,7 @@ class ImportAdmissionJson extends Command
             }
 
             if (!$dryRun) {
-                $this->storeAdmissionSnapshot($json, $student->id, $storageFullName);
+                $this->storeAdmissionSnapshot($json, $storageFolder, $storageFullName);
             }
 
             if ($dryRun) {
@@ -415,9 +416,9 @@ class ImportAdmissionJson extends Command
     /**
      * JSON files[]={'category' => [{'saved_path', 'original_name', ...}]} dan
      * fayllarni admission disk'iga ko'chiramiz (config/filesystems.php → admission).
-     * DB ga disk root'ga nisbatan yo'l saqlanadi: "{student_id}/{category}/{filename}".
+     * DB ga disk root'ga nisbatan yo'l saqlanadi: "{full_name}/{category}/{filename}".
      */
-    private function copyApplicationFiles(array $filesByCategory, string $jsonPath, int $studentId): array
+    private function copyApplicationFiles(array $filesByCategory, string $jsonPath, string $studentFolderName): array
     {
         $studentFolder = dirname($jsonPath);
         $diskRoot = rtrim(config('filesystems.disks.admission.root', storage_path('app/public/admission')), '/');
@@ -440,7 +441,7 @@ class ImportAdmissionJson extends Command
                 if ($srcPath === null) {
                     $missing++;
                     Log::warning('ImportAdmissionJson: source file not found', [
-                        'student_id' => $studentId,
+                        'student_folder' => $studentFolderName,
                         'category' => $category,
                         'filename' => $filename,
                         'saved_path' => $f['saved_path'],
@@ -448,7 +449,7 @@ class ImportAdmissionJson extends Command
                     continue;
                 }
 
-                $destDir = "{$diskRoot}/{$studentId}/{$cleanCategory}";
+                $destDir = "{$diskRoot}/{$studentFolderName}/{$cleanCategory}";
                 if (!is_dir($destDir) && !mkdir($destDir, 0755, true) && !is_dir($destDir)) {
                     Log::warning('ImportAdmissionJson: failed to create dest dir', ['dir' => $destDir]);
                     continue;
@@ -466,7 +467,7 @@ class ImportAdmissionJson extends Command
                 $copied++;
 
                 $categoryOut[] = [
-                    'path' => "{$studentId}/{$cleanCategory}/{$filename}",
+                    'path' => "{$studentFolderName}/{$cleanCategory}/{$filename}",
                     'original_name' => $f['original_name'] ?? $filename,
                     'mime' => $f['mime'] ?? null,
                     'size' => $f['size'] ?? @filesize($destPath),
@@ -483,12 +484,12 @@ class ImportAdmissionJson extends Command
 
     /**
      * Import qilingan JSON'ning o'zini ham student papkasiga saqlab qo'yamiz:
-     *   {diskRoot}/{student_id}/{FULL_NAME}.json
+     *   {diskRoot}/{FULL_NAME_FOLDER}/{FULL_NAME}.json
      */
-    private function storeAdmissionSnapshot(array $json, int $studentId, string $fullName): void
+    private function storeAdmissionSnapshot(array $json, string $studentFolderName, string $fullName): void
     {
         $diskRoot = rtrim(config('filesystems.disks.admission.root', storage_path('app/public/admission')), '/');
-        $studentDir = "{$diskRoot}/{$studentId}";
+        $studentDir = "{$diskRoot}/{$studentFolderName}";
 
         if (!is_dir($studentDir) && !mkdir($studentDir, 0755, true) && !is_dir($studentDir)) {
             Log::warning('ImportAdmissionJson: failed to create student snapshot dir', ['dir' => $studentDir]);
@@ -500,7 +501,7 @@ class ImportAdmissionJson extends Command
         $encoded = json_encode($json, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
 
         if ($encoded === false) {
-            Log::warning('ImportAdmissionJson: failed to encode snapshot json', ['student_id' => $studentId]);
+            Log::warning('ImportAdmissionJson: failed to encode snapshot json', ['student_folder' => $studentFolderName]);
             return;
         }
 
@@ -553,6 +554,11 @@ class ImportAdmissionJson extends Command
             return in_array($v, ['1', 'true', 'yes', 'ha', 'on'], true);
         }
         return false;
+    }
+
+    private function safeFolderName(string $value): string
+    {
+        return $this->safeFileName($value);
     }
 
     private function safeFileName(string $value): string

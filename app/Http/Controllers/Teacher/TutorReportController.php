@@ -969,7 +969,8 @@ class TutorReportController extends Controller
             ->get();
 
         if ($students->isEmpty()) {
-            return view('teacher.reports.debtors', compact('tutorGroups'))->with('results', []);
+            return view('teacher.reports.debtors', compact('tutorGroups'))
+                ->with('results', [])->with('currentRisksMap', []);
         }
 
         $studentHemisIds = $students->pluck('hemis_id')->toArray();
@@ -1028,21 +1029,200 @@ class TutorReportController extends Controller
                 }
             }
 
-            if (count($debts) >= 4) {
-                $results[] = [
-                    'full_name' => $st->full_name,
-                    'student_id' => $st->student_id_number,
-                    'group_name' => $st->group_name,
-                    'image' => $st->image,
-                    'debt_count' => count($debts),
-                    'debts' => $debts,
+            $results[$st->hemis_id] = [
+                'full_name' => $st->full_name,
+                'student_id' => $st->student_id_number,
+                'group_name' => $st->group_name,
+                'image' => $st->image,
+                'debt_count' => count($debts),
+                'debts' => $debts,
+            ];
+        }
+
+        // Joriy semestr xavflari (jurnaldan)
+        $currentRisksMap = $this->getCurrentSemesterRisks($studentHemisIds);
+
+        // Faqat o'tgan semestrda 4+ qarzdor YOKI joriy semestrda xavfi bor talabalar
+        $filteredResults = array_filter($results, fn($r) =>
+            $r['debt_count'] >= 4 || !empty($currentRisksMap[$r['full_name']] ?? [])
+        );
+
+        // hemis_id ga qarab currentRisksMap ni full_name o'rniga hemis_id bilan ulash
+        $currentRisksById = [];
+        foreach ($students as $st) {
+            if (isset($currentRisksMap[$st->hemis_id])) {
+                $currentRisksById[$st->hemis_id] = $currentRisksMap[$st->hemis_id];
+            }
+        }
+
+        // hemis_id ni results array kaliti sifatida saqlash
+        $finalResults = [];
+        foreach ($results as $hemisId => $row) {
+            if ($row['debt_count'] >= 4 || !empty($currentRisksById[$hemisId])) {
+                $row['current_risks'] = $currentRisksById[$hemisId] ?? [];
+                $row['current_risk_count'] = count($row['current_risks']);
+                $finalResults[] = $row;
+            }
+        }
+
+        usort($finalResults, fn($a, $b) => $b['debt_count'] <=> $a['debt_count']);
+
+        return view('teacher.reports.debtors', compact('tutorGroups'))
+            ->with('results', $finalResults);
+    }
+
+    /**
+     * Joriy semestr bo'yicha xavf ostidagi talabalarni student_grades dan hisoblash.
+     * Qaytaradi: [hemis_id => [['subject_name'=>..., 'reasons'=>[...]], ...]]
+     */
+    private function getCurrentSemesterRisks(array $studentHemisIds): array
+    {
+        if (empty($studentHemisIds)) return [];
+
+        $currentSemesterCodes = DB::table('semesters')
+            ->where('current', true)
+            ->pluck('code')
+            ->toArray();
+
+        if (empty($currentSemesterCodes)) return [];
+
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+
+        // Barcha joriy semestr student_grades yozuvlari
+        $grades = collect();
+        foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+            $chunk_grades = DB::table('student_grades')
+                ->whereIn('student_hemis_id', $chunk)
+                ->whereIn('semester_code', $currentSemesterCodes)
+                ->whereNull('deleted_at')
+                ->select(
+                    'student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
+                    'training_type_code', 'grade', 'retake_grade', 'status', 'reason',
+                    $hasAttemptCol ? 'attempt' : DB::raw('1 as attempt'),
+                    'lesson_date'
+                )
+                ->get();
+            $grades = $grades->merge($chunk_grades);
+        }
+
+        if ($grades->isEmpty()) return [];
+
+        // Sababli absent'lar (AbsenceExcuse)
+        $hasExcuseTable = \Illuminate\Support\Facades\Schema::hasTable('absence_excuses');
+        $excusedKeys = [];
+        if ($hasExcuseTable) {
+            $excused = DB::table('absence_excuses')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->whereIn('semester_code', $currentSemesterCodes)
+                ->whereNull('deleted_at')
+                ->select('student_hemis_id', 'subject_id', 'lesson_date')
+                ->get();
+            foreach ($excused as $e) {
+                $excusedKeys[$e->student_hemis_id . '|' . $e->subject_id . '|' . $e->lesson_date] = true;
+            }
+        }
+
+        // Talaba+fan bo'yicha guruhlash
+        $grouped = $grades->groupBy(fn($g) => $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code);
+
+        $risks = [];
+
+        foreach ($grouped as $key => $rows) {
+            [$hemisId, $subjectId, $semCode] = explode('|', $key, 3);
+            $subjectName = $rows->first()->subject_name ?? 'Fan';
+            $reasons = [];
+
+            // 1. OSKI/Test (imtihon urinishlari)
+            $examRows = $rows->whereIn('training_type_code', [101, 102]);
+            if ($examRows->isNotEmpty()) {
+                $byAttempt = $examRows->groupBy('attempt');
+                $maxAttempt = (int) $examRows->max('attempt');
+
+                for ($att = 1; $att <= $maxAttempt; $att++) {
+                    $attRows = $byAttempt->get((string)$att) ?? $byAttempt->get($att);
+                    if (!$attRows || $attRows->isEmpty()) continue;
+                    $baho = null;
+                    foreach ($attRows as $r) {
+                        $val = $r->retake_grade !== null ? (float)$r->retake_grade : ($r->grade !== null ? (float)$r->grade : null);
+                        if ($val !== null && ($baho === null || $val > $baho)) {
+                            $baho = $val;
+                        }
+                    }
+                    if ($baho !== null && $baho < 60) {
+                        if ($att === 1) $reasons[] = '1-urinish: V<60';
+                        elseif ($att === 2) $reasons[] = '2-urinish: V<60';
+                        elseif ($att >= 3) $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
+                    }
+                }
+            }
+
+            // 2. MT (training_type_code = 99)
+            $mtRows = $rows->where('training_type_code', 99);
+            if ($mtRows->isNotEmpty()) {
+                $mtGrade = null;
+                foreach ($mtRows as $r) {
+                    $val = $r->grade !== null ? (float)$r->grade : null;
+                    if ($val !== null && ($mtGrade === null || $val > $mtGrade)) {
+                        $mtGrade = $val;
+                    }
+                }
+                if ($mtGrade !== null && $mtGrade < 60) {
+                    $reasons[] = 'MT<60';
+                }
+            }
+
+            // 3. JN (kunlik baholar: NOT IN [11, 99, 100, 101, 102, 103], lesson_date bor)
+            $jnRows = $rows->filter(fn($r) =>
+                !in_array((int)$r->training_type_code, [11, 99, 100, 101, 102, 103])
+                && $r->lesson_date !== null
+            );
+            if ($jnRows->isNotEmpty()) {
+                $jnGrades = [];
+                foreach ($jnRows as $r) {
+                    if ($r->reason === 'absent' && $r->grade === null) continue; // sababsiz absent — ball yo'q
+                    if ($r->grade !== null) {
+                        $jnGrades[] = (float)$r->grade;
+                    }
+                }
+                if (count($jnGrades) > 0) {
+                    $jnAvg = array_sum($jnGrades) / count($jnGrades);
+                    if ($jnAvg < 60) {
+                        $reasons[] = 'JN<60 (' . round($jnAvg, 1) . ')';
+                    }
+                }
+            }
+
+            // 4. Sababsiz davomat >= 25%
+            $lessonRows = $rows->filter(fn($r) =>
+                !in_array((int)$r->training_type_code, [99, 100, 101, 102, 103])
+                && $r->lesson_date !== null
+            );
+            if ($lessonRows->isNotEmpty()) {
+                $total = $lessonRows->count();
+                $absentCount = 0;
+                foreach ($lessonRows as $r) {
+                    if ($r->reason === 'absent') {
+                        $excuseKey = $hemisId . '|' . $subjectId . '|' . $r->lesson_date;
+                        if (!isset($excusedKeys[$excuseKey])) {
+                            $absentCount++;
+                        }
+                    }
+                }
+                if ($total > 0 && ($absentCount / $total) >= 0.25) {
+                    $pct = round($absentCount / $total * 100);
+                    $reasons[] = "Davomat≥25% ({$pct}%)";
+                }
+            }
+
+            if (!empty($reasons)) {
+                $risks[$hemisId][] = [
+                    'subject_name' => $subjectName,
+                    'reasons' => $reasons,
                 ];
             }
         }
 
-        usort($results, fn($a, $b) => $b['debt_count'] <=> $a['debt_count']);
-
-        return view('teacher.reports.debtors', compact('tutorGroups', 'results'));
+        return $risks;
     }
 
     /**

@@ -4984,6 +4984,16 @@ class ReportController extends Controller
                 return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
             }
 
+            // Joriy semestr journal-based xavflarini qo'shish
+            $finalHemisIds = array_column($finalResults, 'hemis_id');
+            $currentRisksMap = $this->getCurrentSemesterRisksForReport($finalHemisIds);
+            foreach ($finalResults as &$item) {
+                $risks = $currentRisksMap[$item['hemis_id']] ?? [];
+                $item['current_risks'] = $risks;
+                $item['current_risk_count'] = count($risks);
+            }
+            unset($item);
+
             // Saralash (default: qarzdorlik soni kamayib borish tartibida)
             $sortColumn = $request->get('sort', 'debt_count');
             $sortDirection = $request->get('direction', 'desc');
@@ -8937,5 +8947,139 @@ class ReportController extends Controller
         return response()->download($temp, $fileName, [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Joriy semestr bo'yicha talabalarning xavf holatini student_grades dan hisoblash.
+     * Qaytaradi: [hemis_id => [['subject_name'=>..., 'reasons'=>[...]], ...]]
+     */
+    private function getCurrentSemesterRisksForReport(array $studentHemisIds): array
+    {
+        if (empty($studentHemisIds)) return [];
+
+        $currentSemesterCodes = DB::table('semesters')
+            ->where('current', true)
+            ->pluck('code')
+            ->toArray();
+
+        if (empty($currentSemesterCodes)) return [];
+
+        $hasAttemptCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
+
+        $grades = collect();
+        foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+            $chunkGrades = DB::table('student_grades')
+                ->whereIn('student_hemis_id', $chunk)
+                ->whereIn('semester_code', $currentSemesterCodes)
+                ->whereNull('deleted_at')
+                ->select(
+                    'student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
+                    'training_type_code', 'grade', 'retake_grade', 'status', 'reason',
+                    $hasAttemptCol ? 'attempt' : DB::raw('1 as attempt'),
+                    'lesson_date'
+                )
+                ->get();
+            $grades = $grades->merge($chunkGrades);
+        }
+
+        if ($grades->isEmpty()) return [];
+
+        $hasExcuseTable = \Illuminate\Support\Facades\Schema::hasTable('absence_excuses');
+        $excusedKeys = [];
+        if ($hasExcuseTable) {
+            $excused = DB::table('absence_excuses')
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->whereIn('semester_code', $currentSemesterCodes)
+                ->whereNull('deleted_at')
+                ->select('student_hemis_id', 'subject_id', 'lesson_date')
+                ->get();
+            foreach ($excused as $e) {
+                $excusedKeys[$e->student_hemis_id . '|' . $e->subject_id . '|' . $e->lesson_date] = true;
+            }
+        }
+
+        $grouped = $grades->groupBy(fn($g) => $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code);
+        $risks = [];
+
+        foreach ($grouped as $key => $rows) {
+            [$hemisId, $subjectId] = explode('|', $key, 3);
+            $subjectName = $rows->first()->subject_name ?? 'Fan';
+            $reasons = [];
+
+            // Imtihon urinishlari (OSKI/Test)
+            $examRows = $rows->whereIn('training_type_code', [101, 102]);
+            if ($examRows->isNotEmpty()) {
+                $byAttempt = $examRows->groupBy('attempt');
+                $maxAttempt = (int) $examRows->max('attempt');
+                for ($att = 1; $att <= $maxAttempt; $att++) {
+                    $attRows = $byAttempt->get((string)$att) ?? $byAttempt->get($att);
+                    if (!$attRows || $attRows->isEmpty()) continue;
+                    $baho = null;
+                    foreach ($attRows as $r) {
+                        $val = $r->retake_grade !== null ? (float)$r->retake_grade : ($r->grade !== null ? (float)$r->grade : null);
+                        if ($val !== null && ($baho === null || $val > $baho)) $baho = $val;
+                    }
+                    if ($baho !== null && $baho < 60) {
+                        if ($att === 1) $reasons[] = '1-urinish: V<60';
+                        elseif ($att === 2) $reasons[] = '2-urinish: V<60';
+                        elseif ($att >= 3) $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
+                    }
+                }
+            }
+
+            // MT (training_type_code = 99)
+            $mtRows = $rows->where('training_type_code', 99);
+            if ($mtRows->isNotEmpty()) {
+                $mtGrade = null;
+                foreach ($mtRows as $r) {
+                    $val = $r->grade !== null ? (float)$r->grade : null;
+                    if ($val !== null && ($mtGrade === null || $val > $mtGrade)) $mtGrade = $val;
+                }
+                if ($mtGrade !== null && $mtGrade < 60) $reasons[] = 'MT<60';
+            }
+
+            // JN o'rtachasi
+            $jnRows = $rows->filter(fn($r) =>
+                !in_array((int)$r->training_type_code, [11, 99, 100, 101, 102, 103])
+                && $r->lesson_date !== null
+            );
+            if ($jnRows->isNotEmpty()) {
+                $jnGrades = [];
+                foreach ($jnRows as $r) {
+                    if ($r->reason === 'absent' && $r->grade === null) continue;
+                    if ($r->grade !== null) $jnGrades[] = (float)$r->grade;
+                }
+                if (count($jnGrades) > 0) {
+                    $jnAvg = array_sum($jnGrades) / count($jnGrades);
+                    if ($jnAvg < 60) $reasons[] = 'JN<60 (' . round($jnAvg, 1) . ')';
+                }
+            }
+
+            // Sababsiz davomat >= 25%
+            $lessonRows = $rows->filter(fn($r) =>
+                !in_array((int)$r->training_type_code, [99, 100, 101, 102, 103])
+                && $r->lesson_date !== null
+            );
+            if ($lessonRows->isNotEmpty()) {
+                $total = $lessonRows->count();
+                $absentCount = 0;
+                foreach ($lessonRows as $r) {
+                    if ($r->reason === 'absent') {
+                        $excKey = $hemisId . '|' . $subjectId . '|' . $r->lesson_date;
+                        if (!isset($excusedKeys[$excKey])) $absentCount++;
+                    }
+                }
+                if ($total > 0 && ($absentCount / $total) >= 0.25) {
+                    $pct = round($absentCount / $total * 100);
+                    $reasons[] = "Davomat≥25% ({$pct}%)";
+                }
+            }
+
+            if (!empty($reasons)) {
+                $risks[$hemisId][] = ['subject_name' => $subjectName, 'reasons' => $reasons];
+            }
+        }
+
+        return $risks;
     }
 }

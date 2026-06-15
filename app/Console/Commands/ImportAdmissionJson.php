@@ -494,6 +494,17 @@ class ImportAdmissionJson extends Command
             $out[$col] = $val;
         }
 
+        foreach (['kenglik' => 'lat', 'uzunlik' => 'lng'] as $col => $type) {
+            if (array_key_exists($col, $out)) {
+                $normalized = $this->normalizeCoordinate($out[$col], $type);
+                if ($normalized === null) {
+                    unset($out[$col]);
+                } else {
+                    $out[$col] = $normalized;
+                }
+            }
+        }
+
         foreach (['tugilgan_sana' => 'tugilgan_sana', 'passport_sana' => 'passport_sana'] as $jsonKey => $col) {
             if (isset($fields[$jsonKey]) && $existingColumns->has($col)) {
                 $d = $this->parseDate($fields[$jsonKey]);
@@ -854,6 +865,57 @@ class ImportAdmissionJson extends Command
         }
 
         return null;
+    }
+
+    private function normalizeCoordinate($value, string $type): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = trim((string) $value);
+        if ($value === '') {
+            return null;
+        }
+
+        $value = str_replace(
+            ["\u{00A0}", 'В°', '°', 'º', "\r", "\n", "\t"],
+            [' ', ' ', ' ', ' ', ' ', ' ', ' '],
+            $value,
+        );
+        $value = preg_replace('/[\'"`]/u', ' ', $value);
+        $value = preg_replace('/\s+/u', ' ', $value);
+
+        preg_match_all('/[-+]?\d+(?:[.,]\d+)?/', $value, $matches);
+        $numbers = [];
+
+        foreach ($matches[0] ?? [] as $match) {
+            $normalized = str_replace(',', '.', trim($match));
+            if ($normalized === '' || !is_numeric($normalized)) {
+                continue;
+            }
+
+            $numbers[] = (float) $normalized;
+        }
+
+        if (empty($numbers)) {
+            return null;
+        }
+
+        $coordinate = $type === 'lng' ? end($numbers) : $numbers[0];
+        if (!is_float($coordinate) && !is_int($coordinate)) {
+            return null;
+        }
+
+        if ($type === 'lat' && ($coordinate < -90 || $coordinate > 90)) {
+            return null;
+        }
+
+        if ($type === 'lng' && ($coordinate < -180 || $coordinate > 180)) {
+            return null;
+        }
+
+        return number_format((float) $coordinate, 6, '.', '');
     }
 
     private function norm(string $s): string

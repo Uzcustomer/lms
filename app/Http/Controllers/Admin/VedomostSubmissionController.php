@@ -47,7 +47,8 @@ class VedomostSubmissionController extends Controller
     public function __construct(
         private VedomostSubmissionService $service,
         private VedomostSubmissionNotifier $notifier,
-        private VedomostMergeService $merge
+        private VedomostMergeService $merge,
+        private \App\Services\VedomostRejectionInbox $rejectionInbox
     ) {
     }
 
@@ -367,6 +368,12 @@ class VedomostSubmissionController extends Controller
         // Birlashtirilgan (o'zak guruh × o'zak fan) ko'rinish — guruhchalar va
         // ularning o'qituvchilari jamlangan holda ko'rsatish uchun.
         $merged = $this->merge->aggregate($this->merge->siblingsOf($submission))->first();
+
+        // O'quv prorektori rad etilgan vedomostni ochsa — inboxda "o'qilgan" bo'ladi.
+        if ($submission->status === VedomostSubmission::STATUS_REJECTED
+            && in_array(session('active_role', ''), self::REUPLOAD_PERMIT_ROLES, true)) {
+            $this->rejectionInbox->markRead($submission, auth()->user());
+        }
 
         return view('admin.vedomost-submission.show', compact('submission', 'aiConfigured', 'merged'));
     }

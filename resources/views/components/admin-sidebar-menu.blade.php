@@ -322,6 +322,29 @@
         </a>
         @endif
 
+        @if($hasActiveRole(['superadmin', 'oquv_prorektori']))
+        @php
+            $vedomostRejUnread = 0;
+            try {
+                if ($user) {
+                    $vedomostRejUnread = app(\App\Services\VedomostRejectionInbox::class)->unreadCount($user);
+                }
+            } catch (\Throwable $e) {
+                $vedomostRejUnread = 0;
+            }
+        @endphp
+        <a href="{{ route('admin.vedomost-rejections.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.vedomost-rejections.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path>
+            </svg>
+            <span style="flex:1;">Rad etilish bildirgilari</span>
+            @if($vedomostRejUnread > 0)
+                <span style="background:#b91c1c;color:#fff;border-radius:999px;padding:1px 8px;font-size:11px;font-weight:700;">{{ $vedomostRejUnread }}</span>
+            @endif
+        </a>
+        @endif
+
         @if($hasActiveRole('test_markazi'))
         {{-- Test markazi roli uchun faqat Diagnostika --}}
         <div class="sidebar-section">Test markazi</div>

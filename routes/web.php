@@ -634,6 +634,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{id}/file/{type}', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'downloadFile'])->whereNumber('id')->name('file');
         });
 
+        // Vedomost rad etilish bildirgilari (Gmail uslubidagi inbox — o'quv prorektori)
+        Route::prefix('vedomost-rejections')->name('vedomost-rejections.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\VedomostRejectionInboxController::class, 'index'])->name('index');
+            Route::post('/read-all', [\App\Http\Controllers\Admin\VedomostRejectionInboxController::class, 'markAllRead'])->name('read-all');
+            Route::post('/{id}/read', [\App\Http\Controllers\Admin\VedomostRejectionInboxController::class, 'markRead'])->whereNumber('id')->name('read');
+        });
+
         // To'garak arizalari
         Route::prefix('club-applications')->name('club-applications.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\ClubApplicationController::class, 'index'])->name('index');

@@ -386,7 +386,7 @@ class ImportAdmissionJson extends Command
             $birthDate,
         );
         if ($exactKey !== null) {
-            $student = $this->resolveCandidateIds($this->studentsByExactProfile[$exactKey] ?? [], $phones);
+            $student = $this->resolveCandidateIds($this->studentsByExactProfile[$exactKey] ?? [], $phones, $birthDate);
             if ($student) {
                 return $student;
             }
@@ -399,7 +399,7 @@ class ImportAdmissionJson extends Command
             $birthDate,
         );
         if ($looseKey !== null) {
-            $student = $this->resolveCandidateIds($this->studentsByLooseProfile[$looseKey] ?? [], $phones);
+            $student = $this->resolveCandidateIds($this->studentsByLooseProfile[$looseKey] ?? [], $phones, $birthDate);
             if ($student) {
                 return $student;
             }
@@ -417,7 +417,7 @@ class ImportAdmissionJson extends Command
 
         $norm = $this->strongNorm($full);
         if (isset($this->studentsByNorm[$norm])) {
-            $student = $this->resolveCandidateIds($this->studentsByNorm[$norm], $phones);
+            $student = $this->resolveCandidateIds($this->studentsByNorm[$norm], $phones, $birthDate);
             if ($student) {
                 return $student;
             }
@@ -425,7 +425,7 @@ class ImportAdmissionJson extends Command
 
         $sortedNorm = $this->strongNormSorted($full);
         if (isset($this->studentsBySortedNorm[$sortedNorm])) {
-            $student = $this->resolveCandidateIds($this->studentsBySortedNorm[$sortedNorm], $phones);
+            $student = $this->resolveCandidateIds($this->studentsBySortedNorm[$sortedNorm], $phones, $birthDate);
             if ($student) {
                 return $student;
             }
@@ -434,11 +434,31 @@ class ImportAdmissionJson extends Command
         return null;
     }
 
-    private function resolveCandidateIds(array $candidateIds, array $phones = []): ?Student
+    private function resolveCandidateIds(array $candidateIds, array $phones = [], ?string $birthDate = null): ?Student
     {
         $candidateIds = array_values(array_unique(array_map('intval', $candidateIds)));
         if (count($candidateIds) === 1) {
             return $this->studentsById[$candidateIds[0]] ?? null;
+        }
+
+        if (count($candidateIds) > 1 && $birthDate) {
+            $birthMatched = [];
+
+            foreach ($candidateIds as $studentId) {
+                $studentBirthDate = $this->normalizeBirthDate($this->studentsById[$studentId]->birth_date ?? null);
+                if ($studentBirthDate === $birthDate) {
+                    $birthMatched[$studentId] = true;
+                }
+            }
+
+            if (count($birthMatched) === 1) {
+                $studentId = (int) array_key_first($birthMatched);
+                return $this->studentsById[$studentId] ?? null;
+            }
+
+            if (count($birthMatched) > 1) {
+                $candidateIds = array_map('intval', array_keys($birthMatched));
+            }
         }
 
         if (count($candidateIds) > 1 && !empty($phones)) {
@@ -716,7 +736,7 @@ class ImportAdmissionJson extends Command
             $words[] = $word;
         }
 
-        return $words;
+        return $this->collapseRepeatedWordSequence($words);
     }
 
     private function canonicalizeNameToken(string $word): string
@@ -746,6 +766,36 @@ class ImportAdmissionJson extends Command
         }
 
         return $word;
+    }
+
+    private function collapseRepeatedWordSequence(array $words): array
+    {
+        $count = count($words);
+        if ($count < 2) {
+            return $words;
+        }
+
+        for ($chunkSize = 1; $chunkSize <= intdiv($count, 2); $chunkSize++) {
+            if ($count % $chunkSize !== 0) {
+                continue;
+            }
+
+            $chunk = array_slice($words, 0, $chunkSize);
+            $isRepeated = true;
+
+            for ($offset = $chunkSize; $offset < $count; $offset += $chunkSize) {
+                if (array_slice($words, $offset, $chunkSize) !== $chunk) {
+                    $isRepeated = false;
+                    break;
+                }
+            }
+
+            if ($isRepeated) {
+                return $chunk;
+            }
+        }
+
+        return $words;
     }
 
     private function makeStructuredKey(string $secondName, string $firstName, string $thirdName, ?string $birthDate): ?string

@@ -229,26 +229,50 @@ class VedomostSubmissionService
      */
     private function syncResitForms(array $units): void
     {
+        if (empty($units)) {
+            return;
+        }
+
         $today = Carbon::today()->toDateString();
 
-        foreach ($units as $unit) {
-            $groupIds = array_values(array_unique($unit['group_ids']));
-            $subjectKeys = $unit['subject_keys'] ?: [$unit['subject_id']];
+        // Barcha birliklar bo'yicha guruh/fan kalitlarini yig'amiz, so'ngra
+        // yiqilganlar va sanalarni BITTA-ikkita to'plam (batch) so'rovda olamiz —
+        // har birlik uchun alohida so'rov yubormaymiz (sync 504 bermasligi uchun).
+        $allGroupIds = [];
+        $allSubjectKeys = [];
+        $allSemCodes = [];
+        $unitByKey = []; // "group|subjectKey|sem" => unitKey
+        foreach ($units as $unitKey => $unit) {
+            $semCode = (string) $unit['semester_code'];
+            $allSemCodes[$semCode] = true;
+            foreach ($unit['group_ids'] as $gid) {
+                $allGroupIds[(int) $gid] = true;
+                foreach ($unit['subject_keys'] as $sk) {
+                    $allSubjectKeys[$sk] = true;
+                    $unitByKey[$gid . '|' . $sk . '|' . $semCode] = $unitKey;
+                }
+            }
+        }
 
-            $failures = $this->detectFailures($groupIds, $subjectKeys, $unit['semester_code']);
-            $dates = $this->examDates($groupIds, $subjectKeys, $unit['semester_code'], $unit['closing_form']);
+        $failures = $this->detectFailuresBatch(
+            array_keys($allGroupIds), array_keys($allSubjectKeys), array_keys($allSemCodes), $unitByKey
+        );
+        $dates = $this->examDatesBatch(
+            array_keys($allGroupIds), array_keys($allSubjectKeys), array_keys($allSemCodes), $unitByKey, $units
+        );
+
+        foreach ($units as $unitKey => $unit) {
+            $groupIds = array_values(array_unique($unit['group_ids']));
+            $f = $failures[$unitKey] ?? ['failed1' => 0, 'failed2' => 0];
+            $d = $dates[$unitKey] ?? ['attempt1' => null, 'resit' => null, 'resit2' => null];
 
             // 12a — 1-urinish tugagan (sana o'tgan) va 1-urinishda yiqilganlar bor.
-            $open12a = $failures['failed1'] > 0
-                && $dates['attempt1'] !== null
-                && $dates['attempt1'] < $today;
-            $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12A, $open12a, $dates['resit']);
+            $open12a = $f['failed1'] > 0 && $d['attempt1'] !== null && $d['attempt1'] < $today;
+            $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12A, $open12a, $d['resit']);
 
             // 12b — 2-urinish (resit) tugagan va 2-urinishda yiqilganlar bor.
-            $open12b = $failures['failed2'] > 0
-                && $dates['resit'] !== null
-                && $dates['resit'] < $today;
-            $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12B, $open12b, $dates['resit2']);
+            $open12b = $f['failed2'] > 0 && $d['resit'] !== null && $d['resit'] < $today;
+            $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12B, $open12b, $d['resit2']);
         }
     }
 
@@ -312,116 +336,147 @@ class VedomostSubmissionService
     }
 
     /**
-     * Birlikdagi (guruhlar) talabalardan 1- va 2-urinishda yiqilganlar sonini
-     * aniqlaydi. individual-exam-schedule eligibility logikasi bilan bir xil.
+     * Barcha birliklar bo'yicha 1- va 2-urinishda yiqilganlar sonini BITTA
+     * so'rovda aniqlaydi (individual-exam-schedule eligibility logikasi bilan mos).
      *
-     * @return array{failed1:int, failed2:int}
+     * @param  array<string,string>  $unitByKey  "group|subjectKey|sem" => unitKey
+     * @return array<string, array{failed1:int, failed2:int}>  unitKey bo'yicha
      */
-    private function detectFailures(array $groupIds, array $subjectKeys, string $semCode): array
+    private function detectFailuresBatch(array $groupIds, array $subjectKeys, array $semCodes, array $unitByKey): array
     {
+        $result = [];
         if (empty($groupIds) || empty($subjectKeys)) {
-            return ['failed1' => 0, 'failed2' => 0];
+            return $result;
         }
 
         $hasAttempt = $this->studentGradeAttemptColumn();
 
-        $rows = DB::table('student_grades as sg')
+        // unitKey => [student_hemis_id => ['f1' => bool, 'f2' => bool]]
+        $perUnit = [];
+
+        $cursor = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereIn('st.group_id', $groupIds)
             ->whereIn('sg.subject_id', $subjectKeys)
-            ->where('sg.semester_code', $semCode)
+            ->whereIn('sg.semester_code', $semCodes)
             ->whereIn('sg.training_type_code', [101, 102])
             ->whereNull('sg.deleted_at')
             ->select(
+                'st.group_id',
                 'sg.student_hemis_id',
+                'sg.subject_id',
+                'sg.semester_code',
                 'sg.grade',
                 'sg.retake_grade',
                 $hasAttempt ? 'sg.attempt' : DB::raw('1 as attempt')
             )
-            ->get();
+            ->cursor();
 
-        $failed1 = 0;
-        $failed2 = 0;
-        foreach ($rows->groupBy('student_hemis_id') as $studentRows) {
-            $f1 = false;
-            $f2 = false;
-            foreach ($studentRows as $r) {
-                $att = (int) ($r->attempt ?? 1);
-                $val = $r->retake_grade ?? $r->grade;
-                if ($val === null) {
-                    continue;
-                }
-                if ($att <= 1 && (float) $val < self::PASS_GRADE) {
-                    $f1 = true;
-                } elseif ($att === 2 && (float) $val < self::PASS_GRADE) {
-                    $f2 = true;
-                }
+        foreach ($cursor as $r) {
+            $unitKey = $unitByKey[$r->group_id . '|' . $r->subject_id . '|' . $r->semester_code] ?? null;
+            if ($unitKey === null) {
+                continue;
             }
-            if ($f1) {
-                $failed1++;
+            $val = $r->retake_grade ?? $r->grade;
+            if ($val === null) {
+                continue;
             }
-            if ($f2) {
-                $failed2++;
+            $sid = $r->student_hemis_id;
+            if (!isset($perUnit[$unitKey][$sid])) {
+                $perUnit[$unitKey][$sid] = ['f1' => false, 'f2' => false];
+            }
+            $att = (int) ($r->attempt ?? 1);
+            if ($att <= 1 && (float) $val < self::PASS_GRADE) {
+                $perUnit[$unitKey][$sid]['f1'] = true;
+            } elseif ($att === 2 && (float) $val < self::PASS_GRADE) {
+                $perUnit[$unitKey][$sid]['f2'] = true;
             }
         }
 
-        return ['failed1' => $failed1, 'failed2' => $failed2];
+        foreach ($perUnit as $unitKey => $students) {
+            $f1 = 0;
+            $f2 = 0;
+            foreach ($students as $s) {
+                if ($s['f1']) {
+                    $f1++;
+                }
+                if ($s['f2']) {
+                    $f2++;
+                }
+            }
+            $result[$unitKey] = ['failed1' => $f1, 'failed2' => $f2];
+        }
+
+        return $result;
     }
 
     /**
-     * Birlik uchun urinish sanalari (eng kech sana) — yopilish shakliga qarab
-     * OSKI va/yoki Test ustunlaridan olinadi.
+     * Barcha birliklar bo'yicha urinish sanalarini (eng kech sana) BITTA so'rovda
+     * oladi — yopilish shakliga qarab OSKI va/yoki Test ustunlaridan.
      *
-     * @return array{attempt1:?string, resit:?string, resit2:?string}
+     * @param  array<string,string>  $unitByKey  "group|subjectKey|sem" => unitKey
+     * @return array<string, array{attempt1:?string, resit:?string, resit2:?string}>
      */
-    private function examDates(array $groupIds, array $subjectKeys, string $semCode, string $closingForm): array
+    private function examDatesBatch(array $groupIds, array $subjectKeys, array $semCodes, array $unitByKey, array $units): array
     {
+        $result = [];
         if (empty($groupIds) || empty($subjectKeys)) {
-            return ['attempt1' => null, 'resit' => null, 'resit2' => null];
+            return $result;
         }
 
-        $rows = ExamSchedule::whereNull('student_hemis_id')
+        $byUnit = []; // unitKey => ['attempt1' => [], 'resit' => [], 'resit2' => []]
+
+        $cursor = ExamSchedule::whereNull('student_hemis_id')
             ->whereIn('group_hemis_id', $groupIds)
             ->whereIn('subject_id', $subjectKeys)
-            ->where('semester_code', $semCode)
-            ->get();
+            ->whereIn('semester_code', $semCodes)
+            ->cursor();
 
-        $wantOski = in_array($closingForm, ['oski', 'oski_test'], true);
-        $wantTest = in_array($closingForm, ['test', 'oski_test'], true);
+        foreach ($cursor as $r) {
+            $unitKey = $unitByKey[$r->group_hemis_id . '|' . $r->subject_id . '|' . $r->semester_code] ?? null;
+            if ($unitKey === null) {
+                continue;
+            }
+            $cf = $units[$unitKey]['closing_form'] ?? '';
+            $wantOski = in_array($cf, ['oski', 'oski_test'], true);
+            $wantTest = in_array($cf, ['test', 'oski_test'], true);
 
-        $attempt1 = [];
-        $resit = [];
-        $resit2 = [];
-        foreach ($rows as $r) {
+            if (!isset($byUnit[$unitKey])) {
+                $byUnit[$unitKey] = ['attempt1' => [], 'resit' => [], 'resit2' => []];
+            }
             if ($wantOski) {
                 if (!$r->oski_na && $r->oski_date) {
-                    $attempt1[] = $r->oski_date->toDateString();
+                    $byUnit[$unitKey]['attempt1'][] = $r->oski_date->toDateString();
                 }
                 if ($r->oski_resit_date) {
-                    $resit[] = $r->oski_resit_date->toDateString();
+                    $byUnit[$unitKey]['resit'][] = $r->oski_resit_date->toDateString();
                 }
                 if ($r->oski_resit2_date) {
-                    $resit2[] = $r->oski_resit2_date->toDateString();
+                    $byUnit[$unitKey]['resit2'][] = $r->oski_resit2_date->toDateString();
                 }
             }
             if ($wantTest) {
                 if (!$r->test_na && $r->test_date) {
-                    $attempt1[] = $r->test_date->toDateString();
+                    $byUnit[$unitKey]['attempt1'][] = $r->test_date->toDateString();
                 }
                 if ($r->test_resit_date) {
-                    $resit[] = $r->test_resit_date->toDateString();
+                    $byUnit[$unitKey]['resit'][] = $r->test_resit_date->toDateString();
                 }
                 if ($r->test_resit2_date) {
-                    $resit2[] = $r->test_resit2_date->toDateString();
+                    $byUnit[$unitKey]['resit2'][] = $r->test_resit2_date->toDateString();
                 }
             }
         }
 
-        return [
-            'attempt1' => !empty($attempt1) ? max($attempt1) : null,
-            'resit' => !empty($resit) ? max($resit) : null,
-            'resit2' => !empty($resit2) ? max($resit2) : null,
-        ];
+        foreach ($byUnit as $unitKey => $d) {
+            $result[$unitKey] = [
+                'attempt1' => !empty($d['attempt1']) ? max($d['attempt1']) : null,
+                'resit' => !empty($d['resit']) ? max($d['resit']) : null,
+                'resit2' => !empty($d['resit2']) ? max($d['resit2']) : null,
+            ];
+        }
+
+        return $result;
     }
 
     /**

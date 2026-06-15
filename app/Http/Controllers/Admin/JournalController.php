@@ -253,6 +253,16 @@ class JournalController extends Controller
             }
         }
 
+        // Tyutor: faqat o'ziga biriktirilgan guruhlar (faqat ko'rish)
+        if (is_active_tyutor()) {
+            $tyutorGroupIds = get_tyutor_group_db_ids();
+            if (empty($tyutorGroupIds)) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('g.id', $tyutorGroupIds);
+            }
+        }
+
         // Joriy semestr filtri (default ON)
         // curriculum_weeks sanalariga asoslangan — HEMIS current flagidan ishonchliroq
         if ($request->get('current_semester', '1') == '1') {
@@ -333,6 +343,14 @@ class JournalController extends Controller
         if (is_active_nazoratchi()) {
             $nazoratchiGroupIds = get_nazoratchi_group_db_ids();
             if (!in_array((int) $group->id, array_map('intval', $nazoratchiGroupIds), true)) {
+                abort(403, "Sizga bu guruh bo'yicha jurnal ko'rish huquqi yo'q.");
+            }
+        }
+
+        // Tyutor: faqat o'ziga biriktirilgan guruhlarga ruxsat (faqat ko'rish)
+        if (is_active_tyutor()) {
+            $tyutorGroupIds = get_tyutor_group_db_ids();
+            if (!in_array((int) $group->id, array_map('intval', $tyutorGroupIds), true)) {
                 abort(403, "Sizga bu guruh bo'yicha jurnal ko'rish huquqi yo'q.");
             }
         }

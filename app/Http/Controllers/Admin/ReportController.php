@@ -4741,7 +4741,12 @@ class ReportController extends Controller
             ini_set('memory_limit', '512M');
             set_time_limit(120);
 
-            $minDebtCount = (int) $request->get('min_debt_count', 4);
+            // Bo'sh yoki "Barchasi" (0) tanlansa — barcha qarzdorlarni (>=1 fan) ko'rsatamiz
+            $minDebtRaw = $request->get('min_debt_count', 4);
+            $minDebtCount = ($minDebtRaw === '' || $minDebtRaw === null) ? 1 : (int) $minDebtRaw;
+            if ($minDebtCount < 1) {
+                $minDebtCount = 1;
+            }
             $showCurrentSemester = $request->get('current_semester', '0') == '1';
 
             // 1-QADAM: Talabalar ro'yxatini filtrlar bo'yicha olish

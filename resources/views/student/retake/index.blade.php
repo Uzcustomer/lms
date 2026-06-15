@@ -42,23 +42,24 @@
             <p class="text-xs text-gray-500">{{ __("Akkreditatsiya bahosi mavjud bo'lmagan fanlar uchun ariza yuboring") }}</p>
         </div>
 
-        <div class="bg-gradient-to-r from-sky-100 via-cyan-100 to-blue-100 border-2 border-sky-300 rounded-xl p-4 mb-4 shadow-sm">
+        <div class="rounded-xl p-4 mb-4 shadow-sm border border-blue-900/20"
+             style="background:#134bb2; color:white;">
             <div class="flex items-start justify-between gap-3">
                 <div class="flex items-start gap-3 min-w-0">
-                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-white/80 ring-1 ring-sky-200 flex items-center justify-center">
-                        <svg class="w-5 h-5 text-sky-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <div class="flex-shrink-0 w-10 h-10 rounded-full bg-white/15 ring-1 ring-white/20 flex items-center justify-center">
+                        <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
                         </svg>
                     </div>
                     <div class="min-w-0">
-                        <h2 class="text-sm font-semibold text-sky-950">{{ __("Qayta o'qish jurnali") }}</h2>
-                        <p class="text-xs text-sky-900/80 mt-1">
+                        <h2 class="text-sm font-semibold text-white">{{ __("Qayta o'qish jurnali") }}</h2>
+                        <p class="text-xs text-white/80 mt-1">
                             {{ __("Tasdiqlangan qayta o'qish fanlaringiz bo'yicha baholar, guruh, o'qituvchi va mustaqil ta'lim topshiriqlarini shu yerda ko'rishingiz mumkin.") }}
                         </p>
                     </div>
                 </div>
                 <a href="{{ route('student.retake-journal.index') }}"
-                   class="inline-flex items-center justify-center px-3 py-2 text-xs font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-700 transition whitespace-nowrap shadow-sm">
+                   class="inline-flex items-center justify-center px-3 py-2 text-xs font-semibold text-blue-900 bg-white rounded-lg hover:bg-blue-50 transition whitespace-nowrap shadow-sm">
                     {{ __("Jurnalni ochish") }}
                 </a>
             </div>

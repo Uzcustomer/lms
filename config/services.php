@@ -73,6 +73,7 @@ return [
         // local_hemisexport plugin web service
         'ws_url' => env('MOODLE_WS_URL'),
         'ws_token' => env('MOODLE_WS_TOKEN'),
+        'quiz_ws_token' => env('MOODLE_QUIZ_WS_TOKEN'),
         'ws_timeout' => (int) env('MOODLE_WS_TIMEOUT', 30),
         // Master toggle for the narrow exam time window. When false
         // (default for now), the booking push opens the quiz for the

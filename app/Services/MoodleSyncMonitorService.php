@@ -45,7 +45,7 @@ class MoodleSyncMonitorService
     public function diagnose(): array
     {
         $url = $this->wsUrl ?: (string) config('services.moodle.ws_url');
-        $token = $this->wsToken ?: (string) config('services.moodle.ws_token');
+        $token = $this->wsToken ?: (string) config('services.moodle.quiz_ws_token') ?: config('services.moodle.ws_token');
 
         $old = $this->rawCall('local_quizexport_get_results', [
             'page' => 1,
@@ -98,7 +98,7 @@ class MoodleSyncMonitorService
     private function rawCall(string $wsFunction, array $args): array
     {
         $url = $this->wsUrl ?: (string) config('services.moodle.ws_url');
-        $token = $this->wsToken ?: (string) config('services.moodle.ws_token');
+        $token = $this->wsToken ?: (string) config('services.moodle.quiz_ws_token') ?: config('services.moodle.ws_token');
         if ($url === '' || $token === '') {
             return ['ok' => false, 'error' => 'Moodle WS not configured'];
         }

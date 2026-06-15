@@ -1134,27 +1134,25 @@ class TutorReportController extends Controller
             $subjectName = $rows->first()->subject_name ?? 'Fan';
             $reasons = [];
 
-            // 1. OSKI/Test (imtihon urinishlari)
+            // 1. OSKI/Test (imtihon urinishlari) — faqat ENG OXIRGI urinish natijasiga qaraladi
             $examRows = $rows->whereIn('training_type_code', [101, 102]);
             if ($examRows->isNotEmpty()) {
                 $byAttempt = $examRows->groupBy('attempt');
                 $maxAttempt = (int) $examRows->max('attempt');
-
-                for ($att = 1; $att <= $maxAttempt; $att++) {
-                    $attRows = $byAttempt->get((string)$att) ?? $byAttempt->get($att);
-                    if (!$attRows || $attRows->isEmpty()) continue;
-                    $baho = null;
-                    foreach ($attRows as $r) {
+                $lastAttRows = $byAttempt->get((string)$maxAttempt) ?? $byAttempt->get($maxAttempt);
+                $lastBaho = null;
+                if ($lastAttRows) {
+                    foreach ($lastAttRows as $r) {
                         $val = $r->retake_grade !== null ? (float)$r->retake_grade : ($r->grade !== null ? (float)$r->grade : null);
-                        if ($val !== null && ($baho === null || $val > $baho)) {
-                            $baho = $val;
+                        if ($val !== null && ($lastBaho === null || $val > $lastBaho)) {
+                            $lastBaho = $val;
                         }
                     }
-                    if ($baho !== null && $baho < 60) {
-                        if ($att === 1) $reasons[] = '1-urinish: V<60';
-                        elseif ($att === 2) $reasons[] = '2-urinish: V<60';
-                        elseif ($att >= 3) $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
-                    }
+                }
+                if ($lastBaho !== null && $lastBaho < 60) {
+                    if ($maxAttempt === 1) $reasons[] = '1-urinish: V<60';
+                    elseif ($maxAttempt === 2) $reasons[] = '2-urinish: V<60';
+                    elseif ($maxAttempt >= 3) $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
                 }
             }
 

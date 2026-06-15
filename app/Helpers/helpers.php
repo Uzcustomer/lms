@@ -300,6 +300,68 @@ if (!function_exists('get_nazoratchi_group_db_ids')) {
     }
 }
 
+if (!function_exists('is_active_tyutor')) {
+    /**
+     * Joriy foydalanuvchining faol roli tyutor ekanligini tekshirish.
+     */
+    function is_active_tyutor(): bool
+    {
+        $webUser = auth()->guard('web')->user();
+        if ($webUser) {
+            $roles = $webUser->getRoleNames()->toArray();
+            $activeRole = session('active_role', $roles[0] ?? '');
+            if (!in_array($activeRole, $roles) && count($roles) > 0) {
+                $activeRole = $roles[0];
+            }
+            return $activeRole === 'tyutor';
+        }
+
+        if (auth()->guard('teacher')->check()) {
+            $teacher = auth()->guard('teacher')->user();
+            $roles = $teacher->getRoleNames()->toArray();
+            $activeRole = session('active_role', $roles[0] ?? '');
+            if (!in_array($activeRole, $roles) && count($roles) > 0) {
+                $activeRole = $roles[0];
+            }
+            return $activeRole === 'tyutor';
+        }
+
+        return false;
+    }
+}
+
+if (!function_exists('get_tyutor_teacher')) {
+    /**
+     * Joriy foydalanuvchini Teacher modeli sifatida olish (tyutor uchun).
+     */
+    function get_tyutor_teacher(): ?\App\Models\Teacher
+    {
+        $teacher = auth()->guard('teacher')->user();
+        if ($teacher instanceof \App\Models\Teacher) {
+            return $teacher;
+        }
+        $webUser = auth()->guard('web')->user();
+        if ($webUser) {
+            return \App\Models\Teacher::where('login', $webUser->email)->first();
+        }
+        return null;
+    }
+}
+
+if (!function_exists('get_tyutor_group_db_ids')) {
+    /**
+     * Tyutor sifatida biriktirilgan guruhlarning lokal DB ID (groups.id) lari.
+     *
+     * @return array<int>
+     */
+    function get_tyutor_group_db_ids(): array
+    {
+        $teacher = get_tyutor_teacher();
+        if (!$teacher) return [];
+        return $teacher->groups()->where('active', true)->pluck('groups.id')->toArray();
+    }
+}
+
 if (!function_exists('format_date')) {
     /**
      * Sanani dd.mm.yyyy formatda chiqarish

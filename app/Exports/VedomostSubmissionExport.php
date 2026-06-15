@@ -24,16 +24,16 @@ class VedomostSubmissionExport extends DefaultValueBinder implements FromArray, 
     }
 
     /**
-     * Telefon ustunlari — O'qituvchi tel. (H), Fan mas'uli tel. (J),
-     * Kafedra mudiri tel. (L) — aniq MATN formatida bo'lsin (Excel raqamlarni
-     * qisqartirmasligi uchun).
+     * Telefon ustunlari — O'qituvchi tel. (I), Fan mas'uli tel. (K),
+     * Kafedra mudiri tel. (M) — aniq MATN formatida bo'lsin (Excel raqamlarni
+     * qisqartirmasligi uchun). ("Shakl" ustuni qo'shilgani uchun bir pog'ona surilgan.)
      */
     public function columnFormats(): array
     {
         return [
-            'H' => NumberFormat::FORMAT_TEXT,
-            'J' => NumberFormat::FORMAT_TEXT,
-            'L' => NumberFormat::FORMAT_TEXT,
+            'I' => NumberFormat::FORMAT_TEXT,
+            'K' => NumberFormat::FORMAT_TEXT,
+            'M' => NumberFormat::FORMAT_TEXT,
         ];
     }
 
@@ -64,6 +64,7 @@ class VedomostSubmissionExport extends DefaultValueBinder implements FromArray, 
             '#',
             'Fakultet',
             'Guruh',
+            'Shakl',
             "Yo'nalish",
             'Fan',
             'Kafedra',

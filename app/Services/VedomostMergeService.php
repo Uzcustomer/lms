@@ -65,15 +65,23 @@ class VedomostMergeService
     /**
      * Bitta yozuv uchun birlashtirish kaliti — bir xil kalitli yozuvlar bitta
      * vedomost hisoblanadi.
+     *
+     * 12-shakl: o'zak guruh kalitga kiradi (har guruh alohida varaq).
+     * 12a/12b : o'zak guruh kalitdan CHIQARILADI — yo'nalish × fan bo'yicha
+     *           barcha guruhlar bitta umumiy varaqqa jamlanadi.
      */
     public function mergeKey(object $row): string
     {
+        $formType = $row->form_type ?? VedomostSubmission::FORM_12;
+        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true);
+
         return implode('|', [
+            $formType,
             $row->education_year ?? '',
             $row->semester_code ?? '',
             $row->specialty_name ?? '',
             $row->closing_form ?? '',
-            $this->rootGroupName($row->group_name ?? ''),
+            $isCombined ? '*' : $this->rootGroupName($row->group_name ?? ''),
             $this->rootSubjectName($row->subject_name ?? ''),
         ]);
     }
@@ -110,7 +118,16 @@ class VedomostMergeService
             ->sortBy(fn($s) => self::STATUS_PRIORITY[$s] ?? 99)
             ->first();
 
+        $formType = $rep->form_type ?? VedomostSubmission::FORM_12;
+        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true);
+
         $subgroups = $group->pluck('group_name')->filter()->unique()->sort()->values();
+
+        // 12a/12b — umumiy varaq: "Guruh" ustuni umumlashtiriladi.
+        // 12-shakl — o'zak guruh nomi (guruchalar kesilgan).
+        $groupNameOut = $isCombined
+            ? ($rep->group_name ?: 'Barcha guruhlar')
+            : $this->rootGroupName($rep->group_name);
 
         // Ism va telefonni MOSLAB chiqaramiz: "A, B, C" -> "-, +998.., +998.."
         // (telefoni yo'q o'qituvchi o'rnida "-").
@@ -127,12 +144,13 @@ class VedomostMergeService
 
             'education_year' => $rep->education_year,
             'semester_code' => $rep->semester_code,
-            'group_name' => $this->rootGroupName($rep->group_name),
+            'group_name' => $groupNameOut,
             'subject_name' => $this->rootSubjectName($rep->subject_name),
             'specialty_name' => $rep->specialty_name,
             'department_name' => $this->joinDistinct($group, 'department_name'),
             'faculty_name' => $rep->faculty_name ?? null,
             'closing_form' => $rep->closing_form,
+            'form_type' => $formType,
             'level_name' => $rep->level_name ?? null,
             'level_code' => $rep->level_code ?? null,
 
@@ -214,6 +232,9 @@ class VedomostMergeService
      */
     public function siblingsOf(VedomostSubmission $v): Collection
     {
+        $formType = $v->form_type ?? VedomostSubmission::FORM_12;
+        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true);
+
         $query = VedomostSubmission::query()
             // Faqat FAOL guruhlar — index ro'yxati bilan mos bo'lishi uchun.
             ->whereIn('group_hemis_id', function ($q) {
@@ -221,7 +242,8 @@ class VedomostMergeService
             })
             ->where('education_year', $v->education_year)
             ->where('semester_code', $v->semester_code)
-            ->where('closing_form', $v->closing_form);
+            ->where('closing_form', $v->closing_form)
+            ->where('form_type', $formType);
 
         if ($v->specialty_name === null) {
             $query->whereNull('specialty_name');
@@ -232,8 +254,11 @@ class VedomostMergeService
         $rootGroup = $this->rootGroupName($v->group_name);
         $rootSubject = $this->rootSubjectName($v->subject_name);
 
-        return $query->get()->filter(function (VedomostSubmission $row) use ($rootGroup, $rootSubject) {
-            return $this->rootGroupName($row->group_name) === $rootGroup
+        return $query->get()->filter(function (VedomostSubmission $row) use ($isCombined, $rootGroup, $rootSubject) {
+            // 12a/12b — guruh sharti yo'q (hamma guruh bitta vedomost).
+            $groupMatch = $isCombined || $this->rootGroupName($row->group_name) === $rootGroup;
+
+            return $groupMatch
                 && $this->rootSubjectName($row->subject_name) === $rootSubject;
         })->values();
     }

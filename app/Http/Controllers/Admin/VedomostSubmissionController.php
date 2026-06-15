@@ -142,6 +142,9 @@ class VedomostSubmissionController extends Controller
         if ($request->filled('closing_form_filter')) {
             $query->where('vs.closing_form', $request->closing_form_filter);
         }
+        if ($request->filled('form_type')) {
+            $query->where('vs.form_type', $request->form_type);
+        }
         if ($request->filled('status')) {
             $query->where('vs.status', $request->status);
         }
@@ -205,6 +208,7 @@ class VedomostSubmissionController extends Controller
             'normativ' => 'Normativ',
             'sinov' => 'Sinov (test)',
         ];
+        $formLabels = VedomostSubmission::formLabels();
 
         // Filtrlangan yozuvlarni o'zak guruh × o'zak fan bo'yicha jamlaymiz —
         // guruhcha (a/b/c) va fan variant harflari kesilib, bitta vedomost qatori bo'ladi.
@@ -233,6 +237,7 @@ class VedomostSubmissionController extends Controller
             'educationTypes',
             'selectedEducationType',
             'closingForms',
+            'formLabels',
             'stats',
             'notifyEnabled',
             'canToggleNotify'
@@ -263,6 +268,7 @@ class VedomostSubmissionController extends Controller
                 $i++,
                 $v->faculty_name,
                 $v->group_name,
+                VedomostSubmission::formLabel($v->form_type ?? null),
                 $v->specialty_name,
                 $v->subject_name,
                 $v->department_name,

@@ -82,6 +82,11 @@ return Application::configure(basePath: dirname(__DIR__))
 //        $schedule->command('grades:close-expired')->everyMinute();
         $schedule->command('grades:close-expired')->everyThirtyMinutes()->withoutOverlapping(30);
 
+        // Vedomost yozuvlarini har kuni yangilash — joriy semestr 12-shakl
+        // qatorlari + natijaga qarab 12a/12b (qayta topshirish) varaqlari
+        // sana o'tishi bilan avtomatik ochiladi.
+        $schedule->command('vedomost:sync')->dailyAt('06:00')->withoutOverlapping();
+
         // Vedomost topshirish muddati ogohlantirishlari (oz qoldi / kechikdi) — har kuni 09:00
         $schedule->command('vedomost:deadline-warnings')->dailyAt('09:00')->withoutOverlapping();
 

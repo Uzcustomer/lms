@@ -69,6 +69,7 @@
                         <div class="filter-item" style="min-width: 130px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Min. qarzdorlik</label>
                             <select id="min_debt_count" class="select2" style="width: 100%;">
+                                <option value="0">Barchasi</option>
                                 @foreach([1, 2, 3, 4, 5, 6, 7, 8] as $cnt)
                                     <option value="{{ $cnt }}" {{ $cnt == 4 ? 'selected' : '' }}>&ge; {{ $cnt }} ta fan</option>
                                 @endforeach
@@ -259,7 +260,7 @@
                 student_status: $('#student_status').val() || '',
                 student_type: $('#student_type').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
-                min_debt_count: ($('#min_debt_count').length ? ($('#min_debt_count').val() || 4) : 4),
+                min_debt_count: ($('#min_debt_count').length ? ($('#min_debt_count').val() ?? '') : 4),
                 student_name: $('#student_name').val() || '',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,

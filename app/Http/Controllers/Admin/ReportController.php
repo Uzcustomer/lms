@@ -5132,7 +5132,8 @@ class ReportController extends Controller
         $sheet->setTitle('Qarzdorlar hisoboti');
 
         $headers = ['#', 'Talaba FISH', 'ID raqam', 'Fakultet', "Yo'nalish", 'Kurs', 'Guruh', 'Hozirgi semestr',
-            'Qarzlar soni', 'Fan semestr', 'Fan nomi', 'Kredit', 'Soat', 'Baho'];
+            'Qarzlar soni', 'Fan semestr', 'Fan nomi', 'Kredit', 'Soat', 'Baho',
+            'Joriy semestr xavfi (soni)', 'Joriy semestr xavflari'];
         foreach ($headers as $col => $header) {
             $sheet->setCellValue([$col + 1, 1], $header);
         }
@@ -5143,7 +5144,7 @@ class ReportController extends Controller
             'borders' => ['allBorders' => ['borderStyle' => \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN]],
             'alignment' => ['vertical' => \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER],
         ];
-        $lastCol = 'N';
+        $lastCol = 'P';
         $sheet->getStyle("A1:{$lastCol}1")->applyFromArray($headerStyle);
 
         // Har bir talaba uchun barcha curriculum fanlarini academic records bilan birlashtirish
@@ -5184,6 +5185,17 @@ class ReportController extends Controller
                 ->get()
                 ->keyBy(fn($ar) => $ar->subject_id . '|' . $ar->semester_id);
 
+            // Joriy semestr xavflari (journal/individual grafik): matn ko'rinishida
+            $currentRisks = $student['current_risks'] ?? [];
+            $currentRiskCount = $student['current_risk_count'] ?? count($currentRisks);
+            $riskParts = [];
+            foreach ($currentRisks as $cr) {
+                $rname = $cr['subject_name'] ?? 'Fan';
+                $rreasons = implode(', ', $cr['reasons'] ?? []);
+                $riskParts[] = $rreasons !== '' ? ($rname . ': ' . $rreasons) : $rname;
+            }
+            $riskText = implode('; ', $riskParts);
+
             $firstRow = $rowNum;
             foreach ($currSubjects as $sub) {
                 $subSemCode = (int) $sub->semester_code;
@@ -5208,6 +5220,8 @@ class ReportController extends Controller
                 $sheet->setCellValue([12, $rowNum], $sub->credit);
                 $sheet->setCellValue([13, $rowNum], $sub->total_acload);
                 $sheet->setCellValue([14, $rowNum], $isDebt ? 'Qarzdor' : $ar->grade);
+                $sheet->setCellValue([15, $rowNum], $currentRiskCount);
+                $sheet->setCellValue([16, $rowNum], $riskText);
 
                 if ($isDebt) {
                     $sheet->getStyle("A{$rowNum}:{$lastCol}{$rowNum}")->applyFromArray($debtFill);
@@ -5218,7 +5232,7 @@ class ReportController extends Controller
             $idx++;
         }
 
-        $widths = [5, 30, 15, 25, 30, 8, 15, 10, 10, 12, 35, 8, 8, 10];
+        $widths = [5, 30, 15, 25, 30, 8, 15, 10, 10, 12, 35, 8, 8, 10, 12, 45];
         foreach ($widths as $col => $w) {
             $sheet->getColumnDimensionByColumn($col + 1)->setWidth($w);
         }
@@ -9285,20 +9299,26 @@ class ReportController extends Controller
                 if ($mtGrade !== null && $mtGrade < 60) $reasons[] = 'MT<60';
             }
 
-            // JN o'rtachasi
+            // JN o'rtachasi — jurnal bilan bir xil: kunlik o'rtacha → umumiy o'rtacha + round
             $jnRows = $rows->filter(fn($r) =>
                 !in_array((int)$r->training_type_code, [11, 99, 100, 101, 102, 103])
                 && $r->lesson_date !== null
             );
             if ($jnRows->isNotEmpty()) {
-                $jnGrades = [];
+                $byDate = [];
                 foreach ($jnRows as $r) {
-                    if ($r->reason === 'absent' && $r->grade === null) continue;
-                    if ($r->grade !== null) $jnGrades[] = (float)$r->grade;
+                    if ($r->reason === 'absent') continue;
+                    if ($r->grade !== null) {
+                        $dk = substr((string) $r->lesson_date, 0, 10);
+                        $byDate[$dk][] = (float) $r->grade;
+                    }
                 }
-                if (count($jnGrades) > 0) {
-                    $jnAvg = array_sum($jnGrades) / count($jnGrades);
-                    if ($jnAvg < 60) $reasons[] = 'JN<60 (' . round($jnAvg, 1) . ')';
+                if (!empty($byDate)) {
+                    $dayAvgs = array_map(fn($dg) => array_sum($dg) / count($dg), $byDate);
+                    $jnAvg   = array_sum($dayAvgs) / count($dayAvgs);
+                    if ((int) round($jnAvg, 0, PHP_ROUND_HALF_UP) < 60) {
+                        $reasons[] = 'JN<60 (' . round($jnAvg, 1) . ')';
+                    }
                 }
             }
 

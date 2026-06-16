@@ -978,8 +978,14 @@ class TutorReportController extends Controller
 
         $studentHemisIds = $students->pluck('hemis_id')->toArray();
 
+        // Har talaba uchun uning o'z semester_code si (students.semester_code)
+        $studentSemCodeMap = $students->pluck('semester_code', 'hemis_id')
+            ->map(fn($v) => (string) $v)
+            ->filter()
+            ->toArray();
+
         // Joriy semestr xavflari (jurnaldan)
-        $currentRisksMap = $this->getCurrentSemesterRisks($studentHemisIds);
+        $currentRisksMap = $this->getCurrentSemesterRisks($studentHemisIds, $studentSemCodeMap);
 
         // O'tgan semestr qarzlari — admin hisoboti bilan aynan bir xil mantiq
         // (ComputesStudentDebts trait). Barchasi: kamida 1 ta qarz YOKI joriy
@@ -996,14 +1002,18 @@ class TutorReportController extends Controller
      * Joriy semestr bo'yicha xavf ostidagi talabalarni student_grades dan hisoblash.
      * Qaytaradi: [hemis_id => [['subject_name'=>..., 'reasons'=>[...]], ...]]
      */
-    private function getCurrentSemesterRisks(array $studentHemisIds): array
+    private function getCurrentSemesterRisks(array $studentHemisIds, array $studentSemCodesMap = []): array
     {
         if (empty($studentHemisIds)) return [];
 
-        $currentSemesterCodes = DB::table('semesters')
-            ->where('current', true)
-            ->pluck('code')
-            ->toArray();
+        if (!empty($studentSemCodesMap)) {
+            $currentSemesterCodes = array_values(array_unique(array_map('strval', $studentSemCodesMap)));
+        } else {
+            $currentSemesterCodes = DB::table('semesters')
+                ->where('current', true)
+                ->pluck('code')
+                ->toArray();
+        }
 
         if (empty($currentSemesterCodes)) return [];
 
@@ -1168,6 +1178,14 @@ class TutorReportController extends Controller
 
         foreach ($grouped as $key => $rows) {
             [$hemisId, $subjectId, $semCode] = explode('|', $key, 3);
+
+            // Talabaning o'z semester_code si bilan mos kelmasa — bu fan joriy semestr emas
+            if (!empty($studentSemCodesMap)) {
+                $studentSemCode = $studentSemCodesMap[$hemisId] ?? null;
+                if ($studentSemCode !== null && (string) $semCode !== (string) $studentSemCode) {
+                    continue;
+                }
+            }
 
             // Biriktirilganlik tekshiruvi: bu fan joriy o'quv yili biriktirilganlar
             // ro'yxatida bo'lmasa — talaba hozir o'qimaydi (tiklangan, eski yil fani),

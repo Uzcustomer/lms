@@ -1367,21 +1367,30 @@ class TutorReportController extends Controller
             }
 
             // 3. JN (kunlik baholar: NOT IN [11, 99, 100, 101, 102, 103], lesson_date bor)
+            // Jurnal bilan bir xil mantiq: har kun uchun o'rtacha hisoblash, keyin
+            // kunlar o'rtachasi + round — oddiy average emas (jurnal: calcDailyAverage).
             $jnRows = $rows->filter(fn($r) =>
                 !in_array((int)$r->training_type_code, [11, 99, 100, 101, 102, 103])
                 && $r->lesson_date !== null
             );
             if ($jnRows->isNotEmpty()) {
-                $jnGrades = [];
+                $byDate = [];
                 foreach ($jnRows as $r) {
-                    if ($r->reason === 'absent' && $r->grade === null) continue; // sababsiz absent — ball yo'q
+                    if ($r->reason === 'absent') continue; // absent — JN dan o'tkaziladi (davomat alohida hisoblanadi)
                     if ($r->grade !== null) {
-                        $jnGrades[] = (float)$r->grade;
+                        $dateKey = substr((string) $r->lesson_date, 0, 10);
+                        $byDate[$dateKey][] = (float) $r->grade;
                     }
                 }
-                if (count($jnGrades) > 0) {
-                    $jnAvg = array_sum($jnGrades) / count($jnGrades);
-                    if ($jnAvg < 60) {
+                if (!empty($byDate)) {
+                    $dayAvgs = [];
+                    foreach ($byDate as $dateGrades) {
+                        $dayAvgs[] = array_sum($dateGrades) / count($dateGrades);
+                    }
+                    $jnAvg = array_sum($dayAvgs) / count($dayAvgs);
+                    // Jurnal bilan bir xil round: round(avg, 0, HALF_UP) → integer taqqoslash
+                    $jnInt = (int) round($jnAvg, 0, PHP_ROUND_HALF_UP);
+                    if ($jnInt < 60) {
                         $reasons[] = 'JN<60 (' . round($jnAvg, 1) . ')';
                     }
                 }

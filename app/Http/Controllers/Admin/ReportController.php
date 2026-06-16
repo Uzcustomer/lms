@@ -9276,20 +9276,26 @@ class ReportController extends Controller
                 if ($mtGrade !== null && $mtGrade < 60) $reasons[] = 'MT<60';
             }
 
-            // JN o'rtachasi
+            // JN o'rtachasi — jurnal bilan bir xil: kunlik o'rtacha → umumiy o'rtacha + round
             $jnRows = $rows->filter(fn($r) =>
                 !in_array((int)$r->training_type_code, [11, 99, 100, 101, 102, 103])
                 && $r->lesson_date !== null
             );
             if ($jnRows->isNotEmpty()) {
-                $jnGrades = [];
+                $byDate = [];
                 foreach ($jnRows as $r) {
-                    if ($r->reason === 'absent' && $r->grade === null) continue;
-                    if ($r->grade !== null) $jnGrades[] = (float)$r->grade;
+                    if ($r->reason === 'absent') continue;
+                    if ($r->grade !== null) {
+                        $dk = substr((string) $r->lesson_date, 0, 10);
+                        $byDate[$dk][] = (float) $r->grade;
+                    }
                 }
-                if (count($jnGrades) > 0) {
-                    $jnAvg = array_sum($jnGrades) / count($jnGrades);
-                    if ($jnAvg < 60) $reasons[] = 'JN<60 (' . round($jnAvg, 1) . ')';
+                if (!empty($byDate)) {
+                    $dayAvgs = array_map(fn($dg) => array_sum($dg) / count($dg), $byDate);
+                    $jnAvg   = array_sum($dayAvgs) / count($dayAvgs);
+                    if ((int) round($jnAvg, 0, PHP_ROUND_HALF_UP) < 60) {
+                        $reasons[] = 'JN<60 (' . round($jnAvg, 1) . ')';
+                    }
                 }
             }
 

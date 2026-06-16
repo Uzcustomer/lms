@@ -1,4 +1,5 @@
 import 'student_data_cache.dart';
+import '../utils/yn_grade_calculator.dart';
 
 /// Builds the long markdown text we feed to Gemini as the AI's view of the
 /// student. Pure projection of the cache — no API calls happen here, so the
@@ -63,20 +64,19 @@ class StudentContextBuilder {
     // daily grade breakdown pulled from a separate cache entry).
     if (subjects is List && subjects.isNotEmpty) {
       buf.writeln('## FANLAR VA BAHOLAR (${subjects.length} ta fan)');
-      buf.writeln('YN formula: JN×50% + MT×20% + ON×0% + OSKI×15% + TEST×15%');
+      buf.writeln('YN formula: round(JN×50% + MT×20% + ON×0%) + round(OSKI×15% + TEST×15%)');
       buf.writeln();
 
       for (final s in subjects) {
         if (s is! Map) continue;
         final id = s['subject_id'] ?? s['id'];
         final name = s['subject_name'] ?? s['name'] ?? '?';
-        final grades = s['grades'];
-        final gradesMap =
-            grades is Map ? Map<String, dynamic>.from(grades) : <String, dynamic>{};
-        final yn = _computeYn(gradesMap);
+        final yn = YnGradeCalculator.computeFromSubject(
+          Map<String, dynamic>.from(s),
+        );
 
         buf.writeln('### $name');
-        _line(buf, 'YN (yakuniy nazorat)', yn?.toStringAsFixed(1));
+        _line(buf, 'YN (yakuniy nazorat)', yn?.toString());
         // Dump every field the API sent for this subject — nothing is dropped.
         _writeAny(buf, s, 1, today);
 
@@ -244,17 +244,4 @@ class StudentContextBuilder {
     buf.writeln('- $key: $value');
   }
 
-  double? _computeYn(Map<String, dynamic> grades) {
-    const weights = {'jn': 50, 'mt': 20, 'on': 0, 'oski': 15, 'test': 15};
-    double sum = 0;
-    bool hasAny = false;
-    for (final k in weights.keys) {
-      final v = grades[k];
-      if (v is num) {
-        sum += v * (weights[k]! / 100);
-        hasAny = true;
-      }
-    }
-    return hasAny ? sum : null;
-  }
 }

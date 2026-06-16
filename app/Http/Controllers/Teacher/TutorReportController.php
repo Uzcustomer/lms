@@ -957,45 +957,179 @@ class TutorReportController extends Controller
     }
 
     /**
-     * 4+ qarzdorlar hisoboti
+     * Qarzdorlar hisoboti — admin uslubida (filterlar + AJAX jadval), faqat
+     * tyutorning o'z guruhlari kesimida. Sahifa faqat filtr UI ni chizadi;
+     * ma'lumotlar debtorsReportData orqali keladi.
      */
     public function debtorsReport(Request $request)
     {
-        $tutorGroups = $this->getTutorGroups();
-        $groupIds = $this->getFilteredGroupIds($request);
+        $tutorGroupIds = $this->getTutorGroupIds();
 
-        $students = DB::table('students as s')
-            ->whereIn('s.group_id', $groupIds)
-            ->whereNotNull('s.curriculum_id')
-            ->select('s.hemis_id', 's.full_name', 's.student_id_number',
-                's.group_name', 's.semester_code', 's.curriculum_id', 's.image')
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
             ->get();
 
-        if ($students->isEmpty()) {
-            return view('teacher.reports.debtors', compact('tutorGroups'))
-                ->with('results', [])->with('currentRisksMap', []);
+        $selectedEducationType = null;
+
+        // Faqat tyutorga tegishli fakultetlar
+        $facultyHemisIds = DB::table('groups')
+            ->whereIn('group_hemis_id', $tutorGroupIds ?: [0])
+            ->pluck('department_hemis_id')
+            ->unique();
+        $faculties = Department::whereIn('department_hemis_id', $facultyHemisIds)
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
+
+        // Faqat tyutor guruhlaridagi talabalar bo'yicha holat/toifa ro'yxatlari
+        $studentStatuses = DB::table('students')
+            ->whereIn('group_id', $tutorGroupIds ?: [0])
+            ->select('student_status_code', 'student_status_name')
+            ->whereNotNull('student_status_code')
+            ->groupBy('student_status_code', 'student_status_name')
+            ->orderBy('student_status_name')
+            ->get();
+
+        $studentTypes = DB::table('students')
+            ->whereIn('group_id', $tutorGroupIds ?: [0])
+            ->select('student_type_code', 'student_type_name')
+            ->whereNotNull('student_type_code')
+            ->groupBy('student_type_code', 'student_type_name')
+            ->orderBy('student_type_name')
+            ->get();
+
+        return view('teacher.reports.debtors', compact(
+            'educationTypes',
+            'selectedEducationType',
+            'faculties',
+            'studentStatuses',
+            'studentTypes'
+        ));
+    }
+
+    /**
+     * AJAX: qarzdorlar hisobot ma'lumotlari — admin ReportController::debtorsReportData
+     * bilan aynan bir xil natija, faqat tyutorning o'z guruhlari bilan cheklangan.
+     */
+    public function debtorsReportData(Request $request)
+    {
+        try {
+            @ini_set('memory_limit', '1024M');
+            @set_time_limit(180);
+
+            $tutorGroupIds = $this->getTutorGroupIds();
+            if (empty($tutorGroupIds)) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            // Bo'sh yoki "Barchasi" (0) tanlansa — barcha qarzdorlarni (>=1 fan) ko'rsatamiz
+            $minDebtRaw = $request->get('min_debt_count', 4);
+            $minDebtCount = ($minDebtRaw === '' || $minDebtRaw === null) ? 1 : (int) $minDebtRaw;
+            if ($minDebtCount < 1) {
+                $minDebtCount = 1;
+            }
+            $showCurrentSemester = $request->get('current_semester', '0') == '1';
+
+            // Talabalar ro'yxati — faqat tyutor guruhlari + admin bilan bir xil filtrlar
+            $studentQuery = DB::table('students as s')
+                ->whereIn('s.group_id', $tutorGroupIds)
+                ->whereNotNull('s.curriculum_id')
+                ->select('s.hemis_id', 's.full_name', 's.student_id_number',
+                    's.department_name', 's.specialty_name', 's.level_name',
+                    's.semester_name', 's.semester_code', 's.group_name',
+                    's.group_id', 's.curriculum_id', 's.image',
+                    's.student_type_code', 's.student_type_name');
+
+            // Guruh filtri — faqat tyutorning o'z guruhi tanlanishi mumkin
+            if ($request->filled('group')) {
+                $group = \App\Models\Group::find($request->group);
+                if ($group && in_array($group->group_hemis_id, $tutorGroupIds)) {
+                    $studentQuery->where('s.group_id', $group->group_hemis_id);
+                }
+            }
+            if ($request->filled('student_status')) {
+                $studentQuery->where('s.student_status_code', $request->student_status);
+            }
+            if ($request->filled('student_name')) {
+                $studentQuery->where('s.full_name', 'like', '%' . $request->student_name . '%');
+            }
+            if ($request->filled('faculty')) {
+                $faculty = Department::find($request->faculty);
+                if ($faculty) {
+                    $studentQuery->where('s.department_id', $faculty->department_hemis_id);
+                }
+            }
+            if ($request->filled('specialty')) {
+                $studentQuery->where('s.specialty_id', $request->specialty);
+            }
+            if ($request->filled('level_code')) {
+                $studentQuery->where('s.level_code', $request->level_code);
+            }
+            if ($request->filled('education_type')) {
+                $studentQuery->where('s.education_type_code', $request->education_type);
+            }
+            if ($request->filled('student_type')) {
+                $studentQuery->where('s.student_type_code', $request->student_type);
+            }
+
+            $students = $studentQuery->get();
+            if ($students->isEmpty()) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            $studentHemisIds = $students->pluck('hemis_id')->toArray();
+            $studentSemCodeMap = $students->pluck('semester_code', 'hemis_id')
+                ->map(fn($v) => (string) $v)->filter()->toArray();
+
+            // Joriy semestr xavflari (jurnaldan) — xato bo'lsa asosiy ro'yxat ko'rsatiladi
+            try {
+                $currentRisksMap = $this->getCurrentSemesterRisks($studentHemisIds, $studentSemCodeMap);
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('Tyutor joriy semestr xavflari xatolik: ' . $e->getMessage());
+                $currentRisksMap = [];
+            }
+
+            // O'tgan semestr qarzlari — admin bilan aynan bir xil mantiq (trait)
+            $finalResults = $this->computeDebtorResults($students, $minDebtCount, $showCurrentSemester, $currentRisksMap);
+
+            if (empty($finalResults)) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            // Saralash
+            $sortColumn = $request->get('sort', 'debt_count');
+            $sortDirection = $request->get('direction', 'desc');
+            usort($finalResults, function ($a, $b) use ($sortColumn, $sortDirection) {
+                $valA = $a[$sortColumn] ?? '';
+                $valB = $b[$sortColumn] ?? '';
+                $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp($valA, $valB);
+                return $sortDirection === 'desc' ? -$cmp : $cmp;
+            });
+
+            // Sahifalash
+            $page = (int) $request->get('page', 1);
+            $perPage = (int) $request->get('per_page', 50);
+            $total = count($finalResults);
+            $offset = ($page - 1) * $perPage;
+            $pageData = array_slice($finalResults, $offset, $perPage);
+
+            foreach ($pageData as $i => &$item) {
+                $item['row_num'] = $offset + $i + 1;
+            }
+            unset($item);
+
+            return response()->json([
+                'data' => $pageData,
+                'total' => $total,
+                'per_page' => $perPage,
+                'current_page' => $page,
+                'last_page' => (int) ceil($total / max($perPage, 1)),
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Tyutor debtors report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['error' => $e->getMessage()], 500);
         }
-
-        $studentHemisIds = $students->pluck('hemis_id')->toArray();
-
-        // Har talaba uchun uning o'z semester_code si (students.semester_code)
-        $studentSemCodeMap = $students->pluck('semester_code', 'hemis_id')
-            ->map(fn($v) => (string) $v)
-            ->filter()
-            ->toArray();
-
-        // Joriy semestr xavflari (jurnaldan)
-        $currentRisksMap = $this->getCurrentSemesterRisks($studentHemisIds, $studentSemCodeMap);
-
-        // O'tgan semestr qarzlari — admin hisoboti bilan aynan bir xil mantiq
-        // (ComputesStudentDebts trait). Barchasi: kamida 1 ta qarz YOKI joriy
-        // semestr xavfi bo'lgan barcha talabalar.
-        $finalResults = $this->computeDebtorResults($students, 1, false, $currentRisksMap);
-
-        usort($finalResults, fn($a, $b) => $b['debt_count'] <=> $a['debt_count']);
-
-        return view('teacher.reports.debtors', compact('tutorGroups'))
-            ->with('results', $finalResults);
     }
 
     /**
@@ -1104,7 +1238,11 @@ class TutorReportController extends Controller
         // turlari va tasdiqlangan sababli ariza sanalari chiqarib tashlanadi.
         $subjectIdsForAtt = $grades->pluck('subject_id')->filter()->unique()->values()->all();
 
-        // 1) Har talaba+fan+semestr uchun sababsiz qoldirilgan soat
+        // 1) Har talaba+fan+semestr uchun sababsiz qoldirilgan soat.
+        //    Tasdiqlangan sababli ariza sanalari SQL korrelyatsiyalangan subso'rov
+        //    o'rniga PHP tomonda ($excuseRanges) filtrlanadi — DATE() funksiyasi bilan
+        //    indekssiz korrelyatsiyali subso'rov katta talaba to'plamida sahifani
+        //    juda sekinlashtirib (timeout) yuboradi.
         $absentHours = [];
         if (!empty($subjectIdsForAtt)) {
             foreach (array_chunk($studentHemisIds, 500) as $chunk) {
@@ -1113,26 +1251,20 @@ class TutorReportController extends Controller
                     ->whereIn('semester_code', $currentSemesterCodes)
                     ->whereIn('subject_id', $subjectIdsForAtt)
                     ->whereNotIn('training_type_code', [99, 100, 101, 102])
-                    ->when($hasExcuseTable, function ($q) {
-                        $q->whereNotExists(function ($sub) {
-                            $sub->select(DB::raw(1))
-                                ->from('absence_excuses')
-                                ->whereColumn('absence_excuses.student_hemis_id', 'attendances.student_hemis_id')
-                                ->where('absence_excuses.status', 'approved')
-                                ->whereRaw('absence_excuses.start_date <= DATE(attendances.lesson_date)')
-                                ->whereRaw('absence_excuses.end_date >= DATE(attendances.lesson_date)');
-                        });
-                    })
-                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'education_year_code', DB::raw('SUM(absent_off) as tot'))
-                    ->groupBy('student_hemis_id', 'subject_id', 'semester_code', 'education_year_code')
+                    ->where('absent_off', '>', 0)
+                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'education_year_code', 'lesson_date', 'absent_off')
                     ->get();
                 foreach ($attRows as $ar) {
                     // Joriy o'quv yili filtri (tiklangan talaba uchun eski yil qoldirishlarini chiqarib tashlash)
                     $cy = $curYear[$ar->student_hemis_id] ?? null;
                     $ey = (string) ($ar->education_year_code ?? '');
                     if ($cy !== null && $ey !== '' && $ey !== $cy) continue;
+                    // Tasdiqlangan sababli ariza oralig'iga tushsa — sababli, hisobga olinmaydi
+                    if ($hasExcuseTable && $this->isDateExcused($ar->student_hemis_id, $ar->lesson_date, $excuseRanges)) {
+                        continue;
+                    }
                     $k = $ar->student_hemis_id . '|' . $ar->subject_id . '|' . $ar->semester_code;
-                    $absentHours[$k] = ($absentHours[$k] ?? 0) + (float) $ar->tot;
+                    $absentHours[$k] = ($absentHours[$k] ?? 0) + (float) $ar->absent_off;
                 }
             }
         }
@@ -1281,6 +1413,31 @@ class TutorReportController extends Controller
         }
 
         return $risks;
+    }
+
+    /**
+     * Berilgan sana talaba uchun tasdiqlangan sababli ariza oralig'iga tushadimi?
+     *
+     * @param  mixed  $hemisId      Talaba hemis_id.
+     * @param  mixed  $lessonDate   Dars sanasi (Y-m-d yoki datetime).
+     * @param  array  $excuseRanges [hemis_id => [['start'=>Y-m-d, 'end'=>Y-m-d], ...]].
+     */
+    private function isDateExcused($hemisId, $lessonDate, array $excuseRanges): bool
+    {
+        $ranges = $excuseRanges[$hemisId] ?? null;
+        if (empty($ranges) || $lessonDate === null) {
+            return false;
+        }
+        $d = substr((string) $lessonDate, 0, 10);
+        if ($d === '') {
+            return false;
+        }
+        foreach ($ranges as $range) {
+            if ($d >= $range['start'] && $d <= $range['end']) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

@@ -4902,6 +4902,40 @@ class ReportController extends Controller
                 }
             }
 
+            // 5b-QADAM: student_subjects'dan har talaba+semestr uchun biriktirilgan
+            // fanlarni yuklash. Bu "Tiklangan" va boshqa alohida toifadagi talabalar
+            // uchun qaysi fanlarga haqiqatan biriktirilganini aniqlaydi.
+            // JournalController kabi: student_subjects bor bo'lsa — faqat o'sha fanlar,
+            // yo'q bo'lsa — curriculum_subjects (barcha talabalar uchun umumiy).
+            //
+            // $studentSubjectsMap[hemis_id|semester_code] = [subject_id => true, ...]
+            // $studentSubjectsHasSemester[hemis_id|semester_code] = bool (biriktirishlar bor yoki yo'q)
+            $studentSubjectsMap = [];
+            $studentSubjectsHasSemester = [];
+            {
+                $allPastSemCodes = [];
+                foreach ($studentHemisIds as $hId) {
+                    foreach ($studentSemCurr[$hId] ?? [] as $sc => $cId) {
+                        $allPastSemCodes[$sc] = true;
+                    }
+                }
+                $allPastSemCodes = array_keys($allPastSemCodes);
+
+                if (!empty($allPastSemCodes)) {
+                    $ssRows = DB::table('student_subjects')
+                        ->whereIn('student_hemis_id', $studentHemisIds)
+                        ->whereIn('semester_id', $allPastSemCodes)
+                        ->whereNotNull('subject_id')
+                        ->select('student_hemis_id', 'semester_id', 'subject_id')
+                        ->get();
+                    foreach ($ssRows as $sr) {
+                        $k = $sr->student_hemis_id . '|' . (string)$sr->semester_id;
+                        $studentSubjectsMap[$k][$sr->subject_id] = true;
+                        $studentSubjectsHasSemester[$k] = true;
+                    }
+                }
+            }
+
             // 6-QADAM: Har bir talaba uchun qarzdorlikni hisoblash
             $finalResults = [];
 
@@ -4955,8 +4989,36 @@ class ReportController extends Controller
                         }
 
                         $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
-                        if (isset($arExistsLookup[$arKey])) continue;
+                        $hasAR = isset($arExistsLookup[$arKey]);
 
+                        // Biriktirilganlik tekshiruvi (JournalController mantiqiga muvofiq):
+                        // Agar shu talaba+semestr uchun student_subjects da yozuvlar bo'lsa —
+                        // faqat o'sha fanlarga biriktirilgan deb hisoblanadi.
+                        $ssKey = $st->hemis_id . '|' . (string)$sub->semester_code;
+                        $hasSsForSem = $studentSubjectsHasSemester[$ssKey] ?? false;
+                        $isEnrolled = !$hasSsForSem || isset($studentSubjectsMap[$ssKey][$effectiveSubjectId]);
+
+                        if ($hasAR) {
+                            // Baho bor → qarz emas
+                            continue;
+                        }
+
+                        if (!$isEnrolled) {
+                            // Fan biriktirilmagan VA academic records ham yo'q →
+                            // "noaniq" qarz (talabaga na fan biriktirilgan, na baho qo'yilgan)
+                            $debts[] = [
+                                'subject_id'    => $effectiveSubjectId,
+                                'subject_name'  => $effectiveSubjectName,
+                                'semester_code' => $sub->semester_code,
+                                'semester_name' => $sub->semester_name,
+                                'credit'        => $sub->credit,
+                                'total_acload'  => $sub->total_acload,
+                                'status'        => 'noaniq', // fan biriktirilmagan + baho yo'q
+                            ];
+                            continue;
+                        }
+
+                        // Fan biriktirilgan, baho yo'q → oddiy qarz
                         $debts[] = [
                             'subject_id'    => $effectiveSubjectId,
                             'subject_name'  => $effectiveSubjectName,

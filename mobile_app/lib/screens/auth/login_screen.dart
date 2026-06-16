@@ -578,7 +578,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(width: 10),
             const Text(
-              'Tezkor kirish',
+              'Biometrik kirish',
               style: TextStyle(
                 color: _ink,
                 fontSize: 13.5,

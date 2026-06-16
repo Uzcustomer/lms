@@ -4908,7 +4908,11 @@ class ReportController extends Controller
             // Joriy semestr journal-based xavflarini OLDINDAN hisoblaymiz —
             // shunda o'tgan semestrda qarzi bo'lmasa ham, joriy semestrda
             // xavf ostidagi talaba (masalan davomat>=25%) ro'yxatga tushadi.
-            $currentRisksMap = $this->getCurrentSemesterRisksForReport($studentHemisIds);
+            // Talabalarning o'z semester kodlari ishlatiladi (semesters.current
+            // noto'g'ri bo'lishi mumkin), har talabaning semester_code va hemis_id
+            // map sifatida uzatiladi.
+            $studentSemCodeMap = $students->pluck('semester_code', 'hemis_id')->filter()->toArray();
+            $currentRisksMap = $this->getCurrentSemesterRisksForReport($studentHemisIds, $studentSemCodeMap);
 
             foreach ($students as $st) {
                 if (!$st->curriculum_id) continue;
@@ -8958,14 +8962,24 @@ class ReportController extends Controller
      * Joriy semestr bo'yicha talabalarning xavf holatini student_grades dan hisoblash.
      * Qaytaradi: [hemis_id => [['subject_name'=>..., 'reasons'=>[...]], ...]]
      */
-    private function getCurrentSemesterRisksForReport(array $studentHemisIds): array
+    /**
+     * @param array<string,string|int> $studentSemCodeMap  [hemis_id => semester_code]
+     */
+    private function getCurrentSemesterRisksForReport(array $studentHemisIds, array $studentSemCodeMap = []): array
     {
         if (empty($studentHemisIds)) return [];
 
-        $currentSemesterCodes = DB::table('semesters')
-            ->where('current', true)
-            ->pluck('code')
-            ->toArray();
+        // Talabalarning o'z semester_code laridan foydalanamiz.
+        // Agar map uzatilmagan bo'lsa — semesters.current=true ga fallback.
+        if (!empty($studentSemCodeMap)) {
+            $currentSemesterCodes = array_values(array_unique(array_map('strval', $studentSemCodeMap)));
+        } else {
+            $currentSemesterCodes = DB::table('semesters')
+                ->where('current', true)
+                ->pluck('code')
+                ->map('strval')
+                ->toArray();
+        }
 
         if (empty($currentSemesterCodes)) return [];
 
@@ -8973,6 +8987,7 @@ class ReportController extends Controller
 
         $grades = collect();
         foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+            // Har bir talabaning o'z semester_code si ishlatiladi
             $chunkGrades = DB::table('student_grades')
                 ->whereIn('student_hemis_id', $chunk)
                 ->whereIn('semester_code', $currentSemesterCodes)
@@ -9009,7 +9024,13 @@ class ReportController extends Controller
         $risks = [];
 
         foreach ($grouped as $key => $rows) {
-            [$hemisId, $subjectId] = explode('|', $key, 3);
+            [$hemisId, $subjectId, $semCode] = explode('|', $key, 3);
+            // Agar talabaning o'z semester_code si map da bo'lsa —
+            // boshqa semestrlar ma'lumotini o'tkazib yuboramiz.
+            if (!empty($studentSemCodeMap)) {
+                $expectedSem = (string)($studentSemCodeMap[$hemisId] ?? '');
+                if ($expectedSem !== '' && $semCode !== $expectedSem) continue;
+            }
             $subjectName = $rows->first()->subject_name ?? 'Fan';
             $reasons = [];
 

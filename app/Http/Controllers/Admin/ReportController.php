@@ -9195,6 +9195,13 @@ class ReportController extends Controller
             ->pluck('curriculum_hemis_id', 'students.hemis_id')
             ->toArray();
 
+        // Talaba -> guruh xaritasi va JN cache (jurnal mantig'ida JN hisoblash uchun)
+        $stuGroup = DB::table('students')
+            ->whereIn('hemis_id', $studentHemisIds)
+            ->pluck('group_id', 'hemis_id')
+            ->toArray();
+        $jnGroupCache = [];
+
         $auditMap = [];
         $auditAnyMap = [];
         if (!empty($subjectIdsForAtt)) {
@@ -9276,26 +9283,28 @@ class ReportController extends Controller
                 if ($mtGrade !== null && $mtGrade < 60) $reasons[] = 'MT<60';
             }
 
-            // JN o'rtachasi — jurnal bilan bir xil: kunlik o'rtacha → umumiy o'rtacha + round
-            $jnRows = $rows->filter(fn($r) =>
+            // JN o'rtachasi — jurnaldagi AYNAN bir xil hisob (computeJnAveragesForGroup)
+            $jnHasGrades = $rows->contains(fn($r) =>
                 !in_array((int)$r->training_type_code, [11, 99, 100, 101, 102, 103])
                 && $r->lesson_date !== null
+                && $r->reason !== 'absent'
+                && $r->grade !== null
             );
-            if ($jnRows->isNotEmpty()) {
-                $byDate = [];
-                foreach ($jnRows as $r) {
-                    if ($r->reason === 'absent') continue;
-                    if ($r->grade !== null) {
-                        $dk = substr((string) $r->lesson_date, 0, 10);
-                        $byDate[$dk][] = (float) $r->grade;
+            $gidForJn = $stuGroup[$hemisId] ?? null;
+            if ($jnHasGrades && $gidForJn) {
+                $jnCacheKey = $gidForJn . '|' . $subjectId . '|' . $semCode;
+                if (!array_key_exists($jnCacheKey, $jnGroupCache)) {
+                    try {
+                        $jnGroupCache[$jnCacheKey] = \App\Http\Controllers\Admin\JournalController::computeJnAveragesForGroup(
+                            (string) $subjectId, (string) $semCode, (string) $gidForJn
+                        );
+                    } catch (\Throwable $e) {
+                        $jnGroupCache[$jnCacheKey] = [];
                     }
                 }
-                if (!empty($byDate)) {
-                    $dayAvgs = array_map(fn($dg) => array_sum($dg) / count($dg), $byDate);
-                    $jnAvg   = array_sum($dayAvgs) / count($dayAvgs);
-                    if ((int) round($jnAvg, 0, PHP_ROUND_HALF_UP) < 60) {
-                        $reasons[] = 'JN<60 (' . round($jnAvg, 1) . ')';
-                    }
+                $jnVal = $jnGroupCache[$jnCacheKey][$hemisId] ?? null;
+                if ($jnVal !== null && $jnVal > 0 && $jnVal < 60) {
+                    $reasons[] = 'JN<60 (' . $jnVal . ')';
                 }
             }
 

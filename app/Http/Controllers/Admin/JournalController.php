@@ -6378,7 +6378,7 @@ class JournalController extends Controller
      * hisoblash. submitToYn va show() dagi mantiq bilan bir xil — faqat JN
      * qismi ajratilgan. Qaytadi: [student_hemis_id => jn_avg_int].
      */
-    private function computeJnAveragesForGroup(string $subjectId, string $semesterCode, string $groupHemisId): array
+    public static function computeJnAveragesForGroup(string $subjectId, string $semesterCode, string $groupHemisId): array
     {
         $studentHemisIds = DB::table('students')
             ->where('group_id', $groupHemisId)

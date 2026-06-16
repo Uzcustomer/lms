@@ -1277,6 +1277,13 @@ class TutorReportController extends Controller
             ->pluck('curriculum_hemis_id', 'students.hemis_id')
             ->toArray();
 
+        // Talaba -> guruh (group_hemis_id) xaritasi — JN ni jurnal mantig'ida hisoblash uchun
+        $stuGroup = DB::table('students')
+            ->whereIn('hemis_id', $studentHemisIds)
+            ->pluck('group_id', 'hemis_id')
+            ->toArray();
+        $jnGroupCache = [];
+
         // 3) Auditoriya soatlari: [curricula|subject|sem] va fallback [subject|sem]
         $auditMap = [];
         $auditAnyMap = [];
@@ -1366,33 +1373,30 @@ class TutorReportController extends Controller
                 }
             }
 
-            // 3. JN (kunlik baholar: NOT IN [11, 99, 100, 101, 102, 103], lesson_date bor)
-            // Jurnal bilan bir xil mantiq: har kun uchun o'rtacha hisoblash, keyin
-            // kunlar o'rtachasi + round — oddiy average emas (jurnal: calcDailyAverage).
-            $jnRows = $rows->filter(fn($r) =>
+            // 3. JN (kunlik baholar) — jurnaldagi AYNAN bir xil hisob:
+            // computeJnAveragesForGroup (schedules rejasi bo'yicha kunlik o'rtacha,
+            // yo'qolgan juftlar 0, maxraj = rejalashtirilgan dars kunlari soni).
+            $jnHasGrades = $rows->contains(fn($r) =>
                 !in_array((int)$r->training_type_code, [11, 99, 100, 101, 102, 103])
                 && $r->lesson_date !== null
+                && $r->reason !== 'absent'
+                && $r->grade !== null
             );
-            if ($jnRows->isNotEmpty()) {
-                $byDate = [];
-                foreach ($jnRows as $r) {
-                    if ($r->reason === 'absent') continue; // absent — JN dan o'tkaziladi (davomat alohida hisoblanadi)
-                    if ($r->grade !== null) {
-                        $dateKey = substr((string) $r->lesson_date, 0, 10);
-                        $byDate[$dateKey][] = (float) $r->grade;
+            $gidForJn = $stuGroup[$hemisId] ?? null;
+            if ($jnHasGrades && $gidForJn) {
+                $jnCacheKey = $gidForJn . '|' . $subjectId . '|' . $semCode;
+                if (!array_key_exists($jnCacheKey, $jnGroupCache)) {
+                    try {
+                        $jnGroupCache[$jnCacheKey] = \App\Http\Controllers\Admin\JournalController::computeJnAveragesForGroup(
+                            (string) $subjectId, (string) $semCode, (string) $gidForJn
+                        );
+                    } catch (\Throwable $e) {
+                        $jnGroupCache[$jnCacheKey] = [];
                     }
                 }
-                if (!empty($byDate)) {
-                    $dayAvgs = [];
-                    foreach ($byDate as $dateGrades) {
-                        $dayAvgs[] = array_sum($dateGrades) / count($dateGrades);
-                    }
-                    $jnAvg = array_sum($dayAvgs) / count($dayAvgs);
-                    // Jurnal bilan bir xil round: round(avg, 0, HALF_UP) → integer taqqoslash
-                    $jnInt = (int) round($jnAvg, 0, PHP_ROUND_HALF_UP);
-                    if ($jnInt < 60) {
-                        $reasons[] = 'JN<60 (' . round($jnAvg, 1) . ')';
-                    }
+                $jnVal = $jnGroupCache[$jnCacheKey][$hemisId] ?? null;
+                if ($jnVal !== null && $jnVal > 0 && $jnVal < 60) {
+                    $reasons[] = 'JN<60 (' . $jnVal . ')';
                 }
             }
 

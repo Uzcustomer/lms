@@ -467,10 +467,15 @@
                         dh += '</tr></thead><tbody>';
                         for (var i = 0; i < debtsAll.length; i++) {
                             var row = debtsAll[i];
-                            dh += '<tr>';
+                            var isNoaniq = row.status === 'noaniq';
+                            dh += '<tr' + (isNoaniq ? ' style="background:#fef9c3;"' : '') + '>';
                             dh += '<td>' + (i+1) + '</td>';
                             dh += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(row.semester_name) + '</span></td>';
-                            dh += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(row.subject_name) + '</td>';
+                            dh += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(row.subject_name);
+                            if (isNoaniq) {
+                                dh += ' <span style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 5px;font-weight:600;vertical-align:middle;">Fan biriktirilmagan</span>';
+                            }
+                            dh += '</td>';
                             dh += '<td>' + esc(row.credit) + '</td>';
                             dh += '<td>' + esc(row.total_acload) + '</td>';
                             dh += '</tr>';

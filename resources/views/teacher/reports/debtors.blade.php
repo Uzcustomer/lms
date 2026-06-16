@@ -111,7 +111,7 @@
                                             <div style="display:flex;flex-direction:column;gap:4px;">
                                                 @foreach($row['debts'] as $debt)
                                                     <div style="display:flex;align-items:center;gap:8px;">
-                                                        <span style="font-size:11px;color:#64748b;min-width:60px;">{{ $debt['semester_code'] }}-sem</span>
+                                                        <span style="font-size:11px;color:#64748b;min-width:80px;">{{ $debt['semester_name'] ?? ($debt['semester_code'] . '-sem') }}</span>
                                                         <span style="font-size:12px;color:#0f172a;">{{ $debt['subject_name'] }}</span>
                                                         @if($debt['credit'])
                                                             <span style="font-size:10px;color:#94a3b8;">({{ $debt['credit'] }} kr)</span>

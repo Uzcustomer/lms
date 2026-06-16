@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\Concerns\ComputesStudentDebts;
 use App\Models\ContractList;
 use App\Models\Curriculum;
 use App\Models\CurriculumSubject;
@@ -20,6 +21,8 @@ use Illuminate\Support\Facades\Log;
 
 class TutorReportController extends Controller
 {
+    use ComputesStudentDebts;
+
     private function getTutorGroupIds()
     {
         $teacher = auth()->guard('teacher')->user();
@@ -974,107 +977,13 @@ class TutorReportController extends Controller
         }
 
         $studentHemisIds = $students->pluck('hemis_id')->toArray();
-        $curriculumIds = $students->pluck('curriculum_id')->unique()->filter()->values()->toArray();
-
-        // Curriculum subjects
-        $currSubjects = DB::table('curriculum_subjects')
-            ->whereIn('curricula_hemis_id', $curriculumIds)
-            ->where('is_active', true)
-            ->where('subject_code', 'not like', '%/%')
-            ->select('curricula_hemis_id', 'semester_code', 'subject_id', 'subject_name', 'credit')
-            ->distinct()
-            ->get();
-
-        // Academic records
-        $arRecordsLookup = [];
-        // $studentPastSems[hemis_id] = [semester_code => true] — academic_records dan olingan
-        // o'tgan semestrlar kodi. students.semester_code va curriculum_subjects.semester_code
-        // turli namespace da bo'lishi mumkin (HEMIS global vs ketma-ket), shuning uchun
-        // faqat academic_records.semester_id orqali o'tgan semestrlarni aniqlaymiz.
-        $studentPastSems = [];
-        foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
-            $arRecords = DB::table('academic_records')
-                ->whereIn('student_id', $chunk)
-                ->select('student_id', 'subject_id', 'semester_id', 'grade', 'retraining_status')
-                ->get();
-
-            foreach ($arRecords as $ar) {
-                $key = $ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id;
-                if (!isset($arRecordsLookup[$key]) || (float) ($ar->grade ?? 0) > (float) ($arRecordsLookup[$key]->grade ?? 0)) {
-                    $arRecordsLookup[$key] = $ar;
-                }
-                // Bu talaba shu semester_id da o'qigan — o'tgan semestr
-                $studentPastSems[$ar->student_id][$ar->semester_id] = true;
-            }
-        }
-
-        $results = [];
-        foreach ($students as $st) {
-            if (!$st->curriculum_id) continue;
-
-            $subjects = $currSubjects->where('curricula_hemis_id', $st->curriculum_id);
-            $pastSems = $studentPastSems[$st->hemis_id] ?? [];
-            $debts = [];
-
-            foreach ($subjects as $sub) {
-                // Faqat academic_records da mavjud semestrlar o'tgan hisoblanadi.
-                // students.semester_code va curriculum_subjects.semester_code turli
-                // namespace da bo'lishi mumkin — shuning uchun to'g'ridan taqqoslab bo'lmaydi.
-                if (empty($pastSems) || !isset($pastSems[$sub->semester_code])) continue;
-
-                $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
-                $ar = $arRecordsLookup[$arKey] ?? null;
-
-                $isDebt = !$ar
-                    || $ar->grade === null
-                    || (float) ($ar->grade ?? 0) == 0
-                    || (float) ($ar->grade ?? 0) == 2
-                    || $ar->retraining_status;
-
-                if ($isDebt) {
-                    $debts[] = [
-                        'subject_name' => $sub->subject_name,
-                        'semester_code' => $sub->semester_code,
-                        'credit' => $sub->credit,
-                    ];
-                }
-            }
-
-            $results[$st->hemis_id] = [
-                'full_name' => $st->full_name,
-                'student_id' => $st->student_id_number,
-                'group_name' => $st->group_name,
-                'image' => $st->image,
-                'debt_count' => count($debts),
-                'debts' => $debts,
-            ];
-        }
 
         // Joriy semestr xavflari (jurnaldan)
         $currentRisksMap = $this->getCurrentSemesterRisks($studentHemisIds);
 
-        // Faqat o'tgan semestrda 4+ qarzdor YOKI joriy semestrda xavfi bor talabalar
-        $filteredResults = array_filter($results, fn($r) =>
-            $r['debt_count'] >= 4 || !empty($currentRisksMap[$r['full_name']] ?? [])
-        );
-
-        // hemis_id ga qarab currentRisksMap ni full_name o'rniga hemis_id bilan ulash
-        $currentRisksById = [];
-        foreach ($students as $st) {
-            if (isset($currentRisksMap[$st->hemis_id])) {
-                $currentRisksById[$st->hemis_id] = $currentRisksMap[$st->hemis_id];
-            }
-        }
-
-        // hemis_id ni results array kaliti sifatida saqlash
-        $finalResults = [];
-        foreach ($results as $hemisId => $row) {
-            if ($row['debt_count'] >= 4 || !empty($currentRisksById[$hemisId])) {
-                $row['current_risks'] = $currentRisksById[$hemisId] ?? [];
-                $row['current_risk_count'] = count($row['current_risks']);
-                $finalResults[] = $row;
-            }
-        }
+        // O'tgan semestr qarzlari — admin hisoboti bilan aynan bir xil mantiq
+        // (ComputesStudentDebts trait). 4+ qarz YOKI joriy semestr xavfi bo'lganlar.
+        $finalResults = $this->computeDebtorResults($students, 4, false, $currentRisksMap);
 
         usort($finalResults, fn($a, $b) => $b['debt_count'] <=> $a['debt_count']);
 

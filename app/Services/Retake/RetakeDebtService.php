@@ -29,8 +29,55 @@ class RetakeDebtService
     {
         $currentSemesterId = $student->semester_id ? (string) $student->semester_id : null;
 
+        $academicRecords = DB::table('academic_records')
+            ->where('student_id', $student->hemis_id)
+            ->select([
+                'id',
+                'subject_id',
+                'subject_name',
+                'semester_id',
+                'semester_name',
+                'credit',
+                'grade',
+                'retraining_status',
+            ])
+            ->orderByDesc('id')
+            ->get();
+
         $subjects = $this->plannedSubjects($student)
+            ->concat(
+                $academicRecords
+                    ->filter(function ($record) {
+                        return $record->grade === null
+                            || in_array((string) $record->grade, ['2', '0'], true)
+                            || (bool) $record->retraining_status;
+                    })
+                    ->map(function ($record) {
+                        return (object) [
+                            'subject_id' => trim((string) ($record->subject_id ?? '')),
+                            'subject_name' => $record->subject_name,
+                            'semester_id' => trim((string) ($record->semester_id ?? '')),
+                            'curriculum_subject_hemis_id' => null,
+                            'semester_name' => $record->semester_name,
+                            'credit' => $record->credit !== null ? (float) $record->credit : 0.0,
+                        ];
+                    })
+            )
             ->when($currentSemesterId !== null, fn (Collection $items) => $items->where('semester_id', '!=', $currentSemesterId))
+            ->filter(fn ($row) => $row->subject_id !== '' && $row->semester_id !== '')
+            ->groupBy(fn ($row) => $row->subject_id . '|' . $row->semester_id)
+            ->map(function (Collection $group) {
+                $picked = $group->firstWhere('curriculum_subject_hemis_id', '!=', null) ?? $group->first();
+
+                foreach ($group as $candidate) {
+                    $picked->subject_name = $picked->subject_name ?: $candidate->subject_name;
+                    $picked->semester_name = $picked->semester_name ?: $candidate->semester_name;
+                    $picked->credit = $picked->credit ?: $candidate->credit;
+                    $picked->curriculum_subject_hemis_id = $picked->curriculum_subject_hemis_id ?: $candidate->curriculum_subject_hemis_id;
+                }
+
+                return $picked;
+            })
             ->values();
 
         if ($subjects->isEmpty()) {
@@ -40,21 +87,10 @@ class RetakeDebtService
         $subjectIds = $subjects->pluck('subject_id')->filter()->unique()->values()->all();
         $semesterIds = $subjects->pluck('semester_id')->filter()->unique()->values()->all();
 
-        $academicRecords = DB::table('academic_records')
-            ->where('student_id', $student->hemis_id)
+        $academicRecords = $academicRecords
             ->whereIn('subject_id', $subjectIds)
             ->whereIn('semester_id', $semesterIds)
-            ->select([
-                'id',
-                'subject_id',
-                'semester_id',
-                'semester_name',
-                'credit',
-                'grade',
-                'retraining_status',
-            ])
-            ->orderByDesc('id')
-            ->get();
+            ->values();
 
         $academicLookup = [];
         foreach ($academicRecords as $record) {

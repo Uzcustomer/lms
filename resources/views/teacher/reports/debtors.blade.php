@@ -30,13 +30,13 @@
 
                 @php
                     $results = $results ?? [];
-                    $totalPast = count(array_filter($results, fn($r) => $r['debt_count'] >= 4));
+                    $totalPast = count(array_filter($results, fn($r) => $r['debt_count'] > 0));
                     $totalCurrent = count(array_filter($results, fn($r) => !empty($r['current_risks'])));
                 @endphp
 
                 <div style="padding:10px 20px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
                     <span class="badge" style="background:#dc2626;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">
-                        O'tgan semestr 4+ qarz: {{ $totalPast }} ta
+                        O'tgan semestr qarzdor: {{ $totalPast }} ta
                     </span>
                     <span class="badge" style="background:#d97706;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">
                         Joriy semestr xavfi: {{ $totalCurrent }} ta
@@ -72,7 +72,7 @@
                                 </td>
                                 <td><span class="badge badge-indigo">{{ $row['group_name'] }}</span></td>
                                 <td style="text-align:center;">
-                                    @if($row['debt_count'] >= 4)
+                                    @if($row['debt_count'] > 0)
                                         <span class="badge badge-grade-red" style="font-size:14px;" title="O'tgan semestrlardagi qarzlar soni">
                                             {{ $row['debt_count'] }} ta
                                         </span>

@@ -982,8 +982,9 @@ class TutorReportController extends Controller
         $currentRisksMap = $this->getCurrentSemesterRisks($studentHemisIds);
 
         // O'tgan semestr qarzlari — admin hisoboti bilan aynan bir xil mantiq
-        // (ComputesStudentDebts trait). 4+ qarz YOKI joriy semestr xavfi bo'lganlar.
-        $finalResults = $this->computeDebtorResults($students, 4, false, $currentRisksMap);
+        // (ComputesStudentDebts trait). Barchasi: kamida 1 ta qarz YOKI joriy
+        // semestr xavfi bo'lgan barcha talabalar.
+        $finalResults = $this->computeDebtorResults($students, 1, false, $currentRisksMap);
 
         usort($finalResults, fn($a, $b) => $b['debt_count'] <=> $a['debt_count']);
 

@@ -141,7 +141,7 @@
                                         <th style="text-align:center;"><a href="#" class="sort-link" data-sort="student_type_name">Toifa <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;" title="Qarzlar soni (curriculum da bor, academic records da yo'q)"><a href="#" class="sort-link" data-sort="debt_count">O'tgan semestr <span class="sort-icon active">&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Joriy semestr — journal ma'lumotlaridan">Joriy semestr</th>
+                                        <th style="text-align:center;" title="Joriy semestr — journal ma'lumotlaridan"><a href="#" class="sort-link" data-sort="current_risk_count">Joriy semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;width:90px;">Batafsil</th>
                                     </tr>
                                 </thead>

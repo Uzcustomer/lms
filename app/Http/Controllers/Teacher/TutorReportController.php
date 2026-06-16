@@ -1412,6 +1412,113 @@ class TutorReportController extends Controller
             }
         }
 
+        // Individual grafik bo'yicha belgilangan urinishlar: sana o'tib ketgan lekin
+        // student_grades da mos yozuv yo'q — "o'tmagan" hisoblanadi.
+        // exam_schedules.student_hemis_id = talaba → shaxsiy resit sana belgilangan.
+        // attempt=2: test_resit_date / oski_resit_date
+        // attempt=3: test_resit2_date / oski_resit2_date
+        if (\Illuminate\Support\Facades\Schema::hasTable('exam_schedules')) {
+            $today = now()->format('Y-m-d');
+            foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                $esRows = DB::table('exam_schedules')
+                    ->whereIn('student_hemis_id', $chunk)
+                    ->whereIn('semester_code', $currentSemesterCodes)
+                    ->select(
+                        'student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
+                        'test_resit_date', 'oski_resit_date',
+                        'test_resit2_date', 'oski_resit2_date'
+                    )
+                    ->get();
+
+                // Mavjud student_grades imtihon yozuvlari: [hemis_id|subject_id|semester_code|attempt|type]
+                $existingKeys = [];
+                foreach ($grades as $g) {
+                    if (!in_array((int)$g->training_type_code, [101, 102])) continue;
+                    $att = (int) ($g->attempt ?? 1);
+                    $existingKeys[$g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code . '|' . $att] = true;
+                }
+
+                foreach ($esRows as $es) {
+                    $hid = $es->student_hemis_id;
+                    $subId = $es->subject_id;
+                    $semCode = $es->semester_code;
+                    $subName = $es->subject_name ?? 'Fan';
+
+                    // Semester filter per student
+                    if (!empty($studentSemCodesMap)) {
+                        $stu_sem = $studentSemCodesMap[$hid] ?? null;
+                        if ($stu_sem !== null && (string)$semCode !== (string)$stu_sem) continue;
+                    }
+
+                    // attempt=2: test yoki oski resit sanasi o'tib ketgan va grade yo'q
+                    foreach (['test_resit_date' => 102, 'oski_resit_date' => 101] as $col => $ttCode) {
+                        $date = $es->$col ?? null;
+                        if ($date === null) continue;
+                        $dateStr = substr((string)$date, 0, 10);
+                        if ($dateStr > $today) continue;
+                        $key2 = $hid . '|' . $subId . '|' . $semCode . '|2';
+                        if (!isset($existingKeys[$key2])) {
+                            // 2-urinish sanasi o'tib ketgan, lekin baholanmagan
+                            $alreadyAdded = false;
+                            foreach ($risks[$hid] ?? [] as $r) {
+                                if ($r['subject_name'] === $subName) { $alreadyAdded = true; break; }
+                            }
+                            if (!$alreadyAdded) {
+                                $risks[$hid][] = [
+                                    'subject_name' => $subName,
+                                    'reasons' => ['2-urinish: baholanmagan (grafik o\'tib ketdi)'],
+                                ];
+                            } else {
+                                foreach ($risks[$hid] as &$r) {
+                                    if ($r['subject_name'] === $subName) {
+                                        if (!in_array('2-urinish: baholanmagan (grafik o\'tib ketdi)', $r['reasons'])) {
+                                            $r['reasons'][] = '2-urinish: baholanmagan (grafik o\'tib ketdi)';
+                                        }
+                                        break;
+                                    }
+                                }
+                                unset($r);
+                            }
+                        }
+                    }
+
+                    // attempt=3: resit2 sanasi o'tib ketgan va grade yo'q
+                    foreach (['test_resit2_date' => 102, 'oski_resit2_date' => 101] as $col => $ttCode) {
+                        $date = $es->$col ?? null;
+                        if ($date === null) continue;
+                        $dateStr = substr((string)$date, 0, 10);
+                        if ($dateStr > $today) continue;
+                        $key3 = $hid . '|' . $subId . '|' . $semCode . '|3';
+                        if (!isset($existingKeys[$key3])) {
+                            // 3-urinish sanasi o'tib ketgan, lekin baholanmagan → akademik qarzdor
+                            $alreadyAdded = false;
+                            $reason3 = 'Akademik qarzdor (3-urinish baholanmagan)';
+                            foreach ($risks[$hid] ?? [] as $r) {
+                                if ($r['subject_name'] === $subName) { $alreadyAdded = true; break; }
+                            }
+                            if (!$alreadyAdded) {
+                                $risks[$hid][] = [
+                                    'subject_name' => $subName,
+                                    'reasons' => [$reason3],
+                                ];
+                            } else {
+                                foreach ($risks[$hid] as &$r) {
+                                    if ($r['subject_name'] === $subName) {
+                                        // Agar "2-urinish: V<60" yoki shunga o'xshash sabab bo'lsa — 3-urinish ustunlik qiladi
+                                        if (!in_array($reason3, $r['reasons'])) {
+                                            $r['reasons'][] = $reason3;
+                                        }
+                                        break;
+                                    }
+                                }
+                                unset($r);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         return $risks;
     }
 

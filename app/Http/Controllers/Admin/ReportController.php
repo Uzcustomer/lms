@@ -9066,6 +9066,28 @@ class ReportController extends Controller
 
         if ($grades->isEmpty()) return [];
 
+        // Biriktirilganlik (enrollment) — student_subjects bo'yicha.
+        // Tiklangan/akademik mobillik talabalar joriy semestrning faqat
+        // ba'zi fanlariga biriktirilgan bo'lishi mumkin. student_subjects
+        // da shu talaba+semestr uchun yozuv bo'lsa — faqat o'sha fanlarning
+        // xavfi hisoblanadi (boshqalari biriktirilmagan, e'tiborga olinmaydi).
+        // student_subjects'da umuman ma'lumot bo'lmasa — eski mantiq (hammasi).
+        $ssMap = [];            // [hemis_id|semester_code][subject_id] = true
+        $ssHasSem = [];         // [hemis_id|semester_code] = true (biriktirishlar bor)
+        foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+            $ssRows = DB::table('student_subjects')
+                ->whereIn('student_hemis_id', $chunk)
+                ->whereIn('semester_id', $currentSemesterCodes)
+                ->whereNotNull('subject_id')
+                ->select('student_hemis_id', 'semester_id', 'subject_id')
+                ->get();
+            foreach ($ssRows as $sr) {
+                $k = $sr->student_hemis_id . '|' . (string) $sr->semester_id;
+                $ssMap[$k][$sr->subject_id] = true;
+                $ssHasSem[$k] = true;
+            }
+        }
+
         $hasExcuseTable = \Illuminate\Support\Facades\Schema::hasTable('absence_excuses');
         $excuseRanges = [];
         if ($hasExcuseTable) {
@@ -9093,6 +9115,15 @@ class ReportController extends Controller
                 $expectedSem = (string)($studentSemCodeMap[$hemisId] ?? '');
                 if ($expectedSem !== '' && $semCode !== $expectedSem) continue;
             }
+
+            // Biriktirilganlik tekshiruvi: student_subjects da shu talaba+semestr
+            // uchun yozuv bo'lsa-yu, lekin bu fan ro'yxatda bo'lmasa —
+            // talaba bu fanga biriktirilmagan (masalan tiklangan), xavf hisoblanmaydi.
+            $ssKey = $hemisId . '|' . $semCode;
+            if (($ssHasSem[$ssKey] ?? false) && !isset($ssMap[$ssKey][$subjectId])) {
+                continue;
+            }
+
             $subjectName = $rows->first()->subject_name ?? 'Fan';
             $reasons = [];
 

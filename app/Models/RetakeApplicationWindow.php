@@ -116,13 +116,11 @@ class RetakeApplicationWindow extends Model
     {
         $today = Carbon::today();
 
-        if ($this->start_date->gte($today) || $this->isApplicationReopened()) {
+        if ($this->end_date->gte($today) || $this->isApplicationReopened()) {
             return 'active';
         }
-        if ($this->end_date->lt($today)) {
-            return 'closed';
-        }
-        return 'study';
+
+        return 'closed';
     }
 
     public function getRemainingDaysAttribute(): int
@@ -186,11 +184,11 @@ class RetakeApplicationWindow extends Model
         $today = Carbon::today();
 
         if (!self::supportsReopen()) {
-            return $query->whereDate('start_date', '>=', $today);
+            return $query->whereDate('end_date', '>=', $today);
         }
 
         return $query->where(function ($q) use ($today) {
-            $q->whereDate('start_date', '>=', $today)
+            $q->whereDate('end_date', '>=', $today)
               ->orWhereDate('application_reopen_until', '>=', $today);
         });
     }

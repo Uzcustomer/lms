@@ -9058,7 +9058,7 @@ class ReportController extends Controller
                     'student_hemis_id', 'subject_id', 'subject_name', 'semester_code',
                     'training_type_code', 'grade', 'retake_grade', 'status', 'reason',
                     $hasAttemptCol ? 'attempt' : DB::raw('1 as attempt'),
-                    'lesson_date'
+                    'lesson_date', 'education_year_code'
                 )
                 ->get();
             $grades = $grades->merge($chunkGrades);
@@ -9066,27 +9066,60 @@ class ReportController extends Controller
 
         if ($grades->isEmpty()) return [];
 
-        // Biriktirilganlik (enrollment) — student_subjects bo'yicha.
-        // Tiklangan/akademik mobillik talabalar joriy semestrning faqat
-        // ba'zi fanlariga biriktirilgan bo'lishi mumkin. student_subjects
-        // da shu talaba+semestr uchun yozuv bo'lsa — faqat o'sha fanlarning
-        // xavfi hisoblanadi (boshqalari biriktirilmagan, e'tiborga olinmaydi).
-        // student_subjects'da umuman ma'lumot bo'lmasa — eski mantiq (hammasi).
-        $ssMap = [];            // [hemis_id|semester_code][subject_id] = true
-        $ssHasSem = [];         // [hemis_id|semester_code] = true (biriktirishlar bor)
+        // Biriktirilganlik (enrollment) — student_subjects + JORIY O'QUV YILI bo'yicha.
+        //
+        // Tiklangan talaba bir semestrni 2 marta (eski + joriy o'quv yili) o'qishi
+        // mumkin. student_subjects da bir xil semestrda 2024 va 2025 yil yozuvlari
+        // turishi mumkin. Faqat ENG SO'NGGI (joriy) o'quv yili biriktirilgan
+        // fanlar haqiqatda hozir o'qilayotgan fanlardir.
+        //
+        // Mantiq:
+        //  - $curYear[hemis]       = talabaning joriy semestrdagi eng katta education_year
+        //  - $enrolledCur[hemis]   = [subject_id => true] joriy yil biriktirilgan fanlar
+        //  - $hasEnrollment[hemis] = student_subjects da yozuv bor (fallback uchun)
+        $curYear = [];
+        $hasEnrollment = [];
+        $ssRowsAll = collect();
         foreach (array_chunk($studentHemisIds, 500) as $chunk) {
             $ssRows = DB::table('student_subjects')
                 ->whereIn('student_hemis_id', $chunk)
                 ->whereIn('semester_id', $currentSemesterCodes)
                 ->whereNotNull('subject_id')
-                ->select('student_hemis_id', 'semester_id', 'subject_id')
+                ->select('student_hemis_id', 'semester_id', 'subject_id', 'education_year')
                 ->get();
+            $ssRowsAll = $ssRowsAll->merge($ssRows);
             foreach ($ssRows as $sr) {
-                $k = $sr->student_hemis_id . '|' . (string) $sr->semester_id;
-                $ssMap[$k][$sr->subject_id] = true;
-                $ssHasSem[$k] = true;
+                $hid = $sr->student_hemis_id;
+                $hasEnrollment[$hid] = true;
+                $y = (string) $sr->education_year;
+                if ($y !== '' && (!isset($curYear[$hid]) || $y > $curYear[$hid])) {
+                    $curYear[$hid] = $y;
+                }
             }
         }
+        // Joriy yil biriktirilgan fanlar to'plami
+        $enrolledCur = [];
+        foreach ($ssRowsAll as $sr) {
+            $hid = $sr->student_hemis_id;
+            $cy = $curYear[$hid] ?? null;
+            // Yil ko'rsatilmagan yoki joriy yilga teng bo'lsa — biriktirilgan deb olamiz
+            if ($cy === null || (string) $sr->education_year === '' || (string) $sr->education_year === $cy) {
+                $enrolledCur[$hid][$sr->subject_id] = true;
+            }
+        }
+
+        // Baholarni joriy o'quv yili bo'yicha tozalash: eski yil (masalan 2024)
+        // baholari hisobga olinmasin (faqat joriy yil yoki yili belgilanmagan
+        // jurnal yozuvlari qoladi).
+        $grades = $grades->filter(function ($g) use ($curYear) {
+            $cy = $curYear[$g->student_hemis_id] ?? null;
+            if ($cy === null) return true;
+            $gy = (string) ($g->education_year_code ?? '');
+            if ($gy === '') return true;        // jurnal (davomat) yozuvlari — qoldiriladi
+            return $gy === $cy;                  // faqat joriy yil import baholari
+        });
+
+        if ($grades->isEmpty()) return [];
 
         $hasExcuseTable = \Illuminate\Support\Facades\Schema::hasTable('absence_excuses');
         $excuseRanges = [];
@@ -9116,11 +9149,11 @@ class ReportController extends Controller
                 if ($expectedSem !== '' && $semCode !== $expectedSem) continue;
             }
 
-            // Biriktirilganlik tekshiruvi: student_subjects da shu talaba+semestr
-            // uchun yozuv bo'lsa-yu, lekin bu fan ro'yxatda bo'lmasa —
-            // talaba bu fanga biriktirilmagan (masalan tiklangan), xavf hisoblanmaydi.
-            $ssKey = $hemisId . '|' . $semCode;
-            if (($ssHasSem[$ssKey] ?? false) && !isset($ssMap[$ssKey][$subjectId])) {
+            // Biriktirilganlik tekshiruvi: student_subjects da yozuv bo'lsa-yu,
+            // bu fan joriy o'quv yili biriktirilganlar ro'yxatida bo'lmasa —
+            // talaba bu fanga hozir biriktirilmagan (tiklangan, eski yil fani),
+            // xavf hisoblanmaydi.
+            if (($hasEnrollment[$hemisId] ?? false) && !isset($enrolledCur[$hemisId][$subjectId])) {
                 continue;
             }
 

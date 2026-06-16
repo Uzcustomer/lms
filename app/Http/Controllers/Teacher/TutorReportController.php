@@ -987,6 +987,11 @@ class TutorReportController extends Controller
 
         // Academic records
         $arRecordsLookup = [];
+        // $studentPastSems[hemis_id] = [semester_code => true] — academic_records dan olingan
+        // o'tgan semestrlar kodi. students.semester_code va curriculum_subjects.semester_code
+        // turli namespace da bo'lishi mumkin (HEMIS global vs ketma-ket), shuning uchun
+        // faqat academic_records.semester_id orqali o'tgan semestrlarni aniqlaymiz.
+        $studentPastSems = [];
         foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
             $arRecords = DB::table('academic_records')
                 ->whereIn('student_id', $chunk)
@@ -998,6 +1003,8 @@ class TutorReportController extends Controller
                 if (!isset($arRecordsLookup[$key]) || (float) ($ar->grade ?? 0) > (float) ($arRecordsLookup[$key]->grade ?? 0)) {
                     $arRecordsLookup[$key] = $ar;
                 }
+                // Bu talaba shu semester_id da o'qigan — o'tgan semestr
+                $studentPastSems[$ar->student_id][$ar->semester_id] = true;
             }
         }
 
@@ -1006,10 +1013,14 @@ class TutorReportController extends Controller
             if (!$st->curriculum_id) continue;
 
             $subjects = $currSubjects->where('curricula_hemis_id', $st->curriculum_id);
+            $pastSems = $studentPastSems[$st->hemis_id] ?? [];
             $debts = [];
 
             foreach ($subjects as $sub) {
-                if ((int) $sub->semester_code >= (int) $st->semester_code) continue;
+                // Faqat academic_records da mavjud semestrlar o'tgan hisoblanadi.
+                // students.semester_code va curriculum_subjects.semester_code turli
+                // namespace da bo'lishi mumkin — shuning uchun to'g'ridan taqqoslab bo'lmaydi.
+                if (empty($pastSems) || !isset($pastSems[$sub->semester_code])) continue;
 
                 $arKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $sub->semester_code;
                 $ar = $arRecordsLookup[$arKey] ?? null;

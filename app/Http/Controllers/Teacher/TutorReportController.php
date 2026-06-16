@@ -1167,6 +1167,79 @@ class TutorReportController extends Controller
             }
         }
 
+        // --- Davomat (jurnal mantig'i): attendances.absent_off soatlari / auditoriya soati ---
+        // Jurnal show sahifasi davomatni dars SONIDAN emas, balki QOLDIRILGAN SOATLARdan
+        // hisoblaydi: SUM(absent_off) / auditoriumHours * 100. MT/ON/OSKI/Test (99,100,101,102)
+        // turlari va tasdiqlangan sababli ariza sanalari chiqarib tashlanadi.
+        $subjectIdsForAtt = $grades->pluck('subject_id')->filter()->unique()->values()->all();
+
+        // 1) Har talaba+fan+semestr uchun sababsiz qoldirilgan soat
+        $absentHours = [];
+        if (!empty($subjectIdsForAtt)) {
+            foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                $attRows = DB::table('attendances')
+                    ->whereIn('student_hemis_id', $chunk)
+                    ->whereIn('semester_code', $currentSemesterCodes)
+                    ->whereIn('subject_id', $subjectIdsForAtt)
+                    ->whereNotIn('training_type_code', [99, 100, 101, 102])
+                    ->when($hasExcuseTable, function ($q) {
+                        $q->whereNotExists(function ($sub) {
+                            $sub->select(DB::raw(1))
+                                ->from('absence_excuses')
+                                ->whereColumn('absence_excuses.student_hemis_id', 'attendances.student_hemis_id')
+                                ->where('absence_excuses.status', 'approved')
+                                ->whereRaw('absence_excuses.start_date <= DATE(attendances.lesson_date)')
+                                ->whereRaw('absence_excuses.end_date >= DATE(attendances.lesson_date)');
+                        });
+                    })
+                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'education_year_code', DB::raw('SUM(absent_off) as tot'))
+                    ->groupBy('student_hemis_id', 'subject_id', 'semester_code', 'education_year_code')
+                    ->get();
+                foreach ($attRows as $ar) {
+                    // Joriy o'quv yili filtri (tiklangan talaba uchun eski yil qoldirishlarini chiqarib tashlash)
+                    $cy = $curYear[$ar->student_hemis_id] ?? null;
+                    $ey = (string) ($ar->education_year_code ?? '');
+                    if ($cy !== null && $ey !== '' && $ey !== $cy) continue;
+                    $k = $ar->student_hemis_id . '|' . $ar->subject_id . '|' . $ar->semester_code;
+                    $absentHours[$k] = ($absentHours[$k] ?? 0) + (float) $ar->tot;
+                }
+            }
+        }
+
+        // 2) Talaba -> o'quv reja (curricula) xaritasi
+        $stuCurricula = DB::table('students')
+            ->whereIn('students.hemis_id', $studentHemisIds)
+            ->leftJoin('groups', 'students.group_id', '=', 'groups.group_hemis_id')
+            ->select('students.hemis_id', 'groups.curriculum_hemis_id')
+            ->pluck('curriculum_hemis_id', 'students.hemis_id')
+            ->toArray();
+
+        // 3) Auditoriya soatlari: [curricula|subject|sem] va fallback [subject|sem]
+        $auditMap = [];
+        $auditAnyMap = [];
+        if (!empty($subjectIdsForAtt)) {
+            $csRows = \App\Models\CurriculumSubject::whereIn('semester_code', $currentSemesterCodes)
+                ->whereIn('subject_id', $subjectIdsForAtt)
+                ->orderByDesc('is_active')
+                ->get(['subject_id', 'semester_code', 'curricula_hemis_id', 'total_acload', 'subject_details']);
+            foreach ($csRows as $cs) {
+                $h = 0.0;
+                if (is_array($cs->subject_details)) {
+                    foreach ($cs->subject_details as $d) {
+                        $code = (string) (($d['trainingType'] ?? [])['code'] ?? '');
+                        if ($code !== '' && $code !== '17') {
+                            $h += (float) ($d['academic_load'] ?? 0);
+                        }
+                    }
+                }
+                if ($h <= 0) $h = (float) ($cs->total_acload ?? 0);
+                $kc = $cs->curricula_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code;
+                if (!isset($auditMap[$kc])) $auditMap[$kc] = $h;
+                $ka = $cs->subject_id . '|' . $cs->semester_code;
+                if (!isset($auditAnyMap[$ka])) $auditAnyMap[$ka] = $h;
+            }
+        }
+
         // Talaba+fan bo'yicha guruhlash
         $grouped = $grades->groupBy(fn($g) => $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code);
 
@@ -1243,32 +1316,20 @@ class TutorReportController extends Controller
                 }
             }
 
-            // 4. Sababsiz davomat >= 25%
-            $lessonRows = $rows->filter(fn($r) =>
-                !in_array((int)$r->training_type_code, [99, 100, 101, 102, 103])
-                && $r->lesson_date !== null
-            );
-            if ($lessonRows->isNotEmpty()) {
-                $total = $lessonRows->count();
-                $absentCount = 0;
-                foreach ($lessonRows as $r) {
-                    if ($r->reason === 'absent') {
-                        $lessonDate = substr((string) $r->lesson_date, 0, 10);
-                        $isExcused = false;
-                        foreach ($excuseRanges[$hemisId] ?? [] as $range) {
-                            if ($range['start'] <= $lessonDate && $range['end'] >= $lessonDate) {
-                                $isExcused = true;
-                                break;
-                            }
-                        }
-                        if (!$isExcused) {
-                            $absentCount++;
-                        }
-                    }
+            // 4. Sababsiz davomat >= 25% (jurnal mantig'i: qoldirilgan soat / auditoriya soati)
+            $absH = $absentHours[$hemisId . '|' . $subjectId . '|' . $semCode] ?? 0;
+            if ($absH > 0) {
+                $cur = $stuCurricula[$hemisId] ?? null;
+                $audH = ($cur !== null) ? ($auditMap[$cur . '|' . $subjectId . '|' . $semCode] ?? 0) : 0;
+                if ($audH <= 0) {
+                    $audH = $auditAnyMap[$subjectId . '|' . $semCode] ?? 0;
                 }
-                if ($total > 0 && ($absentCount / $total) >= 0.25) {
-                    $pct = round($absentCount / $total * 100);
-                    $reasons[] = "Davomat≥25% ({$pct}%)";
+                if ($audH > 0) {
+                    $pct = round(($absH / $audH) * 100, 2);
+                    if ($pct >= 25) {
+                        $pctLabel = rtrim(rtrim(number_format($pct, 2, '.', ''), '0'), '.');
+                        $reasons[] = "Davomat≥25% ({$pctLabel}%)";
+                    }
                 }
             }
 

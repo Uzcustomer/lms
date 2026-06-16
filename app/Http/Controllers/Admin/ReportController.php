@@ -5408,7 +5408,7 @@ class ReportController extends Controller
             $arRecords = DB::table('academic_records')
                 ->where('student_id', $studentId)
                 ->where('semester_id', $semesterCode)
-                ->select('subject_id', 'subject_name', 'credit', 'total_acload', 'total_point', 'grade')
+                ->select('subject_id', 'subject_name', 'credit', 'total_acload', 'total_point', 'grade', 'retraining_status')
                 ->get()
                 ->keyBy('subject_id');
 
@@ -5440,7 +5440,7 @@ class ReportController extends Controller
                     'total_acload' => $sub->total_acload,
                     'total_point'  => $ar->total_point ?? null,
                     'grade'        => $ar->grade ?? null,
-                    'is_debt'      => !$ar, // academic_records da yo'q = qarzdor
+                    'is_debt'      => $this->isAcademicRecordDebt($ar),
                     'is_orphan'    => false,
                 ];
             }
@@ -5466,7 +5466,7 @@ class ReportController extends Controller
                     'total_acload' => $ar->total_acload,
                     'total_point'  => $ar->total_point ?? null,
                     'grade'        => $ar->grade ?? null,
-                    'is_debt'      => false,
+                    'is_debt'      => $this->isAcademicRecordDebt($ar),
                     'is_orphan'    => true,    // sariq fond bilan ko'rsatiladi
                 ];
             }
@@ -5480,6 +5480,29 @@ class ReportController extends Controller
         } catch (\Exception $e) {
             return response()->json(['error' => $e->getMessage(), 'grades' => []], 500);
         }
+    }
+
+    private function isAcademicRecordDebt($record): bool
+    {
+        if (!$record) {
+            return true;
+        }
+
+        if ($record->grade === null || $record->grade === '') {
+            return true;
+        }
+
+        if ((bool) ($record->retraining_status ?? false)) {
+            return true;
+        }
+
+        if (!is_numeric($record->grade)) {
+            return false;
+        }
+
+        $numericGrade = round((float) $record->grade, 2);
+
+        return $numericGrade === 0.0 || $numericGrade === 2.0;
     }
 
     /**

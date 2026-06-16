@@ -47,11 +47,7 @@ class RetakeDebtService
         $subjects = $this->plannedSubjects($student)
             ->concat(
                 $academicRecords
-                    ->filter(function ($record) {
-                        return $record->grade === null
-                            || in_array((string) $record->grade, ['2', '0'], true)
-                            || (bool) $record->retraining_status;
-                    })
+                    ->filter(fn ($record) => $this->isDebtRecord($record))
                     ->map(function ($record) {
                         return (object) [
                             'subject_id' => trim((string) ($record->subject_id ?? '')),
@@ -118,7 +114,8 @@ class RetakeDebtService
             ->filter(function ($row) {
                 return !$row->ar_id
                     || $row->grade === null
-                    || in_array((string) $row->grade, ['2', '0'], true)
+                    || $row->grade === ''
+                    || $this->isFailingAcademicGrade($row->grade)
                     || (bool) $row->retraining_status;
             })
             ->sortBy([
@@ -130,9 +127,9 @@ class RetakeDebtService
         return $rows->map(function ($row) {
             if (!$row->ar_id) {
                 $row->debt_reason = 'no_record';
-            } elseif ($row->grade === null) {
+            } elseif ($row->grade === null || $row->grade === '') {
                 $row->debt_reason = 'no_grade';
-            } elseif (in_array((string) $row->grade, ['2', '0'], true)) {
+            } elseif ($this->isFailingAcademicGrade($row->grade)) {
                 $row->debt_reason = 'low_grade';
             } elseif ((bool) $row->retraining_status) {
                 $row->debt_reason = 'retraining';
@@ -158,9 +155,7 @@ class RetakeDebtService
             ->first(['grade', 'retraining_status']);
 
         if ($record) {
-            return $record->grade === null
-                || in_array((string) $record->grade, ['2', '0'], true)
-                || (bool) $record->retraining_status;
+            return $this->isDebtRecord($record);
         }
 
         $inStudentSubjects = DB::table('student_subjects')
@@ -191,6 +186,25 @@ class RetakeDebtService
             ->get();
 
         return $this->filterSubjectsByGroupSuffix($curriculumRows, (string) ($student->group_name ?? ''))->isNotEmpty();
+    }
+
+    private function isDebtRecord(object $record): bool
+    {
+        return $record->grade === null
+            || $record->grade === ''
+            || $this->isFailingAcademicGrade($record->grade)
+            || (bool) ($record->retraining_status ?? false);
+    }
+
+    private function isFailingAcademicGrade($grade): bool
+    {
+        if ($grade === null || $grade === '' || !is_numeric($grade)) {
+            return false;
+        }
+
+        $numericGrade = round((float) $grade, 2);
+
+        return $numericGrade === 0.0 || $numericGrade === 2.0;
     }
 
     private function plannedSubjects(Student $student): Collection

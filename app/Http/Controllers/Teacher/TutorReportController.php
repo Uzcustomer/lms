@@ -1107,6 +1107,27 @@ class TutorReportController extends Controller
 
         if ($grades->isEmpty()) return [];
 
+        // Biriktirilganlik (enrollment) — student_subjects bo'yicha.
+        // Tiklangan/akademik mobillik talabalar joriy semestrning faqat
+        // ba'zi fanlariga biriktirilgan bo'lishi mumkin. student_subjects da
+        // shu talaba+semestr uchun yozuv bo'lsa — faqat o'sha fanlar xavfi
+        // hisoblanadi. Yozuv umuman bo'lmasa — eski mantiq (hammasi).
+        $ssMap = [];     // [hemis_id|semester_code][subject_id] = true
+        $ssHasSem = [];  // [hemis_id|semester_code] = true
+        foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+            $ssRows = DB::table('student_subjects')
+                ->whereIn('student_hemis_id', $chunk)
+                ->whereIn('semester_id', $currentSemesterCodes)
+                ->whereNotNull('subject_id')
+                ->select('student_hemis_id', 'semester_id', 'subject_id')
+                ->get();
+            foreach ($ssRows as $sr) {
+                $k = $sr->student_hemis_id . '|' . (string) $sr->semester_id;
+                $ssMap[$k][$sr->subject_id] = true;
+                $ssHasSem[$k] = true;
+            }
+        }
+
         // Sababli absent oralilqlari (AbsenceExcuse — sana oralig'i bo'yicha, fan emas)
         $hasExcuseTable = \Illuminate\Support\Facades\Schema::hasTable('absence_excuses');
         $excuseRanges = [];
@@ -1131,6 +1152,15 @@ class TutorReportController extends Controller
 
         foreach ($grouped as $key => $rows) {
             [$hemisId, $subjectId, $semCode] = explode('|', $key, 3);
+
+            // Biriktirilganlik tekshiruvi: student_subjects da shu talaba+semestr
+            // uchun yozuv bo'lsa-yu, lekin bu fan ro'yxatda bo'lmasa —
+            // talaba bu fanga biriktirilmagan (tiklangan), xavf hisoblanmaydi.
+            $ssKey = $hemisId . '|' . $semCode;
+            if (($ssHasSem[$ssKey] ?? false) && !isset($ssMap[$ssKey][$subjectId])) {
+                continue;
+            }
+
             $subjectName = $rows->first()->subject_name ?? 'Fan';
             $reasons = [];
 

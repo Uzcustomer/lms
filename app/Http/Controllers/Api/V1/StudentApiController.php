@@ -716,6 +716,7 @@ class StudentApiController extends Controller
                 'subject_name' => $cs->subject_name,
                 'credit' => $cs->credit,
                 'subject_id' => $subjectId,
+                'closing_form' => $cs->closing_form,
                 'employee_name' => null,
                 'grades' => [
                     'jn' => $jnAverage > 0 ? $jnAverage : null,

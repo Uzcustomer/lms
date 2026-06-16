@@ -1359,6 +1359,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::get('/reports/absence-74', [TutorReportController::class, 'absenceReport74'])->name('reports.absence-74');
         Route::get('/reports/absence-25', [TutorReportController::class, 'absenceReport25'])->name('reports.absence-25');
         Route::get('/reports/debtors', [TutorReportController::class, 'debtorsReport'])->name('reports.debtors');
+        Route::get('/reports/debtors/data', [TutorReportController::class, 'debtorsReportData'])->name('reports.debtors.data');
         Route::get('/reports/top-students', [TutorReportController::class, 'topStudentsReport'])->name('reports.top-students');
         Route::get('/reports/unrated', [TutorReportController::class, 'unratedReport'])->name('reports.unrated');
         Route::get('/reports/contracts', [TutorReportController::class, 'contractsReport'])->name('reports.contracts');

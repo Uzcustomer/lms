@@ -984,8 +984,14 @@ class TutorReportController extends Controller
             ->filter()
             ->toArray();
 
-        // Joriy semestr xavflari (jurnaldan)
-        $currentRisksMap = $this->getCurrentSemesterRisks($studentHemisIds, $studentSemCodeMap);
+        // Joriy semestr xavflari (jurnaldan) — qo'shimcha ma'lumot. Bu hisob-kitob
+        // muvaffaqiyatsiz bo'lsa ham asosiy qarzdorlik ro'yxati ko'rsatilishi kerak.
+        try {
+            $currentRisksMap = $this->getCurrentSemesterRisks($studentHemisIds, $studentSemCodeMap);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Tyutor joriy semestr xavflarini hisoblashda xatolik: ' . $e->getMessage());
+            $currentRisksMap = [];
+        }
 
         // O'tgan semestr qarzlari — admin hisoboti bilan aynan bir xil mantiq
         // (ComputesStudentDebts trait). Barchasi: kamida 1 ta qarz YOKI joriy
@@ -1104,7 +1110,11 @@ class TutorReportController extends Controller
         // turlari va tasdiqlangan sababli ariza sanalari chiqarib tashlanadi.
         $subjectIdsForAtt = $grades->pluck('subject_id')->filter()->unique()->values()->all();
 
-        // 1) Har talaba+fan+semestr uchun sababsiz qoldirilgan soat
+        // 1) Har talaba+fan+semestr uchun sababsiz qoldirilgan soat.
+        //    Tasdiqlangan sababli ariza sanalari SQL korrelyatsiyalangan subso'rov
+        //    o'rniga PHP tomonda ($excuseRanges) filtrlanadi — DATE() funksiyasi bilan
+        //    indekssiz korrelyatsiyali subso'rov katta talaba to'plamida sahifani
+        //    juda sekinlashtirib (timeout) yuboradi.
         $absentHours = [];
         if (!empty($subjectIdsForAtt)) {
             foreach (array_chunk($studentHemisIds, 500) as $chunk) {
@@ -1113,26 +1123,20 @@ class TutorReportController extends Controller
                     ->whereIn('semester_code', $currentSemesterCodes)
                     ->whereIn('subject_id', $subjectIdsForAtt)
                     ->whereNotIn('training_type_code', [99, 100, 101, 102])
-                    ->when($hasExcuseTable, function ($q) {
-                        $q->whereNotExists(function ($sub) {
-                            $sub->select(DB::raw(1))
-                                ->from('absence_excuses')
-                                ->whereColumn('absence_excuses.student_hemis_id', 'attendances.student_hemis_id')
-                                ->where('absence_excuses.status', 'approved')
-                                ->whereRaw('absence_excuses.start_date <= DATE(attendances.lesson_date)')
-                                ->whereRaw('absence_excuses.end_date >= DATE(attendances.lesson_date)');
-                        });
-                    })
-                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'education_year_code', DB::raw('SUM(absent_off) as tot'))
-                    ->groupBy('student_hemis_id', 'subject_id', 'semester_code', 'education_year_code')
+                    ->where('absent_off', '>', 0)
+                    ->select('student_hemis_id', 'subject_id', 'semester_code', 'education_year_code', 'lesson_date', 'absent_off')
                     ->get();
                 foreach ($attRows as $ar) {
                     // Joriy o'quv yili filtri (tiklangan talaba uchun eski yil qoldirishlarini chiqarib tashlash)
                     $cy = $curYear[$ar->student_hemis_id] ?? null;
                     $ey = (string) ($ar->education_year_code ?? '');
                     if ($cy !== null && $ey !== '' && $ey !== $cy) continue;
+                    // Tasdiqlangan sababli ariza oralig'iga tushsa — sababli, hisobga olinmaydi
+                    if ($hasExcuseTable && $this->isDateExcused($ar->student_hemis_id, $ar->lesson_date, $excuseRanges)) {
+                        continue;
+                    }
                     $k = $ar->student_hemis_id . '|' . $ar->subject_id . '|' . $ar->semester_code;
-                    $absentHours[$k] = ($absentHours[$k] ?? 0) + (float) $ar->tot;
+                    $absentHours[$k] = ($absentHours[$k] ?? 0) + (float) $ar->absent_off;
                 }
             }
         }
@@ -1281,6 +1285,31 @@ class TutorReportController extends Controller
         }
 
         return $risks;
+    }
+
+    /**
+     * Berilgan sana talaba uchun tasdiqlangan sababli ariza oralig'iga tushadimi?
+     *
+     * @param  mixed  $hemisId      Talaba hemis_id.
+     * @param  mixed  $lessonDate   Dars sanasi (Y-m-d yoki datetime).
+     * @param  array  $excuseRanges [hemis_id => [['start'=>Y-m-d, 'end'=>Y-m-d], ...]].
+     */
+    private function isDateExcused($hemisId, $lessonDate, array $excuseRanges): bool
+    {
+        $ranges = $excuseRanges[$hemisId] ?? null;
+        if (empty($ranges) || $lessonDate === null) {
+            return false;
+        }
+        $d = substr((string) $lessonDate, 0, 10);
+        if ($d === '') {
+            return false;
+        }
+        foreach ($ranges as $range) {
+            if ($d >= $range['start'] && $d <= $range['end']) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**

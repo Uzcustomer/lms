@@ -13,6 +13,7 @@ import '../../widgets/scale_tap.dart';
 import '../../widgets/settings_sheet.dart';
 import '../../widgets/notification_bell.dart';
 import '../../widgets/clinic_header.dart';
+import '../../utils/yn_grade_calculator.dart';
 import 'student_home_screen.dart';
 
 class StudentGradesScreen extends StatefulWidget {
@@ -164,28 +165,16 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return grades['oski'] != null || grades['test'] != null;
   }
 
-  /// Total grade for averaging purposes — reads only what the LMS API
-  /// supplies, never computes locally. Returns 0 when no YN is set yet.
+  /// Total grade for averaging purposes. Returns 0 while YN is still blank.
   double _getSubjectTotal(Map<String, dynamic> subject) {
     final v = _getYn(subject);
-    return v ?? 0;
+    return (v ?? 0).toDouble();
   }
 
-  /// Final (YN) grade for a subject — comes from the LMS journal via the
-  /// API. The app never computes YN locally; until the journal sets a YN
-  /// for the subject, this returns null and the UI shows an empty cell.
-  double? _getYn(Map<String, dynamic> subject) {
-    final grades = subject['grades'] as Map<String, dynamic>? ?? {};
-    final raw = grades['yn'];
-    if (raw is num) {
-      final d = raw.toDouble();
-      return d > 0 ? d : null;
-    }
-    if (raw is String) {
-      final parsed = double.tryParse(raw);
-      if (parsed != null && parsed > 0) return parsed;
-    }
-    return null;
+  /// Final (YN) grade for a subject. Mirrors the LMS-side weighted formula
+  /// and sentinel values such as blank, -1 and -3.
+  int? _getYn(Map<String, dynamic> subject) {
+    return YnGradeCalculator.computeFromSubject(subject);
   }
 
   double _calculateSemesterAvg(List subjects) {
@@ -208,7 +197,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
 
   Map<String, dynamic>? _getBestSubject(List subjects) {
     Map<String, dynamic>? best;
-    double bestGrade = 0;
+    int bestGrade = 0;
     for (final s in subjects) {
       if (s is! Map<String, dynamic>) continue;
       final yn = _getYn(s);
@@ -564,7 +553,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   // ── Best subject ─────────────────────────────────────
   Widget _buildBestSubjectCard(Map<String, dynamic> subject) {
     final name = subject['subject_name']?.toString() ?? '';
-    final grade = _getYn(subject)?.round() ?? 0;
+    final grade = _getYn(subject) ?? 0;
     const gold = Color(0xFFD97706);
     return _calmCard(
       child: Row(
@@ -681,7 +670,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
     final name = subject['subject_name']?.toString() ?? '';
     final computedYn = _getYn(subject);
-    final total = computedYn?.round() ?? 0;
+    final total = computedYn;
     final isCompleted = _isSubjectCompleted(subject);
     final attendance = _getAttendancePercent(subject);
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -689,11 +678,15 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     final gradeKeys = ['jn', 'mt', 'on', 'oski', 'test', 'total'];
     final gradeLabels = ['JN', 'MT', 'ON', 'OSKI', 'TEST', 'YN'];
 
-    final totalColor = total >= 71
-        ? _calmBlue
-        : total > 0
-            ? const Color(0xFFB45309)
-            : _calmFaint;
+    final totalColor = total == null
+        ? _calmFaint
+        : total >= 71
+            ? _calmBlue
+            : total >= 60
+                ? const Color(0xFFB45309)
+                : total == -1
+                    ? const Color(0xFFB45309)
+                    : AppTheme.errorColor;
 
     return _calmCard(
       child: Column(
@@ -716,7 +709,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
                   Text(
-                    total > 0 ? '$total' : '—',
+                    total != null ? '$total' : '—',
                     style: TextStyle(
                         fontSize: 22, fontWeight: FontWeight.w900, color: totalColor, height: 1),
                   ),
@@ -774,7 +767,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
           Row(
             children: List.generate(6, (i) {
               final key = gradeKeys[i];
-              final value = key == 'total' ? computedYn?.round() : grades[key];
+              final value = key == 'total' ? computedYn : grades[key];
               final hasValue = value != null;
               final color = _gradeColors[i];
               return Expanded(

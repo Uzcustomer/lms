@@ -4905,6 +4905,11 @@ class ReportController extends Controller
             // 6-QADAM: Har bir talaba uchun qarzdorlikni hisoblash
             $finalResults = [];
 
+            // Joriy semestr journal-based xavflarini OLDINDAN hisoblaymiz —
+            // shunda o'tgan semestrda qarzi bo'lmasa ham, joriy semestrda
+            // xavf ostidagi talaba (masalan davomat>=25%) ro'yxatga tushadi.
+            $currentRisksMap = $this->getCurrentSemesterRisksForReport($studentHemisIds);
+
             foreach ($students as $st) {
                 if (!$st->curriculum_id) continue;
 
@@ -4960,7 +4965,10 @@ class ReportController extends Controller
                 }
 
                 $debtCount = count($debts);
-                if ($debtCount < $minDebtCount) continue;
+                $currentRisks = $currentRisksMap[$st->hemis_id] ?? [];
+                // O'tgan semestr qarzi yetarli BO'LMASA ham, joriy semestrda
+                // xavf bo'lsa talabani ko'rsatamiz.
+                if ($debtCount < $minDebtCount && empty($currentRisks)) continue;
 
                 // Semestr bo'yicha tartiblash
                 usort($debts, fn($a, $b) => $a['semester_code'] <=> $b['semester_code']);
@@ -4982,22 +4990,14 @@ class ReportController extends Controller
                     'debt_status'       => '',
                     'lesson_days'       => 0,
                     'debts'             => $debts,
+                    'current_risks'     => $currentRisks,
+                    'current_risk_count' => count($currentRisks),
                 ];
             }
 
             if (empty($finalResults)) {
                 return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
             }
-
-            // Joriy semestr journal-based xavflarini qo'shish
-            $finalHemisIds = array_column($finalResults, 'hemis_id');
-            $currentRisksMap = $this->getCurrentSemesterRisksForReport($finalHemisIds);
-            foreach ($finalResults as &$item) {
-                $risks = $currentRisksMap[$item['hemis_id']] ?? [];
-                $item['current_risks'] = $risks;
-                $item['current_risk_count'] = count($risks);
-            }
-            unset($item);
 
             // Saralash (default: qarzdorlik soni kamayib borish tartibida)
             $sortColumn = $request->get('sort', 'debt_count');

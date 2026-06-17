@@ -546,10 +546,9 @@
         function loadTartibgaSol() {
             var nameQ = ($('#search_student_name').val() || '').trim();
             var shaklQ = ($('#search_shakl').val() || '').trim();
-            var hasGlobalSearch = nameQ || shaklQ;
             var params = {
-                date_from: hasGlobalSearch ? '' : ($('#date_from').val() || ''),
-                date_to:   hasGlobalSearch ? '' : ($('#date_to').val()   || ''),
+                date_from: $('#date_from').val() || '',
+                date_to:   $('#date_to').val()   || '',
                 student_name: nameQ,
                 shakl_search: shaklQ,
             };

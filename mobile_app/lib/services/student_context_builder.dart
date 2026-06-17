@@ -64,7 +64,7 @@ class StudentContextBuilder {
     // daily grade breakdown pulled from a separate cache entry).
     if (subjects is List && subjects.isNotEmpty) {
       buf.writeln('## FANLAR VA BAHOLAR (${subjects.length} ta fan)');
-      buf.writeln('YN formula: round(JN×50% + MT×20% + ON×0%) + round(OSKI×15% + TEST×15%)');
+      buf.writeln('YN formula: JN×50% + MT×20% + ON×0%; OSKI+TEST fanlarda 15%+15%, faqat TEST fanlarda TEST×30%, Sinov fanlarda JN×80% + MT×20%');
       buf.writeln();
 
       for (final s in subjects) {

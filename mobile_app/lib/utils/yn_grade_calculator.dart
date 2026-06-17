@@ -4,10 +4,16 @@ class YnGradeCalculator {
     final grades = gradesRaw is Map
         ? Map<String, dynamic>.from(gradesRaw)
         : <String, dynamic>{};
+    final weights = _weightsForSubject(subject, grades);
 
     return computeFromGrades(
       grades,
       davPercent: _toDouble(subject['dav_percent']) ?? 0,
+      weightJn: weights.jn,
+      weightMt: weights.mt,
+      weightOn: weights.on,
+      weightOski: weights.oski,
+      weightTest: weights.test,
     );
   }
 
@@ -83,6 +89,45 @@ class YnGradeCalculator {
     return value * weight / 100;
   }
 
+  static _YnWeights _weightsForSubject(
+    Map<String, dynamic> subject,
+    Map<String, dynamic> grades,
+  ) {
+    final closingForm = _normalizeClosingForm(
+      subject['closing_form'] ??
+          subject['yopilish_shakli'] ??
+          subject['assessment_type'],
+    );
+
+    if (closingForm == 'test') {
+      return const _YnWeights(jn: 50, mt: 20, on: 0, oski: 0, test: 30);
+    }
+    if (closingForm == 'oski' || closingForm == 'oske') {
+      return const _YnWeights(jn: 50, mt: 20, on: 0, oski: 30, test: 0);
+    }
+    if (closingForm == 'oski_test' || closingForm == 'oske_test') {
+      return const _YnWeights(jn: 50, mt: 20, on: 0, oski: 15, test: 15);
+    }
+    if (closingForm == 'sinov') {
+      return const _YnWeights(jn: 80, mt: 20, on: 0, oski: 0, test: 0);
+    }
+
+    final hasOski = _toDouble(grades['oski']) != null;
+    final hasTest = _toDouble(grades['test']) != null;
+    if (hasTest && !hasOski) {
+      return const _YnWeights(jn: 50, mt: 20, on: 0, oski: 0, test: 30);
+    }
+    if (hasOski && !hasTest) {
+      return const _YnWeights(jn: 50, mt: 20, on: 0, oski: 30, test: 0);
+    }
+
+    return const _YnWeights(jn: 50, mt: 20, on: 0, oski: 15, test: 15);
+  }
+
+  static String _normalizeClosingForm(dynamic raw) {
+    return raw?.toString().trim().toLowerCase().replaceAll('-', '_') ?? '';
+  }
+
   static int? _toRoundedInt(dynamic raw) {
     final parsed = _toDouble(raw);
     return parsed?.round();
@@ -97,4 +142,20 @@ class YnGradeCalculator {
     }
     return null;
   }
+}
+
+class _YnWeights {
+  final int jn;
+  final int mt;
+  final int on;
+  final int oski;
+  final int test;
+
+  const _YnWeights({
+    required this.jn,
+    required this.mt,
+    required this.on,
+    required this.oski,
+    required this.test,
+  });
 }

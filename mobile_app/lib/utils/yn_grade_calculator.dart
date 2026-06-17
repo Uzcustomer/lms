@@ -108,6 +108,9 @@ class YnGradeCalculator {
     if (closingForm == 'oski_test' || closingForm == 'oske_test') {
       return const _YnWeights(jn: 50, mt: 20, on: 0, oski: 15, test: 15);
     }
+    if (closingForm == 'sinov') {
+      return const _YnWeights(jn: 80, mt: 20, on: 0, oski: 0, test: 0);
+    }
 
     final hasOski = _toDouble(grades['oski']) != null;
     final hasTest = _toDouble(grades['test']) != null;

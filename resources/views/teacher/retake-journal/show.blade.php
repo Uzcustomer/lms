@@ -132,15 +132,15 @@
                                             <td class="px-2 py-1.5 border-r border-gray-200">
                                                 <div class="flex items-center gap-1.5">
                                                     <span class="text-gray-900 font-medium truncate" style="max-width:170px;">{{ $student?->full_name ?? '—' }}</span>
+                                                    @if(!empty($student?->group_name))
+                                                        <span class="text-[10px] text-blue-600 whitespace-nowrap">{{ $student->group_name }}</span>
+                                                    @endif
                                                     @if($attempt === 1)
                                                         <span class="rj-badge rj-badge-1">1-URINISH ✓</span>
                                                     @else
                                                         <span class="rj-badge rj-badge-{{ min($attempt, 3) }}">{{ $attempt }}-URINISH</span>
                                                     @endif
                                                 </div>
-                                                @if(!empty($student?->group_name))
-                                                    <span class="block text-[10px] text-blue-600">{{ $student->group_name }}</span>
-                                                @endif
                                                 <span class="block text-[10px] text-gray-500">{{ $app->student_hemis_id }}</span>
                                             </td>
                                             <td class="px-2 py-1 text-center bg-blue-50">

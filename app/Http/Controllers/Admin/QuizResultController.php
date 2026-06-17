@@ -783,9 +783,6 @@ class QuizResultController extends Controller
                 if ($dateTo)   $sub->whereDate('h2.date_finish', '<=', $dateTo);
             });
 
-            // Ism bo'yicha qidiruv: tanlangan sana oralig'i e'tiborga olinmaydi,
-            // lekin faqat joriy yil natijalari chiqadi (eski yillar aralashmasin).
-            // Shakl qidiruvi esa barcha sanalarda qidiradi.
             $hasNameSearch = $request->filled('student_name');
             $hasShaklSearch = $request->filled('shakl_search');
             if ($hasNameSearch) {
@@ -796,18 +793,15 @@ class QuizResultController extends Controller
                         $q->orWhereIn('student_id', $nameIds);
                     }
                 });
-                $query->whereYear('date_finish', now('Asia/Tashkent')->year);
             }
             if ($hasShaklSearch) {
                 $query->where('shakl', 'LIKE', '%' . $request->shakl_search . '%');
             }
-            if (!$hasNameSearch && !$hasShaklSearch) {
-                if ($request->filled('date_from')) {
-                    $query->whereDate('date_finish', '>=', $request->date_from);
-                }
-                if ($request->filled('date_to')) {
-                    $query->whereDate('date_finish', '<=', $request->date_to);
-                }
+            if ($request->filled('date_from')) {
+                $query->whereDate('date_finish', '>=', $request->date_from);
+            }
+            if ($request->filled('date_to')) {
+                $query->whereDate('date_finish', '<=', $request->date_to);
             }
 
             $results = $query->orderBy('student_id')->orderBy('fan_id')->orderBy('date_finish')->get();

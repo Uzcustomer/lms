@@ -138,6 +138,9 @@
                                                         <span class="rj-badge rj-badge-{{ min($attempt, 3) }}">{{ $attempt }}-URINISH</span>
                                                     @endif
                                                 </div>
+                                                @if(!empty($student?->group_name))
+                                                    <span class="block text-[10px] text-blue-600">{{ $student->group_name }}</span>
+                                                @endif
                                                 <span class="block text-[10px] text-gray-500">{{ $app->student_hemis_id }}</span>
                                             </td>
                                             <td class="px-2 py-1 text-center bg-blue-50">

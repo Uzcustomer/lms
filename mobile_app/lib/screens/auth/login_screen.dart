@@ -38,8 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final auth = context.read<AuthProvider>();
-      _checkBiometric(autoPrompt: !auth.loggedOut);
+      _checkBiometric();
     });
   }
 

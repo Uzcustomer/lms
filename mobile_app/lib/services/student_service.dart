@@ -159,6 +159,10 @@ class StudentService {
     return await _api.get(ApiConfig.studentRetake);
   }
 
+  Future<Map<String, dynamic>> getRetakeJournal() async {
+    return await _api.get(ApiConfig.studentRetakeJournal);
+  }
+
   Future<Map<String, dynamic>> submitRetakeApplication({
     required List<Map<String, dynamic>> subjects,
     required Uint8List receiptBytes,
@@ -196,6 +200,23 @@ class StudentService {
       fileBytes: paymentBytes,
       fileName: paymentFileName,
       fileField: 'payment',
+    );
+  }
+
+  Future<Map<String, dynamic>> uploadRetakeMustaqil({
+    required int applicationId,
+    required Uint8List fileBytes,
+    required String fileName,
+    String? comment,
+  }) async {
+    return await _api.multipartPost(
+      '${ApiConfig.studentRetakeJournal}/$applicationId/mustaqil',
+      {
+        if (comment != null && comment.trim().isNotEmpty)
+          'comment': comment.trim(),
+      },
+      fileBytes: fileBytes,
+      fileName: fileName,
     );
   }
 

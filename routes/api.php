@@ -155,6 +155,8 @@ Route::prefix('v1')->group(function () {
             // Retake applications
             Route::get('/retake', [RetakeApplicationApiController::class, 'index']);
             Route::post('/retake', [RetakeApplicationApiController::class, 'store']);
+            Route::get('/retake/journal', [RetakeApplicationApiController::class, 'journal']);
+            Route::post('/retake/journal/{applicationId}/mustaqil', [RetakeApplicationApiController::class, 'uploadMustaqil']);
             Route::post('/retake/groups/{groupId}/payment', [RetakeApplicationApiController::class, 'uploadPayment']);
 
             // Clubs

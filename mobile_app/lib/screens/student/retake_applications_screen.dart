@@ -28,6 +28,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
   bool _loading = true;
   bool _submitting = false;
   int? _uploadingPaymentGroupId;
+  int? _uploadingMustaqilApplicationId;
   String? _error;
 
   @override
@@ -44,6 +45,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
 
   List<Map<String, dynamic>> get _debts => _listOfMaps(_data?['debts']);
   List<Map<String, dynamic>> get _history => _listOfMaps(_data?['history']);
+  List<Map<String, dynamic>> get _journal => _listOfMaps(_data?['journal']);
   List<Map<String, dynamic>> get _awaitingPayment =>
       _listOfMaps(_data?['groups_awaiting_payment']);
   List<Map<String, dynamic>> get _paymentVerifying =>
@@ -206,6 +208,36 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
     }
   }
 
+  Future<void> _pickAndUploadMustaqil(Map<String, dynamic> journal) async {
+    final applicationId = (journal['id'] as num?)?.toInt();
+    if (applicationId == null) return;
+
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png', 'zip', 'rar'],
+      withData: true,
+    );
+    if (result?.files.single.bytes == null) return;
+
+    setState(() => _uploadingMustaqilApplicationId = applicationId);
+    try {
+      await _service.uploadRetakeMustaqil(
+        applicationId: applicationId,
+        fileBytes: result!.files.single.bytes!,
+        fileName: result.files.single.name,
+      );
+      if (!mounted) return;
+      _showSnack('Mustaqil ta\'lim fayli yuklandi');
+      await _load();
+    } on ApiException catch (e) {
+      if (mounted) _showSnack(e.message, error: true);
+    } catch (_) {
+      if (mounted) _showSnack('Mustaqil faylni yuklashda xatolik', error: true);
+    } finally {
+      if (mounted) setState(() => _uploadingMustaqilApplicationId = null);
+    }
+  }
+
   Future<void> _openUrl(String? url) async {
     if (url == null || url.isEmpty) return;
     final uri = Uri.parse(url);
@@ -251,12 +283,16 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                           children: [
                             _buildHero(),
                             const SizedBox(height: 12),
-                            _buildWindowCard(),
-                            const SizedBox(height: 12),
-                            _buildPaymentAlerts(),
-                            _buildDebtList(),
-                            const SizedBox(height: 14),
-                            _buildHistory(),
+                             _buildWindowCard(),
+                             const SizedBox(height: 12),
+                             _buildPaymentAlerts(),
+                             if (_journal.isNotEmpty) ...[
+                               _buildJournal(),
+                               const SizedBox(height: 14),
+                             ],
+                             _buildDebtList(),
+                             const SizedBox(height: 14),
+                             _buildHistory(),
                           ],
                         ),
                       ),
@@ -370,6 +406,26 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
     }
 
     return Column(children: cards);
+  }
+
+  Widget _buildJournal() {
+    final journal = _journal;
+    return _SectionCard(
+      title: 'Qayta o\'qish jurnali',
+      subtitle: '${journal.length} ta fan',
+      child: Column(
+        children: journal
+            .map(
+              (item) => _RetakeJournalCard(
+                item: item,
+                uploading: _uploadingMustaqilApplicationId == item['id'],
+                onOpen: _openUrl,
+                onUpload: () => _pickAndUploadMustaqil(item),
+              ),
+            )
+            .toList(),
+      ),
+    );
   }
 
   Widget _buildDebtList() {
@@ -711,6 +767,426 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
           },
         );
       },
+    );
+  }
+}
+
+class _RetakeJournalCard extends StatelessWidget {
+  final Map<String, dynamic> item;
+  final bool uploading;
+  final Future<void> Function(String? url) onOpen;
+  final VoidCallback onUpload;
+
+  const _RetakeJournalCard({
+    required this.item,
+    required this.uploading,
+    required this.onOpen,
+    required this.onUpload,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final group = item['retake_group'] is Map
+        ? Map<String, dynamic>.from(item['retake_group'] as Map)
+        : <String, dynamic>{};
+    final mustaqil = item['mustaqil'] is Map
+        ? Map<String, dynamic>.from(item['mustaqil'] as Map)
+        : <String, dynamic>{};
+    final dailyGrades = (item['daily_grades'] as List? ?? const [])
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
+    final phones = (group['teacher_phones'] as List? ?? const [])
+        .map((e) => e.toString())
+        .where((e) => e.trim().isNotEmpty)
+        .toList();
+
+    final canUpload = mustaqil['can_upload'] == true;
+    final hasSubmission = mustaqil['exists'] == true;
+    final fileUrl = mustaqil['file_url']?.toString();
+    final assessment = item['assessment_type_label']?.toString() ?? '-';
+    final showOske = assessment.contains('OSKE') || item['oske_score'] != null;
+    final showTest = assessment.contains('TEST') || item['test_score'] != null;
+    final red = const Color(0xFFDC2626);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: ClinicTheme.surfaceOf(context),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: red.withAlpha(38)),
+        boxShadow: [
+          BoxShadow(
+            color: red.withAlpha(10),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(14),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+                colors: [Color(0xFFDC2626), Color(0xFF991B1B)],
+              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Text(
+                        item['subject_name']?.toString() ?? 'Fan',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    _StatusPill(
+                      text: item['is_editable'] == true
+                          ? 'Davom etmoqda'
+                          : (group['status_label']?.toString() ?? 'Jurnal'),
+                      color: Colors.white,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 6,
+                  runSpacing: 6,
+                  children: [
+                    _LightPill(text: item['semester_name']?.toString() ?? '-'),
+                    _LightPill(text: group['name']?.toString() ?? 'Guruh'),
+                    _LightPill(text: assessment),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _JournalInfoLine(
+                  icon: Icons.person_outline_rounded,
+                  text: group['teacher_name']?.toString() ?? 'O\'qituvchi biriktirilmagan',
+                ),
+                const SizedBox(height: 5),
+                _JournalInfoLine(
+                  icon: Icons.event_note_outlined,
+                  text:
+                      '${_dateText(group['start_date'])} -> ${_dateText(group['end_date'])}',
+                ),
+                if (phones.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: phones
+                        .map(
+                          (phone) => _LinkChip(
+                            text: phone,
+                            onTap: () => onOpen('tel:${_cleanPhone(phone)}'),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    _ScoreTile(label: 'JN', value: _gradeText(item['joriy_score'])),
+                    _ScoreTile(label: 'MT', value: _gradeText(mustaqil['grade'])),
+                    if (showOske)
+                      _ScoreTile(label: 'OSKE', value: _gradeText(item['oske_score'])),
+                    if (showTest)
+                      _ScoreTile(label: 'TEST', value: _gradeText(item['test_score'])),
+                    _ScoreTile(
+                      label: 'Yakuniy',
+                      value: _gradeText(item['final_grade_value']),
+                      accent: ClinicTheme.blue,
+                    ),
+                  ],
+                ),
+                if (dailyGrades.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Kunlik baholar',
+                    style: TextStyle(
+                      color: ClinicTheme.inkOf(context),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 7),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: dailyGrades
+                        .map(
+                          (grade) => _MiniPill(
+                            text:
+                                '${_dateText(grade['date'])}: ${_gradeText(grade['grade'])}',
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.all(11),
+                  decoration: BoxDecoration(
+                    color: ClinicTheme.dividerOf(context).withAlpha(28),
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.cloud_done_outlined, color: ClinicTheme.teal, size: 18),
+                          const SizedBox(width: 7),
+                          Expanded(
+                            child: Text(
+                              'Mustaqil ta\'lim',
+                              style: TextStyle(
+                                color: ClinicTheme.inkOf(context),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ),
+                          _StatusPill(
+                            text: _mustaqilStatus(mustaqil),
+                            color: _mustaqilColor(mustaqil),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        hasSubmission
+                            ? '${mustaqil['file_name'] ?? 'Fayl'} · ${mustaqil['submitted_at'] ?? '-'}'
+                            : 'Hali fayl yuklanmagan',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: ClinicTheme.mutedOf(context),
+                          fontSize: 11,
+                          height: 1.3,
+                        ),
+                      ),
+                      if (mustaqil['teacher_comment'] != null) ...[
+                        const SizedBox(height: 5),
+                        Text(
+                          'Izoh: ${mustaqil['teacher_comment']}',
+                          style: TextStyle(
+                            color: ClinicTheme.mutedOf(context),
+                            fontSize: 11,
+                            height: 1.3,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 9),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          if (fileUrl != null)
+                            _LinkChip(text: 'Faylni ochish', onTap: () => onOpen(fileUrl)),
+                          if (canUpload)
+                            ActionChip(
+                              onPressed: uploading ? null : onUpload,
+                              avatar: uploading
+                                  ? const SizedBox(
+                                      width: 14,
+                                      height: 14,
+                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                    )
+                                  : const Icon(Icons.upload_file_rounded, size: 15),
+                              label: Text(
+                                uploading
+                                    ? 'Yuklanmoqda...'
+                                    : hasSubmission
+                                        ? 'Qayta yuklash'
+                                        : 'Mustaqil yuklash',
+                              ),
+                              labelStyle: const TextStyle(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w800,
+                              ),
+                              backgroundColor: ClinicTheme.teal.withAlpha(18),
+                              side: BorderSide(color: ClinicTheme.teal.withAlpha(45)),
+                            ),
+                        ],
+                      ),
+                      if (canUpload) ...[
+                        const SizedBox(height: 7),
+                        Text(
+                          'Urinish: ${mustaqil['attempt_count'] ?? 0}/${mustaqil['max_attempts'] ?? 3}. '
+                          '60+ baho olinsa qayta yuklash yopiladi.',
+                          style: const TextStyle(
+                            color: Color(0xFFB45309),
+                            fontSize: 10.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _gradeText(dynamic value) {
+    if (value == null) return '-';
+    final n = value is num ? value.toDouble() : double.tryParse(value.toString());
+    if (n == null) return value.toString();
+    if (n == n.roundToDouble()) return n.round().toString();
+    return n.toStringAsFixed(1);
+  }
+
+  String _dateText(dynamic value) {
+    final raw = value?.toString();
+    if (raw == null || raw.isEmpty) return '-';
+    try {
+      return DateFormat('dd.MM.yyyy').format(DateTime.parse(raw));
+    } catch (_) {
+      return raw;
+    }
+  }
+
+  String _cleanPhone(String phone) => phone.replaceAll(RegExp(r'[^+\d]'), '');
+
+  String _mustaqilStatus(Map<String, dynamic> mustaqil) {
+    if (mustaqil['is_passed'] == true) return 'O\'tdi';
+    if (mustaqil['is_exhausted'] == true) return 'Urinish tugadi';
+    if (mustaqil['grade'] != null) return 'Baholangan';
+    if (mustaqil['exists'] == true) return 'Tekshirilmoqda';
+    return 'Yuklanmagan';
+  }
+
+  Color _mustaqilColor(Map<String, dynamic> mustaqil) {
+    if (mustaqil['is_passed'] == true) return ClinicTheme.green;
+    if (mustaqil['is_exhausted'] == true) return const Color(0xFFBE123C);
+    if (mustaqil['grade'] != null) return const Color(0xFFB45309);
+    if (mustaqil['exists'] == true) return ClinicTheme.blue;
+    return ClinicTheme.muted;
+  }
+}
+
+class _LightPill extends StatelessWidget {
+  final String text;
+
+  const _LightPill({required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: Colors.white.withAlpha(38),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+        ),
+      ),
+    );
+  }
+}
+
+class _JournalInfoLine extends StatelessWidget {
+  final IconData icon;
+  final String text;
+
+  const _JournalInfoLine({required this.icon, required this.text});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Icon(icon, color: ClinicTheme.mutedOf(context), size: 16),
+        const SizedBox(width: 7),
+        Expanded(
+          child: Text(
+            text,
+            style: TextStyle(
+              color: ClinicTheme.mutedOf(context),
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ScoreTile extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color accent;
+
+  const _ScoreTile({
+    required this.label,
+    required this.value,
+    this.accent = ClinicTheme.teal,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 72,
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 9),
+      decoration: BoxDecoration(
+        color: accent.withAlpha(16),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: accent.withAlpha(45)),
+      ),
+      child: Column(
+        children: [
+          Text(
+            value,
+            style: TextStyle(
+              color: value == '-' ? ClinicTheme.mutedOf(context) : accent,
+              fontSize: 17,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            label,
+            style: TextStyle(
+              color: ClinicTheme.mutedOf(context),
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

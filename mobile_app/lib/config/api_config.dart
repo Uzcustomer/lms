@@ -42,6 +42,7 @@ class ApiConfig {
 
   // Retake application endpoints
   static const String studentRetake = '/student/retake';
+  static const String studentRetakeJournal = '/student/retake/journal';
 
   // Club endpoints
   static const String studentClubs = '/student/clubs';

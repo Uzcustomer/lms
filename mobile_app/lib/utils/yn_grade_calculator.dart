@@ -1,5 +1,9 @@
 class YnGradeCalculator {
   static int? computeFromSubject(Map<String, dynamic> subject) {
+    if (_isExplicitFalse(subject['yn_can_calculate'])) {
+      return null;
+    }
+
     final gradesRaw = subject['grades'];
     final grades = gradesRaw is Map
         ? Map<String, dynamic>.from(gradesRaw)
@@ -126,6 +130,16 @@ class YnGradeCalculator {
 
   static String _normalizeClosingForm(dynamic raw) {
     return raw?.toString().trim().toLowerCase().replaceAll('-', '_') ?? '';
+  }
+
+  static bool _isExplicitFalse(dynamic raw) {
+    if (raw is bool) return !raw;
+    if (raw is num) return raw == 0;
+    if (raw is String) {
+      final normalized = raw.trim().toLowerCase();
+      return normalized == 'false' || normalized == '0' || normalized == 'no';
+    }
+    return false;
   }
 
   static int? _toRoundedInt(dynamic raw) {

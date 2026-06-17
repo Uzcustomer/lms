@@ -463,6 +463,7 @@ class StudentApiController extends Controller
                 ->whereNotNull('lesson_date')
                 ->pluck('lesson_date');
             $minScheduleDate = $allScheduleDatesForMin->min();
+            $maxScheduleDate = $allScheduleDatesForMin->max();
 
             $jbGradesRaw = DB::table('student_grades')
                 ->where('student_hemis_id', $studentHemisId)
@@ -629,6 +630,35 @@ class StudentApiController extends Controller
             $otherGrades['on'] = $pickLatestAttempt($otherByType[100] ?? null);
             $otherGrades['oski'] = $pickLatestAttempt($otherByType[101] ?? null);
             $otherGrades['test'] = $pickLatestAttempt($otherByType[102] ?? null);
+            $closingForm = strtolower(str_replace('-', '_', trim((string) ($cs->closing_form ?? ''))));
+            $requiresOski = in_array($closingForm, ['oski', 'oske', 'oski_test', 'oske_test'], true);
+            $requiresTest = in_array($closingForm, ['test', 'oski_test', 'oske_test'], true);
+            $hasRequiredFinalGrades =
+                (!$requiresOski || $otherGrades['oski'] !== null) &&
+                (!$requiresTest || $otherGrades['test'] !== null);
+            $hasAnyFinalGrade = $otherGrades['oski'] !== null || $otherGrades['test'] !== null;
+            $ynCanCalculate = false;
+
+            if (!$requiresOski && !$requiresTest) {
+                $lastLessonDateReached = $maxScheduleDate !== null &&
+                    Carbon::parse($maxScheduleDate, 'Asia/Tashkent')->endOfDay()->lte($gradingCutoffDate);
+                $ynCanCalculate = $hasAnyFinalGrade || $lastLessonDateReached;
+            } else {
+                $examSchedule = DB::table('exam_schedules')
+                    ->where('group_hemis_id', $groupHemisId)
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->select('oski_date', 'test_date')
+                    ->orderByDesc('id')
+                    ->first();
+                $today = Carbon::now('Asia/Tashkent')->toDateString();
+                $oskiDateReached = !$requiresOski ||
+                    ($examSchedule?->oski_date && Carbon::parse($examSchedule->oski_date, 'Asia/Tashkent')->toDateString() <= $today);
+                $testDateReached = !$requiresTest ||
+                    ($examSchedule?->test_date && Carbon::parse($examSchedule->test_date, 'Asia/Tashkent')->toDateString() <= $today);
+
+                $ynCanCalculate = $hasRequiredFinalGrades || ($oskiDateReached && $testDateReached);
+            }
 
             // Attendance
             $absentOff = DB::table('attendances')
@@ -717,6 +747,7 @@ class StudentApiController extends Controller
                 'credit' => $cs->credit,
                 'subject_id' => $subjectId,
                 'closing_form' => $cs->closing_form,
+                'yn_can_calculate' => $ynCanCalculate,
                 'employee_name' => null,
                 'grades' => [
                     'jn' => $jnAverage > 0 ? $jnAverage : null,

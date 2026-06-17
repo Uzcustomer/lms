@@ -6,6 +6,7 @@ import '../../widgets/clinic_header.dart';
 import 'absence_excuse_list_screen.dart';
 import 'appeals_list_screen.dart';
 import 'clubs_screen.dart';
+import 'retake_applications_screen.dart';
 
 class StudentServicesScreen extends StatelessWidget {
   const StudentServicesScreen({super.key});
@@ -43,6 +44,16 @@ class StudentServicesScreen extends StatelessWidget {
         onTap: () => Navigator.push(
           context,
           SlideFadePageRoute(builder: (_) => const AppealsListScreen()),
+        ),
+      ),
+      _ServiceItem(
+        icon: Icons.school_outlined,
+        title: 'Qayta o\'qish',
+        subtitle: 'Qarzdor fanlar uchun ariza yuborish',
+        color: const Color(0xFF0F766E),
+        onTap: () => Navigator.push(
+          context,
+          SlideFadePageRoute(builder: (_) => const RetakeApplicationsScreen()),
         ),
       ),
     ];

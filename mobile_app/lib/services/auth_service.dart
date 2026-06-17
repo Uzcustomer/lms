@@ -9,6 +9,7 @@ class AuthService {
   AuthService(this._api);
 
   Future<Map<String, dynamic>> studentFaceLogin(String login, File photo) async {
+    await _api.clearToken();
     final bytes = await photo.readAsBytes();
     final response = await _api.multipartPost(
       ApiConfig.studentFaceLogin,
@@ -26,6 +27,7 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> studentLogin(String login, String password) async {
+    await _api.clearToken();
     final response = await _api.post(ApiConfig.studentLogin, {
       'login': login,
       'password': password,
@@ -43,6 +45,7 @@ class AuthService {
   }
 
   Future<Map<String, dynamic>> teacherLogin(String login, String password) async {
+    await _api.clearToken();
     final response = await _api.post(ApiConfig.teacherLogin, {
       'login': login,
       'password': password,

@@ -30,6 +30,7 @@ class AuthController extends Controller
 
         $student = null;
         $hemisLogin = false;
+        $requestedLogin = trim((string) $request->login);
 
         // Try HEMIS authentication first
         $response = Http::withoutVerifying()->post('https://student.ttatf.uz/rest/v1/auth/login', [
@@ -46,9 +47,21 @@ class AuthController extends Controller
 
             if ($studentDataResponse->successful()) {
                 $studentData = $studentDataResponse->json('data');
+                $studentIdNumber = trim((string) ($studentData['student_id_number'] ?? ''));
+
+                if ($studentIdNumber === '' || $studentIdNumber !== $requestedLogin) {
+                    Log::warning('Student login returned mismatched HEMIS account', [
+                        'requested_login' => $requestedLogin,
+                        'returned_student_id_number' => $studentIdNumber ?: null,
+                    ]);
+
+                    return response()->json([
+                        'message' => "Login javobi boshqa talaba bilan mos kelmadi. Iltimos, qayta kiring.",
+                    ], 401);
+                }
 
                 $student = Student::updateOrCreate(
-                    ['student_id_number' => $studentData['student_id_number']],
+                    ['student_id_number' => $studentIdNumber],
                     [
                         'token' => $hemisToken,
                         'token_expires_at' => now()->addDays(7),

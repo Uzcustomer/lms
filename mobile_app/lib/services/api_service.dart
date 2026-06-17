@@ -41,14 +41,15 @@ class ApiService {
     }
   }
 
-  Future<void> _deleteAll() async {
+  Future<void> _deleteAuthKeys() async {
     if (kIsWeb) {
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_tokenKey);
       await prefs.remove(_guardKey);
     } else {
       try {
-        await _secureStorage.deleteAll();
+        await _secureStorage.delete(key: _tokenKey);
+        await _secureStorage.delete(key: _guardKey);
       } catch (_) {}
       final prefs = await SharedPreferences.getInstance();
       await prefs.remove(_tokenKey);
@@ -70,7 +71,7 @@ class ApiService {
   }
 
   Future<void> clearToken() async {
-    await _deleteAll();
+    await _deleteAuthKeys();
   }
 
   Future<bool> isLoggedIn() async {

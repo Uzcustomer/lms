@@ -21,6 +21,35 @@ use Maatwebsite\Excel\Facades\Excel;
 class QuizResultController extends Controller
 {
     /**
+     * FISH qidiruvi uchun students jadvalidan topilgan identifikatorlar.
+     * Natija ichidagi student_name ba'zan students.full_name bilan farq qiladi,
+     * shu sabab hemis_id va student_id_number bo'yicha ham qidiramiz.
+     */
+    private function findStudentIdentifiersByName(string $name): array
+    {
+        $needle = trim($name);
+        if ($needle === '') {
+            return [];
+        }
+
+        $ids = [];
+        $rows = Student::query()
+            ->where('full_name', 'LIKE', '%' . $needle . '%')
+            ->get(['hemis_id', 'student_id_number']);
+
+        foreach ($rows as $student) {
+            if (!empty($student->hemis_id)) {
+                $ids[] = (string) $student->hemis_id;
+            }
+            if (!empty($student->student_id_number)) {
+                $ids[] = (string) $student->student_id_number;
+            }
+        }
+
+        return array_values(array_unique(array_filter($ids, fn ($v) => $v !== '')));
+    }
+
+    /**
      * Joriy guard bo'yicha route prefiksini aniqlash (admin yoki teacher).
      */
     private function routePrefix(): string
@@ -655,7 +684,13 @@ class QuizResultController extends Controller
             $query->where('fan_name', 'LIKE', '%' . $request->fan_name . '%');
         }
         if ($request->filled('student_name')) {
-            $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
+            $nameIds = $this->findStudentIdentifiersByName((string) $request->student_name);
+            $query->where(function ($q) use ($request, $nameIds) {
+                $q->where('student_name', 'LIKE', '%' . $request->student_name . '%');
+                if (!empty($nameIds)) {
+                    $q->orWhereIn('student_id', $nameIds);
+                }
+            });
         }
         if ($request->filled('shakl_search')) {
             $query->where('shakl', 'LIKE', '%' . $request->shakl_search . '%');
@@ -754,7 +789,13 @@ class QuizResultController extends Controller
             $hasNameSearch = $request->filled('student_name');
             $hasShaklSearch = $request->filled('shakl_search');
             if ($hasNameSearch) {
-                $query->where('student_name', 'LIKE', '%' . $request->student_name . '%');
+                $nameIds = $this->findStudentIdentifiersByName((string) $request->student_name);
+                $query->where(function ($q) use ($request, $nameIds) {
+                    $q->where('student_name', 'LIKE', '%' . $request->student_name . '%');
+                    if (!empty($nameIds)) {
+                        $q->orWhereIn('student_id', $nameIds);
+                    }
+                });
                 $query->whereYear('date_finish', now('Asia/Tashkent')->year);
             }
             if ($hasShaklSearch) {

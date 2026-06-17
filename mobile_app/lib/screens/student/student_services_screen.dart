@@ -270,63 +270,67 @@ class _ServiceCard extends StatelessWidget {
           child: InkWell(
             onTap: item.onTap,
             borderRadius: BorderRadius.circular(24),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(15, 15, 12, 12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    width: 52,
-                    height: 52,
+            child: Stack(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(15, 15, 14, 48),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: item.bgColor,
+                          borderRadius: BorderRadius.circular(17),
+                        ),
+                        child: Icon(item.icon, size: 28, color: item.color),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        item.title,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          height: 1.18,
+                          fontWeight: FontWeight.w900,
+                          color: textColor,
+                        ),
+                      ),
+                      const SizedBox(height: 7),
+                      Text(
+                        item.subtitle,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          fontSize: 11,
+                          height: 1.35,
+                          color: mutedColor,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(
+                  right: 12,
+                  bottom: 12,
+                  child: Container(
+                    width: 32,
+                    height: 32,
                     decoration: BoxDecoration(
                       color: item.bgColor,
-                      borderRadius: BorderRadius.circular(17),
+                      shape: BoxShape.circle,
                     ),
-                    child: Icon(item.icon, size: 28, color: item.color),
-                  ),
-                  const SizedBox(height: 14),
-                  Text(
-                    item.title,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      height: 1.18,
-                      fontWeight: FontWeight.w900,
-                      color: textColor,
+                    child: Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 18,
+                      color: item.color,
                     ),
                   ),
-                  const SizedBox(height: 7),
-                  Text(
-                    item.subtitle,
-                    maxLines: 3,
-                    overflow: TextOverflow.ellipsis,
-                    style: TextStyle(
-                      fontSize: 11,
-                      height: 1.35,
-                      color: mutedColor,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const Spacer(),
-                  Align(
-                    alignment: Alignment.bottomRight,
-                    child: Container(
-                      width: 32,
-                      height: 32,
-                      decoration: BoxDecoration(
-                        color: item.bgColor,
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 18,
-                        color: item.color,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),

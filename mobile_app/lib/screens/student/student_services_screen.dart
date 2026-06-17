@@ -8,8 +8,15 @@ import 'appeals_list_screen.dart';
 import 'clubs_screen.dart';
 import 'retake_applications_screen.dart';
 
-class StudentServicesScreen extends StatelessWidget {
+class StudentServicesScreen extends StatefulWidget {
   const StudentServicesScreen({super.key});
+
+  @override
+  State<StudentServicesScreen> createState() => _StudentServicesScreenState();
+}
+
+class _StudentServicesScreenState extends State<StudentServicesScreen> {
+  String _query = '';
 
   @override
   Widget build(BuildContext context) {
@@ -61,6 +68,13 @@ class StudentServicesScreen extends StatelessWidget {
         ),
       ),
     ];
+    final query = _query.trim().toLowerCase();
+    final filteredServices = query.isEmpty
+        ? services
+        : services.where((service) {
+            final haystack = '${service.title} ${service.subtitle}'.toLowerCase();
+            return haystack.contains(query);
+          }).toList();
 
     return Scaffold(
       backgroundColor: const Color(0xFFF6F8FC),
@@ -97,22 +111,112 @@ class StudentServicesScreen extends StatelessWidget {
                 title: l.services,
                 onBack: () => Navigator.pop(context),
               ),
-              Expanded(
-                child: GridView.builder(
-                  padding: const EdgeInsets.fromLTRB(18, 14, 18, 28),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    crossAxisSpacing: 14,
-                    mainAxisSpacing: 14,
-                    childAspectRatio: 0.92,
-                  ),
-                  itemCount: services.length,
-                  itemBuilder: (context, index) => _ServiceCard(item: services[index]),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(18, 10, 18, 2),
+                child: _ServicesSearchField(
+                  onChanged: (value) => setState(() => _query = value),
                 ),
+              ),
+              Expanded(
+                child: filteredServices.isEmpty
+                    ? _EmptySearchState(query: _query)
+                    : GridView.builder(
+                        padding: const EdgeInsets.fromLTRB(18, 12, 18, 28),
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 14,
+                          mainAxisSpacing: 14,
+                          childAspectRatio: 1.06,
+                        ),
+                        itemCount: filteredServices.length,
+                        itemBuilder: (context, index) =>
+                            _ServiceCard(item: filteredServices[index]),
+                      ),
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ServicesSearchField extends StatelessWidget {
+  final ValueChanged<String> onChanged;
+
+  const _ServicesSearchField({required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 52,
+      decoration: BoxDecoration(
+        color: const Color(0xFFF0F3F9),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: const Color(0xFFE5EAF4)),
+      ),
+      child: TextField(
+        onChanged: onChanged,
+        textInputAction: TextInputAction.search,
+        style: TextStyle(
+          color: ClinicTheme.inkOf(context),
+          fontSize: 14,
+          fontWeight: FontWeight.w700,
+        ),
+        decoration: InputDecoration(
+          border: InputBorder.none,
+          prefixIcon: Icon(
+            Icons.search_rounded,
+            color: ClinicTheme.mutedOf(context),
+            size: 23,
+          ),
+          hintText: 'Xizmatni qidiring...',
+          hintStyle: TextStyle(
+            color: ClinicTheme.mutedOf(context),
+            fontSize: 13.5,
+            fontWeight: FontWeight.w600,
+          ),
+          contentPadding: const EdgeInsets.symmetric(vertical: 15),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptySearchState extends StatelessWidget {
+  final String query;
+
+  const _EmptySearchState({required this.query});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 58,
+              height: 58,
+              decoration: BoxDecoration(
+                color: const Color(0xFFEAF2FF),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: const Icon(Icons.search_off_rounded, color: Color(0xFF3B82F6)),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '"$query" bo\'yicha xizmat topilmadi',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: ClinicTheme.inkOf(context),
+                fontSize: 14,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -167,20 +271,20 @@ class _ServiceCard extends StatelessWidget {
             onTap: item.onTap,
             borderRadius: BorderRadius.circular(24),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 13, 13),
+              padding: const EdgeInsets.fromLTRB(15, 15, 12, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Container(
-                    width: 58,
-                    height: 58,
+                    width: 52,
+                    height: 52,
                     decoration: BoxDecoration(
                       color: item.bgColor,
-                      borderRadius: BorderRadius.circular(18),
+                      borderRadius: BorderRadius.circular(17),
                     ),
-                    child: Icon(item.icon, size: 30, color: item.color),
+                    child: Icon(item.icon, size: 28, color: item.color),
                   ),
-                  const SizedBox(height: 18),
+                  const SizedBox(height: 14),
                   Text(
                     item.title,
                     maxLines: 2,
@@ -208,15 +312,15 @@ class _ServiceCard extends StatelessWidget {
                   Align(
                     alignment: Alignment.bottomRight,
                     child: Container(
-                      width: 34,
-                      height: 34,
+                      width: 32,
+                      height: 32,
                       decoration: BoxDecoration(
                         color: item.bgColor,
                         shape: BoxShape.circle,
                       ),
                       child: Icon(
                         Icons.arrow_forward_rounded,
-                        size: 19,
+                        size: 18,
                         color: item.color,
                       ),
                     ),

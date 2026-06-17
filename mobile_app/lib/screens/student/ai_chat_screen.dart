@@ -611,10 +611,10 @@ class _AiChatScreenState extends State<AiChatScreen>
     final muted = ClinicTheme.mutedOf(context);
 
     return Material(
-      color: ClinicTheme.surfaceOf(context),
-      borderRadius: BorderRadius.circular(14),
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(16),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         onTap: () {
           _controller.text = s.prompt;
           _send();
@@ -622,9 +622,16 @@ class _AiChatScreenState extends State<AiChatScreen>
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            color: ClinicTheme.surfaceOf(context),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: ClinicTheme.dividerOf(context), width: 1),
-            boxShadow: ClinicTheme.cardShadow,
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF0F172A).withAlpha(16),
+                blurRadius: 18,
+                offset: const Offset(0, 8),
+              ),
+            ],
           ),
           child: Row(
             children: [
@@ -632,10 +639,10 @@ class _AiChatScreenState extends State<AiChatScreen>
                 width: 38,
                 height: 38,
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(colors: [_aiA, _aiB]),
+                  color: ClinicTheme.teal.withAlpha(18),
                   borderRadius: BorderRadius.circular(11),
                 ),
-                child: Icon(s.icon, size: 19, color: Colors.white),
+                child: Icon(s.icon, size: 19, color: ClinicTheme.teal),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -655,7 +662,19 @@ class _AiChatScreenState extends State<AiChatScreen>
                   ],
                 ),
               ),
-              Icon(Icons.arrow_forward_ios_rounded, size: 14, color: ClinicTheme.faint),
+              Container(
+                width: 28,
+                height: 28,
+                decoration: BoxDecoration(
+                  color: ClinicTheme.blue.withAlpha(12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(
+                  Icons.chevron_right_rounded,
+                  size: 18,
+                  color: ClinicTheme.blue,
+                ),
+              ),
             ],
           ),
         ),

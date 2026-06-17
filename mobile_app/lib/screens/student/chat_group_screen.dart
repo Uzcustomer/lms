@@ -5,6 +5,7 @@ import '../../config/api_config.dart';
 import '../../config/theme.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
+import '../../widgets/clinic_header.dart';
 
 class ChatGroupScreen extends StatefulWidget {
   const ChatGroupScreen({super.key});
@@ -110,7 +111,7 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
+    final sub = ClinicTheme.mutedOf(context);
 
     return Stack(
       children: [
@@ -131,13 +132,12 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
                                 horizontal: 32, vertical: 24),
                             margin: const EdgeInsets.symmetric(horizontal: 40),
                             decoration: BoxDecoration(
-                              color: (isDark ? Colors.black : Colors.white)
-                                  .withOpacity(0.85),
-                              borderRadius: BorderRadius.circular(20),
+                              color: ClinicTheme.surfaceOf(context),
+                              borderRadius: BorderRadius.circular(22),
                               border: Border.all(
-                                  color: isDark
-                                      ? Colors.white10
-                                      : Colors.grey.shade200),
+                                color: ClinicTheme.dividerOf(context),
+                              ),
+                              boxShadow: ClinicTheme.cardShadow,
                             ),
                             child: Column(
                               mainAxisSize: MainAxisSize.min,
@@ -146,21 +146,18 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
                                   width: 60,
                                   height: 60,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF0F766E)
-                                        .withOpacity(0.1),
-                                    shape: BoxShape.circle,
+                                    color: ClinicTheme.teal.withAlpha(18),
+                                    borderRadius: BorderRadius.circular(20),
                                   ),
                                   child: Icon(Icons.group_outlined,
-                                      size: 28, color: sub),
+                                      size: 28, color: ClinicTheme.teal),
                                 ),
                                 const SizedBox(height: 14),
                                 Text('Guruh chati',
                                     style: TextStyle(
-                                        color: isDark
-                                            ? AppTheme.darkTextPrimary
-                                            : AppTheme.textPrimary,
+                                        color: ClinicTheme.inkOf(context),
                                         fontSize: 15,
-                                        fontWeight: FontWeight.w600)),
+                                        fontWeight: FontWeight.w800)),
                                 const SizedBox(height: 4),
                                 Text(
                                     'Guruhingiz a\'zolari bilan suhbatlashing!',

@@ -65,26 +65,42 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
             actions: const [NotificationBell()],
           ),
           Container(
-            decoration: BoxDecoration(
-              color: ClinicTheme.surfaceOf(context),
-              border: Border(
-                bottom: BorderSide(color: ClinicTheme.dividerOf(context), width: 1),
+            color: ClinicTheme.surfaceOf(context),
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: ClinicTheme.dividerOf(context).withAlpha(55),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: ClinicTheme.dividerOf(context)),
               ),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicatorColor: ClinicTheme.teal,
-              indicatorWeight: 2.5,
-              indicatorSize: TabBarIndicatorSize.tab,
-              labelColor: ClinicTheme.teal,
-              unselectedLabelColor: ClinicTheme.mutedOf(context),
-              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-              unselectedLabelStyle:
-                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              tabs: const [
-                Tab(text: 'Foydalanuvchilar'),
-                Tab(text: 'Guruh'),
-              ],
+              child: TabBar(
+                controller: _tabController,
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  color: ClinicTheme.teal,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: ClinicTheme.teal.withAlpha(35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                labelColor: Colors.white,
+                unselectedLabelColor: ClinicTheme.mutedOf(context),
+                labelStyle:
+                    const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+                unselectedLabelStyle:
+                    const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                tabs: const [
+                  Tab(text: 'Foydalanuvchilar'),
+                  Tab(text: 'Guruh'),
+                ],
+              ),
             ),
           ),
           Expanded(

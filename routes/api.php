@@ -130,6 +130,9 @@ Route::prefix('v1')->group(function () {
             Route::get('/contract', [StudentApiController::class, 'contract']);
             Route::get('/exam-schedule', [StudentApiController::class, 'examSchedule']);
             Route::get('/rating', [StudentApiController::class, 'studentRating']);
+            Route::get('/retake', [StudentApiController::class, 'retakeOverview']);
+            Route::get('/retake-journal', [StudentApiController::class, 'retakeJournalIndex']);
+            Route::get('/retake-journal/{applicationId}', [StudentApiController::class, 'retakeJournalShow']);
 
             // Notifications (bell icon)
             Route::get('/notifications', [StudentApiController::class, 'notifications']);

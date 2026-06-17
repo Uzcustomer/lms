@@ -18,6 +18,7 @@ class StudentProvider extends ChangeNotifier {
   List<dynamic>? _pendingLessons;
   Map<String, dynamic>? _contract;
   List<dynamic>? _contractList;
+  String? _sessionUserKey;
 
   StudentProvider(this._service);
 
@@ -31,6 +32,21 @@ class StudentProvider extends ChangeNotifier {
   List<dynamic>? get pendingLessons => _pendingLessons;
   Map<String, dynamic>? get contract => _contract;
   List<dynamic>? get contractList => _contractList;
+
+  /// Clears in-memory screen data whenever another student account becomes
+  /// active, so dashboards/grades cannot reuse the previous student's data.
+  void syncSessionUser(Map<String, dynamic>? user) {
+    final nextKey = _sessionKeyFor(user);
+    if (_sessionUserKey == nextKey) return;
+    _sessionUserKey = nextKey;
+    _clearData(notify: false);
+  }
+
+  String? _sessionKeyFor(Map<String, dynamic>? user) {
+    if (user == null) return null;
+    final key = user['student_id_number'] ?? user['id'];
+    return key?.toString();
+  }
 
   Future<void> loadDashboard({bool force = false}) async {
     if (_dashboard != null && !force) return;
@@ -234,6 +250,10 @@ class StudentProvider extends ChangeNotifier {
   }
 
   void clearData() {
+    _clearData(notify: true);
+  }
+
+  void _clearData({required bool notify}) {
     _dashboard = null;
     _profile = null;
     _schedule = null;
@@ -244,6 +264,6 @@ class StudentProvider extends ChangeNotifier {
     _contractList = null;
     _excuses = null;
     _excuseReasons = null;
-    notifyListeners();
+    if (notify) notifyListeners();
   }
 }

@@ -39,6 +39,9 @@
                         <div class="min-w-0 flex-1">
                             <p class="text-[10px] uppercase tracking-wider text-red-100 font-semibold">{{ __("Qayta o'qish jurnali") }}</p>
                             <h3 class="text-lg sm:text-xl font-bold mt-1">{{ $application->subject_name }}</h3>
+                            <p class="text-xs text-red-50 mt-2 font-medium">
+                                {{ $student->full_name ?? '—' }}@if(!empty($student->group_name)) | {{ $student->group_name }}@endif
+                            </p>
                             <p class="text-xs text-red-100 mt-0.5">{{ $application->semester_name }} · {{ $group->name }}</p>
                         </div>
                         <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white text-red-700 flex-shrink-0">

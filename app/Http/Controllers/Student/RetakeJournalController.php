@@ -69,6 +69,7 @@ class RetakeJournalController extends Controller
         return view('student.retake-journal.show', [
             'group' => $group,
             'application' => $app,
+            'student' => $student,
             'mustaqil' => $mustaqil,
             'isEditable' => $this->service->isEditable($group),
         ]);

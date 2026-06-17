@@ -84,9 +84,11 @@ class LmsApp extends StatelessWidget {
             home: Consumer<AuthProvider>(
               builder: (context, auth, _) {
                 if (auth.state == AuthState.authenticated && auth.isStudent) {
+                  context.read<StudentProvider>().syncSessionUser(auth.user);
                   StudentDataCache().ensureFresh();
                   NotificationBadge.startPolling();
                 } else {
+                  context.read<StudentProvider>().syncSessionUser(null);
                   NotificationBadge.stopPolling();
                   NotificationBadge.unread.value = 0;
                 }

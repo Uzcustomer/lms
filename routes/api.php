@@ -14,6 +14,7 @@ use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
 use App\Http\Controllers\Api\V1\ChatApiController;
 use App\Http\Controllers\Api\V1\ClubApiController;
 use App\Http\Controllers\Api\V1\ExamAppealApiController;
+use App\Http\Controllers\Api\V1\RetakeApplicationApiController;
 use App\Http\Controllers\Api\V1\StudentApiController;
 use App\Http\Controllers\Api\V1\TeacherApiController;
 use App\Http\Controllers\Api\V1\TutorApiController;
@@ -150,6 +151,11 @@ Route::prefix('v1')->group(function () {
             Route::post('/excuses/missed-assessments', [AbsenceExcuseApiController::class, 'missedAssessments']);
             Route::get('/excuses/{id}/download', [AbsenceExcuseApiController::class, 'download']);
             Route::get('/excuses/{id}/download-pdf', [AbsenceExcuseApiController::class, 'downloadPdf']);
+
+            // Retake applications
+            Route::get('/retake', [RetakeApplicationApiController::class, 'index']);
+            Route::post('/retake', [RetakeApplicationApiController::class, 'store']);
+            Route::post('/retake/groups/{groupId}/payment', [RetakeApplicationApiController::class, 'uploadPayment']);
 
             // Clubs
             Route::get('/clubs', [ClubApiController::class, 'index']);

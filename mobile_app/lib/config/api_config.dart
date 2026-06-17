@@ -40,6 +40,9 @@ class ApiConfig {
   static const String studentExcuses = '/student/excuses';
   static const String studentExcuseMissedAssessments = '/student/excuses/missed-assessments';
 
+  // Retake application endpoints
+  static const String studentRetake = '/student/retake';
+
   // Club endpoints
   static const String studentClubs = '/student/clubs';
   static const String studentMyClubs = '/student/clubs/my';

@@ -154,6 +154,51 @@ class StudentService {
     );
   }
 
+  // Retake application methods
+  Future<Map<String, dynamic>> getRetakeApplications() async {
+    return await _api.get(ApiConfig.studentRetake);
+  }
+
+  Future<Map<String, dynamic>> submitRetakeApplication({
+    required List<Map<String, dynamic>> subjects,
+    required Uint8List receiptBytes,
+    required String receiptFileName,
+    String? comment,
+  }) async {
+    final fields = <String, String>{};
+    for (int i = 0; i < subjects.length; i++) {
+      fields['subjects[$i][subject_id]'] =
+          subjects[i]['subject_id']?.toString() ?? '';
+      fields['subjects[$i][semester_id]'] =
+          subjects[i]['semester_id']?.toString() ?? '';
+    }
+    if (comment != null && comment.trim().isNotEmpty) {
+      fields['comment'] = comment.trim();
+    }
+
+    return await _api.multipartPost(
+      ApiConfig.studentRetake,
+      fields,
+      fileBytes: receiptBytes,
+      fileName: receiptFileName,
+      fileField: 'receipt',
+    );
+  }
+
+  Future<Map<String, dynamic>> uploadRetakePayment({
+    required int groupId,
+    required Uint8List paymentBytes,
+    required String paymentFileName,
+  }) async {
+    return await _api.multipartPost(
+      '${ApiConfig.studentRetake}/groups/$groupId/payment',
+      const {},
+      fileBytes: paymentBytes,
+      fileName: paymentFileName,
+      fileField: 'payment',
+    );
+  }
+
   // Club methods
   Future<Map<String, dynamic>> getClubs() async {
     return await _api.get(ApiConfig.studentClubs);

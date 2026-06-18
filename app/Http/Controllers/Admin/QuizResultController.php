@@ -3359,6 +3359,112 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Mark bosqichida tushib qolgan (hemis_quiz_results'da bor, lekin
+     * student_grades'ga yuklanmagan) natijalarni ikkiga ajratadi:
+     *   - 'gap'     : haqiqatan yuklanishi kerak bo'lib unutilgan (farqda qoladi)
+     *   - 'warning' : jurnalda allaqachon yetarli baho borligi sababli yuklanmagan
+     *                 (talaba adashib qayta topshirgan yoki darsdagi baho yuqori)
+     *
+     * Faqat "N-mavzu" shakldagi natijalar uchun ogohlantirishga o'tkaziladi;
+     * OSKI/Test va boshqa shakllar 'gap' bo'lib qoladi.
+     *
+     * @param  \Illuminate\Support\Collection  $results  HemisQuizResult yozuvlari
+     * @return array<int, array{type:string, reason:?string}>  attempt_id => holat
+     */
+    private function classifyMarkGap($results): array
+    {
+        $out = [];
+        if ($results->isEmpty()) {
+            return $out;
+        }
+
+        $studentIds = $results->pluck('student_id')
+            ->filter(fn ($v) => $v !== null && $v !== '')
+            ->unique()->values()->all();
+
+        $students = !empty($studentIds)
+            ? Student::where(function ($q) use ($studentIds) {
+                $q->whereIn('hemis_id', $studentIds)
+                  ->orWhereIn('student_id_number', $studentIds);
+            })->get()
+            : collect();
+
+        $studentLookup = [];
+        foreach ($students as $s) {
+            $studentLookup[$s->hemis_id] = $s;
+            if ($s->student_id_number) {
+                $studentLookup[$s->student_id_number] = $s;
+            }
+        }
+
+        $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
+
+        foreach ($results as $r) {
+            $type = 'gap';
+            $reason = null;
+
+            if ($r->shakl && preg_match('/^(\d+)-mavzu$/i', $r->shakl, $m)) {
+                $student = $studentLookup[$r->student_id] ?? null;
+                if ($student) {
+                    $mavzuN = (int) $m[1];
+                    $key = $student->hemis_id . '|' . $r->fan_id . '|' . $mavzuN;
+                    $state = $mavzuStates[$key] ?? null;
+                    if ($state) {
+                        $testGrade = $r->grade !== null ? (float) $r->grade : null;
+                        [$type, $reason] = $this->mavzuMarkVerdict($state, $testGrade, $r->shakl);
+                    }
+                }
+            }
+
+            $out[(int) $r->attempt_id] = ['type' => $type, 'reason' => $reason];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Bitta mavzu natijasi uchun jurnal holati va test bahosiga qarab
+     * 'gap'/'warning' va sabab matnini aniqlaydi.
+     *
+     * @return array{0:string, 1:?string}
+     */
+    private function mavzuMarkVerdict(array $state, ?float $testGrade, string $shakl): array
+    {
+        // Jurnalda baho yo'q (NB) — test buni to'ldirishi kerak edi: haqiqiy farq.
+        if ($state['type'] === 'nb') {
+            return ['gap', null];
+        }
+
+        if ($state['type'] === 'grade') {
+            $jn = (float) $state['grade'];
+            if ($jn >= 60) {
+                return ['warning', 'Jurnalda baho bor: ' . $shakl . ' (' . round($jn) . ') — 60+ bo\'lgani uchun qayta topshirilmaydi'];
+            }
+            // jn < 60: test darsdagi bahodan yuqori bo'lsa yuklanishi kerak edi (gap),
+            // aks holda darsdagi baho past emas — ogohlantirish.
+            if ($testGrade !== null && $testGrade > $jn) {
+                return ['gap', null];
+            }
+            return ['warning', 'Jurnalda baho bor: ' . $shakl . ' (' . round($jn) . ') — darsdagi baho test natijasidan past emas'];
+        }
+
+        if ($state['type'] === 'retake') {
+            $eff = max((float) ($state['grade'] ?? 0), (float) $state['retake']);
+            if ($testGrade !== null && $testGrade > $eff) {
+                return ['gap', null];
+            }
+            $orig = $state['grade'] !== null ? round((float) $state['grade']) : null;
+            $rt = round((float) $state['retake']);
+            $txt = $orig !== null
+                ? 'Jurnalda retake bor: ' . $shakl . ' (' . $orig . '→' . $rt . ')'
+                : 'Jurnalda retake bor: ' . $shakl . ' (' . $rt . ')';
+            return ['warning', $txt . ' — test natijasi past emas'];
+        }
+
+        return ['gap', null];
+    }
+
+    /**
      * Kunlik monitoring uchun AJAX data. Moodle WS'dan kunlik attempt_id
      * ro'yxati olinadi, LMS'dagi hemis_quiz_results va student_grades bilan
      * solishtirilib, har kun uchun yo'qotish statistikasi qaytariladi.
@@ -3430,6 +3536,11 @@ class QuizResultController extends Controller
             $totSynced = 0;
             $totGraded = 0;
 
+            // Mark bosqichida tushib qolgan attempt_id lar (kun bo'yicha) —
+            // keyin "farq" (unutilgan) va "ogohlantirish" (sababli) ga ajratiladi.
+            $markGapByDay = [];
+            $allMarkGapIds = [];
+
             foreach ($days as $d) {
                 $date = (string) $d['date'];
                 $attemptIds = array_map('intval', (array) ($d['attempt_ids'] ?? []));
@@ -3442,34 +3553,30 @@ class QuizResultController extends Controller
 
                 $syncedCount = 0;
                 $gradedCount = 0;
+                $dayMarkGapIds = [];
                 foreach ($attemptIds as $aid) {
                     if (isset($syncedMap[$aid])) {
                         $syncedCount++;
                         $qrId = $syncedMap[$aid];
                         if (isset($gradedQuizResultIds[$qrId])) {
                             $gradedCount++;
+                        } else {
+                            $dayMarkGapIds[] = $aid;
                         }
                     }
                 }
 
-                $syncGap = $moodleCount - $syncedCount;
-                $markGap = $syncedCount - $gradedCount;
-
-                $status = 'ok';
-                if ($syncGap > 0) {
-                    $status = 'sync_gap';
-                } elseif ($markGap > 0) {
-                    $status = 'mark_gap';
+                $markGapByDay[$date] = $dayMarkGapIds;
+                foreach ($dayMarkGapIds as $aid) {
+                    $allMarkGapIds[] = $aid;
                 }
 
-                $result[] = [
+                $result[$date] = [
                     'date'         => $date,
                     'moodle_count' => $moodleCount,
                     'synced_count' => $syncedCount,
                     'graded_count' => $gradedCount,
-                    'sync_gap'     => $syncGap,
-                    'mark_gap'     => $markGap,
-                    'status'       => $status,
+                    'sync_gap'     => $moodleCount - $syncedCount,
                 ];
 
                 $totMoodle += $moodleCount;
@@ -3477,15 +3584,57 @@ class QuizResultController extends Controller
                 $totGraded += $gradedCount;
             }
 
+            // Mark-gap natijalarni klassifikatsiya qilamiz: mavzu bo'yicha
+            // jurnalda baho borlar "ogohlantirish"ga, qolganlari "farq"ga.
+            $markClass = [];
+            if (!empty($allMarkGapIds)) {
+                $mgRows = HemisQuizResult::whereIn('attempt_id', array_values(array_unique($allMarkGapIds)))
+                    ->get(['attempt_id', 'student_id', 'fan_id', 'shakl', 'grade']);
+                $markClass = $this->classifyMarkGap($mgRows);
+            }
+
+            $resultDays = [];
+            $totMarkGap = 0;
+            $totWarning = 0;
+            foreach ($result as $date => $row) {
+                $gap = 0;
+                $warn = 0;
+                foreach (($markGapByDay[$date] ?? []) as $aid) {
+                    if (($markClass[$aid]['type'] ?? 'gap') === 'warning') {
+                        $warn++;
+                    } else {
+                        $gap++;
+                    }
+                }
+
+                $status = 'ok';
+                if ($row['sync_gap'] > 0) {
+                    $status = 'sync_gap';
+                } elseif ($gap > 0) {
+                    $status = 'mark_gap';
+                } elseif ($warn > 0) {
+                    $status = 'warning';
+                }
+
+                $row['mark_gap'] = $gap;
+                $row['warning_count'] = $warn;
+                $row['status'] = $status;
+                $resultDays[] = $row;
+
+                $totMarkGap += $gap;
+                $totWarning += $warn;
+            }
+
             return response()->json([
                 'success' => true,
-                'days' => $result,
+                'days' => $resultDays,
                 'totals' => [
-                    'moodle_count' => $totMoodle,
-                    'synced_count' => $totSynced,
-                    'graded_count' => $totGraded,
-                    'sync_gap'     => $totMoodle - $totSynced,
-                    'mark_gap'     => $totSynced - $totGraded,
+                    'moodle_count'  => $totMoodle,
+                    'synced_count'  => $totSynced,
+                    'graded_count'  => $totGraded,
+                    'sync_gap'      => $totMoodle - $totSynced,
+                    'mark_gap'      => $totMarkGap,
+                    'warning_count' => $totWarning,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -3562,7 +3711,7 @@ class QuizResultController extends Controller
         if (!empty($allMoodleIds)) {
             $syncedByAttempt = DB::table('hemis_quiz_results')
                 ->whereIn('attempt_id', $allMoodleIds)
-                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_name', 'quiz_type', 'attempt_name', 'date_finish', 'grade')
+                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_id', 'fan_name', 'shakl', 'quiz_type', 'attempt_name', 'date_finish', 'grade')
                 ->get()
                 ->keyBy('attempt_id');
         }
@@ -3579,10 +3728,16 @@ class QuizResultController extends Controller
             }
         }
 
+        // Mark bosqichida tushib qolganlarni (synced, lekin gradega tushmagan)
+        // mavzu jurnali holatiga qarab "farq" / "ogohlantirish"ga ajratamiz.
+        $markGapRows = $syncedByAttempt->filter(fn ($row) => !isset($gradedIds[(int) $row->id]))->values();
+        $markClass = $this->classifyMarkGap($markGapRows);
+
         // Kun bo'yicha summary va sync/mark gap ro'yxatlari
         $summaryDays = [];
         $missingSync = []; // date => [attempt_ids]
-        $missingMark = []; // date => [{attempt_id, student_id, ...}]
+        $missingMark = []; // date => [{attempt_id, student_id, ...}] — unutilgan
+        $warnings    = []; // date => [{..., reason}] — sababli yuklanmaganlar
 
         foreach ($days as $d) {
             $date = (string) $d['date'];
@@ -3596,6 +3751,7 @@ class QuizResultController extends Controller
             $syncedAttemptIds = [];
             $markedDayCount = 0;
             $dayMissingMark = [];
+            $dayWarnings = [];
 
             foreach ($attemptIds as $aid) {
                 if ($syncedByAttempt->has($aid)) {
@@ -3605,7 +3761,8 @@ class QuizResultController extends Controller
                     if (isset($gradedIds[$qrId])) {
                         $markedDayCount++;
                     } else {
-                        $dayMissingMark[] = [
+                        $verdict = $markClass[(int) $row->attempt_id] ?? ['type' => 'gap', 'reason' => null];
+                        $entry = [
                             'attempt_id'   => (int) $row->attempt_id,
                             'student_id'   => $row->student_id,
                             'student_name' => $row->student_name,
@@ -3615,6 +3772,12 @@ class QuizResultController extends Controller
                             'date_finish'  => $row->date_finish,
                             'grade'        => $row->grade,
                         ];
+                        if (($verdict['type'] ?? 'gap') === 'warning') {
+                            $entry['reason'] = $verdict['reason'];
+                            $dayWarnings[] = $entry;
+                        } else {
+                            $dayMissingMark[] = $entry;
+                        }
                     }
                 }
             }
@@ -3622,20 +3785,23 @@ class QuizResultController extends Controller
             $dayMissingSync = array_values(array_diff($attemptIds, $syncedAttemptIds));
             $syncedCount = count($syncedAttemptIds);
             $syncGap = $moodleCount - $syncedCount;
-            $markGap = $syncedCount - $markedDayCount;
+            $markGap = count($dayMissingMark);   // faqat unutilganlar
+            $warningCount = count($dayWarnings);
 
             $status = 'ok';
             if ($syncGap > 0) $status = 'sync_gap';
             elseif ($markGap > 0) $status = 'mark_gap';
+            elseif ($warningCount > 0) $status = 'warning';
 
             $summaryDays[] = [
-                'date'         => $date,
-                'moodle_count' => $moodleCount,
-                'synced_count' => $syncedCount,
-                'graded_count' => $markedDayCount,
-                'sync_gap'     => $syncGap,
-                'mark_gap'     => $markGap,
-                'status'       => $status,
+                'date'          => $date,
+                'moodle_count'  => $moodleCount,
+                'synced_count'  => $syncedCount,
+                'graded_count'  => $markedDayCount,
+                'sync_gap'      => $syncGap,
+                'mark_gap'      => $markGap,
+                'warning_count' => $warningCount,
+                'status'        => $status,
             ];
 
             if (!empty($dayMissingSync)) {
@@ -3644,12 +3810,15 @@ class QuizResultController extends Controller
             if (!empty($dayMissingMark)) {
                 $missingMark[$date] = $dayMissingMark;
             }
+            if (!empty($dayWarnings)) {
+                $warnings[$date] = $dayWarnings;
+            }
         }
 
         $filename = 'kunlik-monitoring_' . $dateFrom . '_' . $dateTo . '.xlsx';
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Exports\KunlikMonitoringExport($summaryDays, $missingSync, $missingMark, $dateFrom, $dateTo),
+            new \App\Exports\KunlikMonitoringExport($summaryDays, $missingSync, $missingMark, $warnings, $dateFrom, $dateTo),
             $filename
         );
     }
@@ -3698,13 +3867,14 @@ class QuizResultController extends Controller
                     'moodle_count' => 0,
                     'missing_sync' => [],
                     'missing_mark' => [],
+                    'warnings' => [],
                 ]);
             }
 
             // hemis_quiz_results ichidagilar — attempt_id => row.
             $synced = DB::table('hemis_quiz_results')
                 ->whereIn('attempt_id', $moodleIds)
-                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_name', 'quiz_type', 'attempt_name', 'date_finish', 'grade')
+                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_id', 'fan_name', 'shakl', 'quiz_type', 'attempt_name', 'date_finish', 'grade')
                 ->get()
                 ->keyBy('attempt_id');
 
@@ -3724,19 +3894,30 @@ class QuizResultController extends Controller
                 }
             }
 
+            // Mark bosqichida tushib qolganlarni klassifikatsiya qilamiz:
+            // "farq" (unutilgan) va "ogohlantirish" (jurnalda baho bor).
+            $markGapRows = $synced->filter(fn ($row) => !isset($gradedIds[(int) $row->id]))->values();
+            $markClass = $this->classifyMarkGap($markGapRows);
+
             $missingMark = [];
-            foreach ($synced as $row) {
-                if (!isset($gradedIds[(int) $row->id])) {
-                    $missingMark[] = [
-                        'attempt_id'   => (int) $row->attempt_id,
-                        'student_id'   => $row->student_id,
-                        'student_name' => $row->student_name,
-                        'fan_name'     => $row->fan_name,
-                        'quiz_type'    => $row->quiz_type,
-                        'attempt_name' => $row->attempt_name,
-                        'date_finish'  => $row->date_finish,
-                        'grade'        => $row->grade,
-                    ];
+            $warnings = [];
+            foreach ($markGapRows as $row) {
+                $verdict = $markClass[(int) $row->attempt_id] ?? ['type' => 'gap', 'reason' => null];
+                $entry = [
+                    'attempt_id'   => (int) $row->attempt_id,
+                    'student_id'   => $row->student_id,
+                    'student_name' => $row->student_name,
+                    'fan_name'     => $row->fan_name,
+                    'quiz_type'    => $row->quiz_type,
+                    'attempt_name' => $row->attempt_name,
+                    'date_finish'  => $row->date_finish,
+                    'grade'        => $row->grade,
+                ];
+                if (($verdict['type'] ?? 'gap') === 'warning') {
+                    $entry['reason'] = $verdict['reason'];
+                    $warnings[] = $entry;
+                } else {
+                    $missingMark[] = $entry;
                 }
             }
 
@@ -3746,6 +3927,7 @@ class QuizResultController extends Controller
                 'moodle_count' => count($moodleIds),
                 'missing_sync' => $missingSyncIds,
                 'missing_mark' => $missingMark,
+                'warnings' => $warnings,
             ]);
         } catch (\Throwable $e) {
             Log::error('kunlikMonitoringMissing failed', [

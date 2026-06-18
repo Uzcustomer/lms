@@ -19,6 +19,14 @@
         .km-btn-quick { padding: 6px 12px; height: 32px; background: #fff; color: #1e293b; border: 1px solid #cbd5e1; font-weight: 600; box-shadow: none; }
         .km-btn-quick:hover:not(:disabled) { background: #f0fdf4; color: #166534; border-color: #86efac; }
 
+        .km-toggle { display: inline-flex; align-items: center; gap: 8px; height: 36px; cursor: pointer; user-select: none; }
+        .km-toggle input { display: none; }
+        .km-toggle-track { position: relative; width: 40px; height: 22px; background: #cbd5e1; border-radius: 999px; transition: background 0.2s; flex-shrink: 0; }
+        .km-toggle-thumb { position: absolute; top: 2px; left: 2px; width: 18px; height: 18px; background: #fff; border-radius: 50%; transition: left 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+        .km-toggle input:checked + .km-toggle-track { background: #16a34a; }
+        .km-toggle input:checked + .km-toggle-track .km-toggle-thumb { left: 20px; }
+        .km-toggle-text { font-size: 13px; font-weight: 600; color: #1e293b; white-space: nowrap; }
+
         .km-totals { display: flex; gap: 14px; padding: 14px 18px; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; background: #fafafa; }
         .km-stat { flex: 1; min-width: 160px; padding: 12px 14px; background: #fff; border: 1px solid #e2e8f0; border-radius: 10px; }
         .km-stat-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
@@ -95,6 +103,14 @@
                 <div class="km-filter-item">
                     <label class="km-filter-label">&nbsp;</label>
                     <button id="kmDiagnose" class="km-btn km-btn-quick" type="button">🔍 Diagnostika</button>
+                </div>
+                <div class="km-filter-item">
+                    <label class="km-filter-label">Semestr</label>
+                    <label class="km-toggle" title="Yoqilganda faqat talabaning joriy semestridagi natijalar; o'chirilganda barcha semestrlar">
+                        <input type="checkbox" id="kmCurrentSem" checked>
+                        <span class="km-toggle-track"><span class="km-toggle-thumb"></span></span>
+                        <span class="km-toggle-text">Joriy semestr</span>
+                    </label>
                 </div>
                 <div class="km-filter-item" style="margin-left: auto;">
                     <label class="km-filter-label">Tezkor</label>
@@ -175,6 +191,7 @@
         const diagnoseUrl = '{{ route($routePrefix . ".kunlik-monitoring.diagnose") }}';
         const exportUrl = '{{ route($routePrefix . ".kunlik-monitoring.export") }}';
         const $ = id => document.getElementById(id);
+        const esc = s => (s ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]));
 
         function fmtDate(d) {
             const y = d.getFullYear();
@@ -244,6 +261,7 @@
                 const url = new URL(dataUrl, window.location.origin);
                 url.searchParams.set('date_from', dateFrom);
                 url.searchParams.set('date_to', dateTo);
+                url.searchParams.set('current_semester', $('kmCurrentSem').checked ? '1' : '0');
                 const r = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } });
                 const body = await r.json();
 
@@ -307,6 +325,7 @@
             try {
                 const url = new URL(missingUrl, window.location.origin);
                 url.searchParams.set('date', date);
+                url.searchParams.set('current_semester', $('kmCurrentSem').checked ? '1' : '0');
                 const r = await fetch(url.toString(), { headers: { 'Accept': 'application/json' } });
                 const body = await r.json();
 
@@ -357,6 +376,10 @@
                         <th>attempt_id</th>
                         <th>HEMIS ID</th>
                         <th>F.I.Sh.</th>
+                        <th>Fakultet</th>
+                        <th>Yo'nalish</th>
+                        <th>Kurs</th>
+                        <th>Guruh</th>
                         <th>Fan</th>
                         <th>Quiz turi</th>
                         <th>Quiz to'liq nomi</th>
@@ -366,10 +389,14 @@
                     missingMark.map(r => `<tr>
                         <td><span class="km-pill">${r.attempt_id}</span></td>
                         <td>${r.student_id ?? ''}</td>
-                        <td>${(r.student_name ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</td>
-                        <td>${(r.fan_name ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</td>
-                        <td>${(r.quiz_type ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</td>
-                        <td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#475569;">${(r.attempt_name ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</td>
+                        <td>${esc(r.student_name)}</td>
+                        <td>${esc(r.faculty)}</td>
+                        <td>${esc(r.direction)}</td>
+                        <td>${esc(r.kurs)}</td>
+                        <td>${esc(r.group)}</td>
+                        <td>${esc(r.fan_name)}</td>
+                        <td>${esc(r.quiz_type)}</td>
+                        <td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#475569;">${esc(r.attempt_name)}</td>
                         <td>${r.date_finish ?? ''}</td>
                         <td>${r.grade ?? ''}</td>
                     </tr>`).join('') +
@@ -394,19 +421,29 @@
                         <th>attempt_id</th>
                         <th>HEMIS ID</th>
                         <th>F.I.Sh.</th>
+                        <th>Fakultet</th>
+                        <th>Yo'nalish</th>
+                        <th>Kurs</th>
+                        <th>Guruh</th>
                         <th>Fan</th>
                         <th>Quiz turi</th>
+                        <th>Quiz to'liq nomi</th>
                         <th>Test bahosi</th>
                         <th>Sabab</th>
                     </tr></thead><tbody>` +
                     warnings.map(r => `<tr>
                         <td><span class="km-pill">${r.attempt_id}</span></td>
                         <td>${r.student_id ?? ''}</td>
-                        <td>${(r.student_name ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</td>
-                        <td>${(r.fan_name ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</td>
-                        <td>${(r.quiz_type ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</td>
+                        <td>${esc(r.student_name)}</td>
+                        <td>${esc(r.faculty)}</td>
+                        <td>${esc(r.direction)}</td>
+                        <td>${esc(r.kurs)}</td>
+                        <td>${esc(r.group)}</td>
+                        <td>${esc(r.fan_name)}</td>
+                        <td>${esc(r.quiz_type)}</td>
+                        <td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#475569;">${esc(r.attempt_name)}</td>
                         <td>${r.grade ?? ''}</td>
-                        <td style="color:#854d0e;">${(r.reason ?? '').toString().replace(/[<>&]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;'}[c]))}</td>
+                        <td style="color:#854d0e;">${esc(r.reason)}</td>
                     </tr>`).join('') +
                     `</tbody></table>`;
                 }
@@ -419,6 +456,7 @@
         }
 
         $('kmLoad').addEventListener('click', loadData);
+        $('kmCurrentSem').addEventListener('change', loadData);
 
         $('kmExport').addEventListener('click', () => {
             const dateFrom = $('kmDateFrom').value;
@@ -430,6 +468,7 @@
             const url = new URL(exportUrl, window.location.origin);
             url.searchParams.set('date_from', dateFrom);
             url.searchParams.set('date_to', dateTo);
+            url.searchParams.set('current_semester', $('kmCurrentSem').checked ? '1' : '0');
             window.location.href = url.toString();
         });
 

@@ -757,34 +757,37 @@ class QuizResultController extends Controller
 
             $query = HemisQuizResult::where('is_active', 1);
 
-            // Bitta (talaba, fan, quiz_type, shakl) bo'yicha eng yuqori bahoga ega bo'lgan
-            // urinishni qoldirish — diagnostikaData bilan bir xil mantiq, lekin dedup
-            // foydalanuvchi tanlagan sana oralig'i ichida qo'llaniladi. Aks holda,
-            // oraliqdan tashqaridagi balandroq urinishlar shu oraliqdagi yozuvni
-            // yashirib qo'yishi mumkin edi.
             $dateFrom = $request->filled('date_from') ? $request->date_from : null;
             $dateTo   = $request->filled('date_to')   ? $request->date_to   : null;
-            $query->whereNotExists(function ($sub) use ($dateFrom, $dateTo) {
-                $sub->select(\Illuminate\Support\Facades\DB::raw(1))
-                    ->from('hemis_quiz_results as h2')
-                    ->where('h2.is_active', 1)
-                    ->whereColumn('h2.student_id', 'hemis_quiz_results.student_id')
-                    ->whereColumn('h2.fan_id', 'hemis_quiz_results.fan_id')
-                    ->whereColumn('h2.quiz_type', 'hemis_quiz_results.quiz_type')
-                    ->whereColumn('h2.shakl', 'hemis_quiz_results.shakl')
-                    ->where(function ($q) {
-                        $q->whereColumn('h2.grade', '>', 'hemis_quiz_results.grade')
-                          ->orWhere(function ($q2) {
-                              $q2->whereColumn('h2.grade', '=', 'hemis_quiz_results.grade')
-                                 ->whereColumn('h2.attempt_id', '>', 'hemis_quiz_results.attempt_id');
-                          });
-                    });
-                if ($dateFrom) $sub->whereDate('h2.date_finish', '>=', $dateFrom);
-                if ($dateTo)   $sub->whereDate('h2.date_finish', '<=', $dateTo);
-            });
-
             $hasNameSearch = $request->filled('student_name');
             $hasShaklSearch = $request->filled('shakl_search');
+
+            // Ism bilan qidirishda talabaning barcha mos yozuvlari ko'rinsin.
+            // Aks holda boshqa sanadagi balandroq baho aynan kerakli yozuvni
+            // yashirib yuboradi (masalan 03.06 dagi 40 bahoni 24.01 dagi 100).
+            if (!$hasNameSearch) {
+                // Bitta (talaba, fan, quiz_type, shakl) bo'yicha eng yuqori bahoga
+                // ega bo'lgan urinishni qoldirish. Sana oralig'i tanlangan bo'lsa,
+                // dedup ham shu oralig'ning o'zida ishlaydi.
+                $query->whereNotExists(function ($sub) use ($dateFrom, $dateTo) {
+                    $sub->select(\Illuminate\Support\Facades\DB::raw(1))
+                        ->from('hemis_quiz_results as h2')
+                        ->where('h2.is_active', 1)
+                        ->whereColumn('h2.student_id', 'hemis_quiz_results.student_id')
+                        ->whereColumn('h2.fan_id', 'hemis_quiz_results.fan_id')
+                        ->whereColumn('h2.quiz_type', 'hemis_quiz_results.quiz_type')
+                        ->whereColumn('h2.shakl', 'hemis_quiz_results.shakl')
+                        ->where(function ($q) {
+                            $q->whereColumn('h2.grade', '>', 'hemis_quiz_results.grade')
+                              ->orWhere(function ($q2) {
+                                  $q2->whereColumn('h2.grade', '=', 'hemis_quiz_results.grade')
+                                     ->whereColumn('h2.attempt_id', '>', 'hemis_quiz_results.attempt_id');
+                              });
+                        });
+                    if ($dateFrom) $sub->whereDate('h2.date_finish', '>=', $dateFrom);
+                    if ($dateTo)   $sub->whereDate('h2.date_finish', '<=', $dateTo);
+                });
+            }
             if ($hasNameSearch) {
                 $nameIds = $this->findStudentIdentifiersByName((string) $request->student_name);
                 $query->where(function ($q) use ($request, $nameIds) {

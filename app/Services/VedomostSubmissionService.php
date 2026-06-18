@@ -114,6 +114,7 @@ class VedomostSubmissionService
             ->keyBy('curriculum_subject_id');
 
         $count = 0;
+        $keptIds = []; // joriy (haqiqiy) qatorlar — qolganlari eskirgan hisoblanadi
         $units = []; // 12a/12b uchun yo'nalish × fan × semestr birliklari
         foreach ($groups as $group) {
             $sem = $semByGroup->get($group->group_hemis_id);
@@ -141,7 +142,7 @@ class VedomostSubmissionService
                 $kafedraMudiri = $this->kafedraMudiri($deptHemisId);
                 $educationYear = $semesterYears["{$group->curriculum_hemis_id}|{$semCode}"] ?? $currentYear;
 
-                VedomostSubmission::updateOrCreate(
+                $row = VedomostSubmission::updateOrCreate(
                     [
                         'group_hemis_id' => $group->group_hemis_id,
                         'subject_id' => $subject->subject_id,
@@ -173,6 +174,7 @@ class VedomostSubmissionService
                         // status / fayllar / tekshiruv — atayin yangilanmaydi (oqim saqlanadi)
                     ]
                 );
+                $keptIds[] = $row->id;
                 $count++;
 
                 // 12a/12b — faqat OSKI/Test imtihonli fanlar uchun birlik to'playmiz.
@@ -213,9 +215,32 @@ class VedomostSubmissionService
             }
         }
 
-        $this->syncResitForms($units);
+        $keptIds = array_merge($keptIds, $this->syncResitForms($units));
+
+        // Eskirgan qatorlarni tozalash — endi joriy bo'lmagan (masalan, faol
+        // talabasi qolmagan guruh) tegilmagan vedomostlar. Faqat pending VA fayl
+        // yuklanmagan qatorlar o'chiriladi; yuklangan/tasdiqlanganlarga tegilmaydi.
+        $this->pruneStale($keptIds);
 
         return $count;
+    }
+
+    /**
+     * Joriy syncda yaratilmagan (eskirgan) va hali ishlatilmagan (pending, fayl
+     * yo'q) vedomost qatorlarini o'chiradi. keptIds bo'sh bo'lsa hech narsa
+     * o'chirilmaydi (xavfsizlik — sync hech narsa ishlab chiqarmagan holat).
+     */
+    private function pruneStale(array $keptIds): void
+    {
+        $keptIds = array_values(array_unique(array_filter($keptIds)));
+        if (empty($keptIds)) {
+            return;
+        }
+
+        VedomostSubmission::whereNotIn('id', $keptIds)
+            ->where('status', VedomostSubmission::STATUS_PENDING)
+            ->whereNull('pdf_path')
+            ->delete();
     }
 
     /**
@@ -226,11 +251,13 @@ class VedomostSubmissionService
      *  - 12b : 2-urinish (resit) sanasi o'tgan VA 2-urinishda yiqilganlar bo'lsa.
      * Yiqilgan/o'tgan aniqlash individual-exam-schedule logikasiga mos
      * (student_grades: training_type 101/102, attempt, retake_grade ?? grade < 60).
+     *
+     * @return array<int> ochilgan (saqlanadigan) 12a/12b qator id lari
      */
-    private function syncResitForms(array $units): void
+    private function syncResitForms(array $units): array
     {
         if (empty($units)) {
-            return;
+            return [];
         }
 
         $today = Carbon::today()->toDateString();
@@ -261,6 +288,7 @@ class VedomostSubmissionService
             array_keys($allGroupIds), array_keys($allSubjectKeys), array_keys($allSemCodes), $unitByKey, $units
         );
 
+        $keptIds = [];
         foreach ($units as $unitKey => $unit) {
             $groupIds = array_values(array_unique($unit['group_ids']));
             $f = $failures[$unitKey] ?? ['failed1' => 0, 'failed2' => 0];
@@ -268,23 +296,33 @@ class VedomostSubmissionService
 
             // 12a — 1-urinish tugagan (sana o'tgan) va 1-urinishda yiqilganlar bor.
             $open12a = $f['failed1'] > 0 && $d['attempt1'] !== null && $d['attempt1'] < $today;
-            $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12A, $open12a, $d['resit']);
+            $id12a = $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12A, $open12a, $d['resit']);
+            if ($id12a) {
+                $keptIds[] = $id12a;
+            }
 
             // 12b — 2-urinish (resit) tugagan va 2-urinishda yiqilganlar bor.
             $open12b = $f['failed2'] > 0 && $d['resit'] !== null && $d['resit'] < $today;
-            $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12B, $open12b, $d['resit2']);
+            $id12b = $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12B, $open12b, $d['resit2']);
+            if ($id12b) {
+                $keptIds[] = $id12b;
+            }
         }
+
+        return $keptIds;
     }
 
     /**
      * Shart bajarilsa 12a/12b umumiy qatorini yaratadi/yangilaydi; aks holda
      * (hali yuklanmagan, status pending) bo'lsa olib tashlaydi.
+     *
+     * @return int|null  ochilgan (saqlanadigan) qator id, aks holda null
      */
-    private function upsertOrCleanResitRow(array $unit, array $groupIds, string $formType, bool $shouldOpen, ?string $baseDate): void
+    private function upsertOrCleanResitRow(array $unit, array $groupIds, string $formType, bool $shouldOpen, ?string $baseDate): ?int
     {
         $repGroupId = !empty($groupIds) ? min($groupIds) : null;
         if (!$repGroupId) {
-            return;
+            return null;
         }
 
         $keys = [
@@ -301,14 +339,14 @@ class VedomostSubmissionService
                 ->where('status', VedomostSubmission::STATUS_PENDING)
                 ->whereNull('pdf_path')
                 ->delete();
-            return;
+            return null;
         }
 
         $deadline = $baseDate
             ? WorkdayCalculator::addWorkdays(Carbon::parse($baseDate), self::DEADLINE_WORKDAYS)->toDateString()
             : null;
 
-        VedomostSubmission::updateOrCreate($keys, [
+        $row = VedomostSubmission::updateOrCreate($keys, [
             'education_year' => $unit['education_year'],
             'group_name' => 'Barcha guruhlar (' . count($groupIds) . ' ta)',
             'curriculum_hemis_id' => $unit['curriculum_hemis_id'],
@@ -333,6 +371,8 @@ class VedomostSubmissionService
             'deadline' => $deadline,
             // status / fayllar / tekshiruv — atayin yangilanmaydi (oqim saqlanadi)
         ]);
+
+        return $row->id;
     }
 
     /**

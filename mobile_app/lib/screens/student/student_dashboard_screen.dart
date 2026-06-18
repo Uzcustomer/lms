@@ -927,7 +927,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: isContract
-                          ? AppTheme.warningColor.withAlpha(25)
+                          ? AppTheme.primaryColor.withAlpha(25)
                           : AppTheme.successColor.withAlpha(25),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -937,7 +937,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         Icon(
                           isContract ? Icons.receipt_long : Icons.school,
                           size: 14,
-                          color: isContract ? AppTheme.warningColor : AppTheme.successColor,
+                          color: isContract ? AppTheme.primaryColor : AppTheme.successColor,
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -947,7 +947,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: isContract ? AppTheme.warningColor : AppTheme.successColor,
+                            color: isContract ? AppTheme.primaryColor : AppTheme.successColor,
                           ),
                         ),
                       ],

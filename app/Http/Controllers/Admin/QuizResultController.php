@@ -761,11 +761,15 @@ class QuizResultController extends Controller
             $dateTo   = $request->filled('date_to')   ? $request->date_to   : null;
             $hasNameSearch = $request->filled('student_name');
             $hasShaklSearch = $request->filled('shakl_search');
+            // Dublikatlarni ko'rsatish (default ON): yoqilganda dedup o'chiriladi
+            // va bir xil (talaba+fan+quiz_type+shakl) bo'yicha barcha urinishlar
+            // ko'rinadi — takroriy topshirishlarni (jiddiy xato) aniqlash uchun.
+            $showDuplicates = $request->boolean('show_duplicates', true);
 
             // Ism bilan qidirishda talabaning barcha mos yozuvlari ko'rinsin.
             // Aks holda boshqa sanadagi balandroq baho aynan kerakli yozuvni
             // yashirib yuboradi (masalan 03.06 dagi 40 bahoni 24.01 dagi 100).
-            if (!$hasNameSearch) {
+            if (!$hasNameSearch && !$showDuplicates) {
                 // Bitta (talaba, fan, quiz_type, shakl) bo'yicha eng yuqori bahoga
                 // ega bo'lgan urinishni qoldirish. Sana oralig'i tanlangan bo'lsa,
                 // dedup ham shu oralig'ning o'zida ishlaydi.

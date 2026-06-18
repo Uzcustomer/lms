@@ -32,6 +32,9 @@ class VedomostSubmissionService
     private ?\Illuminate\Support\Collection $fanMasuliMap = null;
     private ?bool $studentGradeAttemptCol = null;
 
+    /** Dry-run rejimida o'chiriladigan eskirgan qatorlar (sinov uchun). */
+    public array $lastPruneCandidates = [];
+
     public function __construct(private VedomostMergeService $merge)
     {
     }
@@ -79,8 +82,10 @@ class VedomostSubmissionService
      *
      * @return int yaratilgan/yangilangan yozuvlar soni
      */
-    public function sync(): int
+    public function sync(bool $dryRun = false): int
     {
+        $this->lastPruneCandidates = [];
+
         $currentYear = $this->currentEducationYear();
         if (!$currentYear) {
             return 0;
@@ -113,6 +118,13 @@ class VedomostSubmissionService
             ->get()
             ->keyBy('curriculum_subject_id');
 
+        // Dry-run: barcha o'zgarishlar tranzaksiyada bajariladi va oxirida
+        // rollback qilinadi — bazaga hech narsa yozilmaydi/o'chirilmaydi.
+        if ($dryRun) {
+            DB::beginTransaction();
+        }
+
+        try {
         $count = 0;
         $keptIds = []; // joriy (haqiqiy) qatorlar — qolganlari eskirgan hisoblanadi
         $units = []; // 12a/12b uchun yo'nalish × fan × semestr birliklari
@@ -220,9 +232,49 @@ class VedomostSubmissionService
         // Eskirgan qatorlarni tozalash — endi joriy bo'lmagan (masalan, faol
         // talabasi qolmagan guruh) tegilmagan vedomostlar. Faqat pending VA fayl
         // yuklanmagan qatorlar o'chiriladi; yuklangan/tasdiqlanganlarga tegilmaydi.
-        $this->pruneStale($keptIds);
+        // Nima o'chishini aniqlaymiz (sinov + haqiqiy run hisoboti uchun).
+        $this->lastPruneCandidates = $this->staleCandidates($keptIds);
+        if (!$dryRun) {
+            $this->pruneStale($keptIds);
+        }
 
         return $count;
+        } finally {
+            if ($dryRun) {
+                DB::rollBack();
+            }
+        }
+    }
+
+    /**
+     * Joriy syncda yaratilmagan (eskirgan) va hali ishlatilmagan (pending, fayl
+     * yo'q) qatorlar bo'yicha so'rov.
+     */
+    private function staleQuery(array $keptIds)
+    {
+        return VedomostSubmission::whereNotIn('id', $keptIds)
+            ->where('status', VedomostSubmission::STATUS_PENDING)
+            ->whereNull('pdf_path');
+    }
+
+    /**
+     * O'chiriladigan eskirgan qatorlar ro'yxati (dry-run uchun).
+     *
+     * @return array<int, object>
+     */
+    private function staleCandidates(array $keptIds): array
+    {
+        $keptIds = array_values(array_unique(array_filter($keptIds)));
+        if (empty($keptIds)) {
+            return [];
+        }
+
+        return $this->staleQuery($keptIds)
+            ->orderBy('form_type')
+            ->orderBy('group_name')
+            ->orderBy('subject_name')
+            ->get(['id', 'group_name', 'subject_name', 'form_type', 'semester_code', 'specialty_name'])
+            ->all();
     }
 
     /**
@@ -237,10 +289,7 @@ class VedomostSubmissionService
             return;
         }
 
-        VedomostSubmission::whereNotIn('id', $keptIds)
-            ->where('status', VedomostSubmission::STATUS_PENDING)
-            ->whereNull('pdf_path')
-            ->delete();
+        $this->staleQuery($keptIds)->delete();
     }
 
     /**

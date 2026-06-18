@@ -3359,6 +3359,121 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Matndan semestr raqamini ajratib oladi ("5-semestr" -> 5, "5-sem" -> 5).
+     */
+    private function semesterNumber(?string $s): ?int
+    {
+        if ($s === null || $s === '') {
+            return null;
+        }
+        if (preg_match('/(\d+)/', $s, $m)) {
+            return (int) $m[1];
+        }
+        return null;
+    }
+
+    /**
+     * Berilgan attempt_id lar ichidan talabaning JORIY semestriga tegishli
+     * bo'lmagan (o'tgan semestr) natijalarni aniqlaydi. "Joriy semestr" toggle
+     * yoqilganda kunlik monitoringdan chiqarib tashlanadi.
+     *
+     * Joriy semestr = talaba ayni paytda turgan semestr (students.semester_name).
+     * Natija semestri (hemis_quiz_results.semester) talabaning joriy semestridan
+     * farq qilsa — chiqariladi. Semestr noma'lum bo'lsa — qoldiriladi.
+     *
+     * @param  int[]  $attemptIds
+     * @return array<int,true>  hisobga olinmaydigan attempt_id lar to'plami
+     */
+    private function nonCurrentSemesterAttemptIds(array $attemptIds): array
+    {
+        $excluded = [];
+        if (empty($attemptIds)) {
+            return $excluded;
+        }
+
+        $qr = DB::table('hemis_quiz_results')
+            ->whereIn('attempt_id', $attemptIds)
+            ->whereNotNull('student_id')
+            ->select('attempt_id', 'student_id', 'semester')
+            ->get();
+
+        if ($qr->isEmpty()) {
+            return $excluded;
+        }
+
+        $studentIds = $qr->pluck('student_id')
+            ->map(fn ($v) => (string) $v)
+            ->filter(fn ($v) => $v !== '')
+            ->unique()->all();
+
+        // student_id (hemis_id YOKI student_id_number) -> joriy semestr raqami
+        $semByKey = [];
+        if (!empty($studentIds)) {
+            Student::query()
+                ->whereIn('hemis_id', $studentIds)
+                ->orWhereIn('student_id_number', $studentIds)
+                ->get(['hemis_id', 'student_id_number', 'semester_name'])
+                ->each(function ($s) use (&$semByKey) {
+                    $num = $this->semesterNumber($s->semester_name ?? '');
+                    if (!empty($s->hemis_id)) {
+                        $semByKey[(string) $s->hemis_id] = $num;
+                    }
+                    if (!empty($s->student_id_number)) {
+                        $semByKey[(string) $s->student_id_number] = $num;
+                    }
+                });
+        }
+
+        foreach ($qr as $row) {
+            $studentSem = $semByKey[(string) $row->student_id] ?? null;
+            $resultSem = $this->semesterNumber((string) ($row->semester ?? ''));
+            // Faqat ikkala semestr ham aniq bo'lib, farq qilganda chiqariladi.
+            if ($studentSem !== null && $resultSem !== null && $resultSem !== $studentSem) {
+                $excluded[(int) $row->attempt_id] = true;
+            }
+        }
+
+        return $excluded;
+    }
+
+    /**
+     * Tafsilot ro'yxatlari uchun talaba ma'lumotlari: fakultet, yo'nalish,
+     * kurs, guruh. Kalit — student_id (hemis_id yoki student_id_number).
+     *
+     * @param  string[]  $studentIds
+     * @return array<string, array{faculty:?string, direction:?string, kurs:?string, group:?string}>
+     */
+    private function studentDetailsByKey(array $studentIds): array
+    {
+        $map = [];
+        $studentIds = array_values(array_unique(array_filter($studentIds, fn ($v) => $v !== null && $v !== '')));
+        if (empty($studentIds)) {
+            return $map;
+        }
+
+        Student::query()
+            ->whereIn('hemis_id', $studentIds)
+            ->orWhereIn('student_id_number', $studentIds)
+            ->get(['hemis_id', 'student_id_number', 'department_name', 'specialty_name', 'level_name', 'group_name'])
+            ->each(function ($s) use (&$map) {
+                $info = [
+                    'faculty'   => $s->department_name,
+                    'direction' => $s->specialty_name,
+                    'kurs'      => $s->level_name,
+                    'group'     => $s->group_name,
+                ];
+                if (!empty($s->hemis_id)) {
+                    $map[(string) $s->hemis_id] = $info;
+                }
+                if (!empty($s->student_id_number)) {
+                    $map[(string) $s->student_id_number] = $info;
+                }
+            });
+
+        return $map;
+    }
+
+    /**
      * Mark bosqichida tushib qolgan (hemis_quiz_results'da bor, lekin
      * student_grades'ga yuklanmagan) natijalarni ikkiga ajratadi:
      *   - 'gap'     : haqiqatan yuklanishi kerak bo'lib unutilgan (farqda qoladi)
@@ -3503,6 +3618,11 @@ class QuizResultController extends Controller
 
             // Faqat bakalavriat: ANIQ bakalavr bo'lmagan attempt'larni chiqaramiz.
             $excludedIds = $this->nonBakalavrAttemptIds($allMoodleIds);
+
+            // Joriy semestr toggle (default ON): o'tgan semestr natijalarini chiqaramiz.
+            if ($request->boolean('current_semester', true)) {
+                $excludedIds += $this->nonCurrentSemesterAttemptIds($allMoodleIds);
+            }
 
             // Hozirgi LMS holatini bulk olamiz: attempt_id => hemis_quiz_results.id.
             // Hajm cheklangan (62 kun * kunlik attempts), shuning uchun get() yetarli.
@@ -3706,6 +3826,11 @@ class QuizResultController extends Controller
         // Faqat bakalavriat: ANIQ bakalavr bo'lmagan attempt'larni chiqaramiz.
         $excludedIds = $this->nonBakalavrAttemptIds($allMoodleIds);
 
+        // Joriy semestr toggle (default ON): o'tgan semestr natijalarini chiqaramiz.
+        if ($request->boolean('current_semester', true)) {
+            $excludedIds += $this->nonCurrentSemesterAttemptIds($allMoodleIds);
+        }
+
         // Sync qilinganlar (attempt_id => row)
         $syncedByAttempt = collect();
         if (!empty($allMoodleIds)) {
@@ -3856,6 +3981,10 @@ class QuizResultController extends Controller
 
             // Faqat bakalavriat: ANIQ bakalavr bo'lmagan attempt'larni chiqaramiz.
             $excludedIds = $this->nonBakalavrAttemptIds($moodleIds);
+            // Joriy semestr toggle (default ON): o'tgan semestr natijalarini chiqaramiz.
+            if ($request->boolean('current_semester', true)) {
+                $excludedIds += $this->nonCurrentSemesterAttemptIds($moodleIds);
+            }
             if (!empty($excludedIds)) {
                 $moodleIds = array_values(array_filter($moodleIds, fn ($a) => !isset($excludedIds[$a])));
             }
@@ -3899,14 +4028,24 @@ class QuizResultController extends Controller
             $markGapRows = $synced->filter(fn ($row) => !isset($gradedIds[(int) $row->id]))->values();
             $markClass = $this->classifyMarkGap($markGapRows);
 
+            // Talaba ma'lumotlari (fakultet/yo'nalish/kurs/guruh) — tafsilot uchun.
+            $details = $this->studentDetailsByKey(
+                $markGapRows->pluck('student_id')->map(fn ($v) => (string) $v)->all()
+            );
+
             $missingMark = [];
             $warnings = [];
             foreach ($markGapRows as $row) {
                 $verdict = $markClass[(int) $row->attempt_id] ?? ['type' => 'gap', 'reason' => null];
+                $info = $details[(string) $row->student_id] ?? ['faculty' => null, 'direction' => null, 'kurs' => null, 'group' => null];
                 $entry = [
                     'attempt_id'   => (int) $row->attempt_id,
                     'student_id'   => $row->student_id,
                     'student_name' => $row->student_name,
+                    'faculty'      => $info['faculty'],
+                    'direction'    => $info['direction'],
+                    'kurs'         => $info['kurs'],
+                    'group'        => $info['group'],
                     'fan_name'     => $row->fan_name,
                     'quiz_type'    => $row->quiz_type,
                     'attempt_name' => $row->attempt_name,

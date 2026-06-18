@@ -3514,9 +3514,40 @@ class QuizResultController extends Controller
 
         $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
 
+        // Dublikat aniqlash: shu (talaba+fan+quiz_type+shakl) bo'yicha BOSHQA
+        // urinish allaqachon jurnalga yuklangan bo'lsa, ushbu nusxa "farq" emas.
+        // (Masalan talaba bir mavzuni 2 marta ishlagan; bittasi yuklangan, ikkinchisi
+        //  Moodle kunlik ro'yxatida turibdi.) Jurnal logikasiga (is_active=0 lar ham)
+        //  mos bo'lishi uchun student_grades.quiz_result_id orqali tekshiramiz.
+        $uploadedSiblingKeys = [];
+        $fanIds = $results->pluck('fan_id')->filter()->unique()->values()->all();
+        if (!empty($studentIds) && !empty($fanIds)) {
+            DB::table('hemis_quiz_results as h')
+                ->join('student_grades as sg', 'sg.quiz_result_id', '=', 'h.id')
+                ->whereIn('h.student_id', $studentIds)
+                ->whereIn('h.fan_id', $fanIds)
+                ->whereNull('sg.deleted_at')
+                ->select('h.student_id', 'h.fan_id', 'h.quiz_type', 'h.shakl')
+                ->distinct()
+                ->get()
+                ->each(function ($s) use (&$uploadedSiblingKeys) {
+                    $uploadedSiblingKeys[$s->student_id . '|' . $s->fan_id . '|' . $s->quiz_type . '|' . $s->shakl] = true;
+                });
+        }
+
         foreach ($results as $r) {
             $type = 'gap';
             $reason = null;
+
+            $sibKey = $r->student_id . '|' . $r->fan_id . '|' . $r->quiz_type . '|' . $r->shakl;
+            if (isset($uploadedSiblingKeys[$sibKey])) {
+                // Aynan shu natija (quiz_type+shakl) boshqa urinish orqali yuklangan.
+                $out[(int) $r->attempt_id] = [
+                    'type' => 'warning',
+                    'reason' => 'Dublikat: shu natija (' . $r->shakl . ') boshqa urinish orqali allaqachon jurnalga yuklangan',
+                ];
+                continue;
+            }
 
             if ($r->shakl && preg_match('/^(\d+)-mavzu$/i', $r->shakl, $m)) {
                 $student = $studentLookup[$r->student_id] ?? null;

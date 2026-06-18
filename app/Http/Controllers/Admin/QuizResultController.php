@@ -3291,6 +3291,74 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Berilgan attempt_id lar ichidan BAKALAVRIATdan boshqa ta'lim turidagi
+     * (ordinatura, magistratura, ...) talabalarga tegishlilarini aniqlaydi.
+     * Kunlik monitoring faqat bakalavriat bo'yicha hisoblanishi uchun bular
+     * hisobdan chiqarib tashlanadi.
+     *
+     * Ta'lim turi hemis_quiz_results.student_id -> students (hemis_id yoki
+     * student_id_number) bog'lanishidan olinadi. Agar talaba topilmasa yoki
+     * ta'lim turi noma'lum bo'lsa, attempt chiqarib tashlanmaydi — shunda
+     * haqiqiy sync gap yashirilmaydi (faqat ANIQ bakalavr bo'lmaganlar olib
+     * tashlanadi).
+     *
+     * @param int[] $attemptIds
+     * @return array<int,true> hisobga olinmaydigan attempt_id lar to'plami
+     */
+    private function nonBakalavrAttemptIds(array $attemptIds): array
+    {
+        $excluded = [];
+        if (empty($attemptIds)) {
+            return $excluded;
+        }
+
+        // attempt_id -> student_id (hemis_quiz_results'dagi identifikator)
+        $qr = DB::table('hemis_quiz_results')
+            ->whereIn('attempt_id', $attemptIds)
+            ->whereNotNull('student_id')
+            ->select('attempt_id', 'student_id')
+            ->get();
+
+        if ($qr->isEmpty()) {
+            return $excluded;
+        }
+
+        $studentIds = $qr->pluck('student_id')
+            ->map(fn ($v) => (string) $v)
+            ->filter(fn ($v) => $v !== '')
+            ->unique()
+            ->all();
+
+        // student_id (hemis_id YOKI student_id_number) -> education_type_name
+        $eduByKey = [];
+        if (!empty($studentIds)) {
+            Student::query()
+                ->whereIn('hemis_id', $studentIds)
+                ->orWhereIn('student_id_number', $studentIds)
+                ->get(['hemis_id', 'student_id_number', 'education_type_name'])
+                ->each(function ($s) use (&$eduByKey) {
+                    $edu = (string) ($s->education_type_name ?? '');
+                    if (!empty($s->hemis_id)) {
+                        $eduByKey[(string) $s->hemis_id] = $edu;
+                    }
+                    if (!empty($s->student_id_number)) {
+                        $eduByKey[(string) $s->student_id_number] = $edu;
+                    }
+                });
+        }
+
+        foreach ($qr as $row) {
+            $edu = $eduByKey[(string) $row->student_id] ?? null;
+            // Faqat ta'lim turi ANIQ bo'lib, bakalavr BO'LMAGAN holatlar chiqariladi.
+            if ($edu !== null && $edu !== '' && stripos($edu, 'bakalavr') === false) {
+                $excluded[(int) $row->attempt_id] = true;
+            }
+        }
+
+        return $excluded;
+    }
+
+    /**
      * Kunlik monitoring uchun AJAX data. Moodle WS'dan kunlik attempt_id
      * ro'yxati olinadi, LMS'dagi hemis_quiz_results va student_grades bilan
      * solishtirilib, har kun uchun yo'qotish statistikasi qaytariladi.
@@ -3327,6 +3395,9 @@ class QuizResultController extends Controller
             }
             $allMoodleIds = array_keys($allMoodleIds);
 
+            // Faqat bakalavriat: ANIQ bakalavr bo'lmagan attempt'larni chiqaramiz.
+            $excludedIds = $this->nonBakalavrAttemptIds($allMoodleIds);
+
             // Hozirgi LMS holatini bulk olamiz: attempt_id => hemis_quiz_results.id.
             // Hajm cheklangan (62 kun * kunlik attempts), shuning uchun get() yetarli.
             $syncedMap = []; // attempt_id => quiz_result_id
@@ -3362,7 +3433,12 @@ class QuizResultController extends Controller
             foreach ($days as $d) {
                 $date = (string) $d['date'];
                 $attemptIds = array_map('intval', (array) ($d['attempt_ids'] ?? []));
-                $moodleCount = (int) ($d['count'] ?? count($attemptIds));
+                if (!empty($excludedIds)) {
+                    $attemptIds = array_values(array_filter($attemptIds, fn ($a) => !isset($excludedIds[$a])));
+                }
+                // Bakalavr bo'lmaganlar chiqarilgani uchun WS'ning 'count' i emas,
+                // filtrlangan ro'yxat soni ishlatiladi.
+                $moodleCount = count($attemptIds);
 
                 $syncedCount = 0;
                 $gradedCount = 0;
@@ -3478,6 +3554,9 @@ class QuizResultController extends Controller
         }
         $allMoodleIds = array_keys($allMoodleIds);
 
+        // Faqat bakalavriat: ANIQ bakalavr bo'lmagan attempt'larni chiqaramiz.
+        $excludedIds = $this->nonBakalavrAttemptIds($allMoodleIds);
+
         // Sync qilinganlar (attempt_id => row)
         $syncedByAttempt = collect();
         if (!empty($allMoodleIds)) {
@@ -3508,7 +3587,11 @@ class QuizResultController extends Controller
         foreach ($days as $d) {
             $date = (string) $d['date'];
             $attemptIds = $perDay[$date] ?? [];
-            $moodleCount = (int) ($d['count'] ?? count($attemptIds));
+            if (!empty($excludedIds)) {
+                $attemptIds = array_values(array_filter($attemptIds, fn ($a) => !isset($excludedIds[$a])));
+            }
+            // Faqat bakalavriat — filtrlangan ro'yxat soni.
+            $moodleCount = count($attemptIds);
 
             $syncedAttemptIds = [];
             $markedDayCount = 0;
@@ -3600,6 +3683,12 @@ class QuizResultController extends Controller
                     $moodleIds = array_map('intval', (array) ($d['attempt_ids'] ?? []));
                     break;
                 }
+            }
+
+            // Faqat bakalavriat: ANIQ bakalavr bo'lmagan attempt'larni chiqaramiz.
+            $excludedIds = $this->nonBakalavrAttemptIds($moodleIds);
+            if (!empty($excludedIds)) {
+                $moodleIds = array_values(array_filter($moodleIds, fn ($a) => !isset($excludedIds[$a])));
             }
 
             if (empty($moodleIds)) {

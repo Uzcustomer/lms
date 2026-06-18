@@ -40,6 +40,26 @@ class VedomostSubmissionService
     }
 
     /**
+     * Reja → fakultet (curricula.department_hemis_id) xaritasi. 12a/12b birliklarini
+     * fakultet bo'yicha bo'lish uchun — bitta yo'nalish bir necha fakultetda
+     * (masalan "Davolash ishi" 1-son va 2-son davolashda) bo'lsa, har fakultet
+     * o'z umumiy varag'iga ega bo'ladi.
+     *
+     * @return \Illuminate\Support\Collection<string,string>  curriculum_hemis_id => faculty department_hemis_id
+     */
+    private function facultyByCurriculum(array $curriculumIds): Collection
+    {
+        if (empty($curriculumIds)) {
+            return collect();
+        }
+
+        return DB::table('curricula')
+            ->whereIn('curricula_hemis_id', $curriculumIds)
+            ->whereNotNull('department_hemis_id')
+            ->pluck('department_hemis_id', 'curricula_hemis_id');
+    }
+
+    /**
      * Joriy o'quv yili kodi (HEMIS "current" bayrog'idan).
      */
     public function currentEducationYear(): ?string
@@ -110,6 +130,9 @@ class VedomostSubmissionService
             ->get(['curriculum_hemis_id', 'code', 'education_year'])
             ->keyBy(fn($s) => $s->curriculum_hemis_id . '|' . $s->code)
             ->map(fn($s) => $s->education_year);
+
+        // 12a/12b birliklarini fakultet bo'yicha bo'lish uchun reja→fakultet xaritasi.
+        $facultyByCurriculum = $this->facultyByCurriculum($curriculumIds);
 
         // Fan mas'ullarini oldindan yuklab olamiz (har qator uchun alohida so'rov bermaslik uchun)
         $this->fanMasuliMap = DB::table('teacher_responsible_subjects as trs')
@@ -190,11 +213,13 @@ class VedomostSubmissionService
                 $count++;
 
                 // 12a/12b — faqat OSKI/Test imtihonli fanlar uchun birlik to'playmiz.
+                // Birlik FAKULTET bo'yicha ham bo'linadi — har fakultet o'z varag'iga ega.
                 if (in_array($subject->closing_form, self::RESIT_CLOSING_FORMS, true)) {
                     $rootSubject = $this->merge->rootSubjectName($subject->subject_name);
+                    $facultyId = (string) ($facultyByCurriculum[$group->curriculum_hemis_id] ?? $group->curriculum_hemis_id);
                     $unitKey = implode('|', [
                         $educationYear, $semCode, (string) $group->specialty_name,
-                        $subject->closing_form, $rootSubject,
+                        $subject->closing_form, $rootSubject, $facultyId,
                     ]);
                     if (!isset($units[$unitKey])) {
                         $units[$unitKey] = [
@@ -322,6 +347,7 @@ class VedomostSubmissionService
             ->get(['curriculum_hemis_id', 'code', 'education_year'])
             ->keyBy(fn($s) => $s->curriculum_hemis_id . '|' . $s->code)
             ->map(fn($s) => $s->education_year);
+        $facultyByCurriculum = $this->facultyByCurriculum($curriculumIds);
 
         $units = [];
         foreach ($groups as $group) {
@@ -343,9 +369,10 @@ class VedomostSubmissionService
                 }
                 $educationYear = $semesterYears["{$group->curriculum_hemis_id}|{$semCode}"] ?? $currentYear;
                 $rootSubject = $this->merge->rootSubjectName($subject->subject_name);
+                $facultyId = (string) ($facultyByCurriculum[$group->curriculum_hemis_id] ?? $group->curriculum_hemis_id);
                 $unitKey = implode('|', [
                     $educationYear, $semCode, (string) $group->specialty_name,
-                    $subject->closing_form, $rootSubject,
+                    $subject->closing_form, $rootSubject, $facultyId,
                 ]);
                 if (!isset($units[$unitKey])) {
                     $units[$unitKey] = [

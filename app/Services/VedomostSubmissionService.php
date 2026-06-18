@@ -409,6 +409,7 @@ class VedomostSubmissionService
                 'specialty' => $unit['specialty_name'],
                 'subject' => $unit['subject_name'],
                 'closing_form' => $unit['closing_form'],
+                'semester_code' => $unit['semester_code'],
                 'groups' => count(array_unique($unit['group_ids'])),
                 'group_names' => implode(', ', array_values(array_unique($unit['group_names']))),
                 'subject_keys' => implode(', ', $unit['subject_keys']),

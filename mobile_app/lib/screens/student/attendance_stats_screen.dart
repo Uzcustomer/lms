@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../l10n/app_localizations.dart';
 import '../../providers/student_provider.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
@@ -79,6 +80,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final muted = ClinicTheme.mutedOf(context);
 
     return Scaffold(
@@ -86,8 +88,12 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
       body: Column(
         children: [
           ClinicHeader(
-            overline: 'FOYDALI',
-            title: 'Davomat statistikasi',
+            overline: l.useful.toUpperCase(),
+            title: l.pick(
+              uz: 'Davomat statistikasi',
+              ru: 'Статистика посещаемости',
+              en: 'Attendance statistics',
+            ),
             onBack: () => Navigator.pop(context),
           ),
           if (_loadingSubjects)
@@ -95,7 +101,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
           else if (_subjects.isEmpty)
             Expanded(
               child: Center(
-                child: Text('Fanlar topilmadi',
+                child: Text(l.noSubjects,
                     style: TextStyle(color: muted, fontSize: 15)),
               ),
             )
@@ -120,7 +126,10 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
                       Icon(Icons.touch_app_outlined,
                           size: 48, color: ClinicTheme.faint),
                       const SizedBox(height: 12),
-                      Text('Fanni tanlang',
+                      Text(l.pick(
+                          uz: 'Fanni tanlang',
+                          ru: 'Выберите предмет',
+                          en: 'Select a subject'),
                           style: TextStyle(
                               color: muted,
                               fontSize: 15,
@@ -136,6 +145,7 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
   }
 
   Widget _buildSubjectDropdown() {
+    final l = AppLocalizations.of(context);
     final ink = ClinicTheme.inkOf(context);
     final muted = ClinicTheme.mutedOf(context);
     final surface = ClinicTheme.surfaceOf(context);
@@ -152,7 +162,10 @@ class _AttendanceStatsScreenState extends State<AttendanceStatsScreen> {
       child: DropdownButtonHideUnderline(
         child: DropdownButton<int>(
           value: _selectedSubjectId,
-          hint: Text('Fanni tanlang', style: TextStyle(color: muted, fontSize: 14)),
+          hint: Text(
+            l.pick(uz: 'Fanni tanlang', ru: 'Выберите предмет', en: 'Select a subject'),
+            style: TextStyle(color: muted, fontSize: 14),
+          ),
           isExpanded: true,
           icon: Icon(Icons.keyboard_arrow_down_rounded, color: muted),
           dropdownColor: surface,

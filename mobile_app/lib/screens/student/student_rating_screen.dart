@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../widgets/clinic_header.dart';
@@ -12,12 +13,6 @@ class StudentRatingScreen extends StatefulWidget {
 
 class _StudentRatingScreenState extends State<StudentRatingScreen> {
   final _filters = const ['group', 'specialty', 'department'];
-  final _filterLabels = const {
-    'group': 'Guruh',
-    'specialty': 'Yo\'nalish',
-    'department': 'Fakultet',
-  };
-
   String _activeFilter = 'group';
   bool _loading = true;
   int _myRank = 0;
@@ -54,13 +49,24 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final filterLabels = {
+      'group': l.group,
+      'specialty': l.direction,
+      'department': l.faculty,
+    };
+
     return Scaffold(
       backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
           ClinicHeader(
-            overline: 'FOYDALI',
-            title: 'Talabalar reytingi',
+            overline: l.useful.toUpperCase(),
+            title: l.pick(
+              uz: 'Talabalar reytingi',
+              ru: 'Рейтинг студентов',
+              en: 'Student ranking',
+            ),
             onBack: () => Navigator.pop(context),
           ),
           Padding(
@@ -95,7 +101,7 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
                         borderRadius: BorderRadius.circular(10),
                       ),
                       child: Text(
-                        _filterLabels[f]!,
+                        filterLabels[f]!,
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           fontSize: 12.5,
@@ -115,7 +121,7 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _students.isEmpty
                     ? Center(
-                        child: Text('Ma\'lumot topilmadi',
+                        child: Text(l.noData,
                             style: TextStyle(color: ClinicTheme.mutedOf(context))))
                     : RefreshIndicator(
                         onRefresh: () => _load(force: true),
@@ -132,6 +138,7 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
   }
 
   Widget _buildMyRankCard() {
+    final l = AppLocalizations.of(context);
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -177,7 +184,10 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('SIZNING O\'RNINGIZ',
+                Text(l.pick(
+                    uz: 'SIZNING O\'RNINGIZ',
+                    ru: 'ВАШЕ МЕСТО',
+                    en: 'YOUR PLACE'),
                     style: TextStyle(
                         fontSize: 10,
                         letterSpacing: 0.5,
@@ -187,7 +197,11 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
                 Text(
                   _loading
                       ? '...'
-                      : '$_totalStudents talaba ichida $_myRank-o\'rin',
+                      : l.pick(
+                          uz: '$_totalStudents talaba ichida $_myRank-o\'rin',
+                          ru: '$_myRank место из $_totalStudents студентов',
+                          en: 'Rank $_myRank of $_totalStudents students',
+                        ),
                   style: const TextStyle(
                       fontSize: 14, color: Colors.white, fontWeight: FontWeight.w700),
                 ),
@@ -197,7 +211,7 @@ class _StudentRatingScreenState extends State<StudentRatingScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('O\'RTACHA',
+              Text(l.average.toUpperCase(),
                   style: TextStyle(
                       fontSize: 9,
                       letterSpacing: 0.5,

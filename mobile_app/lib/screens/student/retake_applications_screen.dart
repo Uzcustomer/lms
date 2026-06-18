@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../widgets/clinic_header.dart';
@@ -87,7 +88,13 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
     } on ApiException catch (e) {
       if (mounted) setState(() => _error = e.message);
     } catch (_) {
-      if (mounted) setState(() => _error = 'Ma\'lumotlarni yuklashda xatolik');
+      if (mounted) {
+        setState(() => _error = AppLocalizations.of(context).pick(
+              uz: 'Ma\'lumotlarni yuklashda xatolik',
+              ru: 'Ошибка загрузки данных',
+              en: 'Error loading data',
+            ));
+      }
     } finally {
       if (mounted) setState(() => _loading = false);
     }
@@ -147,7 +154,11 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
   Future<void> _submitApplication() async {
     if (_selected.isEmpty) return;
     if (_receiptBytes == null || _receiptFileName == null) {
-      _showSnack('Dekanat tasdig\'idagi faylni yuklang', error: true);
+      _showSnack(AppLocalizations.of(context).pick(
+        uz: 'Dekanat tasdig\'idagi faylni yuklang',
+        ru: 'Загрузите файл, подтвержденный деканатом',
+        en: 'Upload the file approved by the dean\'s office',
+      ), error: true);
       return;
     }
 
@@ -259,13 +270,18 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
           ClinicHeader(
-            overline: 'XIZMATLAR',
-            title: 'Qayta o\'qish arizasi',
+            overline: l.services.toUpperCase(),
+            title: l.pick(
+              uz: 'Qayta o\'qish arizasi',
+              ru: 'Заявка на пересдачу',
+              en: 'Retake application',
+            ),
             onBack: () => Navigator.pop(context),
             actions: [
               ClinicIconButton(icon: Icons.refresh_rounded, onTap: _load),
@@ -304,6 +320,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
   }
 
   Widget _buildHero() {
+    final l = AppLocalizations.of(context);
     return ShinySweep(
       radius: 20,
       child: Container(
@@ -331,9 +348,9 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Qayta o\'qish',
-                    style: TextStyle(
+                  Text(
+                    l.pick(uz: 'Qayta o\'qish', ru: 'Пересдача', en: 'Retake'),
+                    style: const TextStyle(
                       color: Colors.white,
                       fontSize: 20,
                       fontWeight: FontWeight.w900,
@@ -341,7 +358,11 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Qarzdor fanlar uchun ariza yuboring va holatini kuzating',
+                    l.pick(
+                      uz: 'Qarzdor fanlar uchun ariza yuboring va holatini kuzating',
+                      ru: 'Подайте заявку по задолженным предметам и отслеживайте статус',
+                      en: 'Apply for debt subjects and track the status',
+                    ),
                     style: TextStyle(color: Colors.white.withAlpha(225), fontSize: 12),
                   ),
                 ],
@@ -354,12 +375,21 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
   }
 
   Widget _buildWindowCard() {
+    final l = AppLocalizations.of(context);
     final window = _window;
     if (window == null) {
       return _InfoCard(
         icon: Icons.event_busy_outlined,
-        title: 'Qabul oynasi ochilmagan',
-        message: 'Sizning yo\'nalishingiz va kursingiz uchun ariza oynasi hali ochilmagan.',
+        title: l.pick(
+          uz: 'Qabul oynasi ochilmagan',
+          ru: 'Окно приема не открыто',
+          en: 'Application window is not open',
+        ),
+        message: l.pick(
+          uz: 'Sizning yo\'nalishingiz va kursingiz uchun ariza oynasi hali ochilmagan.',
+          ru: 'Для вашего направления и курса окно подачи заявок пока не открыто.',
+          en: 'The application window for your major and course is not open yet.',
+        ),
         color: const Color(0xFFB45309),
       );
     }
@@ -367,7 +397,9 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
     final isOpen = window['is_open'] == true;
     return _InfoCard(
       icon: isOpen ? Icons.event_available_outlined : Icons.event_busy_outlined,
-      title: isOpen ? 'Ariza qabul ochiq' : 'Ariza qabul yopiq',
+      title: isOpen
+          ? l.pick(uz: 'Ariza qabul ochiq', ru: 'Прием заявок открыт', en: 'Applications are open')
+          : l.pick(uz: 'Ariza qabul yopiq', ru: 'Прием заявок закрыт', en: 'Applications are closed'),
       message:
           '${window['semester_name'] ?? ''}\n${window['start_date'] ?? '-'} -> ${window['end_date'] ?? '-'}',
       color: isOpen ? ClinicTheme.green : const Color(0xFFB45309),
@@ -378,17 +410,27 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
   }
 
   Widget _buildPaymentAlerts() {
+    final l = AppLocalizations.of(context);
     final cards = <Widget>[];
     for (final group in _awaitingPayment) {
       final rejected = group['payment_verification_status'] == 'rejected';
       cards.add(_ActionCard(
         icon: Icons.receipt_long_outlined,
-        title: rejected ? 'To\'lov cheki rad etildi' : 'To\'lov chekini yuklang',
+        title: rejected
+            ? l.pick(uz: 'To\'lov cheki rad etildi', ru: 'Платежный чек отклонен', en: 'Payment receipt rejected')
+            : l.pick(uz: 'To\'lov chekini yuklang', ru: 'Загрузите платежный чек', en: 'Upload payment receipt'),
         message: rejected
-            ? (group['payment_rejection_reason']?.toString() ?? 'Qayta yuklash kerak')
-            : 'Dekan va registrator tasdiqlagan. Jarayon davom etishi uchun to\'lov chekini yuboring.',
+            ? (group['payment_rejection_reason']?.toString() ??
+                l.pick(uz: 'Qayta yuklash kerak', ru: 'Нужно загрузить повторно', en: 'Please reupload'))
+            : l.pick(
+                uz: 'Dekan va registrator tasdiqlagan. Jarayon davom etishi uchun to\'lov chekini yuboring.',
+                ru: 'Декан и регистратор подтвердили. Для продолжения отправьте платежный чек.',
+                en: 'Approved by the dean and registrar. Upload the payment receipt to continue.',
+              ),
         color: const Color(0xFFB45309),
-        buttonText: _uploadingPaymentGroupId == group['id'] ? 'Yuklanmoqda...' : 'Chek yuklash',
+        buttonText: _uploadingPaymentGroupId == group['id']
+            ? l.uploading
+            : l.pick(uz: 'Chek yuklash', ru: 'Загрузить чек', en: 'Upload receipt'),
         onTap: _uploadingPaymentGroupId == null ? () => _pickAndUploadPayment(group) : null,
       ));
       cards.add(const SizedBox(height: 10));
@@ -397,9 +439,12 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
     for (final group in _paymentVerifying) {
       cards.add(_InfoCard(
         icon: Icons.hourglass_top_rounded,
-        title: 'To\'lov cheki tekshirilmoqda',
-        message:
-            'Registrator ofisi chekingizni tekshirmoqda.\nYuklangan: ${group['payment_uploaded_at'] ?? '-'}',
+        title: l.pick(uz: 'To\'lov cheki tekshirilmoqda', ru: 'Платежный чек проверяется', en: 'Payment receipt is being checked'),
+        message: l.pick(
+          uz: 'Registrator ofisi chekingizni tekshirmoqda.\nYuklangan: ${group['payment_uploaded_at'] ?? '-'}',
+          ru: 'Офис регистратора проверяет ваш чек.\nЗагружено: ${group['payment_uploaded_at'] ?? '-'}',
+          en: 'The registrar office is checking your receipt.\nUploaded: ${group['payment_uploaded_at'] ?? '-'}',
+        ),
         color: ClinicTheme.blue,
       ));
       cards.add(const SizedBox(height: 10));
@@ -409,10 +454,11 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
   }
 
   Widget _buildJournal() {
+    final l = AppLocalizations.of(context);
     final journal = _journal;
     return _SectionCard(
-      title: 'Qayta o\'qish jurnali',
-      subtitle: '${journal.length} ta fan',
+      title: l.pick(uz: 'Qayta o\'qish jurnali', ru: 'Журнал пересдачи', en: 'Retake journal'),
+      subtitle: l.pick(uz: '${journal.length} ta fan', ru: '${journal.length} предметов', en: '${journal.length} subjects'),
       child: Column(
         children: journal
             .map(
@@ -429,13 +475,14 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
   }
 
   Widget _buildDebtList() {
+    final l = AppLocalizations.of(context);
     final debts = _debts;
     final textColor = ClinicTheme.inkOf(context);
     final subColor = ClinicTheme.mutedOf(context);
 
     return _SectionCard(
-      title: 'Qarzdor fanlar',
-      subtitle: '${debts.length} ta fan',
+      title: l.pick(uz: 'Qarzdor fanlar', ru: 'Предметы с задолженностью', en: 'Debt subjects'),
+      subtitle: l.pick(uz: '${debts.length} ta fan', ru: '${debts.length} предметов', en: '${debts.length} subjects'),
       child: debts.isEmpty
           ? Padding(
               padding: const EdgeInsets.symmetric(vertical: 22),
@@ -444,7 +491,11 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                   const Icon(Icons.verified_rounded, color: ClinicTheme.green, size: 42),
                   const SizedBox(height: 8),
                   Text(
-                    'Akademik qarzdorlik mavjud emas',
+                    l.pick(
+                      uz: 'Akademik qarzdorlik mavjud emas',
+                      ru: 'Академической задолженности нет',
+                      en: 'No academic debt',
+                    ),
                     style: TextStyle(color: textColor, fontWeight: FontWeight.w700),
                   ),
                 ],
@@ -519,13 +570,14 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                                           '${((debt['credit'] as num?)?.toDouble() ?? 0).toStringAsFixed(1)} kr',
                                     ),
                                     if (debt['grade'] != null)
-                                      _MiniPill(text: 'Baho: ${debt['grade']}'),
+                                      _MiniPill(text: '${l.grades}: ${debt['grade']}'),
                                   ],
                                 ),
                                 if (active) ...[
                                   const SizedBox(height: 6),
                                   Text(
-                                    debt['active_status']?.toString() ?? 'Ariza mavjud',
+                                    debt['active_status']?.toString() ??
+                                        l.pick(uz: 'Ariza mavjud', ru: 'Заявка уже есть', en: 'Application exists'),
                                     style: const TextStyle(
                                       fontSize: 11,
                                       color: Color(0xFFB45309),
@@ -547,15 +599,20 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
   }
 
   Widget _buildHistory() {
+    final l = AppLocalizations.of(context);
     final history = _history;
     if (history.isEmpty) {
       return _SectionCard(
-        title: 'Mening arizalarim',
-        subtitle: 'Hali ariza yo\'q',
+        title: l.pick(uz: 'Mening arizalarim', ru: 'Мои заявки', en: 'My applications'),
+        subtitle: l.pick(uz: 'Hali ariza yo\'q', ru: 'Заявок пока нет', en: 'No applications yet'),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 18),
           child: Text(
-            'Ariza yuborganingizdan keyin uning holati shu yerda ko\'rinadi.',
+            l.pick(
+              uz: 'Ariza yuborganingizdan keyin uning holati shu yerda ko\'rinadi.',
+              ru: 'После отправки заявки ее статус будет отображаться здесь.',
+              en: 'After you submit an application, its status will appear here.',
+            ),
             textAlign: TextAlign.center,
             style: TextStyle(color: ClinicTheme.mutedOf(context), fontSize: 12),
           ),
@@ -564,8 +621,8 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
     }
 
     return _SectionCard(
-      title: 'Mening arizalarim',
-      subtitle: '${history.length} ta ariza',
+      title: l.pick(uz: 'Mening arizalarim', ru: 'Мои заявки', en: 'My applications'),
+      subtitle: l.pick(uz: '${history.length} ta ariza', ru: '${history.length} заявок', en: '${history.length} applications'),
       child: Column(
         children: history.map((group) => _HistoryCard(
               group: group,
@@ -577,6 +634,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
   }
 
   Widget _buildBottomBar() {
+    final l = AppLocalizations.of(context);
     return SafeArea(
       child: Container(
         padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
@@ -599,7 +657,11 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '${_selected.length} fan, ${_totalCredits.toStringAsFixed(1)} kredit',
+                    l.pick(
+                      uz: '${_selected.length} fan, ${_totalCredits.toStringAsFixed(1)} kredit',
+                      ru: '${_selected.length} предметов, ${_totalCredits.toStringAsFixed(1)} кредитов',
+                      en: '${_selected.length} subjects, ${_totalCredits.toStringAsFixed(1)} credits',
+                    ),
                     style: TextStyle(
                       fontSize: 13,
                       color: ClinicTheme.inkOf(context),
@@ -621,7 +683,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
             ElevatedButton.icon(
               onPressed: _showSubmitSheet,
               icon: const Icon(Icons.send_rounded, size: 18),
-              label: const Text('Yuborish'),
+              label: Text(l.pick(uz: 'Yuborish', ru: 'Отправить', en: 'Submit')),
               style: ElevatedButton.styleFrom(
                 backgroundColor: ClinicTheme.teal,
                 foregroundColor: Colors.white,
@@ -643,6 +705,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (context, sheetSetState) {
+            final l = AppLocalizations.of(context);
             return Padding(
               padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
               child: Container(
@@ -667,7 +730,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                     ),
                     const SizedBox(height: 16),
                     Text(
-                      'Arizani yuborish',
+                      l.pick(uz: 'Arizani yuborish', ru: 'Отправка заявки', en: 'Submit application'),
                       style: TextStyle(
                         color: ClinicTheme.inkOf(context),
                         fontSize: 18,
@@ -702,7 +765,11 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                     const SizedBox(height: 10),
                     _FilePickerTile(
                       fileName: _receiptFileName,
-                      title: 'Dekanat tasdig\'idagi tushuntirish xati',
+                      title: l.pick(
+                        uz: 'Dekanat tasdig\'idagi tushuntirish xati',
+                        ru: 'Объяснительная, подтвержденная деканатом',
+                        en: 'Explanation letter approved by the dean\'s office',
+                      ),
                       subtitle: 'PDF, DOC, DOCX, JPG, PNG',
                       onTap: () async {
                         await _pickReceipt();
@@ -724,7 +791,7 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                       maxLines: 3,
                       maxLength: 500,
                       decoration: InputDecoration(
-                        hintText: 'Izoh (ixtiyoriy)',
+                        hintText: l.description,
                         filled: true,
                         fillColor: ClinicTheme.dividerOf(context).withAlpha(35),
                         border: OutlineInputBorder(
@@ -754,9 +821,13 @@ class _RetakeApplicationsScreenState extends State<RetakeApplicationsScreen> {
                                   valueColor: AlwaysStoppedAnimation(Colors.white),
                                 ),
                               )
-                            : const Text(
-                                'Ariza yuborish',
-                                style: TextStyle(fontWeight: FontWeight.w800),
+                            : Text(
+                                l.pick(
+                                  uz: 'Ariza yuborish',
+                                  ru: 'Отправить заявку',
+                                  en: 'Submit application',
+                                ),
+                                style: const TextStyle(fontWeight: FontWeight.w800),
                               ),
                       ),
                     ),

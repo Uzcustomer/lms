@@ -1,6 +1,7 @@
 import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
+import '../../l10n/app_localizations.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../widgets/clinic_header.dart';
@@ -83,6 +84,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final selectedDateStr = _selectedDate != null
         ? DateFormat('yyyy-MM-dd').format(_selectedDate!)
         : null;
@@ -94,8 +96,8 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
       body: Column(
         children: [
           ClinicHeader(
-            overline: 'FOYDALI',
-            title: 'Imtihon sanalari',
+            overline: l.useful.toUpperCase(),
+            title: l.pick(uz: 'Imtihon sanalari', ru: 'Даты экзаменов', en: 'Exam dates'),
             onBack: () => Navigator.pop(context),
           ),
           Expanded(
@@ -137,7 +139,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                                 children: [
                                   _legendDot(_oski, 'OSKI'),
                                   _legendDot(_test, 'Test'),
-                                  _legendDot(_past, 'O\'tgan'),
+                                  _legendDot(_past, l.pick(uz: 'O\'tgan', ru: 'Прошедшие', en: 'Past')),
                                 ],
                               ),
                             ),
@@ -154,8 +156,16 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                                             child: Center(
                                               child: Text(
                                                 _selectedDate == null
-                                                    ? 'Sanani tanlang'
-                                                    : 'Bu kunda imtihon yo\'q',
+                                                    ? l.pick(
+                                                        uz: 'Sanani tanlang',
+                                                        ru: 'Выберите дату',
+                                                        en: 'Select a date',
+                                                      )
+                                                    : l.pick(
+                                                        uz: 'Bu kunda imtihon yo\'q',
+                                                        ru: 'В этот день экзаменов нет',
+                                                        en: 'No exams on this day',
+                                                      ),
                                                 style: TextStyle(
                                                     fontSize: 14,
                                                     color: ClinicTheme.mutedOf(context)),
@@ -223,7 +233,11 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                                             ),
                                             const SizedBox(height: 14),
                                             Text(
-                                              'Belgilangan kunlarga\nbosib ko\'ring',
+                                              l.pick(
+                                                uz: 'Belgilangan kunlarga\nbosib ko\'ring',
+                                                ru: 'Нажмите на\nотмеченные дни',
+                                                en: 'Tap the\nmarked days',
+                                              ),
                                               textAlign: TextAlign.center,
                                               style: TextStyle(
                                                 fontSize: 15,
@@ -234,7 +248,11 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
                                             ),
                                             const SizedBox(height: 6),
                                             Text(
-                                              'Imtihon ma\'lumotlarini ko\'rish uchun',
+                                              l.pick(
+                                                uz: 'Imtihon ma\'lumotlarini ko\'rish uchun',
+                                                ru: 'Чтобы увидеть информацию об экзамене',
+                                                en: 'To view exam details',
+                                              ),
                                               textAlign: TextAlign.center,
                                               style: TextStyle(
                                                 fontSize: 12,
@@ -447,6 +465,7 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
   }
 
   Widget _buildExamTile(dynamic exam) {
+    final l = AppLocalizations.of(context);
     final ink = ClinicTheme.inkOf(context);
     final muted = ClinicTheme.mutedOf(context);
     final subject = exam['subject_name']?.toString() ?? '';
@@ -463,13 +482,17 @@ class _ExamScheduleScreenState extends State<ExamScheduleScreen>
       final diff = date.difference(now).inDays;
       isPast = diff < 0;
       if (diff == 0) {
-        daysLeft = 'Bugun';
+        daysLeft = l.today;
       } else if (diff == 1) {
-        daysLeft = 'Ertaga';
+        daysLeft = l.pick(uz: 'Ertaga', ru: 'Завтра', en: 'Tomorrow');
       } else if (diff > 0) {
-        daysLeft = '$diff kun qoldi';
+        daysLeft = l.pick(
+          uz: '$diff kun qoldi',
+          ru: 'осталось $diff дн.',
+          en: '$diff days left',
+        );
       } else {
-        daysLeft = 'O\'tgan';
+        daysLeft = l.pick(uz: 'O\'tgan', ru: 'Прошло', en: 'Past');
       }
     } catch (_) {}
 

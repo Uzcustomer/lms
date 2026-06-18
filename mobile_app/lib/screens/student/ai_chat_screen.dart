@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../l10n/app_localizations.dart';
 import '../../services/gemini_service.dart';
 import '../../services/student_context_builder.dart';
 import '../../services/student_data_cache.dart';
@@ -443,6 +444,7 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   Widget _buildHeader() {
+    final l = AppLocalizations.of(context);
     final statusBarH = MediaQuery.of(context).padding.top;
     final ink = ClinicTheme.inkOf(context);
     return Container(
@@ -475,7 +477,7 @@ class _AiChatScreenState extends State<AiChatScreen>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'AI Yordamchi',
+                  l.pick(uz: 'AI Yordamchi', ru: 'AI помощник', en: 'AI Assistant'),
                   style: TextStyle(
                       fontSize: 15, fontWeight: FontWeight.w700, color: ink),
                 ),
@@ -489,14 +491,20 @@ class _AiChatScreenState extends State<AiChatScreen>
                             strokeWidth: 1.5, color: ClinicTheme.mutedOf(context)),
                       ),
                       const SizedBox(width: 6),
-                      Text('Ma\'lumot yuklanmoqda...',
+                      Text(l.pick(
+                          uz: 'Ma\'lumot yuklanmoqda...',
+                          ru: 'Данные загружаются...',
+                          en: 'Loading data...'),
                           style: TextStyle(
                               fontSize: 10.5, color: ClinicTheme.mutedOf(context))),
                     ] else if (_contextLoaded) ...[
                       const Icon(Icons.check_circle_rounded,
                           size: 11, color: ClinicTheme.green),
                       const SizedBox(width: 4),
-                      Text('Ma\'lumotlaringiz bilan tayyor',
+                      Text(l.pick(
+                          uz: 'Ma\'lumotlaringiz bilan tayyor',
+                          ru: 'Готов с вашими данными',
+                          en: 'Ready with your data'),
                           style: TextStyle(
                               fontSize: 10.5, color: ClinicTheme.mutedOf(context))),
                     ] else
@@ -530,33 +538,70 @@ class _AiChatScreenState extends State<AiChatScreen>
   }
 
   Widget _buildWelcome() {
+    final l = AppLocalizations.of(context);
     final ink = ClinicTheme.inkOf(context);
     final muted = ClinicTheme.mutedOf(context);
 
     final suggestions = _contextLoaded
         ? [
-            _Suggestion(Icons.bar_chart_rounded, 'Mening baholarim',
-                'Barcha fanlardan baholarimni umumlashtirib bering'),
-            _Suggestion(Icons.trending_up_rounded, 'Eng yaxshi/yomon fanim',
-                'Qaysi fanda eng yaxshi va qaysida yomon natija bor?'),
-            _Suggestion(Icons.warning_amber_rounded, 'Diqqat qilishim kerak',
-                'Qaysi fanlarga ko\'proq e\'tibor berishim kerak?'),
-            _Suggestion(Icons.calendar_month_rounded, 'Imtihon jadvalim',
-                'Yaqinlashayotgan imtihonlarim qachon?'),
-            _Suggestion(Icons.event_available_rounded, 'Davomatim',
-                'Davomat statistikasini tahlil qiling'),
-            _Suggestion(Icons.lightbulb_outline_rounded, 'Maslahat bering',
-                'Reytingimni yaxshilash uchun nima qilishim kerak?'),
+            _Suggestion(
+                Icons.bar_chart_rounded,
+                l.pick(uz: 'Mening baholarim', ru: 'Мои оценки', en: 'My grades'),
+                l.pick(
+                    uz: 'Barcha fanlardan baholarimni umumlashtirib bering',
+                    ru: 'Обобщите мои оценки по всем предметам',
+                    en: 'Summarize my grades across all subjects')),
+            _Suggestion(
+                Icons.trending_up_rounded,
+                l.pick(
+                    uz: 'Eng yaxshi/yomon fanim',
+                    ru: 'Лучший/сложный предмет',
+                    en: 'Best/worst subject'),
+                l.pick(
+                    uz: 'Qaysi fanda eng yaxshi va qaysida yomon natija bor?',
+                    ru: 'По какому предмету у меня лучший и худший результат?',
+                    en: 'Which subject is my best and which is my weakest?')),
+            _Suggestion(
+                Icons.warning_amber_rounded,
+                l.pick(
+                    uz: 'Diqqat qilishim kerak',
+                    ru: 'На что обратить внимание',
+                    en: 'Needs attention'),
+                l.pick(
+                    uz: 'Qaysi fanlarga ko\'proq e\'tibor berishim kerak?',
+                    ru: 'Каким предметам мне нужно уделить больше внимания?',
+                    en: 'Which subjects should I focus on more?')),
+            _Suggestion(
+                Icons.calendar_month_rounded,
+                l.pick(uz: 'Imtihon jadvalim', ru: 'Мое расписание экзаменов', en: 'My exam schedule'),
+                l.pick(
+                    uz: 'Yaqinlashayotgan imtihonlarim qachon?',
+                    ru: 'Когда мои ближайшие экзамены?',
+                    en: 'When are my upcoming exams?')),
+            _Suggestion(
+                Icons.event_available_rounded,
+                l.pick(uz: 'Davomatim', ru: 'Моя посещаемость', en: 'My attendance'),
+                l.pick(
+                    uz: 'Davomat statistikasini tahlil qiling',
+                    ru: 'Проанализируйте мою посещаемость',
+                    en: 'Analyze my attendance statistics')),
+            _Suggestion(
+                Icons.lightbulb_outline_rounded,
+                l.pick(uz: 'Maslahat bering', ru: 'Дайте совет', en: 'Give advice'),
+                l.pick(
+                    uz: 'Reytingimni yaxshilash uchun nima qilishim kerak?',
+                    ru: 'Что мне сделать, чтобы улучшить рейтинг?',
+                    en: 'What should I do to improve my ranking?')),
           ]
         : [
             _Suggestion(Icons.science_outlined, 'Anatomiya',
-                'Yurak tuzilishi haqida tushuntiring'),
+                l.pick(uz: 'Yurak tuzilishi haqida tushuntiring', ru: 'Объясните строение сердца', en: 'Explain the structure of the heart')),
             _Suggestion(Icons.medication_outlined, 'Farmakologiya',
-                'Antibiotiklar klassifikatsiyasi'),
+                l.pick(uz: 'Antibiotiklar klassifikatsiyasi', ru: 'Классификация антибиотиков', en: 'Classification of antibiotics')),
             _Suggestion(Icons.biotech_outlined, 'Fiziologiya',
-                'Qon aylanish doiralari'),
-            _Suggestion(Icons.school_outlined, 'Imtihon',
-                'Patologik anatomiyadan savollar'),
+                l.pick(uz: 'Qon aylanish doiralari', ru: 'Круги кровообращения', en: 'Circles of blood circulation')),
+            _Suggestion(Icons.school_outlined, l.pick(uz: 'Imtihon', ru: 'Экзамен', en: 'Exam'),
+                l.pick(uz: 'Patologik anatomiyadan savollar', ru: 'Вопросы по патологической анатомии', en: 'Pathological anatomy questions')),
           ];
 
     return SingleChildScrollView(
@@ -586,13 +631,17 @@ class _AiChatScreenState extends State<AiChatScreen>
           ),
           const SizedBox(height: 18),
           Text(
-            'TDTU AI Yordamchi',
+            l.pick(uz: 'TDTU AI Yordamchi', ru: 'AI помощник TDTU', en: 'TDTU AI Assistant'),
             style: TextStyle(
                 fontSize: 21, fontWeight: FontWeight.w900, color: ink),
           ),
           const SizedBox(height: 8),
           Text(
-            'Tibbiyot fanlari va o\'quv jarayonida\nsizga yordam berishga tayyorman!',
+            l.pick(
+              uz: 'Tibbiyot fanlari va o\'quv jarayonida\nsizga yordam berishga tayyorman!',
+              ru: 'Готов помочь вам с медицинскими дисциплинами\nи учебным процессом!',
+              en: 'Ready to help with medical subjects\nand your learning process!',
+            ),
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 13, color: muted, height: 1.5),
           ),
@@ -962,8 +1011,16 @@ class _AiChatScreenState extends State<AiChatScreen>
                   style: TextStyle(fontSize: 14, color: ClinicTheme.inkOf(context)),
                   decoration: InputDecoration(
                     hintText: _pendingAttachments.isNotEmpty
-                        ? 'Fayl haqida savol yozing...'
-                        : 'Savol yozing...',
+                        ? AppLocalizations.of(context).pick(
+                            uz: 'Fayl haqida savol yozing...',
+                            ru: 'Задайте вопрос по файлу...',
+                            en: 'Ask a question about the file...',
+                          )
+                        : AppLocalizations.of(context).pick(
+                            uz: 'Savol yozing...',
+                            ru: 'Напишите вопрос...',
+                            en: 'Write a question...',
+                          ),
                     hintStyle: TextStyle(
                         color: ClinicTheme.mutedOf(context), fontSize: 14),
                     filled: true,

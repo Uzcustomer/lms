@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../config/api_config.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
@@ -109,6 +110,7 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final sub = ClinicTheme.mutedOf(context);
 
@@ -152,14 +154,21 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
                                       size: 28, color: ClinicTheme.teal),
                                 ),
                                 const SizedBox(height: 14),
-                                Text('Guruh chati',
+                                Text(l.pick(
+                                    uz: 'Guruh chati',
+                                    ru: 'Групповой чат',
+                                    en: 'Group chat'),
                                     style: TextStyle(
                                         color: ClinicTheme.inkOf(context),
                                         fontSize: 15,
                                         fontWeight: FontWeight.w800)),
                                 const SizedBox(height: 4),
                                 Text(
-                                    'Guruhingiz a\'zolari bilan suhbatlashing!',
+                                    l.pick(
+                                      uz: 'Guruhingiz a\'zolari bilan suhbatlashing!',
+                                      ru: 'Общайтесь с участниками вашей группы!',
+                                      en: 'Chat with your group members!',
+                                    ),
                                     textAlign: TextAlign.center,
                                     style:
                                         TextStyle(color: sub, fontSize: 12)),
@@ -218,11 +227,13 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
       final dt = DateTime.parse(msg['created_at'].toString()).toLocal();
       final now = DateTime.now();
       if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
-        label = 'Bugun';
+        label = AppLocalizations.of(context)
+            .pick(uz: 'Bugun', ru: 'Сегодня', en: 'Today');
       } else if (dt.year == now.year &&
           dt.month == now.month &&
           dt.day == now.day - 1) {
-        label = 'Kecha';
+        label = AppLocalizations.of(context)
+            .pick(uz: 'Kecha', ru: 'Вчера', en: 'Yesterday');
       } else {
         label =
             '${dt.day}.${dt.month.toString().padLeft(2, '0')}.${dt.year}';
@@ -434,7 +445,11 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
                 maxLines: 4,
                 minLines: 1,
                 decoration: InputDecoration(
-                  hintText: 'Guruhga yozing...',
+                  hintText: AppLocalizations.of(context).pick(
+                    uz: 'Guruhga yozing...',
+                    ru: 'Напишите в группу...',
+                    en: 'Write to the group...',
+                  ),
                   hintStyle: TextStyle(
                     color: ClinicTheme.mutedOf(context),
                     fontSize: 14,

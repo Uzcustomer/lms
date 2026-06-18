@@ -58,8 +58,16 @@ class _StudentServicesScreenState extends State<StudentServicesScreen> {
       ),
       _ServiceItem(
         icon: Icons.school_outlined,
-        title: 'Qayta o\'qish',
-        subtitle: 'Qarzdor fanlar uchun ariza yuborish',
+        title: l.pick(
+          uz: 'Qayta o\'qish',
+          ru: 'Пересдача',
+          en: 'Retake',
+        ),
+        subtitle: l.pick(
+          uz: 'Qarzdor fanlar uchun ariza yuborish',
+          ru: 'Подать заявку по предметам с задолженностью',
+          en: 'Apply for subjects with academic debt',
+        ),
         color: const Color(0xFF22C55E),
         bgColor: const Color(0xFFEAFBF1),
         onTap: () => Navigator.push(
@@ -107,7 +115,7 @@ class _StudentServicesScreenState extends State<StudentServicesScreen> {
           Column(
             children: [
               ClinicHeader(
-                overline: 'FOYDALI',
+                overline: l.useful.toUpperCase(),
                 title: l.services,
                 onBack: () => Navigator.pop(context),
               ),
@@ -148,6 +156,7 @@ class _ServicesSearchField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Container(
       height: 52,
       decoration: BoxDecoration(
@@ -170,7 +179,11 @@ class _ServicesSearchField extends StatelessWidget {
             color: ClinicTheme.mutedOf(context),
             size: 23,
           ),
-          hintText: 'Xizmatni qidiring...',
+          hintText: l.pick(
+            uz: 'Xizmatni qidiring...',
+            ru: 'Найти услугу...',
+            en: 'Search services...',
+          ),
           hintStyle: TextStyle(
             color: ClinicTheme.mutedOf(context),
             fontSize: 13.5,
@@ -190,6 +203,7 @@ class _EmptySearchState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(28),
@@ -207,7 +221,11 @@ class _EmptySearchState extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             Text(
-              '"$query" bo\'yicha xizmat topilmadi',
+              l.pick(
+                uz: '"$query" bo\'yicha xizmat topilmadi',
+                ru: 'Услуга по запросу "$query" не найдена',
+                en: 'No service found for "$query"',
+              ),
               textAlign: TextAlign.center,
               style: TextStyle(
                 color: ClinicTheme.inkOf(context),

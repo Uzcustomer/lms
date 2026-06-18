@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Services\VedomostSubmissionService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 
 /**
  * 12a/12b (qayta topshirish) varaqlari nima uchun ochilmayotganini ko'rsatadi.
@@ -36,7 +37,7 @@ class DiagnoseVedomostResit extends Command
 
         foreach ($rows as $r) {
             $this->line('');
-            $this->info("● {$r->subject}  [{$r->specialty}]  ({$r->closing_form}, {$r->groups} guruh)");
+            $this->info("● {$r->subject}  [{$r->specialty}]  ({$r->closing_form}, semestr={$r->semester_code}, {$r->groups} guruh)");
             $this->line("   Guruhlar: {$r->group_names}");
             $this->line("   subject_key(lar): {$r->subject_keys}");
             $this->line("   Bugun: {$r->today}");
@@ -53,9 +54,28 @@ class DiagnoseVedomostResit extends Command
             $this->line("   12b: {$mark12b} {$r->reason12b}");
         }
 
+        // Bazada hozir mavjud 12a/12b qatorlar — semestr bo'yicha (filtr bilan
+        // solishtirish uchun: ro'yxat qaysi semestr/fakultetdan qidirayotganini bilish).
+        $this->line('');
+        $this->info('=== Bazadagi mavjud 12a/12b qatorlar (semestr bo\'yicha) ===');
+        $existing = DB::table('vedomost_submissions')
+            ->whereIn('form_type', ['12a', '12b'])
+            ->select('form_type', 'semester_code', DB::raw('count(*) as c'))
+            ->groupBy('form_type', 'semester_code')
+            ->orderBy('semester_code')
+            ->get();
+        if ($existing->isEmpty()) {
+            $this->warn('Bazada birorta ham 12a/12b qator yo\'q — "php artisan vedomost:sync" ishga tushiring.');
+        } else {
+            foreach ($existing as $e) {
+                $this->line("   {$e->form_type}  semestr={$e->semester_code}  →  {$e->c} ta");
+            }
+        }
+
         $this->line('');
         $this->info('Tugadi. ✅ = ochilishi kerak, ❌ = sabab yonida ko\'rsatilgan.');
         $this->line("12a ochilishi uchun: yiqilgan > 0 VA 1-urinish sanasi bugundan oldin bo'lishi kerak.");
+        $this->line("Eslatma: yuqoridagi 'semestr=' qiymatini ro'yxatdagi SEMESTR filtri bilan solishtiring.");
 
         return self::SUCCESS;
     }

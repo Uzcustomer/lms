@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../config/api_config.dart';
 import '../../config/theme.dart';
 import '../../services/api_service.dart';
@@ -118,6 +119,7 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final sub = isDark ? AppTheme.darkTextSecondary : AppTheme.textSecondary;
 
@@ -210,7 +212,10 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                         color: sub),
                                   ),
                                   const SizedBox(height: 14),
-                                  Text('Hali xabar yo\'q',
+                                  Text(l.pick(
+                                      uz: 'Hali xabar yo\'q',
+                                      ru: 'Сообщений пока нет',
+                                      en: 'No messages yet'),
                                       style: TextStyle(
                                           color: isDark
                                               ? AppTheme.darkTextPrimary
@@ -218,7 +223,10 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                                           fontSize: 15,
                                           fontWeight: FontWeight.w600)),
                                   const SizedBox(height: 4),
-                                  Text('Birinchi xabarni yuboring!',
+                                  Text(l.pick(
+                                      uz: 'Birinchi xabarni yuboring!',
+                                      ru: 'Отправьте первое сообщение!',
+                                      en: 'Send the first message!'),
                                       style: TextStyle(
                                           color: sub, fontSize: 12)),
                                 ],
@@ -268,11 +276,13 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
       final dt = DateTime.parse(msg['created_at'].toString()).toLocal();
       final now = DateTime.now();
       if (dt.year == now.year && dt.month == now.month && dt.day == now.day) {
-        label = 'Bugun';
+        label = AppLocalizations.of(context)
+            .pick(uz: 'Bugun', ru: 'Сегодня', en: 'Today');
       } else if (dt.year == now.year &&
           dt.month == now.month &&
           dt.day == now.day - 1) {
-        label = 'Kecha';
+        label = AppLocalizations.of(context)
+            .pick(uz: 'Kecha', ru: 'Вчера', en: 'Yesterday');
       } else {
         label =
             '${dt.day}.${dt.month.toString().padLeft(2, '0')}.${dt.year}';
@@ -438,7 +448,11 @@ class _ChatConversationScreenState extends State<ChatConversationScreen> {
                 maxLines: 4,
                 minLines: 1,
                 decoration: InputDecoration(
-                  hintText: 'Xabar yozing...',
+                  hintText: AppLocalizations.of(context).pick(
+                    uz: 'Xabar yozing...',
+                    ru: 'Напишите сообщение...',
+                    en: 'Write a message...',
+                  ),
                   hintStyle: TextStyle(
                       color: isDark
                           ? AppTheme.darkTextSecondary

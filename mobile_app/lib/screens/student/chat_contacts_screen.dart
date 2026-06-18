@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../config/api_config.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
@@ -54,13 +55,14 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
           ClinicHeader(
-            overline: 'FOYDALI',
-            title: 'Xabarlar',
+            overline: l.useful.toUpperCase(),
+            title: l.pick(uz: 'Xabarlar', ru: 'Сообщения', en: 'Messages'),
             onBack: () => Navigator.pop(context),
             actions: const [NotificationBell()],
           ),
@@ -96,9 +98,9 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
                     const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
                 unselectedLabelStyle:
                     const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
-                tabs: const [
-                  Tab(text: 'Foydalanuvchilar'),
-                  Tab(text: 'Guruh'),
+                tabs: [
+                  Tab(text: l.pick(uz: 'Foydalanuvchilar', ru: 'Пользователи', en: 'Users')),
+                  Tab(text: l.group),
                 ],
               ),
             ),
@@ -118,6 +120,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
   }
 
   Widget _buildContactsTab() {
+    final l = AppLocalizations.of(context);
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -137,7 +140,11 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
                   size: 36, color: ClinicTheme.teal),
             ),
             const SizedBox(height: 16),
-            Text('Guruhda boshqa talaba topilmadi',
+            Text(l.pick(
+              uz: 'Guruhda boshqa talaba topilmadi',
+              ru: 'В группе нет других студентов',
+              en: 'No other students found in the group',
+            ),
                 style: TextStyle(
                     color: ClinicTheme.mutedOf(context),
                     fontSize: 14,
@@ -157,6 +164,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
   }
 
   Widget _buildContact(dynamic c) {
+    final l = AppLocalizations.of(context);
     final ink = ClinicTheme.inkOf(context);
     final muted = ClinicTheme.mutedOf(context);
     final name = c['name']?.toString() ?? '';
@@ -274,7 +282,12 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
                             ),
                           Expanded(
                             child: Text(
-                              lastMsg ?? 'Xabar yo\'q',
+                              lastMsg ??
+                                  l.pick(
+                                    uz: 'Xabar yo\'q',
+                                    ru: 'Нет сообщений',
+                                    en: 'No messages',
+                                  ),
                               style: TextStyle(
                                   fontSize: 12,
                                   color: unread > 0 ? ink : muted,

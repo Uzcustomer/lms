@@ -228,9 +228,14 @@ class _BiometricTileState extends State<_BiometricTile> {
   Future<void> _toggle(bool value) async {
     if (_busy) return;
     setState(() => _busy = true);
+    final l = AppLocalizations.of(context);
     if (value) {
       final ok = await _bio.authenticate(
-        reason: 'Tasdiqlash uchun qurilma himoyasini tekshiring',
+        reason: l.pick(
+          uz: 'Tasdiqlash uchun qurilma himoyasini tekshiring',
+          ru: 'Подтвердите действие защитой устройства',
+          en: 'Confirm with your device security',
+        ),
       );
       if (ok) {
         await _bio.setEnabled(true);
@@ -247,15 +252,16 @@ class _BiometricTileState extends State<_BiometricTile> {
   @override
   Widget build(BuildContext context) {
     if (_available != true) return const SizedBox.shrink();
+    final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         const SizedBox(height: 20),
-        const Text(
-          'Xavfsizlik',
-          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        Text(
+          l.pick(uz: 'Xavfsizlik', ru: 'Безопасность', en: 'Security'),
+          style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
         Container(
@@ -270,19 +276,27 @@ class _BiometricTileState extends State<_BiometricTile> {
               const Icon(Icons.fingerprint_rounded,
                   color: Color(0xFF0D9488), size: 24),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Tezkor kirish',
-                      style: TextStyle(
+                      l.pick(
+                        uz: 'Tezkor kirish',
+                        ru: 'Быстрый вход',
+                        en: 'Quick access',
+                      ),
+                      style: const TextStyle(
                           fontSize: 13.5, fontWeight: FontWeight.w600),
                     ),
-                    SizedBox(height: 1),
+                    const SizedBox(height: 1),
                     Text(
-                      'Barmoq izi, Face ID yoki qurilma paroli',
-                      style: TextStyle(fontSize: 11.5, color: Colors.grey),
+                      l.pick(
+                        uz: 'Barmoq izi, Face ID yoki qurilma paroli',
+                        ru: 'Отпечаток, Face ID или пароль устройства',
+                        en: 'Fingerprint, Face ID, or device passcode',
+                      ),
+                      style: const TextStyle(fontSize: 11.5, color: Colors.grey),
                     ),
                   ],
                 ),

@@ -38,50 +38,86 @@ class StudentUsefulScreen extends StatelessWidget {
     final services = [
       _ServiceCard(
         icon: Icons.auto_awesome,
-        title: 'AI Yordamchi',
-        subtitle: 'Gemini AI bilan savol-javob',
+        title: l.pick(uz: 'AI Yordamchi', ru: 'AI помощник', en: 'AI Assistant'),
+        subtitle: l.pick(
+          uz: 'Gemini AI bilan savol-javob',
+          ru: 'Вопросы и ответы с Gemini AI',
+          en: 'Q&A with Gemini AI',
+        ),
         color: const Color(0xFF7B1FA2),
         screen: const AiChatScreen(),
       ),
       _ServiceCard(
         icon: Icons.calculate_outlined,
-        title: 'GPA Kalkulyator',
-        subtitle: 'GPA hisoblash va prognoz',
+        title: l.pick(uz: 'GPA Kalkulyator', ru: 'GPA калькулятор', en: 'GPA Calculator'),
+        subtitle: l.pick(
+          uz: 'GPA hisoblash va prognoz',
+          ru: 'Расчет и прогноз GPA',
+          en: 'Calculate and forecast GPA',
+        ),
         color: const Color(0xFF0F766E),
         screen: const GpaCalculatorScreen(),
       ),
       _ServiceCard(
         icon: Icons.bar_chart_rounded,
-        title: 'Davomat statistikasi',
-        subtitle: 'Davomat va baholar jadvali',
+        title: l.pick(
+          uz: 'Davomat statistikasi',
+          ru: 'Статистика посещаемости',
+          en: 'Attendance statistics',
+        ),
+        subtitle: l.pick(
+          uz: 'Davomat va baholar jadvali',
+          ru: 'Посещаемость и оценки',
+          en: 'Attendance and grades table',
+        ),
         color: const Color(0xFF047857),
         screen: const AttendanceStatsScreen(),
       ),
       _ServiceCard(
         icon: Icons.emoji_events_outlined,
-        title: 'Talabalar reytingi',
-        subtitle: 'Guruh va yo\'nalish reytingi',
+        title: l.pick(
+          uz: 'Talabalar reytingi',
+          ru: 'Рейтинг студентов',
+          en: 'Student ranking',
+        ),
+        subtitle: l.pick(
+          uz: 'Guruh va yo\'nalish reytingi',
+          ru: 'Рейтинг группы и направления',
+          en: 'Group and major ranking',
+        ),
         color: const Color(0xFF6D28D9),
         screen: const StudentRatingScreen(),
       ),
       _ServiceCard(
         icon: Icons.chat_bubble_outline_rounded,
-        title: 'Guruh chati',
-        subtitle: 'Guruh a\'zolari bilan yozishing',
+        title: l.pick(uz: 'Guruh chati', ru: 'Групповой чат', en: 'Group chat'),
+        subtitle: l.pick(
+          uz: 'Guruh a\'zolari bilan yozishing',
+          ru: 'Переписка с участниками группы',
+          en: 'Chat with your group members',
+        ),
         color: const Color(0xFF0369A1),
         screen: const ChatContactsScreen(),
       ),
       _ServiceCard(
         icon: Icons.grid_view_rounded,
-        title: 'Imtihon sanalari',
-        subtitle: 'OSKI va Test kunlari',
+        title: l.pick(uz: 'Imtihon sanalari', ru: 'Даты экзаменов', en: 'Exam dates'),
+        subtitle: l.pick(
+          uz: 'OSKI va Test kunlari',
+          ru: 'Дни OSCE и тестов',
+          en: 'OSCE and test dates',
+        ),
         color: const Color(0xFF4338CA),
         screen: const ExamScheduleScreen(),
       ),
       _ServiceCard(
         icon: Icons.menu_book_rounded,
-        title: 'Kutubxona',
-        subtitle: 'Elektron darsliklar',
+        title: l.pick(uz: 'Kutubxona', ru: 'Библиотека', en: 'Library'),
+        subtitle: l.pick(
+          uz: 'Elektron darsliklar',
+          ru: 'Электронные учебники',
+          en: 'Digital textbooks',
+        ),
         color: const Color(0xFFC2410C),
         screen: const LibraryWebViewScreen(),
       ),
@@ -117,7 +153,7 @@ class StudentUsefulScreen extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'FOYDALI',
+                          l.useful.toUpperCase(),
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
@@ -242,6 +278,7 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
@@ -277,9 +314,9 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
                       color: Colors.white.withOpacity(0.18),
                       borderRadius: BorderRadius.circular(999),
                     ),
-                    child: const Text(
-                      'XIZMATLAR',
-                      style: TextStyle(
+                    child: Text(
+                      l.services.toUpperCase(),
+                      style: const TextStyle(
                         fontSize: 10,
                         fontWeight: FontWeight.w800,
                         letterSpacing: 1.2,
@@ -288,9 +325,13 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
                     ),
                   ),
                   const SizedBox(height: 10),
-                  const Text(
-                    'Elektron xizmatlar',
-                    style: TextStyle(
+                  Text(
+                    l.pick(
+                      uz: 'Elektron xizmatlar',
+                      ru: 'Электронные услуги',
+                      en: 'Digital services',
+                    ),
+                    style: const TextStyle(
                       fontSize: 22,
                       fontWeight: FontWeight.w900,
                       letterSpacing: -0.5,
@@ -309,16 +350,16 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(11),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Text('Kirish',
-                            style: TextStyle(
+                        Text(l.signIn,
+                            style: const TextStyle(
                                 fontSize: 12.5,
                                 fontWeight: FontWeight.w800,
                                 color: _heroTeal)),
-                        SizedBox(width: 6),
-                        Icon(Icons.chevron_right_rounded, size: 16, color: _heroTeal),
+                        const SizedBox(width: 6),
+                        const Icon(Icons.chevron_right_rounded, size: 16, color: _heroTeal),
                       ],
                     ),
                   ),

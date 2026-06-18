@@ -19,6 +19,22 @@ class AppLocalizations {
         key;
   }
 
+  String pick({
+    required String uz,
+    required String ru,
+    required String en,
+  }) {
+    switch (locale.languageCode) {
+      case 'ru':
+        return ru;
+      case 'en':
+        return en;
+      case 'uz':
+      default:
+        return uz;
+    }
+  }
+
   // Convenience getters
   String get appTitle => get('app_title');
   String get home => get('home');

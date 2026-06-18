@@ -1029,7 +1029,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
         if (isContract && currentContract != null) ...[
           const SizedBox(height: 20),
           Text(
-            'Joriy shartnoma',
+            l.pick(
+              uz: 'Joriy shartnoma',
+              ru: 'Текущий договор',
+              en: 'Current contract',
+            ),
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w800,
@@ -1179,7 +1183,11 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               ),
               const SizedBox(height: 3),
               Text(
-                'to\'landi',
+                AppLocalizations.of(context).pick(
+                  uz: 'to\'landi',
+                  ru: 'оплачено',
+                  en: 'paid',
+                ),
                 style: TextStyle(
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
@@ -1300,6 +1308,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Widget _buildLiveClassCard() {
+    final l = AppLocalizations.of(context);
     final lesson = _getCurrentOrNextLesson();
 
     if (lesson == null) {
@@ -1320,19 +1329,36 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
     if (isActive) {
       remaining = end.difference(_now);
-      statusText = 'HOZIR DAVOM ETMOQDA';
+      statusText = l.pick(
+        uz: 'HOZIR DAVOM ETMOQDA',
+        ru: 'ИДЕТ СЕЙЧАС',
+        en: 'IN PROGRESS',
+      );
     } else {
       remaining = start.difference(_now);
-      statusText = 'KEYINGI DARS';
+      statusText = l.pick(
+        uz: 'KEYINGI DARS',
+        ru: 'СЛЕДУЮЩЕЕ ЗАНЯТИЕ',
+        en: 'NEXT LESSON',
+      );
     }
 
     final hours = remaining.inHours;
     final minutes = remaining.inMinutes % 60;
     String timeLeft;
     if (hours > 0) {
-      timeLeft = '$hours soat $minutes daqiqa qoldi';
+      timeLeft = l.pick(
+        uz: '$hours soat $minutes daqiqa qoldi',
+        ru: 'осталось $hours ч. $minutes мин.',
+        en: '$hours h $minutes min left',
+      );
     } else {
-      timeLeft = '${minutes > 0 ? minutes : 1} daqiqa qoldi';
+      final safeMinutes = minutes > 0 ? minutes : 1;
+      timeLeft = l.pick(
+        uz: '$safeMinutes daqiqa qoldi',
+        ru: 'осталось $safeMinutes мин.',
+        en: '$safeMinutes min left',
+      );
     }
 
     final progress = isActive

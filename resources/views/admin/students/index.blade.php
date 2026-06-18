@@ -128,6 +128,17 @@
                                     <option value="no" {{ request('has_admission_data') === 'no' ? 'selected' : '' }}>To'ldirilmagan</option>
                                 </select>
                             </div>
+                            <div class="filter-item" style="min-width: 180px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#22c55e;"></span> Holati</label>
+                                <select id="student_status" name="student_status" class="select2" style="width: 100%;">
+                                    <option value="" {{ $selectedStatus === '' ? 'selected' : '' }}>Barchasi</option>
+                                    @foreach($studentStatuses as $status)
+                                        <option value="{{ $status->student_status_code }}" {{ (string) $selectedStatus === (string) $status->student_status_code ? 'selected' : '' }}>
+                                            {{ $status->student_status_name }}
+                                        </option>
+                                    @endforeach
+                                </select>
+                            </div>
                             <div class="filter-item" style="min-width: 120px;">
                                 <label class="filter-label">&nbsp;</label>
                                 <button type="submit" class="btn-calc">

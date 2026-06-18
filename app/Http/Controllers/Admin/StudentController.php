@@ -115,6 +115,20 @@ class StudentController extends Controller
             }
         }
 
+        // Talaba holati bo'yicha filtr (o'qimoqda / bitirgan / chetlashtirilgan ...).
+        // Birinchi marta ochilganda — parametr umuman bo'lmaganda — faqat o'qimoqda
+        // holatidagilar (student_status_code = 11) ko'rsatiladi. "Barchasi" tanlansa
+        // bo'sh qiymat keladi va filtr qo'llanmaydi.
+        if (!$request->has('student_status')) {
+            $selectedStatus = '11';
+            $query->where('student_status_code', '11');
+        } else {
+            $selectedStatus = $request->student_status;
+            if ($request->filled('student_status')) {
+                $query->where('student_status_code', $request->student_status);
+            }
+        }
+
         $perPage = $request->get('per_page', 50);
         $students = $query->paginate($perPage)->appends($request->query());
 
@@ -130,7 +144,13 @@ class StudentController extends Controller
             ->orderBy('country_name')
             ->pluck('country_name');
 
-        return view('admin.students.index', compact('students', 'educationTypes', 'countries'));
+        $studentStatuses = Student::select('student_status_code', 'student_status_name')
+            ->whereNotNull('student_status_code')
+            ->groupBy('student_status_code', 'student_status_name')
+            ->orderBy('student_status_name')
+            ->get();
+
+        return view('admin.students.index', compact('students', 'educationTypes', 'countries', 'studentStatuses', 'selectedStatus'));
     }
 
     public function statistics(Request $request)
@@ -2026,8 +2046,12 @@ class StudentController extends Controller
         $filters = $request->only([
             'student_id_number', 'full_name', 'level_code', 'semester_code',
             'department', 'specialty', 'group', 'education_type',
-            'country', 'has_files', 'has_admission_data',
+            'country', 'has_files', 'has_admission_data', 'student_status',
         ]);
+        // Ro'yxat ko'rinishidagidek — holat tanlanmagan bo'lsa faqat o'qimoqdagilar.
+        if (!$request->has('student_status')) {
+            $filters['student_status'] = '11';
+        }
         $filename = 'talabalar_' . now()->format('Y-m-d_H-i') . '.xlsx';
         return Excel::download(new StudentsExport($filters), $filename);
     }

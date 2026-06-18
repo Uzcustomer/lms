@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../config/api_config.dart';
-import '../../config/theme.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../widgets/clinic_header.dart';
@@ -184,14 +183,14 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
                                     _senderDiffers(_messages[i - 1], msg));
                             return Column(
                               children: [
-                                if (showDate) _buildDateChip(msg, isDark),
-                                _buildBubble(msg, isMe, isDark, showName),
+                                if (showDate) _buildDateChip(msg),
+                                _buildBubble(msg, isMe, showName),
                               ],
                             );
                           },
                         ),
             ),
-            _buildInput(isDark),
+            _buildInput(),
           ],
         ),
       ],
@@ -213,7 +212,7 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
         curr['sender_name']?.toString();
   }
 
-  Widget _buildDateChip(dynamic msg, bool isDark) {
+  Widget _buildDateChip(dynamic msg) {
     String label = '';
     try {
       final dt = DateTime.parse(msg['created_at'].toString()).toLocal();
@@ -238,29 +237,28 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 5),
           decoration: BoxDecoration(
-            color: (isDark ? Colors.black87 : Colors.white).withOpacity(0.85),
+            color: ClinicTheme.surfaceOf(context),
             borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: ClinicTheme.dividerOf(context)),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.06),
-                blurRadius: 4,
+                color: const Color(0xFF0F172A).withAlpha(10),
+                blurRadius: 10,
+                offset: const Offset(0, 4),
               ),
             ],
           ),
           child: Text(label,
               style: TextStyle(
                   fontSize: 11,
-                  fontWeight: FontWeight.w500,
-                  color: isDark
-                      ? AppTheme.darkTextSecondary
-                      : AppTheme.textSecondary)),
+                  fontWeight: FontWeight.w700,
+                  color: ClinicTheme.mutedOf(context))),
         ),
       ),
     );
   }
 
-  Widget _buildBubble(
-      dynamic msg, bool isMe, bool isDark, bool showName) {
+  Widget _buildBubble(dynamic msg, bool isMe, bool showName) {
     final text = msg['message']?.toString() ?? '';
     final senderName = msg['sender_name']?.toString() ?? '';
     final senderImage = msg['sender_image']?.toString();
@@ -271,16 +269,8 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
           '${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
     } catch (_) {}
 
-    final textColor = isMe
-        ? Colors.white
-        : isDark
-            ? AppTheme.darkTextPrimary
-            : AppTheme.textPrimary;
-    final timeColor = isMe
-        ? Colors.white70
-        : isDark
-            ? AppTheme.darkTextSecondary
-            : AppTheme.textSecondary;
+    final textColor = isMe ? Colors.white : ClinicTheme.inkOf(context);
+    final timeColor = isMe ? Colors.white70 : ClinicTheme.mutedOf(context);
 
     final nameColors = [
       const Color(0xFFE53935),
@@ -314,11 +304,11 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
                   border: Border.all(
-                      color: nameColor.withOpacity(0.3), width: 1.5),
+                      color: nameColor.withAlpha(77), width: 1.5),
                 ),
                 child: CircleAvatar(
                   radius: 16,
-                  backgroundColor: nameColor.withOpacity(0.1),
+                  backgroundColor: nameColor.withAlpha(26),
                   backgroundImage:
                       senderImage != null && senderImage.isNotEmpty
                           ? NetworkImage(
@@ -352,9 +342,7 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
                     : null,
                 color: isMe
                     ? null
-                    : isDark
-                        ? AppTheme.darkCard
-                        : Colors.white,
+                    : ClinicTheme.surfaceOf(context),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(18),
                   topRight: const Radius.circular(18),
@@ -364,14 +352,15 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
                 border: isMe
                     ? null
                     : Border.all(
-                        color: isDark ? Colors.white10 : Colors.grey.shade200),
+                        color: ClinicTheme.dividerOf(context),
+                      ),
                 boxShadow: [
                   BoxShadow(
                     color: isMe
-                        ? const Color(0xFF0F766E).withOpacity(0.2)
-                        : Colors.black.withOpacity(0.05),
-                    blurRadius: 8,
-                    offset: const Offset(0, 2),
+                        ? ClinicTheme.teal.withAlpha(34)
+                        : const Color(0xFF0F172A).withAlpha(12),
+                    blurRadius: isMe ? 12 : 16,
+                    offset: const Offset(0, 6),
                   ),
                 ],
               ),
@@ -405,9 +394,7 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
     );
   }
 
-  Widget _buildInput(bool isDark) {
-    final inputBg = isDark ? AppTheme.darkCard : Colors.white;
-
+  Widget _buildInput() {
     return Container(
       padding: EdgeInsets.only(
         left: 10,
@@ -416,16 +403,16 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
         bottom: MediaQuery.of(context).padding.bottom + 10,
       ),
       decoration: BoxDecoration(
-        color: inputBg,
+        color: ClinicTheme.surfaceOf(context),
         border: Border(
           top: BorderSide(
-            color: isDark ? Colors.white10 : Colors.grey.shade200,
+            color: ClinicTheme.dividerOf(context),
           ),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
+            color: const Color(0xFF0F172A).withAlpha(12),
+            blurRadius: 18,
             offset: const Offset(0, -3),
           ),
         ],
@@ -437,7 +424,7 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
               decoration: BoxDecoration(
                 borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: isDark ? Colors.white12 : Colors.grey.shade300,
+                  color: ClinicTheme.dividerOf(context),
                 ),
               ),
               child: TextField(
@@ -449,14 +436,11 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
                 decoration: InputDecoration(
                   hintText: 'Guruhga yozing...',
                   hintStyle: TextStyle(
-                      color: isDark
-                          ? AppTheme.darkTextSecondary
-                          : AppTheme.textSecondary,
-                      fontSize: 14),
+                    color: ClinicTheme.mutedOf(context),
+                    fontSize: 14,
+                  ),
                   filled: true,
-                  fillColor: isDark
-                      ? AppTheme.darkBackground
-                      : const Color(0xFFF5F7FA),
+                  fillColor: ClinicTheme.bgOf(context),
                   contentPadding:
                       const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
                   border: OutlineInputBorder(
@@ -479,7 +463,7 @@ class _ChatGroupScreenState extends State<ChatGroupScreen> {
               shape: BoxShape.circle,
               boxShadow: [
                 BoxShadow(
-                  color: const Color(0xFF0F766E).withOpacity(0.3),
+                  color: const Color(0xFF0F766E).withAlpha(77),
                   blurRadius: 8,
                   offset: const Offset(0, 2),
                 ),
@@ -518,19 +502,19 @@ class _MedicalPatternPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFEDF2F7);
+    final bgColor = isDark ? const Color(0xFF121212) : const Color(0xFFF7FBFA);
     canvas.drawRect(
         Rect.fromLTWH(0, 0, size.width, size.height), Paint()..color = bgColor);
 
     final paint = Paint()
       ..color = (isDark ? Colors.white : const Color(0xFF0F766E))
-          .withOpacity(isDark ? 0.03 : 0.04)
+          .withAlpha(isDark ? 8 : 10)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
 
     final fillPaint = Paint()
       ..color = (isDark ? Colors.white : const Color(0xFF0F766E))
-          .withOpacity(isDark ? 0.015 : 0.02)
+          .withAlpha(isDark ? 4 : 5)
       ..style = PaintingStyle.fill;
 
     const spacing = 90.0;

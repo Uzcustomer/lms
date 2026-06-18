@@ -130,8 +130,8 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: ClinicTheme.teal.withOpacity(0.10),
-                shape: BoxShape.circle,
+                color: ClinicTheme.teal.withAlpha(18),
+                borderRadius: BorderRadius.circular(24),
               ),
               child: Icon(Icons.chat_bubble_outline_rounded,
                   size: 36, color: ClinicTheme.teal),
@@ -189,10 +189,10 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: ClinicTheme.surfaceOf(context),
-        borderRadius: BorderRadius.circular(14),
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(18),
           onTap: () async {
             await Navigator.push(
               context,
@@ -207,14 +207,22 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
             _load();
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
+              color: ClinicTheme.surfaceOf(context),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: unread > 0 ? ClinicTheme.teal : ClinicTheme.dividerOf(context),
+                color:
+                    unread > 0 ? ClinicTheme.teal : ClinicTheme.dividerOf(context),
                 width: unread > 0 ? 1.5 : 1,
               ),
-              boxShadow: ClinicTheme.cardShadow,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withAlpha(14),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: Row(
               children: [

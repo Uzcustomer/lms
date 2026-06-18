@@ -210,6 +210,7 @@
                                 <th>#</th>
                                 <th><a href="{{ $sortUrl('group') }}">Guruh {!! $arrow('group') !!}</a></th>
                                 <th>Shakl</th>
+                                <th>Fakultet</th>
                                 <th>Yo'nalish</th>
                                 <th><a href="{{ $sortUrl('subject') }}">Fan {!! $arrow('subject') !!}</a></th>
                                 <th><a href="{{ $sortUrl('department') }}">Kafedra {!! $arrow('department') !!}</a></th>
@@ -238,6 +239,7 @@
                                         @php $fb = $formBadge[$v->form_type ?? '12'] ?? ['#475569','#f1f5f9']; @endphp
                                         <span style="background:{{ $fb[1] }};color:{{ $fb[0] }};padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;">{{ \App\Models\VedomostSubmission::formLabel($v->form_type ?? '12') }}</span>
                                     </td>
+                                    <td style="color:#64748b;">{{ $v->faculty_name ?? '—' }}</td>
                                     <td style="color:#64748b;">{{ $v->specialty_name }}</td>
                                     <td>{{ $v->subject_name }}</td>
                                     <td style="color:#64748b;">{{ $v->department_name }}</td>
@@ -268,7 +270,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="14" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
+                                <tr><td colspan="15" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
                             @endforelse
                         </tbody>
                     </table>

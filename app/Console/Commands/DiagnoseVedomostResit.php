@@ -43,7 +43,10 @@ class DiagnoseVedomostResit extends Command
             $this->line("   1-urinish sanasi: " . ($r->attempt1_date ?? '—')
                 . " | resit sanasi: " . ($r->resit_date ?? '—')
                 . " | resit2 sanasi: " . ($r->resit2_date ?? '—'));
-            $this->line("   1-urinishda yiqilgan: {$r->failed1} | 2-urinishda yiqilgan: {$r->failed2}");
+            $this->line("   Baholangan talaba: {$r->graded} | 1-urinishda yiqilgan: {$r->failed1} | 2-urinishda yiqilgan: {$r->failed2}");
+            if ($r->graded === 0) {
+                $this->line("   ⚠ baholangan talaba 0 — baho import qilinmagan yoki subject_id mos kelmagan bo'lishi mumkin.");
+            }
             $mark12a = $r->open12a ? '✅' : '❌';
             $mark12b = $r->open12b ? '✅' : '❌';
             $this->line("   12a: {$mark12a} {$r->reason12a}");

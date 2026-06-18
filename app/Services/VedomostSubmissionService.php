@@ -400,7 +400,7 @@ class VedomostSubmissionService
         $today = Carbon::today()->toDateString();
         $out = [];
         foreach ($units as $unitKey => $unit) {
-            $f = $failures[$unitKey] ?? ['failed1' => 0, 'failed2' => 0];
+            $f = $failures[$unitKey] ?? ['failed1' => 0, 'failed2' => 0, 'graded' => 0];
             $d = $dates[$unitKey] ?? ['attempt1' => null, 'resit' => null, 'resit2' => null];
             $open12a = $f['failed1'] > 0 && $d['attempt1'] !== null && $d['attempt1'] < $today;
             $open12b = $f['failed2'] > 0 && $d['resit'] !== null && $d['resit'] < $today;
@@ -412,6 +412,7 @@ class VedomostSubmissionService
                 'groups' => count(array_unique($unit['group_ids'])),
                 'group_names' => implode(', ', array_values(array_unique($unit['group_names']))),
                 'subject_keys' => implode(', ', $unit['subject_keys']),
+                'graded' => $f['graded'] ?? 0,
                 'failed1' => $f['failed1'],
                 'failed2' => $f['failed2'],
                 'attempt1_date' => $d['attempt1'],
@@ -656,7 +657,9 @@ class VedomostSubmissionService
                     $f2++;
                 }
             }
-            $result[$unitKey] = ['failed1' => $f1, 'failed2' => $f2];
+            // graded — shu birlik bo'yicha kamida bitta bahosi topilgan talabalar
+            // soni. graded=0 bo'lsa: baho import qilinmagan yoki subject_id mos emas.
+            $result[$unitKey] = ['failed1' => $f1, 'failed2' => $f2, 'graded' => count($students)];
         }
 
         return $result;

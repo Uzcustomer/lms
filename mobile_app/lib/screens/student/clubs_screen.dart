@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../widgets/clinic_header.dart';
@@ -50,7 +51,11 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _error = 'Ma\'lumotlarni yuklashda xatolik';
+        _error = AppLocalizations.of(context).pick(
+          uz: 'Ma\'lumotlarni yuklashda xatolik',
+          ru: 'Ошибка загрузки данных',
+          en: 'Error loading data',
+        );
         _loading = false;
       });
     }
@@ -83,7 +88,14 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Xatolik yuz berdi'), backgroundColor: Color(0xFFBE123C)),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).pick(
+            uz: 'Xatolik yuz berdi',
+            ru: 'Произошла ошибка',
+            en: 'An error occurred',
+          )),
+          backgroundColor: const Color(0xFFBE123C),
+        ),
       );
     } finally {
       if (mounted) setState(() => _joiningClub = null);
@@ -110,7 +122,14 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Xatolik yuz berdi'), backgroundColor: Color(0xFFBE123C)),
+        SnackBar(
+          content: Text(AppLocalizations.of(context).pick(
+            uz: 'Xatolik yuz berdi',
+            ru: 'Произошла ошибка',
+            en: 'An error occurred',
+          )),
+          backgroundColor: const Color(0xFFBE123C),
+        ),
       );
     } finally {
       if (mounted) setState(() => _cancellingClub = null);
@@ -119,6 +138,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final cardColor = ClinicTheme.surfaceOf(context);
     final textColor = ClinicTheme.inkOf(context);
@@ -129,8 +149,8 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
       body: Column(
         children: [
           ClinicHeader(
-            overline: 'XIZMATLAR',
-            title: "To'garaklar",
+            overline: l.services.toUpperCase(),
+            title: l.clubs,
             onBack: () => Navigator.pop(context),
           ),
           Container(
@@ -144,8 +164,8 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
               labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
               unselectedLabelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
               tabs: [
-                const Tab(text: "Barcha to'garaklar"),
-                Tab(text: "Arizalarim (${_myClubs.length})"),
+                Tab(text: l.pick(uz: "Barcha to'garaklar", ru: 'Все кружки', en: 'All clubs')),
+                Tab(text: l.pick(uz: "Arizalarim (${_myClubs.length})", ru: 'Мои заявки (${_myClubs.length})', en: 'My applications (${_myClubs.length})')),
               ],
             ),
           ),
@@ -159,7 +179,7 @@ class _ClubsScreenState extends State<ClubsScreen> with SingleTickerProviderStat
                           children: [
                             Text(_error!, style: TextStyle(color: subColor)),
                             const SizedBox(height: 12),
-                            TextButton(onPressed: _loadData, child: const Text('Qayta yuklash')),
+                            TextButton(onPressed: _loadData, child: Text(l.reload)),
                           ],
                         ),
                       )

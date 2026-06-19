@@ -1018,6 +1018,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Test markazi paneli — qayta o'qish OSKE/TEST natijalari
         Route::prefix('retake-test-markazi')->name('retake-test-markazi.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'index'])->name('index');
+            Route::post('/generate-yn-oldi-word', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'generateYnOldiWord'])->name('generate-yn-oldi-word');
             Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'show'])->name('show');
             Route::post('/{groupId}/save-score', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'saveScore'])->name('save-score');
         });

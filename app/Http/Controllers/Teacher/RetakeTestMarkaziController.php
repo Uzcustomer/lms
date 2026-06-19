@@ -11,6 +11,10 @@ use App\Services\Retake\RetakeJournalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpWord\IOFactory;
+use PhpOffice\PhpWord\PhpWord;
+use PhpOffice\PhpWord\SimpleType\Jc;
+use Illuminate\Support\Str;
 
 /**
  * Test markazi paneli — qayta o'qish guruhlaridan kelgan vedomostlar:
@@ -104,6 +108,107 @@ class RetakeTestMarkaziController extends Controller
             'test_score' => $fresh->test_score,
             'final_grade' => $fresh->final_grade_value,
         ]);
+    }
+
+    public function generateYnOldiWord(Request $request)
+    {
+        $this->authorize();
+
+        $data = $request->validate([
+            'group_ids' => ['required', 'array', 'min:1'],
+            'group_ids.*' => ['required', 'integer'],
+        ]);
+
+        $groups = RetakeGroup::query()
+            ->whereIn('id', $data['group_ids'])
+            ->whereNotNull('sent_to_test_markazi_at')
+            ->whereIn('assessment_type', ['oske', 'test', 'oske_test'])
+            ->with('teacher')
+            ->orderBy('name')
+            ->get();
+
+        if ($groups->isEmpty()) {
+            abort(404, 'Tanlangan guruhlar topilmadi');
+        }
+
+        $phpWord = new PhpWord();
+        $phpWord->setDefaultFontName('Times New Roman');
+        $phpWord->setDefaultFontSize(11);
+
+        $sectionStyle = [
+            'marginTop' => 900,
+            'marginBottom' => 900,
+            'marginLeft' => 1200,
+            'marginRight' => 1200,
+        ];
+
+        $fileName = 'YN_oldi_test_markazi_' . now()->format('Ymd_His') . '.docx';
+        $tempDir = storage_path('app/public/retake-test-markazi');
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        foreach ($groups as $group) {
+            $applications = $this->service->applications($group);
+            $mustaqilMap = $this->service->mustaqilMap($group);
+
+            $section = $phpWord->addSection($sectionStyle);
+            $section->addText('YN oldi qaydnoma - Test markazi', ['bold' => true, 'size' => 15], ['alignment' => Jc::CENTER, 'spaceAfter' => 120]);
+            $section->addText('Guruh: ' . $group->name, ['bold' => true, 'size' => 12], ['spaceAfter' => 60]);
+            $section->addText('Fan: ' . ($group->subject_name ?? '—'), ['size' => 11], ['spaceAfter' => 30]);
+            $section->addText('Tur: ' . ($group->assessment_type ?? '—'), ['size' => 11], ['spaceAfter' => 30]);
+            $section->addText("Qoidalar: JN >= 60 va MT >= 60 bo'lsa testga ruxsat, aks holda ruxsat yo'q.", ['size' => 11], ['spaceAfter' => 160]);
+
+            $tableStyle = [
+                'borderSize' => 6,
+                'borderColor' => '999999',
+                'cellMargin' => 60,
+            ];
+            $phpWord->addTableStyle('RetakeYnTable_' . $group->id, $tableStyle);
+            $table = $section->addTable('RetakeYnTable_' . $group->id);
+
+            $headerFont = ['bold' => true, 'size' => 10];
+            $bodyFont = ['size' => 10];
+            $bodyFontRed = ['size' => 10, 'color' => 'C00000'];
+            $cellCenter = ['alignment' => Jc::CENTER];
+            $cellLeft = ['alignment' => Jc::START];
+
+            $headerBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
+            $row = $table->addRow();
+            $row->addCell(500, $headerBg)->addText('#', $headerFont, $cellCenter);
+            $row->addCell(5200, $headerBg)->addText('Talaba F.I.Sh.', $headerFont, $cellCenter);
+            $row->addCell(1200, $headerBg)->addText('JN', $headerFont, $cellCenter);
+            $row->addCell(1200, $headerBg)->addText('MT', $headerFont, $cellCenter);
+            $row->addCell(1800, $headerBg)->addText('Testga ruxsat', $headerFont, $cellCenter);
+
+            foreach ($applications as $idx => $app) {
+                $student = $app->group->student ?? null;
+                $jn = $app->joriy_score !== null ? round((float) $app->joriy_score, 2) : null;
+                $mt = ($mustaqilMap[$app->id] ?? null)?->grade;
+                $mt = $mt !== null ? round((float) $mt, 2) : null;
+                $allowed = $jn !== null && $mt !== null && $jn >= 60 && $mt >= 60;
+
+                $row = $table->addRow();
+                $row->addCell(500)->addText((string) ($idx + 1), $bodyFont, $cellCenter);
+                $row->addCell(5200)->addText($student?->full_name ?? '—', $bodyFont, $cellLeft);
+                $row->addCell(1200)->addText($jn !== null ? rtrim(rtrim(number_format($jn, 2, '.', ''), '0'), '.') : '—', $jn !== null && $jn < 60 ? $bodyFontRed : $bodyFont, $cellCenter);
+                $row->addCell(1200)->addText($mt !== null ? rtrim(rtrim(number_format($mt, 2, '.', ''), '0'), '.') : '—', $mt !== null && $mt < 60 ? $bodyFontRed : $bodyFont, $cellCenter);
+                $row->addCell(1800)->addText(
+                    $allowed ? 'Testga ruxsat' : 'Ruxsat yo\'q',
+                    $allowed ? ['size' => 10, 'bold' => true, 'color' => '0F9D58'] : ['size' => 10, 'bold' => true, 'color' => 'C00000'],
+                    $cellCenter
+                );
+            }
+
+            if ($group !== $groups->last()) {
+                $section->addTextBreak(1);
+            }
+        }
+
+        $tempPath = $tempDir . '/' . Str::slug(pathinfo($fileName, PATHINFO_FILENAME)) . '.docx';
+        IOFactory::createWriter($phpWord, 'Word2007')->save($tempPath);
+
+        return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
     }
 
     private function authorize(): void

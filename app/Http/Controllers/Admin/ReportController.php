@@ -9399,22 +9399,55 @@ class ReportController extends Controller
             ];
         }
 
+        // 4. Qarz ko'rinayotgan fanlarni AR da nom bo'yicha qidirish (subject_id farq qilsa)
+        $debtSubjectNames = collect($analysis)
+            ->where('has_ar', false)
+            ->pluck('subject_name')
+            ->unique()->values()->all();
+
+        $arByName = [];
+        foreach ($debtSubjectNames as $name) {
+            $found = DB::table('academic_records')
+                ->where('student_id', $hemisId)
+                ->where('subject_name', 'like', '%' . $name . '%')
+                ->get(['semester_id', 'subject_id', 'subject_name', 'grade'])
+                ->toArray();
+            if ($found) {
+                $arByName[$name] = $found;
+            }
+        }
+
+        // 5. subjects jadvali (agar mavjud bo'lsa) — subject_id xaritalash
+        $subjectIdMap = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('subjects')) {
+            $subjectIdMap = DB::table('subjects')
+                ->whereIn('name', $debtSubjectNames)
+                ->orWhere(function ($q) use ($debtSubjectNames) {
+                    foreach ($debtSubjectNames as $n) {
+                        $q->orWhere('name', 'like', '%' . $n . '%');
+                    }
+                })
+                ->get(['id', 'hemis_id', 'name'])
+                ->toArray();
+        }
+
         return response()->json([
-            'talaba'         => [
-                'hemis_id'    => $hemisId,
-                'full_name'   => $student->full_name,
-                'group'       => $student->group_name,
-                'curriculum'  => $curriculumId,
+            'talaba' => [
+                'hemis_id'      => $hemisId,
+                'full_name'     => $student->full_name,
+                'group'         => $student->group_name,
+                'curriculum'    => $curriculumId,
                 'semester_code' => $semesterCode,
             ],
             'academic_records_count' => count($arRows),
             'academic_records'       => $arRows,
             'curriculum_analysis'    => $analysis,
-            'muammo_izoh' => [
-                'Agar "ar_key" to\'g\'ri lekin "has_ar"=false' => 'Sinxronlash muammosi — AR jadvalida yo\'q',
-                'Agar "has_ar"=true lekin hisobotda qarz ko\'rinsa' => 'subject_id mismatch — curriculum va AR da turli ID',
-                'Agar AR da baho bor lekin "subject_id" farq qilsa' => 'Fan ID mismatch muammosi',
-            ],
+            'QARZ_fanlar_AR_da_nom_boyicha' => $arByName
+                ?: '❌ AR da bu fanlar nom bo\'yicha ham topilmadi — sinxronlash muammosi',
+            'subjects_jadval'        => $subjectIdMap ?: 'subjects jadvali yo\'q yoki topilmadi',
+            'xulosa' => count($arByName) > 0
+                ? '⚠️ SUBJECT_ID MISMATCH: curriculum_subjects.subject_id va academic_records.subject_id farq qiladi. AR da fan bor lekin boshqa ID bilan.'
+                : '❌ SINXRONLASH: Bu fanlar HEMIS dan academic_records ga umuman kelmagan.',
         ], 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     }
 }

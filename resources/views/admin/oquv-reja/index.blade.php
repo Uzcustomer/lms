@@ -336,41 +336,41 @@
                 <div class="p-6">
                     <h3 class="text-lg font-semibold text-gray-800 mb-4">Yuklangan o'quv rejalar</h3>
                     <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200 text-sm">
+                        <table id="curricula-table" class="min-w-full divide-y divide-gray-200 text-sm">
                             <thead class="bg-gray-50">
                             <tr>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">#</th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">Turi</th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">Nomi</th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">Yo'nalish</th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">Reja yili</th>
-                                <th class="px-4 py-2 text-right font-medium text-gray-600">Fan qatorlari</th>
-                                <th class="px-4 py-2 text-right font-medium text-gray-600">Jami soat</th>
-                                <th class="px-4 py-2 text-right font-medium text-gray-600">Jami kredit</th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">Yuklangan</th>
+                                <th data-sort-type="number" class="js-sortable cursor-pointer select-none px-4 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">#<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
+                                <th data-sort-type="text" class="js-sortable cursor-pointer select-none px-4 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Turi<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
+                                <th data-sort-type="text" class="js-sortable cursor-pointer select-none px-4 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Nomi<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
+                                <th data-sort-type="text" class="js-sortable cursor-pointer select-none px-4 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Yo'nalish<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
+                                <th data-sort-type="text" class="js-sortable cursor-pointer select-none px-4 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Reja yili<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
+                                <th data-sort-type="number" class="js-sortable cursor-pointer select-none px-4 py-2 text-right font-medium text-gray-600 hover:bg-gray-100">Fan qatorlari<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
+                                <th data-sort-type="number" class="js-sortable cursor-pointer select-none px-4 py-2 text-right font-medium text-gray-600 hover:bg-gray-100">Jami soat<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
+                                <th data-sort-type="number" class="js-sortable cursor-pointer select-none px-4 py-2 text-right font-medium text-gray-600 hover:bg-gray-100">Jami kredit<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
+                                <th data-sort-type="number" class="js-sortable cursor-pointer select-none px-4 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Yuklangan<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
                                 <th class="px-4 py-2 text-left font-medium text-gray-600">Amallar</th>
                             </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-100">
                             @forelse($curricula as $curriculum)
                                 <tr class="hover:bg-gray-50">
-                                    <td class="px-4 py-2">{{ $loop->iteration }}</td>
-                                    <td class="px-4 py-2">
+                                    <td class="px-4 py-2" data-sort-value="{{ $loop->iteration }}">{{ $loop->iteration }}</td>
+                                    <td class="px-4 py-2" data-sort-value="{{ $curriculum->typeLabel() }}">
                                         <span class="px-2 py-1 rounded text-xs font-medium {{ $curriculum->type === 'namunaviy' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800' }}">
                                             {{ $curriculum->typeLabel() }}
                                         </span>
                                     </td>
-                                    <td class="px-4 py-2">
+                                    <td class="px-4 py-2" data-sort-value="{{ $curriculum->name }}">
                                         <a href="{{ route('admin.oquv-reja.show', $curriculum) }}" class="text-blue-600 hover:underline">
                                             {{ $curriculum->name }}
                                         </a>
                                     </td>
                                     <td class="px-4 py-2">{{ trim($curriculum->specialty_code . ' ' . $curriculum->specialty_name) ?: '—' }}</td>
                                     <td class="px-4 py-2">{{ $curriculum->plan_year ?: '—' }}</td>
-                                    <td class="px-4 py-2 text-right">{{ $curriculum->subjects_count }}</td>
-                                    <td class="px-4 py-2 text-right">{{ rtrim(rtrim(number_format($curriculum->total_hours ?? 0, 2, '.', ' '), '0'), '.') }}</td>
-                                    <td class="px-4 py-2 text-right">{{ rtrim(rtrim(number_format($curriculum->total_credit ?? 0, 2, '.', ' '), '0'), '.') }}</td>
-                                    <td class="px-4 py-2">{{ $curriculum->created_at->format('d.m.Y H:i') }}</td>
+                                    <td class="px-4 py-2 text-right" data-sort-value="{{ $curriculum->subjects_count }}">{{ $curriculum->subjects_count }}</td>
+                                    <td class="px-4 py-2 text-right" data-sort-value="{{ $curriculum->total_hours ?? 0 }}">{{ rtrim(rtrim(number_format($curriculum->total_hours ?? 0, 2, '.', ' '), '0'), '.') }}</td>
+                                    <td class="px-4 py-2 text-right" data-sort-value="{{ $curriculum->total_credit ?? 0 }}">{{ rtrim(rtrim(number_format($curriculum->total_credit ?? 0, 2, '.', ' '), '0'), '.') }}</td>
+                                    <td class="px-4 py-2" data-sort-value="{{ $curriculum->created_at->timestamp }}">{{ $curriculum->created_at->format('d.m.Y H:i') }}</td>
                                     <td class="px-4 py-2">
                                         <form method="POST" action="{{ route('admin.oquv-reja.destroy', $curriculum) }}"
                                               onsubmit="return confirm('Ushbu reja va uning barcha fan qatorlari o’chirilsinmi?');">
@@ -392,6 +392,74 @@
                     </div>
                 </div>
             </div>
+
+            <script>
+                (function () {
+                    const table = document.getElementById('curricula-table');
+                    if (!table) return;
+                    const tbody = table.tBodies[0];
+                    const headers = table.querySelectorAll('th.js-sortable');
+
+                    // Bo'sh jadval yoki faqat "topilmadi" qatori bo'lsa, saralash kerak emas
+                    function dataRows() {
+                        return Array.from(tbody.querySelectorAll('tr')).filter(tr => !tr.querySelector('td[colspan]'));
+                    }
+
+                    function cellValue(row, index, type) {
+                        const cell = row.children[index];
+                        if (!cell) return type === 'number' ? 0 : '';
+                        const raw = cell.hasAttribute('data-sort-value')
+                            ? cell.getAttribute('data-sort-value')
+                            : cell.textContent.trim();
+                        if (type === 'number') {
+                            const num = parseFloat(String(raw).replace(/\s/g, '').replace(',', '.'));
+                            return isNaN(num) ? 0 : num;
+                        }
+                        return String(raw).toLowerCase();
+                    }
+
+                    headers.forEach((header) => {
+                        // Ustun indeksini DOM tartibida aniqlash
+                        const colIndex = Array.from(header.parentNode.children).indexOf(header);
+                        const type = header.getAttribute('data-sort-type') || 'text';
+
+                        header.addEventListener('click', function () {
+                            const rows = dataRows();
+                            if (rows.length < 2) return;
+
+                            const current = header.getAttribute('data-sort-dir');
+                            const dir = current === 'asc' ? 'desc' : 'asc';
+
+                            // Boshqa ustunlardagi indikatorlarni tozalash
+                            headers.forEach(h => {
+                                h.removeAttribute('data-sort-dir');
+                                const ind = h.querySelector('.js-sort-indicator');
+                                if (ind) ind.textContent = '';
+                            });
+
+                            header.setAttribute('data-sort-dir', dir);
+                            const ind = header.querySelector('.js-sort-indicator');
+                            if (ind) ind.textContent = dir === 'asc' ? '▲' : '▼';
+
+                            rows.sort((a, b) => {
+                                const va = cellValue(a, colIndex, type);
+                                const vb = cellValue(b, colIndex, type);
+                                let cmp;
+                                if (type === 'number') {
+                                    cmp = va - vb;
+                                } else {
+                                    cmp = va.localeCompare(vb, 'uz');
+                                }
+                                return dir === 'asc' ? cmp : -cmp;
+                            });
+
+                            const frag = document.createDocumentFragment();
+                            rows.forEach(r => frag.appendChild(r));
+                            tbody.appendChild(frag);
+                        });
+                    });
+                })();
+            </script>
 
         </div>
     </div>

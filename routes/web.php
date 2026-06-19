@@ -706,6 +706,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/student-semester-grades', [ReportController::class, 'studentSemesterGrades'])->name('reports.student-semester-grades');
         Route::get('/reports/student-all-records', [ReportController::class, 'studentAllRecords'])->name('reports.student-all-records');
         Route::get('/reports/debug-student-subjects', [ReportController::class, 'debugStudentSubjects'])->name('reports.debug-student-subjects');
+        Route::get('/reports/debug-debt', [ReportController::class, 'debugDebt'])->name('reports.debug-debt');
 
         Route::get('/reports/sababli-check', [ReportController::class, 'sababliCheckReport'])->name('reports.sababli-check');
         Route::get('/reports/sababli-check/data', [ReportController::class, 'sababliCheckData'])->name('reports.sababli-check.data');

@@ -148,6 +148,13 @@
                         Akkreditatsiya
                     </button>
                 </form>
+                <form method="POST" action="{{ route('admin.synchronize.academic-records.clear-lock') }}" style="margin-top:6px;"
+                      onsubmit="return confirm('Lock tozalansinmi? Faqat import qotib qolgan bo\'lsa bosing.');">
+                    @csrf
+                    <button type="submit" class="w-full inline-flex items-center justify-center px-3 py-1.5 border border-red-300 rounded text-xs text-red-600 bg-white hover:bg-red-50 transition-colors">
+                        🔓 Import lock tozalash
+                    </button>
+                </form>
             </div>
 
             {{-- Academic records import progress --}}

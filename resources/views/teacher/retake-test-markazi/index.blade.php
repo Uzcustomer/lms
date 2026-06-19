@@ -10,16 +10,30 @@
             <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800">{{ session('success') }}</div>
         @endif
 
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <form method="POST" action="{{ route('admin.retake-test-markazi.generate-yn-oldi-word') }}" id="retake-yn-word-form">
+            @csrf
+            <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             @if($groups->isEmpty())
                 <div class="p-10 text-center text-sm text-gray-500">
                     {{ __("Hozircha test markaziga yuborilgan guruhlar yo'q") }}
                 </div>
             @else
+                <div class="p-3 border-b border-gray-100 flex items-center justify-between gap-3">
+                    <div class="text-sm text-gray-600">
+                        {{ __("Tanlangan guruhlar uchun YN oldi Word hosil qiling") }}
+                    </div>
+                    <button type="submit"
+                            class="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700">
+                        {{ __("YN oldi word") }}
+                    </button>
+                </div>
                 <div class="overflow-x-auto">
                     <table class="min-w-full divide-y divide-gray-100">
                         <thead class="bg-gray-50">
                         <tr>
+                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">
+                                <input type="checkbox" id="select-all-retake-yn" class="rounded border-gray-300">
+                            </th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Guruh") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fan") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("O'qituvchi") }}</th>
@@ -40,6 +54,9 @@
                                 ];
                             @endphp
                             <tr>
+                                <td class="px-3 py-2.5 text-sm text-gray-700">
+                                    <input type="checkbox" name="group_ids[]" value="{{ $g->id }}" class="retake-yn-group-checkbox rounded border-gray-300">
+                                </td>
                                 <td class="px-3 py-2.5 text-sm text-gray-900 font-medium">{{ $g->name }}</td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700">
                                     {{ $g->subject_name }}
@@ -71,6 +88,21 @@
                 </div>
                 <div class="p-3 border-t border-gray-100">{{ $groups->links() }}</div>
             @endif
-        </div>
+            </div>
+        </form>
     </div>
+
+    @push('scripts')
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const selectAll = document.getElementById('select-all-retake-yn');
+                const items = Array.from(document.querySelectorAll('.retake-yn-group-checkbox'));
+                if (!selectAll || !items.length) return;
+
+                selectAll.addEventListener('change', function () {
+                    items.forEach(cb => cb.checked = selectAll.checked);
+                });
+            });
+        </script>
+    @endpush
 </x-teacher-app-layout>

@@ -5110,6 +5110,414 @@ class ReportController extends Controller
     }
 
     /**
+     * "Qayta o'qishga ariza topshirmaganlar" hisoboti sahifasi.
+     *
+     * Talabaning o'quv rejasidagi (tugagan semestrlar) fanlarini academic_records
+     * bilan FAN NOMI + KREDIT bo'yicha solishtiradi:
+     *  - Yetmayotgan (bahosi yo'q) fanlar — har biri yoniga qayta o'qishga ariza
+     *    bergan/bermaganlik holati yoziladi.
+     *  - Ortiqcha (rejada yo'q, academic_records'da bor) fanlar alohida.
+     *  - Joriy semestr — "4≥qarzdorlar" mantig'i bo'yicha xavf (potensial yiqilganlar).
+     */
+    public function retakeNotAppliedReport(Request $request)
+    {
+        $dekanFacultyId = get_dekan_faculty_id();
+
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $selectedEducationType = $request->get('education_type');
+        if (!$request->has('education_type')) {
+            $selectedEducationType = $educationTypes
+                ->first(fn($type) => str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr'))
+                ?->education_type_code;
+        }
+
+        $facultyQuery = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name');
+
+        if ($dekanFacultyId) {
+            $facultyQuery->where('id', $dekanFacultyId);
+        }
+
+        $faculties = $facultyQuery->get();
+
+        $studentStatuses = DB::table('students')
+            ->select('student_status_code', 'student_status_name')
+            ->whereNotNull('student_status_code')
+            ->groupBy('student_status_code', 'student_status_name')
+            ->orderBy('student_status_name')
+            ->get();
+
+        $studentTypes = DB::table('students')
+            ->select('student_type_code', 'student_type_name')
+            ->whereNotNull('student_type_code')
+            ->groupBy('student_type_code', 'student_type_name')
+            ->orderBy('student_type_name')
+            ->get();
+
+        return view('admin.reports.retake-not-applied', compact(
+            'educationTypes',
+            'selectedEducationType',
+            'faculties',
+            'studentStatuses',
+            'studentTypes',
+            'dekanFacultyId'
+        ));
+    }
+
+    /**
+     * AJAX: "Qayta o'qishga ariza topshirmaganlar" hisobot ma'lumotlari.
+     */
+    public function retakeNotAppliedReportData(Request $request)
+    {
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyId]);
+        }
+
+        try {
+            ini_set('memory_limit', '512M');
+            set_time_limit(120);
+
+            // Fan nomi normallashtirish (nomi+kredit solishtirish uchun)
+            $normName = function ($s) {
+                $s = mb_strtolower(trim((string) $s));
+                // Oxiridagi guruh belgisi "(a)" / "(б)" ni olib tashlaymiz
+                $s = preg_replace('/\s*\([a-zа-яʻ\']\)\s*$/u', '', $s);
+                $s = preg_replace('/\s+/u', ' ', $s);
+                return $s;
+            };
+            $creditKey = fn ($c) => number_format((float) $c, 1, '.', '');
+
+            // 1-QADAM: Talabalarni filtrlar bo'yicha olish
+            $studentQuery = DB::table('students as s')
+                ->whereNotNull('s.curriculum_id')
+                ->select('s.hemis_id', 's.full_name', 's.student_id_number',
+                    's.department_name', 's.specialty_name', 's.level_name',
+                    's.semester_name', 's.semester_code', 's.group_name',
+                    's.group_id', 's.curriculum_id',
+                    's.student_type_code', 's.student_type_name');
+
+            if ($request->filled('student_status')) {
+                $studentQuery->where('s.student_status_code', $request->student_status);
+            }
+            if ($request->filled('student_name')) {
+                $studentQuery->where('s.full_name', 'like', '%' . $request->student_name . '%');
+            }
+            if ($request->filled('faculty')) {
+                $faculty = Department::find($request->faculty);
+                if ($faculty) {
+                    $studentQuery->where('s.department_id', $faculty->department_hemis_id);
+                }
+            }
+            if ($request->filled('specialty')) {
+                $studentQuery->where('s.specialty_id', $request->specialty);
+            }
+            if ($request->filled('level_code')) {
+                $studentQuery->where('s.level_code', $request->level_code);
+            }
+            if ($request->filled('group')) {
+                $group = \App\Models\Group::find($request->group);
+                if ($group) {
+                    $studentQuery->where('s.group_id', $group->group_hemis_id);
+                }
+            }
+            if ($request->filled('education_type')) {
+                $studentQuery->where('s.education_type_code', $request->education_type);
+            }
+            if ($request->filled('student_type')) {
+                $studentQuery->where('s.student_type_code', $request->student_type);
+            }
+
+            if (is_active_nazoratchi()) {
+                $nazoratchiHemisIds = get_nazoratchi_group_hemis_ids();
+                if (empty($nazoratchiHemisIds)) {
+                    return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+                }
+                $studentQuery->whereIn('s.group_id', $nazoratchiHemisIds);
+            }
+
+            $students = $studentQuery->get();
+            if ($students->isEmpty()) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            $studentHemisIds = $students->pluck('hemis_id')->toArray();
+
+            // 2-QADAM: academic_records (nomi + kredit + baho bilan).
+            //  - Har semestrdagi tarixiy curriculum_id (transfer talabalari uchun).
+            //  - Baholangan fanlar to'plami (nomi+kredit+semestr).
+            //  - Barcha academic_records yozuvlari (ortiqcha aniqlash uchun).
+            $arRecords = [];
+            foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
+                $arRecords = array_merge($arRecords, DB::table('academic_records')
+                    ->whereIn('student_id', $chunk)
+                    ->select('student_id', 'subject_id', 'subject_name', 'credit',
+                        'semester_id', 'curriculum_id', 'grade')
+                    ->get()
+                    ->all());
+            }
+
+            // [hemis_id][semester_code] => curriculum_id
+            $studentSemCurr = [];
+            // [hemis_id] => [ 'normname|credit|sem' => true ] — baholangan fanlar
+            $gradedKeySet = [];
+            // [hemis_id][sem] => [ 'normname|credit' => ['subject_name'=>, 'credit'=>] ] — barcha AR (ortiqcha uchun)
+            $arAllByStudentSem = [];
+            foreach ($arRecords as $ar) {
+                if (!isset($studentSemCurr[$ar->student_id][$ar->semester_id]) && $ar->curriculum_id) {
+                    $studentSemCurr[$ar->student_id][$ar->semester_id] = $ar->curriculum_id;
+                }
+                $nk = $normName($ar->subject_name) . '|' . $creditKey($ar->credit) . '|' . (string) $ar->semester_id;
+                $hasGrade = $ar->grade !== null && trim((string) $ar->grade) !== '';
+                if ($hasGrade) {
+                    $gradedKeySet[$ar->student_id][$nk] = true;
+                }
+                $arAllByStudentSem[$ar->student_id][(string) $ar->semester_id][$normName($ar->subject_name) . '|' . $creditKey($ar->credit)] = [
+                    'subject_name' => $ar->subject_name,
+                    'credit'       => $ar->credit,
+                ];
+            }
+            unset($arRecords);
+
+            // 3-QADAM: Tugagan (joriydan oldingi) semestrlar uchun (curriculum_id, sem) juftliklari
+            $curriculumPairs = [];
+            foreach ($students as $st) {
+                $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
+                foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
+                    if (!$studentSemCode || (int) $semCode < $studentSemCode) {
+                        $curriculumPairs[$currId . '|' . $semCode] = true;
+                    }
+                }
+            }
+
+            $allCurriculumIds = collect($curriculumPairs)->keys()
+                ->map(fn ($k) => explode('|', $k)[0])->unique()->values()->all();
+            $allSemCodes = collect($curriculumPairs)->keys()
+                ->map(fn ($k) => explode('|', $k)[1])->unique()->values()->all();
+
+            $subjectsByPair = collect();
+            if (!empty($allCurriculumIds) && !empty($allSemCodes)) {
+                $currSubjectsQuery = DB::table('curriculum_subjects as cs')
+                    ->whereIn('cs.curricula_hemis_id', $allCurriculumIds)
+                    ->whereIn('cs.semester_code', $allSemCodes)
+                    ->where('cs.is_active', 1)
+                    ->where(function ($q) {
+                        $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
+                    })
+                    ->select(
+                        'cs.curricula_hemis_id', 'cs.curriculum_subject_hemis_id',
+                        'cs.semester_code', 'cs.semester_name',
+                        'cs.subject_id', 'cs.subject_name', 'cs.subject_type_code',
+                        'cs.credit', 'cs.total_acload'
+                    )
+                    ->distinct();
+
+                $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
+                foreach ($excludedPatterns as $pattern) {
+                    $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+                }
+
+                $currSubjects = $currSubjectsQuery->get();
+                $subjectsByPair = $currSubjects->groupBy(fn ($s) => $s->curricula_hemis_id . '|' . $s->semester_code);
+
+                // Tanlov fanlar (subject_type_code=12) — talaba haqiqiy tanlovi
+                $tanlovCsHemisIds = $currSubjects
+                    ->where('subject_type_code', '12')
+                    ->pluck('curriculum_subject_hemis_id')
+                    ->filter()->unique()->values()->toArray();
+                $tanlovPicksMap = [];
+                if (!empty($tanlovCsHemisIds)) {
+                    $tanlovPicks = DB::table('student_subjects')
+                        ->whereIn('student_hemis_id', $studentHemisIds)
+                        ->whereIn('curriculum_subject_hemis_id', $tanlovCsHemisIds)
+                        ->select('student_hemis_id', 'curriculum_subject_hemis_id', 'subject_id', 'subject_name')
+                        ->get();
+                    foreach ($tanlovPicks as $tp) {
+                        $tanlovPicksMap[$tp->student_hemis_id . '|' . $tp->curriculum_subject_hemis_id] = [
+                            'subject_id'   => $tp->subject_id,
+                            'subject_name' => $tp->subject_name,
+                        ];
+                    }
+                }
+            } else {
+                $tanlovPicksMap = [];
+            }
+
+            // 4-QADAM: Qayta o'qish arizalari (faol: pending/approved) — nomi+kredit+semestr
+            $retakeKeySet = [];   // [hemis_id]['normname|credit|sem'] => holat matni
+            $retakeApps = \App\Models\RetakeApplication::query()
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->whereIn('final_status', [
+                    \App\Models\RetakeApplication::STATUS_PENDING,
+                    \App\Models\RetakeApplication::STATUS_APPROVED,
+                ])
+                ->get(['student_hemis_id', 'subject_name', 'credit', 'semester_id', 'final_status']);
+            foreach ($retakeApps as $ra) {
+                $nk = $normName($ra->subject_name) . '|' . $creditKey($ra->credit) . '|' . (string) $ra->semester_id;
+                $label = $ra->final_status === \App\Models\RetakeApplication::STATUS_APPROVED
+                    ? 'Tasdiqlangan' : 'Ko\'rib chiqilmoqda';
+                // approved holati pending'dan ustun
+                if (!isset($retakeKeySet[$ra->student_hemis_id][$nk])
+                    || $ra->final_status === \App\Models\RetakeApplication::STATUS_APPROVED) {
+                    $retakeKeySet[$ra->student_hemis_id][$nk] = $label;
+                }
+            }
+
+            // 5-QADAM: Joriy semestr xavflari (4≥ mantig'i)
+            $studentSemCodeMap = $students->pluck('semester_code', 'hemis_id')->filter()->toArray();
+            $currentRisksMap = $this->getCurrentSemesterRisksForReport($studentHemisIds, $studentSemCodeMap);
+
+            // 6-QADAM: Har bir talaba uchun hisoblash
+            $onlyNotApplied = $request->get('only_not_applied', '1') == '1';
+            $finalResults = [];
+
+            foreach ($students as $st) {
+                if (!$st->curriculum_id) continue;
+                $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
+
+                // Tugagan semestrlar (joriydan oldingi) — academic_records'dagi tarixiy reja
+                $studentPairs = []; // [sem_code => curriculum_id]
+                foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
+                    if (!$studentSemCode || (int) $semCode < $studentSemCode) {
+                        $studentPairs[(int) $semCode] = $currId;
+                    }
+                }
+
+                $noGrade = [];        // yetmayotgan (bahosi yo'q) + ariza holati
+                $expectedKeysBySem = []; // [sem] => ['normname|credit' => true]
+
+                foreach ($studentPairs as $semCode => $currId) {
+                    $subjectsForSem = $subjectsByPair->get($currId . '|' . $semCode, collect());
+                    $subjectsForSem = $this->filterSubjectsByGroupSuffix($subjectsForSem, $st->group_name ?? '');
+
+                    foreach ($subjectsForSem as $sub) {
+                        $effName = $sub->subject_name;
+                        $effCredit = $sub->credit;
+                        if ((string) $sub->subject_type_code === '12') {
+                            $picked = $tanlovPicksMap[$st->hemis_id . '|' . $sub->curriculum_subject_hemis_id] ?? null;
+                            if ($picked) {
+                                $effName = $picked['subject_name'];
+                            } else {
+                                continue; // tanlov qilmagan — e'tiborga olinmaydi
+                            }
+                        }
+
+                        $semKey = (string) $sub->semester_code;
+                        $nkNoSem = $normName($effName) . '|' . $creditKey($effCredit);
+                        $expectedKeysBySem[$semKey][$nkNoSem] = true;
+
+                        $nk = $nkNoSem . '|' . $semKey;
+                        if (isset($gradedKeySet[$st->hemis_id][$nk])) {
+                            continue; // baho bor → qarz emas
+                        }
+
+                        // Bahosi yo'q → yetmayotgan. Qayta o'qish arizasi bormi?
+                        $appLabel = $retakeKeySet[$st->hemis_id][$nk] ?? null;
+                        $noGrade[] = [
+                            'subject_name'       => $effName,
+                            'semester_code'      => $sub->semester_code,
+                            'semester_name'      => $sub->semester_name,
+                            'credit'             => $sub->credit,
+                            'has_application'    => $appLabel !== null,
+                            'application_status' => $appLabel,
+                        ];
+                    }
+                }
+
+                // Ortiqcha: academic_records'da bor, lekin rejada yo'q (tugagan semestrlar)
+                $extra = [];
+                foreach ($arAllByStudentSem[$st->hemis_id] ?? [] as $semKey => $arSubs) {
+                    if ($studentSemCode && (int) $semKey >= $studentSemCode) continue;
+                    if (!isset($expectedKeysBySem[$semKey])) continue; // bu semestr rejasi yuklanmagan — taqqoslamaymiz
+                    foreach ($arSubs as $nkNoSem => $info) {
+                        if (!isset($expectedKeysBySem[$semKey][$nkNoSem])) {
+                            $extra[] = [
+                                'subject_name'  => $info['subject_name'],
+                                'semester_code' => $semKey,
+                                'credit'        => $info['credit'],
+                            ];
+                        }
+                    }
+                }
+
+                usort($noGrade, fn ($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+                usort($extra, fn ($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+
+                $notAppliedCount = count(array_filter($noGrade, fn ($d) => !$d['has_application']));
+                $appliedCount = count($noGrade) - $notAppliedCount;
+                $currentRisks = $currentRisksMap[$st->hemis_id] ?? [];
+
+                // Filtr: standart holatda faqat ariza bermagan fani borlar ko'rsatiladi
+                if ($onlyNotApplied) {
+                    if ($notAppliedCount < 1) continue;
+                } else {
+                    if (count($noGrade) < 1 && empty($currentRisks)) continue;
+                }
+
+                $finalResults[] = [
+                    'hemis_id'           => $st->hemis_id,
+                    'full_name'          => $st->full_name ?? 'Noma\'lum',
+                    'student_id_number'  => $st->student_id_number ?? '-',
+                    'department_name'    => $st->department_name ?? '-',
+                    'specialty_name'     => $st->specialty_name ?? '-',
+                    'level_name'         => $st->level_name ?? '-',
+                    'semester_name'      => $st->semester_name ?? '-',
+                    'group_name'         => $st->group_name ?? '-',
+                    'group_id'           => $st->group_id ?? '',
+                    'student_type_name'  => $st->student_type_name ?? null,
+                    'no_grade_subjects'  => $noGrade,
+                    'no_grade_count'     => count($noGrade),
+                    'not_applied_count'  => $notAppliedCount,
+                    'applied_count'      => $appliedCount,
+                    'extra_subjects'     => $extra,
+                    'extra_count'        => count($extra),
+                    'current_risks'      => $currentRisks,
+                    'current_risk_count' => count($currentRisks),
+                ];
+            }
+
+            if (empty($finalResults)) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            $sortColumn = $request->get('sort', 'not_applied_count');
+            $sortDirection = $request->get('direction', 'desc');
+            usort($finalResults, function ($a, $b) use ($sortColumn, $sortDirection) {
+                $valA = $a[$sortColumn] ?? '';
+                $valB = $b[$sortColumn] ?? '';
+                $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp((string) $valA, (string) $valB);
+                return $sortDirection === 'desc' ? -$cmp : $cmp;
+            });
+
+            $page = (int) $request->get('page', 1);
+            $perPage = (int) $request->get('per_page', 50);
+            $total = count($finalResults);
+            $offset = ($page - 1) * $perPage;
+            $pageData = array_slice($finalResults, $offset, $perPage);
+            foreach ($pageData as $i => &$item) {
+                $item['row_num'] = $offset + $i + 1;
+            }
+            unset($item);
+
+            return response()->json([
+                'data' => $pageData,
+                'total' => $total,
+                'per_page' => $perPage,
+                'current_page' => $page,
+                'last_page' => (int) ceil($total / $perPage),
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Retake-not-applied report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    /**
      * Kunlik o'rtacha hisoblash (har bir kun uchun o'rtacha -> umumiy o'rtacha)
      */
     private function calcDailyAverage(array $dayGrades): float

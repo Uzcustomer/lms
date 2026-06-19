@@ -703,6 +703,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/reports/debtors/export-academic-records/start', [ReportController::class, 'startAcademicRecordsExport'])->name('reports.debtors.export-academic-records.start');
         Route::get('/reports/debtors/export-academic-records/status', [ReportController::class, 'academicRecordsExportStatus'])->name('reports.debtors.export-academic-records.status');
         Route::get('/reports/debtors/export-academic-records/download', [ReportController::class, 'academicRecordsExportDownload'])->name('reports.debtors.export-academic-records.download');
+
+        // Qayta o'qishga ariza topshirmaganlar — faqat admin va registrator ofisi
+        Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi'])->group(function () {
+            Route::get('/reports/retake-not-applied', [ReportController::class, 'retakeNotAppliedReport'])->name('reports.retake-not-applied');
+            Route::get('/reports/retake-not-applied/data', [ReportController::class, 'retakeNotAppliedReportData'])->name('reports.retake-not-applied.data');
+        });
+
         Route::get('/reports/student-semester-grades', [ReportController::class, 'studentSemesterGrades'])->name('reports.student-semester-grades');
         Route::get('/reports/student-all-records', [ReportController::class, 'studentAllRecords'])->name('reports.student-all-records');
         Route::get('/reports/debug-student-subjects', [ReportController::class, 'debugStudentSubjects'])->name('reports.debug-student-subjects');

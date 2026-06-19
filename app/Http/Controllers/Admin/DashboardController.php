@@ -200,7 +200,21 @@ class DashboardController extends Controller
     {
         $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan Akkreditatsiya (academic_records) sinxronizatsiyasi boshlandi");
         ActivityLogService::log('import', 'academic_record', 'Akkreditatsiya sinxronizatsiyasi boshlandi');
+        \Illuminate\Support\Facades\Cache::put('academic_import_progress', [
+            'status'  => 'queued',
+            'percent' => 0,
+            'started_at' => now()->toDateTimeString(),
+        ], 3600);
         Artisan::queue('import:academic-records');
         return back()->with('success', 'Akkreditatsiya (talaba baholari) importi boshlandi (fon rejimida). 359k+ yozuv, bir necha daqiqa olishi mumkin.');
+    }
+
+    public function academicRecordsProgress(): \Illuminate\Http\JsonResponse
+    {
+        $progress = \Illuminate\Support\Facades\Cache::get('academic_import_progress');
+        if (!$progress) {
+            return response()->json(['status' => 'idle']);
+        }
+        return response()->json($progress);
     }
 }

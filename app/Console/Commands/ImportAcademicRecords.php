@@ -34,11 +34,28 @@ class ImportAcademicRecords extends Command
         $startTime = microtime(true);
         $skippedCount = 0;
 
+        \Illuminate\Support\Facades\Cache::put('academic_import_progress', [
+            'status'   => 'running',
+            'page'     => 0,
+            'pages'    => 1,
+            'imported' => 0,
+            'percent'  => 0,
+            'started_at' => now()->toDateTimeString(),
+        ], 3600);
+
         $totalImported = $hemisService->importAcademicRecords(function ($page, $totalPages, $imported, $totalCount) use (&$skippedCount) {
-            $processed = $page * 200; // ~200 yozuv har sahifada
+            $processed = $page * 200;
             $skippedCount = max(0, $processed - $imported);
             $percent = round(($page / $totalPages) * 100, 1);
             $this->output->write("\r  Sahifa: {$page}/{$totalPages} | Yangi/o'zgargan: {$imported} | O'tkazib: {$skippedCount} | {$percent}%");
+            \Illuminate\Support\Facades\Cache::put('academic_import_progress', [
+                'status'   => 'running',
+                'page'     => $page,
+                'pages'    => $totalPages,
+                'imported' => $imported,
+                'percent'  => $percent,
+                'started_at' => \Illuminate\Support\Facades\Cache::get('academic_import_progress.started_at', now()->toDateTimeString()),
+            ], 3600);
         });
 
         $duration = round((microtime(true) - $startTime) / 60, 1);
@@ -46,6 +63,16 @@ class ImportAcademicRecords extends Command
         $this->newLine();
         $this->info("Import tugadi! Yangi/o'zgargan: {$totalImported} ta, O'tkazib yuborildi: {$skippedCount} ta, Vaqt: {$duration} daqiqa");
         $telegram->notify("✅ Akademik qaydlar importi tugadi. Yangi/o'zgargan: {$totalImported} ta, Vaqt: {$duration} daqiqa");
+        \Illuminate\Support\Facades\Cache::put('academic_import_progress', [
+            'status'   => 'done',
+            'page'     => null,
+            'pages'    => null,
+            'imported' => $totalImported,
+            'skipped'  => $skippedCount,
+            'percent'  => 100,
+            'duration' => $duration,
+            'finished_at' => now()->toDateTimeString(),
+        ], 3600);
 
         // Talabaga biriktirilgan fanlarni ham yangilash (debt hisobi uchun)
         $this->info('Talabalarning biriktirilgan fanlari (student-subjects) import qilinmoqda...');

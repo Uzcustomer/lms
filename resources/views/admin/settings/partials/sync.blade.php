@@ -149,6 +149,80 @@
                     </button>
                 </form>
             </div>
+
+            {{-- Academic records import progress --}}
+            <div id="academic-import-progress-wrap" style="display:none;margin-top:16px;padding:14px 16px;background:#fdf4ff;border:1px solid #e9d5ff;border-radius:10px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <span style="font-size:13px;font-weight:600;color:#7c3aed;">Akkreditatsiya import jarayoni</span>
+                    <span id="academic-import-pct" style="font-size:13px;font-weight:700;color:#7c3aed;">0%</span>
+                </div>
+                <div style="background:#ede9fe;border-radius:6px;height:10px;overflow:hidden;">
+                    <div id="academic-import-bar" style="height:10px;background:#7c3aed;border-radius:6px;width:0%;transition:width 0.4s;"></div>
+                </div>
+                <div id="academic-import-detail" style="font-size:12px;color:#6b7280;margin-top:6px;"></div>
+            </div>
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    var progressUrl = '{{ route("admin.synchronize.academic-records.progress") }}';
+    var wrap  = document.getElementById('academic-import-progress-wrap');
+    var bar   = document.getElementById('academic-import-bar');
+    var pct   = document.getElementById('academic-import-pct');
+    var detail= document.getElementById('academic-import-detail');
+    var timer = null;
+
+    function poll() {
+        fetch(progressUrl).then(function(r){ return r.json(); }).then(function(d) {
+            if (!d || d.status === 'idle') { stop(); return; }
+
+            wrap.style.display = 'block';
+
+            if (d.status === 'done') {
+                bar.style.width = '100%';
+                bar.style.background = '#16a34a';
+                pct.textContent = '100%';
+                pct.style.color = '#16a34a';
+                detail.textContent = "✅ Tugadi! Yangi/o'zgargan: " + (d.imported || 0) + " ta. Vaqt: " + (d.duration || '?') + " daqiqa";
+                stop();
+                return;
+            }
+
+            var p = d.percent || 0;
+            bar.style.width = p + '%';
+            pct.textContent = p + '%';
+            if (d.page && d.pages) {
+                detail.textContent = "Sahifa: " + d.page + "/" + d.pages + "  |  Yangi/o'zgargan: " + (d.imported || 0) + " ta";
+            } else {
+                detail.textContent = "Navbatda kutilmoqda...";
+            }
+        }).catch(function(){});
+    }
+
+    function stop() { if (timer) { clearInterval(timer); timer = null; } }
+
+    // Sahifa ochilganda ham, form yuborilganda ham polling boshlaydi
+    function startPolling() {
+        if (timer) return;
+        timer = setInterval(poll, 2000);
+        poll();
+    }
+
+    // Agar allaqachon jarayon ketayotgan bo'lsa (sahifa yangilanganda)
+    fetch(progressUrl).then(function(r){ return r.json(); }).then(function(d) {
+        if (d && (d.status === 'running' || d.status === 'queued')) {
+            startPolling();
+        }
+    }).catch(function(){});
+
+    // Form submit'da polling boshlash
+    var form = document.querySelector('form[action*="academic-records"]');
+    if (form) {
+        form.addEventListener('submit', function() {
+            setTimeout(startPolling, 1500);
+        });
+    }
+})();
+</script>

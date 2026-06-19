@@ -224,4 +224,12 @@ class DashboardController extends Controller
         }
         return response()->json($progress);
     }
+
+    public function clearAcademicImportLock(): \Illuminate\Http\RedirectResponse
+    {
+        \Illuminate\Support\Facades\Cache::forget('academic_import_lock');
+        \Illuminate\Support\Facades\Cache::forget('academic_import_progress');
+        $this->telegram->notify("🔓 {$this->getUserInfo()} tomonidan import lock tozalandi");
+        return back()->with('success', 'Import lock tozalandi. Endi import boshlasa bo\'ladi.');
+    }
 }

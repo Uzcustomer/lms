@@ -1078,6 +1078,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/synchronize/curriculum-subject-teachers', [DashboardController::class, 'importCurriculumSubjectTeachers'])->name('synchronize.curriculum-subject-teachers');
         Route::post('/synchronize/academic-records', [DashboardController::class, 'importAcademicRecords'])->name('synchronize.academic-records');
         Route::get('/synchronize/academic-records/progress', [DashboardController::class, 'academicRecordsProgress'])->name('synchronize.academic-records.progress');
+        Route::post('/synchronize/academic-records/clear-lock', [DashboardController::class, 'clearAcademicImportLock'])->name('synchronize.academic-records.clear-lock');
         Route::post('/synchronize/marking-systems', [SettingsController::class, 'syncMarkingSystems'])->name('synchronize.marking-systems');
 
         // Talabalar so'rovnomasi natijalari + Telegramga e'lon/eslatma

@@ -9332,4 +9332,84 @@ class ReportController extends Controller
 
         return $risks;
     }
+
+    /**
+     * Qarzdor hisobotida talaba noto'g'ri ko'rinishini aniqlash uchun debug endpoint.
+     * URL: /admin/reports/debug-debt?hemis_id=368261100054
+     */
+    public function debugDebt(Request $request)
+    {
+        $hemisId = $request->get('hemis_id');
+        if (!$hemisId) {
+            return response()->json(['error' => 'hemis_id parametri kerak. Masalan: ?hemis_id=368261100054'], 400);
+        }
+
+        $student = DB::table('students')->where('hemis_id', $hemisId)->first();
+        if (!$student) {
+            return response()->json(['error' => 'Talaba topilmadi: ' . $hemisId], 404);
+        }
+
+        $curriculumId = $student->curriculum_id;
+        $semesterCode = $student->semester_code ? (int) $student->semester_code : null;
+
+        // 1. academic_records
+        $arRows = DB::table('academic_records')
+            ->where('student_id', $hemisId)
+            ->orderBy('semester_id')
+            ->get(['semester_id', 'subject_id', 'subject_name', 'grade', 'curriculum_id', 'hemis_updated_at'])
+            ->toArray();
+
+        // AR lookup — hisobot ishlatadigan format
+        $arLookup = [];
+        foreach ($arRows as $ar) {
+            $arLookup[$ar->subject_id . '|' . $ar->semester_id] = $ar->grade;
+        }
+
+        // 2. curriculum_subjects — o'tgan semestrlar
+        $currSubjects = DB::table('curriculum_subjects')
+            ->where('curricula_hemis_id', $curriculumId)
+            ->where('is_active', 1)
+            ->whereNull('in_group')
+            ->orderBy('semester_code')
+            ->get(['semester_code', 'semester_name', 'subject_id', 'subject_name', 'subject_type_code'])
+            ->toArray();
+
+        // 3. Har fan uchun: AR bor/yo'q + kalitlar
+        $analysis = [];
+        foreach ($currSubjects as $cs) {
+            if ($semesterCode && (int)$cs->semester_code >= $semesterCode) continue; // joriy va keyingi — skip
+
+            $arKey  = $hemisId . '|' . $cs->subject_id . '|' . $cs->semester_code;
+            $arKey2 = $cs->subject_id . '|' . $cs->semester_code; // AR lookup kaliti
+            $hasAR  = isset($arLookup[$arKey2]);
+
+            $analysis[] = [
+                'semester'     => $cs->semester_name . ' (' . $cs->semester_code . ')',
+                'subject_id'   => $cs->subject_id,
+                'subject_name' => $cs->subject_name,
+                'ar_key'       => $arKey,
+                'has_ar'       => $hasAR,
+                'ar_grade'     => $arLookup[$arKey2] ?? null,
+                'verdict'      => $hasAR ? '✅ qarz emas' : '❌ QARZ (AR yo\'q)',
+            ];
+        }
+
+        return response()->json([
+            'talaba'         => [
+                'hemis_id'    => $hemisId,
+                'full_name'   => $student->full_name,
+                'group'       => $student->group_name,
+                'curriculum'  => $curriculumId,
+                'semester_code' => $semesterCode,
+            ],
+            'academic_records_count' => count($arRows),
+            'academic_records'       => $arRows,
+            'curriculum_analysis'    => $analysis,
+            'muammo_izoh' => [
+                'Agar "ar_key" to\'g\'ri lekin "has_ar"=false' => 'Sinxronlash muammosi — AR jadvalida yo\'q',
+                'Agar "has_ar"=true lekin hisobotda qarz ko\'rinsa' => 'subject_id mismatch — curriculum va AR da turli ID',
+                'Agar AR da baho bor lekin "subject_id" farq qilsa' => 'Fan ID mismatch muammosi',
+            ],
+        ], 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
+    }
 }

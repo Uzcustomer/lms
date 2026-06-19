@@ -9344,10 +9344,15 @@ class ReportController extends Controller
             return response()->json(['error' => 'hemis_id parametri kerak. Masalan: ?hemis_id=368261100054'], 400);
         }
 
-        $student = DB::table('students')->where('hemis_id', $hemisId)->first();
+        $student = DB::table('students')
+            ->where('hemis_id', $hemisId)
+            ->orWhere('student_id_number', $hemisId)
+            ->first();
         if (!$student) {
-            return response()->json(['error' => 'Talaba topilmadi: ' . $hemisId], 404);
+            return response()->json(['error' => 'Talaba topilmadi: ' . $hemisId . ' (hemis_id va student_id_number ham tekshirildi)'], 404);
         }
+        // Haqiqiy hemis_id ni ishlatamiz (foydalanuvchi student_id_number bergan bo'lishi mumkin)
+        $hemisId = (string) $student->hemis_id;
 
         $curriculumId = $student->curriculum_id;
         $semesterCode = $student->semester_code ? (int) $student->semester_code : null;

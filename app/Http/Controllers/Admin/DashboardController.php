@@ -198,6 +198,11 @@ class DashboardController extends Controller
 
     public function importAcademicRecords(): RedirectResponse
     {
+        // Allaqachon ketayotgan bo'lsa bloklash
+        if (\Illuminate\Support\Facades\Cache::get('academic_import_lock')) {
+            return back()->with('error', 'Import allaqachon ketayapti. Tugashini kuting.');
+        }
+
         $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan Akkreditatsiya (academic_records) sinxronizatsiyasi boshlandi");
         ActivityLogService::log('import', 'academic_record', 'Akkreditatsiya sinxronizatsiyasi boshlandi');
         \Illuminate\Support\Facades\Cache::put('academic_import_progress', [
@@ -205,7 +210,9 @@ class DashboardController extends Controller
             'percent' => 0,
             'started_at' => now()->toDateTimeString(),
         ], 3600);
-        Artisan::queue('import:academic-records');
+
+        \App\Jobs\ImportAcademicRecordsJob::dispatch();
+
         return back()->with('success', 'Akkreditatsiya (talaba baholari) importi boshlandi (fon rejimida). 359k+ yozuv, bir necha daqiqa olishi mumkin.');
     }
 

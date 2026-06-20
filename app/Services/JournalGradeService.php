@@ -582,10 +582,19 @@ class JournalGradeService
             ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHids)
             ->where('subject_id', $subjectId)
-            // OSKI/Test boshqa semestrda saqlangan bo'lishi mumkin (jurnal bilan bir xil yumshatish)
-            ->where(function ($q) use ($semesterCode) {
+            // OSKI/Test boshqa semestrda saqlangan bo'lishi mumkin (jurnal bilan bir xil yumshatish).
+            // AMMO bir xil fan oldingi semestrda ham o'qitilgan bo'lsa, o'sha semestr imtihoni
+            // yakuniy bahoga oqib o'tib o'rtachalanmasligi uchun joriy semestr boshlangan
+            // sanadan oldingi yozuvlarni chiqarib tashlaymiz (sanasi NULL bo'lsa saqlanadi).
+            ->where(function ($q) use ($semesterCode, $minScheduleDate) {
                 $q->where('semester_code', $semesterCode)
-                    ->orWhereIn('training_type_code', [101, 102]);
+                    ->orWhere(function ($q2) use ($minScheduleDate) {
+                        $q2->whereIn('training_type_code', [101, 102])
+                            ->when($minScheduleDate !== null, fn ($q3) => $q3->where(function ($q4) use ($minScheduleDate) {
+                                $q4->whereNull('lesson_date')
+                                    ->orWhere('lesson_date', '>=', $minScheduleDate);
+                            }));
+                    });
             })
             ->whereIn('training_type_code', [100, 101, 102, 103])
             ->when($hasQoshimcha, fn ($q) => $q->where('is_qoshimcha', 0))

@@ -970,9 +970,22 @@ class JournalController extends Controller
             ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
             ->where('subject_id', $subjectId)
-            ->where(function ($q) use ($semesterCode) {
+            ->where(function ($q) use ($semesterCode, $minScheduleDate) {
                 $q->where('semester_code', $semesterCode)
-                    ->orWhereIn('training_type_code', [101, 102]);
+                    ->orWhere(function ($q2) use ($minScheduleDate) {
+                        // OSKI/Test (101,102): diagnostika ba'zan boshqa semester_code
+                        // bilan saqlaydi, shuning uchun semestrni qat'iy talab qilmaymiz.
+                        // AMMO bir xil fan oldingi semestrda ham o'qitilgan bo'lsa
+                        // (masalan kuzgi 5-sem va bahorgi 6-sem — ikkalasi bir o'quv yili),
+                        // o'sha semestr imtihoni hozirgi jurnalga oqib o'tib baholar
+                        // o'rtachalanmasligi uchun joriy semestr boshlangan sanadan
+                        // oldingi yozuvlarni chiqarib tashlaymiz (sanasi NULL bo'lsa saqlanadi).
+                        $q2->whereIn('training_type_code', [101, 102])
+                            ->when($minScheduleDate !== null, fn($q3) => $q3->where(function ($q4) use ($minScheduleDate) {
+                                $q4->whereNull('lesson_date')
+                                    ->orWhere('lesson_date', '>=', $minScheduleDate);
+                            }));
+                    });
             })
             ->whereIn('training_type_code', [100, 101, 102, 103])
             ->when($hasQoshimchaColMain, fn($q) => $q->where('is_qoshimcha', 0))
@@ -1698,9 +1711,18 @@ class JournalController extends Controller
                     ->whereNull('deleted_at')
                     ->whereIn('student_hemis_id', $studentHemisIds)
                     ->where('subject_id', $subjectId)
-                    ->where(function ($q) use ($semesterCode) {
+                    ->where(function ($q) use ($semesterCode, $minScheduleDate) {
                         $q->where('semester_code', $semesterCode)
-                            ->orWhereIn('training_type_code', [101, 102]);
+                            ->orWhere(function ($q2) use ($minScheduleDate) {
+                                // OSKI/Test bypass — asosiy so'rov bilan bir xil mantiq:
+                                // oldingi semestr imtihonlarini joriy semestr boshlanish
+                                // sanasidan oldingi yozuvlar sifatida chiqarib tashlaymiz.
+                                $q2->whereIn('training_type_code', [101, 102])
+                                    ->when($minScheduleDate !== null, fn($q3) => $q3->where(function ($q4) use ($minScheduleDate) {
+                                        $q4->whereNull('lesson_date')
+                                            ->orWhere('lesson_date', '>=', $minScheduleDate);
+                                    }));
+                            });
                     })
                     ->whereIn('training_type_code', [101, 102])
                     ->where('attempt', $attempt)
@@ -1760,9 +1782,18 @@ class JournalController extends Controller
                     ->whereNull('deleted_at')
                     ->whereIn('student_hemis_id', $studentHemisIds)
                     ->where('subject_id', $subjectId)
-                    ->where(function ($q) use ($semesterCode) {
+                    ->where(function ($q) use ($semesterCode, $minScheduleDate) {
                         $q->where('semester_code', $semesterCode)
-                            ->orWhereIn('training_type_code', [101, 102]);
+                            ->orWhere(function ($q2) use ($minScheduleDate) {
+                                // OSKI/Test bypass — oldingi semestr 2-urinish sanasi
+                                // hozirgi promotion mantiqiga oqib o'tmasligi uchun
+                                // joriy semestrdan oldingi yozuvlar chiqariladi.
+                                $q2->whereIn('training_type_code', [101, 102])
+                                    ->when($minScheduleDate !== null, fn($q3) => $q3->where(function ($q4) use ($minScheduleDate) {
+                                        $q4->whereNull('lesson_date')
+                                            ->orWhere('lesson_date', '>=', $minScheduleDate);
+                                    }));
+                            });
                     })
                     ->whereIn('training_type_code', [101, 102])
                     ->where('attempt', 2)

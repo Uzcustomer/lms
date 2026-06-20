@@ -24,47 +24,46 @@
                 </div>
             @endif
 
-            {{-- Solishtirish --}}
+            {{-- Ro'yxatlar va solishtirish juftliklari --}}
             @php
                 $namunaviyList = $curricula->where('type', 'namunaviy');
                 $ishchiList = $curricula->where('type', 'ishchi');
+
+                // Solishtirish juftliklari: namunaviy × ishchi — yo'nalish (specialty_code)
+                // yoki HEMIS reja (curricula_hemis_id) mos kelganlari.
+                $comparisonPairs = collect();
+                foreach ($ishchiList as $w) {
+                    foreach ($namunaviyList as $r) {
+                        $sameSpec = $r->specialty_code && $w->specialty_code
+                            && $r->specialty_code === $w->specialty_code;
+                        $sameHemis = $r->curricula_hemis_id && $w->curricula_hemis_id
+                            && $r->curricula_hemis_id === $w->curricula_hemis_id;
+                        if ($sameSpec || $sameHemis) {
+                            $comparisonPairs->push(['reference' => $r, 'working' => $w]);
+                        }
+                    }
+                }
             @endphp
-            <div class="bg-white shadow-sm sm:rounded-lg mb-6">
-                <div class="p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Namunaviy va ishchi rejani solishtirish</h3>
-                    <form method="GET" action="{{ route('admin.oquv-reja.compare') }}" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Namunaviy o'quv reja</label>
-                            <select name="reference_id" required class="w-full rounded-md border-gray-300 shadow-sm text-sm">
-                                <option value="">Tanlang</option>
-                                @foreach($namunaviyList as $curriculum)
-                                    <option value="{{ $curriculum->id }}">{{ $curriculum->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Ishchi o'quv reja</label>
-                            <select name="working_id" required class="w-full rounded-md border-gray-300 shadow-sm text-sm">
-                                <option value="">Tanlang</option>
-                                @foreach($ishchiList as $curriculum)
-                                    <option value="{{ $curriculum->id }}">{{ $curriculum->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">
-                                Solishtirish
-                            </button>
-                        </div>
-                    </form>
-                    @if($namunaviyList->isEmpty() || $ishchiList->isEmpty())
-                        <p class="mt-3 text-sm text-gray-500">
-                            Solishtirish uchun kamida bitta namunaviy va bitta ishchi o'quv reja yuklangan bo'lishi kerak.
-                        </p>
-                    @endif
-                </div>
+
+            {{-- Asosiy vkladkalar --}}
+            <div class="mb-6 border-b border-gray-200">
+                <nav class="flex flex-wrap gap-1" aria-label="Tabs">
+                    <button type="button" data-tab="rejalar"
+                            class="main-tab px-5 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                        O'quv rejalar
+                    </button>
+                    <button type="button" data-tab="solishtirish"
+                            class="main-tab px-5 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                        Solishtirish
+                        @if($comparisonPairs->isNotEmpty())
+                            <span class="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">{{ $comparisonPairs->count() }}</span>
+                        @endif
+                    </button>
+                </nav>
             </div>
 
+            {{-- ===== PANEL: O'quv rejalar ===== --}}
+            <div data-panel="rejalar">
             {{-- Yangi reja yuklash --}}
             <div class="bg-white shadow-sm sm:rounded-lg mb-6">
                 <div class="p-6">
@@ -331,133 +330,220 @@
                 </div>
             </div>
 
-            {{-- Yuklangan rejalar --}}
+            {{-- Yuklangan o'quv rejalar (Namunaviy / Ishchi vkladkalari) --}}
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6">
                     <h3 class="text-lg font-semibold text-gray-800 mb-4">Yuklangan o'quv rejalar</h3>
-                    <div class="overflow-x-auto">
-                        <table id="curricula-table" class="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead class="bg-gray-50">
-                            <tr>
-                                <th data-sort-type="number" class="js-sortable cursor-pointer select-none px-4 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">#<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
-                                <th data-sort-type="text" class="js-sortable cursor-pointer select-none px-4 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Turi<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
-                                <th data-sort-type="text" class="js-sortable cursor-pointer select-none px-4 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Nomi<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
-                                <th data-sort-type="text" class="js-sortable cursor-pointer select-none px-4 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Yo'nalish<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
-                                <th data-sort-type="text" class="js-sortable cursor-pointer select-none px-4 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Reja yili<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
-                                <th data-sort-type="number" class="js-sortable cursor-pointer select-none px-4 py-2 text-right font-medium text-gray-600 hover:bg-gray-100">Fan qatorlari<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
-                                <th data-sort-type="number" class="js-sortable cursor-pointer select-none px-4 py-2 text-right font-medium text-gray-600 hover:bg-gray-100">Jami soat<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
-                                <th data-sort-type="number" class="js-sortable cursor-pointer select-none px-4 py-2 text-right font-medium text-gray-600 hover:bg-gray-100">Jami kredit<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
-                                <th data-sort-type="number" class="js-sortable cursor-pointer select-none px-4 py-2 text-left font-medium text-gray-600 hover:bg-gray-100">Yuklangan<span class="js-sort-indicator ml-1 text-gray-400"></span></th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">Amallar</th>
-                            </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100">
-                            @forelse($curricula as $curriculum)
-                                <tr class="hover:bg-gray-50">
-                                    <td class="px-4 py-2" data-sort-value="{{ $loop->iteration }}">{{ $loop->iteration }}</td>
-                                    <td class="px-4 py-2" data-sort-value="{{ $curriculum->typeLabel() }}">
-                                        <span class="px-2 py-1 rounded text-xs font-medium {{ $curriculum->type === 'namunaviy' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800' }}">
-                                            {{ $curriculum->typeLabel() }}
-                                        </span>
-                                    </td>
-                                    <td class="px-4 py-2" data-sort-value="{{ $curriculum->name }}">
-                                        <a href="{{ route('admin.oquv-reja.show', $curriculum) }}" class="text-blue-600 hover:underline">
-                                            {{ $curriculum->name }}
-                                        </a>
-                                    </td>
-                                    <td class="px-4 py-2">{{ trim($curriculum->specialty_code . ' ' . $curriculum->specialty_name) ?: '—' }}</td>
-                                    <td class="px-4 py-2">{{ $curriculum->plan_year ?: '—' }}</td>
-                                    <td class="px-4 py-2 text-right" data-sort-value="{{ $curriculum->subjects_count }}">{{ $curriculum->subjects_count }}</td>
-                                    <td class="px-4 py-2 text-right" data-sort-value="{{ $curriculum->total_hours ?? 0 }}">{{ rtrim(rtrim(number_format($curriculum->total_hours ?? 0, 2, '.', ' '), '0'), '.') }}</td>
-                                    <td class="px-4 py-2 text-right" data-sort-value="{{ $curriculum->total_credit ?? 0 }}">{{ rtrim(rtrim(number_format($curriculum->total_credit ?? 0, 2, '.', ' '), '0'), '.') }}</td>
-                                    <td class="px-4 py-2" data-sort-value="{{ $curriculum->created_at->timestamp }}">{{ $curriculum->created_at->format('d.m.Y H:i') }}</td>
-                                    <td class="px-4 py-2">
-                                        <form method="POST" action="{{ route('admin.oquv-reja.destroy', $curriculum) }}"
-                                              onsubmit="return confirm('Ushbu reja va uning barcha fan qatorlari o’chirilsinmi?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="text-red-600 hover:underline text-sm">O'chirish</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="10" class="px-4 py-6 text-center text-gray-500">
-                                        Hozircha o'quv reja yuklanmagan. Yuqoridagi forma orqali Excel fayl yuklang.
-                                    </td>
-                                </tr>
-                            @endforelse
-                            </tbody>
-                        </table>
+
+                    <div class="mb-4 flex flex-wrap gap-1 border-b border-gray-200">
+                        <button type="button" data-subtab="namunaviy"
+                                class="sub-tab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                            Namunaviy o'quv rejalar
+                            <span class="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">{{ $namunaviyList->count() }}</span>
+                        </button>
+                        <button type="button" data-subtab="ishchi"
+                                class="sub-tab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                            Ishchi o'quv rejalar
+                            <span class="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-800">{{ $ishchiList->count() }}</span>
+                        </button>
+                    </div>
+
+                    <div data-subpanel="namunaviy">
+                        @include('admin.oquv-reja._curricula-table', [
+                            'list' => $namunaviyList,
+                            'emptyText' => "Hozircha namunaviy o'quv reja yuklanmagan. Yuqoridagi forma orqali Excel fayl yuklang.",
+                        ])
+                    </div>
+                    <div data-subpanel="ishchi" class="hidden">
+                        @include('admin.oquv-reja._curricula-table', [
+                            'list' => $ishchiList,
+                            'emptyText' => "Hozircha ishchi o'quv reja yuklanmagan. Yuqoridagi forma orqali Excel fayl yuklang.",
+                        ])
                     </div>
                 </div>
             </div>
 
+            </div> {{-- /panel: rejalar --}}
+
+            {{-- ===== PANEL: Solishtirish ===== --}}
+            <div data-panel="solishtirish" class="hidden">
+
+                {{-- Qo'lda solishtirish --}}
+                <div class="bg-white shadow-sm sm:rounded-lg mb-6">
+                    <div class="p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Namunaviy va ishchi rejani solishtirish</h3>
+                        <form method="GET" action="{{ route('admin.oquv-reja.compare') }}" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Namunaviy o'quv reja</label>
+                                <select name="reference_id" required class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">Tanlang</option>
+                                    @foreach($namunaviyList as $curriculum)
+                                        <option value="{{ $curriculum->id }}">{{ $curriculum->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Ishchi o'quv reja</label>
+                                <select name="working_id" required class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">Tanlang</option>
+                                    @foreach($ishchiList as $curriculum)
+                                        <option value="{{ $curriculum->id }}">{{ $curriculum->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">
+                                    Solishtirish
+                                </button>
+                            </div>
+                        </form>
+                        @if($namunaviyList->isEmpty() || $ishchiList->isEmpty())
+                            <p class="mt-3 text-sm text-gray-500">
+                                Solishtirish uchun kamida bitta namunaviy va bitta ishchi o'quv reja yuklangan bo'lishi kerak.
+                            </p>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- Solishtiriladigan rejalar ro'yxati --}}
+                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-1">Solishtiriladigan rejalar</h3>
+                        <p class="text-sm text-gray-500 mb-4">
+                            Yo'nalishi yoki HEMIS rejasi mos keluvchi namunaviy–ishchi juftliklari. Ustiga bosib solishtirish jadvalini oching.
+                        </p>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">#</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Namunaviy reja</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Ishchi reja</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Yo'nalish</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Reja yili</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Amal</th>
+                                </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                @forelse($comparisonPairs as $i => $pair)
+                                    @php $compareUrl = route('admin.oquv-reja.compare', ['reference_id' => $pair['reference']->id, 'working_id' => $pair['working']->id]); @endphp
+                                    <tr class="hover:bg-blue-50 cursor-pointer" onclick="window.location='{{ $compareUrl }}'">
+                                        <td class="px-4 py-2">{{ $i + 1 }}</td>
+                                        <td class="px-4 py-2">
+                                            <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-1">Namunaviy</span>
+                                            {{ $pair['reference']->name }}
+                                        </td>
+                                        <td class="px-4 py-2">
+                                            <span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 mr-1">Ishchi</span>
+                                            {{ $pair['working']->name }}
+                                        </td>
+                                        <td class="px-4 py-2">{{ trim($pair['working']->specialty_code . ' ' . $pair['working']->specialty_name) ?: '—' }}</td>
+                                        <td class="px-4 py-2">{{ $pair['working']->plan_year ?: '—' }}</td>
+                                        <td class="px-4 py-2">
+                                            <a href="{{ $compareUrl }}" class="text-blue-600 hover:underline font-medium" onclick="event.stopPropagation();">
+                                                Solishtirishni ko'rish →
+                                            </a>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="6" class="px-4 py-6 text-center text-gray-500">
+                                            Mos keluvchi namunaviy–ishchi juftligi topilmadi. Yuqoridagi forma orqali qo'lda tanlab solishtiring.
+                                        </td>
+                                    </tr>
+                                @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div> {{-- /panel: solishtirish --}}
+
+            <style>
+                .main-tab.tab-active { color:#2563eb; border-bottom-color:#2563eb; }
+                .sub-tab.subtab-active { color:#2563eb; border-bottom-color:#2563eb; }
+            </style>
+
             <script>
                 (function () {
-                    const table = document.getElementById('curricula-table');
-                    if (!table) return;
-                    const tbody = table.tBodies[0];
-                    const headers = table.querySelectorAll('th.js-sortable');
+                    // ===== Saralash: barcha .js-sortable-table jadvallari uchun =====
+                    function initSortable(table) {
+                        const tbody = table.tBodies[0];
+                        if (!tbody) return;
+                        const headers = table.querySelectorAll('th.js-sortable');
 
-                    // Bo'sh jadval yoki faqat "topilmadi" qatori bo'lsa, saralash kerak emas
-                    function dataRows() {
-                        return Array.from(tbody.querySelectorAll('tr')).filter(tr => !tr.querySelector('td[colspan]'));
-                    }
-
-                    function cellValue(row, index, type) {
-                        const cell = row.children[index];
-                        if (!cell) return type === 'number' ? 0 : '';
-                        const raw = cell.hasAttribute('data-sort-value')
-                            ? cell.getAttribute('data-sort-value')
-                            : cell.textContent.trim();
-                        if (type === 'number') {
-                            const num = parseFloat(String(raw).replace(/\s/g, '').replace(',', '.'));
-                            return isNaN(num) ? 0 : num;
+                        function dataRows() {
+                            return Array.from(tbody.querySelectorAll('tr')).filter(tr => !tr.querySelector('td[colspan]'));
                         }
-                        return String(raw).toLowerCase();
-                    }
+                        function cellValue(row, index, type) {
+                            const cell = row.children[index];
+                            if (!cell) return type === 'number' ? 0 : '';
+                            const raw = cell.hasAttribute('data-sort-value')
+                                ? cell.getAttribute('data-sort-value')
+                                : cell.textContent.trim();
+                            if (type === 'number') {
+                                const num = parseFloat(String(raw).replace(/\s/g, '').replace(',', '.'));
+                                return isNaN(num) ? 0 : num;
+                            }
+                            return String(raw).toLowerCase();
+                        }
 
-                    headers.forEach((header) => {
-                        // Ustun indeksini DOM tartibida aniqlash
-                        const colIndex = Array.from(header.parentNode.children).indexOf(header);
-                        const type = header.getAttribute('data-sort-type') || 'text';
-
-                        header.addEventListener('click', function () {
-                            const rows = dataRows();
-                            if (rows.length < 2) return;
-
-                            const current = header.getAttribute('data-sort-dir');
-                            const dir = current === 'asc' ? 'desc' : 'asc';
-
-                            // Boshqa ustunlardagi indikatorlarni tozalash
-                            headers.forEach(h => {
-                                h.removeAttribute('data-sort-dir');
-                                const ind = h.querySelector('.js-sort-indicator');
-                                if (ind) ind.textContent = '';
+                        headers.forEach((header) => {
+                            const colIndex = Array.from(header.parentNode.children).indexOf(header);
+                            const type = header.getAttribute('data-sort-type') || 'text';
+                            header.addEventListener('click', function () {
+                                const rows = dataRows();
+                                if (rows.length < 2) return;
+                                const dir = header.getAttribute('data-sort-dir') === 'asc' ? 'desc' : 'asc';
+                                headers.forEach(h => {
+                                    h.removeAttribute('data-sort-dir');
+                                    const ind = h.querySelector('.js-sort-indicator');
+                                    if (ind) ind.textContent = '';
+                                });
+                                header.setAttribute('data-sort-dir', dir);
+                                const ind = header.querySelector('.js-sort-indicator');
+                                if (ind) ind.textContent = dir === 'asc' ? '▲' : '▼';
+                                rows.sort((a, b) => {
+                                    const va = cellValue(a, colIndex, type);
+                                    const vb = cellValue(b, colIndex, type);
+                                    const cmp = type === 'number' ? (va - vb) : va.localeCompare(vb, 'uz');
+                                    return dir === 'asc' ? cmp : -cmp;
+                                });
+                                const frag = document.createDocumentFragment();
+                                rows.forEach(r => frag.appendChild(r));
+                                tbody.appendChild(frag);
                             });
-
-                            header.setAttribute('data-sort-dir', dir);
-                            const ind = header.querySelector('.js-sort-indicator');
-                            if (ind) ind.textContent = dir === 'asc' ? '▲' : '▼';
-
-                            rows.sort((a, b) => {
-                                const va = cellValue(a, colIndex, type);
-                                const vb = cellValue(b, colIndex, type);
-                                let cmp;
-                                if (type === 'number') {
-                                    cmp = va - vb;
-                                } else {
-                                    cmp = va.localeCompare(vb, 'uz');
-                                }
-                                return dir === 'asc' ? cmp : -cmp;
-                            });
-
-                            const frag = document.createDocumentFragment();
-                            rows.forEach(r => frag.appendChild(r));
-                            tbody.appendChild(frag);
                         });
-                    });
+                    }
+                    document.querySelectorAll('.js-sortable-table').forEach(initSortable);
+
+                    // ===== Asosiy vkladkalar =====
+                    function activateMainTab(name) {
+                        document.querySelectorAll('.main-tab').forEach(b =>
+                            b.classList.toggle('tab-active', b.dataset.tab === name));
+                        document.querySelectorAll('[data-panel]').forEach(p =>
+                            p.classList.toggle('hidden', p.dataset.panel !== name));
+                        if (history.replaceState) history.replaceState(null, '', '#' + name);
+                    }
+                    document.querySelectorAll('.main-tab').forEach(btn =>
+                        btn.addEventListener('click', () => activateMainTab(btn.dataset.tab)));
+
+                    // ===== Sub-vkladkalar (Namunaviy / Ishchi) =====
+                    document.querySelectorAll('.sub-tab').forEach(btn =>
+                        btn.addEventListener('click', () => {
+                            const name = btn.dataset.subtab;
+                            document.querySelectorAll('.sub-tab').forEach(b =>
+                                b.classList.toggle('subtab-active', b.dataset.subtab === name));
+                            document.querySelectorAll('[data-subpanel]').forEach(p =>
+                                p.classList.toggle('hidden', p.dataset.subpanel !== name));
+                        }));
+
+                    // Boshlang'ich holat (URL hash bo'yicha)
+                    const hash = (location.hash || '').replace('#', '');
+                    activateMainTab(hash === 'solishtirish' ? 'solishtirish' : 'rejalar');
+                    const firstSub = document.querySelector('.sub-tab');
+                    if (firstSub) firstSub.click();
                 })();
             </script>
 

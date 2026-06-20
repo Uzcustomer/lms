@@ -64,8 +64,9 @@
                         <tr>
                             <th class="px-3 py-2 text-left font-medium text-gray-600">T/r</th>
                             <th class="px-3 py-2 text-left font-medium text-gray-600">Blok</th>
-                            <th class="px-3 py-2 text-left font-medium text-gray-600">Fan nomi (namunaviy)</th>
-                            <th class="px-3 py-2 text-left font-medium text-gray-600">Ishchi rejadagi nomi (farqli bo'lsa)</th>
+                            <th class="px-3 py-2 text-left font-medium text-gray-600">Fan nomi (HEMIS)</th>
+                            <th class="px-3 py-2 text-left font-medium text-gray-600">Namunaviy nomi</th>
+                            <th class="px-3 py-2 text-left font-medium text-gray-600">Ishchi nomi</th>
                             <th class="px-3 py-2 text-right font-medium text-gray-600">Nam. soat</th>
                             <th class="px-3 py-2 text-right font-medium text-gray-600">Ishchi soat</th>
                             <th class="px-3 py-2 text-right font-medium text-gray-600">Soat farqi</th>
@@ -83,9 +84,18 @@
                             <tr class="hover:bg-gray-50 {{ $row['status'] === \App\Services\CurriculumComparisonService::STATUS_OK ? '' : 'bg-red-50/40' }}">
                                 <td class="px-3 py-2">{{ $loop->iteration }}</td>
                                 <td class="px-3 py-2 text-gray-500">{{ $row['block'] }}</td>
-                                <td class="px-3 py-2">{{ $row['ref_name'] ?? '—' }}</td>
-                                <td class="px-3 py-2 text-amber-700">
-                                    {{ $row['name_differs'] || $row['ref_name'] === null ? $row['work_name'] : '' }}
+                                <td class="px-3 py-2 font-medium text-gray-800">
+                                    @if($row['hemis_name'] !== null)
+                                        {{ $row['hemis_name'] }}
+                                    @else
+                                        <span class="text-gray-400">{{ $row['ref_name'] ?? $row['work_name'] ?? '—' }} <span class="text-xs">(HEMIS'da topilmadi)</span></span>
+                                    @endif
+                                </td>
+                                <td class="px-3 py-2 {{ $row['ref_matches_hemis'] === false ? 'text-red-600 font-semibold' : 'text-gray-600' }}">
+                                    {{ $row['ref_name'] ?? '—' }}
+                                </td>
+                                <td class="px-3 py-2 {{ $row['work_matches_hemis'] === false ? 'text-red-600 font-semibold' : 'text-gray-600' }}">
+                                    {{ $row['work_name'] ?? '—' }}
                                 </td>
                                 <td class="px-3 py-2 text-right">{{ $fmt($row['ref_hours']) }}</td>
                                 <td class="px-3 py-2 text-right">{{ $fmt($row['work_hours']) }}</td>
@@ -106,7 +116,7 @@
                         </tbody>
                         <tfoot class="bg-gray-50 font-semibold">
                         <tr>
-                            <td class="px-3 py-2" colspan="4">JAMI</td>
+                            <td class="px-3 py-2" colspan="5">JAMI</td>
                             <td class="px-3 py-2 text-right">{{ $fmt($comparison['totals']['ref_hours']) }}</td>
                             <td class="px-3 py-2 text-right">{{ $fmt($comparison['totals']['work_hours']) }}</td>
                             <td class="px-3 py-2 text-right {{ $comparison['totals']['hours_diff'] != 0 ? 'text-red-600' : '' }}">{{ $fmtDiff($comparison['totals']['hours_diff']) }}</td>

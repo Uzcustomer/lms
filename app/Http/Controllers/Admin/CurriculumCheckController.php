@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Imports\ManualCurriculumImport;
 use App\Models\Curriculum;
 use App\Models\ManualCurriculum;
+use App\Models\ManualCurriculumComparison;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Services\CurriculumComparisonService;
@@ -39,7 +40,15 @@ class CurriculumCheckController extends Controller
             ->orderBy('education_type_code')
             ->get();
 
-        return view('admin.oquv-reja.index', compact('curricula', 'educationTypes'));
+        // Bajarilgan (saqlangan) solishtirishlar ro'yxati — eng so'nggisi tepada.
+        // Reja o'chirilgan bo'lsa (relation yo'q) — ko'rsatilmaydi.
+        $savedComparisons = ManualCurriculumComparison::with(['reference', 'working'])
+            ->latest()
+            ->get()
+            ->filter(fn ($c) => $c->reference && $c->working)
+            ->values();
+
+        return view('admin.oquv-reja.index', compact('curricula', 'educationTypes', 'savedComparisons'));
     }
 
     /**
@@ -293,7 +302,21 @@ class CurriculumCheckController extends Controller
         [$reference, $working] = $this->resolvePair($request);
         $comparison = $service->compare($reference, $working, $this->hemisSubjectNames($reference, $working));
 
+        // "Solishtirish" bosilganda juftlik tarixга saqlanadi (takror saqlanmaydi).
+        ManualCurriculumComparison::firstOrCreate(
+            ['reference_id' => $reference->id, 'working_id' => $working->id],
+            ['created_by' => Auth::id()],
+        );
+
         return view('admin.oquv-reja.compare', compact('reference', 'working', 'comparison'));
+    }
+
+    public function destroyComparison(ManualCurriculumComparison $comparison)
+    {
+        $comparison->delete();
+
+        return redirect()->route('admin.oquv-reja.index')
+            ->with('success', "Solishtirish ro'yxatdan o'chirildi.");
     }
 
     public function compareExport(Request $request, CurriculumComparisonService $service)

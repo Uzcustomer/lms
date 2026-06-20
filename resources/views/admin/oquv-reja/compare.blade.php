@@ -9,7 +9,7 @@
         <div class="max-w-full mx-auto sm:px-6 lg:px-8">
 
             <div class="mb-4 flex items-center justify-between flex-wrap gap-3">
-                <a href="{{ route('admin.oquv-reja.index') }}" class="text-blue-600 hover:underline text-sm">&larr; O'quv reja to'g'riligi</a>
+                <a href="{{ route('admin.oquv-reja.index') }}#solishtirish" class="text-blue-600 hover:underline text-sm">&larr; O'quv reja to'g'riligi</a>
                 <a href="{{ route('admin.oquv-reja.compare-export', ['reference_id' => $reference->id, 'working_id' => $working->id]) }}"
                    class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700">
                     Excelga yuklab olish

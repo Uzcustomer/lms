@@ -5113,7 +5113,8 @@ class ReportController extends Controller
      * "Qayta o'qishga ariza topshirmaganlar" hisoboti sahifasi.
      *
      * Talabaning o'quv rejasidagi (tugagan semestrlar) fanlarini academic_records
-     * bilan FAN NOMI + KREDIT bo'yicha solishtiradi:
+     * bilan FAN NOMI + KREDIT bo'yicha (aynan — apostrof va kredit ham muhim)
+     * solishtiradi:
      *  - Yetmayotgan (bahosi yo'q) fanlar — har biri yoniga qayta o'qishga ariza
      *    bergan/bermaganlik holati yoziladi.
      *  - Ortiqcha (rejada yo'q, academic_records'da bor) fanlar alohida.
@@ -5183,15 +5184,14 @@ class ReportController extends Controller
             ini_set('memory_limit', '512M');
             set_time_limit(120);
 
-            // Fan nomi normallashtirish (nomi+kredit solishtirish uchun)
-            $normName = function ($s) {
-                $s = mb_strtolower(trim((string) $s));
-                // Oxiridagi guruh belgisi "(a)" / "(б)" ni olib tashlaymiz
-                $s = preg_replace('/\s*\([a-zа-яʻ\']\)\s*$/u', '', $s);
-                $s = preg_replace('/\s+/u', ' ', $s);
-                return $s;
-            };
-            $creditKey = fn ($c) => number_format((float) $c, 1, '.', '');
+            // Solishtirish kaliti: FAN NOMI + KREDIT (aynan, exact).
+            //  - Apostrof ("‘" va "'") ham, harf registri ham, kredit qiymati ham
+            //    AHAMIYATGA EGA — ya'ni o'quv reja va academic_records'dagi nom yoki
+            //    kredit zarracha farq qilsa, ular HAR XIL fan deb qaraladi (talab shu).
+            //  - Faqat ortiqcha bo'shliqlar (boshi/oxiri va ketma-ket bo'shliqlar)
+            //    tozalanadi — bu ma'noga ta'sir qilmaydigan formatlash shovqini.
+            $normName = fn ($s) => preg_replace('/\s+/u', ' ', trim((string) $s));
+            $creditKey = fn ($c) => number_format((float) $c, 2, '.', '');
 
             // 1-QADAM: Talabalarni filtrlar bo'yicha olish
             $studentQuery = DB::table('students as s')
@@ -5248,9 +5248,9 @@ class ReportController extends Controller
 
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
 
-            // 2-QADAM: academic_records (nomi + kredit + baho bilan).
+            // 2-QADAM: academic_records.
             //  - Har semestrdagi tarixiy curriculum_id (transfer talabalari uchun).
-            //  - Baholangan fanlar to'plami (nomi+kredit+semestr).
+            //  - Baholangan fanlar to'plami (nomi+kredit+semestr bo'yicha).
             //  - Barcha academic_records yozuvlari (ortiqcha aniqlash uchun).
             $arRecords = [];
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
@@ -5266,21 +5266,26 @@ class ReportController extends Controller
             $studentSemCurr = [];
             // [hemis_id] => [ 'normname|credit|sem' => true ] — baholangan fanlar
             $gradedKeySet = [];
-            // [hemis_id][sem] => [ 'normname|credit' => ['subject_name'=>, 'credit'=>] ] — barcha AR (ortiqcha uchun)
+            // [hemis_id][sem] => [ 'normname|credit' => [...] ] — barcha AR (ortiqcha uchun)
             $arAllByStudentSem = [];
             foreach ($arRecords as $ar) {
                 if (!isset($studentSemCurr[$ar->student_id][$ar->semester_id]) && $ar->curriculum_id) {
                     $studentSemCurr[$ar->student_id][$ar->semester_id] = $ar->curriculum_id;
                 }
-                $nk = $normName($ar->subject_name) . '|' . $creditKey($ar->credit) . '|' . (string) $ar->semester_id;
+                $nkNoSem = $normName($ar->subject_name) . '|' . $creditKey($ar->credit);
                 $hasGrade = $ar->grade !== null && trim((string) $ar->grade) !== '';
                 if ($hasGrade) {
-                    $gradedKeySet[$ar->student_id][$nk] = true;
+                    $gradedKeySet[$ar->student_id][$nkNoSem . '|' . (string) $ar->semester_id] = true;
                 }
-                $arAllByStudentSem[$ar->student_id][(string) $ar->semester_id][$normName($ar->subject_name) . '|' . $creditKey($ar->credit)] = [
-                    'subject_name' => $ar->subject_name,
-                    'credit'       => $ar->credit,
-                ];
+                // Bir xil nom+kredit bir semestrda bir necha yozuv bo'lishi mumkin — baholangani ustun
+                $existing = $arAllByStudentSem[$ar->student_id][(string) $ar->semester_id][$nkNoSem] ?? null;
+                if ($existing === null || (!($existing['has_grade'] ?? false) && $hasGrade)) {
+                    $arAllByStudentSem[$ar->student_id][(string) $ar->semester_id][$nkNoSem] = [
+                        'subject_name' => $ar->subject_name,
+                        'credit'       => $ar->credit,
+                        'has_grade'    => $hasGrade,
+                    ];
+                }
             }
             unset($arRecords);
 

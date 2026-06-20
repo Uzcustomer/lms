@@ -291,7 +291,7 @@ class CurriculumCheckController extends Controller
     public function compare(Request $request, CurriculumComparisonService $service)
     {
         [$reference, $working] = $this->resolvePair($request);
-        $comparison = $service->compare($reference, $working);
+        $comparison = $service->compare($reference, $working, $this->hemisSubjectNames($reference, $working));
 
         return view('admin.oquv-reja.compare', compact('reference', 'working', 'comparison'));
     }
@@ -299,12 +299,35 @@ class CurriculumCheckController extends Controller
     public function compareExport(Request $request, CurriculumComparisonService $service)
     {
         [$reference, $working] = $this->resolvePair($request);
-        $comparison = $service->compare($reference, $working);
+        $comparison = $service->compare($reference, $working, $this->hemisSubjectNames($reference, $working));
 
         $title = "{$reference->name} <-> {$working->name} solishtirma";
         $fileName = 'oquv-reja-solishtirma-' . now()->format('Y-m-d_His') . '.xlsx';
 
         return Excel::download(new CurriculumComparisonExport($title, $comparison), $fileName);
+    }
+
+    /**
+     * Solishtirilayotgan rejalarning HEMIS o'quv reja(lar)idagi fanlar nomlari.
+     * Namunaviy/ishchi nomlarini shu HEMIS nomlari bilan solishtirish uchun.
+     */
+    private function hemisSubjectNames(ManualCurriculum $reference, ManualCurriculum $working): array
+    {
+        $ids = array_values(array_unique(array_filter([
+            $reference->curricula_hemis_id,
+            $working->curricula_hemis_id,
+        ])));
+        if (empty($ids)) {
+            return [];
+        }
+
+        return DB::table('curriculum_subjects')
+            ->whereIn('curricula_hemis_id', $ids)
+            ->where('is_active', 1)
+            ->whereNotNull('subject_name')
+            ->distinct()
+            ->pluck('subject_name')
+            ->all();
     }
 
     private function resolvePair(Request $request): array

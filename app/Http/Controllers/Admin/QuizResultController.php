@@ -1633,9 +1633,11 @@ class QuizResultController extends Controller
             $maxGrade = null;
             $maxRetake = null;
             $hasNb = false;
+            $retakeFromNb = false;   // maxRetake NB (baho yo'q) yozuvdan kelganmi
 
             foreach ($rows as $gr) {
-                if ($gr->reason === 'absent' && $gr->grade === null && $gr->retake_grade === null) {
+                $isNbRow = ($gr->reason === 'absent' && $gr->grade === null);
+                if ($isNbRow && $gr->retake_grade === null) {
                     $hasNb = true;
                     continue;
                 }
@@ -1643,21 +1645,57 @@ class QuizResultController extends Controller
                     $maxGrade = $maxGrade === null ? $gr->grade : max($maxGrade, $gr->grade);
                 }
                 if ($gr->retake_grade !== null) {
-                    $maxRetake = $maxRetake === null ? $gr->retake_grade : max($maxRetake, $gr->retake_grade);
+                    if ($maxRetake === null || $gr->retake_grade > $maxRetake) {
+                        $maxRetake = $gr->retake_grade;
+                        $retakeFromNb = $isNbRow;
+                    }
                 }
             }
 
+            // Qayta topshirish koeffitsiyenti (uploadMavzuRetake bilan bir xil):
+            //   - mavjud baho ustidan retake -> har doim 0.8
+            //   - NB ustidan retake -> sababli bo'lsa 1.0, sababsiz 0.8
             $stateKey = $student->hemis_id . '|' . $r->fan_id . '|' . $mavzuN;
             if ($maxRetake !== null) {
-                $states[$stateKey] = ['type' => 'retake', 'grade' => $maxGrade, 'retake' => $maxRetake];
+                $mult = $retakeFromNb
+                    ? $this->mavzuSababliMultiplier($student->hemis_id, $r->fan_id, $targetDate)
+                    : 0.8;
+                $states[$stateKey] = ['type' => 'retake', 'grade' => $maxGrade, 'retake' => $maxRetake, 'mult' => $mult];
             } elseif ($maxGrade !== null) {
-                $states[$stateKey] = ['type' => 'grade', 'grade' => $maxGrade, 'retake' => null];
+                $states[$stateKey] = ['type' => 'grade', 'grade' => $maxGrade, 'retake' => null, 'mult' => 0.8];
             } elseif ($hasNb) {
-                $states[$stateKey] = ['type' => 'nb', 'grade' => null, 'retake' => null];
+                $states[$stateKey] = ['type' => 'nb', 'grade' => null, 'retake' => null, 'mult' => 1.0];
             }
         }
 
         return $states;
+    }
+
+    /**
+     * NB ustidan qayta topshirish koeffitsiyenti: sababli bo'lsa 1.0, sababsiz 0.8.
+     * Sababli aniqlanishi uploadMavzuRetake bilan bir xil: attendances.absent_on>0
+     * yoki shu sanani qamragan tasdiqlangan AbsenceExcuse. (Sababsiz->sababli o'tish
+     * arizani tasdiqlash + qayta yuklash orqali avtomatik 0.8->1.0 yangilanadi;
+     * bu yerda joriy holat o'qiladi.)
+     */
+    private function mavzuSababliMultiplier($hemisId, $fanId, $targetDate): float
+    {
+        $sababli = DB::table('attendances')
+            ->where('student_hemis_id', $hemisId)
+            ->where('subject_id', $fanId)
+            ->whereDate('lesson_date', $targetDate)
+            ->where('absent_on', '>', 0)
+            ->exists();
+
+        if (!$sababli) {
+            $sababli = \App\Models\AbsenceExcuse::where('status', 'approved')
+                ->where('student_hemis_id', $hemisId)
+                ->whereDate('start_date', '<=', $targetDate)
+                ->whereDate('end_date', '>=', $targetDate)
+                ->exists();
+        }
+
+        return $sababli ? 1.0 : 0.8;
     }
 
     /**
@@ -3585,10 +3623,12 @@ class QuizResultController extends Controller
             return ['gap', null];
         }
 
-        // Mavjud bahoga qarshi RETAKE qiymati: test × 0.8 (uploadMavzuRetake bilan
-        // bir xil — mavjud baho ustidan qayta topshirishda 0.8 koeffitsiyent qo'llanadi).
+        // Mavjud bahoga qarshi RETAKE qiymati: test × koeffitsiyent (uploadMavzuRetake
+        // bilan bir xil). Koeffitsiyent: mavjud baho ustidan = 0.8; NB sababli = 1.0.
         // Faqat shu retake qiymati darsdagi bahodan BALAND bo'lsa jurnal yangilanadi.
-        $retakeValue = $testGrade !== null ? round($testGrade * 0.8, 2) : null;
+        $mult = isset($state['mult']) ? (float) $state['mult'] : 0.8;
+        $multText = rtrim(rtrim(number_format($mult, 2, '.', ''), '0'), '.');
+        $retakeValue = $testGrade !== null ? round($testGrade * $mult, 2) : null;
         $rvText = $retakeValue !== null ? rtrim(rtrim(number_format($retakeValue, 2, '.', ''), '0'), '.') : '?';
 
         if ($state['type'] === 'grade') {
@@ -3601,7 +3641,7 @@ class QuizResultController extends Controller
             if ($retakeValue !== null && $retakeValue > $jn) {
                 return ['gap', null];
             }
-            return ['warning', 'Jurnalda baho bor: ' . $shakl . ' (' . round($jn) . ') — retake (test×0.8=' . $rvText . ') darsdagi bahodan past'];
+            return ['warning', 'Jurnalda baho bor: ' . $shakl . ' (' . round($jn) . ') — retake (test×' . $multText . '=' . $rvText . ') darsdagi bahodan past'];
         }
 
         if ($state['type'] === 'retake') {
@@ -3614,7 +3654,7 @@ class QuizResultController extends Controller
             $txt = $orig !== null
                 ? 'Jurnalda retake bor: ' . $shakl . ' (' . $orig . '→' . $rt . ')'
                 : 'Jurnalda retake bor: ' . $shakl . ' (' . $rt . ')';
-            return ['warning', $txt . ' — retake (test×0.8=' . $rvText . ') past'];
+            return ['warning', $txt . ' — retake (test×' . $multText . '=' . $rvText . ') past'];
         }
 
         return ['gap', null];

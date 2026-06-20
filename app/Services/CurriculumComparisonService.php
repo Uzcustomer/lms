@@ -80,6 +80,9 @@ class CurriculumComparisonService
         $workMatchesHemis = ($hemisName !== null && $workName !== null)
             ? ($this->collapse($workName) === $hemisName) : null;
 
+        // HEMIS nomlari umuman yuklangan bo'lsa — tekshiruv faol.
+        $hemisAvailable = !empty($hemisMap);
+
         if ($ref === null) {
             $status = self::STATUS_MISSING_IN_REFERENCE;
         } elseif ($work === null) {
@@ -87,10 +90,13 @@ class CurriculumComparisonService
         } else {
             $hoursDiff = $this->diff($ref['hours'], $work['hours']);
             $creditDiff = $this->diff($ref['credit'], $work['credit']);
-            // Nom farqi: HEMIS nomi bo'lsa — namunaviy yoki ishchi HEMIS'dan farq
-            // qilsa; bo'lmasa — namunaviy va ishchi bir-biridan farq qilsa.
-            $nameDiffers = $hemisName !== null
-                ? ($refMatchesHemis === false || $workMatchesHemis === false)
+            // Nom farqi:
+            //  - HEMIS tekshiruvi faol bo'lsa: HEMIS'da topilmasa YOKI namunaviy/
+            //    ishchi nomi HEMIS nomidan farq qilsa — nom farqi (yashil emas).
+            //  - HEMIS nomlari umuman yuklanmagan bo'lsa: eski mantiq — namunaviy
+            //    va ishchi bir-biridan farq qilsa.
+            $nameDiffers = $hemisAvailable
+                ? ($hemisName === null || $refMatchesHemis === false || $workMatchesHemis === false)
                 : ($this->collapse($ref['name']) !== $this->collapse($work['name']));
             $status = match (true) {
                 $hoursDiff && $creditDiff => self::STATUS_HOURS_CREDIT,

@@ -3585,22 +3585,28 @@ class QuizResultController extends Controller
             return ['gap', null];
         }
 
+        // Mavjud bahoga qarshi RETAKE qiymati: test × 0.8 (uploadMavzuRetake bilan
+        // bir xil — mavjud baho ustidan qayta topshirishda 0.8 koeffitsiyent qo'llanadi).
+        // Faqat shu retake qiymati darsdagi bahodan BALAND bo'lsa jurnal yangilanadi.
+        $retakeValue = $testGrade !== null ? round($testGrade * 0.8, 2) : null;
+        $rvText = $retakeValue !== null ? rtrim(rtrim(number_format($retakeValue, 2, '.', ''), '0'), '.') : '?';
+
         if ($state['type'] === 'grade') {
             $jn = (float) $state['grade'];
             if ($jn >= 60) {
                 return ['warning', 'Jurnalda baho bor: ' . $shakl . ' (' . round($jn) . ') — 60+ bo\'lgani uchun qayta topshirilmaydi'];
             }
-            // jn < 60: test darsdagi bahodan yuqori bo'lsa yuklanishi kerak edi (gap),
-            // aks holda darsdagi baho past emas — ogohlantirish.
-            if ($testGrade !== null && $testGrade > $jn) {
+            // jn < 60: retake (test×0.8) darsdagi bahodan baland bo'lsa yuklanadi (gap),
+            // aks holda darsdagi baho baland — jurnal o'zgarmaydi (ogohlantirish).
+            if ($retakeValue !== null && $retakeValue > $jn) {
                 return ['gap', null];
             }
-            return ['warning', 'Jurnalda baho bor: ' . $shakl . ' (' . round($jn) . ') — darsdagi baho test natijasidan past emas'];
+            return ['warning', 'Jurnalda baho bor: ' . $shakl . ' (' . round($jn) . ') — retake (test×0.8=' . $rvText . ') darsdagi bahodan past'];
         }
 
         if ($state['type'] === 'retake') {
             $eff = max((float) ($state['grade'] ?? 0), (float) $state['retake']);
-            if ($testGrade !== null && $testGrade > $eff) {
+            if ($retakeValue !== null && $retakeValue > $eff) {
                 return ['gap', null];
             }
             $orig = $state['grade'] !== null ? round((float) $state['grade']) : null;
@@ -3608,7 +3614,7 @@ class QuizResultController extends Controller
             $txt = $orig !== null
                 ? 'Jurnalda retake bor: ' . $shakl . ' (' . $orig . '→' . $rt . ')'
                 : 'Jurnalda retake bor: ' . $shakl . ' (' . $rt . ')';
-            return ['warning', $txt . ' — test natijasi past emas'];
+            return ['warning', $txt . ' — retake (test×0.8=' . $rvText . ') past'];
         }
 
         return ['gap', null];

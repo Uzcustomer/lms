@@ -182,6 +182,13 @@ return [
         'photo_allowed_origins' => array_values(array_filter(array_map('trim', explode(',', (string) env('FACEID_PHOTO_ALLOWED_ORIGINS', ''))))),
     ],
 
+    'retake' => [
+        // Qayta o'qish modulida Telegram xabarlarini yuborish yoqilganmi.
+        // false bo'lsa — ilova ichidagi bildirishnomalar (qo'ng'iroqcha)
+        // ishlayveradi, lekin Telegram'ga xabar yuborilmaydi.
+        'telegram_enabled' => filter_var(env('RETAKE_TELEGRAM_ENABLED', true), FILTER_VALIDATE_BOOLEAN),
+    ],
+
     'exam_access' => [
         // Whether ExamAccessGuardService should enforce the
         // "student must sit at a specific computer" rule. When false

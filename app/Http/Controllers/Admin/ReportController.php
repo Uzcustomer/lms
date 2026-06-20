@@ -5113,7 +5113,7 @@ class ReportController extends Controller
      * "Qayta o'qishga ariza topshirmaganlar" hisoboti sahifasi.
      *
      * Talabaning o'quv rejasidagi (tugagan semestrlar) fanlarini academic_records
-     * bilan FAN NOMI + KREDIT bo'yicha solishtiradi:
+     * bilan subject_id + semestr bo'yicha solishtiradi:
      *  - Yetmayotgan (bahosi yo'q) fanlar — har biri yoniga qayta o'qishga ariza
      *    bergan/bermaganlik holati yoziladi.
      *  - Ortiqcha (rejada yo'q, academic_records'da bor) fanlar alohida.
@@ -5183,16 +5183,6 @@ class ReportController extends Controller
             ini_set('memory_limit', '512M');
             set_time_limit(120);
 
-            // Fan nomi normallashtirish (nomi+kredit solishtirish uchun)
-            $normName = function ($s) {
-                $s = mb_strtolower(trim((string) $s));
-                // Oxiridagi guruh belgisi "(a)" / "(б)" ni olib tashlaymiz
-                $s = preg_replace('/\s*\([a-zа-яʻ\']\)\s*$/u', '', $s);
-                $s = preg_replace('/\s+/u', ' ', $s);
-                return $s;
-            };
-            $creditKey = fn ($c) => number_format((float) $c, 1, '.', '');
-
             // 1-QADAM: Talabalarni filtrlar bo'yicha olish
             $studentQuery = DB::table('students as s')
                 ->whereNotNull('s.curriculum_id')
@@ -5248,10 +5238,15 @@ class ReportController extends Controller
 
             $studentHemisIds = $students->pluck('hemis_id')->toArray();
 
-            // 2-QADAM: academic_records (nomi + kredit + baho bilan).
+            // 2-QADAM: academic_records.
             //  - Har semestrdagi tarixiy curriculum_id (transfer talabalari uchun).
-            //  - Baholangan fanlar to'plami (nomi+kredit+semestr).
+            //  - Baholangan fanlar to'plami (subject_id + semestr bo'yicha).
             //  - Barcha academic_records yozuvlari (ortiqcha aniqlash uchun).
+            //
+            // MUHIM: solishtirish FAN NOMI emas, balki subject_id bo'yicha bo'ladi.
+            // O'quv reja (curriculum_subjects) va academic_records'dagi kredit va fan
+            // nomi yozilishi (masalan apostrof "‘" va "'") farq qilishi mumkin —
+            // shu sababli nomi+kredit emas, barqaror subject_id ishlatiladi.
             $arRecords = [];
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $arRecords = array_merge($arRecords, DB::table('academic_records')
@@ -5264,23 +5259,28 @@ class ReportController extends Controller
 
             // [hemis_id][semester_code] => curriculum_id
             $studentSemCurr = [];
-            // [hemis_id] => [ 'normname|credit|sem' => true ] — baholangan fanlar
+            // [hemis_id] => [ 'subject_id|sem' => true ] — baholangan fanlar
             $gradedKeySet = [];
-            // [hemis_id][sem] => [ 'normname|credit' => ['subject_name'=>, 'credit'=>] ] — barcha AR (ortiqcha uchun)
+            // [hemis_id][sem] => [ subject_id => ['subject_name'=>, 'credit'=>] ] — barcha AR (ortiqcha uchun)
             $arAllByStudentSem = [];
             foreach ($arRecords as $ar) {
                 if (!isset($studentSemCurr[$ar->student_id][$ar->semester_id]) && $ar->curriculum_id) {
                     $studentSemCurr[$ar->student_id][$ar->semester_id] = $ar->curriculum_id;
                 }
-                $nk = $normName($ar->subject_name) . '|' . $creditKey($ar->credit) . '|' . (string) $ar->semester_id;
+                $sk = (string) $ar->subject_id . '|' . (string) $ar->semester_id;
                 $hasGrade = $ar->grade !== null && trim((string) $ar->grade) !== '';
                 if ($hasGrade) {
-                    $gradedKeySet[$ar->student_id][$nk] = true;
+                    $gradedKeySet[$ar->student_id][$sk] = true;
                 }
-                $arAllByStudentSem[$ar->student_id][(string) $ar->semester_id][$normName($ar->subject_name) . '|' . $creditKey($ar->credit)] = [
-                    'subject_name' => $ar->subject_name,
-                    'credit'       => $ar->credit,
-                ];
+                // Bir fan bir semestrda bir necha yozuv bo'lishi mumkin — baholangani ustun
+                $existing = $arAllByStudentSem[$ar->student_id][(string) $ar->semester_id][(string) $ar->subject_id] ?? null;
+                if ($existing === null || (!($existing['has_grade'] ?? false) && $hasGrade)) {
+                    $arAllByStudentSem[$ar->student_id][(string) $ar->semester_id][(string) $ar->subject_id] = [
+                        'subject_name' => $ar->subject_name,
+                        'credit'       => $ar->credit,
+                        'has_grade'    => $hasGrade,
+                    ];
+                }
             }
             unset($arRecords);
 
@@ -5348,23 +5348,23 @@ class ReportController extends Controller
                 $tanlovPicksMap = [];
             }
 
-            // 4-QADAM: Qayta o'qish arizalari (faol: pending/approved) — nomi+kredit+semestr
-            $retakeKeySet = [];   // [hemis_id]['normname|credit|sem'] => holat matni
+            // 4-QADAM: Qayta o'qish arizalari (faol: pending/approved) — subject_id + semestr
+            $retakeKeySet = [];   // [hemis_id]['subject_id|sem'] => holat matni
             $retakeApps = \App\Models\RetakeApplication::query()
                 ->whereIn('student_hemis_id', $studentHemisIds)
                 ->whereIn('final_status', [
                     \App\Models\RetakeApplication::STATUS_PENDING,
                     \App\Models\RetakeApplication::STATUS_APPROVED,
                 ])
-                ->get(['student_hemis_id', 'subject_name', 'credit', 'semester_id', 'final_status']);
+                ->get(['student_hemis_id', 'subject_id', 'subject_name', 'credit', 'semester_id', 'final_status']);
             foreach ($retakeApps as $ra) {
-                $nk = $normName($ra->subject_name) . '|' . $creditKey($ra->credit) . '|' . (string) $ra->semester_id;
+                $sk = (string) $ra->subject_id . '|' . (string) $ra->semester_id;
                 $label = $ra->final_status === \App\Models\RetakeApplication::STATUS_APPROVED
                     ? 'Tasdiqlangan' : 'Ko\'rib chiqilmoqda';
                 // approved holati pending'dan ustun
-                if (!isset($retakeKeySet[$ra->student_hemis_id][$nk])
+                if (!isset($retakeKeySet[$ra->student_hemis_id][$sk])
                     || $ra->final_status === \App\Models\RetakeApplication::STATUS_APPROVED) {
-                    $retakeKeySet[$ra->student_hemis_id][$nk] = $label;
+                    $retakeKeySet[$ra->student_hemis_id][$sk] = $label;
                 }
             }
 
@@ -5389,18 +5389,19 @@ class ReportController extends Controller
                 }
 
                 $noGrade = [];        // yetmayotgan (bahosi yo'q) + ariza holati
-                $expectedKeysBySem = []; // [sem] => ['normname|credit' => true]
+                $expectedKeysBySem = []; // [sem] => [subject_id => true]
 
                 foreach ($studentPairs as $semCode => $currId) {
                     $subjectsForSem = $subjectsByPair->get($currId . '|' . $semCode, collect());
                     $subjectsForSem = $this->filterSubjectsByGroupSuffix($subjectsForSem, $st->group_name ?? '');
 
                     foreach ($subjectsForSem as $sub) {
+                        $effSubjectId = $sub->subject_id;
                         $effName = $sub->subject_name;
-                        $effCredit = $sub->credit;
                         if ((string) $sub->subject_type_code === '12') {
                             $picked = $tanlovPicksMap[$st->hemis_id . '|' . $sub->curriculum_subject_hemis_id] ?? null;
                             if ($picked) {
+                                $effSubjectId = $picked['subject_id'];
                                 $effName = $picked['subject_name'];
                             } else {
                                 continue; // tanlov qilmagan — e'tiborga olinmaydi
@@ -5408,16 +5409,15 @@ class ReportController extends Controller
                         }
 
                         $semKey = (string) $sub->semester_code;
-                        $nkNoSem = $normName($effName) . '|' . $creditKey($effCredit);
-                        $expectedKeysBySem[$semKey][$nkNoSem] = true;
+                        $expectedKeysBySem[$semKey][(string) $effSubjectId] = true;
 
-                        $nk = $nkNoSem . '|' . $semKey;
-                        if (isset($gradedKeySet[$st->hemis_id][$nk])) {
+                        $sk = (string) $effSubjectId . '|' . $semKey;
+                        if (isset($gradedKeySet[$st->hemis_id][$sk])) {
                             continue; // baho bor → qarz emas
                         }
 
                         // Bahosi yo'q → yetmayotgan. Qayta o'qish arizasi bormi?
-                        $appLabel = $retakeKeySet[$st->hemis_id][$nk] ?? null;
+                        $appLabel = $retakeKeySet[$st->hemis_id][$sk] ?? null;
                         $noGrade[] = [
                             'subject_name'       => $effName,
                             'semester_code'      => $sub->semester_code,
@@ -5434,8 +5434,8 @@ class ReportController extends Controller
                 foreach ($arAllByStudentSem[$st->hemis_id] ?? [] as $semKey => $arSubs) {
                     if ($studentSemCode && (int) $semKey >= $studentSemCode) continue;
                     if (!isset($expectedKeysBySem[$semKey])) continue; // bu semestr rejasi yuklanmagan — taqqoslamaymiz
-                    foreach ($arSubs as $nkNoSem => $info) {
-                        if (!isset($expectedKeysBySem[$semKey][$nkNoSem])) {
+                    foreach ($arSubs as $subjId => $info) {
+                        if (!isset($expectedKeysBySem[$semKey][(string) $subjId])) {
                             $extra[] = [
                                 'subject_name'  => $info['subject_name'],
                                 'semester_code' => $semKey,

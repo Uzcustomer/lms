@@ -43,10 +43,24 @@ class RetakeTestMarkaziController extends Controller
             ->paginate(30, ['*'], 'groups_page')
             ->withQueryString();
 
-        $sentApplications = RetakeApplication::query()
+        $studentSearch = trim((string) request('student_search', ''));
+
+        $sentApplicationsQuery = RetakeApplication::query()
             ->whereNotNull('sent_to_test_markazi_at')
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
-            ->with(['group.student', 'retakeGroup'])
+            ->with(['group.student', 'retakeGroup']);
+
+        if ($studentSearch !== '') {
+            $sentApplicationsQuery->where(function ($query) use ($studentSearch) {
+                $query->where('student_hemis_id', 'like', "%{$studentSearch}%")
+                    ->orWhereHas('group.student', function ($studentQuery) use ($studentSearch) {
+                        $studentQuery->where('full_name', 'like', "%{$studentSearch}%")
+                            ->orWhere('student_id_number', 'like', "%{$studentSearch}%");
+                    });
+            });
+        }
+
+        $sentApplications = $sentApplicationsQuery
             ->orderByDesc('sent_to_test_markazi_at')
             ->paginate(50, ['*'], 'students_page')
             ->withQueryString();
@@ -61,6 +75,7 @@ class RetakeTestMarkaziController extends Controller
             'sentApplications' => $sentApplications,
             'mustaqilMap' => $mustaqilMap,
             'activeTab' => $activeTab,
+            'studentSearch' => $studentSearch,
         ]);
     }
 
@@ -225,6 +240,100 @@ class RetakeTestMarkaziController extends Controller
             }
         }
 
+        $tempPath = $tempDir . '/' . Str::slug(pathinfo($fileName, PATHINFO_FILENAME)) . '.docx';
+        IOFactory::createWriter($phpWord, 'Word2007')->save($tempPath);
+
+        return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
+    }
+
+    public function generateDailyAllowedStudentsWord(Request $request)
+    {
+        $this->authorize();
+
+        $studentSearch = trim((string) $request->input('student_search', ''));
+
+        $query = RetakeApplication::query()
+            ->whereNotNull('sent_to_test_markazi_at')
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->with(['group.student', 'retakeGroup'])
+            ->orderBy('sent_to_test_markazi_at');
+
+        if ($studentSearch !== '') {
+            $query->where(function ($q) use ($studentSearch) {
+                $q->where('student_hemis_id', 'like', "%{$studentSearch}%")
+                    ->orWhereHas('group.student', function ($studentQuery) use ($studentSearch) {
+                        $studentQuery->where('full_name', 'like', "%{$studentSearch}%")
+                            ->orWhere('student_id_number', 'like', "%{$studentSearch}%");
+                    });
+            });
+        }
+
+        $applications = $query->get();
+        if ($applications->isEmpty()) {
+            abort(404, 'Word uchun ruxsat etilgan talabalar topilmadi');
+        }
+
+        $mustaqilMap = RetakeMustaqilSubmission::query()
+            ->whereIn('application_id', $applications->pluck('id'))
+            ->get()
+            ->keyBy('application_id');
+
+        $phpWord = new PhpWord();
+        $phpWord->setDefaultFontName('Times New Roman');
+        $phpWord->setDefaultFontSize(11);
+
+        $section = $phpWord->addSection([
+            'marginTop' => 900,
+            'marginBottom' => 900,
+            'marginLeft' => 1000,
+            'marginRight' => 1000,
+        ]);
+
+        $section->addText('Testga ruxsat etilgan talabalar', ['bold' => true, 'size' => 15], ['alignment' => Jc::CENTER, 'spaceAfter' => 120]);
+        $section->addText('Sana: ' . now()->format('d.m.Y H:i'), ['size' => 11], ['spaceAfter' => 160]);
+
+        $phpWord->addTableStyle('DailyAllowedStudentsTable', [
+            'borderSize' => 6,
+            'borderColor' => '999999',
+            'cellMargin' => 60,
+        ]);
+
+        $headerFont = ['bold' => true, 'size' => 9];
+        $bodyFont = ['size' => 9];
+        $cellCenter = ['alignment' => Jc::CENTER];
+        $cellLeft = ['alignment' => Jc::START];
+        $headerBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
+
+        $table = $section->addTable('DailyAllowedStudentsTable');
+        $row = $table->addRow();
+        $row->addCell(500, $headerBg)->addText('#', $headerFont, $cellCenter);
+        $row->addCell(3600, $headerBg)->addText('F.I.Sh.', $headerFont, $cellCenter);
+        $row->addCell(1800, $headerBg)->addText('Fan', $headerFont, $cellCenter);
+        $row->addCell(1400, $headerBg)->addText('Semester', $headerFont, $cellCenter);
+        $row->addCell(900, $headerBg)->addText('JN', $headerFont, $cellCenter);
+        $row->addCell(900, $headerBg)->addText('MT', $headerFont, $cellCenter);
+        $row->addCell(1700, $headerBg)->addText('Status', $headerFont, $cellCenter);
+
+        foreach ($applications as $idx => $app) {
+            $student = $app->group?->student;
+            $retakeGroup = $app->retakeGroup;
+            $mustaqil = $mustaqilMap[$app->id] ?? null;
+
+            $row = $table->addRow();
+            $row->addCell(500)->addText((string) ($idx + 1), $bodyFont, $cellCenter);
+            $row->addCell(3600)->addText($student?->full_name ?? '—', $bodyFont, $cellLeft);
+            $row->addCell(1800)->addText($retakeGroup?->subject_name ?? $app->subject_name ?? '—', $bodyFont, $cellLeft);
+            $row->addCell(1400)->addText($retakeGroup?->semester_name ?? $app->semester_name ?? '—', $bodyFont, $cellCenter);
+            $row->addCell(900)->addText($app->joriy_score !== null ? rtrim(rtrim(number_format($app->joriy_score, 2, '.', ''), '0'), '.') : '—', $bodyFont, $cellCenter);
+            $row->addCell(900)->addText($mustaqil?->grade !== null ? rtrim(rtrim(number_format($mustaqil->grade, 2, '.', ''), '0'), '.') : '—', $bodyFont, $cellCenter);
+            $row->addCell(1700)->addText('Ruxsat', ['size' => 9, 'bold' => true, 'color' => '0F9D58'], $cellCenter);
+        }
+
+        $fileName = 'testga_ruxsat_etilgan_talabalar_' . now()->format('Ymd_His') . '.docx';
+        $tempDir = storage_path('app/public/retake-test-markazi');
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
         $tempPath = $tempDir . '/' . Str::slug(pathinfo($fileName, PATHINFO_FILENAME)) . '.docx';
         IOFactory::createWriter($phpWord, 'Word2007')->save($tempPath);
 

@@ -10,13 +10,13 @@
             <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800">{{ session('success') }}</div>
         @endif
 
-        <div class="mb-4 flex items-center gap-2 border-b border-gray-200">
+        <div class="mb-4 flex items-center gap-2 border-b border-gray-200 bg-white rounded-t-xl px-4 pt-3 shadow-sm">
             <a href="{{ route('admin.retake-test-markazi.index', ['tab' => 'groups']) }}"
-               class="px-4 py-2 text-sm font-semibold border-b-2 {{ $activeTab === 'groups' ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-800' }}">
+               class="px-5 py-3 text-sm font-semibold border-b-2 rounded-t-lg transition {{ $activeTab === 'groups' ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50' }}">
                 {{ __("Testga yuborilgan guruhlar") }}
             </a>
             <a href="{{ route('admin.retake-test-markazi.index', ['tab' => 'students']) }}"
-               class="px-4 py-2 text-sm font-semibold border-b-2 {{ $activeTab === 'students' ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-800' }}">
+               class="px-5 py-3 text-sm font-semibold border-b-2 rounded-t-lg transition {{ $activeTab === 'students' ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50' }}">
                 {{ __("Testga yuborilgan talabalar") }}
             </a>
         </div>
@@ -104,6 +104,29 @@
             </form>
         @else
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div class="p-3 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+                    <form method="GET" action="{{ route('admin.retake-test-markazi.index') }}" class="flex items-center gap-2">
+                        <input type="hidden" name="tab" value="students">
+                        <input type="text"
+                               name="student_search"
+                               value="{{ $studentSearch }}"
+                               placeholder="{{ __('Ism yoki ID...') }}"
+                               class="w-64 rounded-lg border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        <button type="submit"
+                                class="inline-flex items-center px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold hover:bg-blue-700">
+                            {{ __("Qidirish") }}
+                        </button>
+                        @if($studentSearch !== '')
+                            <a href="{{ route('admin.retake-test-markazi.index', ['tab' => 'students']) }}"
+                               class="text-sm text-gray-500 hover:text-gray-800">{{ __("Tozalash") }}</a>
+                        @endif
+                    </form>
+
+                    <a href="{{ route('admin.retake-test-markazi.daily-allowed-students-word', ['student_search' => $studentSearch]) }}"
+                       class="inline-flex items-center px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
+                        {{ __("Word chiqarish") }}
+                    </a>
+                </div>
                 @if($sentApplications->isEmpty())
                     <div class="p-10 text-center text-sm text-gray-500">
                         {{ __("Hozircha testga yuborilgan talaba yo'q") }}

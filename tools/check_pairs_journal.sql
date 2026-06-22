@@ -172,3 +172,23 @@ WHERE sg.student_hemis_id = @hid COLLATE utf8mb4_unicode_ci
   AND DATE(sg.lesson_date) = @kun
   AND sg.deleted_at IS NULL
 ORDER BY sg.lesson_pair_code;
+
+
+-- ---------------------------------------------------------------------
+-- Q8) QILICHEV holati (dublikatsiz, pair 13 qolgan) — nega skip bo'lgan?
+--     is_yn_locked / absent_on ni ko'rsatadi.
+-- ---------------------------------------------------------------------
+SELECT sg.lesson_pair_code AS juftlik, sg.grade, sg.retake_grade, sg.reason, sg.status,
+       sg.is_yn_locked, sg.quiz_result_id,
+       (SELECT MAX(a.absent_on) FROM attendances a
+          WHERE a.student_hemis_id = sg.student_hemis_id COLLATE utf8mb4_unicode_ci
+            AND a.subject_id = sg.subject_id
+            AND DATE(a.lesson_date) = DATE(sg.lesson_date)
+            AND a.lesson_pair_code = sg.lesson_pair_code COLLATE utf8mb4_unicode_ci) AS absent_on
+FROM student_grades sg
+JOIN students s ON s.hemis_id = sg.student_hemis_id COLLATE utf8mb4_unicode_ci
+WHERE s.full_name LIKE 'QILICHEV BEKZOD%'
+  AND sg.subject_id = 433
+  AND DATE(sg.lesson_date) = '2026-04-28'
+  AND sg.deleted_at IS NULL
+ORDER BY sg.lesson_pair_code;

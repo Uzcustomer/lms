@@ -127,3 +127,48 @@ GROUP BY sg.student_hemis_id, s.full_name, s.group_name, sg.subject_id, DATE(sg.
 HAVING juftliklar > 1 AND retake_soni > 0 AND retake_soni < juftliklar
 ORDER BY kun DESC
 LIMIT 50;
+
+
+-- ---------------------------------------------------------------------
+-- Q6) HAQIQIY tushib qolganlar: bir juftlik retake olgan, lekin BOSHQA
+--     qoidaviy juftlik (NB yoki <60) retake olmagan. (To'g'ri >=60 skiplar
+--     bu yerga kirmaydi.) qoldirilgan>0 -> haqiqiy muammo.
+-- ---------------------------------------------------------------------
+SELECT s.full_name, s.group_name, sg.subject_id, DATE(sg.lesson_date) AS kun,
+       COUNT(*) AS juftliklar,
+       SUM(sg.retake_grade IS NOT NULL) AS retake_bor,
+       SUM(sg.retake_grade IS NULL AND (sg.grade IS NULL OR sg.grade < 60)) AS qoldirilgan,
+       GROUP_CONCAT(CONCAT(sg.lesson_pair_code,':',COALESCE(sg.grade,'NB'),
+         '/',COALESCE(sg.retake_grade,'-')) ORDER BY sg.lesson_pair_code SEPARATOR ' | ') AS tafsilot
+FROM student_grades sg
+JOIN students s ON s.hemis_id = sg.student_hemis_id COLLATE utf8mb4_unicode_ci
+WHERE sg.deleted_at IS NULL
+  AND sg.training_type_code NOT IN (11,17,99,100,101,102,103)
+  AND sg.lesson_date >= '2026-02-01'
+GROUP BY sg.student_hemis_id, s.full_name, s.group_name, sg.subject_id, DATE(sg.lesson_date)
+HAVING juftliklar > 1 AND retake_bor > 0 AND qoldirilgan > 0
+ORDER BY kun DESC
+LIMIT 100;
+
+
+-- ---------------------------------------------------------------------
+-- Q7) BITTA holatni to'liq tekshirish — nega juftlik tushib qolgan?
+--     (YN qulf, attendance, sabablilik). @hid/@sub/@kun ni to'ldiring.
+-- ---------------------------------------------------------------------
+SET @hid = '0000000000';  -- student_hemis_id
+SET @sub = 0;             -- subject_id
+SET @kun = '2026-04-28';  -- kun
+
+SELECT sg.lesson_pair_code AS juftlik, sg.grade, sg.retake_grade, sg.reason, sg.status,
+       sg.is_yn_locked, sg.quiz_result_id,
+       (SELECT MAX(a.absent_on) FROM attendances a
+          WHERE a.student_hemis_id = sg.student_hemis_id COLLATE utf8mb4_unicode_ci
+            AND a.subject_id = sg.subject_id
+            AND DATE(a.lesson_date) = DATE(sg.lesson_date)
+            AND a.lesson_pair_code = sg.lesson_pair_code COLLATE utf8mb4_unicode_ci) AS absent_on
+FROM student_grades sg
+WHERE sg.student_hemis_id = @hid COLLATE utf8mb4_unicode_ci
+  AND sg.subject_id = @sub
+  AND DATE(sg.lesson_date) = @kun
+  AND sg.deleted_at IS NULL
+ORDER BY sg.lesson_pair_code;

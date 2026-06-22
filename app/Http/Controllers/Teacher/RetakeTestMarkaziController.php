@@ -6,6 +6,7 @@ use App\Enums\ProjectRole;
 use App\Http\Controllers\Controller;
 use App\Models\RetakeApplication;
 use App\Models\RetakeGroup;
+use App\Models\RetakeMustaqilSubmission;
 use App\Services\Retake\RetakeAccess;
 use App\Services\Retake\RetakeJournalService;
 use Illuminate\Http\JsonResponse;
@@ -30,6 +31,8 @@ class RetakeTestMarkaziController extends Controller
     {
         $this->authorize();
 
+        $activeTab = request('tab') === 'students' ? 'students' : 'groups';
+
         // Yuborilgan guruhlar — eng yangi avval
         $groups = RetakeGroup::query()
             ->whereNotNull('sent_to_test_markazi_at')
@@ -37,10 +40,27 @@ class RetakeTestMarkaziController extends Controller
             ->with('teacher')
             ->withCount('applications as students_count')
             ->orderByDesc('sent_to_test_markazi_at')
-            ->paginate(30);
+            ->paginate(30, ['*'], 'groups_page')
+            ->withQueryString();
+
+        $sentApplications = RetakeApplication::query()
+            ->whereNotNull('sent_to_test_markazi_at')
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->with(['group.student', 'retakeGroup'])
+            ->orderByDesc('sent_to_test_markazi_at')
+            ->paginate(50, ['*'], 'students_page')
+            ->withQueryString();
+
+        $mustaqilMap = RetakeMustaqilSubmission::query()
+            ->whereIn('application_id', $sentApplications->getCollection()->pluck('id'))
+            ->get()
+            ->keyBy('application_id');
 
         return view('teacher.retake-test-markazi.index', [
             'groups' => $groups,
+            'sentApplications' => $sentApplications,
+            'mustaqilMap' => $mustaqilMap,
+            'activeTab' => $activeTab,
         ]);
     }
 

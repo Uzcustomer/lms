@@ -48,6 +48,8 @@ class RetakeApplication extends Model
         'final_status',
         'rejected_by',
         'retake_group_id',
+        'sent_to_test_markazi_at',
+        'sent_to_test_markazi_by',
     ];
 
     protected $casts = [
@@ -66,6 +68,7 @@ class RetakeApplication extends Model
         'dean_decision_at' => 'datetime',
         'registrar_decision_at' => 'datetime',
         'academic_dept_decision_at' => 'datetime',
+        'sent_to_test_markazi_at' => 'datetime',
     ];
 
     public function group()

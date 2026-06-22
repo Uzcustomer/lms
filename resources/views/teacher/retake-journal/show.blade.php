@@ -110,6 +110,7 @@
                                                 <div class="text-[9px] font-normal text-gray-500 mt-0.5">{{ __("yagona baho") }}</div>
                                             </th>
                                             <th class="px-2 py-2 text-left font-semibold text-gray-600" style="min-width:160px;">{{ __("Qachon qo'yilgan") }}</th>
+                                            <th class="px-2 py-2 text-left font-semibold text-gray-600" style="min-width:170px;">{{ __("Testga yuborish") }}</th>
                                         </tr>
                                     </thead>
                                     <tbody class="bg-white">
@@ -161,6 +162,32 @@
                                                     <span class="block text-[10px] text-gray-400">{{ $app->joriy_graded_by_name }}</span>
                                                 @else
                                                     —
+                                                @endif
+                                            </td>
+                                            <td class="px-2 py-1.5 text-[11px]">
+                                                @if($group->is_locked)
+                                                    @if($app->sent_to_test_markazi_at)
+                                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+                                                            {{ __("Testga ruxsat etilgan") }}
+                                                        </span>
+                                                        <span class="block text-[10px] text-gray-400 mt-1">
+                                                            {{ $app->sent_to_test_markazi_at->format('d.m.Y H:i') }}
+                                                        </span>
+                                                    @elseif($canEdit)
+                                                        <form method="POST"
+                                                              action="{{ route('admin.retake-journal.send-application-to-test-markazi', [$group->id, $app->id]) }}"
+                                                              onsubmit="return confirm('{{ __("Bu talabani test markaziga yuborishni tasdiqlaysizmi?") }}')">
+                                                            @csrf
+                                                            <button type="submit"
+                                                                    class="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-700">
+                                                                ✉️ {{ __("Testga yuborish") }}
+                                                            </button>
+                                                        </form>
+                                                    @else
+                                                        <span class="text-gray-400">—</span>
+                                                    @endif
+                                                @else
+                                                    <span class="text-gray-400">—</span>
                                                 @endif
                                             </td>
                                         </tr>

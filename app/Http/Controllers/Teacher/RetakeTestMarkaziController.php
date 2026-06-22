@@ -53,7 +53,7 @@ class RetakeTestMarkaziController extends Controller
             abort(404, 'Bu guruh test markaziga yuborilmagan');
         }
 
-        $applications = $this->service->applications($group);
+        $applications = $this->service->sentApplications($group);
         $gradesMap = $this->service->gradesMap($group);
         $mustaqilMap = $this->service->mustaqilMap($group);
 
@@ -149,7 +149,7 @@ class RetakeTestMarkaziController extends Controller
         }
 
         foreach ($groups as $group) {
-            $applications = $this->service->applications($group);
+            $applications = $this->service->sentApplications($group);
             $mustaqilMap = $this->service->mustaqilMap($group);
 
             $section = $phpWord->addSection($sectionStyle);

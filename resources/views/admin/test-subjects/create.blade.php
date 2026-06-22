@@ -1,6 +1,6 @@
 <x-app-layout>
     <div class="py-6">
-        <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-6">
+        <div class="w-full px-4 sm:px-6 lg:px-8 space-y-6">
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                 <h1 class="text-2xl font-bold text-slate-900">Yangi test fan</h1>
                 <p class="text-sm text-slate-500 mt-1">Admin fan yaratadi, o‘qituvchi biriktiradi, guruhlar va dars kunlarini belgilaydi.</p>

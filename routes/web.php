@@ -28,6 +28,7 @@ use App\Http\Controllers\Teacher\TeacherMainController;
 use App\Http\Controllers\Teacher\TutorReportController;
 use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
 use App\Http\Controllers\Admin\TeacherController;
+use App\Http\Controllers\Admin\TestSubjectController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\LessonController;
@@ -123,6 +124,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/student-ratings', [\App\Http\Controllers\Admin\StudentRatingController::class, 'index'])->name('student-ratings.index');
         Route::get('/student-ratings/export-excel', [\App\Http\Controllers\Admin\StudentRatingController::class, 'exportExcel'])->name('student-ratings.export-excel');
         Route::get('/student-ratings/{studentHemisId}/subjects', [\App\Http\Controllers\Admin\StudentRatingController::class, 'subjectDetails'])->name('student-ratings.subjects');
+
+        Route::prefix('test-subjects')->name('test-subjects.')
+            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin')
+            ->group(function () {
+            Route::get('/', [TestSubjectController::class, 'index'])->name('index');
+            Route::get('/create', [TestSubjectController::class, 'create'])->name('create');
+            Route::post('/', [TestSubjectController::class, 'store'])->name('store');
+            Route::get('/{testSubject}', [TestSubjectController::class, 'show'])->name('show');
+        });
 
         // Role switching
         Route::post('/switch-role', function (\Illuminate\Http\Request $request) {

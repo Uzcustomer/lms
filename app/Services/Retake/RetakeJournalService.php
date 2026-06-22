@@ -484,12 +484,6 @@ class RetakeJournalService
         RetakeApplication $app,
         Teacher $actor,
     ): RetakeApplication {
-        if (!$group->is_locked) {
-            throw ValidationException::withMessages([
-                'group' => 'Avval guruhni yopish (yakuniy yuborish) kerak',
-            ]);
-        }
-
         if ((int) $app->retake_group_id !== (int) $group->id) {
             throw ValidationException::withMessages([
                 'application_id' => 'Ariza bu guruhga tegishli emas',

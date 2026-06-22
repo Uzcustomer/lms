@@ -108,3 +108,22 @@ WHERE sg.subject_id = @fan AND s.group_name = 'd2/23-08a'
   AND sg.deleted_at IS NULL
   AND (sg.grade IS NULL OR sg.retake_grade IS NOT NULL)
 ORDER BY s.full_name, kun, juftlik;
+
+
+-- ---------------------------------------------------------------------
+-- Q5) GLOBAL: butun bazada ko'p-juftlikli kunda otrabotka (retake) ba'zi
+--     juftliklarga tushgan, HAMMASIGA emas holatlar. Bo'sh qaytsa -> doim
+--     to'liq tushyapti. Qatorlar -> "yarim tushgan", tekshirish kerak.
+-- ---------------------------------------------------------------------
+SELECT s.full_name, s.group_name, sg.subject_id, DATE(sg.lesson_date) AS kun,
+       COUNT(*) AS juftliklar, SUM(sg.retake_grade IS NOT NULL) AS retake_soni,
+       GROUP_CONCAT(CONCAT(sg.lesson_pair_code,':',COALESCE(sg.grade,'NB'),
+         '/',COALESCE(sg.retake_grade,'-')) ORDER BY sg.lesson_pair_code SEPARATOR ' | ') AS tafsilot
+FROM student_grades sg
+JOIN students s ON s.hemis_id = sg.student_hemis_id COLLATE utf8mb4_unicode_ci
+WHERE sg.deleted_at IS NULL
+  AND sg.training_type_code NOT IN (11,17,99,100,101,102,103)
+GROUP BY sg.student_hemis_id, sg.subject_id, DATE(sg.lesson_date)
+HAVING juftliklar > 1 AND retake_soni > 0 AND retake_soni < juftliklar
+ORDER BY kun DESC
+LIMIT 50;

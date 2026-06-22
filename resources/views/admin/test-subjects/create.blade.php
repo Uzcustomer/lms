@@ -3,7 +3,7 @@
         <div class="w-full px-4 sm:px-6 lg:px-8 space-y-6">
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                 <h1 class="text-2xl font-bold text-slate-900">Yangi test fan</h1>
-                <p class="text-sm text-slate-500 mt-1">Admin fan yaratadi, o‘qituvchi biriktiradi, guruhlar va dars kunlarini belgilaydi.</p>
+                <p class="text-sm text-slate-500 mt-1">Admin fan yaratadi, o'qituvchi biriktiradi, guruhlar va dars kunlarini belgilaydi.</p>
             </div>
 
             @if($errors->any())
@@ -31,19 +31,23 @@
 
                         <div>
                             <label class="block text-sm font-semibold text-slate-700 mb-2">Kafedra</label>
+                            <input type="text" x-model="departmentSearch"
+                                   class="w-full mb-2 rounded-xl border-slate-300 focus:border-blue-500 focus:ring-blue-500"
+                                   placeholder="Kafedrani yozib qidiring">
                             <select name="department_hemis_id" x-model="selectedDepartment"
                                     class="w-full rounded-xl border-slate-300 focus:border-blue-500 focus:ring-blue-500">
                                 <option value="">Barchasi</option>
-                                @foreach($departments as $department)
-                                    <option value="{{ $department->department_hemis_id }}" @selected(old('department_hemis_id') == $department->department_hemis_id)>
-                                        {{ $department->name }}
-                                    </option>
-                                @endforeach
+                                <template x-for="department in filteredDepartments" :key="department.department_hemis_id">
+                                    <option :value="department.department_hemis_id" x-text="department.name"></option>
+                                </template>
                             </select>
                         </div>
 
                         <div>
-                            <label class="block text-sm font-semibold text-slate-700 mb-2">Yo‘nalish</label>
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">Yo'nalish</label>
+                            <input type="text" x-model="specialtySearch"
+                                   class="w-full mb-2 rounded-xl border-slate-300 focus:border-blue-500 focus:ring-blue-500"
+                                   placeholder="Yo'nalishni yozib qidiring">
                             <select name="specialty_hemis_id" x-model="selectedSpecialty"
                                     class="w-full rounded-xl border-slate-300 focus:border-blue-500 focus:ring-blue-500">
                                 <option value="">Barchasi</option>
@@ -67,14 +71,16 @@
                         </div>
 
                         <div>
-                            <label class="block text-sm font-semibold text-slate-700 mb-2">O‘qituvchi</label>
-                            <select name="teacher_id" class="w-full rounded-xl border-slate-300 focus:border-blue-500 focus:ring-blue-500">
+                            <label class="block text-sm font-semibold text-slate-700 mb-2">O'qituvchi</label>
+                            <input type="text" x-model="teacherSearch"
+                                   class="w-full mb-2 rounded-xl border-slate-300 focus:border-blue-500 focus:ring-blue-500"
+                                   placeholder="O'qituvchini yozib qidiring">
+                            <select name="teacher_id" x-model="selectedTeacher"
+                                    class="w-full rounded-xl border-slate-300 focus:border-blue-500 focus:ring-blue-500">
                                 <option value="">Tanlanmagan</option>
-                                @foreach($teachers as $teacher)
-                                    <option value="{{ $teacher->id }}" @selected(old('teacher_id') == $teacher->id)>
-                                        {{ $teacher->full_name }}
-                                    </option>
-                                @endforeach
+                                <template x-for="teacher in filteredTeachers" :key="teacher.id">
+                                    <option :value="teacher.id" x-text="teacher.full_name"></option>
+                                </template>
                             </select>
                         </div>
 
@@ -96,12 +102,16 @@
                     <div class="flex items-center justify-between gap-4 mb-4">
                         <div>
                             <h2 class="text-lg font-bold text-slate-900">Guruhlar</h2>
-                            <p class="text-sm text-slate-500">Tanlangan kafedra, yo‘nalish va kursga mos guruhlarni belgilang.</p>
+                            <p class="text-sm text-slate-500">Faqat 2025-2026 o'quv yilidagi guruhlar ko'rsatiladi.</p>
                         </div>
                         <div class="text-sm text-slate-500">
                             Topildi: <span class="font-semibold text-slate-800" x-text="filteredGroups.length"></span>
                         </div>
                     </div>
+
+                    <input type="text" x-model="groupSearch"
+                           class="w-full mb-4 rounded-xl border-slate-300 focus:border-blue-500 focus:ring-blue-500"
+                           placeholder="Guruh nomi bo'yicha yozib qidiring">
 
                     <div class="rounded-2xl border border-slate-200 p-4 max-h-96 overflow-auto">
                         <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -112,7 +122,7 @@
                                            class="mt-1 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
                                     <div>
                                         <div class="font-semibold text-slate-900" x-text="group.name"></div>
-                                        <div class="text-xs text-slate-500" x-text="group.level_name || 'Kurs noma’lum'"></div>
+                                        <div class="text-xs text-slate-500" x-text="group.level_name || 'Kurs noma\\'lum'"></div>
                                     </div>
                                 </label>
                             </template>
@@ -128,7 +138,7 @@
                         </div>
                         <button type="button" @click="addLesson()"
                                 class="inline-flex items-center px-4 py-2 rounded-lg bg-emerald-600 text-white font-semibold hover:bg-emerald-700 transition">
-                            + Dars qo‘shish
+                            + Dars qo'shish
                         </button>
                     </div>
 
@@ -187,26 +197,56 @@
                 selectedDepartment: @js((string) old('department_hemis_id', '')),
                 selectedSpecialty: @js((string) old('specialty_hemis_id', '')),
                 selectedLevel: @js((string) old('level_code', '')),
+                selectedTeacher: @js((string) old('teacher_id', '')),
+                departmentSearch: '',
+                specialtySearch: '',
+                teacherSearch: '',
+                groupSearch: '',
+                departments: @js($departments),
                 specialties: @js($specialties),
+                teachers: @js($teachers),
                 groups: @js($groups),
                 initialSelectedGroups: @js(array_map('intval', old('group_ids', []))),
                 lessons: @js(old('lessons', [['lesson_date' => '', 'starts_at' => '', 'ends_at' => '', 'topic_title' => '']])),
-                get filteredSpecialties() {
-                    if (!this.selectedDepartment) {
-                        return this.specialties;
+                get filteredDepartments() {
+                    const term = this.normalize(this.departmentSearch);
+                    if (!term) {
+                        return this.departments;
                     }
-                    return this.specialties.filter(item => String(item.department_hemis_id) === String(this.selectedDepartment));
+                    return this.departments.filter(item => this.normalize(item.name).includes(term));
+                },
+                get filteredSpecialties() {
+                    const term = this.normalize(this.specialtySearch);
+                    if (!this.selectedDepartment) {
+                        return this.specialties.filter(item => !term || this.normalize(item.name).includes(term));
+                    }
+                    return this.specialties.filter(item =>
+                        String(item.department_hemis_id) === String(this.selectedDepartment)
+                        && (!term || this.normalize(item.name).includes(term))
+                    );
+                },
+                get filteredTeachers() {
+                    const term = this.normalize(this.teacherSearch);
+                    if (!term) {
+                        return this.teachers;
+                    }
+                    return this.teachers.filter(item => this.normalize(item.full_name).includes(term));
                 },
                 get filteredGroups() {
+                    const term = this.normalize(this.groupSearch);
                     return this.groups.filter(group => {
                         const departmentOk = !this.selectedDepartment || String(group.department_hemis_id) === String(this.selectedDepartment);
                         const specialtyOk = !this.selectedSpecialty || String(group.specialty_hemis_id) === String(this.selectedSpecialty);
                         const levelOk = !this.selectedLevel || String(group.level_code) === String(this.selectedLevel);
-                        return departmentOk && specialtyOk && levelOk;
+                        const groupOk = !term || this.normalize(group.name).includes(term);
+                        return departmentOk && specialtyOk && levelOk && groupOk;
                     });
                 },
                 isInitiallySelected(groupId) {
                     return this.initialSelectedGroups.includes(Number(groupId));
+                },
+                normalize(value) {
+                    return String(value || '').toLowerCase().replace(/\s+/g, ' ').trim();
                 },
                 addLesson() {
                     this.lessons.push({ lesson_date: '', starts_at: '', ends_at: '', topic_title: '' });

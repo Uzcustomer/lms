@@ -13,6 +13,8 @@ use Illuminate\Support\Facades\DB;
 
 class TestSubjectController extends Controller
 {
+    private const TARGET_EDUCATION_YEAR = '2025-2026';
+
     public function index()
     {
         $subjects = TestSubject::query()
@@ -27,11 +29,22 @@ class TestSubjectController extends Controller
     {
         $departments = Department::query()
             ->orderBy('name')
-            ->get(['department_hemis_id', 'name']);
+            ->get(['department_hemis_id', 'name'])
+            ->map(fn (Department $department) => [
+                'department_hemis_id' => (string) $department->department_hemis_id,
+                'name' => $department->name,
+            ])
+            ->values();
 
         $specialties = Specialty::query()
             ->orderBy('name')
-            ->get(['specialty_hemis_id', 'name', 'department_hemis_id']);
+            ->get(['specialty_hemis_id', 'name', 'department_hemis_id'])
+            ->map(fn (Specialty $specialty) => [
+                'specialty_hemis_id' => (string) $specialty->specialty_hemis_id,
+                'name' => $specialty->name,
+                'department_hemis_id' => (string) $specialty->department_hemis_id,
+            ])
+            ->values();
 
         $teachers = Teacher::query()
             ->where(function ($query) {
@@ -39,9 +52,15 @@ class TestSubjectController extends Controller
                     ->orWhere('is_active', true);
             })
             ->orderBy('full_name')
-            ->get(['id', 'hemis_id', 'full_name']);
+            ->get(['id', 'hemis_id', 'full_name'])
+            ->map(fn (Teacher $teacher) => [
+                'id' => $teacher->id,
+                'hemis_id' => (string) $teacher->hemis_id,
+                'full_name' => $teacher->full_name,
+            ])
+            ->values();
 
-        $groups = Group::query()
+        $groups = $this->testSubjectGroupsQuery()
             ->with(['curriculum.semesters'])
             ->orderBy('name')
             ->get()
@@ -177,7 +196,7 @@ class TestSubjectController extends Controller
 
     private function availableLevels(): array
     {
-        return Group::query()
+        return $this->testSubjectGroupsQuery()
             ->with(['curriculum.semesters'])
             ->get()
             ->map(function (Group $group) {
@@ -194,5 +213,13 @@ class TestSubjectController extends Controller
             ->unique('code')
             ->values()
             ->all();
+    }
+
+    private function testSubjectGroupsQuery()
+    {
+        return Group::query()
+            ->whereHas('curriculum', function ($query) {
+                $query->where('education_year_name', 'like', self::TARGET_EDUCATION_YEAR . '%');
+            });
     }
 }

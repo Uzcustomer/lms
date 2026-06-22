@@ -43,13 +43,79 @@ class RetakeTestMarkaziController extends Controller
             ->paginate(30, ['*'], 'groups_page')
             ->withQueryString();
 
-        $sentApplications = RetakeApplication::query()
+        $filters = [
+            'student_search' => trim((string) request('student_search', '')),
+            'level_name' => request('level_name'),
+            'group_name' => request('group_name'),
+            'subject_id' => request('subject_id'),
+            'semester_name' => request('semester_name'),
+        ];
+
+        $studentsQuery = RetakeApplication::query()
             ->whereNotNull('sent_to_test_markazi_at')
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
-            ->with(['group.student', 'retakeGroup'])
+            ->with(['group.student', 'retakeGroup']);
+
+        if ($filters['student_search'] !== '') {
+            $search = $filters['student_search'];
+            $studentsQuery->where(function ($query) use ($search) {
+                $query->where('student_hemis_id', 'like', "%{$search}%")
+                    ->orWhereHas('group.student', function ($studentQuery) use ($search) {
+                        $studentQuery->where('full_name', 'like', "%{$search}%")
+                            ->orWhere('student_id_number', 'like', "%{$search}%");
+                    });
+            });
+        }
+
+        if ($filters['level_name']) {
+            $studentsQuery->whereHas('group.student', fn ($query) => $query->where('level_name', $filters['level_name']));
+        }
+
+        if ($filters['group_name']) {
+            $studentsQuery->whereHas('group.student', fn ($query) => $query->where('group_name', $filters['group_name']));
+        }
+
+        if ($filters['subject_id']) {
+            $studentsQuery->where('subject_id', $filters['subject_id']);
+        }
+
+        if ($filters['semester_name']) {
+            $studentsQuery->where(function ($query) use ($filters) {
+                $query->where('semester_name', $filters['semester_name'])
+                    ->orWhereHas('retakeGroup', fn ($groupQuery) => $groupQuery->where('semester_name', $filters['semester_name']));
+            });
+        }
+
+        $sentApplications = $studentsQuery
             ->orderByDesc('sent_to_test_markazi_at')
             ->paginate(50, ['*'], 'students_page')
             ->withQueryString();
+
+        $filterRows = RetakeApplication::query()
+            ->whereNotNull('sent_to_test_markazi_at')
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->with(['group.student', 'retakeGroup'])
+            ->get();
+
+        $filterOptions = [
+            'levels' => $filterRows->pluck('group.student.level_name')->filter()->unique()->sort()->values(),
+            'groups' => $filterRows->pluck('group.student.group_name')->filter()->unique()->sort()->values(),
+            'subjects' => $filterRows
+                ->map(fn ($app) => [
+                    'id' => (string) $app->subject_id,
+                    'name' => $app->retakeGroup?->subject_name ?? $app->subject_name,
+                ])
+                ->filter(fn ($subject) => $subject['id'] !== '' && $subject['name'] !== null)
+                ->unique('id')
+                ->sortBy('name')
+                ->values(),
+            'semesters' => $filterRows
+                ->map(fn ($app) => $app->retakeGroup?->semester_name ?? $app->semester_name)
+                ->filter()
+                ->unique()
+                ->sort()
+                ->values(),
+        ];
 
         $mustaqilMap = RetakeMustaqilSubmission::query()
             ->whereIn('application_id', $sentApplications->getCollection()->pluck('id'))
@@ -61,6 +127,8 @@ class RetakeTestMarkaziController extends Controller
             'sentApplications' => $sentApplications,
             'mustaqilMap' => $mustaqilMap,
             'activeTab' => $activeTab,
+            'filters' => $filters,
+            'filterOptions' => $filterOptions,
         ]);
     }
 

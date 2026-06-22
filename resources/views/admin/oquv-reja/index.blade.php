@@ -24,25 +24,10 @@
                 </div>
             @endif
 
-            {{-- Ro'yxatlar va solishtirish juftliklari --}}
+            {{-- Ro'yxatlar --}}
             @php
                 $namunaviyList = $curricula->where('type', 'namunaviy');
                 $ishchiList = $curricula->where('type', 'ishchi');
-
-                // Solishtirish juftliklari: namunaviy × ishchi — yo'nalish (specialty_code)
-                // yoki HEMIS reja (curricula_hemis_id) mos kelganlari.
-                $comparisonPairs = collect();
-                foreach ($ishchiList as $w) {
-                    foreach ($namunaviyList as $r) {
-                        $sameSpec = $r->specialty_code && $w->specialty_code
-                            && $r->specialty_code === $w->specialty_code;
-                        $sameHemis = $r->curricula_hemis_id && $w->curricula_hemis_id
-                            && $r->curricula_hemis_id === $w->curricula_hemis_id;
-                        if ($sameSpec || $sameHemis) {
-                            $comparisonPairs->push(['reference' => $r, 'working' => $w]);
-                        }
-                    }
-                }
             @endphp
 
             {{-- Asosiy vkladkalar --}}
@@ -55,8 +40,8 @@
                     <button type="button" data-tab="solishtirish"
                             class="main-tab px-5 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
                         Solishtirish
-                        @if($comparisonPairs->isNotEmpty())
-                            <span class="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">{{ $comparisonPairs->count() }}</span>
+                        @if($savedComparisons->isNotEmpty())
+                            <span class="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">{{ $savedComparisons->count() }}</span>
                         @endif
                     </button>
                 </nav>
@@ -405,12 +390,12 @@
                     </div>
                 </div>
 
-                {{-- Solishtiriladigan rejalar ro'yxati --}}
+                {{-- Solishtirilgan rejalar ro'yxati (saqlangan tarix) --}}
                 <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                     <div class="p-6">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-1">Solishtiriladigan rejalar</h3>
+                        <h3 class="text-lg font-semibold text-gray-800 mb-1">Solishtirilgan rejalar</h3>
                         <p class="text-sm text-gray-500 mb-4">
-                            Yo'nalishi yoki HEMIS rejasi mos keluvchi namunaviy–ishchi juftliklari. Ustiga bosib solishtirish jadvalini oching.
+                            Yuqorida tanlab "Solishtirish" tugmasi bosilganda juftlik shu ro'yxatga qo'shiladi va saqlanadi. Ustiga bosib solishtirish jadvalini qayta oching.
                         </p>
                         <div class="overflow-x-auto">
                             <table class="min-w-full divide-y divide-gray-200 text-sm">
@@ -425,30 +410,36 @@
                                 </tr>
                                 </thead>
                                 <tbody class="divide-y divide-gray-100">
-                                @forelse($comparisonPairs as $i => $pair)
-                                    @php $compareUrl = route('admin.oquv-reja.compare', ['reference_id' => $pair['reference']->id, 'working_id' => $pair['working']->id]); @endphp
+                                @forelse($savedComparisons as $i => $comp)
+                                    @php $compareUrl = route('admin.oquv-reja.compare', ['reference_id' => $comp->reference->id, 'working_id' => $comp->working->id]); @endphp
                                     <tr class="hover:bg-blue-50 cursor-pointer" onclick="window.location='{{ $compareUrl }}'">
                                         <td class="px-4 py-2">{{ $i + 1 }}</td>
                                         <td class="px-4 py-2">
                                             <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-1">Namunaviy</span>
-                                            {{ $pair['reference']->name }}
+                                            {{ $comp->reference->name }}
                                         </td>
                                         <td class="px-4 py-2">
                                             <span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 mr-1">Ishchi</span>
-                                            {{ $pair['working']->name }}
+                                            {{ $comp->working->name }}
                                         </td>
-                                        <td class="px-4 py-2">{{ trim($pair['working']->specialty_code . ' ' . $pair['working']->specialty_name) ?: '—' }}</td>
-                                        <td class="px-4 py-2">{{ $pair['working']->plan_year ?: '—' }}</td>
-                                        <td class="px-4 py-2">
-                                            <a href="{{ $compareUrl }}" class="text-blue-600 hover:underline font-medium" onclick="event.stopPropagation();">
+                                        <td class="px-4 py-2">{{ trim($comp->working->specialty_code . ' ' . $comp->working->specialty_name) ?: '—' }}</td>
+                                        <td class="px-4 py-2">{{ $comp->working->plan_year ?: '—' }}</td>
+                                        <td class="px-4 py-2 whitespace-nowrap" onclick="event.stopPropagation();">
+                                            <a href="{{ $compareUrl }}" class="text-blue-600 hover:underline font-medium mr-3">
                                                 Solishtirishni ko'rish →
                                             </a>
+                                            <form method="POST" action="{{ route('admin.oquv-reja.comparisons.destroy', $comp) }}" class="inline"
+                                                  onsubmit="return confirm('Ushbu solishtirish ro\'yxatdan o\'chirilsinmi?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="text-red-600 hover:underline text-sm">O'chirish</button>
+                                            </form>
                                         </td>
                                     </tr>
                                 @empty
                                     <tr>
                                         <td colspan="6" class="px-4 py-6 text-center text-gray-500">
-                                            Mos keluvchi namunaviy–ishchi juftligi topilmadi. Yuqoridagi forma orqali qo'lda tanlab solishtiring.
+                                            Hali solishtirish bajarilmagan. Yuqorida namunaviy va ishchi rejani tanlab "Solishtirish" tugmasini bosing — juftlik shu yerga qo'shiladi.
                                         </td>
                                     </tr>
                                 @endforelse

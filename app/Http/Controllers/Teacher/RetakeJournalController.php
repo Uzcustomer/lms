@@ -407,6 +407,34 @@ class RetakeJournalController extends Controller
     }
 
     /**
+     * Bitta talabani test markazidan qaytarish.
+     */
+    public function returnApplicationFromTestMarkazi(int $groupId, int $applicationId): RedirectResponse
+    {
+        $actor = RetakeAccess::currentStaff();
+        if (!$actor) abort(403);
+
+        $group = RetakeGroup::findOrFail($groupId);
+        $isAdmin = $actor->hasRole(ProjectRole::SUPERADMIN->value);
+        if (!$isAdmin && (!$actor instanceof Teacher || !$this->service->isAssignedTeacher($group, $actor))) {
+            abort(403);
+        }
+
+        $app = \App\Models\RetakeApplication::query()
+            ->where('id', $applicationId)
+            ->where('retake_group_id', $group->id)
+            ->firstOrFail();
+
+        try {
+            $this->service->returnApplicationFromTestMarkazi($group, $app);
+        } catch (ValidationException $e) {
+            return redirect()->back()->withErrors($e->errors());
+        }
+
+        return redirect()->back()->with('success', __('Talaba test markazidan qaytarildi'));
+    }
+
+    /**
      * Mustaqil ta'lim faylini yuklab olish.
      */
     public function downloadMustaqil(int $groupId, int $submissionId)

@@ -168,9 +168,22 @@
                                             </td>
                                             <td class="px-2 py-1.5 text-[11px]">
                                                 @if($app->sent_to_test_markazi_at)
-                                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
-                                                        {{ __("Testga ruxsat etilgan") }}
-                                                    </span>
+                                                    @if($canEdit)
+                                                        <form method="POST"
+                                                              action="{{ route('admin.retake-journal.return-application-from-test-markazi', [$group->id, $app->id]) }}"
+                                                              onsubmit="return confirm('{{ __("Bu talabani test markazidan qaytarishni tasdiqlaysizmi?") }}')">
+                                                            @csrf
+                                                            <button type="submit"
+                                                                    style="background:#dc2626;color:#fff;border-radius:5px;"
+                                                                    class="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold hover:bg-red-700">
+                                                                {{ __("Qaytarish") }}
+                                                            </button>
+                                                        </form>
+                                                    @else
+                                                        <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+                                                            {{ __("Testga ruxsat etilgan") }}
+                                                        </span>
+                                                    @endif
                                                     <span class="block text-[10px] text-gray-400 mt-1">
                                                         {{ $app->sent_to_test_markazi_at->format('d.m.Y H:i') }}
                                                     </span>

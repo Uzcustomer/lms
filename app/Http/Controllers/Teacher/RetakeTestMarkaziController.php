@@ -43,79 +43,27 @@ class RetakeTestMarkaziController extends Controller
             ->paginate(30, ['*'], 'groups_page')
             ->withQueryString();
 
-        $filters = [
-            'student_search' => trim((string) request('student_search', '')),
-            'level_name' => request('level_name'),
-            'group_name' => request('group_name'),
-            'subject_id' => request('subject_id'),
-            'semester_name' => request('semester_name'),
-        ];
+        $studentSearch = trim((string) request('student_search', ''));
 
-        $studentsQuery = RetakeApplication::query()
+        $sentApplicationsQuery = RetakeApplication::query()
             ->whereNotNull('sent_to_test_markazi_at')
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
             ->with(['group.student', 'retakeGroup']);
 
-        if ($filters['student_search'] !== '') {
-            $search = $filters['student_search'];
-            $studentsQuery->where(function ($query) use ($search) {
-                $query->where('student_hemis_id', 'like', "%{$search}%")
-                    ->orWhereHas('group.student', function ($studentQuery) use ($search) {
-                        $studentQuery->where('full_name', 'like', "%{$search}%")
-                            ->orWhere('student_id_number', 'like', "%{$search}%");
+        if ($studentSearch !== '') {
+            $sentApplicationsQuery->where(function ($query) use ($studentSearch) {
+                $query->where('student_hemis_id', 'like', "%{$studentSearch}%")
+                    ->orWhereHas('group.student', function ($studentQuery) use ($studentSearch) {
+                        $studentQuery->where('full_name', 'like', "%{$studentSearch}%")
+                            ->orWhere('student_id_number', 'like', "%{$studentSearch}%");
                     });
             });
         }
 
-        if ($filters['level_name']) {
-            $studentsQuery->whereHas('group.student', fn ($query) => $query->where('level_name', $filters['level_name']));
-        }
-
-        if ($filters['group_name']) {
-            $studentsQuery->whereHas('group.student', fn ($query) => $query->where('group_name', $filters['group_name']));
-        }
-
-        if ($filters['subject_id']) {
-            $studentsQuery->where('subject_id', $filters['subject_id']);
-        }
-
-        if ($filters['semester_name']) {
-            $studentsQuery->where(function ($query) use ($filters) {
-                $query->where('semester_name', $filters['semester_name'])
-                    ->orWhereHas('retakeGroup', fn ($groupQuery) => $groupQuery->where('semester_name', $filters['semester_name']));
-            });
-        }
-
-        $sentApplications = $studentsQuery
+        $sentApplications = $sentApplicationsQuery
             ->orderByDesc('sent_to_test_markazi_at')
             ->paginate(50, ['*'], 'students_page')
             ->withQueryString();
-
-        $filterRows = RetakeApplication::query()
-            ->whereNotNull('sent_to_test_markazi_at')
-            ->where('final_status', RetakeApplication::STATUS_APPROVED)
-            ->with(['group.student', 'retakeGroup'])
-            ->get();
-
-        $filterOptions = [
-            'levels' => $filterRows->pluck('group.student.level_name')->filter()->unique()->sort()->values(),
-            'groups' => $filterRows->pluck('group.student.group_name')->filter()->unique()->sort()->values(),
-            'subjects' => $filterRows
-                ->map(fn ($app) => [
-                    'id' => (string) $app->subject_id,
-                    'name' => $app->retakeGroup?->subject_name ?? $app->subject_name,
-                ])
-                ->filter(fn ($subject) => $subject['id'] !== '' && $subject['name'] !== null)
-                ->unique('id')
-                ->sortBy('name')
-                ->values(),
-            'semesters' => $filterRows
-                ->map(fn ($app) => $app->retakeGroup?->semester_name ?? $app->semester_name)
-                ->filter()
-                ->unique()
-                ->sort()
-                ->values(),
-        ];
 
         $mustaqilMap = RetakeMustaqilSubmission::query()
             ->whereIn('application_id', $sentApplications->getCollection()->pluck('id'))
@@ -127,8 +75,7 @@ class RetakeTestMarkaziController extends Controller
             'sentApplications' => $sentApplications,
             'mustaqilMap' => $mustaqilMap,
             'activeTab' => $activeTab,
-            'filters' => $filters,
-            'filterOptions' => $filterOptions,
+            'studentSearch' => $studentSearch,
         ]);
     }
 
@@ -293,6 +240,100 @@ class RetakeTestMarkaziController extends Controller
             }
         }
 
+        $tempPath = $tempDir . '/' . Str::slug(pathinfo($fileName, PATHINFO_FILENAME)) . '.docx';
+        IOFactory::createWriter($phpWord, 'Word2007')->save($tempPath);
+
+        return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
+    }
+
+    public function generateDailyAllowedStudentsWord(Request $request)
+    {
+        $this->authorize();
+
+        $studentSearch = trim((string) $request->input('student_search', ''));
+
+        $query = RetakeApplication::query()
+            ->whereNotNull('sent_to_test_markazi_at')
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->with(['group.student', 'retakeGroup'])
+            ->orderBy('sent_to_test_markazi_at');
+
+        if ($studentSearch !== '') {
+            $query->where(function ($q) use ($studentSearch) {
+                $q->where('student_hemis_id', 'like', "%{$studentSearch}%")
+                    ->orWhereHas('group.student', function ($studentQuery) use ($studentSearch) {
+                        $studentQuery->where('full_name', 'like', "%{$studentSearch}%")
+                            ->orWhere('student_id_number', 'like', "%{$studentSearch}%");
+                    });
+            });
+        }
+
+        $applications = $query->get();
+        if ($applications->isEmpty()) {
+            abort(404, 'Word uchun ruxsat etilgan talabalar topilmadi');
+        }
+
+        $mustaqilMap = RetakeMustaqilSubmission::query()
+            ->whereIn('application_id', $applications->pluck('id'))
+            ->get()
+            ->keyBy('application_id');
+
+        $phpWord = new PhpWord();
+        $phpWord->setDefaultFontName('Times New Roman');
+        $phpWord->setDefaultFontSize(11);
+
+        $section = $phpWord->addSection([
+            'marginTop' => 900,
+            'marginBottom' => 900,
+            'marginLeft' => 1000,
+            'marginRight' => 1000,
+        ]);
+
+        $section->addText('Testga ruxsat etilgan talabalar', ['bold' => true, 'size' => 15], ['alignment' => Jc::CENTER, 'spaceAfter' => 120]);
+        $section->addText('Sana: ' . now()->format('d.m.Y H:i'), ['size' => 11], ['spaceAfter' => 160]);
+
+        $phpWord->addTableStyle('DailyAllowedStudentsTable', [
+            'borderSize' => 6,
+            'borderColor' => '999999',
+            'cellMargin' => 60,
+        ]);
+
+        $headerFont = ['bold' => true, 'size' => 9];
+        $bodyFont = ['size' => 9];
+        $cellCenter = ['alignment' => Jc::CENTER];
+        $cellLeft = ['alignment' => Jc::START];
+        $headerBg = ['bgColor' => 'D9E2F3', 'valign' => 'center'];
+
+        $table = $section->addTable('DailyAllowedStudentsTable');
+        $row = $table->addRow();
+        $row->addCell(500, $headerBg)->addText('#', $headerFont, $cellCenter);
+        $row->addCell(3600, $headerBg)->addText('F.I.Sh.', $headerFont, $cellCenter);
+        $row->addCell(1800, $headerBg)->addText('Fan', $headerFont, $cellCenter);
+        $row->addCell(1400, $headerBg)->addText('Semester', $headerFont, $cellCenter);
+        $row->addCell(900, $headerBg)->addText('JN', $headerFont, $cellCenter);
+        $row->addCell(900, $headerBg)->addText('MT', $headerFont, $cellCenter);
+        $row->addCell(1700, $headerBg)->addText('Status', $headerFont, $cellCenter);
+
+        foreach ($applications as $idx => $app) {
+            $student = $app->group?->student;
+            $retakeGroup = $app->retakeGroup;
+            $mustaqil = $mustaqilMap[$app->id] ?? null;
+
+            $row = $table->addRow();
+            $row->addCell(500)->addText((string) ($idx + 1), $bodyFont, $cellCenter);
+            $row->addCell(3600)->addText($student?->full_name ?? '—', $bodyFont, $cellLeft);
+            $row->addCell(1800)->addText($retakeGroup?->subject_name ?? $app->subject_name ?? '—', $bodyFont, $cellLeft);
+            $row->addCell(1400)->addText($retakeGroup?->semester_name ?? $app->semester_name ?? '—', $bodyFont, $cellCenter);
+            $row->addCell(900)->addText($app->joriy_score !== null ? rtrim(rtrim(number_format($app->joriy_score, 2, '.', ''), '0'), '.') : '—', $bodyFont, $cellCenter);
+            $row->addCell(900)->addText($mustaqil?->grade !== null ? rtrim(rtrim(number_format($mustaqil->grade, 2, '.', ''), '0'), '.') : '—', $bodyFont, $cellCenter);
+            $row->addCell(1700)->addText('Ruxsat', ['size' => 9, 'bold' => true, 'color' => '0F9D58'], $cellCenter);
+        }
+
+        $fileName = 'testga_ruxsat_etilgan_talabalar_' . now()->format('Ymd_His') . '.docx';
+        $tempDir = storage_path('app/public/retake-test-markazi');
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
         $tempPath = $tempDir . '/' . Str::slug(pathinfo($fileName, PATHINFO_FILENAME)) . '.docx';
         IOFactory::createWriter($phpWord, 'Word2007')->save($tempPath);
 

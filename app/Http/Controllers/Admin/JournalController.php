@@ -151,12 +151,7 @@ class JournalController extends Controller
             });
         }
         if ($request->get('current_semester', '1') == '1') {
-            $kafedraQuery->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
-            });
+            $kafedraQuery->whereIn('s.semester_hemis_id', $this->journalCurrentSemesterWindowQuery());
         }
 
         $kafedras = $kafedraQuery
@@ -264,14 +259,9 @@ class JournalController extends Controller
         }
 
         // Joriy semestr filtri (default ON)
-        // curriculum_weeks sanalariga asoslangan — HEMIS current flagidan ishonchliroq
+        // Jurnalda joriy o'quv yilining barcha semestrlari ko'rinishi kerak.
         if ($request->get('current_semester', '1') == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
-            });
+            $query->whereIn('s.semester_hemis_id', $this->journalCurrentSemesterWindowQuery());
         }
 
         // Sorting
@@ -4567,14 +4557,25 @@ class JournalController extends Controller
 
     /**
      * Jurnal sahifasi uchun "joriy semestr" oynasi.
-     * HEMIS current flagidan ko'ra curriculum_weeks sanalari ishonchliroq.
+     * Sanaga qattiq bog'lanmaymiz: dars haftasi tugagan kurslar ham joriy o'quv
+     * yili jurnalida ko'rinishi kerak.
      */
     private function journalCurrentSemesterWindowQuery()
     {
-        return DB::table('curriculum_weeks')
+        $currentEducationYear = DB::table('semesters')
+            ->where('current', true)
+            ->orderByDesc('education_year')
+            ->value('education_year');
+
+        return DB::table('semesters')
             ->select('semester_hemis_id')
-            ->groupBy('semester_hemis_id')
-            ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
+            ->when(
+                $currentEducationYear,
+                fn ($query) => $query->where('education_year', $currentEducationYear),
+                fn ($query) => $query->where('current', true)
+            )
+            ->whereNotNull('semester_hemis_id')
+            ->groupBy('semester_hemis_id');
     }
 
     public function getLevelCodes(Request $request)
@@ -4728,12 +4729,7 @@ class JournalController extends Controller
             $query->where('s.level_code', $request->level_code);
         }
         if ($request->get('current_semester') == '1') {
-            $query->whereIn('s.semester_hemis_id', function ($sub) {
-                $sub->select('semester_hemis_id')
-                    ->from('curriculum_weeks')
-                    ->groupBy('semester_hemis_id')
-                    ->havingRaw('MIN(start_date) <= NOW() AND MAX(end_date) >= DATE_SUB(NOW(), INTERVAL 30 DAY)');
-            });
+            $query->whereIn('s.semester_hemis_id', $this->journalCurrentSemesterWindowQuery());
         }
 
         if ($isOqituvchi && $teacherHemisId) {
@@ -4849,7 +4845,7 @@ class JournalController extends Controller
             $query->whereIn('curriculum_hemis_id', $curriculaIds);
         }
 
-        // Joriy semestr bo'yicha filtrlash (curriculum_weeks sanalariga asoslangan)
+        // Joriy semestr bo'yicha filtrlash (joriy o'quv yili kesimida)
         if ($request->get('current_semester') == '1') {
             $currentSemesterHemisIds = $this->journalCurrentSemesterWindowQuery()->pluck('semester_hemis_id');
             $curriculaIds = Semester::whereIn('semester_hemis_id', $currentSemesterHemisIds)

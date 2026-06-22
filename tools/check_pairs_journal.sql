@@ -192,3 +192,26 @@ WHERE s.full_name LIKE 'QILICHEV BEKZOD%'
   AND DATE(sg.lesson_date) = '2026-04-28'
   AND sg.deleted_at IS NULL
 ORDER BY sg.lesson_pair_code;
+
+
+-- ---------------------------------------------------------------------
+-- Q9) Tushib qolgan holatlar quiz-dan (upload bug) yoki qo'lda (inson)?
+--     quiz_bilan katta -> uploadMavzuRetake bug. faqat_qolda katta -> inson omili.
+-- ---------------------------------------------------------------------
+SELECT
+  SUM(quiz_retakes > 0) AS quiz_bilan,
+  SUM(quiz_retakes = 0) AS faqat_qolda,
+  COUNT(*)              AS jami_miss
+FROM (
+  SELECT sg.student_hemis_id, sg.subject_id, DATE(sg.lesson_date) AS kun,
+    COUNT(*) AS juftliklar,
+    SUM(sg.retake_grade IS NOT NULL) AS retake_bor,
+    SUM(sg.retake_grade IS NOT NULL AND sg.quiz_result_id IS NOT NULL) AS quiz_retakes,
+    SUM(sg.retake_grade IS NULL AND (sg.grade IS NULL OR sg.grade<60)) AS qoldirilgan
+  FROM student_grades sg
+  WHERE sg.deleted_at IS NULL
+    AND sg.training_type_code NOT IN (11,17,99,100,101,102,103)
+    AND sg.lesson_date >= '2026-02-01'
+  GROUP BY sg.student_hemis_id, sg.subject_id, DATE(sg.lesson_date)
+  HAVING juftliklar>1 AND retake_bor>0 AND qoldirilgan>0
+) t;

@@ -1014,6 +1014,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{groupId}/fetch-results', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'fetchResults'])->name('fetch-results');
             Route::post('/{groupId}/send-to-test-markazi', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'sendToTestMarkazi'])->name('send-to-test-markazi');
             Route::post('/{groupId}/applications/{applicationId}/send-to-test-markazi', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'sendApplicationToTestMarkazi'])->name('send-application-to-test-markazi');
+            Route::post('/{groupId}/applications/{applicationId}/return-from-test-markazi', [\App\Http\Controllers\Teacher\RetakeJournalController::class, 'returnApplicationFromTestMarkazi'])->name('return-application-from-test-markazi');
         });
 
         // Test markazi paneli — qayta o'qish OSKE/TEST natijalari

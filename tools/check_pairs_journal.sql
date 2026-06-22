@@ -123,7 +123,7 @@ FROM student_grades sg
 JOIN students s ON s.hemis_id = sg.student_hemis_id COLLATE utf8mb4_unicode_ci
 WHERE sg.deleted_at IS NULL
   AND sg.training_type_code NOT IN (11,17,99,100,101,102,103)
-GROUP BY sg.student_hemis_id, sg.subject_id, DATE(sg.lesson_date)
+GROUP BY sg.student_hemis_id, s.full_name, s.group_name, sg.subject_id, DATE(sg.lesson_date)
 HAVING juftliklar > 1 AND retake_soni > 0 AND retake_soni < juftliklar
 ORDER BY kun DESC
 LIMIT 50;

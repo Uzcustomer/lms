@@ -6,8 +6,9 @@
                     <div class="text-sm text-slate-500 mb-1">Test fan tafsilotlari</div>
                     <h1 class="text-2xl font-bold text-slate-900">{{ $testSubject->name }}</h1>
                     <p class="text-sm text-slate-500 mt-2">
-                        {{ $testSubject->department_name ?: 'Bo‘lim tanlanmagan' }}
-                        · {{ $testSubject->specialty_name ?: 'Yo‘nalish tanlanmagan' }}
+                        {{ $testSubject->faculty_name ?: 'Fakultet tanlanmagan' }}
+                        · {{ $testSubject->specialty_name ?: 'Yo'nalish tanlanmagan' }}
+                        · {{ $testSubject->department_name ?: 'Kafedra tanlanmagan' }}
                         · {{ $testSubject->level_name ?: 'Kurs tanlanmagan' }}
                     </p>
                 </div>
@@ -19,9 +20,12 @@
 
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
-                    <h2 class="text-lg font-bold text-slate-900 mb-4">Asosiy ma’lumotlar</h2>
+                    <h2 class="text-lg font-bold text-slate-900 mb-4">Asosiy ma'lumotlar</h2>
                     <div class="space-y-3 text-sm">
-                        <div><span class="text-slate-500">O‘qituvchi:</span> <span class="font-semibold text-slate-900">{{ $testSubject->teacher_name ?: '—' }}</span></div>
+                        <div><span class="text-slate-500">Fakultet:</span> <span class="font-semibold text-slate-900">{{ $testSubject->faculty_name ?: '—' }}</span></div>
+                        <div><span class="text-slate-500">Yo'nalish:</span> <span class="font-semibold text-slate-900">{{ $testSubject->specialty_name ?: '—' }}</span></div>
+                        <div><span class="text-slate-500">Kafedra:</span> <span class="font-semibold text-slate-900">{{ $testSubject->department_name ?: '—' }}</span></div>
+                        <div><span class="text-slate-500">O'qituvchi:</span> <span class="font-semibold text-slate-900">{{ $testSubject->teacher_name ?: '—' }}</span></div>
                         <div><span class="text-slate-500">Boshlanish:</span> <span class="font-semibold text-slate-900">{{ optional($testSubject->starts_on)->format('d.m.Y') ?: '—' }}</span></div>
                         <div><span class="text-slate-500">Tugash:</span> <span class="font-semibold text-slate-900">{{ optional($testSubject->ends_on)->format('d.m.Y') ?: '—' }}</span></div>
                         <div><span class="text-slate-500">Holat:</span> <span class="font-semibold {{ $testSubject->is_active ? 'text-emerald-600' : 'text-rose-600' }}">{{ $testSubject->is_active ? 'Faol' : 'Nofaol' }}</span></div>

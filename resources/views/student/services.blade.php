@@ -51,8 +51,17 @@
                class="flex flex-col items-center bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-[0.98] transition-all duration-150"
                style="padding:16px 10px; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);">
                 <div class="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center mb-3">
-                    <svg class="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+                    <svg class="w-8 h-8" viewBox="0 0 60 30" aria-hidden="true">
+                        <clipPath id="uk-flag-card">
+                            <rect width="60" height="30" rx="4" ry="4"></rect>
+                        </clipPath>
+                        <g clip-path="url(#uk-flag-card)">
+                            <rect width="60" height="30" fill="#012169"></rect>
+                            <path d="M0,0 L60,30 M60,0 L0,30" stroke="#fff" stroke-width="6"></path>
+                            <path d="M0,0 L60,30 M60,0 L0,30" stroke="#C8102E" stroke-width="3"></path>
+                            <path d="M30,0 V30 M0,15 H60" stroke="#fff" stroke-width="10"></path>
+                            <path d="M30,0 V30 M0,15 H60" stroke="#C8102E" stroke-width="6"></path>
+                        </g>
                     </svg>
                 </div>
                 <span class="text-sm font-bold text-gray-800 text-center leading-tight">Ingliz tili guruhi</span>

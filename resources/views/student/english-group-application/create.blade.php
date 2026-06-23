@@ -59,6 +59,50 @@
         .ega-status-pending { background:#fef3c7; color:#92400e; }
         .ega-status-approved { background:#d1fae5; color:#065f46; }
         .ega-status-rejected { background:#fee2e2; color:#991b1b; }
+        .ega-modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.55);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            z-index: 60;
+        }
+        .ega-modal {
+            width: 100%;
+            max-width: 460px;
+            background: #fff;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 24px 60px -28px rgba(15, 23, 42, 0.45);
+        }
+        .ega-modal-head {
+            background: linear-gradient(135deg, #0f766e 0%, #10b981 100%);
+            color: #fff;
+            padding: 18px 20px;
+        }
+        .ega-modal-body {
+            padding: 20px;
+            color: #334155;
+            font-size: 14px;
+            line-height: 1.65;
+        }
+        .ega-modal-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 120px;
+            background: #0f172a;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 700;
+            border-radius: 10px;
+            padding: 10px 18px;
+            border: none;
+            cursor: pointer;
+        }
     </style>
 
     <div class="px-3 py-4 sm:py-6">
@@ -71,15 +115,7 @@
                     </p>
                 </div>
 
-                <form method="POST" enctype="multipart/form-data" action="{{ route('student.english-group-application.store') }}" class="px-5 py-5">
-                    @csrf
-
-                    @if(session('success'))
-                        <div class="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-700">
-                            {{ session('success') }}
-                        </div>
-                    @endif
-
+                <div class="px-5 py-5">
                     @if($errors->any())
                         <div class="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
                             <ul class="list-disc pl-5 space-y-1">
@@ -90,52 +126,99 @@
                         </div>
                     @endif
 
-                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                        <div class="sm:col-span-2">
-                            <label class="ega-label">F.I.SH</label>
-                            <input type="text" class="ega-input" value="{{ $student->full_name ?? '-' }}" readonly>
-                        </div>
-                        <div>
-                            <label class="ega-label">Fakultet</label>
-                            <input type="text" class="ega-input" value="{{ $student->department_name ?? '-' }}" readonly>
-                        </div>
-                        <div>
-                            <label class="ega-label">Yo'nalish</label>
-                            <input type="text" class="ega-input" value="{{ $student->specialty_name ?? '-' }}" readonly>
-                        </div>
-                        <div>
-                            <label class="ega-label">Kurs</label>
-                            <input type="text" class="ega-input" value="{{ $student->level_name ?? '-' }}" readonly>
-                        </div>
-                        <div>
-                            <label class="ega-label">Semestr</label>
-                            <input type="text" class="ega-input" value="{{ $student->semester_name ?? '-' }}" readonly>
-                        </div>
-                        <div class="sm:col-span-2">
-                            <label class="ega-label">Guruh</label>
-                            <input type="text" class="ega-input" value="{{ $student->group_name ?? '-' }}" readonly>
-                        </div>
-                        <div>
-                            <label for="english_level" class="ega-label">Ingliz tilini bilish darajasi</label>
-                            <select id="english_level" name="english_level" class="ega-input">
-                                <option value="">Tanlanmagan</option>
-                                @foreach($englishLevels as $value => $label)
-                                    <option value="{{ $value }}" @selected(old('english_level') === $value)>{{ $label }}</option>
-                                @endforeach
-                            </select>
-                            <div class="ega-hint">Ixtiyoriy maydon.</div>
-                        </div>
-                        <div>
-                            <label for="certificate_pdf" class="ega-label">Til sertifikati (ixtiyoriy)</label>
-                            <input id="certificate_pdf" type="file" name="certificate_pdf" accept="application/pdf" class="ega-input">
-                            <div class="ega-hint">Faqat PDF, maksimal 2 MB.</div>
-                        </div>
-                    </div>
+                    @if($canSubmit)
+                        <form method="POST" enctype="multipart/form-data" action="{{ route('student.english-group-application.store') }}">
+                            @csrf
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div class="sm:col-span-2">
+                                    <label class="ega-label">F.I.SH</label>
+                                    <input type="text" class="ega-input" value="{{ $student->full_name ?? '-' }}" readonly>
+                                </div>
+                                <div>
+                                    <label class="ega-label">Telefon raqam</label>
+                                    <input type="text" class="ega-input" value="{{ $student->phone ?? '-' }}" readonly>
+                                </div>
+                                <div>
+                                    <label class="ega-label">Fakultet</label>
+                                    <input type="text" class="ega-input" value="{{ $student->department_name ?? '-' }}" readonly>
+                                </div>
+                                <div>
+                                    <label class="ega-label">Yo'nalish</label>
+                                    <input type="text" class="ega-input" value="{{ $student->specialty_name ?? '-' }}" readonly>
+                                </div>
+                                <div>
+                                    <label class="ega-label">Kurs</label>
+                                    <input type="text" class="ega-input" value="{{ $student->level_name ?? '-' }}" readonly>
+                                </div>
+                                <div>
+                                    <label class="ega-label">Semestr</label>
+                                    <input type="text" class="ega-input" value="{{ $student->semester_name ?? '-' }}" readonly>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="ega-label">Guruh</label>
+                                    <input type="text" class="ega-input" value="{{ $student->group_name ?? '-' }}" readonly>
+                                </div>
+                                <div>
+                                    <label for="english_level" class="ega-label">Ingliz tilini bilish darajasi</label>
+                                    <select id="english_level" name="english_level" class="ega-input">
+                                        <option value="">Tanlanmagan</option>
+                                        @foreach($englishLevels as $value => $label)
+                                            <option value="{{ $value }}" @selected(old('english_level') === $value)>{{ $label }}</option>
+                                        @endforeach
+                                    </select>
+                                    <div class="ega-hint">Ixtiyoriy maydon.</div>
+                                </div>
+                                <div>
+                                    <label for="certificate_pdf" class="ega-label">Til sertifikati (ixtiyoriy)</label>
+                                    <input id="certificate_pdf" type="file" name="certificate_pdf" accept="application/pdf" class="ega-input">
+                                    <div class="ega-hint">Faqat PDF, maksimal 2 MB.</div>
+                                </div>
+                            </div>
 
-                    <div class="mt-5 flex justify-end">
-                        <button type="submit" class="ega-btn">Arizani yuborish</button>
-                    </div>
-                </form>
+                            <div class="mt-5 flex justify-end">
+                                <button type="submit" class="ega-btn">Arizani yuborish</button>
+                            </div>
+                        </form>
+                    @elseif($latest)
+                        <div class="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+                            <div class="flex items-start justify-between gap-4 flex-wrap">
+                                <div>
+                                    <h3 class="text-sm font-bold text-slate-800">Ariza holati</h3>
+                                    <p class="mt-1 text-sm text-slate-600">
+                                        Ingliz tili guruhiga o'tish uchun arizangiz qabul qilingan. Quyida joriy holati ko'rinadi.
+                                    </p>
+                                </div>
+                                <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold ega-status-{{ $latest->status }}">
+                                    @if($latest->status === 'approved')
+                                        Qabul qilingan
+                                    @elseif($latest->status === 'rejected')
+                                        Rad etilgan
+                                    @else
+                                        Kutilmoqda
+                                    @endif
+                                </span>
+                            </div>
+                            <div class="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <div class="ega-label">Telefon raqam</div>
+                                    <div class="text-sm text-slate-700">{{ $latest->phone_number ?: '-' }}</div>
+                                </div>
+                                <div>
+                                    <div class="ega-label">Ingliz tili darajasi</div>
+                                    <div class="text-sm text-slate-700">{{ $englishLevels[$latest->english_level] ?? 'Tanlanmagan' }}</div>
+                                </div>
+                                <div>
+                                    <div class="ega-label">Yuborilgan sana</div>
+                                    <div class="text-sm text-slate-700">{{ $latest->created_at?->format('d.m.Y H:i') }}</div>
+                                </div>
+                                <div>
+                                    <div class="ega-label">Til sertifikati</div>
+                                    <div class="text-sm text-slate-700">{{ $latest->certificate_pdf_path ? 'Yuklangan' : 'Yuklanmagan' }}</div>
+                                </div>
+                            </div>
+                        </div>
+                    @endif
+                </div>
             </div>
 
             @if($applications->isNotEmpty())
@@ -177,4 +260,20 @@
             @endif
         </div>
     </div>
+
+    @if(session('success'))
+        <div id="egaSuccessModal" class="ega-modal-backdrop">
+            <div class="ega-modal">
+                <div class="ega-modal-head">
+                    <h3 class="text-lg font-bold">Ariza qabul qilindi</h3>
+                </div>
+                <div class="ega-modal-body">
+                    <p>{{ session('success') }}</p>
+                    <div class="mt-5 flex justify-end">
+                        <button type="button" class="ega-modal-btn" onclick="document.getElementById('egaSuccessModal').remove()">Yopish</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    @endif
 </x-student-app-layout>

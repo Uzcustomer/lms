@@ -63,6 +63,30 @@ class RetakeJournalService
     }
 
     /**
+     * Test markaziga yuborilgan talabalar ro'yxati.
+     */
+    public function sentApplications(RetakeGroup $group): Collection
+    {
+        $sent = RetakeApplication::query()
+            ->where('retake_group_id', $group->id)
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('sent_to_test_markazi_at')
+            ->with(['group.student'])
+            ->orderBy('id')
+            ->get();
+
+        if ($sent->isNotEmpty()) {
+            return $sent;
+        }
+
+        if ($group->sent_to_test_markazi_at) {
+            return $this->applications($group);
+        }
+
+        return $sent;
+    }
+
+    /**
      * Guruh uchun barcha baholar — [application_id => [Y-m-d => RetakeGrade]] xarita.
      */
     public function gradesMap(RetakeGroup $group): array
@@ -441,7 +465,90 @@ class RetakeJournalService
             'sent_to_test_markazi_by' => $actor->id,
         ]);
 
+        RetakeApplication::query()
+            ->where('retake_group_id', $group->id)
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->update([
+                'sent_to_test_markazi_at' => now(),
+                'sent_to_test_markazi_by' => $actor->id,
+            ]);
+
         return $group->refresh();
+    }
+
+    /**
+     * Bitta talabani test markaziga yuborish.
+     */
+    public function sendApplicationToTestMarkazi(
+        RetakeGroup $group,
+        RetakeApplication $app,
+        Teacher $actor,
+    ): RetakeApplication {
+        if ((int) $app->retake_group_id !== (int) $group->id) {
+            throw ValidationException::withMessages([
+                'application_id' => 'Ariza bu guruhga tegishli emas',
+            ]);
+        }
+
+        if ($app->final_status !== RetakeApplication::STATUS_APPROVED) {
+            throw ValidationException::withMessages([
+                'application_id' => 'Faqat tasdiqlangan arizani yuborish mumkin',
+            ]);
+        }
+
+        if ($app->sent_to_test_markazi_at) {
+            throw ValidationException::withMessages([
+                'application_id' => 'Bu talaba allaqachon test markaziga yuborilgan',
+            ]);
+        }
+
+        if (!$group->sent_to_test_markazi_at) {
+            $group->update([
+                'sent_to_test_markazi_at' => now(),
+                'sent_to_test_markazi_by' => $actor->id,
+            ]);
+        }
+
+        $app->update([
+            'sent_to_test_markazi_at' => now(),
+            'sent_to_test_markazi_by' => $actor->id,
+        ]);
+
+        return $app->refresh();
+    }
+
+    /**
+     * Bitta talabani test markazidan qaytarish.
+     */
+    public function returnApplicationFromTestMarkazi(
+        RetakeGroup $group,
+        RetakeApplication $app,
+    ): RetakeApplication {
+        if ((int) $app->retake_group_id !== (int) $group->id) {
+            throw ValidationException::withMessages([
+                'application_id' => 'Ariza bu guruhga tegishli emas',
+            ]);
+        }
+
+        $app->update([
+            'sent_to_test_markazi_at' => null,
+            'sent_to_test_markazi_by' => null,
+        ]);
+
+        $hasSentStudents = RetakeApplication::query()
+            ->where('retake_group_id', $group->id)
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('sent_to_test_markazi_at')
+            ->exists();
+
+        if (!$hasSentStudents) {
+            $group->update([
+                'sent_to_test_markazi_at' => null,
+                'sent_to_test_markazi_by' => null,
+            ]);
+        }
+
+        return $app->refresh();
     }
 
     /**

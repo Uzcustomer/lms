@@ -235,6 +235,13 @@
                                 </button>
                             </div>
                         </div>
+                        <div class="filter-item" style="max-width:200px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Dublikatlar</label>
+                            <label style="display:inline-flex;align-items:center;gap:8px;height:34px;cursor:pointer;user-select:none;" title="Yoqilganda bir xil natijaning barcha urinishlari ko'rinadi (dedup o'chadi)">
+                                <input type="checkbox" id="show_duplicates" checked onchange="loadTartibgaSol()" style="width:16px;height:16px;cursor:pointer;">
+                                <span style="font-size:12px;font-weight:600;color:#1e293b;white-space:nowrap;">Dublikatlarni ko'rsatish</span>
+                            </label>
+                        </div>
                         <div class="filter-item" style="margin-left:auto;max-width:280px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Ism bo'yicha qidiruv ({{ now('Asia/Tashkent')->year }}-yil)</label>
                             <div style="display:flex;gap:6px;align-items:center;">
@@ -546,12 +553,12 @@
         function loadTartibgaSol() {
             var nameQ = ($('#search_student_name').val() || '').trim();
             var shaklQ = ($('#search_shakl').val() || '').trim();
-            var hasGlobalSearch = nameQ || shaklQ;
             var params = {
-                date_from: hasGlobalSearch ? '' : ($('#date_from').val() || ''),
-                date_to:   hasGlobalSearch ? '' : ($('#date_to').val()   || ''),
+                date_from: $('#date_from').val() || '',
+                date_to:   $('#date_to').val()   || '',
                 student_name: nameQ,
                 shakl_search: shaklQ,
+                show_duplicates: $('#show_duplicates').is(':checked') ? '1' : '0',
             };
 
             $('#empty-state').hide(); $('#table-area').hide(); $('#loading-state').show();
@@ -864,6 +871,13 @@
                 var ub = (b.xulosa_code === 'uploaded' || b.xulosa_code === 'mavzu_uploaded') ? 1 : 0;
                 return ua - ub;
             });
+            // Dublikatlarni aniqlash: bir xil (talaba+fan+yn_turi+shakl) bo'yicha
+            // bir nechta urinish bo'lsa, ularning hammasi "DUBLIKAT" deb belgilanadi.
+            var dupCount = {};
+            (allData || []).forEach(function(d) {
+                var k = d.student_id + '|' + d.fan_id + '|' + d.yn_turi + '|' + d.shakl;
+                dupCount[k] = (dupCount[k] || 0) + 1;
+            });
             var html = '';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
@@ -899,7 +913,11 @@
                 html += '<td>' + fanCell + '</td>';
                 html += '<td><span class="badge editable-fan-id" data-id="' + r.id + '" onclick="editFanId(this,' + r.id + ')" title="Fan ID ni tahrirlash uchun bosing" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;cursor:pointer;">' + esc(r.fan_id || '-') + '</span></td>';
                 html += '<td style="text-align:center;">' + ynBadge + '</td>';
-                html += '<td><span class="text-cell">' + esc(r.shakl) + '</span></td>';
+                var dupKey = r.student_id + '|' + r.fan_id + '|' + r.yn_turi + '|' + r.shakl;
+                var dupBadge = (dupCount[dupKey] > 1)
+                    ? ' <span class="badge" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;font-weight:700;" title="Bir xil natija ' + dupCount[dupKey] + ' marta topshirilgan — takroriy urinish">DUBLIKAT ×' + dupCount[dupKey] + '</span>'
+                    : '';
+                html += '<td><span class="text-cell">' + esc(r.shakl) + '</span>' + dupBadge + '</td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade editable-grade" data-id="' + r.id + '" onclick="editGrade(this,' + r.id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + esc(r.grade) + '</span></td>';
                 html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date) + '</td>';
                 html += '<td>' + getXulosaBadge(r.xulosa_code, r.xulosa, r.id) + '</td>';

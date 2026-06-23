@@ -11,7 +11,6 @@ return new class extends Migration
         if (Schema::hasTable('ingliz_guruh_arizalar')) {
             return;
         }
-
         Schema::create('ingliz_guruh_arizalar', function (Blueprint $table) {
             $table->id();
             $table->unsignedBigInteger('student_id')->nullable()->index();

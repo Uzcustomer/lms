@@ -12,6 +12,14 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 
 class GraduatePassportController extends Controller
 {
+    private function applyActiveGraduateFilters($query)
+    {
+        return $query
+            ->where('s.is_graduate', true)
+            ->where('s.education_type_code', '11')
+            ->where('s.student_status_code', '11');
+    }
+
     public function index()
     {
         // Umumiy statistika (barcha bakalavr bitiruvchilar)
@@ -22,10 +30,10 @@ class GraduatePassportController extends Controller
             'filled' => 0,
         ];
 
-        $agg = DB::table('students as s')
-            ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
-            ->where('s.is_graduate', true)
-            ->where('s.education_type_code', '11')
+        $agg = $this->applyActiveGraduateFilters(
+            DB::table('students as s')
+                ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
+        )
             ->select(
                 DB::raw('COUNT(*) as total'),
                 DB::raw("SUM(CASE WHEN s.gender_code = '11' THEN 1 ELSE 0 END) as male"),
@@ -43,9 +51,9 @@ class GraduatePassportController extends Controller
 
         // Fakultetlar ro'yxati — students.department_id bo'yicha
         // (HEMIS'da student'ning department_id odatda fakultet hemis_id'sini bildiradi)
-        $faculties = DB::table('students as s')
-            ->where('s.is_graduate', true)
-            ->where('s.education_type_code', '11')
+        $faculties = $this->applyActiveGraduateFilters(
+            DB::table('students as s')
+        )
             ->whereNotNull('s.department_id')
             ->select(
                 's.department_id as id',
@@ -57,9 +65,9 @@ class GraduatePassportController extends Controller
             ->get();
 
         // Guruhlar ro'yxati (fakultet tanlanganda client tomondan filterlanadi)
-        $groups = DB::table('students as s')
-            ->where('s.is_graduate', true)
-            ->where('s.education_type_code', '11')
+        $groups = $this->applyActiveGraduateFilters(
+            DB::table('students as s')
+        )
             ->whereNotNull('s.group_id')
             ->select(
                 's.group_name',
@@ -80,12 +88,12 @@ class GraduatePassportController extends Controller
         try {
             $hasReviewFields = Schema::hasColumn('graduate_student_passports', 'status');
 
-            $query = DB::table('students as s')
-                ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
-                ->leftJoin('departments as d', 'd.department_hemis_id', '=', 's.department_id')
-                ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'd.parent_id')
-                ->where('s.is_graduate', true)
-                ->where('s.education_type_code', '11');
+            $query = $this->applyActiveGraduateFilters(
+                DB::table('students as s')
+                    ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
+                    ->leftJoin('departments as d', 'd.department_hemis_id', '=', 's.department_id')
+                    ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'd.parent_id')
+            );
 
             if ($request->filled('faculty_id')) {
                 $query->where('s.department_id', $request->faculty_id);
@@ -259,12 +267,12 @@ class GraduatePassportController extends Controller
         @ini_set('memory_limit', '1024M');
         @set_time_limit(300);
 
-        $query = DB::table('students as s')
-            ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
-            ->leftJoin('departments as d', 'd.department_hemis_id', '=', 's.department_id')
-            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'd.parent_id')
-            ->where('s.is_graduate', true)
-            ->where('s.education_type_code', '11');
+        $query = $this->applyActiveGraduateFilters(
+            DB::table('students as s')
+                ->leftJoin('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
+                ->leftJoin('departments as d', 'd.department_hemis_id', '=', 's.department_id')
+                ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'd.parent_id')
+        );
 
         if ($request->filled('faculty_id')) {
             $query->where('s.department_id', $request->faculty_id);
@@ -359,10 +367,10 @@ class GraduatePassportController extends Controller
         @ini_set('memory_limit', '1024M');
         @set_time_limit(300);
 
-        $query = DB::table('students as s')
-            ->join('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
-            ->where('s.is_graduate', true)
-            ->where('s.education_type_code', '11');
+        $query = $this->applyActiveGraduateFilters(
+            DB::table('students as s')
+                ->join('graduate_student_passports as gp', 'gp.student_id', '=', 's.id')
+        );
 
         if ($request->filled('faculty_id')) {
             $query->where('s.department_id', $request->faculty_id);

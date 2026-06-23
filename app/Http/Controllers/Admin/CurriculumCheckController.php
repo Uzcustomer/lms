@@ -8,6 +8,8 @@ use App\Http\Controllers\Controller;
 use App\Imports\ManualCurriculumImport;
 use App\Models\Curriculum;
 use App\Models\ManualCurriculum;
+use App\Models\ManualCurriculumComparison;
+use App\Models\ManualCurriculumSubject;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Services\CurriculumComparisonService;
@@ -39,7 +41,15 @@ class CurriculumCheckController extends Controller
             ->orderBy('education_type_code')
             ->get();
 
-        return view('admin.oquv-reja.index', compact('curricula', 'educationTypes'));
+        // Bajarilgan (saqlangan) solishtirishlar ro'yxati — eng so'nggisi tepada.
+        // Reja o'chirilgan bo'lsa (relation yo'q) — ko'rsatilmaydi.
+        $savedComparisons = ManualCurriculumComparison::with(['reference', 'working'])
+            ->latest()
+            ->get()
+            ->filter(fn ($c) => $c->reference && $c->working)
+            ->values();
+
+        return view('admin.oquv-reja.index', compact('curricula', 'educationTypes', 'savedComparisons'));
     }
 
     /**
@@ -288,23 +298,133 @@ class CurriculumCheckController extends Controller
         return redirect()->route('admin.oquv-reja.index')->with('success', "O'quv reja o'chirildi.");
     }
 
+    /**
+     * Yuklangan rejaga yangi fan qatori qo'shish (qo'lda tahrirlash).
+     */
+    public function storeSubject(Request $request, ManualCurriculum $curriculum)
+    {
+        $data = $this->validateSubject($request);
+        $data['audit_total'] = $this->auditTotal($data);
+        $curriculum->subjects()->create($data);
+
+        return redirect()->route('admin.oquv-reja.show', $curriculum)
+            ->with('success', "Yangi fan qatori qo'shildi.");
+    }
+
+    /**
+     * Mavjud fan qatorini tahrirlash (nom, soat, kredit va h.k.).
+     */
+    public function updateSubject(Request $request, ManualCurriculum $curriculum, ManualCurriculumSubject $subject)
+    {
+        abort_unless($subject->manual_curriculum_id === $curriculum->id, 404);
+
+        $data = $this->validateSubject($request);
+        $data['audit_total'] = $this->auditTotal($data);
+        $subject->update($data);
+
+        return redirect()->route('admin.oquv-reja.show', $curriculum)
+            ->with('success', "Fan qatori yangilandi.");
+    }
+
+    /**
+     * Fan qatorini o'chirish (masalan, ortiqcha qator).
+     */
+    public function destroySubject(ManualCurriculum $curriculum, ManualCurriculumSubject $subject)
+    {
+        abort_unless($subject->manual_curriculum_id === $curriculum->id, 404);
+
+        $subject->delete();
+
+        return redirect()->route('admin.oquv-reja.show', $curriculum)
+            ->with('success', "Fan qatori o'chirildi.");
+    }
+
+    private function validateSubject(Request $request): array
+    {
+        return $request->validate([
+            'block' => 'nullable|string|max:255',
+            'subject_code' => 'nullable|string|max:255',
+            'subject_name' => 'required|string|max:1000',
+            'reference_name' => 'nullable|string|max:1000',
+            'kurs' => 'nullable|string|max:50',
+            'semester' => 'nullable|string|max:50',
+            'total_hours' => 'nullable|numeric|min:0',
+            'lecture' => 'nullable|numeric|min:0',
+            'practice' => 'nullable|numeric|min:0',
+            'laboratory' => 'nullable|numeric|min:0',
+            'seminar' => 'nullable|numeric|min:0',
+            'independent' => 'nullable|numeric|min:0',
+            'credit' => 'nullable|numeric|min:0',
+            'note' => 'nullable|string|max:1000',
+        ]);
+    }
+
+    /**
+     * Auditoriya jami = ma'ruza + amaliy + laboratoriya + seminar
+     * (mustaqil ta'lim alohida hisoblanadi).
+     */
+    private function auditTotal(array $data): float
+    {
+        return (float) ($data['lecture'] ?? 0)
+            + (float) ($data['practice'] ?? 0)
+            + (float) ($data['laboratory'] ?? 0)
+            + (float) ($data['seminar'] ?? 0);
+    }
+
     public function compare(Request $request, CurriculumComparisonService $service)
     {
         [$reference, $working] = $this->resolvePair($request);
-        $comparison = $service->compare($reference, $working);
+        $comparison = $service->compare($reference, $working, $this->hemisSubjectNames($reference, $working));
+
+        // "Solishtirish" bosilganda juftlik tarixга saqlanadi (takror saqlanmaydi).
+        ManualCurriculumComparison::firstOrCreate(
+            ['reference_id' => $reference->id, 'working_id' => $working->id],
+            ['created_by' => Auth::id()],
+        );
 
         return view('admin.oquv-reja.compare', compact('reference', 'working', 'comparison'));
+    }
+
+    public function destroyComparison(ManualCurriculumComparison $comparison)
+    {
+        $comparison->delete();
+
+        return redirect()->route('admin.oquv-reja.index')
+            ->with('success', "Solishtirish ro'yxatdan o'chirildi.");
     }
 
     public function compareExport(Request $request, CurriculumComparisonService $service)
     {
         [$reference, $working] = $this->resolvePair($request);
-        $comparison = $service->compare($reference, $working);
+        $comparison = $service->compare($reference, $working, $this->hemisSubjectNames($reference, $working));
 
         $title = "{$reference->name} <-> {$working->name} solishtirma";
         $fileName = 'oquv-reja-solishtirma-' . now()->format('Y-m-d_His') . '.xlsx';
 
         return Excel::download(new CurriculumComparisonExport($title, $comparison), $fileName);
+    }
+
+    /**
+     * Solishtirilayotgan rejalarning HEMIS o'quv reja(lar)idagi fanlar nomlari.
+     * Namunaviy/ishchi nomlarini shu HEMIS nomlari bilan solishtirish uchun.
+     */
+    private function hemisSubjectNames(ManualCurriculum $reference, ManualCurriculum $working): array
+    {
+        $ids = array_values(array_unique(array_filter([
+            $reference->curricula_hemis_id,
+            $working->curricula_hemis_id,
+        ])));
+        if (empty($ids)) {
+            return [];
+        }
+
+        return DB::table('curriculum_subjects')
+            ->whereIn('curricula_hemis_id', $ids)
+            ->where('is_active', 1)
+            ->whereNotNull('subject_name')
+            ->distinct()
+            ->pluck('subject_name')
+            ->all();
     }
 
     private function resolvePair(Request $request): array

@@ -24,47 +24,31 @@
                 </div>
             @endif
 
-            {{-- Solishtirish --}}
+            {{-- Ro'yxatlar --}}
             @php
                 $namunaviyList = $curricula->where('type', 'namunaviy');
                 $ishchiList = $curricula->where('type', 'ishchi');
             @endphp
-            <div class="bg-white shadow-sm sm:rounded-lg mb-6">
-                <div class="p-6">
-                    <h3 class="text-lg font-semibold text-gray-800 mb-4">Namunaviy va ishchi rejani solishtirish</h3>
-                    <form method="GET" action="{{ route('admin.oquv-reja.compare') }}" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Namunaviy o'quv reja</label>
-                            <select name="reference_id" required class="w-full rounded-md border-gray-300 shadow-sm text-sm">
-                                <option value="">Tanlang</option>
-                                @foreach($namunaviyList as $curriculum)
-                                    <option value="{{ $curriculum->id }}">{{ $curriculum->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-gray-700 mb-1">Ishchi o'quv reja</label>
-                            <select name="working_id" required class="w-full rounded-md border-gray-300 shadow-sm text-sm">
-                                <option value="">Tanlang</option>
-                                @foreach($ishchiList as $curriculum)
-                                    <option value="{{ $curriculum->id }}">{{ $curriculum->name }}</option>
-                                @endforeach
-                            </select>
-                        </div>
-                        <div>
-                            <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">
-                                Solishtirish
-                            </button>
-                        </div>
-                    </form>
-                    @if($namunaviyList->isEmpty() || $ishchiList->isEmpty())
-                        <p class="mt-3 text-sm text-gray-500">
-                            Solishtirish uchun kamida bitta namunaviy va bitta ishchi o'quv reja yuklangan bo'lishi kerak.
-                        </p>
-                    @endif
-                </div>
+
+            {{-- Asosiy vkladkalar --}}
+            <div class="mb-6 border-b border-gray-200">
+                <nav class="flex flex-wrap gap-1" aria-label="Tabs">
+                    <button type="button" data-tab="rejalar"
+                            class="main-tab px-5 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                        O'quv rejalar
+                    </button>
+                    <button type="button" data-tab="solishtirish"
+                            class="main-tab px-5 py-2.5 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                        Solishtirish
+                        @if($savedComparisons->isNotEmpty())
+                            <span class="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">{{ $savedComparisons->count() }}</span>
+                        @endif
+                    </button>
+                </nav>
             </div>
 
+            {{-- ===== PANEL: O'quv rejalar ===== --}}
+            <div data-panel="rejalar">
             {{-- Yangi reja yuklash --}}
             <div class="bg-white shadow-sm sm:rounded-lg mb-6">
                 <div class="p-6">
@@ -331,67 +315,228 @@
                 </div>
             </div>
 
-            {{-- Yuklangan rejalar --}}
+            {{-- Yuklangan o'quv rejalar (Namunaviy / Ishchi vkladkalari) --}}
             <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6">
                     <h3 class="text-lg font-semibold text-gray-800 mb-4">Yuklangan o'quv rejalar</h3>
-                    <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-200 text-sm">
-                            <thead class="bg-gray-50">
-                            <tr>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">#</th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">Turi</th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">Nomi</th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">Yo'nalish</th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">Reja yili</th>
-                                <th class="px-4 py-2 text-right font-medium text-gray-600">Fan qatorlari</th>
-                                <th class="px-4 py-2 text-right font-medium text-gray-600">Jami soat</th>
-                                <th class="px-4 py-2 text-right font-medium text-gray-600">Jami kredit</th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">Yuklangan</th>
-                                <th class="px-4 py-2 text-left font-medium text-gray-600">Amallar</th>
-                            </tr>
-                            </thead>
-                            <tbody class="divide-y divide-gray-100">
-                            @forelse($curricula as $curriculum)
-                                <tr class="hover:bg-gray-50">
-                                    <td class="px-4 py-2">{{ $loop->iteration }}</td>
-                                    <td class="px-4 py-2">
-                                        <span class="px-2 py-1 rounded text-xs font-medium {{ $curriculum->type === 'namunaviy' ? 'bg-blue-100 text-blue-800' : 'bg-purple-100 text-purple-800' }}">
-                                            {{ $curriculum->typeLabel() }}
-                                        </span>
-                                    </td>
-                                    <td class="px-4 py-2">
-                                        <a href="{{ route('admin.oquv-reja.show', $curriculum) }}" class="text-blue-600 hover:underline">
-                                            {{ $curriculum->name }}
-                                        </a>
-                                    </td>
-                                    <td class="px-4 py-2">{{ trim($curriculum->specialty_code . ' ' . $curriculum->specialty_name) ?: '—' }}</td>
-                                    <td class="px-4 py-2">{{ $curriculum->plan_year ?: '—' }}</td>
-                                    <td class="px-4 py-2 text-right">{{ $curriculum->subjects_count }}</td>
-                                    <td class="px-4 py-2 text-right">{{ rtrim(rtrim(number_format($curriculum->total_hours ?? 0, 2, '.', ' '), '0'), '.') }}</td>
-                                    <td class="px-4 py-2 text-right">{{ rtrim(rtrim(number_format($curriculum->total_credit ?? 0, 2, '.', ' '), '0'), '.') }}</td>
-                                    <td class="px-4 py-2">{{ $curriculum->created_at->format('d.m.Y H:i') }}</td>
-                                    <td class="px-4 py-2">
-                                        <form method="POST" action="{{ route('admin.oquv-reja.destroy', $curriculum) }}"
-                                              onsubmit="return confirm('Ushbu reja va uning barcha fan qatorlari o’chirilsinmi?');">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="text-red-600 hover:underline text-sm">O'chirish</button>
-                                        </form>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="10" class="px-4 py-6 text-center text-gray-500">
-                                        Hozircha o'quv reja yuklanmagan. Yuqoridagi forma orqali Excel fayl yuklang.
-                                    </td>
-                                </tr>
-                            @endforelse
-                            </tbody>
-                        </table>
+
+                    <div class="mb-4 flex flex-wrap gap-1 border-b border-gray-200">
+                        <button type="button" data-subtab="namunaviy"
+                                class="sub-tab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                            Namunaviy o'quv rejalar
+                            <span class="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-blue-100 text-blue-800">{{ $namunaviyList->count() }}</span>
+                        </button>
+                        <button type="button" data-subtab="ishchi"
+                                class="sub-tab px-4 py-2 text-sm font-semibold border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                            Ishchi o'quv rejalar
+                            <span class="ml-1 inline-flex items-center justify-center px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-800">{{ $ishchiList->count() }}</span>
+                        </button>
+                    </div>
+
+                    <div data-subpanel="namunaviy">
+                        @include('admin.oquv-reja._curricula-table', [
+                            'list' => $namunaviyList,
+                            'emptyText' => "Hozircha namunaviy o'quv reja yuklanmagan. Yuqoridagi forma orqali Excel fayl yuklang.",
+                        ])
+                    </div>
+                    <div data-subpanel="ishchi" class="hidden">
+                        @include('admin.oquv-reja._curricula-table', [
+                            'list' => $ishchiList,
+                            'emptyText' => "Hozircha ishchi o'quv reja yuklanmagan. Yuqoridagi forma orqali Excel fayl yuklang.",
+                        ])
                     </div>
                 </div>
             </div>
+
+            </div> {{-- /panel: rejalar --}}
+
+            {{-- ===== PANEL: Solishtirish ===== --}}
+            <div data-panel="solishtirish" class="hidden">
+
+                {{-- Qo'lda solishtirish --}}
+                <div class="bg-white shadow-sm sm:rounded-lg mb-6">
+                    <div class="p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-4">Namunaviy va ishchi rejani solishtirish</h3>
+                        <form method="GET" action="{{ route('admin.oquv-reja.compare') }}" class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Namunaviy o'quv reja</label>
+                                <select name="reference_id" required class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">Tanlang</option>
+                                    @foreach($namunaviyList as $curriculum)
+                                        <option value="{{ $curriculum->id }}">{{ $curriculum->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">Ishchi o'quv reja</label>
+                                <select name="working_id" required class="w-full rounded-md border-gray-300 shadow-sm text-sm">
+                                    <option value="">Tanlang</option>
+                                    @foreach($ishchiList as $curriculum)
+                                        <option value="{{ $curriculum->id }}">{{ $curriculum->name }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
+                            <div>
+                                <button type="submit" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">
+                                    Solishtirish
+                                </button>
+                            </div>
+                        </form>
+                        @if($namunaviyList->isEmpty() || $ishchiList->isEmpty())
+                            <p class="mt-3 text-sm text-gray-500">
+                                Solishtirish uchun kamida bitta namunaviy va bitta ishchi o'quv reja yuklangan bo'lishi kerak.
+                            </p>
+                        @endif
+                    </div>
+                </div>
+
+                {{-- Solishtirilgan rejalar ro'yxati (saqlangan tarix) --}}
+                <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg">
+                    <div class="p-6">
+                        <h3 class="text-lg font-semibold text-gray-800 mb-1">Solishtirilgan rejalar</h3>
+                        <p class="text-sm text-gray-500 mb-4">
+                            Yuqorida tanlab "Solishtirish" tugmasi bosilganda juftlik shu ro'yxatga qo'shiladi va saqlanadi. Ustiga bosib solishtirish jadvalini qayta oching.
+                        </p>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200 text-sm">
+                                <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">#</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Namunaviy reja</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Ishchi reja</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Yo'nalish</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Reja yili</th>
+                                    <th class="px-4 py-2 text-left font-medium text-gray-600">Amal</th>
+                                </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                @forelse($savedComparisons as $i => $comp)
+                                    @php $compareUrl = route('admin.oquv-reja.compare', ['reference_id' => $comp->reference->id, 'working_id' => $comp->working->id]); @endphp
+                                    <tr class="hover:bg-blue-50 cursor-pointer" onclick="window.location='{{ $compareUrl }}'">
+                                        <td class="px-4 py-2">{{ $i + 1 }}</td>
+                                        <td class="px-4 py-2">
+                                            <span class="px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 mr-1">Namunaviy</span>
+                                            {{ $comp->reference->name }}
+                                        </td>
+                                        <td class="px-4 py-2">
+                                            <span class="px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 mr-1">Ishchi</span>
+                                            {{ $comp->working->name }}
+                                        </td>
+                                        <td class="px-4 py-2">{{ trim($comp->working->specialty_code . ' ' . $comp->working->specialty_name) ?: '—' }}</td>
+                                        <td class="px-4 py-2">{{ $comp->working->plan_year ?: '—' }}</td>
+                                        <td class="px-4 py-2 whitespace-nowrap" onclick="event.stopPropagation();">
+                                            <a href="{{ $compareUrl }}" class="text-blue-600 hover:underline font-medium mr-3">
+                                                Solishtirishni ko'rish →
+                                            </a>
+                                            <form method="POST" action="{{ route('admin.oquv-reja.comparisons.destroy', $comp) }}" class="inline"
+                                                  onsubmit="return confirm('Ushbu solishtirish ro\'yxatdan o\'chirilsinmi?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit" class="text-red-600 hover:underline text-sm">O'chirish</button>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="6" class="px-4 py-6 text-center text-gray-500">
+                                            Hali solishtirish bajarilmagan. Yuqorida namunaviy va ishchi rejani tanlab "Solishtirish" tugmasini bosing — juftlik shu yerga qo'shiladi.
+                                        </td>
+                                    </tr>
+                                @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </div> {{-- /panel: solishtirish --}}
+
+            <style>
+                .main-tab.tab-active { color:#2563eb; border-bottom-color:#2563eb; }
+                .sub-tab.subtab-active { color:#2563eb; border-bottom-color:#2563eb; }
+            </style>
+
+            <script>
+                (function () {
+                    // ===== Saralash: barcha .js-sortable-table jadvallari uchun =====
+                    function initSortable(table) {
+                        const tbody = table.tBodies[0];
+                        if (!tbody) return;
+                        const headers = table.querySelectorAll('th.js-sortable');
+
+                        function dataRows() {
+                            return Array.from(tbody.querySelectorAll('tr')).filter(tr => !tr.querySelector('td[colspan]'));
+                        }
+                        function cellValue(row, index, type) {
+                            const cell = row.children[index];
+                            if (!cell) return type === 'number' ? 0 : '';
+                            const raw = cell.hasAttribute('data-sort-value')
+                                ? cell.getAttribute('data-sort-value')
+                                : cell.textContent.trim();
+                            if (type === 'number') {
+                                const num = parseFloat(String(raw).replace(/\s/g, '').replace(',', '.'));
+                                return isNaN(num) ? 0 : num;
+                            }
+                            return String(raw).toLowerCase();
+                        }
+
+                        headers.forEach((header) => {
+                            const colIndex = Array.from(header.parentNode.children).indexOf(header);
+                            const type = header.getAttribute('data-sort-type') || 'text';
+                            header.addEventListener('click', function () {
+                                const rows = dataRows();
+                                if (rows.length < 2) return;
+                                const dir = header.getAttribute('data-sort-dir') === 'asc' ? 'desc' : 'asc';
+                                headers.forEach(h => {
+                                    h.removeAttribute('data-sort-dir');
+                                    const ind = h.querySelector('.js-sort-indicator');
+                                    if (ind) ind.textContent = '';
+                                });
+                                header.setAttribute('data-sort-dir', dir);
+                                const ind = header.querySelector('.js-sort-indicator');
+                                if (ind) ind.textContent = dir === 'asc' ? '▲' : '▼';
+                                rows.sort((a, b) => {
+                                    const va = cellValue(a, colIndex, type);
+                                    const vb = cellValue(b, colIndex, type);
+                                    const cmp = type === 'number' ? (va - vb) : va.localeCompare(vb, 'uz');
+                                    return dir === 'asc' ? cmp : -cmp;
+                                });
+                                const frag = document.createDocumentFragment();
+                                rows.forEach(r => frag.appendChild(r));
+                                tbody.appendChild(frag);
+                            });
+                        });
+                    }
+                    document.querySelectorAll('.js-sortable-table').forEach(initSortable);
+
+                    // ===== Asosiy vkladkalar =====
+                    function activateMainTab(name) {
+                        document.querySelectorAll('.main-tab').forEach(b =>
+                            b.classList.toggle('tab-active', b.dataset.tab === name));
+                        document.querySelectorAll('[data-panel]').forEach(p =>
+                            p.classList.toggle('hidden', p.dataset.panel !== name));
+                        if (history.replaceState) history.replaceState(null, '', '#' + name);
+                    }
+                    document.querySelectorAll('.main-tab').forEach(btn =>
+                        btn.addEventListener('click', () => activateMainTab(btn.dataset.tab)));
+
+                    // ===== Sub-vkladkalar (Namunaviy / Ishchi) =====
+                    document.querySelectorAll('.sub-tab').forEach(btn =>
+                        btn.addEventListener('click', () => {
+                            const name = btn.dataset.subtab;
+                            document.querySelectorAll('.sub-tab').forEach(b =>
+                                b.classList.toggle('subtab-active', b.dataset.subtab === name));
+                            document.querySelectorAll('[data-subpanel]').forEach(p =>
+                                p.classList.toggle('hidden', p.dataset.subpanel !== name));
+                        }));
+
+                    // Boshlang'ich holat (URL hash bo'yicha)
+                    const hash = (location.hash || '').replace('#', '');
+                    activateMainTab(hash === 'solishtirish' ? 'solishtirish' : 'rejalar');
+                    const firstSub = document.querySelector('.sub-tab');
+                    if (firstSub) firstSub.click();
+                })();
+            </script>
 
         </div>
     </div>

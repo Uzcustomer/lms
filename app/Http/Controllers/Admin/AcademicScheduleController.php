@@ -2725,7 +2725,19 @@ class AcademicScheduleController extends Controller
     ) {
         $currentSemesterOnly = $currentSemesterToggle === '1';
         $currentEducationYear = $currentSemesters->first()?->education_year;
-        $currentSemesterCodes = $currentSemesters->pluck('code')->filter()->unique()->values();
+        // current=true faqat ayrim kurslarda turib qolgan bo'lsa, toggle yoqilganda
+        // kurs/semestr filterlari sun'iy ravishda 1 va 5-kurs bilan cheklanib
+        // qolmasin. Joriy o'quv yilidagi barcha semester code'larni olamiz.
+        $currentSemesterCodes = Semester::query()
+            ->when(
+                $currentEducationYear,
+                fn ($q) => $q->where('education_year', $currentEducationYear),
+                fn ($q) => $q->where('current', true)
+            )
+            ->pluck('code')
+            ->filter()
+            ->unique()
+            ->values();
 
         // Semester filter closure
         $semesterFilter = function ($query) use ($currentSemesterOnly, $currentEducationYear, $currentSemesterCodes) {
@@ -3975,7 +3987,18 @@ class AcademicScheduleController extends Controller
         // Joriy o'quv yili
         $currentSemesters = Semester::where('current', true)->get(['curriculum_hemis_id', 'education_year', 'code']);
         $currentEducationYear = $currentSemesters->first()?->education_year;
-        $currentSemesterCodes = $currentSemesters->pluck('code')->filter()->unique()->values();
+        // Dropdown'lar current=true yozuvlari kam bo'lsa torayib qolmasin:
+        // joriy o'quv yilidagi barcha semester code'larni scope qilamiz.
+        $currentSemesterCodes = Semester::query()
+            ->when(
+                $currentEducationYear,
+                fn ($q) => $q->where('education_year', $currentEducationYear),
+                fn ($q) => $q->where('current', true)
+            )
+            ->pluck('code')
+            ->filter()
+            ->unique()
+            ->values();
 
         $applySemesterWindow = function ($query) use ($currentSemesterOnly, $currentEducationYear, $currentSemesterCodes) {
             if ($currentSemesterOnly) {

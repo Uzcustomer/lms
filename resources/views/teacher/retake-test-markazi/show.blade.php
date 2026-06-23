@@ -64,6 +64,7 @@
                         <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase">T/R</th>
                         <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase">{{ __("F.I.Sh") }}</th>
                         <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase">HEMIS ID</th>
+                        <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase">{{ __("Holat") }}</th>
                         <th class="px-3 py-2 text-center font-medium text-gray-500 uppercase">{{ __("Amaliyot o'rt.") }}</th>
                         <th class="px-3 py-2 text-center font-medium text-gray-500 uppercase">{{ __("Mustaqil") }}</th>
                         @if($needsOske)
@@ -76,19 +77,23 @@
                     </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-100">
-                    @foreach($applications as $i => $app)
-                        @php
-                            $student = $app->group->student ?? null;
-                            $rowGrades = collect($gradesMap[$app->id] ?? [])
-                                ->map(fn ($g) => $g->grade)
-                                ->filter(fn ($v) => $v !== null);
-                            $amaliyotAvg = $rowGrades->isNotEmpty() ? round($rowGrades->avg(), 1) : null;
-                            $mustaqil = $mustaqilMap[$app->id] ?? null;
-                        @endphp
+                        @foreach($applications as $i => $app)
+                            @php
+                                $student = $app->group->student ?? null;
+                                // Test markazi oynasida birinchi ustun — retake jurnalidagi yagona JN bahosi.
+                                // Eski kunlik baholar emas, aynan joriy_score ko'rsatiladi.
+                                $amaliyotAvg = $app->joriy_score !== null ? round((float) $app->joriy_score, 1) : null;
+                                $mustaqil = $mustaqilMap[$app->id] ?? null;
+                            @endphp
                         <tr>
                             <td class="px-3 py-2 text-gray-600">{{ $i + 1 }}</td>
                             <td class="px-3 py-2 text-gray-900 font-medium">{{ $student?->full_name ?? '—' }}</td>
                             <td class="px-3 py-2 text-gray-600">{{ $app->student_hemis_id }}</td>
+                            <td class="px-3 py-2">
+                                <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
+                                    {{ __("Testga ruxsat etilgan") }}
+                                </span>
+                            </td>
                             <td class="px-3 py-2 text-center text-gray-700">{{ $amaliyotAvg ?? '—' }}</td>
                             <td class="px-3 py-2 text-center text-gray-700">
                                 {{ $mustaqil?->grade !== null ? rtrim(rtrim(number_format($mustaqil->grade, 2, '.', ''), '0'), '.') : '—' }}

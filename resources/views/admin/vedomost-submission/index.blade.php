@@ -188,6 +188,11 @@
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;flex-wrap:wrap;gap:8px;">
                     <span style="font-size:13px;color:#64748b;">Jami: {{ $submissions->total() }} ta</span>
                     <div style="display:flex;gap:8px;">
+                        <a href="{{ route('admin.vedomost-submission.report', request()->query()) }}"
+                           style="background:#1a3268;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+                            <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6h13M9 17H4V5a2 2 0 012-2h7l5 5v9h-5M9 17v4h10v-4"/></svg>
+                            Hisobot
+                        </a>
                         <a href="{{ route('admin.vedomost-submission.export', request()->query()) }}"
                            style="background:#1d6f42;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
                             <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
@@ -210,6 +215,7 @@
                                 <th>#</th>
                                 <th><a href="{{ $sortUrl('group') }}">Guruh {!! $arrow('group') !!}</a></th>
                                 <th>Shakl</th>
+                                <th>Fakultet</th>
                                 <th>Yo'nalish</th>
                                 <th><a href="{{ $sortUrl('subject') }}">Fan {!! $arrow('subject') !!}</a></th>
                                 <th><a href="{{ $sortUrl('department') }}">Kafedra {!! $arrow('department') !!}</a></th>
@@ -238,6 +244,7 @@
                                         @php $fb = $formBadge[$v->form_type ?? '12'] ?? ['#475569','#f1f5f9']; @endphp
                                         <span style="background:{{ $fb[1] }};color:{{ $fb[0] }};padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;">{{ \App\Models\VedomostSubmission::formLabel($v->form_type ?? '12') }}</span>
                                     </td>
+                                    <td style="color:#64748b;">{{ $v->faculty_name ?? '—' }}</td>
                                     <td style="color:#64748b;">{{ $v->specialty_name }}</td>
                                     <td>{{ $v->subject_name }}</td>
                                     <td style="color:#64748b;">{{ $v->department_name }}</td>
@@ -268,7 +275,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="14" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
+                                <tr><td colspan="15" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
                             @endforelse
                         </tbody>
                     </table>

@@ -21,6 +21,14 @@ use App\Models\Semester;
 use App\Models\Setting;
 use App\Models\Student;
 use App\Models\StudentGrade;
+use App\Models\RetakeApplication;
+use App\Models\RetakeApplicationGroup;
+use App\Models\RetakeMustaqilSubmission;
+use App\Models\RetakeSetting;
+use App\Services\Retake\RetakeApplicationService;
+use App\Services\Retake\RetakeDebtService;
+use App\Services\Retake\RetakeJournalService;
+use App\Services\Retake\RetakeWindowService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -238,6 +246,275 @@ class StudentApiController extends Controller
                 'payment_form_code' => $student->payment_form_code,
                 'payment_form_name' => $student->payment_form_name,
                 'is_graduate' => $student->is_graduate,
+            ],
+        ]);
+    }
+
+    /**
+     * Mobile uchun qayta o'qish arizasi overview.
+     * Web sahifadagi asosiy bloklar va jurnal kartasini JSON ko'rinishida qaytaradi.
+     */
+    public function retakeOverview(Request $request): JsonResponse
+    {
+        /** @var Student $student */
+        $student = $request->user();
+
+        /** @var RetakeWindowService $windowService */
+        $windowService = app(RetakeWindowService::class);
+        /** @var RetakeDebtService $debtService */
+        $debtService = app(RetakeDebtService::class);
+        /** @var RetakeApplicationService $applicationService */
+        $applicationService = app(RetakeApplicationService::class);
+
+        $window = $windowService->activeWindowForStudent($student);
+
+        $activeApplications = RetakeApplication::query()
+            ->forStudent((int) $student->hemis_id)
+            ->whereIn('final_status', [
+                RetakeApplication::STATUS_PENDING,
+                RetakeApplication::STATUS_APPROVED,
+            ])
+            ->with(['retakeGroup.teacher'])
+            ->get()
+            ->keyBy(fn (RetakeApplication $a) => $a->subject_id . '|' . $a->semester_id);
+
+        $history = RetakeApplicationGroup::query()
+            ->where('student_hemis_id', $student->hemis_id)
+            ->with(['applications.retakeGroup.teacher', 'window.session'])
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get();
+
+        $groupsAwaitingPayment = $history->filter(fn (RetakeApplicationGroup $g) => $g->requires_payment)->values();
+        $groupsPaymentVerifying = $history->filter(fn (RetakeApplicationGroup $g) => $g->payment_awaiting_verification)->values();
+
+        $currentSemester = $applicationService->currentSemesterNumber($student);
+        $remainingSlots = $applicationService->currentSemesterRemainingSlots($student, $window?->id);
+        $creditPrice = RetakeSetting::creditPrice();
+        $receiptMaxMb = RetakeSetting::receiptMaxMb();
+
+        $debts = $debtService->debts($student)->map(function ($d) use ($activeApplications, $currentSemester) {
+            $key = $d->subject_id . '|' . $d->semester_id;
+            /** @var RetakeApplication|null $app */
+            $app = $activeApplications->get($key);
+            $group = $app?->retakeGroup;
+            $semNum = preg_match('/(\d+)/', (string) ($d->semester_name ?: $d->semester_id), $mm) ? (int) $mm[1] : null;
+
+            return [
+                'subject_id' => (string) $d->subject_id,
+                'subject_name' => (string) $d->subject_name,
+                'semester_id' => (string) $d->semester_id,
+                'semester_name' => (string) ($d->semester_name ?: $d->semester_id),
+                'credit' => (float) $d->credit,
+                'debt_reason' => $d->debt_reason ?? null,
+                'is_current_semester' => $currentSemester !== null && $semNum !== null && $semNum === (int) $currentSemester,
+                'active_status' => $app?->studentDisplayStatus(),
+                'is_active' => $app !== null,
+                'final_status' => $app?->final_status,
+                'retake_group' => $group ? [
+                    'id' => $group->id,
+                    'name' => $group->name,
+                    'teacher_name' => $group->teacher_name ?? ($group->teacher?->full_name ?? null),
+                    'teacher_phones' => $group->teacher_phones ?? [],
+                    'start_date' => optional($group->start_date)->format('Y-m-d'),
+                    'end_date' => optional($group->end_date)->format('Y-m-d'),
+                ] : null,
+            ];
+        })->values();
+
+        $journalApplications = RetakeApplication::query()
+            ->where('student_hemis_id', $student->hemis_id)
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
+            ->with(['retakeGroup.teacher'])
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn ($a) => $a->retakeGroup !== null)
+            ->values();
+
+        return response()->json([
+            'data' => [
+                'journal_card' => [
+                    'title' => "Qayta o'qish jurnali",
+                    'description' => "Tasdiqlangan qayta o'qish fanlaringiz bo'yicha baholar, guruh, o'qituvchi va mustaqil ta'lim topshiriqlarini shu yerda ko'rishingiz mumkin.",
+                    'count' => $journalApplications->count(),
+                    'has_items' => $journalApplications->isNotEmpty(),
+                ],
+                'warning_card' => [
+                    'title' => 'Hurmatli talaba!',
+                    'message' => "Joriy semestr fanlaridan aktiv (kutilayotgan + tasdiqlangan) arizalaringiz bilan birga jami 3 tadan ko'p ariza topshira olmaysiz. Boshqa (oldingi) semestrlardagi qarzlaringizga limit yo'q — barchasiga ariza topshirishingiz mumkin. Rad etilgan arizalar bu hisobga kirmaydi.",
+                ],
+                'window' => $window ? [
+                    'id' => $window->id,
+                    'specialty_name' => $student->specialty_name,
+                    'level_name' => $student->level_name ?? $student->level_code,
+                    'semester_name' => $window->semester_name,
+                    'start_date' => optional($window->start_date)->format('Y-m-d'),
+                    'end_date' => optional($window->end_date)->format('Y-m-d'),
+                    'status' => $window->status,
+                    'is_open' => $window->isOpen(),
+                    'status_label' => $window->isOpen()
+                        ? 'Ariza qabul ochiq'
+                        : ($window->status === 'study' ? "O'qish davri - ariza qabul tugadi" : 'Muddat tugagan'),
+                ] : null,
+                'window_missing_message' => $window
+                    ? null
+                    : "Sizning yo'nalishingiz va kursingiz uchun qayta o'qish ariza qabul qilish oynasi hali ochilmagan.",
+                'remaining_slots' => $remainingSlots,
+                'current_semester' => $currentSemester,
+                'credit_price' => $creditPrice,
+                'receipt_max_mb' => $receiptMaxMb,
+                'window_open' => (bool) ($window && $window->isOpen()),
+                'debts' => $debts,
+                'groups_awaiting_payment' => $groupsAwaitingPayment->map(function (RetakeApplicationGroup $group) {
+                    return [
+                        'id' => $group->id,
+                        'receipt_amount' => (float) $group->receipt_amount,
+                        'payment_verification_status' => $group->payment_verification_status,
+                        'payment_rejection_reason' => $group->payment_rejection_reason,
+                        'approved_subjects_count' => $group->applications
+                            ->where('dean_status', 'approved')
+                            ->where('registrar_status', 'approved')
+                            ->count(),
+                    ];
+                })->values(),
+                'groups_payment_verifying' => $groupsPaymentVerifying->map(function (RetakeApplicationGroup $group) {
+                    return [
+                        'id' => $group->id,
+                        'payment_uploaded_at' => optional($group->payment_uploaded_at)->format('Y-m-d H:i:s'),
+                    ];
+                })->values(),
+            ],
+        ]);
+    }
+
+    /**
+     * Mobile uchun qayta o'qish jurnali ro'yxati.
+     */
+    public function retakeJournalIndex(Request $request): JsonResponse
+    {
+        /** @var Student $student */
+        $student = $request->user();
+
+        $applications = RetakeApplication::query()
+            ->where('student_hemis_id', $student->hemis_id)
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
+            ->with(['retakeGroup.teacher'])
+            ->orderByDesc('id')
+            ->get()
+            ->filter(fn ($a) => $a->retakeGroup !== null)
+            ->values();
+
+        return response()->json([
+            'data' => [
+                'count' => $applications->count(),
+                'items' => $applications->map(fn (RetakeApplication $app) => $this->mapRetakeJournalCard($app))->values(),
+            ],
+        ]);
+    }
+
+    /**
+     * Mobile uchun qayta o'qish jurnalining bitta kartasi.
+     */
+    public function retakeJournalShow(Request $request, int $applicationId): JsonResponse
+    {
+        /** @var Student $student */
+        $student = $request->user();
+
+        $app = RetakeApplication::query()
+            ->where('id', $applicationId)
+            ->where('student_hemis_id', $student->hemis_id)
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
+            ->with(['retakeGroup.teacher'])
+            ->first();
+
+        if (!$app || !$app->retakeGroup) {
+            return response()->json(['message' => 'Bu jurnal sizga tegishli emas yoki guruh topilmadi'], 403);
+        }
+
+        /** @var RetakeJournalService $journalService */
+        $journalService = app(RetakeJournalService::class);
+        $group = $app->retakeGroup;
+        $mustaqil = RetakeMustaqilSubmission::query()
+            ->where('retake_group_id', $group->id)
+            ->where('application_id', $app->id)
+            ->first();
+
+        $dates = $journalService->lessonDates($group);
+        $gradesMap = $journalService->gradesMap($group);
+        $appGrades = $gradesMap[$app->id] ?? [];
+        $isEditable = $journalService->isEditable($group);
+
+        return response()->json([
+            'data' => [
+                'application' => [
+                    'id' => $app->id,
+                    'subject_id' => (string) $app->subject_id,
+                    'subject_name' => (string) $app->subject_name,
+                    'semester_id' => (string) $app->semester_id,
+                    'semester_name' => (string) $app->semester_name,
+                    'credit' => (float) $app->credit,
+                    'joriy_score' => $app->joriy_score !== null ? (float) $app->joriy_score : null,
+                    'joriy_graded_by_name' => $app->joriy_graded_by_name,
+                    'joriy_graded_at' => optional($app->joriy_graded_at)->format('Y-m-d H:i:s'),
+                    'oske_score' => $app->oske_score !== null ? (float) $app->oske_score : null,
+                    'test_score' => $app->test_score !== null ? (float) $app->test_score : null,
+                    'final_grade_value' => $app->final_grade_value !== null ? (float) $app->final_grade_value : null,
+                ],
+                'group' => [
+                    'id' => $group->id,
+                    'name' => $group->name,
+                    'teacher_name' => $group->teacher_name ?? ($group->teacher?->full_name ?? null),
+                    'teacher_phones' => $group->teacher_phones ?? [],
+                    'start_date' => optional($group->start_date)->format('Y-m-d'),
+                    'end_date' => optional($group->end_date)->format('Y-m-d'),
+                    'assessment_type' => $group->assessment_type,
+                    'assessment_type_label' => match ($group->assessment_type) {
+                        'oske' => 'OSKE',
+                        'test' => 'TEST',
+                        'oske_test' => 'OSKE + TEST',
+                        'sinov_fan' => 'Sinov fan',
+                        default => '—',
+                    },
+                    'oske_date' => optional($group->oske_date)->format('Y-m-d'),
+                    'test_date' => optional($group->test_date)->format('Y-m-d'),
+                    'status' => $group->status,
+                    'status_label' => $isEditable ? 'Davom etmoqda' : $group->statusLabel(),
+                ],
+                'is_editable' => $isEditable,
+                'lesson_dates' => $dates,
+                'daily_grades' => collect($dates)->map(function (string $date) use ($appGrades) {
+                    $grade = $appGrades[$date] ?? null;
+
+                    return [
+                        'lesson_date' => $date,
+                        'grade' => $grade?->grade !== null ? (float) $grade->grade : null,
+                        'comment' => $grade?->comment,
+                        'graded_by_name' => $grade?->graded_by_name,
+                        'graded_at' => optional($grade?->graded_at)->format('Y-m-d H:i:s'),
+                    ];
+                })->values(),
+                'mustaqil' => $mustaqil ? [
+                    'id' => $mustaqil->id,
+                    'original_filename' => $mustaqil->original_filename,
+                    'student_comment' => $mustaqil->student_comment,
+                    'submitted_at' => optional($mustaqil->submitted_at)->format('Y-m-d H:i:s'),
+                    'grade' => $mustaqil->grade !== null ? (float) $mustaqil->grade : null,
+                    'teacher_comment' => $mustaqil->teacher_comment,
+                    'graded_by_name' => $mustaqil->graded_by_name,
+                    'graded_at' => optional($mustaqil->graded_at)->format('Y-m-d H:i:s'),
+                    'attempt_count' => (int) ($mustaqil->attempt_count ?? 0),
+                    'is_passed' => $mustaqil->isPassed(),
+                    'can_resubmit' => $mustaqil->canResubmit(),
+                    'attempts_exhausted' => $mustaqil->attemptsExhausted(),
+                ] : null,
+                'mustaqil_rules' => [
+                    'max_file_mb' => RetakeMustaqilSubmission::MAX_FILE_MB,
+                    'max_attempts' => RetakeMustaqilSubmission::MAX_ATTEMPTS,
+                    'pass_grade' => RetakeMustaqilSubmission::PASS_GRADE,
+                ],
             ],
         ]);
     }
@@ -1535,5 +1812,29 @@ class StudentApiController extends Controller
             ->update(['read_at' => now()]);
 
         return response()->json(['success' => true]);
+    }
+
+    private function mapRetakeJournalCard(RetakeApplication $app): array
+    {
+        $group = $app->retakeGroup;
+
+        return [
+            'application_id' => $app->id,
+            'subject_id' => (string) $app->subject_id,
+            'subject_name' => (string) $app->subject_name,
+            'semester_id' => (string) $app->semester_id,
+            'semester_name' => (string) $app->semester_name,
+            'credit' => (float) $app->credit,
+            'group' => $group ? [
+                'id' => $group->id,
+                'name' => $group->name,
+                'teacher_name' => $group->teacher_name ?? ($group->teacher?->full_name ?? null),
+                'teacher_phones' => $group->teacher_phones ?? [],
+                'start_date' => optional($group->start_date)->format('Y-m-d'),
+                'end_date' => optional($group->end_date)->format('Y-m-d'),
+                'status' => $group->status,
+                'status_label' => $group->statusLabel(),
+            ] : null,
+        ];
     }
 }

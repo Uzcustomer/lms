@@ -55,6 +55,19 @@ class VedomostMergeService
     }
 
     /**
+     * O'zak guruh nomini birlashtirish uchun NORMALIZATSIYA qiladi: nuqta, bo'shliq
+     * kabi nomuvofiq belgilarni olib tashlab, kichik harfga keltiradi. HEMIS'da
+     * bitta kohortaning guruhchalari turlicha yozilishi mumkin:
+     *   "tibprof23-02a"  -> o'zak "tibprof23-02"  -> normal "tibprof23-02"
+     *   "tib.prof23-02b" -> o'zak "tib.prof23-02" -> normal "tibprof23-02"
+     * Shunda nuqtali/nuqtasiz variantlar BITTA vedomostga birlashadi.
+     */
+    public function normalizedRootGroup(?string $name): string
+    {
+        return mb_strtolower(str_replace([' ', '.'], '', $this->rootGroupName($name)));
+    }
+
+    /**
      * Fan nomidan variant qo'shimchasini ("(a)", "(б)", "(1)") kesib, o'zak fanni qaytaradi.
      */
     public function rootSubjectName(?string $name): string
@@ -67,8 +80,9 @@ class VedomostMergeService
      * vedomost hisoblanadi.
      *
      * 12-shakl: o'zak guruh kalitga kiradi (har guruh alohida varaq).
-     * 12a/12b : o'zak guruh kalitdan CHIQARILADI — yo'nalish × fan bo'yicha
-     *           barcha guruhlar bitta umumiy varaqqa jamlanadi.
+     * 12a/12b : o'zak guruh kalitdan CHIQARILADI, lekin FAKULTET (reja) saqlanadi —
+     *           yo'nalish × fan bo'yicha bitta FAKULTETning barcha guruhlari bitta
+     *           umumiy varaqqa jamlanadi (har fakultet alohida varaq).
      */
     public function mergeKey(object $row): string
     {
@@ -81,7 +95,8 @@ class VedomostMergeService
             $row->semester_code ?? '',
             $row->specialty_name ?? '',
             $row->closing_form ?? '',
-            $isCombined ? '*' : $this->rootGroupName($row->group_name ?? ''),
+            // 12a/12b — guruh o'rniga fakultet (reja) belgisi; 12 — o'zak guruh.
+            $isCombined ? ('*' . ($row->curriculum_hemis_id ?? '')) : $this->normalizedRootGroup($row->group_name ?? ''),
             $this->rootSubjectName($row->subject_name ?? ''),
         ]);
     }
@@ -259,12 +274,17 @@ class VedomostMergeService
             $query->where('specialty_name', $v->specialty_name);
         }
 
-        $rootGroup = $this->rootGroupName($v->group_name);
+        // 12a/12b — har fakultet alohida varaq: bir xil reja (fakultet) doirasida.
+        if ($isCombined) {
+            $query->where('curriculum_hemis_id', $v->curriculum_hemis_id);
+        }
+
+        $rootGroup = $this->normalizedRootGroup($v->group_name);
         $rootSubject = $this->rootSubjectName($v->subject_name);
 
         return $query->get()->filter(function (VedomostSubmission $row) use ($isCombined, $rootGroup, $rootSubject) {
             // 12a/12b — guruh sharti yo'q (hamma guruh bitta vedomost).
-            $groupMatch = $isCombined || $this->rootGroupName($row->group_name) === $rootGroup;
+            $groupMatch = $isCombined || $this->normalizedRootGroup($row->group_name) === $rootGroup;
 
             return $groupMatch
                 && $this->rootSubjectName($row->subject_name) === $rootSubject;

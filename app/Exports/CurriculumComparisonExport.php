@@ -37,7 +37,7 @@ class CurriculumComparisonExport implements FromArray, ShouldAutoSize, WithStric
     {
         $data = [
             [$this->title],
-            ['T/r', 'Blok', "Fan nomi (namunaviy reja)", "Ishchi rejadagi nomi (farqli bo'lsa)",
+            ['T/r', 'Blok', 'Fan nomi (HEMIS)', 'Namunaviy nomi', 'Ishchi nomi',
                 'Nam. soat', 'Ishchi soat', 'Soat farqi', 'Nam. kredit', 'Ishchi kredit', 'Kredit farqi',
                 'Kurs(lar)', 'Semestr(lar)', 'Holati', 'Izoh'],
         ];
@@ -46,8 +46,9 @@ class CurriculumComparisonExport implements FromArray, ShouldAutoSize, WithStric
             $data[] = [
                 $i + 1,
                 $row['block'],
+                $row['hemis_name'] ?? ($row['ref_name'] ?? $row['work_name']),
                 $row['ref_name'],
-                $row['name_differs'] ? $row['work_name'] : ($row['ref_name'] === null ? $row['work_name'] : ''),
+                $row['work_name'],
                 $row['ref_hours'],
                 $row['work_hours'],
                 $row['hours_diff'],
@@ -62,7 +63,7 @@ class CurriculumComparisonExport implements FromArray, ShouldAutoSize, WithStric
         }
 
         $totals = $this->comparison['totals'];
-        $data[] = ['', '', 'JAMI', '',
+        $data[] = ['', '', 'JAMI', '', '',
             $totals['ref_hours'], $totals['work_hours'], $totals['hours_diff'],
             $totals['ref_credit'], $totals['work_credit'], $totals['credit_diff'],
             '', '', '', ''];
@@ -72,7 +73,7 @@ class CurriculumComparisonExport implements FromArray, ShouldAutoSize, WithStric
 
     public function styles(Worksheet $sheet)
     {
-        $sheet->mergeCells('A1:N1');
+        $sheet->mergeCells('A1:O1');
         $lastRow = count($this->comparison['rows']) + 3;
 
         $styles = [

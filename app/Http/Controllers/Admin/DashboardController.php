@@ -198,9 +198,38 @@ class DashboardController extends Controller
 
     public function importAcademicRecords(): RedirectResponse
     {
+        // Allaqachon ketayotgan bo'lsa bloklash
+        if (\Illuminate\Support\Facades\Cache::get('academic_import_lock')) {
+            return back()->with('error', 'Import allaqachon ketayapti. Tugashini kuting.');
+        }
+
         $this->telegram->notify("👤 {$this->getUserInfo()} tomonidan Akkreditatsiya (academic_records) sinxronizatsiyasi boshlandi");
         ActivityLogService::log('import', 'academic_record', 'Akkreditatsiya sinxronizatsiyasi boshlandi');
-        Artisan::queue('import:academic-records');
+        \Illuminate\Support\Facades\Cache::put('academic_import_progress', [
+            'status'  => 'queued',
+            'percent' => 0,
+            'started_at' => now()->toDateTimeString(),
+        ], 3600);
+
+        \App\Jobs\ImportAcademicRecordsJob::dispatch();
+
         return back()->with('success', 'Akkreditatsiya (talaba baholari) importi boshlandi (fon rejimida). 359k+ yozuv, bir necha daqiqa olishi mumkin.');
+    }
+
+    public function academicRecordsProgress(): \Illuminate\Http\JsonResponse
+    {
+        $progress = \Illuminate\Support\Facades\Cache::get('academic_import_progress');
+        if (!$progress) {
+            return response()->json(['status' => 'idle']);
+        }
+        return response()->json($progress);
+    }
+
+    public function clearAcademicImportLock(): \Illuminate\Http\RedirectResponse
+    {
+        \Illuminate\Support\Facades\Cache::forget('academic_import_lock');
+        \Illuminate\Support\Facades\Cache::forget('academic_import_progress');
+        $this->telegram->notify("🔓 {$this->getUserInfo()} tomonidan import lock tozalandi");
+        return back()->with('success', 'Import lock tozalandi. Endi import boshlasa bo\'ladi.');
     }
 }

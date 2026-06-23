@@ -4,7 +4,10 @@ namespace App\Http\Controllers\Student;
 
 use App\Http\Controllers\Controller;
 use App\Models\InglizGuruhAriza;
+use App\Models\StudentNotification;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 
 class EnglishGroupApplicationController extends Controller
@@ -91,6 +94,8 @@ class EnglishGroupApplicationController extends Controller
             ]);
         }
 
+        $this->notifyStudent($student, 'submitted', $application);
+
         return redirect()
             ->route('student.english-group-application.create')
             ->with('success', "Ingliz tili guruhiga o'tish uchun topshirgan arizangiz muvaffaqqiyatli qabul qilindi. Til sertifikati bo'lmagan talabalar ingliz tilida suhbat asosida qabul qilinadi.");
@@ -113,5 +118,55 @@ class EnglishGroupApplicationController extends Controller
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => 'inline; filename="til_sertifikati.pdf"',
         ]);
+    }
+
+    private function notifyStudent($student, string $event, InglizGuruhAriza $application): void
+    {
+        $title = match ($event) {
+            'submitted' => "Ingliz tili guruhiga o'tish arizasi yuborildi",
+            'approved' => "Ingliz tili guruhiga o'tish arizasi qabul qilindi",
+            'rejected' => "Ingliz tili guruhiga o'tish arizasi rad etildi",
+            default => "Ingliz tili guruhiga o'tish arizasi",
+        };
+
+        $message = match ($event) {
+            'submitted' => "Arizangiz muvaffaqiyatli qabul qilindi va ko'rib chiqish uchun yuborildi.",
+            'approved' => "Arizangiz admin tomonidan qabul qilindi.",
+            'rejected' => "Arizangiz admin tomonidan rad etildi.",
+            default => "Arizangiz bo'yicha holat yangilandi.",
+        };
+
+        if ($application->rejection_reason_label) {
+            $message .= " Sabab: {$application->rejection_reason_label}.";
+        }
+        if ($application->admin_note) {
+            $message .= " Izoh: {$application->admin_note}";
+        }
+
+        StudentNotification::create([
+            'student_id' => $student->id,
+            'type' => 'english_group_application',
+            'title' => $title,
+            'message' => $message,
+            'link' => '/student/english-group-application',
+            'data' => [
+                'application_id' => $application->id,
+                'status' => $application->status,
+            ],
+        ]);
+
+        if (!empty($student->telegram_chat_id)) {
+            try {
+                app(TelegramService::class)->sendToUser(
+                    (string) $student->telegram_chat_id,
+                    "<b>{$title}</b>\n\n" . e($message)
+                );
+            } catch (\Throwable $e) {
+                Log::warning('English group application telegram notify failed: ' . $e->getMessage(), [
+                    'application_id' => $application->id,
+                    'student_id' => $student->id,
+                ]);
+            }
+        }
     }
 }

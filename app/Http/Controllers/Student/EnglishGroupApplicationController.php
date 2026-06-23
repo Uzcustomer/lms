@@ -50,9 +50,11 @@ class EnglishGroupApplicationController extends Controller
 
         $data = $request->validate([
             'english_level' => 'nullable|in:boshlangich,orta,mukammal',
+            'phone_number' => 'nullable|string|max:50',
             'certificate_pdf' => 'nullable|file|mimes:pdf|max:2048',
         ], [
             'english_level.in' => "Ingliz tili darajasi noto'g'ri tanlangan.",
+            'phone_number.max' => "Telefon raqam juda uzun.",
             'certificate_pdf.mimes' => 'Til sertifikati faqat PDF formatda yuklanadi.',
             'certificate_pdf.max' => 'Til sertifikati 2 MB dan oshmasligi kerak.',
         ]);
@@ -61,7 +63,7 @@ class EnglishGroupApplicationController extends Controller
             'student_id' => $student->id,
             'student_hemis_id' => $student->hemis_id,
             'full_name' => $student->full_name,
-            'phone_number' => $student->phone,
+            'phone_number' => $data['phone_number'] ?? $student->phone,
             'faculty_name' => $student->department_name,
             'specialty_name' => $student->specialty_name,
             'course_name' => $student->level_name,

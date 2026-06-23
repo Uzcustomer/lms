@@ -799,6 +799,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
                 Route::get('/compare/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compareExport'])->name('compare-export');
                 Route::delete('/comparisons/{comparison}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroyComparison'])->name('comparisons.destroy');
                 Route::get('/{curriculum}/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'export'])->name('export');
+                Route::post('/{curriculum}/subjects', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storeSubject'])->name('subjects.store');
+                Route::put('/{curriculum}/subjects/{subject}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'updateSubject'])->name('subjects.update');
+                Route::delete('/{curriculum}/subjects/{subject}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroySubject'])->name('subjects.destroy');
                 Route::get('/{curriculum}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'show'])->name('show');
                 Route::delete('/{curriculum}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroy'])->name('destroy');
             });

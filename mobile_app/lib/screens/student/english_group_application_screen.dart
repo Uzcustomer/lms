@@ -497,19 +497,22 @@ class _EnglishGroupApplicationScreenState
             const SizedBox(height: 12),
             SizedBox(
               width: double.infinity,
-              child: OutlinedButton(
+              child: ElevatedButton(
                 onPressed: () => setState(() => _resubmitMode = true),
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: ClinicTheme.green,
-                  side: const BorderSide(color: Color(0xFF10B981)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: ClinicTheme.teal,
+                  foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
-                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 20,
+                    vertical: 18,
+                  ),
                 ),
                 child: Text(
                   l.pick(
-                    uz: 'Qayta ariza topshirish',
+                    uz: 'Qayta ariza yuborish',
                     ru: 'Подать повторно',
                     en: 'Resubmit application',
                   ),

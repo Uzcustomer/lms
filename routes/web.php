@@ -1237,6 +1237,10 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/visa-application', [\App\Http\Controllers\Student\VisaApplicationController::class, 'create'])->name('visa-application.create');
         Route::post('/visa-application', [\App\Http\Controllers\Student\VisaApplicationController::class, 'store'])->name('visa-application.store');
 
+        // Ingliz tili guruhiga o'tish uchun ariza
+        Route::get('/english-group-application', [\App\Http\Controllers\Student\EnglishGroupApplicationController::class, 'create'])->name('english-group-application.create');
+        Route::post('/english-group-application', [\App\Http\Controllers\Student\EnglishGroupApplicationController::class, 'store'])->name('english-group-application.store');
+
         // Ish e'lonlari
         Route::get('/job-listings', function () {
             return view('student.job-listings');

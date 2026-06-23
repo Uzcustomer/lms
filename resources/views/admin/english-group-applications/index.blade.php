@@ -154,6 +154,20 @@
                                                     Rad etish
                                                 </button>
                                             @endif
+                                            <form method="POST"
+                                                  action="{{ route('admin.english-group-applications.destroy', $application->id) }}"
+                                                  onsubmit="return confirm('Ariza va yuklangan fayl butunlay o\\'chirilsinmi?');">
+                                                @csrf
+                                                @method('DELETE')
+                                                <button type="submit"
+                                                        title="O'chirish"
+                                                        class="inline-flex items-center justify-center w-9 h-9 rounded-lg text-white transition"
+                                                        style="background: #0f172a;">
+                                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3M4 7h16"></path>
+                                                    </svg>
+                                                </button>
+                                            </form>
                                         </div>
 
                                         @if($application->status !== 'rejected')

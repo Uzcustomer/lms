@@ -221,6 +221,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'index'])->name('index');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'reject'])->name('reject');
+            Route::delete('/{id}', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'destroy'])->name('destroy');
         });
 
         // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)

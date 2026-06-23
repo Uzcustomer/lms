@@ -220,6 +220,7 @@ class RetakeDebtService
                 'ss.curriculum_subject_hemis_id',
                 DB::raw('COALESCE(sem.name, cs.semester_name) as semester_name'),
                 DB::raw('COALESCE(cs.credit, 0) as credit'),
+                DB::raw('CASE WHEN cs.curricula_hemis_id = ' . (int) $student->curriculum_id . ' AND cs.is_active = 1 THEN 1 ELSE 0 END as is_own_curriculum'),
             ])
             ->get();
 
@@ -236,6 +237,7 @@ class RetakeDebtService
                     'curriculum_subject_hemis_id',
                     'semester_name',
                     'credit',
+                    DB::raw('1 as is_own_curriculum'),
                 ])
                 ->orderBy('semester_code')
                 ->orderBy('subject_name')
@@ -254,18 +256,27 @@ class RetakeDebtService
                     'curriculum_subject_hemis_id' => $row->curriculum_subject_hemis_id,
                     'semester_name' => $row->semester_name,
                     'credit' => $row->credit !== null ? (float) $row->credit : 0.0,
+                    'is_own_curriculum' => (bool) ($row->is_own_curriculum ?? false),
                 ];
             })
             ->filter(fn ($row) => $row->subject_id !== '' && $row->semester_id !== '')
             ->groupBy(fn ($row) => $row->subject_id . '|' . $row->semester_id)
             ->map(function (Collection $group) {
-                $picked = $group->firstWhere('curriculum_subject_hemis_id', '!=', null) ?? $group->first();
+                $picked = $group->firstWhere('is_own_curriculum', true)
+                    ?? $group->firstWhere('curriculum_subject_hemis_id', '!=', null)
+                    ?? $group->first();
 
                 foreach ($group as $candidate) {
                     $picked->subject_name = $picked->subject_name ?: $candidate->subject_name;
                     $picked->semester_name = $picked->semester_name ?: $candidate->semester_name;
-                    $picked->credit = $picked->credit ?: $candidate->credit;
                     $picked->curriculum_subject_hemis_id = $picked->curriculum_subject_hemis_id ?: $candidate->curriculum_subject_hemis_id;
+
+                    if (!$picked->is_own_curriculum && $candidate->is_own_curriculum) {
+                        $picked->credit = $candidate->credit;
+                        $picked->is_own_curriculum = true;
+                    } elseif (!$picked->credit) {
+                        $picked->credit = $candidate->credit;
+                    }
                 }
 
                 return $picked;

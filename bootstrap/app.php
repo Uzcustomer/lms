@@ -72,6 +72,9 @@ return Application::configure(basePath: dirname(__DIR__))
         // import:schedules — nightly:run ichiga ko'chirildi (routes/console.php)
         $schedule->command('import:curriculum-subject-teachers')->dailyAt('22:00');
 
+        // Academic records — har kuni kechki 23:00 da HEMIS dan yangilanadi
+        $schedule->command('import:academic-records')->dailyAt('23:00')->withoutOverlapping(55);
+
         // Live import — har 30 daqiqada bugungi baholarni yangilaydi (faqat 8:30 — 00:00)
         // withoutOverlapping(25): lock 25 daqiqada expire bo'ladi — 30 daqiqalik intervalni bloklamaydi
         // (oldin 60 edi — crash bo'lganda keyingi 1-2 ta run ham bloklanardi)

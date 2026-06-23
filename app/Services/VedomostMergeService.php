@@ -80,8 +80,9 @@ class VedomostMergeService
      * vedomost hisoblanadi.
      *
      * 12-shakl: o'zak guruh kalitga kiradi (har guruh alohida varaq).
-     * 12a/12b : o'zak guruh kalitdan CHIQARILADI — yo'nalish × fan bo'yicha
-     *           barcha guruhlar bitta umumiy varaqqa jamlanadi.
+     * 12a/12b : o'zak guruh kalitdan CHIQARILADI, lekin FAKULTET (reja) saqlanadi —
+     *           yo'nalish × fan bo'yicha bitta FAKULTETning barcha guruhlari bitta
+     *           umumiy varaqqa jamlanadi (har fakultet alohida varaq).
      */
     public function mergeKey(object $row): string
     {
@@ -94,7 +95,8 @@ class VedomostMergeService
             $row->semester_code ?? '',
             $row->specialty_name ?? '',
             $row->closing_form ?? '',
-            $isCombined ? '*' : $this->normalizedRootGroup($row->group_name ?? ''),
+            // 12a/12b — guruh o'rniga fakultet (reja) belgisi; 12 — o'zak guruh.
+            $isCombined ? ('*' . ($row->curriculum_hemis_id ?? '')) : $this->normalizedRootGroup($row->group_name ?? ''),
             $this->rootSubjectName($row->subject_name ?? ''),
         ]);
     }
@@ -270,6 +272,11 @@ class VedomostMergeService
             $query->whereNull('specialty_name');
         } else {
             $query->where('specialty_name', $v->specialty_name);
+        }
+
+        // 12a/12b — har fakultet alohida varaq: bir xil reja (fakultet) doirasida.
+        if ($isCombined) {
+            $query->where('curriculum_hemis_id', $v->curriculum_hemis_id);
         }
 
         $rootGroup = $this->normalizedRootGroup($v->group_name);

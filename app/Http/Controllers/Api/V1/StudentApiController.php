@@ -536,8 +536,12 @@ class StudentApiController extends Controller
                 'current' => (bool) $sem->current,
             ]);
 
+        $studentSemester = $semesters->firstWhere('code', $student->semester_code);
         $currentSemester = $semesters->firstWhere('current', true);
-        $selectedSemesterId = $request->input('semester_id', $currentSemester['id'] ?? $semesters->first()['id'] ?? null);
+        $selectedSemesterId = $request->input(
+            'semester_id',
+            $studentSemester['id'] ?? $currentSemester['id'] ?? $semesters->first()['id'] ?? null
+        );
         $selectedSemester = $semesters->firstWhere('id', $selectedSemesterId);
 
         if (!$selectedSemester) {
@@ -563,11 +567,16 @@ class StudentApiController extends Controller
             $currentWeek = $weeks->first(fn($w) => Carbon::parse($w['start_date'])->isAfter($currentDate));
         }
 
-        $selectedWeekId = $request->input('week_id', $currentWeek['id'] ?? ($weeks->first()['id'] ?? null));
+        $selectedWeekId = $request->input('week_id', $currentWeek['id'] ?? null);
         $selectedWeek = $weeks->firstWhere('id', $selectedWeekId);
 
-        $weekStart = $selectedWeek ? Carbon::parse($selectedWeek['start_date']) : null;
-        $weekEnd = $selectedWeek ? Carbon::parse($selectedWeek['end_date']) : null;
+        if ($selectedWeek) {
+            $weekStart = Carbon::parse($selectedWeek['start_date']);
+            $weekEnd = Carbon::parse($selectedWeek['end_date']);
+        } else {
+            $weekStart = $currentDate->copy()->startOfWeek(Carbon::MONDAY);
+            $weekEnd = $weekStart->copy()->addDays(5);
+        }
 
         // Query schedule
         $scheduleQuery = Schedule::where('group_id', $student->group_id)
@@ -612,10 +621,7 @@ class StudentApiController extends Controller
             $days[$day['day_name']] = $day['lessons'];
         }
 
-        $weekLabel = null;
-        if ($selectedWeek) {
-            $weekLabel = Carbon::parse($selectedWeek['start_date'])->format('d.m') . ' - ' . Carbon::parse($selectedWeek['end_date'])->format('d.m.Y');
-        }
+        $weekLabel = $weekStart->format('d.m') . ' - ' . $weekEnd->format('d.m.Y');
 
         return response()->json([
             'data' => [

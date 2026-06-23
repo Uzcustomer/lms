@@ -8,6 +8,7 @@ use App\Http\Controllers\Controller;
 use App\Imports\ManualCurriculumImport;
 use App\Models\Curriculum;
 use App\Models\ManualCurriculum;
+use App\Models\ManualCurriculumComparison;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Services\CurriculumComparisonService;
@@ -39,7 +40,15 @@ class CurriculumCheckController extends Controller
             ->orderBy('education_type_code')
             ->get();
 
-        return view('admin.oquv-reja.index', compact('curricula', 'educationTypes'));
+        // Bajarilgan (saqlangan) solishtirishlar ro'yxati — eng so'nggisi tepada.
+        // Reja o'chirilgan bo'lsa (relation yo'q) — ko'rsatilmaydi.
+        $savedComparisons = ManualCurriculumComparison::with(['reference', 'working'])
+            ->latest()
+            ->get()
+            ->filter(fn ($c) => $c->reference && $c->working)
+            ->values();
+
+        return view('admin.oquv-reja.index', compact('curricula', 'educationTypes', 'savedComparisons'));
     }
 
     /**
@@ -291,20 +300,57 @@ class CurriculumCheckController extends Controller
     public function compare(Request $request, CurriculumComparisonService $service)
     {
         [$reference, $working] = $this->resolvePair($request);
-        $comparison = $service->compare($reference, $working);
+        $comparison = $service->compare($reference, $working, $this->hemisSubjectNames($reference, $working));
+
+        // "Solishtirish" bosilganda juftlik tarixга saqlanadi (takror saqlanmaydi).
+        ManualCurriculumComparison::firstOrCreate(
+            ['reference_id' => $reference->id, 'working_id' => $working->id],
+            ['created_by' => Auth::id()],
+        );
 
         return view('admin.oquv-reja.compare', compact('reference', 'working', 'comparison'));
+    }
+
+    public function destroyComparison(ManualCurriculumComparison $comparison)
+    {
+        $comparison->delete();
+
+        return redirect()->route('admin.oquv-reja.index')
+            ->with('success', "Solishtirish ro'yxatdan o'chirildi.");
     }
 
     public function compareExport(Request $request, CurriculumComparisonService $service)
     {
         [$reference, $working] = $this->resolvePair($request);
-        $comparison = $service->compare($reference, $working);
+        $comparison = $service->compare($reference, $working, $this->hemisSubjectNames($reference, $working));
 
         $title = "{$reference->name} <-> {$working->name} solishtirma";
         $fileName = 'oquv-reja-solishtirma-' . now()->format('Y-m-d_His') . '.xlsx';
 
         return Excel::download(new CurriculumComparisonExport($title, $comparison), $fileName);
+    }
+
+    /**
+     * Solishtirilayotgan rejalarning HEMIS o'quv reja(lar)idagi fanlar nomlari.
+     * Namunaviy/ishchi nomlarini shu HEMIS nomlari bilan solishtirish uchun.
+     */
+    private function hemisSubjectNames(ManualCurriculum $reference, ManualCurriculum $working): array
+    {
+        $ids = array_values(array_unique(array_filter([
+            $reference->curricula_hemis_id,
+            $working->curricula_hemis_id,
+        ])));
+        if (empty($ids)) {
+            return [];
+        }
+
+        return DB::table('curriculum_subjects')
+            ->whereIn('curricula_hemis_id', $ids)
+            ->where('is_active', 1)
+            ->whereNotNull('subject_name')
+            ->distinct()
+            ->pluck('subject_name')
+            ->all();
     }
 
     private function resolvePair(Request $request): array

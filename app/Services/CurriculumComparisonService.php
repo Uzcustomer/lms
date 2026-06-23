@@ -24,8 +24,18 @@ class CurriculumComparisonService
     public const STATUS_MISSING_IN_WORKING = "Ishchi rejada yo'q";
     public const STATUS_MISSING_IN_REFERENCE = "Namunaviy rejada yo'q";
 
-    public function compare(ManualCurriculum $reference, ManualCurriculum $working): array
+    public function compare(ManualCurriculum $reference, ManualCurriculum $working, array $hemisNames = []): array
     {
+        // HEMIS fan nomlari xaritasi: normalizatsiya qilingan kalit => asl nom.
+        // Bu namunaviy/ishchi nomlarini HEMIS nomi bilan solishtirish uchun.
+        $hemisMap = [];
+        foreach ($hemisNames as $hn) {
+            $key = $this->normalize((string) $hn);
+            if ($key !== '' && !isset($hemisMap[$key])) {
+                $hemisMap[$key] = $this->collapse((string) $hn);
+            }
+        }
+
         $refGroups = $this->groupSubjects($reference->subjects()->orderBy('id')->get(), false);
         $workGroups = $this->groupSubjects($working->subjects()->orderBy('id')->get(), true);
 
@@ -33,10 +43,10 @@ class CurriculumComparisonService
         foreach ($refGroups as $key => $ref) {
             $work = $workGroups[$key] ?? null;
             unset($workGroups[$key]);
-            $rows[] = $this->buildRow($ref, $work);
+            $rows[] = $this->buildRow($ref, $work, $hemisMap);
         }
         foreach ($workGroups as $work) {
-            $rows[] = $this->buildRow(null, $work);
+            $rows[] = $this->buildRow(null, $work, $hemisMap);
         }
 
         $stats = collect($rows)->countBy('status')->all();
@@ -52,9 +62,26 @@ class CurriculumComparisonService
         return ['rows' => $rows, 'totals' => $totals, 'stats' => $stats];
     }
 
-    private function buildRow(?array $ref, ?array $work): array
+    private function buildRow(?array $ref, ?array $work, array $hemisMap = []): array
     {
         $notes = array_filter(array_merge($ref['notes'] ?? [], $work['notes'] ?? []));
+
+        $refName = $ref['name'] ?? null;
+        $workName = $work['name'] ?? null;
+
+        // HEMIS nomini topish (normalizatsiya bo'yicha), keyin nomlarni AYNAN
+        // (collapse — faqat bo'shliq farqi e'tiborsiz, apostrof/registr muhim)
+        // HEMIS nomi bilan solishtirish.
+        $lookupKey = $this->normalize((string) ($refName ?? $workName ?? ''));
+        $hemisName = $hemisMap[$lookupKey] ?? null;
+
+        $refMatchesHemis = ($hemisName !== null && $refName !== null)
+            ? ($this->collapse($refName) === $hemisName) : null;
+        $workMatchesHemis = ($hemisName !== null && $workName !== null)
+            ? ($this->collapse($workName) === $hemisName) : null;
+
+        // HEMIS nomlari umuman yuklangan bo'lsa — tekshiruv faol.
+        $hemisAvailable = !empty($hemisMap);
 
         if ($ref === null) {
             $status = self::STATUS_MISSING_IN_REFERENCE;
@@ -63,7 +90,14 @@ class CurriculumComparisonService
         } else {
             $hoursDiff = $this->diff($ref['hours'], $work['hours']);
             $creditDiff = $this->diff($ref['credit'], $work['credit']);
-            $nameDiffers = $this->collapse($ref['name']) !== $this->collapse($work['name']);
+            // Nom farqi:
+            //  - HEMIS tekshiruvi faol bo'lsa: HEMIS'da topilmasa YOKI namunaviy/
+            //    ishchi nomi HEMIS nomidan farq qilsa — nom farqi (yashil emas).
+            //  - HEMIS nomlari umuman yuklanmagan bo'lsa: eski mantiq — namunaviy
+            //    va ishchi bir-biridan farq qilsa.
+            $nameDiffers = $hemisAvailable
+                ? ($hemisName === null || $refMatchesHemis === false || $workMatchesHemis === false)
+                : ($this->collapse($ref['name']) !== $this->collapse($work['name']));
             $status = match (true) {
                 $hoursDiff && $creditDiff => self::STATUS_HOURS_CREDIT,
                 $hoursDiff => self::STATUS_HOURS,
@@ -76,10 +110,24 @@ class CurriculumComparisonService
             }
         }
 
+        // HEMIS nomi bo'yicha aniq izohlar
+        if ($refMatchesHemis === false) {
+            $notes[] = "Namunaviy nomi HEMIS nomidan farq qiladi";
+        }
+        if ($workMatchesHemis === false) {
+            $notes[] = "Ishchi nomi HEMIS nomidan farq qiladi";
+        }
+        if ($hemisName === null && ($refName !== null || $workName !== null)) {
+            $notes[] = "HEMIS bazasida fan topilmadi";
+        }
+
         return [
             'block' => $ref['block'] ?? $work['block'] ?? null,
-            'ref_name' => $ref['name'] ?? null,
-            'work_name' => $work['name'] ?? null,
+            'hemis_name' => $hemisName,
+            'ref_name' => $refName,
+            'work_name' => $workName,
+            'ref_matches_hemis' => $refMatchesHemis,
+            'work_matches_hemis' => $workMatchesHemis,
             'name_differs' => $ref && $work && $this->collapse($ref['name']) !== $this->collapse($work['name']),
             'ref_hours' => $ref['hours'] ?? null,
             'work_hours' => $work['hours'] ?? null,

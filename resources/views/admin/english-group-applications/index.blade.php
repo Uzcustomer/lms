@@ -83,7 +83,7 @@
                                 <th class="px-4 py-3 text-left">Talaba</th>
                                 <th class="px-4 py-3 text-left">Aloqa</th>
                                 <th class="px-4 py-3 text-left">O'qish ma'lumoti</th>
-                                <th class="px-4 py-3 text-left">Daraja</th>
+                                <th class="px-4 py-3 text-left">Til darajasi</th>
                                 <th class="px-4 py-3 text-left">Sertifikat</th>
                                 <th class="px-4 py-3 text-left">Holat</th>
                                 <th class="px-4 py-3 text-left">Sana</th>
@@ -111,7 +111,12 @@
                                     </td>
                                     <td class="px-4 py-4 align-top">
                                         @if($application->certificate_pdf_path)
-                                            <span class="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-700">Yuklangan</span>
+                                            <a href="{{ asset('storage/' . $application->certificate_pdf_path) }}"
+                                               target="_blank"
+                                               rel="noopener"
+                                               class="text-sky-600 hover:text-sky-800 underline text-sm font-medium">
+                                                Sertifikatni ochish
+                                            </a>
                                         @else
                                             <span class="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-100 text-slate-500">Yo'q</span>
                                         @endif

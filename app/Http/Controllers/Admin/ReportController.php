@@ -9770,6 +9770,58 @@ class ReportController extends Controller
     }
 
     /**
+     * "Qo'lda yarim to'ldirilgan otrabotka" ogohlantirish sahifasi.
+     * Faqat KO'RSATISH — baholar o'zgartirilmaydi (qaydnomada tasdiqlangan).
+     */
+    public function manualRetakeGaps(Request $request)
+    {
+        return view('admin.reports.manual-retake-gaps');
+    }
+
+    /**
+     * AJAX: ko'p juftlikli kunda retake ba'zi juftliklarga qo'yilib, qoidaviy
+     * juftlik (NB yoki <60) retakesiz qolgan holatlar. O'qituvchi qo'lda
+     * to'ldirishda ba'zi juftlikni unutgan bo'lishi mumkin — admin ko'rib
+     * to'ldiradi. Read-only.
+     */
+    public function manualRetakeGapsData(Request $request)
+    {
+        $dateFrom = $request->input('date_from') ?: now('Asia/Tashkent')->subMonths(6)->toDateString();
+        $dateTo   = $request->input('date_to')   ?: now('Asia/Tashkent')->toDateString();
+
+        $rows = DB::select("
+            SELECT s.full_name, s.group_name, sg.subject_id, sg.subject_name,
+                   DATE(sg.lesson_date) AS kun,
+                   COUNT(*) AS juftliklar,
+                   SUM(sg.retake_grade IS NOT NULL) AS retake_bor,
+                   SUM(sg.retake_grade IS NULL AND ((sg.grade IS NULL AND sg.reason = 'absent') OR sg.grade < 60)) AS qoldirilgan,
+                   GROUP_CONCAT(
+                       CONCAT(sg.lesson_pair_code, ':', COALESCE(sg.grade, 'NB'), '/',
+                              COALESCE(sg.retake_grade, '-'),
+                              IF(sg.quiz_result_id IS NOT NULL, '(q)', ''))
+                       ORDER BY sg.lesson_pair_code SEPARATOR ' | ') AS tafsilot
+            FROM student_grades sg
+            JOIN students s ON s.hemis_id = sg.student_hemis_id COLLATE utf8mb4_unicode_ci
+            WHERE sg.deleted_at IS NULL
+              AND sg.training_type_code NOT IN (11, 17, 99, 100, 101, 102, 103)
+              AND DATE(sg.lesson_date) >= ?
+              AND DATE(sg.lesson_date) <= ?
+            GROUP BY sg.student_hemis_id, s.full_name, s.group_name, sg.subject_id, sg.subject_name, DATE(sg.lesson_date)
+            HAVING juftliklar > 1 AND retake_bor > 0 AND qoldirilgan > 0
+            ORDER BY kun DESC
+            LIMIT 2000
+        ", [$dateFrom, $dateTo]);
+
+        return response()->json([
+            'success'    => true,
+            'rows'       => $rows,
+            'total'      => count($rows),
+            'date_from'  => $dateFrom,
+            'date_to'    => $dateTo,
+        ]);
+    }
+
+    /**
      * Qarzdor hisobotida talaba noto'g'ri ko'rinishini aniqlash uchun debug endpoint.
      * URL: /admin/reports/debug-debt?hemis_id=368261100054
      */

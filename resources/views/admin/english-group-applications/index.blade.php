@@ -1,7 +1,7 @@
 <x-app-layout>
     <div class="p-4 sm:ml-64">
         <div class="mt-14">
-            <div class="flex items-center justify-between mb-6">
+            <div class="flex items-center justify-between mb-4">
                 <div>
                     <h1 class="text-2xl font-bold text-gray-800 dark:text-white">Ingliz guruhga o'tish arizalari</h1>
                     <p class="text-sm text-gray-500 mt-1">Talabalar yuborgan arizalarni ko'rish, saralash va ko'rib chiqish oynasi</p>
@@ -20,7 +20,7 @@
                 </div>
             @endif
 
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                 <a href="{{ route('admin.english-group-applications.index') }}"
                    class="block rounded-xl border-2 p-4 transition hover:shadow-md {{ !request('status') ? 'border-sky-500 bg-sky-50' : 'border-sky-200 bg-white hover:border-sky-300' }}">
                     <div class="text-xs uppercase font-semibold text-sky-600">Jami</div>
@@ -43,7 +43,7 @@
                 </a>
             </div>
 
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm mb-5">
+            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm mb-4">
                 <form method="GET" action="{{ route('admin.english-group-applications.index') }}" class="p-4 grid grid-cols-1 md:grid-cols-4 gap-3">
                     <div class="md:col-span-2">
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qidiruv</label>
@@ -92,7 +92,7 @@
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             @forelse($applications as $application)
-                                <tr class="hover:bg-slate-50 transition">
+                                <tr x-data="{ rejectOpen: false }" class="hover:bg-slate-50 transition">
                                     <td class="px-4 py-4 align-top">
                                         <div class="font-semibold text-slate-800">{{ $application->full_name }}</div>
                                         <div class="text-xs text-slate-500 mt-1">HEMIS: {{ $application->student_hemis_id ?: '-' }}</div>
@@ -132,7 +132,7 @@
                                         {{ $application->created_at?->format('d.m.Y H:i') }}
                                     </td>
                                     <td class="px-4 py-4 align-top text-right">
-                                        <div class="flex items-center justify-end gap-2">
+                                        <div class="flex items-center justify-end gap-2 flex-wrap">
                                             @if($application->status !== 'approved')
                                                 <form method="POST" action="{{ route('admin.english-group-applications.approve', $application->id) }}">
                                                     @csrf
@@ -142,16 +142,50 @@
                                                 </form>
                                             @endif
                                             @if($application->status !== 'rejected')
-                                                <form method="POST" action="{{ route('admin.english-group-applications.reject', $application->id) }}" class="flex items-center gap-2">
-                                                    @csrf
-                                                    <input type="text" name="admin_note" placeholder="Izoh"
-                                                           class="w-28 rounded-lg border-slate-300 text-xs focus:border-rose-500 focus:ring-rose-500">
-                                                    <button type="submit" class="px-3 py-1.5 rounded-lg bg-rose-600 text-white text-xs font-semibold hover:bg-rose-700 transition">
-                                                        Rad etish
-                                                    </button>
-                                                </form>
+                                                <button type="button"
+                                                        @click="rejectOpen = true"
+                                                        class="px-3 py-1.5 rounded-lg text-white text-xs font-semibold transition"
+                                                        style="background: #dc2626; border-radius: 8px;">
+                                                    Rad etish
+                                                </button>
                                             @endif
                                         </div>
+
+                                        @if($application->status !== 'rejected')
+                                            <div x-show="rejectOpen"
+                                                 x-cloak
+                                                 class="fixed inset-0 z-50 flex items-center justify-center px-4"
+                                                 style="background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(4px);">
+                                                <div @click.outside="rejectOpen = false"
+                                                     class="w-full max-w-md rounded-2xl bg-white text-left shadow-2xl overflow-hidden">
+                                                    <div class="px-5 py-4" style="background: linear-gradient(135deg, #b91c1c 0%, #ef4444 100%); color: white;">
+                                                        <div class="text-base font-bold">Arizani rad etish</div>
+                                                        <div class="text-sm text-white/90 mt-1">{{ $application->full_name }}</div>
+                                                    </div>
+                                                    <form method="POST" action="{{ route('admin.english-group-applications.reject', $application->id) }}" class="p-5">
+                                                        @csrf
+                                                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-2">Rad etish sababi</label>
+                                                        <textarea name="admin_note"
+                                                                  required
+                                                                  rows="4"
+                                                                  placeholder="Izoh yozing..."
+                                                                  class="w-full rounded-xl border-slate-300 text-sm focus:border-rose-500 focus:ring-rose-500">{{ old('admin_note') }}</textarea>
+                                                        <div class="mt-4 flex items-center justify-end gap-2">
+                                                            <button type="button"
+                                                                    @click="rejectOpen = false"
+                                                                    class="px-4 py-2 rounded-xl bg-slate-200 text-slate-700 text-sm font-semibold hover:bg-slate-300 transition">
+                                                                Bekor qilish
+                                                            </button>
+                                                            <button type="submit"
+                                                                    class="px-4 py-2 rounded-xl text-white text-sm font-semibold transition"
+                                                                    style="background: #dc2626;">
+                                                                Rad etish
+                                                            </button>
+                                                        </div>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        @endif
                                     </td>
                                 </tr>
                             @empty

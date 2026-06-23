@@ -68,22 +68,36 @@ class EnglishGroupApplicationController extends Controller
     public function reject(Request $request, int $id)
     {
         $data = $request->validate([
-            'admin_note' => 'required|string|max:1000',
+            'rejection_reason_code' => 'nullable|in:interview_failed',
+            'admin_note' => 'nullable|string|max:1000|required_without:rejection_reason_code',
         ], [
-            'admin_note.required' => 'Rad etish uchun izoh kiritilishi shart.',
+            'rejection_reason_code.in' => "Noto'g'ri rad etish sababi tanlandi.",
+            'admin_note.required_without' => 'Rad etish uchun sabab yoki izoh kiritilishi shart.',
             'admin_note.max' => 'Izoh juda uzun.',
         ]);
 
         $application = InglizGuruhAriza::findOrFail($id);
         $application->update([
             'status' => 'rejected',
-            'admin_note' => $data['admin_note'],
+            'rejection_reason_code' => $data['rejection_reason_code'] ?? null,
+            'admin_note' => $data['admin_note'] ?? null,
             'reviewed_by' => Auth::id(),
             'reviewed_at' => now(),
         ]);
 
         return redirect()->route('admin.english-group-applications.index', request()->query())
             ->with('success', 'Ariza rad etildi.');
+    }
+
+    public function certificate(int $id)
+    {
+        $application = InglizGuruhAriza::findOrFail($id);
+        abort_if(!$application->certificate_pdf_path || !Storage::exists($application->certificate_pdf_path), 404);
+
+        return response()->file(Storage::path($application->certificate_pdf_path), [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="til_sertifikati.pdf"',
+        ]);
     }
 
     public function destroy(int $id)

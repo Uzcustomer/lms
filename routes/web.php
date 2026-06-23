@@ -221,6 +221,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'index'])->name('index');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'approve'])->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'reject'])->name('reject');
+            Route::get('/{id}/certificate', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'certificate'])->name('certificate');
             Route::delete('/{id}', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'destroy'])->name('destroy');
         });
 
@@ -1247,6 +1248,7 @@ Route::prefix('student')->name('student.')->group(function () {
         // Ingliz tili guruhiga o'tish uchun ariza
         Route::get('/english-group-application', [\App\Http\Controllers\Student\EnglishGroupApplicationController::class, 'create'])->name('english-group-application.create');
         Route::post('/english-group-application', [\App\Http\Controllers\Student\EnglishGroupApplicationController::class, 'store'])->name('english-group-application.store');
+        Route::get('/english-group-application/{id}/certificate', [\App\Http\Controllers\Student\EnglishGroupApplicationController::class, 'certificate'])->name('english-group-application.certificate');
 
         // Ish e'lonlari
         Route::get('/job-listings', function () {

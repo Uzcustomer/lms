@@ -19,6 +19,7 @@ class InglizGuruhAriza extends Model
         'semester_name',
         'group_name',
         'english_level',
+        'rejection_reason_code',
         'certificate_pdf_path',
         'status',
         'admin_note',
@@ -36,6 +37,14 @@ class InglizGuruhAriza extends Model
             'approved' => 'Qabul qilingan',
             'rejected' => 'Rad etilgan',
             default => 'Kutilmoqda',
+        };
+    }
+
+    public function getRejectionReasonLabelAttribute(): ?string
+    {
+        return match ($this->rejection_reason_code) {
+            'interview_failed' => "Suhbatdan o'ta olmadi",
+            default => null,
         };
     }
 

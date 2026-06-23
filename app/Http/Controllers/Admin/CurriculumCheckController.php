@@ -9,6 +9,7 @@ use App\Imports\ManualCurriculumImport;
 use App\Models\Curriculum;
 use App\Models\ManualCurriculum;
 use App\Models\ManualCurriculumComparison;
+use App\Models\ManualCurriculumSubject;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Services\CurriculumComparisonService;
@@ -295,6 +296,79 @@ class CurriculumCheckController extends Controller
     {
         $curriculum->delete();
         return redirect()->route('admin.oquv-reja.index')->with('success', "O'quv reja o'chirildi.");
+    }
+
+    /**
+     * Yuklangan rejaga yangi fan qatori qo'shish (qo'lda tahrirlash).
+     */
+    public function storeSubject(Request $request, ManualCurriculum $curriculum)
+    {
+        $data = $this->validateSubject($request);
+        $data['audit_total'] = $this->auditTotal($data);
+        $curriculum->subjects()->create($data);
+
+        return redirect()->route('admin.oquv-reja.show', $curriculum)
+            ->with('success', "Yangi fan qatori qo'shildi.");
+    }
+
+    /**
+     * Mavjud fan qatorini tahrirlash (nom, soat, kredit va h.k.).
+     */
+    public function updateSubject(Request $request, ManualCurriculum $curriculum, ManualCurriculumSubject $subject)
+    {
+        abort_unless($subject->manual_curriculum_id === $curriculum->id, 404);
+
+        $data = $this->validateSubject($request);
+        $data['audit_total'] = $this->auditTotal($data);
+        $subject->update($data);
+
+        return redirect()->route('admin.oquv-reja.show', $curriculum)
+            ->with('success', "Fan qatori yangilandi.");
+    }
+
+    /**
+     * Fan qatorini o'chirish (masalan, ortiqcha qator).
+     */
+    public function destroySubject(ManualCurriculum $curriculum, ManualCurriculumSubject $subject)
+    {
+        abort_unless($subject->manual_curriculum_id === $curriculum->id, 404);
+
+        $subject->delete();
+
+        return redirect()->route('admin.oquv-reja.show', $curriculum)
+            ->with('success', "Fan qatori o'chirildi.");
+    }
+
+    private function validateSubject(Request $request): array
+    {
+        return $request->validate([
+            'block' => 'nullable|string|max:255',
+            'subject_code' => 'nullable|string|max:255',
+            'subject_name' => 'required|string|max:1000',
+            'reference_name' => 'nullable|string|max:1000',
+            'kurs' => 'nullable|string|max:50',
+            'semester' => 'nullable|string|max:50',
+            'total_hours' => 'nullable|numeric|min:0',
+            'lecture' => 'nullable|numeric|min:0',
+            'practice' => 'nullable|numeric|min:0',
+            'laboratory' => 'nullable|numeric|min:0',
+            'seminar' => 'nullable|numeric|min:0',
+            'independent' => 'nullable|numeric|min:0',
+            'credit' => 'nullable|numeric|min:0',
+            'note' => 'nullable|string|max:1000',
+        ]);
+    }
+
+    /**
+     * Auditoriya jami = ma'ruza + amaliy + laboratoriya + seminar
+     * (mustaqil ta'lim alohida hisoblanadi).
+     */
+    private function auditTotal(array $data): float
+    {
+        return (float) ($data['lecture'] ?? 0)
+            + (float) ($data['practice'] ?? 0)
+            + (float) ($data['laboratory'] ?? 0)
+            + (float) ($data['seminar'] ?? 0);
     }
 
     public function compare(Request $request, CurriculumComparisonService $service)

@@ -9794,7 +9794,7 @@ class ReportController extends Controller
                    DATE(sg.lesson_date) AS kun,
                    COUNT(*) AS juftliklar,
                    SUM(sg.retake_grade IS NOT NULL) AS retake_bor,
-                   SUM(sg.retake_grade IS NULL AND (sg.grade IS NULL OR sg.grade < 60)) AS qoldirilgan,
+                   SUM(sg.retake_grade IS NULL AND ((sg.grade IS NULL AND sg.reason = 'absent') OR sg.grade < 60)) AS qoldirilgan,
                    GROUP_CONCAT(
                        CONCAT(sg.lesson_pair_code, ':', COALESCE(sg.grade, 'NB'), '/',
                               COALESCE(sg.retake_grade, '-'),

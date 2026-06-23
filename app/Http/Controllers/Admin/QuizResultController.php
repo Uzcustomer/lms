@@ -1602,7 +1602,7 @@ class QuizResultController extends Controller
             ->whereIn('student_hemis_id', $hemisIds)
             ->whereIn('subject_id', $fanIds)
             ->whereIn('semester_code', $semCodes)
-            ->select('student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'grade', 'retake_grade', 'reason', 'status')
+            ->select('student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'reason', 'status')
             ->get();
 
         $gradesByDate = []; // hemis|fan|sem|date => [rows]
@@ -1634,6 +1634,7 @@ class QuizResultController extends Controller
             $maxRetake = null;
             $hasNb = false;
             $retakeFromNb = false;   // maxRetake NB (baho yo'q) yozuvdan kelganmi
+            $retakeNbPair = null;    // o'sha NB retake qaysi juftlikdan (pair-specific sababli uchun)
 
             foreach ($rows as $gr) {
                 $isNbRow = ($gr->reason === 'absent' && $gr->grade === null);
@@ -1648,6 +1649,7 @@ class QuizResultController extends Controller
                     if ($maxRetake === null || $gr->retake_grade > $maxRetake) {
                         $maxRetake = $gr->retake_grade;
                         $retakeFromNb = $isNbRow;
+                        $retakeNbPair = $isNbRow ? $gr->lesson_pair_code : null;
                     }
                 }
             }
@@ -1655,10 +1657,11 @@ class QuizResultController extends Controller
             // Qayta topshirish koeffitsiyenti (uploadMavzuRetake bilan bir xil):
             //   - mavjud baho ustidan retake -> har doim 0.8
             //   - NB ustidan retake -> sababli bo'lsa 1.0, sababsiz 0.8
+            //     (sabablilik aynan o'sha juftlik (lesson_pair_code) bo'yicha tekshiriladi)
             $stateKey = $student->hemis_id . '|' . $r->fan_id . '|' . $mavzuN;
             if ($maxRetake !== null) {
                 $mult = $retakeFromNb
-                    ? $this->mavzuSababliMultiplier($student->hemis_id, $r->fan_id, $targetDate)
+                    ? $this->mavzuSababliMultiplier($student->hemis_id, $r->fan_id, $targetDate, $retakeNbPair)
                     : 0.8;
                 $states[$stateKey] = ['type' => 'retake', 'grade' => $maxGrade, 'retake' => $maxRetake, 'mult' => $mult];
             } elseif ($maxGrade !== null) {
@@ -1674,16 +1677,17 @@ class QuizResultController extends Controller
     /**
      * NB ustidan qayta topshirish koeffitsiyenti: sababli bo'lsa 1.0, sababsiz 0.8.
      * Sababli aniqlanishi uploadMavzuRetake bilan bir xil: attendances.absent_on>0
-     * yoki shu sanani qamragan tasdiqlangan AbsenceExcuse. (Sababsiz->sababli o'tish
-     * arizani tasdiqlash + qayta yuklash orqali avtomatik 0.8->1.0 yangilanadi;
-     * bu yerda joriy holat o'qiladi.)
+     * (aynan o'sha juftlik — lesson_pair_code bo'yicha) yoki shu sanani qamragan
+     * tasdiqlangan AbsenceExcuse. (Sababsiz->sababli o'tish arizani tasdiqlash +
+     * qayta yuklash orqali avtomatik 0.8->1.0 yangilanadi; bu yerda joriy holat o'qiladi.)
      */
-    private function mavzuSababliMultiplier($hemisId, $fanId, $targetDate): float
+    private function mavzuSababliMultiplier($hemisId, $fanId, $targetDate, $pairCode = null): float
     {
         $sababli = DB::table('attendances')
             ->where('student_hemis_id', $hemisId)
             ->where('subject_id', $fanId)
             ->whereDate('lesson_date', $targetDate)
+            ->when($pairCode !== null, fn ($q) => $q->where('lesson_pair_code', $pairCode))
             ->where('absent_on', '>', 0)
             ->exists();
 

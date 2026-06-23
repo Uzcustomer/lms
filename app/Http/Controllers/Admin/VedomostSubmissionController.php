@@ -278,6 +278,57 @@ class VedomostSubmissionController extends Controller
         ));
     }
 
+    /**
+     * Svodnaya hisobot — tanlangan kesim (fakultet/kurs/kafedra/fan/guruh) bo'yicha
+     * qatorlar, ustunlarda shakl turi (12 / 12a / 12b) × status sanog'i.
+     * Joriy filtrlar (query string) hisobga olinadi.
+     */
+    public function report(Request $request)
+    {
+        $this->checkViewAccess();
+
+        [$query] = $this->filteredQuery($request);
+
+        // Mavjud kesimlar: yorliq + jamlangan qatordagi maydon nomi.
+        $dimensions = [
+            'faculty'    => ['label' => 'Fakultet', 'field' => 'faculty_name'],
+            'level'      => ['label' => 'Kurs',     'field' => 'level_name'],
+            'department' => ['label' => 'Kafedra',  'field' => 'department_name'],
+            'subject'    => ['label' => 'Fan',      'field' => 'subject_name'],
+            'group'      => ['label' => 'Guruh',    'field' => 'group_name'],
+        ];
+        $dimension = $request->get('dimension', 'faculty');
+        if (!isset($dimensions[$dimension])) {
+            $dimension = 'faculty';
+        }
+        $field = $dimensions[$dimension]['field'];
+
+        $forms    = VedomostSubmission::formLabels();    // 12 / 12a / 12b
+        $statuses = VedomostSubmission::statusLabels();  // pending..rejected
+
+        // Index bilan bir xil — o'zak guruh × o'zak fan bo'yicha jamlangan qatorlar.
+        $aggregated = $this->merge->aggregate($query->get());
+
+        // pivot[kesim qiymati][shakl][status] = soni
+        $pivot = [];
+        $formStatusTotals = []; // [shakl][status] — pastdagi "Jami" qatori uchun
+        foreach ($aggregated as $v) {
+            $key  = trim((string) ($v->{$field} ?? '')) ?: '— (aniqlanmagan)';
+            $form = $v->form_type ?? VedomostSubmission::FORM_12;
+            $st   = $v->status;
+            if (!isset($forms[$form])) {
+                $form = VedomostSubmission::FORM_12;
+            }
+            $pivot[$key][$form][$st] = ($pivot[$key][$form][$st] ?? 0) + 1;
+            $formStatusTotals[$form][$st] = ($formStatusTotals[$form][$st] ?? 0) + 1;
+        }
+        ksort($pivot, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return view('admin.vedomost-submission.report', compact(
+            'pivot', 'dimensions', 'dimension', 'forms', 'statuses', 'formStatusTotals'
+        ));
+    }
+
     public function export(Request $request)
     {
         $this->checkViewAccess();

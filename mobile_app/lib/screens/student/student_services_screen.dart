@@ -6,6 +6,7 @@ import '../../widgets/clinic_header.dart';
 import 'absence_excuse_list_screen.dart';
 import 'appeals_list_screen.dart';
 import 'clubs_screen.dart';
+import 'english_group_application_screen.dart';
 import 'retake_applications_screen.dart';
 
 class StudentServicesScreen extends StatefulWidget {
@@ -54,6 +55,27 @@ class _StudentServicesScreenState extends State<StudentServicesScreen> {
         onTap: () => Navigator.push(
           context,
           SlideFadePageRoute(builder: (_) => const AppealsListScreen()),
+        ),
+      ),
+      _ServiceItem(
+        icon: Icons.translate_rounded,
+        title: l.pick(
+          uz: 'Ingliz tili guruhi',
+          ru: 'Группа английского языка',
+          en: 'English group',
+        ),
+        subtitle: l.pick(
+          uz: 'O\'tish uchun ariza yuborish',
+          ru: 'Подать заявление на перевод',
+          en: 'Apply to transfer',
+        ),
+        color: const Color(0xFF10B981),
+        bgColor: const Color(0xFFE8FBF4),
+        onTap: () => Navigator.push(
+          context,
+          SlideFadePageRoute(
+            builder: (_) => const EnglishGroupApplicationScreen(),
+          ),
         ),
       ),
       _ServiceItem(

@@ -135,10 +135,6 @@
                                     <input type="text" class="ega-input" value="{{ $student->full_name ?? '-' }}" readonly>
                                 </div>
                                 <div>
-                                    <label class="ega-label">Telefon raqam</label>
-                                    <input type="text" class="ega-input" value="{{ $student->phone ?? '-' }}" readonly>
-                                </div>
-                                <div>
                                     <label class="ega-label">Fakultet</label>
                                     <input type="text" class="ega-input" value="{{ $student->department_name ?? '-' }}" readonly>
                                 </div>
@@ -172,6 +168,10 @@
                                     <label for="certificate_pdf" class="ega-label">Til sertifikati (ixtiyoriy)</label>
                                     <input id="certificate_pdf" type="file" name="certificate_pdf" accept="application/pdf" class="ega-input">
                                     <div class="ega-hint">Faqat PDF, maksimal 2 MB.</div>
+                                </div>
+                                <div class="sm:col-span-2">
+                                    <label class="ega-label" for="phone_number">Telefon raqam</label>
+                                    <input id="phone_number" type="text" name="phone_number" class="ega-input" value="{{ old('phone_number', $student->phone ?? '') }}" placeholder="+998...">
                                 </div>
                             </div>
 

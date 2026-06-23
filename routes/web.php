@@ -217,6 +217,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/reset-to-pending', [\App\Http\Controllers\Admin\AbsenceExcuseController::class, 'resetToPending'])->name('reset-to-pending');
         });
 
+        Route::prefix('english-group-applications')->name('english-group-applications.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'index'])->name('index');
+            Route::post('/{id}/approve', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'approve'])->name('approve');
+            Route::post('/{id}/reject', [\App\Http\Controllers\Admin\EnglishGroupApplicationController::class, 'reject'])->name('reject');
+        });
+
         // YN shakli tuzatish dalolatnomalari (yakuniydan keyin kelgan sababli)
         Route::prefix('yn-form-corrections')->name('yn-form-corrections.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\YnFormCorrectionController::class, 'index'])->name('index');

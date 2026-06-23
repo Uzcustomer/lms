@@ -30,6 +30,15 @@ class InglizGuruhAriza extends Model
         'reviewed_at' => 'datetime',
     ];
 
+    public function getStatusLabelAttribute(): string
+    {
+        return match ($this->status) {
+            'approved' => 'Qabul qilingan',
+            'rejected' => 'Rad etilgan',
+            default => 'Kutilmoqda',
+        };
+    }
+
     public function student()
     {
         return $this->belongsTo(Student::class, 'student_id');

@@ -279,8 +279,9 @@ class VedomostSubmissionController extends Controller
     }
 
     /**
-     * Svodnaya hisobot — tanlangan kesim (fakultet/kurs/kafedra/fan/guruh) bo'yicha
-     * qatorlar, ustunlarda shakl turi (12 / 12a / 12b) × status sanog'i.
+     * Svodnaya hisobot — tanlangan kesimlar (fakultet/kurs/kafedra/fan/guruh)
+     * bo'yicha IERARXIK (bir nechta darajali) qatorlar, ustunlarda shakl turi
+     * (12 / 12a / 12b) × status sanog'i. Har ustun bo'yicha sort qilish mumkin.
      * Joriy filtrlar (query string) hisobga olinadi.
      */
     public function report(Request $request)
@@ -297,11 +298,18 @@ class VedomostSubmissionController extends Controller
             'subject'    => ['label' => 'Fan',      'field' => 'subject_name'],
             'group'      => ['label' => 'Guruh',    'field' => 'group_name'],
         ];
-        $dimension = $request->get('dimension', 'faculty');
-        if (!isset($dimensions[$dimension])) {
-            $dimension = 'faculty';
+
+        // Tanlangan kesimlar — tartibli ro'yxat (dims=department,subject -> Kafedra > Fan).
+        $selectedDims = collect(explode(',', (string) $request->get('dims', 'faculty')))
+            ->map(fn($d) => trim($d))
+            ->filter(fn($d) => isset($dimensions[$d]))
+            ->unique()
+            ->values()
+            ->all();
+        if (empty($selectedDims)) {
+            $selectedDims = ['faculty'];
         }
-        $field = $dimensions[$dimension]['field'];
+        $availableDims = array_values(array_diff(array_keys($dimensions), $selectedDims));
 
         $forms    = VedomostSubmission::formLabels();    // 12 / 12a / 12b
         $statuses = VedomostSubmission::statusLabels();  // pending..rejected
@@ -309,24 +317,123 @@ class VedomostSubmissionController extends Controller
         // Index bilan bir xil — o'zak guruh × o'zak fan bo'yicha jamlangan qatorlar.
         $aggregated = $this->merge->aggregate($query->get());
 
-        // pivot[kesim qiymati][shakl][status] = soni
-        $pivot = [];
-        $formStatusTotals = []; // [shakl][status] — pastdagi "Jami" qatori uchun
+        // Ierarxik daraxt: har daraja uchun kesim maydoni bo'yicha guruhlash.
+        $dimFields = array_map(fn($d) => $dimensions[$d]['field'], $selectedDims);
+        $tree = $this->buildReportTree($aggregated, $dimFields, $forms);
+
+        // Pastdagi umumiy "Jami" qatori uchun — barcha varaqlar bo'yicha.
+        $formStatusTotals = [];
         foreach ($aggregated as $v) {
-            $key  = trim((string) ($v->{$field} ?? '')) ?: '— (aniqlanmagan)';
-            $form = $v->form_type ?? VedomostSubmission::FORM_12;
-            $st   = $v->status;
-            if (!isset($forms[$form])) {
-                $form = VedomostSubmission::FORM_12;
-            }
-            $pivot[$key][$form][$st] = ($pivot[$key][$form][$st] ?? 0) + 1;
-            $formStatusTotals[$form][$st] = ($formStatusTotals[$form][$st] ?? 0) + 1;
+            $form = isset($forms[$v->form_type]) ? $v->form_type : VedomostSubmission::FORM_12;
+            $formStatusTotals[$form][$v->status] = ($formStatusTotals[$form][$v->status] ?? 0) + 1;
         }
-        ksort($pivot, SORT_NATURAL | SORT_FLAG_CASE);
+
+        // Sort: ustun kaliti (label | "{form}|{status}" | "{form}|__total" | __grand) + yo'nalish.
+        $sortCol = $request->get('rsort', 'label');
+        $sortDir = $request->get('rdir') === 'desc' ? 'desc' : 'asc';
+        $this->sortReportNodes($tree, $sortCol, $sortDir);
+
+        // Daraxtni render uchun tekis qatorlarga yoyamiz (depth bilan).
+        $rows = [];
+        $this->flattenReportTree($tree, 0, $rows);
 
         return view('admin.vedomost-submission.report', compact(
-            'pivot', 'dimensions', 'dimension', 'forms', 'statuses', 'formStatusTotals'
+            'rows', 'dimensions', 'selectedDims', 'availableDims',
+            'forms', 'statuses', 'formStatusTotals', 'sortCol', 'sortDir'
         ));
+    }
+
+    /**
+     * Jamlangan qatorlardan ierarxik daraxt quradi. Har tugun o'z avlodlari
+     * yig'indisi bo'lgan metrikani (metrics[shakl][status]) va umumiy sonni saqlaydi.
+     *
+     * @param  array  $dimFields  tartibli kesim maydonlari (qolgan darajalar)
+     */
+    private function buildReportTree(iterable $rows, array $dimFields, array $forms): array
+    {
+        if (empty($dimFields)) {
+            return [];
+        }
+        $field = $dimFields[0];
+        $rest  = array_slice($dimFields, 1);
+
+        $groups = collect($rows)->groupBy(
+            fn($v) => trim((string) ($v->{$field} ?? '')) ?: '— (aniqlanmagan)'
+        );
+
+        $nodes = [];
+        foreach ($groups as $label => $groupRows) {
+            $metrics = [];
+            $total = 0;
+            foreach ($groupRows as $v) {
+                $form = isset($forms[$v->form_type]) ? $v->form_type : VedomostSubmission::FORM_12;
+                $metrics[$form][$v->status] = ($metrics[$form][$v->status] ?? 0) + 1;
+                $total++;
+            }
+            $nodes[] = [
+                'label'    => (string) $label,
+                'metrics'  => $metrics,
+                'total'    => $total,
+                'children' => $this->buildReportTree($groupRows, $rest, $forms),
+            ];
+        }
+
+        return $nodes;
+    }
+
+    /**
+     * Tanlangan ustun bo'yicha har bir darajadagi "aka-uka" tugunlarni saralaydi.
+     */
+    private function sortReportNodes(array &$nodes, string $sortCol, string $sortDir): void
+    {
+        if (empty($nodes)) {
+            return;
+        }
+        $factor = $sortDir === 'desc' ? -1 : 1;
+
+        $metric = function (array $node) use ($sortCol) {
+            if ($sortCol === '__grand') {
+                return $node['total'];
+            }
+            if (str_contains($sortCol, '|')) {
+                [$form, $st] = explode('|', $sortCol, 2);
+                if ($st === '__total') {
+                    return array_sum($node['metrics'][$form] ?? []);
+                }
+                return $node['metrics'][$form][$st] ?? 0;
+            }
+            return 0;
+        };
+
+        usort($nodes, function ($a, $b) use ($sortCol, $factor, $metric) {
+            if ($sortCol === 'label') {
+                return strnatcasecmp($a['label'], $b['label']) * $factor;
+            }
+            $cmp = $metric($a) <=> $metric($b);
+            // Teng bo'lsa — nom bo'yicha barqaror tartib.
+            return ($cmp !== 0 ? $cmp * $factor : strnatcasecmp($a['label'], $b['label']));
+        });
+
+        foreach ($nodes as &$node) {
+            $this->sortReportNodes($node['children'], $sortCol, $sortDir);
+        }
+    }
+
+    /**
+     * Daraxtni depth bilan tekis qatorlar massiviga yoyadi.
+     */
+    private function flattenReportTree(array $nodes, int $depth, array &$out): void
+    {
+        foreach ($nodes as $node) {
+            $out[] = [
+                'label'        => $node['label'],
+                'depth'        => $depth,
+                'metrics'      => $node['metrics'],
+                'total'        => $node['total'],
+                'has_children' => !empty($node['children']),
+            ];
+            $this->flattenReportTree($node['children'], $depth + 1, $out);
+        }
     }
 
     public function export(Request $request)

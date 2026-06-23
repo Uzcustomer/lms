@@ -11,6 +11,8 @@ class TestSubject extends Model
 
     protected $fillable = [
         'name',
+        'faculty_hemis_id',
+        'faculty_name',
         'department_hemis_id',
         'department_name',
         'specialty_hemis_id',
@@ -36,6 +38,11 @@ class TestSubject extends Model
     public function department()
     {
         return $this->belongsTo(Department::class, 'department_hemis_id', 'department_hemis_id');
+    }
+
+    public function faculty()
+    {
+        return $this->belongsTo(Department::class, 'faculty_hemis_id', 'department_hemis_id');
     }
 
     public function specialty()

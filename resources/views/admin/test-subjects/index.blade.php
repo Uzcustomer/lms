@@ -24,9 +24,11 @@
                         <thead class="bg-slate-50 text-slate-600 uppercase text-xs tracking-wide">
                             <tr>
                                 <th class="px-4 py-3 text-left">Fan</th>
-                                <th class="px-4 py-3 text-left">Yo‘nalish</th>
+                                <th class="px-4 py-3 text-left">Fakultet</th>
+                                <th class="px-4 py-3 text-left">Yo'nalish</th>
+                                <th class="px-4 py-3 text-left">Kafedra</th>
                                 <th class="px-4 py-3 text-left">Kurs</th>
-                                <th class="px-4 py-3 text-left">O‘qituvchi</th>
+                                <th class="px-4 py-3 text-left">O'qituvchi</th>
                                 <th class="px-4 py-3 text-center">Guruhlar</th>
                                 <th class="px-4 py-3 text-center">Darslar</th>
                                 <th class="px-4 py-3 text-left">Muddat</th>
@@ -38,9 +40,10 @@
                                 <tr class="hover:bg-slate-50">
                                     <td class="px-4 py-4">
                                         <div class="font-semibold text-slate-900">{{ $subject->name }}</div>
-                                        <div class="text-xs text-slate-500">{{ $subject->department_name ?: 'Bo‘lim tanlanmagan' }}</div>
                                     </td>
+                                    <td class="px-4 py-4 text-slate-700">{{ $subject->faculty_name ?: '—' }}</td>
                                     <td class="px-4 py-4 text-slate-700">{{ $subject->specialty_name ?: '—' }}</td>
+                                    <td class="px-4 py-4 text-slate-700">{{ $subject->department_name ?: '—' }}</td>
                                     <td class="px-4 py-4 text-slate-700">{{ $subject->level_name ?: '—' }}</td>
                                     <td class="px-4 py-4 text-slate-700">{{ $subject->teacher_name ?: '—' }}</td>
                                     <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->groups->count() }}</td>
@@ -53,13 +56,13 @@
                                     <td class="px-4 py-4 text-right">
                                         <a href="{{ route('admin.test-subjects.show', $subject) }}"
                                            class="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 transition">
-                                            Ko‘rish
+                                            Ko'rish
                                         </a>
                                     </td>
                                 </tr>
                             @empty
                                 <tr>
-                                    <td colspan="8" class="px-4 py-10 text-center text-slate-500">
+                                    <td colspan="10" class="px-4 py-10 text-center text-slate-500">
                                         Hozircha test fanlar yaratilmagan.
                                     </td>
                                 </tr>

@@ -19,7 +19,7 @@ class EnglishGroupApplicationController extends Controller
             ->latest()
             ->get();
         $latest = $applications->first();
-        $canSubmit = $latest === null;
+        $canSubmit = $latest === null || $latest->status === 'rejected';
 
         return view('student.english-group-application.create', [
             'student' => $student,
@@ -42,7 +42,7 @@ class EnglishGroupApplicationController extends Controller
         }
 
         $existing = InglizGuruhAriza::where('student_hemis_id', $student->hemis_id)->latest()->first();
-        if ($existing) {
+        if ($existing && $existing->status !== 'rejected') {
             return redirect()
                 ->route('student.english-group-application.create')
                 ->with('success', "Ingliz tili guruhiga o'tish uchun topshirgan arizangiz muvaffaqqiyatli qabul qilindi. Til sertifikati bo'lmagan talabalar ingliz tilida suhbat asosida qabul qilinadi.");

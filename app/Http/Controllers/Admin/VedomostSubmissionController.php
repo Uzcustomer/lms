@@ -278,11 +278,20 @@ class VedomostSubmissionController extends Controller
         ));
     }
 
+    /** Davr ichidagi harakat turlari (audit jurnali action -> yorliq). */
+    private const REPORT_ACTIONS = [
+        'upload'          => 'Topshirildi',
+        'review'          => 'Tekshirishga olindi',
+        'approve'         => 'Tasdiqlandi',
+        'reject'          => 'Rad etildi',
+        'reupload_permit' => 'Qayta ruxsat',
+    ];
+
     /**
      * Svodnaya hisobot — tanlangan kesimlar (fakultet/kurs/kafedra/fan/guruh)
-     * bo'yicha IERARXIK (bir nechta darajali) qatorlar, ustunlarda shakl turi
-     * (12 / 12a / 12b) × status sanog'i. Har ustun bo'yicha sort qilish mumkin.
-     * Joriy filtrlar (query string) hisobga olinadi.
+     * bo'yicha IERARXIK qatorlar. Sana oralig'isiz — shakl (12/12a/12b) × status.
+     * Sana oralig'i berilsa — "Davri boshiga / Davri ichida / Davri oxiriga"
+     * (qoldiq–harakat–qoldiq) ko'rinishi. Har ustun bo'yicha sort qilinadi.
      */
     public function report(Request $request)
     {
@@ -303,53 +312,211 @@ class VedomostSubmissionController extends Controller
         $selectedDims = collect(explode(',', (string) $request->get('dims', 'faculty')))
             ->map(fn($d) => trim($d))
             ->filter(fn($d) => isset($dimensions[$d]))
-            ->unique()
-            ->values()
-            ->all();
+            ->unique()->values()->all();
         if (empty($selectedDims)) {
             $selectedDims = ['faculty'];
         }
         $availableDims = array_values(array_diff(array_keys($dimensions), $selectedDims));
 
-        $forms    = VedomostSubmission::formLabels();    // 12 / 12a / 12b
         $statuses = VedomostSubmission::statusLabels();  // pending..rejected
+        $statusColor = [
+            'pending'   => ['#475569', '#f1f5f9'],
+            'received'  => ['#1d4ed8', '#dbeafe'],
+            'reviewing' => ['#b45309', '#fef3c7'],
+            'approved'  => ['#166534', '#dcfce7'],
+            'rejected'  => ['#b91c1c', '#fee2e2'],
+        ];
 
         // Index bilan bir xil — o'zak guruh × o'zak fan bo'yicha jamlangan qatorlar.
         $aggregated = $this->merge->aggregate($query->get());
 
-        // Ierarxik daraxt: har daraja uchun kesim maydoni bo'yicha guruhlash.
-        $dimFields = array_map(fn($d) => $dimensions[$d]['field'], $selectedDims);
-        $tree = $this->buildReportTree($aggregated, $dimFields, $forms);
+        // Sana oralig'i (ikkalasi ham berilsa — davr rejimi).
+        [$from, $to] = $this->reportDateRange($request);
+        $dateMode = $from && $to;
 
-        // Pastdagi umumiy "Jami" qatori uchun — barcha varaqlar bo'yicha.
-        $formStatusTotals = [];
-        foreach ($aggregated as $v) {
-            $form = isset($forms[$v->form_type]) ? $v->form_type : VedomostSubmission::FORM_12;
-            $formStatusTotals[$form][$v->status] = ($formStatusTotals[$form][$v->status] ?? 0) + 1;
+        // Ustun bo'limlari ($sections) va har varaq uchun ustun hissasi ($contribById).
+        if ($dateMode) {
+            [$sections, $contribById] = $this->reportDateSections($aggregated, $from, $to, $statuses, $statusColor);
+            $showGrand = false;
+        } else {
+            [$sections, $contribById] = $this->reportFormSections($aggregated, $statuses, $statusColor);
+            $showGrand = true;
         }
 
-        // Sort: ustun kaliti (label | "{form}|{status}" | "{form}|__total" | __grand) + yo'nalish.
+        // Ierarxik daraxt + har bir ustun bo'yicha umumiy "Jami" (tfoot).
+        $dimFields = array_map(fn($d) => $dimensions[$d]['field'], $selectedDims);
+        $tree = $this->buildReportTree($aggregated, $dimFields, $contribById);
+
+        $totalMetrics = [];
+        foreach ($contribById as $contrib) {
+            foreach ($contrib as $k => $c) {
+                $totalMetrics[$k] = ($totalMetrics[$k] ?? 0) + $c;
+            }
+        }
+
+        // Sort: label | "{section}|{col}" | "{section}|__total" | __grand
         $sortCol = $request->get('rsort', 'label');
         $sortDir = $request->get('rdir') === 'desc' ? 'desc' : 'asc';
-        $this->sortReportNodes($tree, $sortCol, $sortDir);
+        $sectionKeys = array_map(fn($s) => $s['key'], $sections);
+        $this->sortReportNodes($tree, $sortCol, $sortDir, $sectionKeys);
 
-        // Daraxtni render uchun tekis qatorlarga yoyamiz (depth bilan).
         $rows = [];
         $this->flattenReportTree($tree, 0, $rows);
 
         return view('admin.vedomost-submission.report', compact(
             'rows', 'dimensions', 'selectedDims', 'availableDims',
-            'forms', 'statuses', 'formStatusTotals', 'sortCol', 'sortDir'
+            'sections', 'totalMetrics', 'showGrand', 'sortCol', 'sortDir', 'from', 'to'
         ));
     }
 
+    /** Hisobot sana oralig'i: [Carbon|null start, Carbon|null end]. */
+    private function reportDateRange(Request $request): array
+    {
+        $parse = function ($v) {
+            $v = trim((string) $v);
+            if ($v === '') {
+                return null;
+            }
+            try {
+                return \Carbon\Carbon::parse($v);
+            } catch (\Throwable $e) {
+                return null;
+            }
+        };
+        $from = $parse($request->get('from'));
+        $to   = $parse($request->get('to'));
+
+        return [$from?->startOfDay(), $to?->endOfDay()];
+    }
+
     /**
-     * Jamlangan qatorlardan ierarxik daraxt quradi. Har tugun o'z avlodlari
-     * yig'indisi bo'lgan metrikani (metrics[shakl][status]) va umumiy sonni saqlaydi.
-     *
-     * @param  array  $dimFields  tartibli kesim maydonlari (qolgan darajalar)
+     * Sana oralig'isiz rejim — shakl (12/12a/12b) × status bo'limlari.
+     * @return array{0: array, 1: array}  [$sections, $contribById]
      */
-    private function buildReportTree(iterable $rows, array $dimFields, array $forms): array
+    private function reportFormSections(iterable $aggregated, array $statuses, array $statusColor): array
+    {
+        $forms = VedomostSubmission::formLabels();
+        $formTint = ['12' => '#eef2ff', '12a' => '#ecfeff', '12b' => '#fef2f2'];
+
+        $sections = [];
+        foreach ($forms as $fkey => $flabel) {
+            $cols = [];
+            foreach ($statuses as $st => $slabel) {
+                $cols[] = ['key' => "$fkey|$st", 'label' => $slabel, 'color' => $statusColor[$st] ?? null];
+            }
+            $sections[] = ['key' => $fkey, 'label' => $flabel, 'cols' => $cols, 'tint' => $formTint[$fkey] ?? '#f8fafc'];
+        }
+
+        $contribById = [];
+        foreach ($aggregated as $v) {
+            $form = isset($forms[$v->form_type]) ? $v->form_type : VedomostSubmission::FORM_12;
+            $contribById[$v->id] = ["$form|$v->status" => 1];
+        }
+
+        return [$sections, $contribById];
+    }
+
+    /**
+     * Sana rejimi — "Davri boshiga / Davri ichida / Davri oxiriga" bo'limlari.
+     * Har varaqning holati audit jurnalidan (rep yozuv loglari) tiklanadi.
+     * @return array{0: array, 1: array}  [$sections, $contribById]
+     */
+    private function reportDateSections(iterable $aggregated, \Carbon\Carbon $from, \Carbon\Carbon $to, array $statuses, array $statusColor): array
+    {
+        $aggregated = collect($aggregated);
+        $repIds = $aggregated->pluck('id')->all();
+
+        $logsById = VedomostSubmissionLog::whereIn('vedomost_submission_id', $repIds)
+            ->orderBy('created_at')->orderBy('id')
+            ->get(['vedomost_submission_id', 'action', 'from_status', 'to_status', 'created_at'])
+            ->groupBy('vedomost_submission_id');
+
+        $contribById = [];
+        foreach ($aggregated as $v) {
+            $logs = $logsById->get($v->id) ?? collect();
+            $initial = $logs->isNotEmpty() ? ($logs->first()->from_status ?: VedomostSubmission::STATUS_PENDING) : VedomostSubmission::STATUS_PENDING;
+            $created = $v->created_at ? \Carbon\Carbon::parse($v->created_at) : null;
+
+            $contrib = [];
+
+            // Davri boshiga — davr boshlanishidan oldingi holat (varaq o'shanda mavjud bo'lsa).
+            if ($created === null || $created < $from) {
+                $st = $this->statusAt($logs, $from, false, $initial);
+                $contrib["open|$st"] = ($contrib["open|$st"] ?? 0) + 1;
+            }
+
+            // Davri ichida — oraliqda qilingan harakatlar (loglar).
+            foreach ($logs as $l) {
+                $at = \Carbon\Carbon::parse($l->created_at);
+                if ($at >= $from && $at <= $to && isset(self::REPORT_ACTIONS[$l->action])) {
+                    $key = "period|{$l->action}";
+                    $contrib[$key] = ($contrib[$key] ?? 0) + 1;
+                }
+            }
+
+            // Davri oxiriga — davr oxiridagi holat (varaq o'shanda mavjud bo'lsa).
+            if ($created === null || $created <= $to) {
+                $st = $this->statusAt($logs, $to, true, $initial);
+                $contrib["close|$st"] = ($contrib["close|$st"] ?? 0) + 1;
+            }
+
+            $contribById[$v->id] = $contrib;
+        }
+
+        $statusCols = function (string $prefix) use ($statuses, $statusColor) {
+            $cols = [];
+            foreach ($statuses as $st => $slabel) {
+                $cols[] = ['key' => "$prefix|$st", 'label' => $slabel, 'color' => $statusColor[$st] ?? null];
+            }
+            return $cols;
+        };
+        $actionCols = [];
+        $actionColor = [
+            'upload' => ['#1d4ed8', '#dbeafe'], 'review' => ['#b45309', '#fef3c7'],
+            'approve' => ['#166534', '#dcfce7'], 'reject' => ['#b91c1c', '#fee2e2'],
+            'reupload_permit' => ['#475569', '#f1f5f9'],
+        ];
+        foreach (self::REPORT_ACTIONS as $act => $label) {
+            $actionCols[] = ['key' => "period|$act", 'label' => $label, 'color' => $actionColor[$act] ?? null];
+        }
+
+        $sections = [
+            ['key' => 'open',   'label' => 'Davri boshiga',            'cols' => $statusCols('open'),  'tint' => '#eef2ff'],
+            ['key' => 'period', 'label' => 'Davri ichida (harakatlar)', 'cols' => $actionCols,          'tint' => '#ecfeff'],
+            ['key' => 'close',  'label' => 'Davri oxiriga',            'cols' => $statusCols('close'), 'tint' => '#fef2f2'],
+        ];
+
+        return [$sections, $contribById];
+    }
+
+    /**
+     * Saralangan loglar (created_at asc) bo'yicha berilgan kesim vaqtidagi status.
+     * @param  bool  $inclusive  cutoff vaqtning o'zi kiritiladimi (<=) yoki yo'q (<).
+     */
+    private function statusAt(Collection $logs, \Carbon\Carbon $cutoff, bool $inclusive, string $initial): string
+    {
+        $status = $initial;
+        foreach ($logs as $l) {
+            $at = \Carbon\Carbon::parse($l->created_at);
+            $within = $inclusive ? $at <= $cutoff : $at < $cutoff;
+            if (!$within) {
+                break;
+            }
+            if ($l->to_status) {
+                $status = $l->to_status;
+            }
+        }
+        return $status;
+    }
+
+    /**
+     * Jamlangan qatorlardan ierarxik daraxt quradi. Har tugun avlodlari
+     * hissasi yig'indisi bo'lgan metrikani (metrics[ustun_kaliti] => son) saqlaydi.
+     *
+     * @param  array  $dimFields    tartibli kesim maydonlari (qolgan darajalar)
+     * @param  array  $contribById  vedomost id => [ustun_kaliti => son]
+     */
+    private function buildReportTree(iterable $rows, array $dimFields, array $contribById): array
     {
         if (empty($dimFields)) {
             return [];
@@ -364,17 +531,15 @@ class VedomostSubmissionController extends Controller
         $nodes = [];
         foreach ($groups as $label => $groupRows) {
             $metrics = [];
-            $total = 0;
             foreach ($groupRows as $v) {
-                $form = isset($forms[$v->form_type]) ? $v->form_type : VedomostSubmission::FORM_12;
-                $metrics[$form][$v->status] = ($metrics[$form][$v->status] ?? 0) + 1;
-                $total++;
+                foreach (($contribById[$v->id] ?? []) as $k => $c) {
+                    $metrics[$k] = ($metrics[$k] ?? 0) + $c;
+                }
             }
             $nodes[] = [
                 'label'    => (string) $label,
                 'metrics'  => $metrics,
-                'total'    => $total,
-                'children' => $this->buildReportTree($groupRows, $rest, $forms),
+                'children' => $this->buildReportTree($groupRows, $rest, $contribById),
             ];
         }
 
@@ -384,23 +549,29 @@ class VedomostSubmissionController extends Controller
     /**
      * Tanlangan ustun bo'yicha har bir darajadagi "aka-uka" tugunlarni saralaydi.
      */
-    private function sortReportNodes(array &$nodes, string $sortCol, string $sortDir): void
+    private function sortReportNodes(array &$nodes, string $sortCol, string $sortDir, array $sectionKeys): void
     {
         if (empty($nodes)) {
             return;
         }
         $factor = $sortDir === 'desc' ? -1 : 1;
 
-        $metric = function (array $node) use ($sortCol) {
+        $metric = function (array $node) use ($sortCol, $sectionKeys) {
             if ($sortCol === '__grand') {
-                return $node['total'];
+                return array_sum($node['metrics']);
             }
             if (str_contains($sortCol, '|')) {
-                [$form, $st] = explode('|', $sortCol, 2);
-                if ($st === '__total') {
-                    return array_sum($node['metrics'][$form] ?? []);
+                [$sec, $col] = explode('|', $sortCol, 2);
+                if ($col === '__total') {
+                    $sum = 0;
+                    foreach ($node['metrics'] as $k => $c) {
+                        if (str_starts_with($k, "$sec|")) {
+                            $sum += $c;
+                        }
+                    }
+                    return $sum;
                 }
-                return $node['metrics'][$form][$st] ?? 0;
+                return $node['metrics'][$sortCol] ?? 0;
             }
             return 0;
         };
@@ -410,12 +581,11 @@ class VedomostSubmissionController extends Controller
                 return strnatcasecmp($a['label'], $b['label']) * $factor;
             }
             $cmp = $metric($a) <=> $metric($b);
-            // Teng bo'lsa — nom bo'yicha barqaror tartib.
             return ($cmp !== 0 ? $cmp * $factor : strnatcasecmp($a['label'], $b['label']));
         });
 
         foreach ($nodes as &$node) {
-            $this->sortReportNodes($node['children'], $sortCol, $sortDir);
+            $this->sortReportNodes($node['children'], $sortCol, $sortDir, $sectionKeys);
         }
     }
 
@@ -429,7 +599,6 @@ class VedomostSubmissionController extends Controller
                 'label'        => $node['label'],
                 'depth'        => $depth,
                 'metrics'      => $node['metrics'],
-                'total'        => $node['total'],
                 'has_children' => !empty($node['children']),
             ];
             $this->flattenReportTree($node['children'], $depth + 1, $out);

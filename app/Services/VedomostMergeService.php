@@ -153,6 +153,7 @@ class VedomostMergeService
         $out = (object) [
             'id' => $rep->id,
             'ids' => $group->pluck('id')->all(),
+            'created_at' => $rep->created_at ?? null,
             'merge_count' => $group->count(),
             'subgroup_names' => $subgroups->all(),
             'subgroup_label' => $subgroups->implode(', '),

@@ -215,6 +215,14 @@
                                     <div class="ega-label">Til sertifikati</div>
                                     <div class="text-sm text-slate-700">{{ $latest->certificate_pdf_path ? 'Yuklangan' : 'Yuklanmagan' }}</div>
                                 </div>
+                                @if($latest->status === 'rejected' && $latest->admin_note)
+                                    <div class="sm:col-span-2">
+                                        <div class="ega-label">Rad etish sababi</div>
+                                        <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                                            {{ $latest->admin_note }}
+                                        </div>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     @endif

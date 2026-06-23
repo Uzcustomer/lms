@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\InglizGuruhAriza;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class EnglishGroupApplicationController extends Controller
 {
@@ -83,5 +84,24 @@ class EnglishGroupApplicationController extends Controller
 
         return redirect()->route('admin.english-group-applications.index', request()->query())
             ->with('success', 'Ariza rad etildi.');
+    }
+
+    public function destroy(int $id)
+    {
+        $application = InglizGuruhAriza::findOrFail($id);
+
+        if ($application->certificate_pdf_path) {
+            Storage::delete($application->certificate_pdf_path);
+
+            $dir = dirname($application->certificate_pdf_path);
+            if ($dir && $dir !== '.') {
+                Storage::deleteDirectory($dir);
+            }
+        }
+
+        $application->delete();
+
+        return redirect()->route('admin.english-group-applications.index', request()->query())
+            ->with('success', "Ariza va unga biriktirilgan fayl o'chirildi.");
     }
 }

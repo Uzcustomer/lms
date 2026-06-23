@@ -47,6 +47,18 @@
                 <span class="text-[11px] text-gray-400 mt-1 text-center">{{ __("Akademik qarzdorliklar uchun") }}</span>
             </a>
 
+            <a href="{{ route('student.english-group-application.create') }}"
+               class="flex flex-col items-center bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-[0.98] transition-all duration-150"
+               style="padding:16px 10px; box-shadow: 0 4px 14px rgba(16, 185, 129, 0.25);">
+                <div class="w-14 h-14 rounded-2xl bg-emerald-100 flex items-center justify-center mb-3">
+                    <svg class="w-7 h-7 text-emerald-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+                    </svg>
+                </div>
+                <span class="text-sm font-bold text-gray-800 text-center leading-tight">Ingliz tili guruhi</span>
+                <span class="text-[11px] text-gray-400 mt-1 text-center">O'tish uchun ariza yuborish</span>
+            </a>
+
             {{-- 4. Pasport ma'lumotlari (faqat bitiruvchilar uchun) --}}
             @if(Auth::guard('student')->user()->is_graduate)
             <a href="{{ route('student.passport.index') }}"

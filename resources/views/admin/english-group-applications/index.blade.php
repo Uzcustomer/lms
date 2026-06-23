@@ -60,7 +60,7 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Daraja</label>
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Til darajasi</label>
                         <select name="english_level" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($englishLevels as $value => $label)
@@ -111,7 +111,7 @@
                                     </td>
                                     <td class="px-4 py-4 align-top">
                                         @if($application->certificate_pdf_path)
-                                            <a href="{{ asset('storage/' . $application->certificate_pdf_path) }}"
+                                            <a href="{{ route('admin.english-group-applications.certificate', $application->id) }}"
                                                target="_blank"
                                                rel="noopener"
                                                class="text-sky-600 hover:text-sky-800 underline text-sm font-medium">
@@ -128,6 +128,9 @@
                                             <span class="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-100 text-rose-700">Rad etilgan</span>
                                         @else
                                             <span class="inline-flex px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700">Kutilmoqda</span>
+                                        @endif
+                                        @if($application->rejection_reason_label)
+                                            <div class="mt-2 text-xs text-rose-600">{{ $application->rejection_reason_label }}</div>
                                         @endif
                                         @if($application->admin_note)
                                             <div class="mt-2 text-xs text-rose-600">{{ $application->admin_note }}</div>
@@ -184,10 +187,13 @@
                                                     <form method="POST" action="{{ route('admin.english-group-applications.reject', $application->id) }}" class="p-5">
                                                         @csrf
                                                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-2">Rad etish sababi</label>
+                                                        <label class="flex items-center gap-2 mb-3 text-sm text-slate-700">
+                                                            <input type="checkbox" name="rejection_reason_code" value="interview_failed" class="rounded border-slate-300 text-rose-600 focus:ring-rose-500">
+                                                            <span>Suhbatdan o'ta olmadi</span>
+                                                        </label>
                                                         <textarea name="admin_note"
-                                                                  required
                                                                   rows="4"
-                                                                  placeholder="Izoh yozing..."
+                                                                  placeholder="Ixtiyoriy izoh..."
                                                                   class="w-full rounded-xl border-slate-300 text-sm focus:border-rose-500 focus:ring-rose-500">{{ old('admin_note') }}</textarea>
                                                         <div class="mt-4 flex items-center justify-end gap-2">
                                                             <button type="button"

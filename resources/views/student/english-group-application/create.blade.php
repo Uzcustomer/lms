@@ -103,6 +103,17 @@
             border: none;
             cursor: pointer;
         }
+        .ega-input-error {
+            border-color: #ef4444 !important;
+            background: #fef2f2 !important;
+            box-shadow: 0 0 0 4px rgba(239, 68, 68, 0.12) !important;
+        }
+        .ega-error-text {
+            margin-top: 4px;
+            font-size: 11px;
+            color: #dc2626;
+            font-weight: 600;
+        }
     </style>
 
     <div class="px-3 py-4 sm:py-6">
@@ -156,13 +167,15 @@
                                 </div>
                                 <div>
                                     <label for="english_level" class="ega-label">Ingliz tilini bilish darajasi</label>
-                                    <select id="english_level" name="english_level" class="ega-input">
+                                    <select id="english_level" name="english_level" required class="ega-input {{ $errors->has('english_level') ? 'ega-input-error' : '' }}">
                                         <option value="">Tanlanmagan</option>
                                         @foreach($englishLevels as $value => $label)
                                             <option value="{{ $value }}" @selected(old('english_level') === $value)>{{ $label }}</option>
                                         @endforeach
                                     </select>
-                                    <div class="ega-hint">Ixtiyoriy maydon.</div>
+                                    @error('english_level')
+                                        <div class="ega-error-text">{{ $message }}</div>
+                                    @enderror
                                 </div>
                                 <div>
                                     <label for="certificate_pdf" class="ega-label">Til sertifikati (ixtiyoriy)</label>
@@ -185,7 +198,7 @@
                                 <div>
                                     <h3 class="text-sm font-bold text-slate-800">Ariza holati</h3>
                                     <p class="mt-1 text-sm text-slate-600">
-                                        Ingliz tili guruhiga o'tish uchun arizangiz qabul qilingan. Quyida joriy holati ko'rinadi.
+                                        Ingliz tili guruhiga o'tish uchun arizangiz bo'yicha joriy holat quyida ko'rinadi.
                                     </p>
                                 </div>
                                 <span class="inline-flex rounded-full px-3 py-1 text-xs font-semibold ega-status-{{ $latest->status }}">
@@ -213,8 +226,24 @@
                                 </div>
                                 <div>
                                     <div class="ega-label">Til sertifikati</div>
-                                    <div class="text-sm text-slate-700">{{ $latest->certificate_pdf_path ? 'Yuklangan' : 'Yuklanmagan' }}</div>
+                                    <div class="text-sm text-slate-700">
+                                        @if($latest->certificate_pdf_path)
+                                            <a href="{{ route('student.english-group-application.certificate', $latest->id) }}" target="_blank" rel="noopener" class="text-sky-600 hover:text-sky-800 underline font-medium">
+                                                Sertifikatni ochish
+                                            </a>
+                                        @else
+                                            Yuklanmagan
+                                        @endif
+                                    </div>
                                 </div>
+                                @if($latest->status === 'rejected' && $latest->rejection_reason_label)
+                                    <div class="sm:col-span-2">
+                                        <div class="ega-label">Rad etish sababi</div>
+                                        <div class="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
+                                            {{ $latest->rejection_reason_label }}
+                                        </div>
+                                    </div>
+                                @endif
                                 @if($latest->status === 'rejected' && $latest->admin_note)
                                     <div class="sm:col-span-2">
                                         <div class="ega-label">Rad etish sababi</div>
@@ -224,6 +253,14 @@
                                     </div>
                                 @endif
                             </div>
+                            @if($canResubmit)
+                                <div class="mt-4">
+                                    <a href="{{ route('student.english-group-application.create', ['resubmit' => 1]) }}"
+                                       class="inline-flex items-center rounded-xl bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 transition">
+                                        Qayta ariza topshirish
+                                    </a>
+                                </div>
+                            @endif
                         </div>
                     @endif
                 </div>

@@ -22,12 +22,12 @@
 
             <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-4">
                 <a href="{{ route('admin.english-group-applications.index') }}"
-                   class="block rounded-xl border-2 p-4 transition hover:shadow-md {{ !request('status') ? 'border-sky-500 bg-sky-50' : 'border-sky-200 bg-white hover:border-sky-300' }}">
+                   class="block rounded-xl border-2 p-4 transition hover:shadow-md {{ request('status') === 'all' ? 'border-sky-500 bg-sky-50' : 'border-sky-200 bg-white hover:border-sky-300' }}">
                     <div class="text-xs uppercase font-semibold text-sky-600">Jami</div>
                     <div class="mt-2 text-3xl font-bold text-slate-800">{{ $stats['total'] }}</div>
                 </a>
                 <a href="{{ route('admin.english-group-applications.index', ['status' => 'pending']) }}"
-                   class="block rounded-xl border-2 p-4 transition hover:shadow-md {{ request('status') === 'pending' ? 'border-amber-500 bg-amber-50' : 'border-amber-200 bg-white hover:border-amber-300' }}">
+                   class="block rounded-xl border-2 p-4 transition hover:shadow-md {{ request('status', 'pending') === 'pending' ? 'border-amber-500 bg-amber-50' : 'border-amber-200 bg-white hover:border-amber-300' }}">
                     <div class="text-xs uppercase font-semibold text-amber-600">Kutilmoqda</div>
                     <div class="mt-2 text-3xl font-bold text-slate-800">{{ $stats['pending'] }}</div>
                 </a>
@@ -53,8 +53,8 @@
                     <div>
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Holat</label>
                         <select name="status" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
-                            <option value="">Barchasi</option>
-                            <option value="pending" @selected(request('status') === 'pending')>Kutilmoqda</option>
+                            <option value="all" @selected(request('status') === 'all')>Barchasi</option>
+                            <option value="pending" @selected(request('status', 'pending') === 'pending')>Kutilmoqda</option>
                             <option value="approved" @selected(request('status') === 'approved')>Qabul qilingan</option>
                             <option value="rejected" @selected(request('status') === 'rejected')>Rad etilgan</option>
                         </select>
@@ -70,7 +70,7 @@
                     </div>
                     <div class="md:col-span-4 flex flex-wrap gap-2">
                         <button type="submit" class="px-4 py-2 rounded-xl bg-sky-600 text-white font-semibold hover:bg-sky-700 transition">Filtrlash</button>
-                        <a href="{{ route('admin.english-group-applications.index') }}" class="px-4 py-2 rounded-xl bg-slate-200 text-slate-700 font-semibold hover:bg-slate-300 transition">Tozalash</a>
+                        <a href="{{ route('admin.english-group-applications.index', ['status' => 'pending']) }}" class="px-4 py-2 rounded-xl bg-slate-200 text-slate-700 font-semibold hover:bg-slate-300 transition">Tozalash</a>
                     </div>
                 </form>
             </div>
@@ -164,8 +164,8 @@
                                                 @method('DELETE')
                                                 <button type="submit"
                                                         title="O'chirish"
-                                                        class="inline-flex items-center justify-center w-9 h-9 rounded-lg text-white transition"
-                                                        style="background: #0f172a;">
+                                                        class="inline-flex items-center justify-center w-9 h-9 rounded-lg transition"
+                                                        style="background: transparent; color: #dc2626;">
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6M9 7V4a1 1 0 011-1h4a1 1 0 011 1v3M4 7h16"></path>
                                                     </svg>

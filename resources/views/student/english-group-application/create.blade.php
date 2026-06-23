@@ -175,7 +175,7 @@
                                 </div>
                             </div>
 
-                            <div class="mt-[5px] flex justify-end">
+                            <div class="flex justify-end" style="margin-top: 5px;">
                                 <button type="submit" class="ega-btn">Arizani yuborish</button>
                             </div>
                         </form>

@@ -66,10 +66,17 @@ class EnglishGroupApplicationController extends Controller
 
     public function reject(Request $request, int $id)
     {
+        $data = $request->validate([
+            'admin_note' => 'required|string|max:1000',
+        ], [
+            'admin_note.required' => 'Rad etish uchun izoh kiritilishi shart.',
+            'admin_note.max' => 'Izoh juda uzun.',
+        ]);
+
         $application = InglizGuruhAriza::findOrFail($id);
         $application->update([
             'status' => 'rejected',
-            'admin_note' => $request->input('admin_note'),
+            'admin_note' => $data['admin_note'],
             'reviewed_by' => Auth::id(),
             'reviewed_at' => now(),
         ]);

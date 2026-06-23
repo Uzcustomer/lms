@@ -13,6 +13,7 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
 use App\Http\Controllers\Api\V1\ChatApiController;
 use App\Http\Controllers\Api\V1\ClubApiController;
+use App\Http\Controllers\Api\V1\EnglishGroupApplicationApiController;
 use App\Http\Controllers\Api\V1\ExamAppealApiController;
 use App\Http\Controllers\Api\V1\RetakeApplicationApiController;
 use App\Http\Controllers\Api\V1\StudentApiController;
@@ -172,6 +173,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/appeals/{id}', [ExamAppealApiController::class, 'show']);
             Route::post('/appeals/{id}/comment', [ExamAppealApiController::class, 'addComment']);
             Route::get('/appeals/{id}/download', [ExamAppealApiController::class, 'download']);
+
+            // English group application
+            Route::get('/english-group-application', [EnglishGroupApplicationApiController::class, 'index']);
+            Route::post('/english-group-application', [EnglishGroupApplicationApiController::class, 'store']);
+            Route::get('/english-group-application/{id}/certificate', [EnglishGroupApplicationApiController::class, 'certificate']);
         });
 
         // ── Chat endpoints ───────────────────────────────

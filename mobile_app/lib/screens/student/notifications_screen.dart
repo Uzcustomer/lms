@@ -307,6 +307,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return ClinicTheme.green;
       case 'excuse':
       case 'appeal':
+      case 'english_group_application':
         return const Color(0xFF6D28D9);
       case 'warning':
         return const Color(0xFFBE123C);
@@ -323,6 +324,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return Icons.grade_outlined;
       case 'excuse':
       case 'appeal':
+      case 'english_group_application':
         return Icons.assignment_outlined;
       case 'warning':
         return Icons.warning_amber_rounded;

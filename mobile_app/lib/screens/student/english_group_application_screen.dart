@@ -376,7 +376,10 @@ class _EnglishGroupApplicationScreenState
               style: ElevatedButton.styleFrom(
                 backgroundColor: ClinicTheme.teal,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 20,
+                  vertical: 18,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),

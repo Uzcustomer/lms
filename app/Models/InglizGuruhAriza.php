@@ -12,6 +12,7 @@ class InglizGuruhAriza extends Model
         'student_id',
         'student_hemis_id',
         'full_name',
+        'phone_number',
         'faculty_name',
         'specialty_name',
         'course_name',

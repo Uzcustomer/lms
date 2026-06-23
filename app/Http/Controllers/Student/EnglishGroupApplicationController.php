@@ -18,10 +18,14 @@ class EnglishGroupApplicationController extends Controller
         $applications = InglizGuruhAriza::where('student_hemis_id', $student->hemis_id)
             ->latest()
             ->get();
+        $latest = $applications->first();
+        $canSubmit = $latest === null;
 
         return view('student.english-group-application.create', [
             'student' => $student,
             'applications' => $applications,
+            'latest' => $latest,
+            'canSubmit' => $canSubmit,
             'englishLevels' => [
                 'boshlangich' => "Boshlang'ich",
                 'orta' => "O'rta",
@@ -37,6 +41,13 @@ class EnglishGroupApplicationController extends Controller
             abort(401);
         }
 
+        $existing = InglizGuruhAriza::where('student_hemis_id', $student->hemis_id)->latest()->first();
+        if ($existing) {
+            return redirect()
+                ->route('student.english-group-application.create')
+                ->with('success', "Ingliz tili guruhiga o'tish uchun topshirgan arizangiz muvaffaqqiyatli qabul qilindi. Til sertifikati bo'lmagan talabalar ingliz tilida suhbat asosida qabul qilinadi.");
+        }
+
         $data = $request->validate([
             'english_level' => 'nullable|in:boshlangich,orta,mukammal',
             'certificate_pdf' => 'nullable|file|mimes:pdf|max:2048',
@@ -50,6 +61,7 @@ class EnglishGroupApplicationController extends Controller
             'student_id' => $student->id,
             'student_hemis_id' => $student->hemis_id,
             'full_name' => $student->full_name,
+            'phone_number' => $student->phone,
             'faculty_name' => $student->department_name,
             'specialty_name' => $student->specialty_name,
             'course_name' => $student->level_name,
@@ -73,6 +85,6 @@ class EnglishGroupApplicationController extends Controller
 
         return redirect()
             ->route('student.english-group-application.create')
-            ->with('success', "Arizangiz muvaffaqiyatli yuborildi.");
+            ->with('success', "Ingliz tili guruhiga o'tish uchun topshirgan arizangiz muvaffaqqiyatli qabul qilindi. Til sertifikati bo'lmagan talabalar ingliz tilida suhbat asosida qabul qilinadi.");
     }
 }

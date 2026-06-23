@@ -12,7 +12,7 @@
         }
         .ega-input {
             width: 100%;
-            padding: 10px 12px;
+            padding: 8px;
             font-size: 14px;
             background: #fff;
             border: 1.5px solid #dbe4f0;
@@ -129,7 +129,7 @@
                     @if($canSubmit)
                         <form method="POST" enctype="multipart/form-data" action="{{ route('student.english-group-application.store') }}">
                             @csrf
-                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div class="grid grid-cols-1 sm:grid-cols-2 gap-[5px]">
                                 <div class="sm:col-span-2">
                                     <label class="ega-label">F.I.SH</label>
                                     <input type="text" class="ega-input" value="{{ $student->full_name ?? '-' }}" readonly>
@@ -175,7 +175,7 @@
                                 </div>
                             </div>
 
-                            <div class="mt-5 flex justify-end">
+                            <div class="mt-[5px] flex justify-end">
                                 <button type="submit" class="ega-btn">Arizani yuborish</button>
                             </div>
                         </form>

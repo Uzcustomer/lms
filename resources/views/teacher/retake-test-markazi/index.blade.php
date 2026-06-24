@@ -5,6 +5,8 @@
         </h2>
     </x-slot>
 
+    @include('partials._journal_table_styles')
+
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
         @if(session('success'))
             <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800">{{ session('success') }}</div>
@@ -20,6 +22,14 @@
                 {{ __("Testga yuborilgan talabalar") }}
             </a>
         </div>
+
+        @php
+            $atypeBadge = [
+                'oske' => ['label' => 'OSKE', 'cls' => 'badge-blue'],
+                'test' => ['label' => 'TEST', 'cls' => 'badge-green'],
+                'oske_test' => ['label' => 'OSKE + TEST', 'cls' => 'badge-purple'],
+            ];
+        @endphp
 
         @if($activeTab === 'groups')
             <form method="POST" action="{{ route('admin.retake-test-markazi.generate-yn-oldi-word') }}" id="retake-yn-word-form">
@@ -40,58 +50,47 @@
                             </button>
                         </div>
                         <div class="overflow-x-auto">
-                            <table class="min-w-full divide-y divide-gray-100">
-                                <thead class="bg-gray-50">
+                            <table class="journal-table">
+                                <thead>
                                 <tr>
-                                    <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">
+                                    <th class="th-num" onclick="event.stopPropagation();">
                                         <input type="checkbox" id="select-all-retake-yn" class="rounded border-gray-300">
                                     </th>
-                                    <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Guruh") }}</th>
-                                    <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fan") }}</th>
-                                    <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("O'qituvchi") }}</th>
-                                    <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Tur") }}</th>
-                                    <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("OSKE / TEST sanasi") }}</th>
-                                    <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase">{{ __("Talabalar") }}</th>
-                                    <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Yuborilgan") }}</th>
+                                    <th>{{ __("Guruh") }}</th>
+                                    <th>{{ __("Fan") }}</th>
+                                    <th>{{ __("O'qituvchi") }}</th>
+                                    <th>{{ __("Tur") }}</th>
+                                    <th>{{ __("OSKE / TEST sanasi") }}</th>
+                                    <th style="text-align:center;">{{ __("Talabalar") }}</th>
+                                    <th>{{ __("Yuborilgan") }}</th>
                                     <th></th>
                                 </tr>
                                 </thead>
-                                <tbody class="bg-white divide-y divide-gray-100">
+                                <tbody>
                                 @foreach($groups as $g)
-                                    @php
-                                        $atypeLabels = [
-                                            'oske' => 'OSKE',
-                                            'test' => 'TEST',
-                                            'oske_test' => 'OSKE + TEST',
-                                        ];
-                                    @endphp
-                                    <tr>
-                                        <td class="px-3 py-2.5 text-sm text-gray-700">
+                                    <tr onclick="window.location='{{ route('admin.retake-test-markazi.show', $g->id) }}'">
+                                        <td class="td-num" onclick="event.stopPropagation();">
                                             <input type="checkbox" name="group_ids[]" value="{{ $g->id }}" class="retake-yn-group-checkbox rounded border-gray-300">
                                         </td>
-                                        <td class="px-3 py-2.5 text-sm text-gray-900 font-medium">{{ $g->name }}</td>
-                                        <td class="px-3 py-2.5 text-sm text-gray-700">
-                                            {{ $g->subject_name }}
-                                            <span class="block text-[11px] text-gray-500">{{ $g->semester_name }}</span>
+                                        <td><span class="badge badge-indigo">{{ $g->name }}</span></td>
+                                        <td>
+                                            <span class="text-cell text-subject">{{ $g->subject_name }}</span>
+                                            <span class="text-cell" style="color:#64748b;font-size:11px;">{{ $g->semester_name }}</span>
                                         </td>
-                                        <td class="px-3 py-2.5 text-sm text-gray-700">{{ $g->teacher_name ?? '—' }}</td>
-                                        <td class="px-3 py-2.5 text-sm text-gray-700">
-                                            <span class="inline-flex px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-100 text-blue-800">
-                                                {{ $atypeLabels[$g->assessment_type] ?? '—' }}
-                                            </span>
+                                        <td><span class="text-cell text-emerald">{{ $g->teacher_name ?? '—' }}</span></td>
+                                        <td>
+                                            @php $b = $atypeBadge[$g->assessment_type] ?? ['label' => '—', 'cls' => 'badge-gray']; @endphp
+                                            <span class="badge {{ $b['cls'] }}">{{ $b['label'] }}</span>
                                         </td>
-                                        <td class="px-3 py-2.5 text-xs text-gray-700">
-                                            @if($g->oske_date)OSKE: {{ $g->oske_date->format('Y-m-d') }}@endif
-                                            @if($g->oske_date && $g->test_date)<br>@endif
-                                            @if($g->test_date)TEST: {{ $g->test_date->format('Y-m-d') }}@endif
+                                        <td class="text-xs text-gray-700">
+                                            @if($g->oske_date)<span class="badge badge-violet">OSKE: {{ $g->oske_date->format('Y-m-d') }}</span>@endif
+                                            @if($g->test_date)<span class="badge badge-violet">TEST: {{ $g->test_date->format('Y-m-d') }}</span>@endif
+                                            @if(!$g->oske_date && !$g->test_date)—@endif
                                         </td>
-                                        <td class="px-3 py-2.5 text-sm text-gray-700 text-right">{{ $g->students_count }}</td>
-                                        <td class="px-3 py-2.5 text-xs text-gray-500">
-                                            {{ $g->sent_to_test_markazi_at?->format('Y-m-d H:i') }}
-                                        </td>
-                                        <td class="px-3 py-2.5 text-right">
-                                            <a href="{{ route('admin.retake-test-markazi.show', $g->id) }}"
-                                               class="text-xs text-blue-600 hover:underline">{{ __("Ochish") }}</a>
+                                        <td style="text-align:center;"><span class="badge badge-blue">{{ $g->students_count }}</span></td>
+                                        <td class="text-xs text-gray-500">{{ $g->sent_to_test_markazi_at?->format('Y-m-d H:i') }}</td>
+                                        <td style="text-align:right;" onclick="event.stopPropagation();">
+                                            <a href="{{ route('admin.retake-test-markazi.show', $g->id) }}" class="journal-row-link">{{ __("Ochish") }}</a>
                                         </td>
                                     </tr>
                                 @endforeach
@@ -133,48 +132,45 @@
                     </div>
                 @else
                     <div class="overflow-x-auto">
-                        <table class="min-w-full divide-y divide-gray-100">
-                            <thead class="bg-gray-50">
+                        <table class="journal-table">
+                            <thead>
                             <tr>
-                                <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">#</th>
-                                <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("F.I.Sh") }}</th>
-                                <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Kurs") }}</th>
-                                <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Guruh") }}</th>
-                                <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fan") }}</th>
-                                <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Semester") }}</th>
-                                <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase">JN</th>
-                                <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase">MT</th>
-                                <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Yuborilgan") }}</th>
+                                <th class="th-num">#</th>
+                                <th>{{ __("F.I.Sh") }}</th>
+                                <th>{{ __("Kurs") }}</th>
+                                <th>{{ __("Guruh") }}</th>
+                                <th>{{ __("Fan") }}</th>
+                                <th>{{ __("Semestr") }}</th>
+                                <th style="text-align:center;">JN</th>
+                                <th style="text-align:center;">MT</th>
+                                <th>{{ __("Yuborilgan") }}</th>
                             </tr>
                             </thead>
-                            <tbody class="bg-white divide-y divide-gray-100">
+                            <tbody>
                             @foreach($sentApplications as $app)
                                 @php
                                     $student = $app->group?->student;
                                     $retakeGroup = $app->retakeGroup;
                                     $mustaqil = $mustaqilMap[$app->id] ?? null;
+                                    $rgId = $app->retake_group_id ?? $retakeGroup?->id;
                                 @endphp
-                                <tr>
-                                    <td class="px-3 py-2.5 text-sm text-gray-600">{{ ($sentApplications->currentPage() - 1) * $sentApplications->perPage() + $loop->iteration }}</td>
-                                    <td class="px-3 py-2.5 text-sm text-gray-900 font-semibold">
-                                        {{ $student?->full_name ?? '—' }}
-                                        <span class="block text-[11px] text-gray-500">{{ $app->student_hemis_id }}</span>
+                                <tr @if($rgId) onclick="window.location='{{ route('admin.retake-test-markazi.show', $rgId) }}'" @endif>
+                                    <td class="td-num">{{ ($sentApplications->currentPage() - 1) * $sentApplications->perPage() + $loop->iteration }}</td>
+                                    <td>
+                                        <span class="text-cell text-subject">{{ $student?->full_name ?? '—' }}</span>
+                                        <span class="text-cell" style="color:#64748b;font-size:11px;">{{ $app->student_hemis_id }}</span>
                                     </td>
-                                    <td class="px-3 py-2.5 text-sm text-gray-700">{{ $student?->level_name ?? '—' }}</td>
-                                    <td class="px-3 py-2.5 text-sm text-gray-700">{{ $student?->group_name ?? '—' }}</td>
-                                    <td class="px-3 py-2.5 text-sm text-gray-900 font-medium">
-                                        {{ $retakeGroup?->subject_name ?? $app->subject_name }}
+                                    <td><span class="badge badge-violet">{{ $student?->level_name ?? '—' }}</span></td>
+                                    <td><span class="badge badge-indigo">{{ $student?->group_name ?? '—' }}</span></td>
+                                    <td><span class="text-cell text-subject">{{ $retakeGroup?->subject_name ?? $app->subject_name }}</span></td>
+                                    <td><span class="badge badge-teal">{{ $retakeGroup?->semester_name ?? $app->semester_name }}</span></td>
+                                    <td style="text-align:center;">
+                                        <span class="badge badge-blue">{{ $app->joriy_score !== null ? rtrim(rtrim(number_format($app->joriy_score, 2, '.', ''), '0'), '.') : '—' }}</span>
                                     </td>
-                                    <td class="px-3 py-2.5 text-sm text-gray-700">{{ $retakeGroup?->semester_name ?? $app->semester_name }}</td>
-                                    <td class="px-3 py-2.5 text-sm text-center font-semibold text-blue-700">
-                                        {{ $app->joriy_score !== null ? rtrim(rtrim(number_format($app->joriy_score, 2, '.', ''), '0'), '.') : '—' }}
+                                    <td style="text-align:center;">
+                                        <span class="badge badge-green">{{ $mustaqil?->grade !== null ? rtrim(rtrim(number_format($mustaqil->grade, 2, '.', ''), '0'), '.') : '—' }}</span>
                                     </td>
-                                    <td class="px-3 py-2.5 text-sm text-center font-semibold text-emerald-700">
-                                        {{ $mustaqil?->grade !== null ? rtrim(rtrim(number_format($mustaqil->grade, 2, '.', ''), '0'), '.') : '—' }}
-                                    </td>
-                                    <td class="px-3 py-2.5 text-xs text-gray-500">
-                                        {{ $app->sent_to_test_markazi_at?->format('Y-m-d H:i') }}
-                                    </td>
+                                    <td class="text-xs text-gray-500">{{ $app->sent_to_test_markazi_at?->format('Y-m-d H:i') }}</td>
                                 </tr>
                             @endforeach
                             </tbody>

@@ -1,6 +1,12 @@
 <x-app-layout>
     <div class="py-6">
         <div class="w-full px-4 sm:px-6 lg:px-8 space-y-6">
+            @if(!$builderReady)
+                <div class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-700 shadow-sm">
+                    Test builder jadvallari hali serverda yaratilmagan. `php artisan migrate` ishlatilmaguncha testlar soni va builder tugmalari to‘liq ishlamaydi.
+                </div>
+            @endif
+
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                 <h1 class="text-2xl font-bold text-slate-900">Test fanlar</h1>
                 <p class="text-sm text-slate-500 mt-1">Sizga biriktirilgan test fanlar va ular bo'yicha mavzu-jadval.</p>
@@ -32,7 +38,9 @@
                                 <td class="px-4 py-4 text-slate-700">{{ $subject->specialty_name ?: '-' }}</td>
                                 <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->groups->count() }}</td>
                                 <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->lessons->count() }}</td>
-                                <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->lessons->filter(fn($lesson) => $lesson->lessonTest)->count() }}</td>
+                                <td class="px-4 py-4 text-center font-semibold text-slate-900">
+                                    {{ $builderReady ? $subject->lessons->filter(fn($lesson) => $lesson->lessonTest)->count() : '-' }}
+                                </td>
                                 <td class="px-4 py-4 text-slate-700">
                                     {{ optional($subject->starts_on)->format('d.m.Y') ?: '-' }}
                                     -

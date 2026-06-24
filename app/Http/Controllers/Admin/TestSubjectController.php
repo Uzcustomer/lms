@@ -182,7 +182,7 @@ class TestSubjectController extends Controller
             'lesson_date' => $validated['lesson_date'],
             'starts_at' => $validated['starts_at'] ?? null,
             'ends_at' => $validated['ends_at'] ?? null,
-            'topic_order' => $validated['topic_order'] ?? ($testSubject->lessons()->max('topic_order') + 1),
+            'topic_order' => ((int) $testSubject->lessons()->max('topic_order')) + 1,
             'topic_title' => $validated['topic_title'] ?? null,
             'is_active' => $request->boolean('is_active', true),
         ]);
@@ -204,7 +204,6 @@ class TestSubjectController extends Controller
             'lesson_date' => $validated['lesson_date'],
             'starts_at' => $validated['starts_at'] ?? null,
             'ends_at' => $validated['ends_at'] ?? null,
-            'topic_order' => $validated['topic_order'] ?? $lesson->topic_order,
             'topic_title' => $validated['topic_title'] ?? null,
             'is_active' => $request->boolean('is_active', true),
         ]);
@@ -243,7 +242,6 @@ class TestSubjectController extends Controller
             'lesson_date' => ['required', 'date'],
             'starts_at' => ['nullable', 'date_format:H:i'],
             'ends_at' => ['nullable', 'date_format:H:i', 'after:starts_at'],
-            'topic_order' => ['nullable', 'integer', 'min:1'],
             'topic_title' => ['required', 'string', 'max:255'],
         ]);
     }
@@ -254,8 +252,6 @@ class TestSubjectController extends Controller
 
         $testSubject->lessons
             ->sortBy([
-                fn (TestSubjectLesson $lesson) => $lesson->lesson_date?->format('Y-m-d') ?? '9999-12-31',
-                fn (TestSubjectLesson $lesson) => $lesson->starts_at ?? '23:59',
                 fn (TestSubjectLesson $lesson) => $lesson->topic_order ?? PHP_INT_MAX,
                 fn (TestSubjectLesson $lesson) => $lesson->id,
             ])

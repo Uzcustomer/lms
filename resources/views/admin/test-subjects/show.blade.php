@@ -382,7 +382,9 @@
                                 </div>
                                 <div>
                                     <label class="test-subject-label">Tartib raqami</label>
-                                    <input type="number" min="1" name="topic_order" value="{{ old('topic_order', $lessonCount + 1) }}" class="test-subject-input">
+                                    <div class="test-subject-input bg-slate-50 text-slate-500 flex items-center">
+                                        Avtomatik: {{ $lessonCount + 1 }}
+                                    </div>
                                 </div>
                             </div>
 

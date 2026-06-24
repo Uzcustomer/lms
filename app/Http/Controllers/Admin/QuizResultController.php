@@ -1638,6 +1638,83 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Qayta o'qish quiz natijasini ASOSIY jurnalga emas, QAYTA O'QISH
+     * jurnaliga (retake_applications.oske_score / test_score) yozadi.
+     *
+     * Mos arizani (student_hemis_id + subject_id, approved) topadi. Quiz
+     * nomida sessiya tokeni (yil+fasl) bo'lsa — faqat o'sha sessiyaning
+     * arizasiga yoziladi (boshqa fasl natijasi boshqa sessiya jurnaliga
+     * o'tib ketmaydi). Yakuniy baho RetakeJournalService orqali qayta
+     * hisoblanadi.
+     */
+    private function uploadRetakeResult($result, $student, array $rowInfo, int &$successCount, array &$errors): void
+    {
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+
+        $isOske = in_array($result->quiz_type, $oskiTypes, true) || stripos((string) $result->quiz_type, 'OSKI') !== false;
+        $isTest = in_array($result->quiz_type, $testTypes, true) || stripos((string) $result->quiz_type, 'test') !== false;
+
+        if (!$isOske && !$isTest) {
+            $rowInfo['error'] = "Quiz turi aniqlanmadi (OSKI/Test emas): '{$result->quiz_type}'";
+            $errors[] = $rowInfo;
+            return;
+        }
+        if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
+            $rowInfo['error'] = "Baho noto'g'ri: {$result->grade}";
+            $errors[] = $rowInfo;
+            return;
+        }
+
+        $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($result->attempt_name, $result->shakl);
+
+        $apps = \App\Models\RetakeApplication::query()
+            ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
+            ->where('student_hemis_id', $student->hemis_id)
+            ->where('subject_id', $result->fan_id)
+            ->with(['group.window.session'])
+            ->orderByDesc('id')
+            ->get();
+
+        if ($apps->isEmpty()) {
+            $rowInfo['error'] = "Qayta o'qish arizasi topilmadi (talaba shu fandan qayta o'qishga yozilmagan)";
+            $errors[] = $rowInfo;
+            return;
+        }
+
+        // Sessiya tokeni bo'lsa — faqat mos sessiyaning arizasini olamiz.
+        if ($code !== null) {
+            $matched = $apps->filter(function ($a) use ($code) {
+                return \App\Services\Retake\RetakeSessionCode::fromSession($a->group?->window?->session) === $code;
+            });
+            if ($matched->isEmpty()) {
+                $rowInfo['error'] = "Mos sessiya topilmadi (natija: {$code}) — boshqa fasl/o'quv yili arizasiga yozilmaydi";
+                $errors[] = $rowInfo;
+                return;
+            }
+            $apps = $matched;
+        }
+
+        $app = $apps->first();
+        $grade = round((float) $result->grade);
+
+        $actor = \App\Services\Retake\RetakeAccess::currentStaff() ?? new \App\Models\Teacher();
+
+        try {
+            app(\App\Services\Retake\RetakeJournalService::class)->saveOskeTestScore(
+                $app,
+                $isOske ? $grade : ($app->oske_score !== null ? (float) $app->oske_score : null),
+                $isTest ? $grade : ($app->test_score !== null ? (float) $app->test_score : null),
+                $actor,
+            );
+            $successCount++;
+        } catch (\Throwable $e) {
+            $rowInfo['error'] = "Qayta o'qish jurnaliga yozishda xato: " . $e->getMessage();
+            $errors[] = $rowInfo;
+        }
+    }
+
+    /**
      * Mavzu shakldagi natijalar uchun jurnal holatini bulk yuklash.
      * Har bir (student_hemis_id, fan_id, mavzu_n) uchun state qaytaradi:
      *   ['type' => 'retake'|'grade'|'nb'|'empty', 'grade' => ?, 'retake' => ?]
@@ -2196,6 +2273,15 @@ class QuizResultController extends Controller
             if (!$student) {
                 $rowInfo['error'] = "Talaba topilmadi (student_id: {$result->student_id})";
                 $errors[] = $rowInfo;
+                continue;
+            }
+
+            // QAYTA O'QISH natijasi (shakl "Qayta-o'qish") — asosiy jurnalga
+            // (student_grades) EMAS, qayta o'qish jurnaliga (retake_applications)
+            // yoziladi. Fasl/sessiya guard bilan. Bu yerda yo'naltirib, qolgan
+            // student_grades mantig'ini o'tkazib yuboramiz.
+            if (\App\Services\Retake\RetakeSessionCode::isRetakeQuiz($result->attempt_name, $result->shakl)) {
+                $this->uploadRetakeResult($result, $student, $rowInfo, $successCount, $errors);
                 continue;
             }
 

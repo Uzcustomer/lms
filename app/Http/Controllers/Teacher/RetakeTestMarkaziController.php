@@ -100,49 +100,19 @@ class RetakeTestMarkaziController extends Controller
         ]);
     }
 
+    /**
+     * Qo'lda baho kiritish O'CHIRILGAN. OSKE/TEST natijalari faqat
+     * diagnostika orqali (Test markazi → "Sistemaga yuklash") tushadi.
+     * Bu endpoint endi qabul qilmaydi — eski/tashqi so'rovlarga ham yopiq.
+     */
     public function saveScore(Request $request, int $groupId): JsonResponse
     {
         $this->authorize();
 
-        $data = $request->validate([
-            'application_id' => 'required|integer',
-            'oske_score' => 'nullable|numeric|min:0|max:100',
-            'test_score' => 'nullable|numeric|min:0|max:100',
-        ]);
-
-        $group = RetakeGroup::findOrFail($groupId);
-        if (!$group->sent_to_test_markazi_at) {
-            return response()->json(['success' => false, 'message' => 'Guruh test markaziga yuborilmagan'], 403);
-        }
-
-        $app = RetakeApplication::query()
-            ->where('id', $data['application_id'])
-            ->where('retake_group_id', $group->id)
-            ->firstOrFail();
-
-        $actor = RetakeAccess::currentStaff();
-
-        try {
-            $this->service->saveOskeTestScore(
-                $app,
-                $data['oske_score'] !== null && $data['oske_score'] !== '' ? (float) $data['oske_score'] : null,
-                $data['test_score'] !== null && $data['test_score'] !== '' ? (float) $data['test_score'] : null,
-                $actor,
-            );
-        } catch (ValidationException $e) {
-            return response()->json([
-                'success' => false,
-                'message' => collect($e->errors())->flatten()->first(),
-            ], 422);
-        }
-
-        $fresh = $app->refresh();
         return response()->json([
-            'success' => true,
-            'oske_score' => $fresh->oske_score,
-            'test_score' => $fresh->test_score,
-            'final_grade' => $fresh->final_grade_value,
-        ]);
+            'success' => false,
+            'message' => "Qo'lda kiritish o'chirilgan. OSKE/TEST natijalari faqat diagnostika orqali (Sistemaga yuklash) tushadi.",
+        ], 403);
     }
 
     /**

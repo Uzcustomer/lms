@@ -1527,6 +1527,16 @@ class QuizResultController extends Controller
                 return $map[$rkGen] ?? null;
             };
 
+            // Allaqachon qayta o'qish jurnaliga yuklanganmi? (shu turdagi baho bor)
+            $alreadyOske = $pick($retakeLookup['oski'] ?? []);
+            $alreadyTest = $pick($retakeLookup['test'] ?? []);
+            if ($ynTuri === 'OSKI' && $alreadyOske !== null) {
+                return ['code' => 'uploaded', 'text' => "Qayta o'qish jurnalida bor ({$alreadyOske})", 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $alreadyOske];
+            }
+            if ($ynTuri === 'Test' && $alreadyTest !== null) {
+                return ['code' => 'uploaded', 'text' => "Qayta o'qish jurnalida bor ({$alreadyTest})", 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+            }
+
             $rJn = $pick($retakeLookup['jn'] ?? []);
             $rMt = $pick($retakeLookup['mt'] ?? []);
             $rOski = $pick($retakeLookup['oski'] ?? []);
@@ -1599,7 +1609,7 @@ class QuizResultController extends Controller
             ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
             ->whereIn('subject_id', array_keys($fanIds))
             ->with(['group.window.session'])
-            ->get(['id', 'student_hemis_id', 'subject_id', 'joriy_score', 'oske_score', 'group_id']);
+            ->get(['id', 'student_hemis_id', 'subject_id', 'joriy_score', 'oske_score', 'test_score', 'group_id']);
 
         if ($apps->isEmpty()) {
             return $empty;
@@ -1613,6 +1623,7 @@ class QuizResultController extends Controller
         $jn = [];
         $mt = [];
         $oski = [];
+        $test = [];
         foreach ($apps as $a) {
             $hid = (string) $a->student_hemis_id;
             $fan = (string) $a->subject_id;
@@ -1622,6 +1633,7 @@ class QuizResultController extends Controller
             $mtRaw = $mustaqil->get($a->id)?->grade;
             $mtVal = $mtRaw !== null ? round((float) $mtRaw) : null;
             $oskeVal = $a->oske_score !== null ? round((float) $a->oske_score) : null;
+            $testVal = $a->test_score !== null ? round((float) $a->test_score) : null;
 
             $keys = [$hid . '|' . $fan];
             if ($code !== null) {
@@ -1631,10 +1643,11 @@ class QuizResultController extends Controller
                 if ($jnVal !== null && !isset($jn[$k])) $jn[$k] = $jnVal;
                 if ($mtVal !== null && !isset($mt[$k])) $mt[$k] = $mtVal;
                 if ($oskeVal !== null && !isset($oski[$k])) $oski[$k] = $oskeVal;
+                if ($testVal !== null && !isset($test[$k])) $test[$k] = $testVal;
             }
         }
 
-        return ['jn' => $jn, 'mt' => $mt, 'oski' => $oski];
+        return ['jn' => $jn, 'mt' => $mt, 'oski' => $oski, 'test' => $test];
     }
 
     /**

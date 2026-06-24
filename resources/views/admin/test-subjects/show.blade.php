@@ -296,8 +296,8 @@
                     <h2 class="text-lg font-bold text-slate-900">Modul ma’lumotlari va guruhlar</h2>
                     <p class="text-sm text-slate-500 mt-1">Chap tomonda test fan ma’lumotlari, o‘ng tomonda biriktirilgan guruhlar.</p>
                 </div>
-                <div class="flex flex-col xl:flex-row p-5" style="gap: 10px;">
-                    <div class="p-5 flex-1 border border-slate-200 rounded-2xl">
+                <div class="flex flex-col md:flex-row items-stretch p-5" style="gap: 10px;">
+                    <div class="p-5 flex-1 min-w-0 border border-slate-200 rounded-2xl">
                         <div class="space-y-4">
                             <div>
                                 <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Fakultet</div>
@@ -330,7 +330,7 @@
                         </div>
                     </div>
 
-                    <div class="p-5 flex-1 border border-slate-200 rounded-2xl">
+                    <div class="p-5 flex-1 min-w-0 border border-slate-200 rounded-2xl">
                         <div class="flex items-center justify-between gap-3 mb-4">
                             <div>
                                 <div class="text-lg font-bold text-slate-900">Biriktirilgan guruhlar</div>

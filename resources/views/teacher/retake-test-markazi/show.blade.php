@@ -60,6 +60,14 @@
                    class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
                     📊 {{ __("Vedomost (PDF)") }}
                 </a>
+                <form method="POST" action="{{ route('admin.retake-test-markazi.generate-yn-oldi-word') }}" class="inline">
+                    @csrf
+                    <input type="hidden" name="group_ids[]" value="{{ $group->id }}">
+                    <button type="submit"
+                            class="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700">
+                        📝 {{ __("YN qaydnoma yaratish") }}
+                    </button>
+                </form>
                 @if($needsOske || $needsTest)
                     <button type="button" @click="loadFromDiagnostika()" :disabled="loading"
                        class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50">
@@ -71,9 +79,57 @@
             </div>
         </div>
 
+        @php
+            $studentsCol = $applications->map(fn ($a) => $a->group->student ?? null)->filter();
+            $faculties  = $studentsCol->pluck('department_name')->filter()->unique()->sort()->values();
+            $directions = $studentsCol->pluck('specialty_name')->filter()->unique()->sort()->values();
+            $kurslar    = $studentsCol->pluck('level_name')->filter()->unique()->sort()->values();
+            $guruhlar   = $studentsCol->pluck('group_name')->filter()->unique()->sort()->values();
+            $fanlar     = $applications->pluck('subject_name')->filter()->push($group->subject_name)->filter()->unique()->sort()->values();
+        @endphp
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            {{-- Filtrlar: Fakultet, Yo'nalish, Kurs, Guruh, Fan --}}
+            <div class="p-3 border-b border-gray-100 grid grid-cols-2 md:grid-cols-5 gap-2">
+                <div>
+                    <label class="block text-[10px] font-semibold text-gray-500 uppercase mb-1">{{ __("Fakultet") }}</label>
+                    <select data-rtm-filter="faculty" class="w-full rounded-lg border-gray-300 text-xs focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">{{ __("Barchasi") }}</option>
+                        @foreach($faculties as $v)<option value="{{ $v }}">{{ $v }}</option>@endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-semibold text-gray-500 uppercase mb-1">{{ __("Yo'nalish") }}</label>
+                    <select data-rtm-filter="direction" class="w-full rounded-lg border-gray-300 text-xs focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">{{ __("Barchasi") }}</option>
+                        @foreach($directions as $v)<option value="{{ $v }}">{{ $v }}</option>@endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-semibold text-gray-500 uppercase mb-1">{{ __("Kurs") }}</label>
+                    <select data-rtm-filter="kurs" class="w-full rounded-lg border-gray-300 text-xs focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">{{ __("Barchasi") }}</option>
+                        @foreach($kurslar as $v)<option value="{{ $v }}">{{ $v }}</option>@endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-semibold text-gray-500 uppercase mb-1">{{ __("Guruh") }}</label>
+                    <select data-rtm-filter="group" class="w-full rounded-lg border-gray-300 text-xs focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">{{ __("Barchasi") }}</option>
+                        @foreach($guruhlar as $v)<option value="{{ $v }}">{{ $v }}</option>@endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-[10px] font-semibold text-gray-500 uppercase mb-1">{{ __("Fan") }}</label>
+                    <select data-rtm-filter="fan" class="w-full rounded-lg border-gray-300 text-xs focus:border-blue-500 focus:ring-blue-500">
+                        <option value="">{{ __("Barchasi") }}</option>
+                        @foreach($fanlar as $v)<option value="{{ $v }}">{{ $v }}</option>@endforeach
+                    </select>
+                </div>
+            </div>
+
             <div class="overflow-x-auto">
-                <table class="journal-table">
+                <table class="journal-table" id="rtm-table">
                     <thead>
                     <tr>
                         <th class="th-num">T/R</th>
@@ -87,21 +143,22 @@
                         @if($needsTest)
                             <th style="text-align:center; background:#eff6ff; color:#1d4ed8;">TEST</th>
                         @endif
-                        <th style="text-align:center; background:#ecfdf5; color:#15803d;">{{ __("Yakuniy") }}</th>
                     </tr>
                     </thead>
                     <tbody>
                         @foreach($applications as $i => $app)
                             @php
                                 $student = $app->group->student ?? null;
-                                // Test markazi oynasida birinchi ustun — retake jurnalidagi yagona JN bahosi.
-                                // Eski kunlik baholar emas, aynan joriy_score ko'rsatiladi.
                                 $amaliyotAvg = $app->joriy_score !== null ? round((float) $app->joriy_score, 1) : null;
                                 $mustaqil = $mustaqilMap[$app->id] ?? null;
-                                $finalVal = $app->final_grade_value;
                             @endphp
-                        <tr>
-                            <td class="td-num">{{ $i + 1 }}</td>
+                        <tr class="rtm-row"
+                            data-faculty="{{ $student?->department_name }}"
+                            data-direction="{{ $student?->specialty_name }}"
+                            data-kurs="{{ $student?->level_name }}"
+                            data-group="{{ $student?->group_name }}"
+                            data-fan="{{ $app->subject_name ?? $group->subject_name }}">
+                            <td class="td-num rtm-num">{{ $i + 1 }}</td>
                             <td>
                                 <span class="text-cell text-subject">{{ $student?->full_name ?? '—' }}</span>
                                 <span class="text-cell" style="color:#64748b;font-size:11px;">{{ $app->student_hemis_id }}</span>
@@ -121,15 +178,11 @@
                                     <span class="badge badge-blue">{{ $app->test_score !== null ? rtrim(rtrim(number_format($app->test_score, 2, '.', ''), '0'), '.') : '—' }}</span>
                                 </td>
                             @endif
-                            <td style="text-align:center; background:#ecfdf5;" data-final="{{ $app->id }}">
-                                @if($finalVal !== null)
-                                    <span class="badge {{ $finalVal < 60 ? 'badge-red' : 'badge-green' }}">{{ rtrim(rtrim(number_format($finalVal, 2, '.', ''), '0'), '.') }}</span>
-                                @else
-                                    <span class="text-gray-400">—</span>
-                                @endif
-                            </td>
                         </tr>
                     @endforeach
+                    <tr id="rtm-empty" style="display:none;">
+                        <td colspan="7" class="p-6 text-center text-sm text-gray-500">{{ __("Filtr bo'yicha talaba topilmadi") }}</td>
+                    </tr>
                     </tbody>
                 </table>
             </div>
@@ -173,6 +226,39 @@
                     },
                 };
             }
+        </script>
+    @endpush
+
+    @push('scripts')
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const selects = Array.from(document.querySelectorAll('[data-rtm-filter]'));
+                const rows = Array.from(document.querySelectorAll('#rtm-table tbody tr.rtm-row'));
+                const emptyRow = document.getElementById('rtm-empty');
+                if (!selects.length || !rows.length) return;
+
+                function applyFilters() {
+                    const active = {};
+                    selects.forEach(s => { active[s.dataset.rtmFilter] = s.value; });
+                    let visible = 0;
+                    rows.forEach(row => {
+                        const ok = Object.keys(active).every(key => {
+                            if (!active[key]) return true;
+                            return (row.dataset[key] || '') === active[key];
+                        });
+                        row.style.display = ok ? '' : 'none';
+                        if (ok) {
+                            visible++;
+                            const num = row.querySelector('.rtm-num');
+                            if (num) num.textContent = visible;
+                        }
+                    });
+                    if (emptyRow) emptyRow.style.display = visible === 0 ? '' : 'none';
+                }
+
+                selects.forEach(s => s.addEventListener('change', applyFilters));
+                applyFilters();
+            });
         </script>
     @endpush
 </x-teacher-app-layout>

@@ -254,20 +254,20 @@
                             </p>
                         </div>
 
-                        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-[15px]">
-                            <div class="test-subject-stat blue">
+                        <div class="flex flex-col md:flex-row gap-[10px] mb-[15px]">
+                            <div class="test-subject-stat blue flex-1">
                                 <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">O‘qituvchi</div>
                                 <div class="mt-2 text-sm font-semibold text-slate-900">{{ $testSubject->teacher_name ?: 'Biriktirilmagan' }}</div>
                             </div>
-                            <div class="test-subject-stat green">
+                            <div class="test-subject-stat green flex-1">
                                 <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Guruhlar</div>
                                 <div class="mt-2 text-3xl font-extrabold text-slate-900">{{ $groupCount }}</div>
                             </div>
-                            <div class="test-subject-stat orange">
+                            <div class="test-subject-stat orange flex-1">
                                 <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Darslar</div>
                                 <div class="mt-2 text-3xl font-extrabold text-slate-900">{{ $lessonCount }}</div>
                             </div>
-                            <div class="test-subject-stat blue">
+                            <div class="test-subject-stat blue flex-1">
                                 <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Faol darslar</div>
                                 <div class="mt-2 text-3xl font-extrabold text-slate-900">{{ $activeLessonCount }}</div>
                             </div>
@@ -295,8 +295,8 @@
                     <h2 class="text-lg font-bold text-slate-900">Modul ma’lumotlari va guruhlar</h2>
                     <p class="text-sm text-slate-500 mt-1">Chap tomonda test fan ma’lumotlari, o‘ng tomonda biriktirilgan guruhlar.</p>
                 </div>
-                <div class="grid grid-cols-1 xl:grid-cols-2 gap-0">
-                    <div class="p-5 xl:border-r xl:border-slate-200">
+                <div class="flex flex-col xl:flex-row gap-[10px] p-5">
+                    <div class="p-5 flex-1 border border-slate-200 rounded-2xl">
                         <div class="space-y-4">
                             <div>
                                 <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Fakultet</div>
@@ -329,7 +329,7 @@
                         </div>
                     </div>
 
-                    <div class="p-5">
+                    <div class="p-5 flex-1 border border-slate-200 rounded-2xl">
                         <div class="flex items-center justify-between gap-3 mb-4">
                             <div>
                                 <div class="text-lg font-bold text-slate-900">Biriktirilgan guruhlar</div>

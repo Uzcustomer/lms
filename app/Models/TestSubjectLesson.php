@@ -25,4 +25,9 @@ class TestSubjectLesson extends Model
     {
         return $this->belongsTo(TestSubject::class);
     }
+
+    public function lessonTest()
+    {
+        return $this->hasOne(TestSubjectLessonTest::class, 'test_subject_lesson_id');
+    }
 }

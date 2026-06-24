@@ -16,6 +16,7 @@
                             <th class="px-4 py-3 text-left">Yo'nalish</th>
                             <th class="px-4 py-3 text-center">Guruhlar</th>
                             <th class="px-4 py-3 text-center">Mavzular</th>
+                            <th class="px-4 py-3 text-center">Testlar</th>
                             <th class="px-4 py-3 text-left">Muddat</th>
                             <th class="px-4 py-3 text-right">Amal</th>
                         </tr>
@@ -31,6 +32,7 @@
                                 <td class="px-4 py-4 text-slate-700">{{ $subject->specialty_name ?: '-' }}</td>
                                 <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->groups->count() }}</td>
                                 <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->lessons->count() }}</td>
+                                <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->lessons->filter(fn($lesson) => $lesson->lessonTest)->count() }}</td>
                                 <td class="px-4 py-4 text-slate-700">
                                     {{ optional($subject->starts_on)->format('d.m.Y') ?: '-' }}
                                     -
@@ -45,7 +47,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-4 py-10 text-center text-slate-500">
+                                <td colspan="8" class="px-4 py-10 text-center text-slate-500">
                                     Sizga hali test fan biriktirilmagan.
                                 </td>
                             </tr>

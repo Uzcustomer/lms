@@ -25,6 +25,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
+use App\Http\Controllers\Teacher\TestSubjectLessonTestController;
 use App\Http\Controllers\Teacher\TestSubjectController as TeacherTestSubjectController;
 use App\Http\Controllers\Teacher\TutorReportController;
 use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
@@ -1385,6 +1386,11 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             ->group(function () {
                 Route::get('/', [TeacherTestSubjectController::class, 'index'])->name('index');
                 Route::get('/{testSubject}', [TeacherTestSubjectController::class, 'show'])->name('show');
+                Route::get('/{testSubject}/lessons/{lesson}/test', [TestSubjectLessonTestController::class, 'edit'])->name('tests.edit');
+                Route::post('/{testSubject}/lessons/{lesson}/test', [TestSubjectLessonTestController::class, 'upsert'])->name('tests.upsert');
+                Route::post('/{testSubject}/lessons/{lesson}/test/questions', [TestSubjectLessonTestController::class, 'storeQuestion'])->name('tests.questions.store');
+                Route::put('/{testSubject}/lessons/{lesson}/test/questions/{question}', [TestSubjectLessonTestController::class, 'updateQuestion'])->name('tests.questions.update');
+                Route::delete('/{testSubject}/lessons/{lesson}/test/questions/{question}', [TestSubjectLessonTestController::class, 'destroyQuestion'])->name('tests.questions.destroy');
             });
 
         // Role switching

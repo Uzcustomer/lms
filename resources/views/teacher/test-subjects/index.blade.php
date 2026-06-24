@@ -1,22 +1,10 @@
 <x-app-layout>
     <div class="py-6">
         <div class="w-full px-4 sm:px-6 lg:px-8 space-y-6">
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex items-center justify-between">
-                <div>
-                    <h1 class="text-2xl font-bold text-slate-900">Test fanlar</h1>
-                    <p class="text-sm text-slate-500 mt-1">Sohta fan, guruh, o'qituvchi va dars jadvali yaratish uchun admin moduli.</p>
-                </div>
-                <a href="{{ route('admin.test-subjects.create') }}"
-                   class="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition">
-                    + Test fan yaratish
-                </a>
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
+                <h1 class="text-2xl font-bold text-slate-900">Test fanlar</h1>
+                <p class="text-sm text-slate-500 mt-1">Sizga biriktirilgan test fanlar va ular bo'yicha mavzu-jadval.</p>
             </div>
-
-            @if(session('success'))
-                <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
-                    {{ session('success') }}
-                </div>
-            @endif
 
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
                 <div class="overflow-x-auto">
@@ -24,11 +12,10 @@
                         <thead class="bg-slate-50 text-slate-600 uppercase text-xs tracking-wide">
                         <tr>
                             <th class="px-4 py-3 text-left">Fan</th>
-                            <th class="px-4 py-3 text-left">O'qituvchi</th>
                             <th class="px-4 py-3 text-left">Kurs</th>
                             <th class="px-4 py-3 text-left">Yo'nalish</th>
                             <th class="px-4 py-3 text-center">Guruhlar</th>
-                            <th class="px-4 py-3 text-center">Darslar</th>
+                            <th class="px-4 py-3 text-center">Mavzular</th>
                             <th class="px-4 py-3 text-left">Muddat</th>
                             <th class="px-4 py-3 text-right">Amal</th>
                         </tr>
@@ -40,7 +27,6 @@
                                     <div class="font-semibold text-slate-900">{{ $subject->name }}</div>
                                     <div class="text-xs text-slate-500 mt-1">{{ $subject->faculty_name ?: 'Fakultet tanlanmagan' }}</div>
                                 </td>
-                                <td class="px-4 py-4 text-slate-700">{{ $subject->teacher_name ?: '-' }}</td>
                                 <td class="px-4 py-4 text-slate-700">{{ $subject->level_name ?: '-' }}</td>
                                 <td class="px-4 py-4 text-slate-700">{{ $subject->specialty_name ?: '-' }}</td>
                                 <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->groups->count() }}</td>
@@ -50,28 +36,17 @@
                                     -
                                     {{ optional($subject->ends_on)->format('d.m.Y') ?: '-' }}
                                 </td>
-                                <td class="px-4 py-4">
-                                    <div class="flex items-center justify-end gap-2">
-                                    <a href="{{ route('admin.test-subjects.show', $subject) }}"
-                                       class="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 transition">
-                                        Ko'rish
+                                <td class="px-4 py-4 text-right">
+                                    <a href="{{ route('teacher.test-subjects.show', $subject) }}"
+                                       class="inline-flex items-center px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 transition">
+                                        Ochish
                                     </a>
-                                        <form method="POST" action="{{ route('admin.test-subjects.destroy', $subject) }}"
-                                              onsubmit="return confirm('Test fanni o\\'chirishni tasdiqlaysizmi?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit"
-                                                    class="inline-flex items-center px-3 py-1.5 rounded-lg bg-red-50 text-red-600 border border-red-200 hover:bg-red-100 transition">
-                                                Delete
-                                            </button>
-                                        </form>
-                                    </div>
                                 </td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="px-4 py-10 text-center text-slate-500">
-                                    Hozircha test fan yaratilmagan.
+                                <td colspan="7" class="px-4 py-10 text-center text-slate-500">
+                                    Sizga hali test fan biriktirilmagan.
                                 </td>
                             </tr>
                         @endforelse

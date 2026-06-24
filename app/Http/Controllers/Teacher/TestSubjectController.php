@@ -13,7 +13,7 @@ class TestSubjectController extends Controller
         $teacher = auth()->guard('teacher')->user();
 
         $subjects = TestSubject::query()
-            ->with(['groups', 'lessons'])
+            ->with(['groups', 'lessons.lessonTest'])
             ->where('teacher_id', $teacher->id)
             ->latest()
             ->paginate(20);
@@ -26,7 +26,7 @@ class TestSubjectController extends Controller
         $teacher = auth()->guard('teacher')->user();
         abort_unless((int) $testSubject->teacher_id === (int) $teacher->id, 403);
 
-        $testSubject->load(['groups', 'lessons', 'teacher']);
+        $testSubject->load(['groups', 'lessons.lessonTest.questions', 'teacher']);
 
         return view('teacher.test-subjects.show', compact('testSubject'));
     }

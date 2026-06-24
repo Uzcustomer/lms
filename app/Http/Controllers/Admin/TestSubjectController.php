@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Department;
 use App\Models\Group;
 use App\Models\Specialty;
+use App\Models\Student;
 use App\Models\Teacher;
 use App\Models\TestSubject;
 use App\Models\TestSubjectLesson;
@@ -158,7 +159,19 @@ class TestSubjectController extends Controller
     {
         $testSubject->load(['groups', 'lessons', 'teacher']);
 
-        return view('admin.test-subjects.show', compact('testSubject'));
+        $groupHemisIds = $testSubject->groups
+            ->pluck('group_hemis_id')
+            ->filter()
+            ->map(fn ($id) => (string) $id)
+            ->values();
+
+        $studentsByGroup = Student::query()
+            ->whereIn('group_id', $groupHemisIds)
+            ->orderBy('full_name')
+            ->get(['hemis_id', 'student_id_number', 'full_name', 'group_id', 'group_name'])
+            ->groupBy(fn (Student $student) => (string) $student->group_id);
+
+        return view('admin.test-subjects.show', compact('testSubject', 'studentsByGroup'));
     }
 
     public function storeLesson(Request $request, TestSubject $testSubject)

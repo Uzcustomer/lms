@@ -9,6 +9,12 @@
         </div>
     </x-slot>
 
+    @include('partials._journal_table_styles')
+    <style>
+        /* Bu sahifada qatorlar bosiladigan emas — kursor oddiy holatda. */
+        .journal-table tbody tr { cursor: default; }
+    </style>
+
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full"
          x-data="testMarkazi({
             saveUrl: '{{ route('admin.retake-test-markazi.save-score', $group->id) }}',
@@ -67,25 +73,24 @@
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div class="overflow-x-auto">
-                <table class="min-w-full text-xs">
-                    <thead class="bg-gray-50">
+                <table class="journal-table">
+                    <thead>
                     <tr>
-                        <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase">T/R</th>
-                        <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase">{{ __("F.I.Sh") }}</th>
-                        <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase">HEMIS ID</th>
-                        <th class="px-3 py-2 text-left font-medium text-gray-500 uppercase">{{ __("Holat") }}</th>
-                        <th class="px-3 py-2 text-center font-medium text-gray-500 uppercase">{{ __("Amaliyot o'rt.") }}</th>
-                        <th class="px-3 py-2 text-center font-medium text-gray-500 uppercase">{{ __("Mustaqil") }}</th>
+                        <th class="th-num">T/R</th>
+                        <th>{{ __("F.I.Sh") }}</th>
+                        <th>{{ __("Holat") }}</th>
+                        <th style="text-align:center;">{{ __("Amaliyot o'rt.") }}</th>
+                        <th style="text-align:center;">{{ __("Mustaqil") }}</th>
                         @if($needsOske)
-                            <th class="px-3 py-2 text-center font-medium text-blue-700 uppercase bg-blue-50">OSKE</th>
+                            <th style="text-align:center; background:#eff6ff; color:#1d4ed8;">OSKE</th>
                         @endif
                         @if($needsTest)
-                            <th class="px-3 py-2 text-center font-medium text-blue-700 uppercase bg-blue-50">TEST</th>
+                            <th style="text-align:center; background:#eff6ff; color:#1d4ed8;">TEST</th>
                         @endif
-                        <th class="px-3 py-2 text-center font-medium text-green-700 uppercase bg-green-50">{{ __("Yakuniy") }}</th>
+                        <th style="text-align:center; background:#ecfdf5; color:#15803d;">{{ __("Yakuniy") }}</th>
                     </tr>
                     </thead>
-                    <tbody class="divide-y divide-gray-100">
+                    <tbody>
                         @foreach($applications as $i => $app)
                             @php
                                 $student = $app->group->student ?? null;
@@ -93,33 +98,35 @@
                                 // Eski kunlik baholar emas, aynan joriy_score ko'rsatiladi.
                                 $amaliyotAvg = $app->joriy_score !== null ? round((float) $app->joriy_score, 1) : null;
                                 $mustaqil = $mustaqilMap[$app->id] ?? null;
+                                $finalVal = $app->final_grade_value;
                             @endphp
                         <tr>
-                            <td class="px-3 py-2 text-gray-600">{{ $i + 1 }}</td>
-                            <td class="px-3 py-2 text-gray-900 font-medium">{{ $student?->full_name ?? '—' }}</td>
-                            <td class="px-3 py-2 text-gray-600">{{ $app->student_hemis_id }}</td>
-                            <td class="px-3 py-2">
-                                <span class="inline-flex items-center px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
-                                    {{ __("Testga ruxsat etilgan") }}
-                                </span>
+                            <td class="td-num">{{ $i + 1 }}</td>
+                            <td>
+                                <span class="text-cell text-subject">{{ $student?->full_name ?? '—' }}</span>
+                                <span class="text-cell" style="color:#64748b;font-size:11px;">{{ $app->student_hemis_id }}</span>
                             </td>
-                            <td class="px-3 py-2 text-center text-gray-700">{{ $amaliyotAvg ?? '—' }}</td>
-                            <td class="px-3 py-2 text-center text-gray-700">
-                                {{ $mustaqil?->grade !== null ? rtrim(rtrim(number_format($mustaqil->grade, 2, '.', ''), '0'), '.') : '—' }}
+                            <td><span class="badge badge-green">{{ __("Testga ruxsat etilgan") }}</span></td>
+                            <td style="text-align:center;"><span class="badge badge-blue">{{ $amaliyotAvg ?? '—' }}</span></td>
+                            <td style="text-align:center;">
+                                <span class="badge badge-teal">{{ $mustaqil?->grade !== null ? rtrim(rtrim(number_format($mustaqil->grade, 2, '.', ''), '0'), '.') : '—' }}</span>
                             </td>
                             @if($needsOske)
-                                <td class="px-3 py-2 text-center bg-blue-50 font-semibold text-gray-800" data-oske-cell="{{ $app->id }}">
-                                    {{ $app->oske_score !== null ? rtrim(rtrim(number_format($app->oske_score, 2, '.', ''), '0'), '.') : '—' }}
+                                <td style="text-align:center; background:#eff6ff;" data-oske-cell="{{ $app->id }}">
+                                    <span class="badge badge-blue">{{ $app->oske_score !== null ? rtrim(rtrim(number_format($app->oske_score, 2, '.', ''), '0'), '.') : '—' }}</span>
                                 </td>
                             @endif
                             @if($needsTest)
-                                <td class="px-3 py-2 text-center bg-blue-50 font-semibold text-gray-800" data-test-cell="{{ $app->id }}">
-                                    {{ $app->test_score !== null ? rtrim(rtrim(number_format($app->test_score, 2, '.', ''), '0'), '.') : '—' }}
+                                <td style="text-align:center; background:#eff6ff;" data-test-cell="{{ $app->id }}">
+                                    <span class="badge badge-blue">{{ $app->test_score !== null ? rtrim(rtrim(number_format($app->test_score, 2, '.', ''), '0'), '.') : '—' }}</span>
                                 </td>
                             @endif
-                            <td class="px-3 py-2 text-center bg-green-50 font-bold {{ $app->final_grade_value !== null && $app->final_grade_value < 60 ? 'text-red-700' : 'text-green-700' }}"
-                                data-final="{{ $app->id }}">
-                                {{ $app->final_grade_value !== null ? rtrim(rtrim(number_format($app->final_grade_value, 2, '.', ''), '0'), '.') : '—' }}
+                            <td style="text-align:center; background:#ecfdf5;" data-final="{{ $app->id }}">
+                                @if($finalVal !== null)
+                                    <span class="badge {{ $finalVal < 60 ? 'badge-red' : 'badge-green' }}">{{ rtrim(rtrim(number_format($finalVal, 2, '.', ''), '0'), '.') }}</span>
+                                @else
+                                    <span class="text-gray-400">—</span>
+                                @endif
                             </td>
                         </tr>
                     @endforeach

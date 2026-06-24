@@ -55,6 +55,7 @@
         .badge-green { background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0; white-space: nowrap; }
         .badge-purple { background: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe; white-space: nowrap; }
         .badge-gray { background: #f1f5f9; color: #475569; border: 1px solid #e2e8f0; white-space: nowrap; }
+        .badge-red { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; white-space: nowrap; }
         .badge-indigo {
             background: linear-gradient(135deg, #1a3268, #2b5ea7);
             color: #ffffff;

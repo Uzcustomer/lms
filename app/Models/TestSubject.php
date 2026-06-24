@@ -47,6 +47,6 @@ class TestSubject extends Model
 
     public function lessons()
     {
-        return $this->hasMany(TestSubjectLesson::class)->orderBy('lesson_date')->orderBy('topic_order');
+        return $this->hasMany(TestSubjectLesson::class)->orderBy('topic_order')->orderBy('id');
     }
 }

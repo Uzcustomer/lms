@@ -1972,6 +1972,10 @@
                                                                         $graderName = $retakeGraderNames[$absenceData['graded_by_user_id']];
                                                                     } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
                                                                         $graderName = $retakeEmployeeNames[$absenceData['employee_id']];
+                                                                    } elseif (!empty($absenceData['employee_name']) && $absenceData['employee_name'] !== 'Manual Entry') {
+                                                                        $graderName = $absenceData['employee_name'];
+                                                                    } elseif (!empty($absenceData['retake_by'])) {
+                                                                        $graderName = $absenceData['retake_by'];
                                                                     }
                                                                     if ($graderName) {
                                                                         $retakeTooltip .= "\nBaho qo'ydi: " . $graderName;
@@ -2066,6 +2070,10 @@
                                                                     $graderName2 = $retakeGraderNames[$absenceData['graded_by_user_id']];
                                                                 } elseif (!empty($absenceData['employee_id']) && isset($retakeEmployeeNames[$absenceData['employee_id']])) {
                                                                     $graderName2 = $retakeEmployeeNames[$absenceData['employee_id']];
+                                                                } elseif (!empty($absenceData['employee_name']) && $absenceData['employee_name'] !== 'Manual Entry') {
+                                                                    $graderName2 = $absenceData['employee_name'];
+                                                                } elseif (!empty($absenceData['retake_by'])) {
+                                                                    $graderName2 = $absenceData['retake_by'];
                                                                 }
                                                                 if ($graderName2) {
                                                                     $retakeTooltip2 .= "\nBaho qo'ydi: " . $graderName2;

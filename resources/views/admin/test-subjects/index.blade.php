@@ -1,78 +1,20 @@
 <x-app-layout>
     <div class="py-6">
         <div class="w-full px-4 sm:px-6 lg:px-8 space-y-6">
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex items-center justify-between">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
                 <div>
                     <h1 class="text-2xl font-bold text-slate-900">Test fanlar</h1>
-                    <p class="text-sm text-slate-500 mt-1">Admin yaratadigan maxsus test fanlar, guruhlar va dars sanalari.</p>
+                    <p class="text-sm text-slate-500 mt-1">Bo'lim vaqtincha tozalandi. Keyin yangi reja asosida qayta quriladi.</p>
                 </div>
-                <a href="{{ route('admin.test-subjects.create') }}"
-                   class="inline-flex items-center px-4 py-2 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition">
-                    + Test fan yaratish
-                </a>
             </div>
 
-            @if(session('success'))
-                <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
-                    {{ session('success') }}
-                </div>
-            @endif
-
-            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-                <div class="overflow-x-auto">
-                    <table class="min-w-full text-sm">
-                        <thead class="bg-slate-50 text-slate-600 uppercase text-xs tracking-wide">
-                            <tr>
-                                <th class="px-4 py-3 text-left">Fan</th>
-                                <th class="px-4 py-3 text-left">Fakultet</th>
-                                <th class="px-4 py-3 text-left">Yo'nalish</th>
-                                <th class="px-4 py-3 text-left">Kafedra</th>
-                                <th class="px-4 py-3 text-left">Kurs</th>
-                                <th class="px-4 py-3 text-left">O'qituvchi</th>
-                                <th class="px-4 py-3 text-center">Guruhlar</th>
-                                <th class="px-4 py-3 text-center">Darslar</th>
-                                <th class="px-4 py-3 text-left">Muddat</th>
-                                <th class="px-4 py-3 text-right">Amal</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-slate-100">
-                            @forelse($subjects as $subject)
-                                <tr class="hover:bg-slate-50">
-                                    <td class="px-4 py-4">
-                                        <div class="font-semibold text-slate-900">{{ $subject->name }}</div>
-                                    </td>
-                                    <td class="px-4 py-4 text-slate-700">{{ $subject->faculty_name ?: '—' }}</td>
-                                    <td class="px-4 py-4 text-slate-700">{{ $subject->specialty_name ?: '—' }}</td>
-                                    <td class="px-4 py-4 text-slate-700">{{ $subject->department_name ?: '—' }}</td>
-                                    <td class="px-4 py-4 text-slate-700">{{ $subject->level_name ?: '—' }}</td>
-                                    <td class="px-4 py-4 text-slate-700">{{ $subject->teacher_name ?: '—' }}</td>
-                                    <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->groups->count() }}</td>
-                                    <td class="px-4 py-4 text-center font-semibold text-slate-900">{{ $subject->lessons->count() }}</td>
-                                    <td class="px-4 py-4 text-slate-700">
-                                        {{ optional($subject->starts_on)->format('d.m.Y') ?: '—' }}
-                                        -
-                                        {{ optional($subject->ends_on)->format('d.m.Y') ?: '—' }}
-                                    </td>
-                                    <td class="px-4 py-4 text-right">
-                                        <a href="{{ route('admin.test-subjects.show', $subject) }}"
-                                           class="inline-flex items-center px-3 py-1.5 rounded-lg border border-slate-300 text-slate-700 hover:bg-slate-100 transition">
-                                            Ko'rish
-                                        </a>
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="10" class="px-4 py-10 text-center text-slate-500">
-                                        Hozircha test fanlar yaratilmagan.
-                                    </td>
-                                </tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-
-                <div class="px-4 py-4 border-t border-slate-100">
-                    {{ $subjects->links() }}
+            <div class="bg-white rounded-2xl shadow-sm border border-dashed border-slate-300 p-10 text-center">
+                <div class="max-w-2xl mx-auto">
+                    <h2 class="text-xl font-semibold text-slate-900">Bo'lim hozircha bo'sh</h2>
+                    <p class="mt-3 text-sm text-slate-500 leading-6">
+                        Test fanlar bo'yicha oldingi kodlar LMS dan olib tashlandi.
+                        Sidebar tab saqlandi, keyingi reja tayyor bo'lgach shu bo'lim qayta yig'iladi.
+                    </p>
                 </div>
             </div>
         </div>

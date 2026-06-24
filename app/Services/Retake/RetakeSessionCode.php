@@ -89,10 +89,25 @@ class RetakeSessionCode
     }
 
     /**
-     * Berilgan quiz natijasi qayta o'qishga tegishlimi?
+     * Matnda qayta o'qish markeri ("Qayta-o'qish") bormi — yil/fasl tokeni
+     * bo'lmasa ham (eski quizlar). Apostrof variantlariga bardoshli.
+     */
+    public static function hasRetakeMarker(?string $s): bool
+    {
+        if ($s === null || $s === '') {
+            return false;
+        }
+        return (bool) preg_match("/qayta[-_\\s]*o['’‘ʻʼ`´]?\\s*qish/iu", $s);
+    }
+
+    /**
+     * Berilgan quiz natijasi qayta o'qishga tegishlimi? Sessiya tokeni
+     * (yil+fasl) bo'lmasa ham, "Qayta-o'qish" markeri bo'lsa — true.
      */
     public static function isRetakeQuiz(?string $attemptName, ?string $shakl = null): bool
     {
-        return self::fromQuizName($attemptName, $shakl) !== null;
+        return self::fromQuizName($attemptName, $shakl) !== null
+            || self::hasRetakeMarker($shakl)
+            || self::hasRetakeMarker($attemptName);
     }
 }

@@ -17,8 +17,9 @@ class TestSubjectLessonTestController extends Controller
     public function edit(TestSubject $testSubject, TestSubjectLesson $lesson)
     {
         [$teacher, $test] = $this->resolveContext($testSubject, $lesson);
+        $test = $test ?: $this->ensureDraftTest($teacher->id, $testSubject, $lesson);
 
-        $test?->load(['questions.options']);
+        $test->load(['questions.options']);
 
         return view('teacher.test-subjects.test-builder', [
             'teacher' => $teacher,
@@ -31,6 +32,7 @@ class TestSubjectLessonTestController extends Controller
     public function upsert(Request $request, TestSubject $testSubject, TestSubjectLesson $lesson)
     {
         [$teacher, $test] = $this->resolveContext($testSubject, $lesson);
+        $test = $test ?: $this->ensureDraftTest($teacher->id, $testSubject, $lesson);
 
         $validated = $request->validate([
             'title' => ['required', 'string', 'max:255'],
@@ -87,7 +89,8 @@ class TestSubjectLessonTestController extends Controller
 
     public function storeQuestion(Request $request, TestSubject $testSubject, TestSubjectLesson $lesson)
     {
-        [$teacher, $test] = $this->resolveContext($testSubject, $lesson, true);
+        [$teacher, $test] = $this->resolveContext($testSubject, $lesson);
+        $test = $test ?: $this->ensureDraftTest($teacher->id, $testSubject, $lesson);
         $validated = $this->validateQuestion($request);
 
         DB::transaction(function () use ($validated, $request, $test) {
@@ -107,7 +110,7 @@ class TestSubjectLessonTestController extends Controller
             if ($validated['type'] === 'single_choice') {
                 $this->syncSingleChoiceOptions(
                     $question,
-                    $validated['options_text'],
+                    $validated['options'] ?? [],
                     (int) $validated['correct_option_number']
                 );
             }
@@ -141,7 +144,7 @@ class TestSubjectLessonTestController extends Controller
             if ($validated['type'] === 'single_choice') {
                 $this->syncSingleChoiceOptions(
                     $question,
-                    $validated['options_text'],
+                    $validated['options'] ?? [],
                     (int) $validated['correct_option_number']
                 );
             } else {
@@ -190,7 +193,8 @@ class TestSubjectLessonTestController extends Controller
             'helper_text' => ['nullable', 'string'],
             'points' => ['required', 'integer', 'min:1', 'max:100'],
             'correct_answer_text' => ['nullable', 'string', 'max:255'],
-            'options_text' => ['nullable', 'string'],
+            'options' => ['nullable', 'array'],
+            'options.*.text' => ['nullable', 'string', 'max:255'],
             'correct_option_number' => ['nullable', 'integer', 'min:1'],
         ]);
 
@@ -201,10 +205,10 @@ class TestSubjectLessonTestController extends Controller
         }
 
         if ($validated['type'] === 'single_choice') {
-            $options = $this->parseOptionsText($validated['options_text'] ?? '');
+            $options = $this->normalizeOptions($validated['options'] ?? []);
             if (count($options) < 2) {
                 throw ValidationException::withMessages([
-                    'options_text' => 'Multiple choice uchun kamida 2 ta variant kiriting.',
+                    'options' => 'Multiple choice uchun kamida 2 ta variant kiriting.',
                 ]);
             }
             $correctNo = (int) ($validated['correct_option_number'] ?? 0);
@@ -218,18 +222,18 @@ class TestSubjectLessonTestController extends Controller
         return $validated;
     }
 
-    private function parseOptionsText(string $text): array
+    private function normalizeOptions(array $options): array
     {
-        return collect(preg_split('/\r\n|\r|\n/', $text))
-            ->map(fn ($line) => trim((string) $line))
+        return collect($options)
+            ->map(fn ($option) => trim((string) data_get($option, 'text')))
             ->filter()
             ->values()
             ->all();
     }
 
-    private function syncSingleChoiceOptions(TestSubjectLessonTestQuestion $question, string $optionsText, int $correctOptionNumber): void
+    private function syncSingleChoiceOptions(TestSubjectLessonTestQuestion $question, array $optionsInput, int $correctOptionNumber): void
     {
-        $options = $this->parseOptionsText($optionsText);
+        $options = $this->normalizeOptions($optionsInput);
         $question->options()->delete();
 
         foreach ($options as $index => $optionText) {
@@ -256,5 +260,26 @@ class TestSubjectLessonTestController extends Controller
                     $question->update(['sort_order' => $index + 1]);
                 }
             });
+    }
+
+    private function ensureDraftTest(int $teacherId, TestSubject $testSubject, TestSubjectLesson $lesson): TestSubjectLessonTest
+    {
+        return TestSubjectLessonTest::query()->firstOrCreate(
+            ['test_subject_lesson_id' => $lesson->id],
+            [
+                'test_subject_id' => $testSubject->id,
+                'teacher_id' => $teacherId,
+                'title' => ($lesson->topic_title ?: ('Mavzu ' . $lesson->topic_order)) . ' testi',
+                'description' => null,
+                'duration_minutes' => 20,
+                'pass_percent' => 60,
+                'shuffle_questions' => false,
+                'show_result_after_submit' => true,
+                'is_published' => false,
+                'is_open' => false,
+                'created_by' => $teacherId,
+                'updated_by' => $teacherId,
+            ]
+        );
     }
 }

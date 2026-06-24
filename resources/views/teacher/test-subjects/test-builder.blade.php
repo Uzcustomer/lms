@@ -1,40 +1,120 @@
 <x-app-layout>
     @php
         $questions = $test?->questions ?? collect();
+        $alphabetLabel = function (int $index): string {
+            $letters = range('a', 'z');
+            return ($letters[$index] ?? ('v' . ($index + 1))) . ')';
+        };
+        $questionOptions = function ($question) {
+            $options = $question->options
+                ->sortBy('sort_order')
+                ->values()
+                ->map(fn ($option) => ['text' => $option->option_text])
+                ->all();
+
+            while (count($options) < 3) {
+                $options[] = ['text' => ''];
+            }
+
+            return $options;
+        };
         $correctOptionNumber = function ($question) {
             $correct = $question->options->firstWhere('is_correct', true);
             return $correct ? ($correct->sort_order ?: 1) : 1;
         };
-        $optionsText = function ($question) {
-            return $question->options->pluck('option_text')->implode("\n");
-        };
     @endphp
 
-    <div class="py-6" x-data>
-        <div class="w-full px-4 sm:px-6 lg:px-8 space-y-6">
+    <div class="py-6">
+        <div class="w-full px-4 sm:px-6 lg:px-8 space-y-5">
             <style>
-                .tb-card { background:#fff; border:1px solid #dbe4ef; border-radius:24px; box-shadow:0 10px 30px rgba(15,23,42,.06); }
-                .tb-head { padding:20px 24px; border-bottom:1px solid #e8edf5; background:linear-gradient(135deg,#f4f8fc,#e7eef8); border-top-left-radius:24px; border-top-right-radius:24px; }
+                .tb-card { background:#fff; border:1px solid #dbe4ef; border-radius:22px; box-shadow:0 10px 28px rgba(15,23,42,.06); }
+                .tb-head { padding:14px 18px; border-bottom:1px solid #e8edf5; background:linear-gradient(135deg,#f4f8fc,#e7eef8); border-top-left-radius:22px; border-top-right-radius:22px; }
+                .tb-section { padding:16px 18px; }
+                .tb-chip { display:inline-flex; align-items:center; padding:6px 12px; border-radius:999px; font-size:12px; font-weight:800; border:1px solid transparent; }
+                .tb-chip.blue { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
+                .tb-chip.green { background:#ecfdf5; color:#15803d; border-color:#bbf7d0; }
+                .tb-chip.orange { background:#fff7ed; color:#c2410c; border-color:#fdba74; }
+                .tb-chip.gray { background:#f8fafc; color:#475569; border-color:#cbd5e1; }
                 .tb-input, .tb-textarea, .tb-select {
-                    width:100%; border:1px solid #cbd5e1; border-radius:12px; padding:10px 12px; font-size:14px; color:#0f172a; background:#fff;
+                    width:100%;
+                    border:1px solid #cbd5e1;
+                    border-radius:10px;
+                    padding:9px 11px;
+                    font-size:14px;
+                    color:#0f172a;
+                    background:#fff;
                 }
-                .tb-textarea { min-height:110px; resize:vertical; }
+                .tb-textarea { min-height:82px; resize:vertical; }
                 .tb-input:focus, .tb-textarea:focus, .tb-select:focus {
-                    outline:none; border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.14);
+                    outline:none;
+                    border-color:#3b82f6;
+                    box-shadow:0 0 0 3px rgba(59,130,246,.14);
                 }
-                .tb-label { display:block; margin-bottom:6px; font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.05em; color:#475569; }
-                .tb-btn { display:inline-flex; align-items:center; justify-content:center; gap:8px; border-radius:12px; padding:10px 16px; font-size:13px; font-weight:800; transition:all .18s ease; }
+                .tb-label {
+                    display:block;
+                    margin-bottom:5px;
+                    font-size:11px;
+                    font-weight:800;
+                    text-transform:uppercase;
+                    letter-spacing:.05em;
+                    color:#475569;
+                }
+                .tb-btn {
+                    display:inline-flex;
+                    align-items:center;
+                    justify-content:center;
+                    gap:8px;
+                    border-radius:10px;
+                    padding:9px 14px;
+                    font-size:13px;
+                    font-weight:800;
+                    transition:all .18s ease;
+                }
                 .tb-btn:hover { transform:translateY(-1px); }
-                .tb-btn-primary { background:linear-gradient(135deg,#2b5ea7,#3b7ddb); color:#fff; box-shadow:0 10px 24px rgba(43,94,167,.22); }
-                .tb-btn-green { background:linear-gradient(135deg,#059669,#10b981); color:#fff; box-shadow:0 10px 24px rgba(5,150,105,.18); }
-                .tb-btn-red { background:linear-gradient(135deg,#dc2626,#ef4444); color:#fff; box-shadow:0 10px 24px rgba(220,38,38,.18); }
+                .tb-btn-primary { background:linear-gradient(135deg,#2b5ea7,#3b7ddb); color:#fff; box-shadow:0 8px 20px rgba(43,94,167,.22); }
+                .tb-btn-green { background:linear-gradient(135deg,#059669,#10b981); color:#fff; box-shadow:0 8px 20px rgba(5,150,105,.18); }
+                .tb-btn-red { background:linear-gradient(135deg,#dc2626,#ef4444); color:#fff; box-shadow:0 8px 20px rgba(220,38,38,.18); }
                 .tb-btn-light { background:#fff; color:#334155; border:1px solid #cbd5e1; }
-                .tb-stat { border:1px solid #dbe4ef; border-radius:18px; padding:16px 18px; }
+                .tb-btn-ghost { background:#f8fafc; color:#334155; border:1px dashed #cbd5e1; }
+                .tb-stat { flex:1 1 0; min-width:180px; border:1px solid #dbe4ef; border-radius:16px; padding:14px 16px; }
                 .tb-stat.blue { background:linear-gradient(135deg,#eff6ff,#dbeafe); }
                 .tb-stat.green { background:linear-gradient(135deg,#ecfdf5,#d1fae5); }
                 .tb-stat.orange { background:linear-gradient(135deg,#fff7ed,#ffedd5); }
-                .tb-question { border:1px solid #dbe4ef; border-radius:20px; overflow:hidden; background:#fff; }
-                .tb-question-head { padding:16px 18px; background:linear-gradient(135deg,#f8fafc,#f1f5f9); border-bottom:1px solid #e2e8f0; }
+                .tb-split { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; }
+                .tb-pane { min-width:0; }
+                .tb-soft-box { border:1px dashed #cbd5e1; border-radius:14px; background:#f8fafc; padding:12px; }
+                .tb-option-row { display:flex; align-items:center; gap:10px; }
+                .tb-option-prefix {
+                    min-width:34px;
+                    height:38px;
+                    border-radius:10px;
+                    display:flex;
+                    align-items:center;
+                    justify-content:center;
+                    background:#f8fafc;
+                    border:1px solid #e2e8f0;
+                    font-size:12px;
+                    font-weight:800;
+                    color:#475569;
+                }
+                .tb-option-remove {
+                    width:38px;
+                    height:38px;
+                    border-radius:10px;
+                    display:inline-flex;
+                    align-items:center;
+                    justify-content:center;
+                    border:1px solid #fecaca;
+                    background:#fef2f2;
+                    color:#dc2626;
+                    font-weight:800;
+                }
+                .tb-question { border:1px solid #dbe4ef; border-radius:18px; overflow:hidden; background:#fff; }
+                .tb-question-head { padding:14px 18px; background:linear-gradient(135deg,#f8fafc,#f1f5f9); border-bottom:1px solid #e2e8f0; }
+                @media (max-width: 900px) {
+                    .tb-split { flex-direction:column; }
+                    .tb-option-row { flex-wrap:wrap; }
+                }
             </style>
 
             @if(session('success'))
@@ -56,37 +136,34 @@
 
             <div class="tb-card">
                 <div class="tb-head">
-                    <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                         <div class="space-y-3">
                             <div class="flex flex-wrap gap-2">
-                                <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700">{{ $testSubject->name }}</span>
-                                <span class="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">{{ $lesson->topic_order }}-mavzu</span>
-                                <span class="inline-flex items-center rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-bold text-orange-700">{{ optional($lesson->lesson_date)->format('d.m.Y') ?: '-' }}</span>
+                                <span class="tb-chip blue">{{ $testSubject->name }}</span>
+                                <span class="tb-chip green">{{ $lesson->topic_order }}-mavzu</span>
+                                <span class="tb-chip orange">{{ optional($lesson->lesson_date)->format('d.m.Y') ?: '-' }}</span>
+                                <span class="tb-chip gray">{{ $lesson->starts_at ? substr($lesson->starts_at, 0, 5) : '--:--' }} - {{ $lesson->ends_at ? substr($lesson->ends_at, 0, 5) : '--:--' }}</span>
                             </div>
                             <div>
-                                <h1 class="text-3xl font-extrabold text-slate-900">{{ $lesson->topic_title ?: ($lesson->topic_order . '-mavzu') }}</h1>
-                                <p class="mt-2 text-sm text-slate-600 max-w-4xl">
-                                    Shu mavzu uchun test yarating, savollarni kiriting va kerak paytda testni talabalar uchun oching.
-                                </p>
+                                <h1 class="text-2xl font-extrabold text-slate-900">{{ $lesson->topic_title ?: ($lesson->topic_order . '-mavzu') }}</h1>
+                                <p class="mt-1 text-sm text-slate-600">Bu mavzu uchun test yarating va savollarni boshqaring.</p>
                             </div>
                         </div>
-                        <a href="{{ route('teacher.test-subjects.show', $testSubject) }}" class="tb-btn tb-btn-light">
-                            Orqaga
-                        </a>
+                        <a href="{{ route('teacher.test-subjects.show', $testSubject) }}" class="tb-btn tb-btn-light">Orqaga</a>
                     </div>
                 </div>
 
-                <div class="p-6">
-                    <div class="flex flex-col lg:flex-row" style="gap: 10px;">
-                        <div class="tb-stat blue flex-1">
-                            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Test holati</div>
-                            <div class="mt-2 text-sm font-semibold text-slate-900">{{ $test ? 'Yaratilgan' : 'Hali yaratilmagan' }}</div>
-                        </div>
-                        <div class="tb-stat green flex-1">
+                <div class="tb-section">
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <div class="tb-stat blue">
                             <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Savollar</div>
                             <div class="mt-2 text-3xl font-extrabold text-slate-900">{{ $questions->count() }}</div>
                         </div>
-                        <div class="tb-stat orange flex-1">
+                        <div class="tb-stat green">
+                            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Test holati</div>
+                            <div class="mt-2 text-sm font-semibold text-slate-900">{{ $test ? 'Draft / tayyor' : 'Yaratilmoqda' }}</div>
+                        </div>
+                        <div class="tb-stat orange">
                             <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Ochiq holat</div>
                             <div class="mt-2 text-sm font-semibold text-slate-900">{{ $test?->is_open ? 'Ochiq' : 'Yopiq' }}</div>
                         </div>
@@ -94,13 +171,13 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 2xl:grid-cols-3 gap-6">
-                <div class="tb-card 2xl:col-span-1">
+            <div class="tb-split">
+                <div class="tb-card tb-pane" style="flex:0 0 350px; width:350px; max-width:100%;">
                     <div class="tb-head">
                         <h2 class="text-lg font-bold text-slate-900">Test sozlamalari</h2>
-                        <p class="mt-1 text-sm text-slate-500">Testning asosiy parametrlari va ochiq/yopiq holati.</p>
+                        <p class="mt-1 text-sm text-slate-500">Savol yaratishdan alohida boshqariladi.</p>
                     </div>
-                    <div class="p-6">
+                    <div class="tb-section">
                         <form method="POST" action="{{ route('teacher.test-subjects.tests.upsert', [$testSubject, $lesson]) }}" class="space-y-4">
                             @csrf
 
@@ -110,236 +187,252 @@
                             </div>
 
                             <div>
-                                <label class="tb-label">Ko‘rsatma</label>
-                                <textarea name="description" class="tb-textarea" placeholder="Talabaga ko‘rinadigan ko‘rsatma...">{{ old('description', $test?->description) }}</textarea>
+                                <label class="tb-label">Qisqa ko'rsatma</label>
+                                <textarea name="description" class="tb-textarea" style="min-height:70px;" placeholder="Talabaga ko'rinadigan qisqa ko'rsatma...">{{ old('description', $test?->description) }}</textarea>
                             </div>
 
                             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div>
-                                    <label class="tb-label">Davomiyligi (daq.)</label>
+                                    <label class="tb-label">Davomiyligi</label>
                                     <input type="number" min="1" max="300" name="duration_minutes" class="tb-input" value="{{ old('duration_minutes', $test?->duration_minutes ?? 20) }}" required>
                                 </div>
                                 <div>
-                                    <label class="tb-label">O‘tish foizi</label>
+                                    <label class="tb-label">O'tish foizi</label>
                                     <input type="number" min="1" max="100" name="pass_percent" class="tb-input" value="{{ old('pass_percent', $test?->pass_percent ?? 60) }}">
                                 </div>
                             </div>
 
-                            <div class="space-y-3">
+                            <div class="grid grid-cols-1 gap-3">
                                 <label class="flex items-center gap-3 text-sm text-slate-700">
                                     <input type="checkbox" name="shuffle_questions" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('shuffle_questions', $test?->shuffle_questions) ? 'checked' : '' }}>
-                                    Savollar aralashtirilsin
+                                    Savollar aralashsin
                                 </label>
                                 <label class="flex items-center gap-3 text-sm text-slate-700">
                                     <input type="checkbox" name="show_result_after_submit" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('show_result_after_submit', $test?->show_result_after_submit ?? true) ? 'checked' : '' }}>
-                                    Natija topshirgandan keyin ko‘rinsin
+                                    Natija ko'rinsin
                                 </label>
                                 <label class="flex items-center gap-3 text-sm text-slate-700">
                                     <input type="checkbox" name="is_published" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('is_published', $test?->is_published) ? 'checked' : '' }}>
-                                    Test nashr qilinsin
+                                    Nashr qilingan
                                 </label>
                                 <label class="flex items-center gap-3 text-sm text-slate-700">
                                     <input type="checkbox" name="is_open" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('is_open', $test?->is_open) ? 'checked' : '' }}>
-                                    Hozir test ochiq bo‘lsin
+                                    Test ochiq
                                 </label>
                             </div>
 
-                            <button type="submit" class="tb-btn tb-btn-primary w-full">
-                                Test sozlamalarini saqlash
-                            </button>
+                            <button type="submit" class="tb-btn tb-btn-primary w-full">Sozlamalarni saqlash</button>
                         </form>
                     </div>
                 </div>
 
-                <div class="tb-card 2xl:col-span-2">
+                <div class="tb-card tb-pane" style="flex:1 1 760px; min-width:0;"
+                     x-data="questionBuilder({
+                        type: '{{ old('type', 'single_choice') }}',
+                        options: @js(old('options', [['text' => ''], ['text' => ''], ['text' => '']])),
+                        correctOption: {{ (int) old('correct_option_number', 1) }}
+                     })">
                     <div class="tb-head">
-                        <h2 class="text-lg font-bold text-slate-900">Yangi savol qo‘shish</h2>
-                        <p class="mt-1 text-sm text-slate-500">Multiple choice yoki fill in blank savol yarating.</p>
+                        <h2 class="text-lg font-bold text-slate-900">Yangi savol qo'shish</h2>
+                        <p class="mt-1 text-sm text-slate-500">Multiple choice va fill in blank savollarni shu yerning o'zida yarating.</p>
                     </div>
-                    <div class="p-6">
-                        @if(!$test)
-                            <div class="rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-amber-700">
-                                Avval test sozlamalarini saqlang. Shundan keyin savol qo‘shish ochiladi.
-                            </div>
-                        @else
-                            <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.store', [$testSubject, $lesson]) }}" class="space-y-4" x-data="{ type: '{{ old('type', 'single_choice') }}' }">
-                                @csrf
+                    <div class="tb-section">
+                        <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.store', [$testSubject, $lesson]) }}" class="space-y-4">
+                            @csrf
 
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div>
-                                        <label class="tb-label">Savol turi</label>
-                                        <select name="type" class="tb-select" x-model="type">
-                                            <option value="single_choice">Multiple choice</option>
-                                            <option value="fill_in_blank">Fill in blank</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label class="tb-label">Ball</label>
-                                        <input type="number" min="1" max="100" name="points" class="tb-input" value="{{ old('points', 1) }}" required>
-                                    </div>
-                                    <div class="flex items-end">
-                                        <label class="flex items-center gap-3 text-sm text-slate-700 pb-2">
-                                            <input type="checkbox" name="is_active" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('is_active', '1') ? 'checked' : '' }}>
-                                            Savol faol bo‘lsin
-                                        </label>
-                                    </div>
+                            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                                <div class="lg:col-span-4">
+                                    <label class="tb-label">Savol turi</label>
+                                    <select name="type" class="tb-select" x-model="type">
+                                        <option value="single_choice">Multiple choice</option>
+                                        <option value="fill_in_blank">Fill in blank</option>
+                                    </select>
                                 </div>
+                                <div class="lg:col-span-4">
+                                    <label class="tb-label">Ball</label>
+                                    <input type="number" min="1" max="100" name="points" class="tb-input" value="{{ old('points', 1) }}" required>
+                                </div>
+                                <div class="lg:col-span-4 flex items-end">
+                                    <label class="flex items-center gap-3 text-sm text-slate-700 pb-2">
+                                        <input type="checkbox" name="is_active" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('is_active', '1') ? 'checked' : '' }}>
+                                        Savol faol bo'lsin
+                                    </label>
+                                </div>
+                            </div>
 
-                                <div>
+                            <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+                                <div class="xl:col-span-7">
                                     <label class="tb-label">Savol matni</label>
                                     <textarea name="prompt" class="tb-textarea" required>{{ old('prompt') }}</textarea>
                                 </div>
-
-                                <div>
+                                <div class="xl:col-span-5">
                                     <label class="tb-label">Yordamchi izoh</label>
-                                    <textarea name="helper_text" class="tb-textarea" style="min-height:80px;">{{ old('helper_text') }}</textarea>
+                                    <textarea name="helper_text" class="tb-textarea">{{ old('helper_text') }}</textarea>
                                 </div>
+                            </div>
 
-                                <div x-show="type === 'single_choice'" x-cloak class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="tb-label">Variantlar</label>
-                                        <textarea name="options_text" class="tb-textarea" placeholder="Har bir variantni yangi qatordan yozing">{{ old('options_text') }}</textarea>
+                            <div x-show="type === 'single_choice'" x-cloak class="space-y-3">
+                                <div class="tb-soft-box">
+                                    <div class="flex items-center justify-between gap-3 mb-3">
+                                        <label class="tb-label !mb-0">Variantlar</label>
+                                        <button type="button" @click="addOption()" class="tb-btn tb-btn-ghost">+ Variant qo'shish</button>
                                     </div>
-                                    <div>
-                                        <label class="tb-label">To‘g‘ri variant raqami</label>
-                                        <input type="number" min="1" name="correct_option_number" class="tb-input" value="{{ old('correct_option_number', 1) }}">
-                                        <p class="mt-2 text-xs text-slate-500">Masalan, to‘g‘ri javob 2-variant bo‘lsa `2` deb yozing.</p>
+
+                                    <div class="space-y-2">
+                                        <template x-for="(option, index) in options" :key="index">
+                                            <div class="tb-option-row">
+                                                <div class="tb-option-prefix" x-text="optionLabel(index)"></div>
+                                                <input type="text"
+                                                       class="tb-input"
+                                                       :name="`options[${index}][text]`"
+                                                       x-model="option.text"
+                                                       placeholder="Variant matni">
+                                                <label class="flex items-center gap-2 text-sm text-slate-700 whitespace-nowrap">
+                                                    <input type="radio" name="correct_option_number" :value="index + 1" x-model="correctOption" class="text-emerald-600 focus:ring-emerald-500">
+                                                    To'g'ri
+                                                </label>
+                                                <button type="button" class="tb-option-remove" @click="removeOption(index)" x-show="options.length > 2">x</button>
+                                            </div>
+                                        </template>
+                                    </div>
+
+                                    <div class="mt-3 text-xs text-slate-500">
+                                        Standart holatda a), b), c) variantlar turadi. Kerak bo'lsa yangi variant qo'shing.
                                     </div>
                                 </div>
+                            </div>
 
-                                <div x-show="type === 'fill_in_blank'" x-cloak class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="tb-label">To‘g‘ri javob</label>
-                                        <input type="text" name="correct_answer_text" class="tb-input" value="{{ old('correct_answer_text') }}">
-                                    </div>
-                                    <div class="flex items-end">
-                                        <label class="flex items-center gap-3 text-sm text-slate-700 pb-2">
-                                            <input type="checkbox" name="case_sensitive" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('case_sensitive') ? 'checked' : '' }}>
-                                            Harf kattaligi farq qilsin
-                                        </label>
-                                    </div>
+                            <div x-show="type === 'fill_in_blank'" x-cloak class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="tb-label">To'g'ri javob</label>
+                                    <input type="text" name="correct_answer_text" class="tb-input" value="{{ old('correct_answer_text') }}">
                                 </div>
+                                <div class="flex items-end">
+                                    <label class="flex items-center gap-3 text-sm text-slate-700 pb-2">
+                                        <input type="checkbox" name="case_sensitive" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('case_sensitive') ? 'checked' : '' }}>
+                                        Harf kattaligi farq qilsin
+                                    </label>
+                                </div>
+                            </div>
 
-                                <button type="submit" class="tb-btn tb-btn-green">
-                                    Savol qo‘shish
-                                </button>
-                            </form>
-                        @endif
+                            <button type="submit" class="tb-btn tb-btn-green">Savol qo'shish</button>
+                        </form>
                     </div>
                 </div>
             </div>
 
-            <div class="space-y-5">
+            <div class="space-y-4">
                 <div>
                     <h2 class="text-xl font-bold text-slate-900">Mavjud savollar</h2>
-                    <p class="mt-1 text-sm text-slate-500">Har bir savolni tahrirlash, variantlarini almashtirish yoki o‘chirish mumkin.</p>
+                    <p class="mt-1 text-sm text-slate-500">Har bir savolni shu yerning o'zida tahrirlash yoki o'chirish mumkin.</p>
                 </div>
 
                 @forelse($questions as $question)
-                    <div class="tb-question" x-data="{ open: false, type: '{{ old('question_type_' . $question->id, $question->type) }}' }">
-                        <div class="tb-question-head flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                            <div>
+                    <div class="tb-question"
+                         x-data="questionBuilder({
+                            type: '{{ $question->type }}',
+                            options: @js($questionOptions($question)),
+                            correctOption: {{ (int) $correctOptionNumber($question) }}
+                         }, false)">
+                        <div class="tb-question-head flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                            <div class="min-w-0">
                                 <div class="flex flex-wrap items-center gap-2">
-                                    <span class="inline-flex items-center rounded-full border border-blue-200 bg-blue-50 px-3 py-1 text-[11px] font-bold text-blue-700">Savol {{ $question->sort_order }}</span>
-                                    <span class="inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-bold {{ $question->type === 'single_choice' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-orange-200 bg-orange-50 text-orange-700' }}">
+                                    <span class="tb-chip blue">Savol {{ $question->sort_order }}</span>
+                                    <span class="tb-chip {{ $question->type === 'single_choice' ? 'green' : 'orange' }}">
                                         {{ $question->type === 'single_choice' ? 'Multiple choice' : 'Fill in blank' }}
                                     </span>
-                                    <span class="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-bold text-slate-700">{{ $question->points }} ball</span>
+                                    <span class="tb-chip gray">{{ $question->points }} ball</span>
                                 </div>
-                                <div class="mt-3 text-base font-bold text-slate-900">{{ $question->prompt }}</div>
-                                @if($question->helper_text)
-                                    <div class="mt-1 text-sm text-slate-500">{{ $question->helper_text }}</div>
-                                @endif
+                                <div class="mt-2 text-sm font-bold text-slate-900">{{ $question->prompt }}</div>
                             </div>
-
                             <div class="flex items-center gap-2">
                                 <button type="button" @click="open = !open" class="tb-btn tb-btn-light">
                                     <span x-text="open ? 'Yopish' : 'Tahrirlash'"></span>
                                 </button>
-                                <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.destroy', [$testSubject, $lesson, $question]) }}" onsubmit="return confirm('Savolni o‘chirasizmi?')">
+                                <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.destroy', [$testSubject, $lesson, $question]) }}" onsubmit="return confirm('Savolni o\'chirasizmi?')">
                                     @csrf
                                     @method('DELETE')
-                                    <button type="submit" class="tb-btn tb-btn-red">O‘chirish</button>
+                                    <button type="submit" class="tb-btn tb-btn-red">O'chirish</button>
                                 </form>
                             </div>
                         </div>
 
-                        <div class="p-6 border-t border-slate-100" x-show="open" x-cloak>
+                        <div class="tb-section border-t border-slate-100" x-show="open" x-cloak>
                             <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.update', [$testSubject, $lesson, $question]) }}" class="space-y-4">
                                 @csrf
                                 @method('PUT')
 
-                                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                    <div>
+                                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                                    <div class="lg:col-span-4">
                                         <label class="tb-label">Savol turi</label>
                                         <select name="type" class="tb-select" x-model="type">
                                             <option value="single_choice">Multiple choice</option>
                                             <option value="fill_in_blank">Fill in blank</option>
                                         </select>
                                     </div>
-                                    <div>
+                                    <div class="lg:col-span-4">
                                         <label class="tb-label">Ball</label>
-                                        <input type="number" min="1" max="100" name="points" class="tb-input" value="{{ old('points', $question->points) }}" required>
+                                        <input type="number" min="1" max="100" name="points" class="tb-input" value="{{ $question->points }}" required>
                                     </div>
-                                    <div class="flex items-end">
+                                    <div class="lg:col-span-4 flex items-end">
                                         <label class="flex items-center gap-3 text-sm text-slate-700 pb-2">
-                                            <input type="checkbox" name="is_active" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('is_active', $question->is_active) ? 'checked' : '' }}>
+                                            <input type="checkbox" name="is_active" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ $question->is_active ? 'checked' : '' }}>
                                             Savol faol
                                         </label>
                                     </div>
                                 </div>
 
-                                <div>
-                                    <label class="tb-label">Savol matni</label>
-                                    <textarea name="prompt" class="tb-textarea" required>{{ old('prompt', $question->prompt) }}</textarea>
-                                </div>
-
-                                <div>
-                                    <label class="tb-label">Yordamchi izoh</label>
-                                    <textarea name="helper_text" class="tb-textarea" style="min-height:80px;">{{ old('helper_text', $question->helper_text) }}</textarea>
-                                </div>
-
-                                <div x-show="type === 'single_choice'" x-cloak class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    <div>
-                                        <label class="tb-label">Variantlar</label>
-                                        <textarea name="options_text" class="tb-textarea">{{ old('options_text', $optionsText($question)) }}</textarea>
+                                <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
+                                    <div class="xl:col-span-7">
+                                        <label class="tb-label">Savol matni</label>
+                                        <textarea name="prompt" class="tb-textarea" required>{{ $question->prompt }}</textarea>
                                     </div>
-                                    <div>
-                                        <label class="tb-label">To‘g‘ri variant raqami</label>
-                                        <input type="number" min="1" name="correct_option_number" class="tb-input" value="{{ old('correct_option_number', $correctOptionNumber($question)) }}">
+                                    <div class="xl:col-span-5">
+                                        <label class="tb-label">Yordamchi izoh</label>
+                                        <textarea name="helper_text" class="tb-textarea">{{ $question->helper_text }}</textarea>
+                                    </div>
+                                </div>
+
+                                <div x-show="type === 'single_choice'" x-cloak class="space-y-3">
+                                    <div class="tb-soft-box">
+                                        <div class="flex items-center justify-between gap-3 mb-3">
+                                            <label class="tb-label !mb-0">Variantlar</label>
+                                            <button type="button" @click="addOption()" class="tb-btn tb-btn-ghost">+ Variant qo'shish</button>
+                                        </div>
+                                        <div class="space-y-2">
+                                            <template x-for="(option, index) in options" :key="index">
+                                                <div class="tb-option-row">
+                                                    <div class="tb-option-prefix" x-text="optionLabel(index)"></div>
+                                                    <input type="text"
+                                                           class="tb-input"
+                                                           :name="`options[${index}][text]`"
+                                                           x-model="option.text"
+                                                           placeholder="Variant matni">
+                                                    <label class="flex items-center gap-2 text-sm text-slate-700 whitespace-nowrap">
+                                                        <input type="radio" name="correct_option_number" :value="index + 1" x-model="correctOption" class="text-emerald-600 focus:ring-emerald-500">
+                                                        To'g'ri
+                                                    </label>
+                                                    <button type="button" class="tb-option-remove" @click="removeOption(index)" x-show="options.length > 2">x</button>
+                                                </div>
+                                            </template>
+                                        </div>
                                     </div>
                                 </div>
 
                                 <div x-show="type === 'fill_in_blank'" x-cloak class="grid grid-cols-1 lg:grid-cols-2 gap-4">
                                     <div>
-                                        <label class="tb-label">To‘g‘ri javob</label>
-                                        <input type="text" name="correct_answer_text" class="tb-input" value="{{ old('correct_answer_text', $question->correct_answer_text) }}">
+                                        <label class="tb-label">To'g'ri javob</label>
+                                        <input type="text" name="correct_answer_text" class="tb-input" value="{{ $question->correct_answer_text }}">
                                     </div>
                                     <div class="flex items-end">
                                         <label class="flex items-center gap-3 text-sm text-slate-700 pb-2">
-                                            <input type="checkbox" name="case_sensitive" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('case_sensitive', $question->case_sensitive) ? 'checked' : '' }}>
+                                            <input type="checkbox" name="case_sensitive" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ $question->case_sensitive ? 'checked' : '' }}>
                                             Harf kattaligi farq qilsin
                                         </label>
                                     </div>
                                 </div>
 
-                                @if($question->type === 'single_choice' && $question->options->count())
-                                    <div class="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
-                                        <div class="text-sm font-semibold text-slate-900 mb-2">Hozirgi variantlar</div>
-                                        <div class="space-y-2">
-                                            @foreach($question->options as $option)
-                                                <div class="flex items-center gap-2 text-sm">
-                                                    <span class="inline-flex min-w-[24px] items-center justify-center rounded-full bg-slate-200 px-2 py-1 text-xs font-bold text-slate-700">{{ $option->sort_order }}</span>
-                                                    <span class="{{ $option->is_correct ? 'font-bold text-emerald-700' : 'text-slate-700' }}">{{ $option->option_text }}</span>
-                                                </div>
-                                            @endforeach
-                                        </div>
-                                    </div>
-                                @endif
-
-                                <button type="submit" class="tb-btn tb-btn-primary">
-                                    Savolni yangilash
-                                </button>
+                                <button type="submit" class="tb-btn tb-btn-primary">Savolni yangilash</button>
                             </form>
                         </div>
                     </div>
@@ -351,4 +444,49 @@
             </div>
         </div>
     </div>
+
+    <script>
+        function questionBuilder(initial, collapsible = true) {
+            return {
+                open: !collapsible,
+                type: initial.type || 'single_choice',
+                options: (initial.options && initial.options.length ? initial.options : [{ text: '' }, { text: '' }, { text: '' }]).map(option => ({ text: option.text ?? '' })),
+                correctOption: Number(initial.correctOption || 1),
+                init() {
+                    this.ensureMinimumOptions();
+                },
+                optionLabel(index) {
+                    const alphabet = 'abcdefghijklmnopqrstuvwxyz';
+                    return (alphabet[index] || ('v' + (index + 1))) + ')';
+                },
+                ensureMinimumOptions() {
+                    if (this.type !== 'single_choice') {
+                        return;
+                    }
+
+                    while (this.options.length < 3) {
+                        this.options.push({ text: '' });
+                    }
+
+                    if (this.correctOption < 1) {
+                        this.correctOption = 1;
+                    }
+                },
+                addOption() {
+                    this.options.push({ text: '' });
+                },
+                removeOption(index) {
+                    if (this.options.length <= 2) {
+                        return;
+                    }
+
+                    this.options.splice(index, 1);
+
+                    if (this.correctOption > this.options.length) {
+                        this.correctOption = this.options.length;
+                    }
+                }
+            }
+        }
+    </script>
 </x-app-layout>

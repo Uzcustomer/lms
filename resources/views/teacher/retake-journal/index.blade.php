@@ -5,71 +5,76 @@
         </h2>
     </x-slot>
 
-    <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
-        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh + Fan) --}}
-        @include('partials._retake_filters', [
-            'formAction' => route('admin.retake-journal.index'),
-            'educationTypes' => $educationTypes ?? collect(),
-            'subjects' => $subjects ?? collect(),
-            'hiddenFilters' => ['full_name'],
-        ])
+    @include('partials._journal_table_styles')
 
-        <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-            @if($groups->isEmpty())
-                <div class="p-10 text-center text-sm text-gray-500">
-                    {{ __("Hozircha qayta o'qish guruhlari yo'q") }}
-                </div>
-            @else
-                <div class="overflow-x-auto">
-                    <table class="min-w-full divide-y divide-gray-100">
-                        <thead class="bg-gray-50">
+    <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
+        <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="overflow: visible;">
+            {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh + Fan) --}}
+            @include('partials._retake_filters', [
+                'formAction' => route('admin.retake-journal.index'),
+                'educationTypes' => $educationTypes ?? collect(),
+                'subjects' => $subjects ?? collect(),
+                'hiddenFilters' => ['full_name'],
+            ])
+
+            <div class="overflow-x-auto">
+                @if($groups->isEmpty())
+                    <div class="p-10 text-center text-sm text-gray-500">
+                        {{ __("Hozircha qayta o'qish guruhlari yo'q") }}
+                    </div>
+                @else
+                    @php
+                        $statusBadge = [
+                            'forming' => 'badge-gray',
+                            'scheduled' => 'badge-blue',
+                            'in_progress' => 'badge-green',
+                            'completed' => 'badge-purple',
+                        ];
+                    @endphp
+                    <table class="journal-table">
+                        <thead>
                         <tr>
-                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Nom") }}</th>
-                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fan") }}</th>
-                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("O'qituvchi") }}</th>
-                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Sanalar") }}</th>
-                            <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase">{{ __("Talabalar") }}</th>
-                            <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Holat") }}</th>
+                            <th class="th-num">#</th>
+                            <th>{{ __("Guruh") }}</th>
+                            <th>{{ __("Fan") }}</th>
+                            <th>{{ __("Semestr") }}</th>
+                            <th>{{ __("O'qituvchi") }}</th>
+                            <th>{{ __("Sanalar") }}</th>
+                            <th style="text-align:center;">{{ __("Talabalar") }}</th>
+                            <th>{{ __("Holat") }}</th>
                             <th></th>
                         </tr>
                         </thead>
-                        <tbody class="bg-white divide-y divide-gray-100">
-                        @foreach($groups as $g)
-                            <tr>
-                                <td class="px-3 py-2.5 text-sm text-gray-900">{{ $g->name }}</td>
-                                <td class="px-3 py-2.5 text-sm text-gray-700">
-                                    {{ $g->subject_name }}
-                                    <span class="block text-[11px] text-gray-500">{{ $g->semester_name }}</span>
+                        <tbody>
+                        @foreach($groups as $index => $g)
+                            <tr onclick="window.location='{{ route('admin.retake-journal.show', $g->id) }}'">
+                                <td class="td-num">{{ $groups->firstItem() + $index }}</td>
+                                <td><span class="badge badge-indigo">{{ $g->name }}</span></td>
+                                <td><span class="text-cell text-subject">{{ $g->subject_name }}</span></td>
+                                <td><span class="badge badge-teal">{{ $g->semester_name ?? '—' }}</span></td>
+                                <td><span class="text-cell text-emerald">{{ $g->teacher_name ?? '—' }}</span></td>
+                                <td>
+                                    <span class="badge badge-violet">{{ $g->start_date?->format('Y-m-d') }}</span>
+                                    <span class="text-gray-400">→</span>
+                                    <span class="badge badge-violet">{{ $g->end_date?->format('Y-m-d') }}</span>
                                 </td>
-                                <td class="px-3 py-2.5 text-sm text-gray-700">{{ $g->teacher_name ?? '—' }}</td>
-                                <td class="px-3 py-2.5 text-xs text-gray-700">
-                                    {{ $g->start_date->format('Y-m-d') }} → {{ $g->end_date->format('Y-m-d') }}
+                                <td style="text-align:center;"><span class="badge badge-blue">{{ $g->students_count }}</span></td>
+                                <td>
+                                    <span class="badge {{ $statusBadge[$g->status] ?? 'badge-gray' }}">{{ $g->statusLabel() }}</span>
                                 </td>
-                                <td class="px-3 py-2.5 text-sm text-gray-700 text-right">{{ $g->students_count }}</td>
-                                <td class="px-3 py-2.5">
-                                    @php
-                                        $colors = [
-                                            'forming' => 'bg-gray-100 text-gray-700',
-                                            'scheduled' => 'bg-blue-100 text-blue-800',
-                                            'in_progress' => 'bg-green-100 text-green-800',
-                                            'completed' => 'bg-purple-100 text-purple-800',
-                                        ];
-                                    @endphp
-                                    <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium {{ $colors[$g->status] ?? 'bg-gray-100' }}">
-                                        {{ $g->statusLabel() }}
-                                    </span>
-                                </td>
-                                <td class="px-3 py-2.5 text-right">
-                                    <a href="{{ route('admin.retake-journal.show', $g->id) }}"
-                                       class="text-xs text-blue-600 hover:underline">{{ __("Jurnal") }}</a>
+                                <td style="text-align:right;" onclick="event.stopPropagation();">
+                                    <a href="{{ route('admin.retake-journal.show', $g->id) }}" class="journal-row-link">{{ __("Jurnal") }}</a>
                                 </td>
                             </tr>
                         @endforeach
                         </tbody>
                     </table>
-                </div>
-                <div class="p-3 border-t border-gray-100">{{ $groups->links() }}</div>
-            @endif
+
+                    <div style="padding: 12px 20px; border-top: 1px solid #e2e8f0; background: #f8fafc;">
+                        {{ $groups->links() }}
+                    </div>
+                @endif
+            </div>
         </div>
     </div>
 </x-teacher-app-layout>

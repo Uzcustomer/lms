@@ -41,6 +41,21 @@ test('builds the canonical quiz suffix', function () {
     expect(RetakeSessionCode::quizSuffix('2025-2026-yozgi'))->toBe("Qayta-o'qish-2025-2026-yozgi");
 });
 
+test('detects retake marker even without a session token (legacy quizzes)', function () {
+    // Hozirgi prod quizlari: shakl faqat "Qayta-o'qish" (yil/fasl tokensiz)
+    expect(RetakeSessionCode::isRetakeQuiz(null, "Qayta-o'qish"))->toBeTrue();
+    expect(RetakeSessionCode::hasRetakeMarker("Qayta-o'qish"))->toBeTrue();
+    // Lekin sessiya kodi chiqmaydi (token yo'q)
+    expect(RetakeSessionCode::fromQuizName(null, "Qayta-o'qish"))->toBeNull();
+});
+
+test('marker detection is robust to apostrophe variants', function () {
+    expect(RetakeSessionCode::hasRetakeMarker("Qayta-o'qish"))->toBeTrue();   // ASCII '
+    expect(RetakeSessionCode::hasRetakeMarker("Qayta-o‘qish"))->toBeTrue();   // U+2018
+    expect(RetakeSessionCode::hasRetakeMarker('Qayta oqish'))->toBeTrue();    // apostrofsiz
+    expect(RetakeSessionCode::hasRetakeMarker("1-urinish"))->toBeFalse();
+});
+
 test('different seasons of the same year produce distinct codes', function () {
     $winter = RetakeSessionCode::fromQuizName("X_Qayta-o'qish-2025-2026-qishki");
     $summer = RetakeSessionCode::fromQuizName("X_Qayta-o'qish-2025-2026-yozgi");

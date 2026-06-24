@@ -566,6 +566,9 @@ class QuizResultController extends Controller
             // Har bir (student, fan, mavzu_n) uchun jurnaldagi state: NB / Baho / Retake / Bo'sh
             $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
 
+            // Qayta o'qish natijalari uchun JN/MT/OSKI — qayta o'qish jurnalidan
+            $retakeLookup = $this->buildRetakeJournalLookup($results);
+
             // ====== DATA TAYYORLASH ======
             $data = [];
             $rowNum = 0;
@@ -594,7 +597,7 @@ class QuizResultController extends Controller
                     $jnGrades, $mtGrades, $oskiGrades,
                     $curriculumSubjects, $groups,
                     $testTypes, $oskiTypes,
-                    [], null, $mavzuStates
+                    [], null, $mavzuStates, $retakeLookup
                 );
 
                 $rowNum++;
@@ -1223,6 +1226,9 @@ class QuizResultController extends Controller
             // Mavzu (N-mavzu) shakldagi natijalar uchun jurnal holati
             $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
 
+            // Qayta o'qish natijalari uchun JN/MT/OSKI — qayta o'qish jurnalidan
+            $retakeLookup = $this->buildRetakeJournalLookup($results);
+
             // 4) MarkingSystemScore larni bulk yuklash (N+1 query oldini olish)
             $markingSystemCodes = $students
                 ->map(fn($s) => optional($s->curriculum)->marking_system_code)
@@ -1296,7 +1302,7 @@ class QuizResultController extends Controller
                     $jnGrades, $mtGrades, $oskiGrades,
                     $curriculumSubjects, $groups,
                     $testTypes, $oskiTypes,
-                    $studentScoreLookup, $defaultScore, $mavzuStates
+                    $studentScoreLookup, $defaultScore, $mavzuStates, $retakeLookup
                 );
 
                 $rowNum++;
@@ -1359,7 +1365,7 @@ class QuizResultController extends Controller
         $curriculumSubjects, $groups,
         $testTypes, $oskiTypes,
         $studentScoreLookup = [], $defaultScore = null,
-        $mavzuStates = []
+        $mavzuStates = [], $retakeLookup = []
     ) {
         $jnAvg = null;
         $mtAvg = null;
@@ -1508,6 +1514,28 @@ class QuizResultController extends Controller
             $oskiAvg = $oskiGrades[$gradeKey];
         }
 
+        // 8.5) QAYTA O'QISH natijasi — JN/MT/OSKI ni ASOSIY jurnaldan emas,
+        // QAYTA O'QISH jurnalidan (retake_applications) olamiz. Aks holda
+        // talabaning eski (yiqilgan) JN bahosi tekshiriladi va yuklash bloklanadi.
+        if (\App\Services\Retake\RetakeSessionCode::isRetakeQuiz($result->attempt_name, $result->shakl)) {
+            $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($result->attempt_name, $result->shakl);
+            $rkGen = $student->hemis_id . '|' . $result->fan_id;
+            $rkCode = $code !== null ? ($rkGen . '|' . $code) : null;
+
+            $pick = function (array $map) use ($rkCode, $rkGen) {
+                if ($rkCode !== null && array_key_exists($rkCode, $map)) return $map[$rkCode];
+                return $map[$rkGen] ?? null;
+            };
+
+            $rJn = $pick($retakeLookup['jn'] ?? []);
+            $rMt = $pick($retakeLookup['mt'] ?? []);
+            $rOski = $pick($retakeLookup['oski'] ?? []);
+
+            if ($rJn !== null) $jnAvg = $rJn;
+            if ($rMt !== null) $mtAvg = $rMt;
+            if ($rOski !== null) $oskiAvg = $rOski;
+        }
+
         // 9) YNga ruxsat tekshiruvi (MarkingSystemScore orqali)
         $markingScore = $studentScoreLookup[$student->hemis_id]
             ?? $defaultScore
@@ -1539,6 +1567,74 @@ class QuizResultController extends Controller
 
         // 10) Hammasi joyida
         return ['code' => 'ok', 'text' => 'Yuklasa bo\'ladi', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+    }
+
+    /**
+     * Qayta o'qish natijalari uchun JN/MT/OSKI baholarini QAYTA O'QISH
+     * jurnalidan (retake_applications) oldindan yuklab map qaytaradi.
+     *
+     * Kalit: "hemis_id|fan_id" va (sessiya kodi bo'lsa) "hemis_id|fan_id|code".
+     * calculateXulosa shu xaritadan JN/MT/OSKI ni asosiy jurnal o'rniga oladi.
+     *
+     * @return array{jn:array<string,float>, mt:array<string,float>, oski:array<string,float>}
+     */
+    private function buildRetakeJournalLookup($results): array
+    {
+        $fanIds = [];
+        foreach ($results as $r) {
+            if (!\App\Services\Retake\RetakeSessionCode::isRetakeQuiz($r->attempt_name, $r->shakl)) {
+                continue;
+            }
+            if (!empty($r->fan_id)) {
+                $fanIds[(string) $r->fan_id] = true;
+            }
+        }
+
+        $empty = ['jn' => [], 'mt' => [], 'oski' => []];
+        if (empty($fanIds)) {
+            return $empty;
+        }
+
+        $apps = \App\Models\RetakeApplication::query()
+            ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
+            ->whereIn('subject_id', array_keys($fanIds))
+            ->with(['group.window.session'])
+            ->get(['id', 'student_hemis_id', 'subject_id', 'joriy_score', 'oske_score', 'group_id']);
+
+        if ($apps->isEmpty()) {
+            return $empty;
+        }
+
+        $mustaqil = \App\Models\RetakeMustaqilSubmission::query()
+            ->whereIn('application_id', $apps->pluck('id'))
+            ->get()
+            ->keyBy('application_id');
+
+        $jn = [];
+        $mt = [];
+        $oski = [];
+        foreach ($apps as $a) {
+            $hid = (string) $a->student_hemis_id;
+            $fan = (string) $a->subject_id;
+            $code = \App\Services\Retake\RetakeSessionCode::fromSession($a->group?->window?->session);
+
+            $jnVal = $a->joriy_score !== null ? round((float) $a->joriy_score) : null;
+            $mtRaw = $mustaqil->get($a->id)?->grade;
+            $mtVal = $mtRaw !== null ? round((float) $mtRaw) : null;
+            $oskeVal = $a->oske_score !== null ? round((float) $a->oske_score) : null;
+
+            $keys = [$hid . '|' . $fan];
+            if ($code !== null) {
+                $keys[] = $hid . '|' . $fan . '|' . $code;
+            }
+            foreach ($keys as $k) {
+                if ($jnVal !== null && !isset($jn[$k])) $jn[$k] = $jnVal;
+                if ($mtVal !== null && !isset($mt[$k])) $mt[$k] = $mtVal;
+                if ($oskeVal !== null && !isset($oski[$k])) $oski[$k] = $oskeVal;
+            }
+        }
+
+        return ['jn' => $jn, 'mt' => $mt, 'oski' => $oski];
     }
 
     /**

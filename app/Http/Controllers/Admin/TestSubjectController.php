@@ -160,6 +160,15 @@ class TestSubjectController extends Controller
         return view('admin.test-subjects.show', compact('testSubject'));
     }
 
+    public function destroy(TestSubject $testSubject)
+    {
+        $testSubject->delete();
+
+        return redirect()
+            ->route('admin.test-subjects.index')
+            ->with('success', 'Test fan o\'chirildi.');
+    }
+
     private function groupPayload(): array
     {
         $groups = Group::query()

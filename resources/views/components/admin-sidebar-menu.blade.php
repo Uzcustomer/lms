@@ -57,6 +57,11 @@
     $logoutRoute = $isImpersonating ? route('impersonate.stop') : ($useTeacherRoutes ? route('teacher.logout') : route('admin.logout'));
     $switchRoleRoute = $useTeacherRoutes ? route('teacher.switch-role') : route('admin.switch-role');
     $profileRoute = $useTeacherRoutes ? route('teacher.info-me') : null;
+    $teacherTestSubjectCount = 0;
+
+    if ($isTeacher && $user && !in_array($activeRole, $adminRoles)) {
+        $teacherTestSubjectCount = \App\Models\TestSubject::where('teacher_id', $user->id)->count();
+    }
 
     // Rol labellarini olish
     $roleLabels = [];
@@ -1222,10 +1227,10 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']) || ($isTeacher && !in_array($activeRole, $adminRoles) && $teacherTestSubjectCount > 0))
         <div class="sidebar-section">Test Moduli</div>
-        <a href="{{ route('admin.test-subjects.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.test-subjects.*') ? 'sidebar-active' : '' }}">
+        <a href="{{ $r('admin.test-subjects.index', 'teacher.test-subjects.index') }}"
+           class="sidebar-link {{ $isActive('admin.test-subjects.*', 'teacher.test-subjects.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6l4 2m5-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
             </svg>

@@ -25,6 +25,7 @@ use App\Http\Controllers\Auth\AuthenticatedSessionController;
 use App\Http\Controllers\Admin\AdminAuthController;
 use App\Http\Controllers\Teacher\TeacherAuthController;
 use App\Http\Controllers\Teacher\TeacherMainController;
+use App\Http\Controllers\Teacher\TestSubjectController as TeacherTestSubjectController;
 use App\Http\Controllers\Teacher\TutorReportController;
 use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
 use App\Http\Controllers\Admin\TeacherController;
@@ -132,6 +133,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/create', [TestSubjectController::class, 'create'])->name('create');
             Route::post('/', [TestSubjectController::class, 'store'])->name('store');
             Route::get('/{testSubject}', [TestSubjectController::class, 'show'])->name('show');
+            Route::delete('/{testSubject}', [TestSubjectController::class, 'destroy'])->name('destroy');
         });
 
         // Role switching
@@ -1374,6 +1376,13 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         });
         Route::get('/dashboard', [TeacherMainController::class, 'index'])->name('dashboard');
         Route::get('/info-me', [TeacherMainController::class, 'info'])->name('info-me');
+
+        Route::prefix('test-subjects')->name('test-subjects.')
+            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':oqituvchi|admin|superadmin|kichik_admin')
+            ->group(function () {
+                Route::get('/', [TeacherTestSubjectController::class, 'index'])->name('index');
+                Route::get('/{testSubject}', [TeacherTestSubjectController::class, 'show'])->name('show');
+            });
 
         // Role switching
         Route::post('/switch-role', function (\Illuminate\Http\Request $request) {

@@ -1080,6 +1080,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/daily-allowed-students-word', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'generateDailyAllowedStudentsWord'])->name('daily-allowed-students-word');
             Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'show'])->name('show');
             Route::post('/{groupId}/save-score', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'saveScore'])->name('save-score');
+            Route::post('/{groupId}/load-from-diagnostika', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'loadFromDiagnostika'])->name('load-from-diagnostika');
         });
 
         // Statistika va eksport

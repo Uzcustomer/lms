@@ -12,6 +12,7 @@ class RetakeWindowSession extends Model
 
     protected $fillable = [
         'name',
+        'code',
         'is_closed',
         'created_by_user_id',
         'created_by_name',
@@ -31,5 +32,15 @@ class RetakeWindowSession extends Model
     public function scopeOpen($query)
     {
         return $query->where('is_closed', false);
+    }
+
+    /**
+     * Kanonik sessiya kodi (YYYY-YYYY-fasl) — Moodle quiz nomidagi
+     * suffiks bilan moslashtirish uchun. `code` ustuni bo'sh bo'lsa
+     * nom matnidan chiqariladi.
+     */
+    public function resolvedCode(): ?string
+    {
+        return \App\Services\Retake\RetakeSessionCode::fromSession($this);
     }
 }

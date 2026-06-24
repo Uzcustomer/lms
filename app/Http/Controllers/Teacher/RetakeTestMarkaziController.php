@@ -145,6 +145,46 @@ class RetakeTestMarkaziController extends Controller
         ]);
     }
 
+    /**
+     * Diagnostika orqali — Moodle qayta o'qish quiz natijalarini (OSKE/TEST)
+     * shu guruh sessiyasiga mos kelganlarini avtomatik yuklaydi. Boshqa
+     * fasl/o'quv yili natijalari rad etiladi.
+     */
+    public function loadFromDiagnostika(int $groupId): JsonResponse
+    {
+        $this->authorize();
+
+        $group = RetakeGroup::findOrFail($groupId);
+        if (!$group->sent_to_test_markazi_at) {
+            return response()->json(['success' => false, 'message' => 'Guruh test markaziga yuborilmagan'], 403);
+        }
+
+        $actor = RetakeAccess::currentStaff();
+
+        try {
+            $stats = $this->service->fetchRetakeResultsFromQuiz($group, $actor);
+        } catch (ValidationException $e) {
+            return response()->json([
+                'success' => false,
+                'message' => collect($e->errors())->flatten()->first(),
+            ], 422);
+        }
+
+        $parts = [];
+        if ($stats['fetched_oske'] > 0) $parts[] = "OSKE: {$stats['fetched_oske']} ta";
+        if ($stats['fetched_test'] > 0) $parts[] = "TEST: {$stats['fetched_test']} ta";
+        $loaded = empty($parts) ? 'Yangi natija topilmadi' : ('Yuklandi — ' . implode(', ', $parts));
+        if ($stats['rejected_other_session'] > 0) {
+            $loaded .= ". Boshqa sessiyaga tegishli {$stats['rejected_other_session']} natija rad etildi";
+        }
+
+        return response()->json([
+            'success' => true,
+            'message' => $loaded,
+            'stats' => $stats,
+        ]);
+    }
+
     public function generateYnOldiWord(Request $request)
     {
         $this->authorize();

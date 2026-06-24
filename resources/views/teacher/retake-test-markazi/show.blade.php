@@ -108,25 +108,13 @@
                                 {{ $mustaqil?->grade !== null ? rtrim(rtrim(number_format($mustaqil->grade, 2, '.', ''), '0'), '.') : '—' }}
                             </td>
                             @if($needsOske)
-                                <td class="px-3 py-2 text-center bg-blue-50">
-                                    <input type="text"
-                                           inputmode="numeric"
-                                           maxlength="3"
-                                           value="{{ $app->oske_score !== null ? rtrim(rtrim(number_format($app->oske_score, 2, '.', ''), '0'), '.') : '' }}"
-                                           data-oske="{{ $app->id }}"
-                                           @change="saveScore({{ $app->id }})"
-                                           class="w-16 px-2 py-1 text-xs text-center border border-blue-300 rounded focus:ring-2 focus:ring-blue-400 outline-none">
+                                <td class="px-3 py-2 text-center bg-blue-50 font-semibold text-gray-800" data-oske-cell="{{ $app->id }}">
+                                    {{ $app->oske_score !== null ? rtrim(rtrim(number_format($app->oske_score, 2, '.', ''), '0'), '.') : '—' }}
                                 </td>
                             @endif
                             @if($needsTest)
-                                <td class="px-3 py-2 text-center bg-blue-50">
-                                    <input type="text"
-                                           inputmode="numeric"
-                                           maxlength="3"
-                                           value="{{ $app->test_score !== null ? rtrim(rtrim(number_format($app->test_score, 2, '.', ''), '0'), '.') : '' }}"
-                                           data-test="{{ $app->id }}"
-                                           @change="saveScore({{ $app->id }})"
-                                           class="w-16 px-2 py-1 text-xs text-center border border-blue-300 rounded focus:ring-2 focus:ring-blue-400 outline-none">
+                                <td class="px-3 py-2 text-center bg-blue-50 font-semibold text-gray-800" data-test-cell="{{ $app->id }}">
+                                    {{ $app->test_score !== null ? rtrim(rtrim(number_format($app->test_score, 2, '.', ''), '0'), '.') : '—' }}
                                 </td>
                             @endif
                             <td class="px-3 py-2 text-center bg-green-50 font-bold {{ $app->final_grade_value !== null && $app->final_grade_value < 60 ? 'text-red-700' : 'text-green-700' }}"
@@ -141,7 +129,7 @@
         </div>
 
         <div class="mt-3 text-xs text-gray-500">
-            💡 {{ __("OSKE va TEST natijalarini katakka kiritib, boshqa joyga bosing — avtomatik saqlanadi va yakuniy baho qayta hisoblanadi.") }}
+            💡 {{ __("OSKE va TEST natijalari qo'lda kiritilmaydi — faqat diagnostika orqali (Test markazi → Sistemaga yuklash) avtomatik tushadi.") }}
         </div>
     </div>
 
@@ -174,67 +162,6 @@
                             alert('Tarmoq xatosi');
                         } finally {
                             this.loading = false;
-                        }
-                    },
-                    async saveScore(appId) {
-                        const oskeInp = document.querySelector(`input[data-oske="${appId}"]`);
-                        const testInp = document.querySelector(`input[data-test="${appId}"]`);
-
-                        const oske = oskeInp ? (oskeInp.value || '').trim() : '';
-                        const test = testInp ? (testInp.value || '').trim() : '';
-
-                        const oskeNum = oske === '' ? null : Number(oske);
-                        const testNum = test === '' ? null : Number(test);
-
-                        if ((oskeNum !== null && (isNaN(oskeNum) || oskeNum < 0 || oskeNum > 100)) ||
-                            (testNum !== null && (isNaN(testNum) || testNum < 0 || testNum > 100))) {
-                            alert("Baho 0 dan 100 gacha bo'lishi kerak");
-                            return;
-                        }
-
-                        if (this.saving[appId]) return;
-                        this.saving[appId] = true;
-
-                        try {
-                            const res = await fetch(this.saveUrl, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'X-CSRF-TOKEN': this.csrf,
-                                    'Accept': 'application/json',
-                                },
-                                body: JSON.stringify({
-                                    application_id: appId,
-                                    oske_score: oskeNum,
-                                    test_score: testNum,
-                                }),
-                            });
-                            const data = await res.json();
-                            if (!res.ok || !data.success) {
-                                alert(data.message || 'Saqlashda xato');
-                                return;
-                            }
-                            const finalCell = document.querySelector(`td[data-final="${appId}"]`);
-                            if (finalCell) {
-                                const f = data.final_grade !== null ? Number(data.final_grade) : null;
-                                finalCell.textContent = f === null ? '—' : f;
-                                finalCell.classList.remove('text-red-700', 'text-green-700');
-                                if (f !== null) {
-                                    finalCell.classList.add(f < 60 ? 'text-red-700' : 'text-green-700');
-                                }
-                            }
-                            if (oskeInp) {
-                                oskeInp.classList.add('bg-green-50');
-                                setTimeout(() => oskeInp.classList.remove('bg-green-50'), 600);
-                            }
-                            if (testInp) {
-                                testInp.classList.add('bg-green-50');
-                                setTimeout(() => testInp.classList.remove('bg-green-50'), 600);
-                            }
-                        } catch (e) {
-                            alert('Tarmoq xatosi');
-                        } finally {
-                            delete this.saving[appId];
                         }
                     },
                 };

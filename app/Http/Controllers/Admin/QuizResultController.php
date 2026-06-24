@@ -600,6 +600,13 @@ class QuizResultController extends Controller
                     [], null, $mavzuStates, $retakeLookup
                 );
 
+                // Qayta o'qish jurnaliga allaqachon yuklangan natijalar
+                // "Yuklanmagan natijalar" ro'yxatida ko'rinmasligi kerak
+                // (ular student_grades'da emas, retake_applications'da).
+                if (($xulosa['code'] ?? null) === 'uploaded') {
+                    continue;
+                }
+
                 $rowNum++;
                 $studentGroup = ($student && isset($groups[$student->group_id])) ? $groups[$student->group_id] : null;
                 $data[] = [
@@ -1304,13 +1311,6 @@ class QuizResultController extends Controller
                     $testTypes, $oskiTypes,
                     $studentScoreLookup, $defaultScore, $mavzuStates, $retakeLookup
                 );
-
-                // Qayta o'qish jurnaliga allaqachon yuklangan natijalar
-                // "Yuklanmagan natijalar" ro'yxatida ko'rinmasligi kerak
-                // (ular student_grades'da emas, retake_applications'da).
-                if (($xulosa['code'] ?? null) === 'uploaded') {
-                    continue;
-                }
 
                 $rowNum++;
                 $studentGroup = ($student && isset($groups[$student->group_id])) ? $groups[$student->group_id] : null;

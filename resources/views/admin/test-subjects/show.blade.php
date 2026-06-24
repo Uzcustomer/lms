@@ -237,8 +237,8 @@
             @endif
 
             <div class="test-subject-hero rounded-[24px] p-6 lg:p-7">
-                <div class="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-                    <div class="space-y-4">
+                <div class="space-y-4">
+                    <div>
                         <div class="flex flex-wrap items-center gap-2">
                             <span class="test-subject-chip blue">{{ $testSubject->faculty_name ?: 'Fakultet tanlanmagan' }}</span>
                             <span class="test-subject-chip green">{{ $testSubject->specialty_name ?: 'Yo‘nalish tanlanmagan' }}</span>
@@ -254,27 +254,28 @@
                             </p>
                         </div>
 
-                        <div class="flex flex-col md:flex-row gap-[10px] mb-[15px]">
-                            <div class="test-subject-stat blue flex-1">
-                                <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">O‘qituvchi</div>
-                                <div class="mt-2 text-sm font-semibold text-slate-900">{{ $testSubject->teacher_name ?: 'Biriktirilmagan' }}</div>
-                            </div>
-                            <div class="test-subject-stat green flex-1">
-                                <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Guruhlar</div>
-                                <div class="mt-2 text-3xl font-extrabold text-slate-900">{{ $groupCount }}</div>
-                            </div>
-                            <div class="test-subject-stat orange flex-1">
-                                <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Darslar</div>
-                                <div class="mt-2 text-3xl font-extrabold text-slate-900">{{ $lessonCount }}</div>
-                            </div>
-                            <div class="test-subject-stat blue flex-1">
-                                <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Faol darslar</div>
-                                <div class="mt-2 text-3xl font-extrabold text-slate-900">{{ $activeLessonCount }}</div>
-                            </div>
+                    </div>
+
+                    <div class="flex flex-col md:flex-row" style="gap: 10px; margin-bottom: 15px;">
+                        <div class="test-subject-stat blue flex-1">
+                            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">O‘qituvchi</div>
+                            <div class="mt-2 text-sm font-semibold text-slate-900">{{ $testSubject->teacher_name ?: 'Biriktirilmagan' }}</div>
+                        </div>
+                        <div class="test-subject-stat green flex-1">
+                            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Guruhlar</div>
+                            <div class="mt-2 text-3xl font-extrabold text-slate-900">{{ $groupCount }}</div>
+                        </div>
+                        <div class="test-subject-stat orange flex-1">
+                            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Darslar</div>
+                            <div class="mt-2 text-3xl font-extrabold text-slate-900">{{ $lessonCount }}</div>
+                        </div>
+                        <div class="test-subject-stat blue flex-1">
+                            <div class="text-[11px] font-bold uppercase tracking-[0.12em] text-slate-500">Faol darslar</div>
+                            <div class="mt-2 text-3xl font-extrabold text-slate-900">{{ $activeLessonCount }}</div>
                         </div>
                     </div>
 
-                    <div class="flex flex-wrap items-center gap-3 lg:justify-end">
+                    <div class="flex flex-wrap items-center gap-3" style="margin-top: 10px;">
                         <a href="{{ route('admin.test-subjects.index') }}" class="test-btn test-btn-light">
                             Orqaga
                         </a>
@@ -295,7 +296,7 @@
                     <h2 class="text-lg font-bold text-slate-900">Modul ma’lumotlari va guruhlar</h2>
                     <p class="text-sm text-slate-500 mt-1">Chap tomonda test fan ma’lumotlari, o‘ng tomonda biriktirilgan guruhlar.</p>
                 </div>
-                <div class="flex flex-col xl:flex-row gap-[10px] p-5">
+                <div class="flex flex-col xl:flex-row p-5" style="gap: 10px;">
                     <div class="p-5 flex-1 border border-slate-200 rounded-2xl">
                         <div class="space-y-4">
                             <div>

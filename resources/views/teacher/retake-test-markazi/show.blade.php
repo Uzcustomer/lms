@@ -134,6 +134,10 @@
                     <tr>
                         <th class="th-num">T/R</th>
                         <th>{{ __("F.I.Sh") }}</th>
+                        <th>{{ __("Fakultet") }}</th>
+                        <th>{{ __("Yo'nalish") }}</th>
+                        <th>{{ __("Kurs") }}</th>
+                        <th>{{ __("Guruh") }}</th>
                         <th>{{ __("Holat") }}</th>
                         <th style="text-align:center;">{{ __("Amaliyot o'rt.") }}</th>
                         <th style="text-align:center;">{{ __("Mustaqil") }}</th>
@@ -163,6 +167,10 @@
                                 <span class="text-cell text-subject">{{ $student?->full_name ?? '—' }}</span>
                                 <span class="text-cell" style="color:#64748b;font-size:11px;">{{ $app->student_hemis_id }}</span>
                             </td>
+                            <td><span class="text-cell text-emerald">{{ $student?->department_name ?? '—' }}</span></td>
+                            <td><span class="text-cell" style="color:#0e7490;">{{ $student?->specialty_name ?? '—' }}</span></td>
+                            <td><span class="badge badge-violet">{{ $student?->level_name ?? '—' }}</span></td>
+                            <td><span class="badge badge-indigo">{{ $student?->group_name ?? '—' }}</span></td>
                             <td><span class="badge badge-green">{{ __("Testga ruxsat etilgan") }}</span></td>
                             <td style="text-align:center;"><span class="badge badge-blue">{{ $amaliyotAvg ?? '—' }}</span></td>
                             <td style="text-align:center;">
@@ -181,7 +189,7 @@
                         </tr>
                     @endforeach
                     <tr id="rtm-empty" style="display:none;">
-                        <td colspan="7" class="p-6 text-center text-sm text-gray-500">{{ __("Filtr bo'yicha talaba topilmadi") }}</td>
+                        <td colspan="11" class="p-6 text-center text-sm text-gray-500">{{ __("Filtr bo'yicha talaba topilmadi") }}</td>
                     </tr>
                     </tbody>
                 </table>

@@ -567,7 +567,7 @@ class QuizResultController extends Controller
             $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
 
             // Qayta o'qish natijalari uchun JN/MT/OSKI — qayta o'qish jurnalidan
-            $retakeLookup = $this->buildRetakeJournalLookup($results);
+            $retakeApps = $this->buildRetakeApps($results);
 
             // ====== DATA TAYYORLASH ======
             $data = [];
@@ -597,7 +597,7 @@ class QuizResultController extends Controller
                     $jnGrades, $mtGrades, $oskiGrades,
                     $curriculumSubjects, $groups,
                     $testTypes, $oskiTypes,
-                    [], null, $mavzuStates, $retakeLookup
+                    [], null, $mavzuStates, $retakeApps
                 );
 
                 // Qayta o'qish jurnaliga allaqachon yuklangan natijalar
@@ -1234,7 +1234,7 @@ class QuizResultController extends Controller
             $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
 
             // Qayta o'qish natijalari uchun JN/MT/OSKI — qayta o'qish jurnalidan
-            $retakeLookup = $this->buildRetakeJournalLookup($results);
+            $retakeApps = $this->buildRetakeApps($results);
 
             // 4) MarkingSystemScore larni bulk yuklash (N+1 query oldini olish)
             $markingSystemCodes = $students
@@ -1309,7 +1309,7 @@ class QuizResultController extends Controller
                     $jnGrades, $mtGrades, $oskiGrades,
                     $curriculumSubjects, $groups,
                     $testTypes, $oskiTypes,
-                    $studentScoreLookup, $defaultScore, $mavzuStates, $retakeLookup
+                    $studentScoreLookup, $defaultScore, $mavzuStates, $retakeApps
                 );
 
                 $rowNum++;
@@ -1372,7 +1372,7 @@ class QuizResultController extends Controller
         $curriculumSubjects, $groups,
         $testTypes, $oskiTypes,
         $studentScoreLookup = [], $defaultScore = null,
-        $mavzuStates = [], $retakeLookup = []
+        $mavzuStates = [], $retakeApps = null
     ) {
         $jnAvg = null;
         $mtAvg = null;
@@ -1394,6 +1394,16 @@ class QuizResultController extends Controller
                 return ['code' => 'mavzu_uploaded', 'text' => 'Jurnalga yuklangan: ' . $result->shakl, 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
             }
             return ['code' => 'uploaded', 'text' => 'Jurnalga yuklangan', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+        }
+
+        // 1.55) QAYTA O'QISH natijasi — ASOSIY jurnal mantig'idan (curriculum,
+        // joriy semestr, eski yiqilgan baho) BUTUNLAY mustaqil. Admission qayta
+        // o'qish jurnalidan: JN >= chegara va MT >= chegara bo'lsa OSKI/Test'ga
+        // ruxsat (xuddi qayta o'qish jurnali / YN-oldi mantig'i kabi). Quiz'da
+        // fan_id bo'lmasa ham, ariza nom bo'yicha topiladi.
+        if (!$isMavzuShakl
+            && \App\Services\Retake\RetakeSessionCode::isRetakeQuiz($result->attempt_name, $result->shakl)) {
+            return $this->calculateRetakeXulosa($result, $student, $ynTuri, $retakeApps, $studentScoreLookup, $defaultScore);
         }
 
         // 1.6) OSKI/Test uchun: jurnalda shu YN turi (OSKI yoki Test) bahosi bor — informativ
@@ -1521,37 +1531,8 @@ class QuizResultController extends Controller
             $oskiAvg = $oskiGrades[$gradeKey];
         }
 
-        // 8.5) QAYTA O'QISH natijasi — JN/MT/OSKI ni ASOSIY jurnaldan emas,
-        // QAYTA O'QISH jurnalidan (retake_applications) olamiz. Aks holda
-        // talabaning eski (yiqilgan) JN bahosi tekshiriladi va yuklash bloklanadi.
-        if (\App\Services\Retake\RetakeSessionCode::isRetakeQuiz($result->attempt_name, $result->shakl)) {
-            $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($result->attempt_name, $result->shakl);
-            $rkGen = $student->hemis_id . '|' . $result->fan_id;
-            $rkCode = $code !== null ? ($rkGen . '|' . $code) : null;
-
-            $pick = function (array $map) use ($rkCode, $rkGen) {
-                if ($rkCode !== null && array_key_exists($rkCode, $map)) return $map[$rkCode];
-                return $map[$rkGen] ?? null;
-            };
-
-            // Allaqachon qayta o'qish jurnaliga yuklanganmi? (shu turdagi baho bor)
-            $alreadyOske = $pick($retakeLookup['oski'] ?? []);
-            $alreadyTest = $pick($retakeLookup['test'] ?? []);
-            if ($ynTuri === 'OSKI' && $alreadyOske !== null) {
-                return ['code' => 'uploaded', 'text' => "Qayta o'qish jurnalida bor ({$alreadyOske})", 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $alreadyOske];
-            }
-            if ($ynTuri === 'Test' && $alreadyTest !== null) {
-                return ['code' => 'uploaded', 'text' => "Qayta o'qish jurnalida bor ({$alreadyTest})", 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
-            }
-
-            $rJn = $pick($retakeLookup['jn'] ?? []);
-            $rMt = $pick($retakeLookup['mt'] ?? []);
-            $rOski = $pick($retakeLookup['oski'] ?? []);
-
-            if ($rJn !== null) $jnAvg = $rJn;
-            if ($rMt !== null) $mtAvg = $rMt;
-            if ($rOski !== null) $oskiAvg = $rOski;
-        }
+        // (Qayta o'qish natijalari yuqorida 1.55) bo'limida alohida —
+        // qayta o'qish jurnali mantig'i bilan — hisoblanadi.)
 
         // 9) YNga ruxsat tekshiruvi (MarkingSystemScore orqali)
         $markingScore = $studentScoreLookup[$student->hemis_id]
@@ -1587,74 +1568,183 @@ class QuizResultController extends Controller
     }
 
     /**
-     * Qayta o'qish natijalari uchun JN/MT/OSKI baholarini QAYTA O'QISH
-     * jurnalidan (retake_applications) oldindan yuklab map qaytaradi.
+     * Diagnostikadagi qayta o'qish natijalariga tegishli tasdiqlangan
+     * qayta o'qish arizalarini (RetakeApplication) oldindan yuklaydi.
+     * Talabaning BARCHA approved arizalari olinadi (quiz'da fan_id bo'lmasligi
+     * mumkin, shuning uchun fan bo'yicha cheklamaymiz). Har arizaga mustaqil
+     * bahosi `mustaqil_grade` atributi sifatida biriktiriladi.
      *
-     * Kalit: "hemis_id|fan_id" va (sessiya kodi bo'lsa) "hemis_id|fan_id|code".
-     * calculateXulosa shu xaritadan JN/MT/OSKI ni asosiy jurnal o'rniga oladi.
-     *
-     * @return array{jn:array<string,float>, mt:array<string,float>, oski:array<string,float>}
+     * @return \Illuminate\Support\Collection<\App\Models\RetakeApplication>
      */
-    private function buildRetakeJournalLookup($results): array
+    private function buildRetakeApps($results): \Illuminate\Support\Collection
     {
-        $fanIds = [];
-        foreach ($results as $r) {
-            if (!\App\Services\Retake\RetakeSessionCode::isRetakeQuiz($r->attempt_name, $r->shakl)) {
-                continue;
-            }
-            if (!empty($r->fan_id)) {
-                $fanIds[(string) $r->fan_id] = true;
-            }
+        $retakeRows = collect($results)->filter(
+            fn ($r) => \App\Services\Retake\RetakeSessionCode::isRetakeQuiz($r->attempt_name, $r->shakl)
+        );
+        if ($retakeRows->isEmpty()) {
+            return collect();
         }
 
-        $empty = ['jn' => [], 'mt' => [], 'oski' => []];
-        if (empty($fanIds)) {
-            return $empty;
+        $sids = $retakeRows->pluck('student_id')->filter()->unique()->values()->all();
+        $students = Student::where(function ($q) use ($sids) {
+            $q->whereIn('hemis_id', $sids)->orWhereIn('student_id_number', $sids);
+        })->get(['hemis_id', 'student_id_number']);
+
+        $hemisIds = $students->pluck('hemis_id')->filter()->unique()->values()->all();
+        if (empty($hemisIds)) {
+            return collect();
         }
 
         $apps = \App\Models\RetakeApplication::query()
             ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
-            ->whereIn('subject_id', array_keys($fanIds))
+            ->whereIn('student_hemis_id', $hemisIds)
             ->with(['group.window.session'])
-            ->get(['id', 'student_hemis_id', 'subject_id', 'joriy_score', 'oske_score', 'test_score', 'group_id']);
+            ->get();
 
         if ($apps->isEmpty()) {
-            return $empty;
+            return $apps;
         }
 
         $mustaqil = \App\Models\RetakeMustaqilSubmission::query()
             ->whereIn('application_id', $apps->pluck('id'))
             ->get()
             ->keyBy('application_id');
-
-        $jn = [];
-        $mt = [];
-        $oski = [];
-        $test = [];
         foreach ($apps as $a) {
-            $hid = (string) $a->student_hemis_id;
-            $fan = (string) $a->subject_id;
-            $code = \App\Services\Retake\RetakeSessionCode::fromSession($a->group?->window?->session);
+            $a->mustaqil_grade = $mustaqil->get($a->id)?->grade;
+        }
 
-            $jnVal = $a->joriy_score !== null ? round((float) $a->joriy_score) : null;
-            $mtRaw = $mustaqil->get($a->id)?->grade;
-            $mtVal = $mtRaw !== null ? round((float) $mtRaw) : null;
-            $oskeVal = $a->oske_score !== null ? round((float) $a->oske_score) : null;
-            $testVal = $a->test_score !== null ? round((float) $a->test_score) : null;
+        return $apps;
+    }
 
-            $keys = [$hid . '|' . $fan];
-            if ($code !== null) {
-                $keys[] = $hid . '|' . $fan . '|' . $code;
-            }
-            foreach ($keys as $k) {
-                if ($jnVal !== null && !isset($jn[$k])) $jn[$k] = $jnVal;
-                if ($mtVal !== null && !isset($mt[$k])) $mt[$k] = $mtVal;
-                if ($oskeVal !== null && !isset($oski[$k])) $oski[$k] = $oskeVal;
-                if ($testVal !== null && !isset($test[$k])) $test[$k] = $testVal;
+    /**
+     * Nomni taqqoslash uchun normallashtiradi (kichik harf, faqat harf/raqam).
+     */
+    private function normName(?string $s): string
+    {
+        if ($s === null) {
+            return '';
+        }
+        return preg_replace('/[^a-z0-9]/u', '', mb_strtolower(trim($s)));
+    }
+
+    /**
+     * Quiz natijasiga mos qayta o'qish arizasini topadi. Tartib:
+     *   1) fan_id bo'yicha aniq
+     *   2) fan nomi bo'yicha aniq
+     *   3) fan nomi bo'yicha taxminiy (imlo farqi, masalan q/k) — >=85%
+     *   4) talabaning yagona arizasi
+     * Sessiya kodi (yil+fasl) bo'lsa — avval o'sha sessiya arizalari bilan
+     * cheklaymiz (fasl guard).
+     */
+    private function matchRetakeApp($apps, string $hemis, ?string $fanId, ?string $fanName, ?string $code): ?\App\Models\RetakeApplication
+    {
+        if (!$apps || $apps->isEmpty()) {
+            return null;
+        }
+
+        $cands = $apps->filter(fn ($a) => (string) $a->student_hemis_id === $hemis);
+        if ($cands->isEmpty()) {
+            return null;
+        }
+
+        if ($code !== null) {
+            $coded = $cands->filter(
+                fn ($a) => \App\Services\Retake\RetakeSessionCode::fromSession($a->group?->window?->session) === $code
+            );
+            if ($coded->isNotEmpty()) {
+                $cands = $coded;
             }
         }
 
-        return ['jn' => $jn, 'mt' => $mt, 'oski' => $oski, 'test' => $test];
+        // 1) fan_id
+        if (!empty($fanId)) {
+            $m = $cands->filter(fn ($a) => (string) $a->subject_id === (string) $fanId);
+            if ($m->isNotEmpty()) {
+                return $m->sortByDesc('id')->first();
+            }
+        }
+
+        // 2) nom (aniq) va 3) nom (taxminiy)
+        $nk = $this->normName($fanName);
+        if ($nk !== '') {
+            $m = $cands->filter(fn ($a) => $this->normName($a->subject_name) === $nk);
+            if ($m->isNotEmpty()) {
+                return $m->sortByDesc('id')->first();
+            }
+            $best = null;
+            $bestPct = 0.0;
+            foreach ($cands as $a) {
+                similar_text($nk, $this->normName($a->subject_name), $pct);
+                if ($pct > $bestPct) {
+                    $bestPct = $pct;
+                    $best = $a;
+                }
+            }
+            if ($best !== null && $bestPct >= 85) {
+                return $best;
+            }
+        }
+
+        // 4) talabaning yagona arizasi
+        if ($cands->count() === 1) {
+            return $cands->first();
+        }
+
+        return null;
+    }
+
+    /**
+     * Qayta o'qish quiz natijasi uchun xulosa — ASOSIY jurnaldan mustaqil.
+     * Admission qayta o'qish jurnalidan: JN >= chegara va MT >= chegara.
+     */
+    private function calculateRetakeXulosa($result, $student, $ynTuri, $retakeApps, $studentScoreLookup, $defaultScore): array
+    {
+        $none = ['jn_avg' => null, 'mt_avg' => null, 'oski_avg' => null];
+
+        if ($ynTuri !== 'OSKI' && $ynTuri !== 'Test') {
+            return ['code' => 'unknown_type', 'text' => 'Quiz turi noma\'lum'] + $none;
+        }
+
+        $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($result->attempt_name, $result->shakl);
+        $app = $this->matchRetakeApp($retakeApps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code);
+
+        if (!$app) {
+            return ['code' => 'no_retake_app', 'text' => 'Qayta o\'qish arizasi topilmadi'] + $none;
+        }
+
+        $jn = $app->joriy_score !== null ? round((float) $app->joriy_score) : null;
+        $mt = $app->mustaqil_grade !== null ? round((float) $app->mustaqil_grade) : null;
+        $oske = $app->oske_score !== null ? round((float) $app->oske_score) : null;
+        $test = $app->test_score !== null ? round((float) $app->test_score) : null;
+
+        $avg = ['jn_avg' => $jn, 'mt_avg' => $mt, 'oski_avg' => $oske];
+
+        // Allaqachon qayta o'qish jurnaliga yuklanganmi?
+        if ($ynTuri === 'OSKI' && $oske !== null) {
+            return ['code' => 'uploaded', 'text' => "Qayta o'qish jurnalida bor ({$oske})"] + $avg;
+        }
+        if ($ynTuri === 'Test' && $test !== null) {
+            return ['code' => 'uploaded', 'text' => "Qayta o'qish jurnalida bor ({$test})"] + $avg;
+        }
+
+        if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
+            return ['code' => 'bad_grade', 'text' => 'Baho noto\'g\'ri'] + $avg;
+        }
+
+        $markingScore = $studentScoreLookup[$student->hemis_id]
+            ?? $defaultScore
+            ?? MarkingSystemScore::getDefault();
+        $jnTh = $markingScore->effectiveLimit('jn');
+        $mtTh = $markingScore->effectiveLimit('mt');
+
+        if ($jnTh > 0 && $jn !== null && $jn < $jnTh) {
+            return ['code' => 'jn_low', 'text' => 'JN yetarli emas (' . $jn . '<' . $jnTh . ')'] + $avg;
+        }
+        if ($mtTh > 0 && $mt !== null && $mt < $mtTh) {
+            return ['code' => 'mt_low', 'text' => 'MT yetarli emas (' . $mt . '<' . $mtTh . ')'] + $avg;
+        }
+
+        return ['code' => 'ok', 'text' => 'Yuklasa bo\'ladi'] + $avg;
     }
 
     /**
@@ -1688,34 +1778,22 @@ class QuizResultController extends Controller
 
         $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($result->attempt_name, $result->shakl);
 
+        // Talabaning barcha tasdiqlangan arizalarini olib, fan_id/nom/yagona
+        // bo'yicha mos arizani topamiz (quiz'da fan_id bo'lmasligi mumkin).
         $apps = \App\Models\RetakeApplication::query()
             ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
             ->where('student_hemis_id', $student->hemis_id)
-            ->where('subject_id', $result->fan_id)
             ->with(['group.window.session'])
-            ->orderByDesc('id')
             ->get();
 
-        if ($apps->isEmpty()) {
+        $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code);
+
+        if (!$app) {
             $rowInfo['error'] = "Qayta o'qish arizasi topilmadi (talaba shu fandan qayta o'qishga yozilmagan)";
             $errors[] = $rowInfo;
             return;
         }
 
-        // Sessiya tokeni bo'lsa — faqat mos sessiyaning arizasini olamiz.
-        if ($code !== null) {
-            $matched = $apps->filter(function ($a) use ($code) {
-                return \App\Services\Retake\RetakeSessionCode::fromSession($a->group?->window?->session) === $code;
-            });
-            if ($matched->isEmpty()) {
-                $rowInfo['error'] = "Mos sessiya topilmadi (natija: {$code}) — boshqa fasl/o'quv yili arizasiga yozilmaydi";
-                $errors[] = $rowInfo;
-                return;
-            }
-            $apps = $matched;
-        }
-
-        $app = $apps->first();
         $grade = round((float) $result->grade);
 
         $actor = \App\Services\Retake\RetakeAccess::currentStaff() ?? new \App\Models\Teacher();
@@ -2024,28 +2102,9 @@ class QuizResultController extends Controller
             }
         }
 
-        $hemisIds = $students->pluck('hemis_id')->filter()->unique()->values()->all();
-        $fanIds = $rows->pluck('fan_id')->filter()->unique()->values()->all();
-        if (empty($hemisIds) || empty($fanIds)) {
+        $apps = $this->buildRetakeApps($rows);
+        if ($apps->isEmpty()) {
             return;
-        }
-
-        $apps = \App\Models\RetakeApplication::query()
-            ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
-            ->whereIn('student_hemis_id', $hemisIds)
-            ->whereIn('subject_id', $fanIds)
-            ->with(['group.window.session'])
-            ->get();
-
-        $appByKey = [];
-        foreach ($apps as $a) {
-            $hid = (string) $a->student_hemis_id;
-            $fan = (string) $a->subject_id;
-            $code = \App\Services\Retake\RetakeSessionCode::fromSession($a->group?->window?->session);
-            $appByKey[$hid . '|' . $fan][] = $a;
-            if ($code !== null) {
-                $appByKey[$hid . '|' . $fan . '|' . $code][] = $a;
-            }
         }
 
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
@@ -2068,26 +2127,15 @@ class QuizResultController extends Controller
                 continue;
             }
 
-            $hid = (string) $student->hemis_id;
-            $fan = (string) $q->fan_id;
             $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($q->attempt_name, $q->shakl);
-
-            $cands = [];
-            if ($code !== null && isset($appByKey[$hid . '|' . $fan . '|' . $code])) {
-                $cands = $appByKey[$hid . '|' . $fan . '|' . $code];
-            } elseif (isset($appByKey[$hid . '|' . $fan])) {
-                $cands = $appByKey[$hid . '|' . $fan];
+            $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $q->fan_id, $q->fan_name, $code);
+            if (!$app) {
+                continue;
             }
 
-            $matched = false;
-            foreach ($cands as $a) {
-                $score = $isOske ? $a->oske_score : $a->test_score;
-                if ($score !== null && (int) round((float) $score) === $grade) {
-                    $matched = true;
-                    break;
-                }
-            }
-            if (!$matched) {
+            // Faqat aynan shu urinish bahosi jurnaldagi baho bilan teng bo'lsa.
+            $score = $isOske ? $app->oske_score : $app->test_score;
+            if ($score === null || (int) round((float) $score) !== $grade) {
                 continue;
             }
 

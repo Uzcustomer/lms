@@ -21,6 +21,8 @@ const _calmMuted = Color(0xFF64748B);
 const _calmLine = Color(0xFFE2E8F0);
 const _heroTeal = Color(0xFF0F766E);
 const _heroNavy = Color(0xFF1E3A8A);
+const _calmBg = Color(0xFFF4F7FB);
+const _calmPanel = Color(0xFFF8FBFF);
 
 class StudentUsefulScreen extends StatelessWidget {
   const StudentUsefulScreen({super.key});
@@ -124,108 +126,182 @@ class StudentUsefulScreen extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: isDark ? AppTheme.darkBackground : Colors.white,
-      body: SingleChildScrollView(
-        padding: EdgeInsets.zero,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Header
-            Container(
-              padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
-              decoration: BoxDecoration(
-                color: surface,
-                border: Border(bottom: BorderSide(color: divider, width: 1)),
-              ),
-              child: Row(
-                children: [
-                  _HeaderIconButton(
-                    isDark: isDark,
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      icon: Icon(Icons.arrow_back_rounded, color: ink, size: 20),
-                      onPressed: () => StudentHomeScreen.switchToHome(context),
-                    ),
+      backgroundColor: isDark ? AppTheme.darkBackground : _calmBg,
+      body: Stack(
+        children: [
+          if (!isDark) ...[
+            Positioned(
+              top: -80,
+              right: -30,
+              child: Container(
+                width: 220,
+                height: 220,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFF99F6E4).withOpacity(0.24),
+                      Colors.transparent,
+                    ],
                   ),
-                  const SizedBox(width: 11),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          l.useful.toUpperCase(),
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                            color: muted,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          l.useful,
-                          style: TextStyle(
-                              fontSize: 15, fontWeight: FontWeight.w700, color: ink),
-                        ),
-                      ],
-                    ),
-                  ),
-                  _HeaderIconButton(
-                    isDark: isDark,
-                    child: NotificationBell(iconColor: ink, iconSize: 18),
-                  ),
-                  const SizedBox(width: 8),
-                  _HeaderIconButton(
-                    isDark: isDark,
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      icon: Icon(Icons.settings_outlined, color: ink, size: 18),
-                      onPressed: () => showSettingsSheet(context),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
-
-            Padding(
-              padding: const EdgeInsets.fromLTRB(14, 12, 14, 100),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Shimmering hero banner
-                  ScaleTap(
-                    onTap: () => Navigator.push(
-                      context,
-                      SlideFadePageRoute(builder: (_) => const StudentServicesScreen()),
-                    ),
-                    child: const _ShinyHero(),
+            Positioned(
+              top: 110,
+              left: -50,
+              child: Container(
+                width: 180,
+                height: 180,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: RadialGradient(
+                    colors: [
+                      const Color(0xFFBFDBFE).withOpacity(0.22),
+                      Colors.transparent,
+                    ],
                   ),
-                  const SizedBox(height: 12),
-                  // Services grid
-                  GridView.builder(
-                    shrinkWrap: true,
-                    padding: EdgeInsets.zero,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: services.length,
-                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: 2,
-                      crossAxisSpacing: 12,
-                      mainAxisSpacing: 12,
-                      mainAxisExtent: 146,
-                    ),
-                    itemBuilder: (_, i) => _ServiceTile(
-                      item: services[i],
-                      ink: ink,
-                      muted: muted,
-                      surface: surface,
-                      divider: divider,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ],
-        ),
+          SingleChildScrollView(
+            padding: EdgeInsets.zero,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: EdgeInsets.fromLTRB(14, statusBarH + 10, 14, 12),
+                  decoration: BoxDecoration(
+                    color: isDark ? surface : Colors.white.withOpacity(0.86),
+                    border: Border(bottom: BorderSide(color: divider, width: 1)),
+                    boxShadow: isDark
+                        ? null
+                        : [
+                            BoxShadow(
+                              color: const Color(0xFF0F172A).withOpacity(0.04),
+                              blurRadius: 14,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                  ),
+                  child: Row(
+                    children: [
+                      _HeaderIconButton(
+                        isDark: isDark,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          icon: Icon(Icons.arrow_back_rounded, color: ink, size: 20),
+                          onPressed: () => StudentHomeScreen.switchToHome(context),
+                        ),
+                      ),
+                      const SizedBox(width: 11),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              l.useful.toUpperCase(),
+                              style: TextStyle(
+                                fontSize: 10,
+                                fontWeight: FontWeight.w700,
+                                letterSpacing: 0.7,
+                                color: muted,
+                              ),
+                            ),
+                            const SizedBox(height: 2),
+                            Text(
+                              l.useful,
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                                color: ink,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      _HeaderIconButton(
+                        isDark: isDark,
+                        child: NotificationBell(iconColor: ink, iconSize: 18),
+                      ),
+                      const SizedBox(width: 8),
+                      _HeaderIconButton(
+                        isDark: isDark,
+                        child: IconButton(
+                          padding: EdgeInsets.zero,
+                          icon: Icon(Icons.settings_outlined, color: ink, size: 18),
+                          onPressed: () => showSettingsSheet(context),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(14, 14, 14, 100),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      ScaleTap(
+                        onTap: () => Navigator.push(
+                          context,
+                          SlideFadePageRoute(builder: (_) => const StudentServicesScreen()),
+                        ),
+                        child: const _CalmHero(),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        l.pick(
+                          uz: 'Tezkor xizmatlar',
+                          ru: 'Быстрые сервисы',
+                          en: 'Quick services',
+                        ),
+                        style: TextStyle(
+                          color: ink,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        l.pick(
+                          uz: 'Talabalarga kerak bo‘ladigan asosiy bo‘limlar bir joyda.',
+                          ru: 'Основные разделы для студентов собраны в одном месте.',
+                          en: 'The main student sections are collected in one place.',
+                        ),
+                        style: TextStyle(
+                          color: muted,
+                          fontSize: 12.5,
+                          height: 1.45,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      GridView.builder(
+                        shrinkWrap: true,
+                        padding: EdgeInsets.zero,
+                        physics: const NeverScrollableScrollPhysics(),
+                        itemCount: services.length,
+                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: 2,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                          mainAxisExtent: 168,
+                        ),
+                        itemBuilder: (_, i) => _ServiceTile(
+                          item: services[i],
+                          ink: ink,
+                          muted: muted,
+                          surface: surface,
+                          divider: divider,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -414,6 +490,163 @@ class _ShinyHeroState extends State<_ShinyHero> with SingleTickerProviderStateMi
   }
 }
 
+class _CalmHero extends StatelessWidget {
+  const _CalmHero();
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: _calmPanel,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: const Color(0xFFD8E4F0)),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0F172A).withOpacity(0.06),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -8,
+            top: -12,
+            child: Container(
+              width: 90,
+              height: 90,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFCCFBF1).withOpacity(0.75),
+              ),
+            ),
+          ),
+          Positioned(
+            right: 38,
+            bottom: -26,
+            child: Container(
+              width: 74,
+              height: 74,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: const Color(0xFFDBEAFE).withOpacity(0.8),
+              ),
+            ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFE6FFFA),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  l.services.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1,
+                    color: _heroTeal,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(18),
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [_heroTeal, _heroNavy],
+                      ),
+                    ),
+                    child: const Icon(Icons.widgets_rounded, color: Colors.white, size: 26),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          l.pick(
+                            uz: 'Elektron xizmatlar',
+                            ru: 'Электронные услуги',
+                            en: 'Digital services',
+                          ),
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: -0.4,
+                            color: _calmInk,
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text(
+                          l.pick(
+                            uz: 'Arizalar, ma’lumotnomalar va foydali xizmatlar bir sahifada.',
+                            ru: 'Заявки, справки и полезные сервисы собраны на одной странице.',
+                            en: 'Applications, certificates, and helpful services in one place.',
+                          ),
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            height: 1.45,
+                            color: _calmMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.82),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: const Color(0xFFD9E7F4)),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.auto_awesome_rounded, size: 18, color: _heroTeal),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        l.pick(
+                          uz: 'Ariza yuborish, ko‘rish va boshqarish uchun bosing',
+                          ru: 'Нажмите, чтобы отправлять, просматривать и управлять заявками',
+                          en: 'Tap to submit, view, and manage your applications',
+                        ),
+                        style: const TextStyle(
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w700,
+                          color: _heroTeal,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Icon(Icons.chevron_right_rounded, size: 18, color: _heroTeal),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 // ---------- Service tile ----------
 class _ServiceTile extends StatelessWidget {
   final _ServiceCard item;
@@ -439,13 +672,13 @@ class _ServiceTile extends StatelessWidget {
       child: Container(
         decoration: BoxDecoration(
           color: surface,
-          borderRadius: BorderRadius.circular(16),
+          borderRadius: BorderRadius.circular(20),
           border: Border.all(color: divider, width: 1),
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF0F172A).withOpacity(0.14),
-              blurRadius: 5,
-              offset: const Offset(0, 2),
+              color: const Color(0xFF0F172A).withOpacity(0.08),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -456,53 +689,64 @@ class _ServiceTile extends StatelessWidget {
               context,
               SlideFadePageRoute(builder: (_) => item.screen),
             ),
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             child: Padding(
-              padding: const EdgeInsets.all(14),
+              padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
                   Container(
-                    width: 44,
-                    height: 44,
+                    width: 52,
+                    height: 52,
                     decoration: BoxDecoration(
-                      color: item.color,
-                      borderRadius: BorderRadius.circular(12),
-                      boxShadow: [
-                        BoxShadow(
-                          color: item.color.withOpacity(0.35),
-                          blurRadius: 8,
-                          offset: const Offset(0, 3),
+                      color: item.color.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(item.icon, size: 24, color: item.color),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          item.title,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                            height: 1.25,
+                            letterSpacing: -0.2,
+                            color: ink,
+                          ),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          item.subtitle,
+                          style: TextStyle(fontSize: 11.5, height: 1.38, color: muted),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
-                    child: Icon(item.icon, size: 21, color: Colors.white),
                   ),
-                  const SizedBox(height: 10),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        item.title,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          height: 1.25,
-                          letterSpacing: -0.2,
-                          color: ink,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                  Align(
+                    alignment: Alignment.bottomRight,
+                    child: Container(
+                      width: 34,
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: item.color.withOpacity(0.10),
+                        shape: BoxShape.circle,
                       ),
-                      const SizedBox(height: 3),
-                      Text(
-                        item.subtitle,
-                        style: TextStyle(fontSize: 11, height: 1.35, color: muted),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                      child: Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 18,
+                        color: item.color,
                       ),
-                    ],
+                    ),
                   ),
                 ],
               ),

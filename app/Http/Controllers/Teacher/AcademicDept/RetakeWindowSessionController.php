@@ -67,6 +67,9 @@ class RetakeWindowSessionController extends Controller
 
         RetakeWindowSession::create([
             'name' => $data['name'],
+            // Moodle quiz nomidagi suffiks bilan moslash uchun kanonik kod
+            // (YYYY-YYYY-fasl) — nom matnidan avtomatik chiqariladi.
+            'code' => \App\Services\Retake\RetakeSessionCode::normalize($data['name']),
             'created_by_user_id' => $user->id,
             'created_by_name' => $user->full_name,
         ]);

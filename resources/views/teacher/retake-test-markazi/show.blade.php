@@ -12,6 +12,7 @@
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full"
          x-data="testMarkazi({
             saveUrl: '{{ route('admin.retake-test-markazi.save-score', $group->id) }}',
+            loadUrl: '{{ route('admin.retake-test-markazi.load-from-diagnostika', $group->id) }}',
             csrf: '{{ csrf_token() }}',
          })">
 
@@ -48,11 +49,19 @@
                     </div>
                 @endif
             </div>
-            <div class="mt-3 flex items-center gap-2">
+            <div class="mt-3 flex items-center gap-2 flex-wrap">
                 <a href="{{ route('admin.retake-journal.vedomost', $group->id) }}"
                    class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
                     📊 {{ __("Vedomost (PDF)") }}
                 </a>
+                @if($needsOske || $needsTest)
+                    <button type="button" @click="loadFromDiagnostika()" :disabled="loading"
+                       class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50">
+                        <span x-show="!loading">⬇️ {{ __("Diagnostika orqali yuklash") }}</span>
+                        <span x-show="loading">{{ __("Yuklanmoqda...") }}</span>
+                    </button>
+                    <span class="text-xs text-gray-500">{{ __("Faqat shu sessiya (fasl/o'quv yili) natijalari olinadi") }}</span>
+                @endif
             </div>
         </div>
 
@@ -138,9 +147,35 @@
 
     @push('scripts')
         <script>
-            function testMarkazi({ saveUrl, csrf }) {
+            function testMarkazi({ saveUrl, loadUrl, csrf }) {
                 return {
-                    saveUrl, csrf, saving: {},
+                    saveUrl, loadUrl, csrf, saving: {}, loading: false,
+                    async loadFromDiagnostika() {
+                        if (this.loading) return;
+                        if (!confirm("Diagnostika orqali shu guruh sessiyasiga mos OSKE/TEST natijalari yuklansinmi?")) return;
+                        this.loading = true;
+                        try {
+                            const res = await fetch(this.loadUrl, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-TOKEN': this.csrf,
+                                    'Accept': 'application/json',
+                                },
+                            });
+                            const data = await res.json();
+                            if (!res.ok || !data.success) {
+                                alert(data.message || 'Yuklashda xato');
+                                return;
+                            }
+                            alert(data.message || 'Yuklandi');
+                            window.location.reload();
+                        } catch (e) {
+                            alert('Tarmoq xatosi');
+                        } finally {
+                            this.loading = false;
+                        }
+                    },
                     async saveScore(appId) {
                         const oskeInp = document.querySelector(`input[data-oske="${appId}"]`);
                         const testInp = document.querySelector(`input[data-test="${appId}"]`);

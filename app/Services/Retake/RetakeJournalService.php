@@ -2,6 +2,7 @@
 
 namespace App\Services\Retake;
 
+use App\Models\HemisQuizResult;
 use App\Models\RetakeApplication;
 use App\Models\RetakeGrade;
 use App\Models\RetakeGroup;
@@ -1043,6 +1044,143 @@ class RetakeJournalService
             'fetched_oske' => $fetchedOske,
             'fetched_test' => $fetchedTest,
             'missing' => $missing,
+        ];
+    }
+
+    /**
+     * Diagnostika orqali — qayta o'qish quiz natijalarini to'g'ridan-to'g'ri
+     * `hemis_quiz_results` (Moodle sync manbai) dan o'qib,
+     * retake_applications.oske_score / test_score ga yozadi.
+     *
+     * `fetchOskeTestResults` dan asosiy farqi: natija FASL (sessiya kodi)
+     * bo'yicha QAT'IY filtrlanadi. Quiz nomidagi `Qayta-o'qish-YYYY-YYYY-fasl`
+     * tokeni guruh sessiyasiga mos kelmasa — natija RAD ETILADI. Shu bilan
+     * qishki sessiya natijasi yozgi jurnalga oqib o'tishi oldi olinadi.
+     *
+     * @return array{
+     *   fetched_oske:int, fetched_test:int, missing:int,
+     *   rejected_other_session:int, session_code:string
+     * }
+     */
+    public function fetchRetakeResultsFromQuiz(RetakeGroup $group, Teacher $actor): array
+    {
+        $sessionCode = $group->sessionCode();
+        if ($sessionCode === null) {
+            throw ValidationException::withMessages([
+                'session' => "Guruh sessiyasi (o'quv yili / fasl) aniqlanmadi — diagnostika orqali yuklab bo'lmaydi. "
+                    . "Sessiya nomida YYYY-YYYY va fasl (kuzgi/qishki/yozgi) bo'lishi shart.",
+            ]);
+        }
+
+        $applications = $this->applications($group);
+
+        $base = [
+            'fetched_oske' => 0,
+            'fetched_test' => 0,
+            'missing' => 0,
+            'rejected_other_session' => 0,
+            'session_code' => $sessionCode,
+        ];
+
+        if ($applications->isEmpty()) {
+            return $base;
+        }
+
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+        $needsOske = in_array($group->assessment_type, ['oske', 'oske_test'], true);
+        $needsTest = in_array($group->assessment_type, ['test', 'oske_test'], true);
+
+        $relevantTypes = array_merge(
+            $needsOske ? $oskiTypes : [],
+            $needsTest ? $testTypes : [],
+        );
+        if (empty($relevantTypes)) {
+            return $base;
+        }
+
+        $hemisIds = $applications->pluck('student_hemis_id')
+            ->filter()
+            ->map(fn ($v) => (string) $v)
+            ->unique()
+            ->values()
+            ->all();
+
+        $rows = HemisQuizResult::query()
+            ->where('is_active', 1)
+            ->where('fan_id', $group->subject_id)
+            ->whereIn('student_id', $hemisIds)
+            ->whereIn('quiz_type', $relevantTypes)
+            ->get(['student_id', 'quiz_type', 'attempt_name', 'shakl', 'grade']);
+
+        // [hemis_id]['oske'|'test'] => eng yuqori baho (faqat shu sessiya).
+        $best = [];
+        $rejected = 0;
+        foreach ($rows as $row) {
+            $rowCode = RetakeSessionCode::fromQuizName($row->attempt_name, $row->shakl);
+            if ($rowCode !== $sessionCode) {
+                // Boshqa fasl/o'quv yili yoki qayta o'qish bo'lmagan oddiy quiz.
+                $rejected++;
+                continue;
+            }
+            if ($row->grade === null) {
+                continue;
+            }
+            $grade = (float) $row->grade;
+            $kind = in_array($row->quiz_type, $oskiTypes, true) ? 'oske' : 'test';
+            $hid = (string) $row->student_id;
+            if (!isset($best[$hid][$kind]) || $grade > $best[$hid][$kind]) {
+                $best[$hid][$kind] = $grade;
+            }
+        }
+
+        $fetchedOske = 0;
+        $fetchedTest = 0;
+        $missing = 0;
+
+        foreach ($applications as $app) {
+            $hid = (string) $app->student_hemis_id;
+            $oske = $needsOske ? ($best[$hid]['oske'] ?? null) : null;
+            $test = $needsTest ? ($best[$hid]['test'] ?? null) : null;
+
+            $hasUpdate = false;
+            if ($needsOske) {
+                if ($oske !== null) {
+                    $fetchedOske++;
+                    $hasUpdate = true;
+                } elseif ($app->oske_score === null) {
+                    $missing++;
+                }
+            }
+            if ($needsTest) {
+                if ($test !== null) {
+                    $fetchedTest++;
+                    $hasUpdate = true;
+                } elseif ($app->test_score === null) {
+                    $missing++;
+                }
+            }
+
+            if ($hasUpdate) {
+                // Yakuniy baho qayta hisoblash logikasi bitta joyda
+                // (saveOskeTestScore) saqlanadi. Yangi natija bo'lmagan
+                // komponent uchun mavjud qiymat saqlanadi.
+                $this->saveOskeTestScore(
+                    $app,
+                    $oske !== null ? round($oske) : ($app->oske_score !== null ? (float) $app->oske_score : null),
+                    $test !== null ? round($test) : ($app->test_score !== null ? (float) $app->test_score : null),
+                    $actor,
+                );
+            }
+        }
+
+        return [
+            'fetched_oske' => $fetchedOske,
+            'fetched_test' => $fetchedTest,
+            'missing' => $missing,
+            'rejected_other_session' => $rejected,
+            'session_code' => $sessionCode,
         ];
     }
 }

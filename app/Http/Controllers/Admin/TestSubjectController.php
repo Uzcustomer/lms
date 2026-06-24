@@ -8,6 +8,7 @@ use App\Models\Group;
 use App\Models\Specialty;
 use App\Models\Teacher;
 use App\Models\TestSubject;
+use App\Models\TestSubjectLesson;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -160,6 +161,60 @@ class TestSubjectController extends Controller
         return view('admin.test-subjects.show', compact('testSubject'));
     }
 
+    public function storeLesson(Request $request, TestSubject $testSubject)
+    {
+        $validated = $this->validateLesson($request);
+
+        $testSubject->lessons()->create([
+            'lesson_date' => $validated['lesson_date'],
+            'starts_at' => $validated['starts_at'] ?? null,
+            'ends_at' => $validated['ends_at'] ?? null,
+            'topic_order' => $validated['topic_order'] ?? ($testSubject->lessons()->max('topic_order') + 1),
+            'topic_title' => $validated['topic_title'] ?? null,
+            'is_active' => $request->boolean('is_active', true),
+        ]);
+
+        $this->syncLessonOrdering($testSubject);
+
+        return redirect()
+            ->route('admin.test-subjects.show', $testSubject)
+            ->with('success', 'Dars jadvali qo‘shildi.');
+    }
+
+    public function updateLesson(Request $request, TestSubject $testSubject, TestSubjectLesson $lesson)
+    {
+        abort_unless((int) $lesson->test_subject_id === (int) $testSubject->id, 404);
+
+        $validated = $this->validateLesson($request);
+
+        $lesson->update([
+            'lesson_date' => $validated['lesson_date'],
+            'starts_at' => $validated['starts_at'] ?? null,
+            'ends_at' => $validated['ends_at'] ?? null,
+            'topic_order' => $validated['topic_order'] ?? $lesson->topic_order,
+            'topic_title' => $validated['topic_title'] ?? null,
+            'is_active' => $request->boolean('is_active', true),
+        ]);
+
+        $this->syncLessonOrdering($testSubject);
+
+        return redirect()
+            ->route('admin.test-subjects.show', $testSubject)
+            ->with('success', 'Dars jadvali yangilandi.');
+    }
+
+    public function destroyLesson(TestSubject $testSubject, TestSubjectLesson $lesson)
+    {
+        abort_unless((int) $lesson->test_subject_id === (int) $testSubject->id, 404);
+
+        $lesson->delete();
+        $this->syncLessonOrdering($testSubject);
+
+        return redirect()
+            ->route('admin.test-subjects.show', $testSubject)
+            ->with('success', 'Dars jadvali o‘chirildi.');
+    }
+
     public function destroy(TestSubject $testSubject)
     {
         $testSubject->delete();
@@ -167,6 +222,36 @@ class TestSubjectController extends Controller
         return redirect()
             ->route('admin.test-subjects.index')
             ->with('success', 'Test fan o\'chirildi.');
+    }
+
+    private function validateLesson(Request $request): array
+    {
+        return $request->validate([
+            'lesson_date' => ['required', 'date'],
+            'starts_at' => ['nullable', 'date_format:H:i'],
+            'ends_at' => ['nullable', 'date_format:H:i', 'after:starts_at'],
+            'topic_order' => ['nullable', 'integer', 'min:1'],
+            'topic_title' => ['required', 'string', 'max:255'],
+        ]);
+    }
+
+    private function syncLessonOrdering(TestSubject $testSubject): void
+    {
+        $testSubject->load('lessons');
+
+        $testSubject->lessons
+            ->sortBy([
+                fn (TestSubjectLesson $lesson) => $lesson->lesson_date?->format('Y-m-d') ?? '9999-12-31',
+                fn (TestSubjectLesson $lesson) => $lesson->starts_at ?? '23:59',
+                fn (TestSubjectLesson $lesson) => $lesson->topic_order ?? PHP_INT_MAX,
+                fn (TestSubjectLesson $lesson) => $lesson->id,
+            ])
+            ->values()
+            ->each(function (TestSubjectLesson $lesson, int $index) {
+                if ((int) $lesson->topic_order !== $index + 1) {
+                    $lesson->update(['topic_order' => $index + 1]);
+                }
+            });
     }
 
     private function groupPayload(): array

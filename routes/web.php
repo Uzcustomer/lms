@@ -133,6 +133,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/create', [TestSubjectController::class, 'create'])->name('create');
             Route::post('/', [TestSubjectController::class, 'store'])->name('store');
             Route::get('/{testSubject}', [TestSubjectController::class, 'show'])->name('show');
+            Route::post('/{testSubject}/lessons', [TestSubjectController::class, 'storeLesson'])->name('lessons.store');
+            Route::put('/{testSubject}/lessons/{lesson}', [TestSubjectController::class, 'updateLesson'])->name('lessons.update');
+            Route::delete('/{testSubject}/lessons/{lesson}', [TestSubjectController::class, 'destroyLesson'])->name('lessons.destroy');
             Route::delete('/{testSubject}', [TestSubjectController::class, 'destroy'])->name('destroy');
         });
 

@@ -83,6 +83,8 @@
                 .tb-split { display:flex; gap:12px; flex-wrap:wrap; align-items:flex-start; }
                 .tb-pane { min-width:0; }
                 .tb-soft-box { border:1px dashed #cbd5e1; border-radius:14px; background:#f8fafc; padding:12px; }
+                .tb-inline { display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; }
+                .tb-col { min-width:0; }
                 .tb-option-row { display:flex; align-items:center; gap:10px; }
                 .tb-option-prefix {
                     min-width:34px;
@@ -113,6 +115,7 @@
                 .tb-question-head { padding:14px 18px; background:linear-gradient(135deg,#f8fafc,#f1f5f9); border-bottom:1px solid #e2e8f0; }
                 @media (max-width: 900px) {
                     .tb-split { flex-direction:column; }
+                    .tb-inline { flex-direction:column; align-items:stretch; }
                     .tb-option-row { flex-wrap:wrap; }
                 }
             </style>
@@ -240,32 +243,32 @@
                         <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.store', [$testSubject, $lesson]) }}" class="space-y-4">
                             @csrf
 
-                            <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                                <div class="lg:col-span-4">
+                            <div class="tb-inline">
+                                <div class="tb-col" style="flex:1 1 240px;">
                                     <label class="tb-label">Savol turi</label>
                                     <select name="type" class="tb-select" x-model="type">
                                         <option value="single_choice">Multiple choice</option>
                                         <option value="fill_in_blank">Fill in blank</option>
                                     </select>
                                 </div>
-                                <div class="lg:col-span-4">
+                                <div class="tb-col" style="flex:0 0 130px;">
                                     <label class="tb-label">Ball</label>
                                     <input type="number" min="1" max="100" name="points" class="tb-input" value="{{ old('points', 1) }}" required>
                                 </div>
-                                <div class="lg:col-span-4 flex items-end">
-                                    <label class="flex items-center gap-3 text-sm text-slate-700 pb-2">
+                                <div class="tb-col" style="flex:0 0 180px;">
+                                    <label class="flex items-center gap-3 text-sm text-slate-700 h-[42px]">
                                         <input type="checkbox" name="is_active" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('is_active', '1') ? 'checked' : '' }}>
                                         Savol faol bo'lsin
                                     </label>
                                 </div>
                             </div>
 
-                            <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
-                                <div class="xl:col-span-7">
+                            <div class="tb-inline">
+                                <div class="tb-col" style="flex:1 1 420px;">
                                     <label class="tb-label">Savol matni</label>
                                     <textarea name="prompt" class="tb-textarea" required>{{ old('prompt') }}</textarea>
                                 </div>
-                                <div class="xl:col-span-5">
+                                <div class="tb-col" style="flex:1 1 320px;">
                                     <label class="tb-label">Yordamchi izoh</label>
                                     <textarea name="helper_text" class="tb-textarea">{{ old('helper_text') }}</textarea>
                                 </div>
@@ -302,13 +305,13 @@
                                 </div>
                             </div>
 
-                            <div x-show="type === 'fill_in_blank'" x-cloak class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                <div>
+                            <div x-show="type === 'fill_in_blank'" x-cloak class="tb-inline">
+                                <div class="tb-col" style="flex:1 1 300px;">
                                     <label class="tb-label">To'g'ri javob</label>
                                     <input type="text" name="correct_answer_text" class="tb-input" value="{{ old('correct_answer_text') }}">
                                 </div>
-                                <div class="flex items-end">
-                                    <label class="flex items-center gap-3 text-sm text-slate-700 pb-2">
+                                <div class="tb-col" style="flex:0 0 220px;">
+                                    <label class="flex items-center gap-3 text-sm text-slate-700 h-[42px]">
                                         <input type="checkbox" name="case_sensitive" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('case_sensitive') ? 'checked' : '' }}>
                                         Harf kattaligi farq qilsin
                                     </label>
@@ -362,32 +365,32 @@
                                 @csrf
                                 @method('PUT')
 
-                                <div class="grid grid-cols-1 lg:grid-cols-12 gap-4">
-                                    <div class="lg:col-span-4">
+                                <div class="tb-inline">
+                                    <div class="tb-col" style="flex:1 1 240px;">
                                         <label class="tb-label">Savol turi</label>
                                         <select name="type" class="tb-select" x-model="type">
                                             <option value="single_choice">Multiple choice</option>
                                             <option value="fill_in_blank">Fill in blank</option>
                                         </select>
                                     </div>
-                                    <div class="lg:col-span-4">
+                                    <div class="tb-col" style="flex:0 0 130px;">
                                         <label class="tb-label">Ball</label>
                                         <input type="number" min="1" max="100" name="points" class="tb-input" value="{{ $question->points }}" required>
                                     </div>
-                                    <div class="lg:col-span-4 flex items-end">
-                                        <label class="flex items-center gap-3 text-sm text-slate-700 pb-2">
+                                    <div class="tb-col" style="flex:0 0 180px;">
+                                        <label class="flex items-center gap-3 text-sm text-slate-700 h-[42px]">
                                             <input type="checkbox" name="is_active" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ $question->is_active ? 'checked' : '' }}>
                                             Savol faol
                                         </label>
                                     </div>
                                 </div>
 
-                                <div class="grid grid-cols-1 xl:grid-cols-12 gap-4">
-                                    <div class="xl:col-span-7">
+                                <div class="tb-inline">
+                                    <div class="tb-col" style="flex:1 1 420px;">
                                         <label class="tb-label">Savol matni</label>
                                         <textarea name="prompt" class="tb-textarea" required>{{ $question->prompt }}</textarea>
                                     </div>
-                                    <div class="xl:col-span-5">
+                                    <div class="tb-col" style="flex:1 1 320px;">
                                         <label class="tb-label">Yordamchi izoh</label>
                                         <textarea name="helper_text" class="tb-textarea">{{ $question->helper_text }}</textarea>
                                     </div>
@@ -419,13 +422,13 @@
                                     </div>
                                 </div>
 
-                                <div x-show="type === 'fill_in_blank'" x-cloak class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                                    <div>
+                                <div x-show="type === 'fill_in_blank'" x-cloak class="tb-inline">
+                                    <div class="tb-col" style="flex:1 1 300px;">
                                         <label class="tb-label">To'g'ri javob</label>
                                         <input type="text" name="correct_answer_text" class="tb-input" value="{{ $question->correct_answer_text }}">
                                     </div>
-                                    <div class="flex items-end">
-                                        <label class="flex items-center gap-3 text-sm text-slate-700 pb-2">
+                                    <div class="tb-col" style="flex:0 0 220px;">
+                                        <label class="flex items-center gap-3 text-sm text-slate-700 h-[42px]">
                                             <input type="checkbox" name="case_sensitive" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ $question->case_sensitive ? 'checked' : '' }}>
                                             Harf kattaligi farq qilsin
                                         </label>

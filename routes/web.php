@@ -129,6 +129,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
             ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin')
             ->group(function () {
             Route::get('/', [TestSubjectController::class, 'index'])->name('index');
+            Route::get('/create', [TestSubjectController::class, 'create'])->name('create');
+            Route::post('/', [TestSubjectController::class, 'store'])->name('store');
+            Route::get('/{testSubject}', [TestSubjectController::class, 'show'])->name('show');
         });
 
         // Role switching

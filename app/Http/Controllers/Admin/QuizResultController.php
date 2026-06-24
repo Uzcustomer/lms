@@ -1305,6 +1305,13 @@ class QuizResultController extends Controller
                     $studentScoreLookup, $defaultScore, $mavzuStates, $retakeLookup
                 );
 
+                // Qayta o'qish jurnaliga allaqachon yuklangan natijalar
+                // "Yuklanmagan natijalar" ro'yxatida ko'rinmasligi kerak
+                // (ular student_grades'da emas, retake_applications'da).
+                if (($xulosa['code'] ?? null) === 'uploaded') {
+                    continue;
+                }
+
                 $rowNum++;
                 $studentGroup = ($student && isset($groups[$student->group_id])) ? $groups[$student->group_id] : null;
                 $data[] = [
@@ -1968,10 +1975,146 @@ class QuizResultController extends Controller
             ];
         }
 
+        // Qayta o'qish jurnaliga yuklangan natijalar — student_grades'da emas,
+        // retake_applications'da. Ularni ham shu hisobotga qo'shamiz.
+        $this->appendRetakeUploadedRows($data, $rowNum, $request);
+
         return response()->json([
             'data' => $data,
             'total' => count($data),
         ]);
+    }
+
+    /**
+     * "Sistemaga yuklangan natijalar" hisobotiga QAYTA O'QISH jurnaliga
+     * yozilgan natijalarni qo'shadi. Qayta o'qish quiz natijasi (shakl
+     * "Qayta-o'qish") retake_applications'ga yoziladi (student_grades'ga
+     * emas), shuning uchun asosiy so'rovda ko'rinmaydi. Bu yerda: sana
+     * oralig'idagi retake quiz natijalaridan, mos arizada o'sha turdagi
+     * (OSKE/TEST) baho yozilgan va aynan shu urinish bahosiga teng
+     * bo'lganlarini "yuklangan" deb qo'shamiz.
+     */
+    private function appendRetakeUploadedRows(array &$data, int &$rowNum, Request $request): void
+    {
+        $rq = HemisQuizResult::where('is_active', 1);
+        if ($request->filled('date_from')) {
+            $rq->whereDate('date_finish', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $rq->whereDate('date_finish', '<=', $request->date_to);
+        }
+
+        $rows = $rq->get()->filter(
+            fn ($q) => \App\Services\Retake\RetakeSessionCode::isRetakeQuiz($q->attempt_name, $q->shakl)
+        );
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $sids = $rows->pluck('student_id')->filter()->unique()->values()->all();
+        $students = Student::where(function ($q) use ($sids) {
+            $q->whereIn('hemis_id', $sids)->orWhereIn('student_id_number', $sids);
+        })->get();
+
+        $lookup = [];
+        foreach ($students as $s) {
+            $lookup[(string) $s->hemis_id] = $s;
+            if ($s->student_id_number) {
+                $lookup[(string) $s->student_id_number] = $s;
+            }
+        }
+
+        $hemisIds = $students->pluck('hemis_id')->filter()->unique()->values()->all();
+        $fanIds = $rows->pluck('fan_id')->filter()->unique()->values()->all();
+        if (empty($hemisIds) || empty($fanIds)) {
+            return;
+        }
+
+        $apps = \App\Models\RetakeApplication::query()
+            ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
+            ->whereIn('student_hemis_id', $hemisIds)
+            ->whereIn('subject_id', $fanIds)
+            ->with(['group.window.session'])
+            ->get();
+
+        $appByKey = [];
+        foreach ($apps as $a) {
+            $hid = (string) $a->student_hemis_id;
+            $fan = (string) $a->subject_id;
+            $code = \App\Services\Retake\RetakeSessionCode::fromSession($a->group?->window?->session);
+            $appByKey[$hid . '|' . $fan][] = $a;
+            if ($code !== null) {
+                $appByKey[$hid . '|' . $fan . '|' . $code][] = $a;
+            }
+        }
+
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+
+        foreach ($rows as $q) {
+            $student = $lookup[(string) $q->student_id] ?? null;
+            if (!$student) {
+                continue;
+            }
+
+            $isOske = in_array($q->quiz_type, $oskiTypes, true) || stripos((string) $q->quiz_type, 'OSKI') !== false;
+            $isTest = !$isOske && (in_array($q->quiz_type, $testTypes, true) || stripos((string) $q->quiz_type, 'test') !== false);
+            if (!$isOske && !$isTest) {
+                continue;
+            }
+
+            $grade = $q->grade !== null ? (int) round((float) $q->grade) : null;
+            if ($grade === null) {
+                continue;
+            }
+
+            $hid = (string) $student->hemis_id;
+            $fan = (string) $q->fan_id;
+            $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($q->attempt_name, $q->shakl);
+
+            $cands = [];
+            if ($code !== null && isset($appByKey[$hid . '|' . $fan . '|' . $code])) {
+                $cands = $appByKey[$hid . '|' . $fan . '|' . $code];
+            } elseif (isset($appByKey[$hid . '|' . $fan])) {
+                $cands = $appByKey[$hid . '|' . $fan];
+            }
+
+            $matched = false;
+            foreach ($cands as $a) {
+                $score = $isOske ? $a->oske_score : $a->test_score;
+                if ($score !== null && (int) round((float) $score) === $grade) {
+                    $matched = true;
+                    break;
+                }
+            }
+            if (!$matched) {
+                continue;
+            }
+
+            $semLabel = $q->semester ?: $student->semester_name;
+            $semNum = ($semLabel && preg_match('/(\d+)/', (string) $semLabel, $m)) ? (int) $m[1] : null;
+
+            $rowNum++;
+            $data[] = [
+                'id'           => 'r' . $q->id,
+                'row_num'      => $rowNum,
+                'attempt_id'   => $q->attempt_id ?? '-',
+                'student_id'   => $student->id,
+                'student_name' => $student->full_name,
+                'faculty'      => $student->department_name ?? '-',
+                'direction'    => $student->specialty_name ?? '-',
+                'semester'     => $semNum ? $semNum . '-sem' : ($semLabel ?: '-'),
+                'fan_id'       => $q->fan_id,
+                'fan_name'     => $q->fan_name,
+                'quiz_type'    => $q->quiz_type ?? '-',
+                'attempt_name' => $q->attempt_name ?? '-',
+                'shakl'        => $q->shakl ?? '-',
+                'grade'        => $grade,
+                'date_start'   => $q->date_start ? $q->date_start->format('d.m.Y H:i') : '',
+                'date_finish'  => $q->date_finish ? $q->date_finish->format('d.m.Y H:i') : '',
+                'is_retake'    => true,
+            ];
+        }
     }
 
     public function index(Request $request)

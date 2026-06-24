@@ -1,4 +1,22 @@
 <x-app-layout>
+    @php
+        $formatDate = function ($value) {
+            if (empty($value)) {
+                return '—';
+            }
+
+            if ($value instanceof \Carbon\CarbonInterface) {
+                return $value->format('d.m.Y');
+            }
+
+            try {
+                return \Carbon\Carbon::parse($value)->format('d.m.Y');
+            } catch (\Throwable $e) {
+                return (string) $value;
+            }
+        };
+    @endphp
+
     <div class="py-6">
         <div class="w-full px-4 sm:px-6 lg:px-8 space-y-6">
             <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6 flex items-start justify-between gap-4">
@@ -7,7 +25,7 @@
                     <h1 class="text-2xl font-bold text-slate-900">{{ $testSubject->name }}</h1>
                     <p class="text-sm text-slate-500 mt-2">
                         {{ $testSubject->faculty_name ?: 'Fakultet tanlanmagan' }}
-                        · {{ $testSubject->specialty_name ?: 'Yo'nalish tanlanmagan' }}
+                        · {{ $testSubject->specialty_name ?: 'Yo\'nalish tanlanmagan' }}
                         · {{ $testSubject->department_name ?: 'Kafedra tanlanmagan' }}
                         · {{ $testSubject->level_name ?: 'Kurs tanlanmagan' }}
                     </p>
@@ -26,8 +44,8 @@
                         <div><span class="text-slate-500">Yo'nalish:</span> <span class="font-semibold text-slate-900">{{ $testSubject->specialty_name ?: '—' }}</span></div>
                         <div><span class="text-slate-500">Kafedra:</span> <span class="font-semibold text-slate-900">{{ $testSubject->department_name ?: '—' }}</span></div>
                         <div><span class="text-slate-500">O'qituvchi:</span> <span class="font-semibold text-slate-900">{{ $testSubject->teacher_name ?: '—' }}</span></div>
-                        <div><span class="text-slate-500">Boshlanish:</span> <span class="font-semibold text-slate-900">{{ optional($testSubject->starts_on)->format('d.m.Y') ?: '—' }}</span></div>
-                        <div><span class="text-slate-500">Tugash:</span> <span class="font-semibold text-slate-900">{{ optional($testSubject->ends_on)->format('d.m.Y') ?: '—' }}</span></div>
+                        <div><span class="text-slate-500">Boshlanish:</span> <span class="font-semibold text-slate-900">{{ $formatDate($testSubject->starts_on) }}</span></div>
+                        <div><span class="text-slate-500">Tugash:</span> <span class="font-semibold text-slate-900">{{ $formatDate($testSubject->ends_on) }}</span></div>
                         <div><span class="text-slate-500">Holat:</span> <span class="font-semibold {{ $testSubject->is_active ? 'text-emerald-600' : 'text-rose-600' }}">{{ $testSubject->is_active ? 'Faol' : 'Nofaol' }}</span></div>
                     </div>
                 </div>
@@ -37,7 +55,7 @@
                     <div class="flex flex-wrap gap-2">
                         @forelse($testSubject->groups as $group)
                             <span class="inline-flex items-center px-3 py-1.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 text-sm font-medium">
-                                {{ $group->name }}
+                                {{ $group->name ?: ($group->pivot->group_name ?? 'Nomsiz guruh') }}
                             </span>
                         @empty
                             <div class="text-sm text-slate-500">Guruh biriktirilmagan.</div>
@@ -64,7 +82,7 @@
                             @forelse($testSubject->lessons as $lesson)
                                 <tr>
                                     <td class="px-4 py-4 font-semibold text-slate-900">{{ $lesson->topic_order }}</td>
-                                    <td class="px-4 py-4 text-slate-700">{{ optional($lesson->lesson_date)->format('d.m.Y') }}</td>
+                                    <td class="px-4 py-4 text-slate-700">{{ $formatDate($lesson->lesson_date) }}</td>
                                     <td class="px-4 py-4 text-slate-700">
                                         {{ $lesson->starts_at ?: '—' }} - {{ $lesson->ends_at ?: '—' }}
                                     </td>

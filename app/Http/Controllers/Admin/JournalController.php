@@ -758,6 +758,8 @@ class JournalController extends Controller
                     'retake_graded_at' => $g->retake_graded_at,
                     'quiz_result_id' => $g->quiz_result_id,
                     'employee_id' => $g->employee_id,
+                    'employee_name' => $g->employee_name ?? null,
+                    'retake_by' => $g->retake_by ?? null,
                 ];
             }
         }
@@ -770,6 +772,12 @@ class JournalController extends Controller
                     'retake_grade' => $g->retake_grade,
                     'retake_was_sababli' => !empty($g->retake_was_sababli),
                     'deadline' => $g->deadline,
+                    'graded_by_user_id' => $g->graded_by_user_id,
+                    'retake_graded_at' => $g->retake_graded_at,
+                    'quiz_result_id' => $g->quiz_result_id,
+                    'employee_id' => $g->employee_id,
+                    'employee_name' => $g->employee_name ?? null,
+                    'retake_by' => $g->retake_by ?? null,
                 ];
             }
         }

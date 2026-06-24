@@ -2458,6 +2458,9 @@ class QuizResultController extends Controller
 
         $targetDate = $lessonDates[$mavzuN - 1];
         $moodleGrade = (int) round((float) $result->grade);
+        $retakeGradedAt = now();
+        $retakeGradedByUserId = auth()->id();
+        $retakeGraderName = auth()->user()->name ?? 'Diagnostika';
 
         // Shu sanadagi jurnal yozuvlari (JN type) — bir kunda bir nechta juftlik bo'lishi mumkin
         $sgRecords = DB::table('student_grades')
@@ -2537,6 +2540,10 @@ class QuizResultController extends Controller
                     'reason'               => 'absent',
                     'status'               => 'closed',
                     'quiz_result_id'       => $result->id,
+                    'graded_by_user_id'    => $retakeGradedByUserId,
+                    'retake_graded_at'     => $retakeGradedAt,
+                    'retake_by'            => $retakeGraderName,
+                    'employee_name'        => $retakeGraderName,
                     'updated_at'           => now(),
                 ];
             } else {
@@ -2576,6 +2583,10 @@ class QuizResultController extends Controller
                     'reason'               => $sg->reason ?? 'low_grade',
                     'status'               => 'closed',
                     'quiz_result_id'       => $result->id,
+                    'graded_by_user_id'    => $retakeGradedByUserId,
+                    'retake_graded_at'     => $retakeGradedAt,
+                    'retake_by'            => $retakeGraderName,
+                    'employee_name'        => $retakeGraderName,
                     'updated_at'           => now(),
                 ];
             }

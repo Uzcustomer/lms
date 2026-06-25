@@ -503,6 +503,18 @@ class RetakeJournalService
             ]);
         }
 
+        // Testga yuborish faqat JN >= 60 VA MT >= 60 bo'lganda mumkin.
+        $jn = $app->joriy_score;
+        $mt = RetakeMustaqilSubmission::query()
+            ->where('retake_group_id', $group->id)
+            ->where('application_id', $app->id)
+            ->value('grade');
+        if ($jn === null || (float) $jn < 60 || $mt === null || (float) $mt < 60) {
+            throw ValidationException::withMessages([
+                'application_id' => "JN va MT 60 dan kam — testga yuborib bo'lmaydi",
+            ]);
+        }
+
         if (!$group->sent_to_test_markazi_at) {
             $group->update([
                 'sent_to_test_markazi_at' => now(),

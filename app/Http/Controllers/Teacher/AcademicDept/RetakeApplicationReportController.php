@@ -150,10 +150,26 @@ class RetakeApplicationReportController extends Controller
             $addDetail($hid, $sn, $a->subject_name, $prefix . ' — ' . $resLabel[$res], $a->oske_score, $a->test_score);
         }
 
-        // 2) Qarzdorlar olami (o'tgan semestr) — ariza bermaganlar (D).
-        $debtorResults = $this->computeDebtorResults($students, 1, false, []);
+        // Joriy semestr qarzlari (jurnal xavflari) — computeDebtorResults'ga uzatamiz.
+        $studentSemCodes = [];
+        foreach ($students as $s) {
+            if ($s->semester_code !== null) {
+                $studentSemCodes[(string) $s->hemis_id] = (string) $s->semester_code;
+            }
+        }
+        $currentRisksMap = [];
+        try {
+            $currentRisksMap = $this->getCurrentSemesterRisks($hemisIds, $studentSemCodes);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[RetakeAppReport] joriy semestr xavflari: ' . $e->getMessage());
+        }
+
+        // 2) Qarzdorlar olami — o'tgan semestr (academic_records) + joriy semestr (xavflar).
+        $debtorResults = $this->computeDebtorResults($students, 1, false, $currentRisksMap);
         foreach ($debtorResults as $dr) {
             $hid = (string) $dr['hemis_id'];
+
+            // O'tgan semestr qarzlari → "Qayta o'qishga ariza bermaganlar" (D).
             foreach ($dr['debts'] as $d) {
                 $sid = (string) $d['subject_id'];
                 $sn = $semNum($d['semester_name'] ?: $d['semester_code']);
@@ -164,6 +180,24 @@ class RetakeApplicationReportController extends Controller
                     $isCurrent = ($curSem[$hid] ?? null) === $sn;
                     if ($isCurrent) $rows[$key]['current_not_applied']++;
                     $addDetail($hid, $sn, $d['subject_name'], $isCurrent ? 'Joriy semestrdan ariza bermagan' : 'Ariza bermagan');
+                }
+            }
+
+            // Joriy semestr qarzlari (xavflar) → "Joriy semestrdan ariza bermagan
+            // qarzdorlar" (E) va umumiy "ariza bermaganlar" (D). Semestr raqami
+            // talabaning joriy semestri.
+            $sn = $curSem[$hid] ?? null;
+            if ($sn !== null) {
+                foreach (($dr['current_risks'] ?? []) as $cr) {
+                    $sid = (string) ($cr['subject_id'] ?? '');
+                    if ($sid === '') continue;
+                    if (isset($appliedKeys[$hid . '|' . $sid . '|' . $sn])) {
+                        continue; // ariza bergan — B guruhda hisoblangan
+                    }
+                    $key = $rowFor($sid, $sn, $cr['subject_name'] ?? '—', $sn . '-semestr');
+                    $rows[$key]['not_applied']++;
+                    $rows[$key]['current_not_applied']++;
+                    $addDetail($hid, $sn, $cr['subject_name'] ?? '—', 'Joriy semestrdan ariza bermagan');
                 }
             }
         }

@@ -78,6 +78,8 @@
                 case 'oske':      $dJn=50; $dMt=20; $dOn=0; $dOski=30; $dTest=0;  break;
                 case 'test':      $dJn=50; $dMt=20; $dOn=0; $dOski=0;  $dTest=30; break;
                 case 'oske_test': $dJn=50; $dMt=20; $dOn=0; $dOski=15; $dTest=15; break;
+                case 'sinov':
+                case 'sinov_fan': $dJn=50; $dMt=20; $dOn=0; $dOski=0;  $dTest=30; break;
                 default:          $dJn=80; $dMt=20; $dOn=0; $dOski=0;  $dTest=0;  break;
             }
         @endphp

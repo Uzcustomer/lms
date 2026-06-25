@@ -119,7 +119,10 @@
                                             $student = $app->group->student ?? null;
                                             $val = $app->joriy_score;
                                             $mustaqil = $mustaqilMap[$app->id] ?? null;
-                                            $canSendToTestMarkazi = $val !== null && $mustaqil?->grade !== null;
+                                            // Testga yuborish faqat JN >= 60 VA MT >= 60 bo'lganda faol.
+                                            $jnOk = $val !== null && (float) $val >= 60;
+                                            $mtOk = $mustaqil?->grade !== null && (float) $mustaqil->grade >= 60;
+                                            $canSendToTestMarkazi = $jnOk && $mtOk;
                                             $attempt = $attemptsMap[$app->id] ?? 1;
                                             $cellStyle = '';
                                             if ($val !== null) {
@@ -187,17 +190,26 @@
                                                     <span class="block text-[10px] text-gray-400 mt-1">
                                                         {{ $app->sent_to_test_markazi_at->format('d.m.Y H:i') }}
                                                     </span>
-                                                @elseif($canEdit && $canSendToTestMarkazi)
-                                                    <form method="POST"
-                                                          action="{{ route('admin.retake-journal.send-application-to-test-markazi', [$group->id, $app->id]) }}"
-                                                          onsubmit="return confirm('{{ __("Bu talabani test markaziga yuborishni tasdiqlaysizmi?") }}')">
-                                                        @csrf
-                                                        <button type="submit"
-                                                                style="background:#16a34a;color:#fff;border-radius:5px;"
-                                                                class="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold hover:bg-green-700">
+                                                @elseif($canEdit)
+                                                    @if($canSendToTestMarkazi)
+                                                        <form method="POST"
+                                                              action="{{ route('admin.retake-journal.send-application-to-test-markazi', [$group->id, $app->id]) }}"
+                                                              onsubmit="return confirm('{{ __("Bu talabani test markaziga yuborishni tasdiqlaysizmi?") }}')">
+                                                            @csrf
+                                                            <button type="submit"
+                                                                    style="background:#16a34a;color:#fff;border-radius:5px;"
+                                                                    class="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold hover:bg-green-700">
+                                                                {{ __("Testga yuborish") }}
+                                                            </button>
+                                                        </form>
+                                                    @else
+                                                        <button type="button" disabled
+                                                                title="{{ __("JN va MT 60 dan kam — testga yuborib bo'lmaydi") }}"
+                                                                style="background:#e5e7eb;color:#9ca3af;border-radius:5px;cursor:not-allowed;"
+                                                                class="inline-flex items-center gap-2 px-3 py-1.5 text-[11px] font-semibold">
                                                             {{ __("Testga yuborish") }}
                                                         </button>
-                                                    </form>
+                                                    @endif
                                                 @else
                                                     <span class="text-gray-400">—</span>
                                                 @endif

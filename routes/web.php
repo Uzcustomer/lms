@@ -1228,6 +1228,10 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/attendance', [StudentController::class, 'getAttendance'])->name('attendance');
         Route::get('/subjects', [StudentController::class, 'getSubjects'])->name('subjects');
         Route::get('/subject/{id}', [StudentController::class, 'getSubjectGrades'])->name('subject.grades');
+        Route::prefix('test-subjects')->name('test-subjects.')->group(function () {
+            Route::get('/{testSubject}/lessons/{lesson}/test', [\App\Http\Controllers\Student\TestSubjectController::class, 'show'])->name('tests.show');
+            Route::post('/{testSubject}/lessons/{lesson}/test', [\App\Http\Controllers\Student\TestSubjectController::class, 'submit'])->name('tests.submit');
+        });
         Route::get('/pending-lessons', [StudentController::class, 'getPendingLessons'])->name('pending-lessons');
         Route::get('/independents', [StudentController::class, 'getIndependents'])->name('independents');
         Route::post('/independents/{id}/submit', [StudentController::class, 'submitIndependent'])->name('independents.submit');

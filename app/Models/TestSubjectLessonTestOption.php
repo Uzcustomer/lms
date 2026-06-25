@@ -21,4 +21,9 @@ class TestSubjectLessonTestOption extends Model
     {
         return $this->belongsTo(TestSubjectLessonTestQuestion::class, 'question_id');
     }
+
+    public function answers()
+    {
+        return $this->hasMany(TestSubjectLessonTestAnswer::class, 'selected_option_id');
+    }
 }

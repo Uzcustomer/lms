@@ -1096,6 +1096,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/export', [\App\Http\Controllers\Teacher\AcademicDept\RetakeStatisticsController::class, 'exportExcel'])->name('export');
         });
 
+        // Qayta o'qish arizasi hisoboti (fan + ariza semestri kesimida)
+        Route::prefix('retake-application-report')->name('retake-application-report.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeApplicationReportController::class, 'index'])->name('index');
+            Route::get('/data', [\App\Http\Controllers\Teacher\AcademicDept\RetakeApplicationReportController::class, 'data'])->name('data');
+        });
+
         // O'qituvchi-fan kesimida talabalar statistikasi (faqat o'quv bo'limi)
         Route::prefix('retake-teacher-subjects')->name('retake-teacher-subjects.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeTeacherSubjectStatsController::class, 'index'])->name('index');

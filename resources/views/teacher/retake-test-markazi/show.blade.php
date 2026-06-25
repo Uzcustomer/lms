@@ -13,7 +13,21 @@
     <style>
         /* Bu sahifada qatorlar bosiladigan emas — kursor oddiy holatda. */
         .journal-table tbody tr { cursor: default; }
+        .rtm-await {
+            display:inline-flex; align-items:center; justify-content:center;
+            min-width:26px; height:22px; border-radius:6px;
+            background:#f8fafc; border:1px dashed #cbd5e1; color:#94a3b8;
+            font-size:13px; line-height:1;
+        }
     </style>
+    @php
+        $awaitHtml = '<span class="rtm-await" title="Natija hali yo\'q">…</span>';
+        $cellVal = function ($v, $cls) use ($awaitHtml) {
+            if ($v === null) return $awaitHtml;
+            $f = rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
+            return '<span class="badge ' . $cls . '">' . $f . '</span>';
+        };
+    @endphp
 
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full"
          x-data="testMarkazi({
@@ -45,13 +59,13 @@
                 @if($group->oske_date)
                     <div>
                         <p class="text-xs text-gray-500 uppercase">OSKE {{ __("sanasi") }}</p>
-                        <p class="font-medium text-gray-900">{{ $group->oske_date->format('Y-m-d') }}</p>
+                        <p class="font-medium text-gray-900">{{ $group->oske_date->format('d.m.Y') }}</p>
                     </div>
                 @endif
                 @if($group->test_date)
                     <div>
                         <p class="text-xs text-gray-500 uppercase">TEST {{ __("sanasi") }}</p>
-                        <p class="font-medium text-gray-900">{{ $group->test_date->format('Y-m-d') }}</p>
+                        <p class="font-medium text-gray-900">{{ $group->test_date->format('d.m.Y') }}</p>
                     </div>
                 @endif
             </div>
@@ -223,19 +237,13 @@
                                     <span class="badge badge-red" title="JN va MT 60 dan past — testga ruxsat yo'q">{{ __("Ruxsat yo'q") }}</span>
                                 @endif
                             </td>
-                            <td style="text-align:center;"><span class="badge badge-blue">{{ $amaliyotAvg ?? '—' }}</span></td>
-                            <td style="text-align:center;">
-                                <span class="badge badge-teal">{{ $mustaqil?->grade !== null ? rtrim(rtrim(number_format($mustaqil->grade, 2, '.', ''), '0'), '.') : '—' }}</span>
-                            </td>
+                            <td style="text-align:center;">{!! $cellVal($amaliyotAvg, 'badge-blue') !!}</td>
+                            <td style="text-align:center;">{!! $cellVal($mustaqil?->grade, 'badge-teal') !!}</td>
                             @if($needsOske)
-                                <td style="text-align:center; background:#eff6ff;" data-oske-cell="{{ $app->id }}">
-                                    <span class="badge badge-blue">{{ $app->oske_score !== null ? rtrim(rtrim(number_format($app->oske_score, 2, '.', ''), '0'), '.') : '—' }}</span>
-                                </td>
+                                <td style="text-align:center; background:#eff6ff;" data-oske-cell="{{ $app->id }}">{!! $cellVal($app->oske_score, 'badge-blue') !!}</td>
                             @endif
                             @if($needsTest)
-                                <td style="text-align:center; background:#eff6ff;" data-test-cell="{{ $app->id }}">
-                                    <span class="badge badge-blue">{{ $app->test_score !== null ? rtrim(rtrim(number_format($app->test_score, 2, '.', ''), '0'), '.') : '—' }}</span>
-                                </td>
+                                <td style="text-align:center; background:#eff6ff;" data-test-cell="{{ $app->id }}">{!! $cellVal($app->test_score, 'badge-blue') !!}</td>
                             @endif
                         </tr>
                     @endforeach

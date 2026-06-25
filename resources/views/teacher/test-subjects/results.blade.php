@@ -207,42 +207,6 @@
 
             <div class="tr-card">
                 <div class="tr-head">
-                    <h2 class="text-lg font-bold text-slate-900">Savollar kesimida tahlil</h2>
-                    <p class="mt-1 text-sm text-slate-500">Har bir savol bo'yicha nechta talaba to'g'ri, noto'g'ri yoki javobsiz qoldirganini ko'ring.</p>
-                </div>
-                <div class="tr-section">
-                    <div class="tr-question-grid">
-                        @foreach($questionSummaries as $question)
-                            <div class="tr-question-box">
-                                <div class="flex items-center justify-between gap-3">
-                                    <div class="text-sm font-extrabold text-slate-900">Savol {{ $question['question_no'] }}</div>
-                                    <span class="tr-status {{ $question['type'] === 'single_choice' ? 'green' : 'orange' }}">
-                                        {{ $question['type'] === 'single_choice' ? 'Multiple choice' : 'Fill in blank' }}
-                                    </span>
-                                </div>
-                                <div class="mt-2 text-sm font-medium text-slate-700">{{ $question['prompt'] }}</div>
-                                <div class="mt-4 grid grid-cols-3 gap-2 text-center">
-                                    <div class="rounded-xl border border-emerald-200 bg-emerald-50 px-2 py-3">
-                                        <div class="text-[11px] font-bold uppercase text-emerald-700">To'g'ri</div>
-                                        <div class="mt-1 text-xl font-extrabold text-emerald-700">{{ $question['correct_count'] }}</div>
-                                    </div>
-                                    <div class="rounded-xl border border-red-200 bg-red-50 px-2 py-3">
-                                        <div class="text-[11px] font-bold uppercase text-red-700">Noto'g'ri</div>
-                                        <div class="mt-1 text-xl font-extrabold text-red-700">{{ $question['incorrect_count'] }}</div>
-                                    </div>
-                                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-2 py-3">
-                                        <div class="text-[11px] font-bold uppercase text-slate-600">Javobsiz</div>
-                                        <div class="mt-1 text-xl font-extrabold text-slate-700">{{ $question['unanswered_count'] }}</div>
-                                    </div>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-            </div>
-
-            <div class="tr-card">
-                <div class="tr-head">
                     <h2 class="text-lg font-bold text-slate-900">Talabalar natijalari</h2>
                     <p class="mt-1 text-sm text-slate-500">Qatorni ochib har bir talabaga qaysi savolda nima javob berganini ko'rishingiz mumkin.</p>
                 </div>

@@ -155,6 +155,48 @@ class RetakeTestMarkaziController extends Controller
         ]);
     }
 
+    /**
+     * YN qaydnoma (Excel) — vazn taqsimoti bilan, asosiy jurnal logikasidek.
+     * RetakeJournalService::buildVedomostExcel orqali yn_qaydnoma shablonidan.
+     */
+    public function generateYnQaydnoma(Request $request, int $groupId)
+    {
+        $this->authorize();
+
+        $request->validate([
+            'weight_jn'   => 'required|integer|min:0|max:100',
+            'weight_mt'   => 'required|integer|min:0|max:100',
+            'weight_on'   => 'nullable|integer|min:0|max:100',
+            'weight_oski' => 'nullable|integer|min:0|max:100',
+            'weight_test' => 'nullable|integer|min:0|max:100',
+            'semester'    => 'nullable|integer|min:1|max:20',
+        ]);
+
+        $group = RetakeGroup::with('teacher')->findOrFail($groupId);
+
+        $weights = [
+            'jn'   => (int) $request->input('weight_jn'),
+            'mt'   => (int) $request->input('weight_mt'),
+            'on'   => (int) ($request->input('weight_on') ?? 0),
+            'oski' => (int) ($request->input('weight_oski') ?? 0),
+            'test' => (int) ($request->input('weight_test') ?? 0),
+        ];
+
+        if (array_sum($weights) !== 100) {
+            return response()->json(['error' => "Vaznlar jami 100 bo'lishi kerak"], 422);
+        }
+
+        $semesterNumber = $request->filled('semester') ? (int) $request->input('semester') : null;
+
+        try {
+            $built = $this->service->buildVedomostExcel($group, $weights, $semesterNumber);
+        } catch (ValidationException $e) {
+            return response()->json(['error' => collect($e->errors())->flatten()->first()], 422);
+        }
+
+        return response()->download($built['path'], $built['filename'])->deleteFileAfterSend(false);
+    }
+
     public function generateYnOldiWord(Request $request)
     {
         $this->authorize();

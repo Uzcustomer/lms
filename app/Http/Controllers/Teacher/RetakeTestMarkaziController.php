@@ -401,6 +401,7 @@ class RetakeTestMarkaziController extends Controller
             ProjectRole::SUPERADMIN->value,
             ProjectRole::ADMIN->value,
             ProjectRole::TEST_CENTER->value,
+            ProjectRole::REGISTRAR_OFFICE->value,
         ]);
         if (!$allowed) {
             abort(403, 'Sizda test markaziga ruxsat yo\'q');

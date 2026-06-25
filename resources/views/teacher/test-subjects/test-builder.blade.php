@@ -113,7 +113,10 @@
                 }
                 .tb-question { border:1px solid #dbe4ef; border-radius:18px; overflow:hidden; background:#fff; }
                 .tb-question-head { padding:14px 18px; background:linear-gradient(135deg,#f8fafc,#f1f5f9); border-bottom:1px solid #e2e8f0; }
-                .tb-question-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:start; }
+                .tb-question-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; align-items:start; }
+                @media (max-width: 1200px) {
+                    .tb-question-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+                }
                 @media (max-width: 900px) {
                     .tb-split { flex-direction:column; }
                     .tb-inline { flex-direction:column; align-items:stretch; }

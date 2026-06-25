@@ -6,31 +6,31 @@
     </x-slot>
 
     @include('partials._journal_table_styles')
-    <style>
-        .col-filter {
-            width: 100%;
-            font-size: 11px;
-            padding: 3px 6px;
-            border: 1px solid #cbd5e1;
-            border-radius: 6px;
-            background: #fff;
-            font-weight: 400;
-            text-transform: none;
-        }
-        .journal-table thead tr.filter-row th { padding: 4px 8px 8px; background: #eef2f8; border-bottom: 2px solid #cbd5e1; }
-    </style>
 
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
         @if(session('success'))
             <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800">{{ session('success') }}</div>
         @endif
 
-        <div class="mb-4 flex items-center gap-2 border-b border-gray-200 bg-white rounded-t-xl px-4 pt-3 shadow-sm">
-            <a href="{{ route('admin.retake-test-markazi.index', ['tab' => 'groups']) }}"
+        {{-- Yuqori filtrlar — JN hisoboti uslubida (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh + Fan) --}}
+        @include('partials._retake_filters', [
+            'formAction' => route('admin.retake-test-markazi.index'),
+            'educationTypes' => $educationTypes ?? collect(),
+            'subjects' => $subjects ?? collect(),
+            'hiddenFilters' => ['full_name'],
+            'extraQueryFields' => [
+                'tab' => $activeTab,
+                'student_search' => $studentSearch,
+                'sent_status' => $sentStatus ?? '',
+            ],
+        ])
+
+        <div class="mb-4 flex items-center gap-2 border-b border-gray-200 bg-white rounded-t-xl px-4 pt-3 shadow-sm mt-4">
+            <a href="{{ route('admin.retake-test-markazi.index', array_merge(request()->except(['tab','page','groups_page','students_page']), ['tab' => 'groups'])) }}"
                class="px-5 py-3 text-sm font-semibold border-b-2 rounded-t-lg transition {{ $activeTab === 'groups' ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50' }}">
                 {{ __("Jami guruhlar") }}
             </a>
-            <a href="{{ route('admin.retake-test-markazi.index', ['tab' => 'students']) }}"
+            <a href="{{ route('admin.retake-test-markazi.index', array_merge(request()->except(['tab','page','groups_page','students_page']), ['tab' => 'students'])) }}"
                class="px-5 py-3 text-sm font-semibold border-b-2 rounded-t-lg transition {{ $activeTab === 'students' ? 'border-blue-600 text-blue-700 bg-blue-50' : 'border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50' }}">
                 {{ __("Testga yuborilgan talabalar") }}
             </a>
@@ -45,21 +45,17 @@
                 'sinov' => ['label' => 'Sinov', 'cls' => 'badge-teal'],
             ];
             $atype = fn ($t) => $atypeBadge[$t] ?? ['label' => $t ?: '—', 'cls' => 'badge-gray'];
+            // Faol bo'lmagan (baho qo'yilmaydigan) katak
+            $inactiveCell = '<span class="badge badge-gray" style="opacity:.45;" title="Bu fanda bu nazorat qo\'yilmaydi">—</span>';
+            $fmt = fn ($v) => $v !== null ? rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.') : null;
         @endphp
 
         @if($activeTab === 'groups')
-            @php
-                $gFanlar = $groups->pluck('subject_name')->filter()->unique()->sort()->values();
-                $gTeachers = $groups->pluck('teacher_name')->filter()->unique()->sort()->values();
-                $gTurlar = $groups->pluck('assessment_type')->filter()->unique()->values();
-            @endphp
             <form method="POST" action="{{ route('admin.retake-test-markazi.generate-yn-oldi-word') }}" id="retake-yn-word-form">
                 @csrf
                 <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                     @if($groups->isEmpty())
-                        <div class="p-10 text-center text-sm text-gray-500">
-                            {{ __("Hozircha tasdiqlangan qayta o'qish guruhlari yo'q") }}
-                        </div>
+                        <div class="p-10 text-center text-sm text-gray-500">{{ __("Tasdiqlangan qayta o'qish guruhlari yo'q") }}</div>
                     @else
                         <div class="p-3 border-b border-gray-100 flex items-center justify-between gap-3">
                             <div class="text-sm text-gray-600">{{ __("Tanlangan guruhlar uchun YN oldi Word hosil qiling") }}</div>
@@ -68,49 +64,23 @@
                             </button>
                         </div>
                         <div class="overflow-x-auto">
-                            <table class="journal-table" id="groups-table">
+                            <table class="journal-table">
                                 <thead>
                                 <tr>
                                     <th class="th-num" onclick="event.stopPropagation();">
                                         <input type="checkbox" id="select-all-retake-yn" class="rounded border-gray-300">
                                     </th>
                                     <th>{{ __("Fan") }}</th>
+                                    <th>{{ __("Yopilish shakli") }}</th>
                                     <th>{{ __("O'qituvchi") }}</th>
-                                    <th>{{ __("Tur") }}</th>
                                     <th>{{ __("OSKE / TEST sanasi") }}</th>
                                     <th style="text-align:center;">{{ __("Talabalar") }}</th>
                                     <th>{{ __("Yuborilgan") }}</th>
                                 </tr>
-                                <tr class="filter-row">
-                                    <th></th>
-                                    <th>
-                                        <select class="col-filter" data-key="fan">
-                                            <option value="">{{ __("Barchasi") }}</option>
-                                            @foreach($gFanlar as $v)<option value="{{ $v }}">{{ $v }}</option>@endforeach
-                                        </select>
-                                    </th>
-                                    <th>
-                                        <select class="col-filter" data-key="teacher">
-                                            <option value="">{{ __("Barchasi") }}</option>
-                                            @foreach($gTeachers as $v)<option value="{{ $v }}">{{ $v }}</option>@endforeach
-                                        </select>
-                                    </th>
-                                    <th>
-                                        <select class="col-filter" data-key="tur">
-                                            <option value="">{{ __("Barchasi") }}</option>
-                                            @foreach($gTurlar as $v)<option value="{{ $v }}">{{ $atype($v)['label'] }}</option>@endforeach
-                                        </select>
-                                    </th>
-                                    <th></th><th></th><th></th>
-                                </tr>
                                 </thead>
                                 <tbody>
                                 @foreach($groups as $g)
-                                    <tr class="data-row"
-                                        data-fan="{{ $g->subject_name }}"
-                                        data-teacher="{{ $g->teacher_name }}"
-                                        data-tur="{{ $g->assessment_type }}"
-                                        onclick="window.location='{{ route('admin.retake-test-markazi.show', $g->id) }}'">
+                                    <tr onclick="window.location='{{ route('admin.retake-test-markazi.show', $g->id) }}'">
                                         <td class="td-num" onclick="event.stopPropagation();">
                                             <input type="checkbox" name="group_ids[]" value="{{ $g->id }}" class="retake-yn-group-checkbox rounded border-gray-300">
                                         </td>
@@ -118,8 +88,8 @@
                                             <span class="text-cell text-subject">{{ $g->subject_name }}</span>
                                             <span class="text-cell" style="color:#64748b;font-size:11px;">{{ $g->semester_name }}</span>
                                         </td>
-                                        <td><span class="text-cell text-emerald">{{ $g->teacher_name ?? '—' }}</span></td>
                                         <td>@php $b = $atype($g->assessment_type); @endphp<span class="badge {{ $b['cls'] }}">{{ $b['label'] }}</span></td>
+                                        <td><span class="text-cell text-emerald">{{ $g->teacher_name ?? '—' }}</span></td>
                                         <td class="text-xs">
                                             @if($g->oske_date)<span class="badge badge-violet">OSKE: {{ $g->oske_date->format('Y-m-d') }}</span>@endif
                                             @if($g->test_date)<span class="badge badge-violet">TEST: {{ $g->test_date->format('Y-m-d') }}</span>@endif
@@ -137,26 +107,25 @@
                 </div>
             </form>
         @else
-            @php
-                $sStudents = $sentApplications->getCollection()->map(fn ($a) => $a->group?->student)->filter();
-                $sKurslar = $sStudents->pluck('level_name')->filter()->unique()->sort()->values();
-                $sGuruhlar = $sStudents->pluck('group_name')->filter()->unique()->sort()->values();
-                $sFanlar = $sentApplications->getCollection()->map(fn ($a) => $a->retakeGroup?->subject_name ?? $a->subject_name)->filter()->unique()->sort()->values();
-                $sSemestrlar = $sentApplications->getCollection()->map(fn ($a) => $a->retakeGroup?->semester_name ?? $a->semester_name)->filter()->unique()->sort()->values();
-            @endphp
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 <div class="p-3 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
-                    <form method="GET" action="{{ route('admin.retake-test-markazi.index') }}" class="flex items-center gap-2">
+                    <form method="GET" action="{{ route('admin.retake-test-markazi.index') }}" class="flex items-center gap-2 flex-wrap">
                         <input type="hidden" name="tab" value="students">
+                        @foreach(['education_type','department','specialty','level_code','semester_code','group','subject','per_page'] as $k)
+                            @if(filled(request($k)))<input type="hidden" name="{{ $k }}" value="{{ request($k) }}">@endif
+                        @endforeach
                         <input type="text" name="student_search" value="{{ $studentSearch }}"
                                placeholder="{{ __('Ism yoki ID...') }}"
-                               class="w-64 rounded-lg border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                               class="w-56 rounded-lg border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                        <select name="sent_status" onchange="this.form.submit()"
+                                class="rounded-lg border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
+                            <option value="">{{ __("Holat: barchasi") }}</option>
+                            <option value="sent" {{ ($sentStatus ?? '') === 'sent' ? 'selected' : '' }}>{{ __("Testga yuborilgan") }}</option>
+                            <option value="not_sent" {{ ($sentStatus ?? '') === 'not_sent' ? 'selected' : '' }}>{{ __("Yuborilmagan") }}</option>
+                        </select>
                         <button type="submit" class="inline-flex items-center px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold hover:bg-blue-700">
                             {{ __("Qidirish") }}
                         </button>
-                        @if($studentSearch !== '')
-                            <a href="{{ route('admin.retake-test-markazi.index', ['tab' => 'students']) }}" class="text-sm text-gray-500 hover:text-gray-800">{{ __("Tozalash") }}</a>
-                        @endif
                     </form>
                     <a href="{{ route('admin.retake-test-markazi.daily-allowed-students-word', ['student_search' => $studentSearch]) }}"
                        class="inline-flex items-center px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
@@ -164,10 +133,10 @@
                     </a>
                 </div>
                 @if($sentApplications->isEmpty())
-                    <div class="p-10 text-center text-sm text-gray-500">{{ __("Hozircha talaba yo'q") }}</div>
+                    <div class="p-10 text-center text-sm text-gray-500">{{ __("Talaba topilmadi") }}</div>
                 @else
                     <div class="overflow-x-auto">
-                        <table class="journal-table" id="students-table">
+                        <table class="journal-table">
                             <thead>
                             <tr>
                                 <th class="th-num">#</th>
@@ -175,19 +144,13 @@
                                 <th>{{ __("Kurs") }}</th>
                                 <th>{{ __("Guruh") }}</th>
                                 <th>{{ __("Fan") }}</th>
+                                <th>{{ __("Yopilish shakli") }}</th>
                                 <th>{{ __("Semestr") }}</th>
+                                <th>{{ __("Holat") }}</th>
                                 <th style="text-align:center;">JN</th>
                                 <th style="text-align:center;">MT</th>
                                 <th style="text-align:center; background:#eff6ff; color:#1d4ed8;">OSKE</th>
                                 <th style="text-align:center; background:#eff6ff; color:#1d4ed8;">TEST</th>
-                            </tr>
-                            <tr class="filter-row">
-                                <th></th><th></th>
-                                <th><select class="col-filter" data-key="kurs"><option value="">{{ __("Barchasi") }}</option>@foreach($sKurslar as $v)<option value="{{ $v }}">{{ $v }}</option>@endforeach</select></th>
-                                <th><select class="col-filter" data-key="group"><option value="">{{ __("Barchasi") }}</option>@foreach($sGuruhlar as $v)<option value="{{ $v }}">{{ $v }}</option>@endforeach</select></th>
-                                <th><select class="col-filter" data-key="fan"><option value="">{{ __("Barchasi") }}</option>@foreach($sFanlar as $v)<option value="{{ $v }}">{{ $v }}</option>@endforeach</select></th>
-                                <th><select class="col-filter" data-key="semestr"><option value="">{{ __("Barchasi") }}</option>@foreach($sSemestrlar as $v)<option value="{{ $v }}">{{ $v }}</option>@endforeach</select></th>
-                                <th></th><th></th><th></th><th></th>
                             </tr>
                             </thead>
                             <tbody>
@@ -197,15 +160,13 @@
                                     $retakeGroup = $app->retakeGroup;
                                     $mustaqil = $mustaqilMap[$app->id] ?? null;
                                     $rgId = $app->retake_group_id ?? $retakeGroup?->id;
-                                    $fmt = fn ($v) => $v !== null ? rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.') : '—';
+                                    $at = $retakeGroup?->assessment_type;
+                                    $needsOske = in_array($at, ['oske', 'oske_test'], true);
+                                    $needsTest = in_array($at, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
+                                    $b = $atype($at);
                                 @endphp
-                                <tr class="data-row"
-                                    data-kurs="{{ $student?->level_name }}"
-                                    data-group="{{ $student?->group_name }}"
-                                    data-fan="{{ $retakeGroup?->subject_name ?? $app->subject_name }}"
-                                    data-semestr="{{ $retakeGroup?->semester_name ?? $app->semester_name }}"
-                                    @if($rgId) onclick="window.location='{{ route('admin.retake-test-markazi.show', $rgId) }}'" @endif>
-                                    <td class="td-num row-num">{{ ($sentApplications->currentPage() - 1) * $sentApplications->perPage() + $loop->iteration }}</td>
+                                <tr @if($rgId) onclick="window.location='{{ route('admin.retake-test-markazi.show', $rgId) }}'" @endif>
+                                    <td class="td-num">{{ ($sentApplications->currentPage() - 1) * $sentApplications->perPage() + $loop->iteration }}</td>
                                     <td>
                                         <span class="text-cell text-subject">{{ $student?->full_name ?? '—' }}</span>
                                         <span class="text-cell" style="color:#64748b;font-size:11px;">{{ $app->student_hemis_id }}</span>
@@ -213,11 +174,23 @@
                                     <td><span class="badge badge-violet">{{ $student?->level_name ?? '—' }}</span></td>
                                     <td><span class="badge badge-indigo">{{ $student?->group_name ?? '—' }}</span></td>
                                     <td><span class="text-cell text-subject">{{ $retakeGroup?->subject_name ?? $app->subject_name }}</span></td>
+                                    <td><span class="badge {{ $b['cls'] }}">{{ $b['label'] }}</span></td>
                                     <td><span class="badge badge-teal">{{ $retakeGroup?->semester_name ?? $app->semester_name }}</span></td>
-                                    <td style="text-align:center;"><span class="badge badge-blue">{{ $fmt($app->joriy_score) }}</span></td>
-                                    <td style="text-align:center;"><span class="badge badge-green">{{ $fmt($mustaqil?->grade) }}</span></td>
-                                    <td style="text-align:center; background:#eff6ff;"><span class="badge badge-blue">{{ $fmt($app->oske_score) }}</span></td>
-                                    <td style="text-align:center; background:#eff6ff;"><span class="badge badge-blue">{{ $fmt($app->test_score) }}</span></td>
+                                    <td>
+                                        @if($app->sent_to_test_markazi_at)
+                                            <span class="badge badge-green">{{ __("Yuborilgan") }}</span>
+                                        @else
+                                            <span class="badge badge-gray">{{ __("Yuborilmagan") }}</span>
+                                        @endif
+                                    </td>
+                                    <td style="text-align:center;"><span class="badge badge-blue">{{ $fmt($app->joriy_score) ?? '—' }}</span></td>
+                                    <td style="text-align:center;"><span class="badge badge-green">{{ $fmt($mustaqil?->grade) ?? '—' }}</span></td>
+                                    <td style="text-align:center; background:#eff6ff;">
+                                        @if($needsOske)<span class="badge badge-blue">{{ $fmt($app->oske_score) ?? '—' }}</span>@else{!! $inactiveCell !!}@endif
+                                    </td>
+                                    <td style="text-align:center; background:#eff6ff;">
+                                        @if($needsTest)<span class="badge badge-blue">{{ $fmt($app->test_score) ?? '—' }}</span>@else{!! $inactiveCell !!}@endif
+                                    </td>
                                 </tr>
                             @endforeach
                             </tbody>
@@ -237,28 +210,6 @@
                 if (selectAll && items.length) {
                     selectAll.addEventListener('change', () => items.forEach(cb => cb.checked = selectAll.checked));
                 }
-
-                function initColumnFilters(tableId) {
-                    const table = document.getElementById(tableId);
-                    if (!table) return;
-                    const selects = Array.from(table.querySelectorAll('thead select.col-filter'));
-                    const rows = Array.from(table.querySelectorAll('tbody tr.data-row'));
-                    if (!selects.length || !rows.length) return;
-                    function apply() {
-                        const active = {};
-                        selects.forEach(s => active[s.dataset.key] = s.value);
-                        let visible = 0;
-                        rows.forEach(r => {
-                            const ok = Object.keys(active).every(k => !active[k] || (r.dataset[k] || '') === active[k]);
-                            r.style.display = ok ? '' : 'none';
-                            if (ok) { visible++; const n = r.querySelector('.row-num'); if (n) n.textContent = visible; }
-                        });
-                    }
-                    selects.forEach(s => s.addEventListener('change', apply));
-                    apply();
-                }
-                initColumnFilters('groups-table');
-                initColumnFilters('students-table');
             });
         </script>
     @endpush

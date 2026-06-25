@@ -56,18 +56,10 @@
                 @endif
             </div>
             <div class="mt-3 flex items-center gap-2 flex-wrap">
-                <a href="{{ route('admin.retake-journal.vedomost', $group->id) }}"
-                   class="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700">
-                    📊 {{ __("Vedomost (PDF)") }}
-                </a>
-                <form method="POST" action="{{ route('admin.retake-test-markazi.generate-yn-oldi-word') }}" class="inline">
-                    @csrf
-                    <input type="hidden" name="group_ids[]" value="{{ $group->id }}">
-                    <button type="submit"
-                            class="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700">
-                        📝 {{ __("YN qaydnoma yaratish") }}
-                    </button>
-                </form>
+                <button type="button" onclick="openYnWeightsModal()"
+                        class="px-3 py-1.5 text-xs bg-emerald-600 text-white rounded hover:bg-emerald-700">
+                    📝 {{ __("YN qaydnoma yaratish") }}
+                </button>
                 @if($needsOske || $needsTest)
                     <button type="button" @click="loadFromDiagnostika()" :disabled="loading"
                        class="px-3 py-1.5 text-xs bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50">
@@ -76,6 +68,52 @@
                     </button>
                     <span class="text-xs text-gray-500">{{ __("Faqat shu sessiya (fasl/o'quv yili) natijalari olinadi") }}</span>
                 @endif
+            </div>
+        </div>
+
+        {{-- YN qaydnoma vazn taqsimlash modali (asosiy jurnaldagidek → Excel) --}}
+        @php
+            switch ($group->assessment_type) {
+                case 'oske':      $dJn=30; $dMt=10; $dOn=0; $dOski=60; $dTest=0;  break;
+                case 'test':      $dJn=30; $dMt=10; $dOn=0; $dOski=0;  $dTest=60; break;
+                case 'oske_test': $dJn=30; $dMt=10; $dOn=0; $dOski=30; $dTest=30; break;
+                default:          $dJn=70; $dMt=30; $dOn=0; $dOski=0;  $dTest=0;  break;
+            }
+        @endphp
+        <div id="yn-weights-modal" class="fixed inset-0 z-50 hidden">
+            <div class="fixed inset-0 bg-black bg-opacity-50" onclick="closeYnWeightsModal()"></div>
+            <div class="fixed inset-0 flex items-center justify-center p-4">
+                <div class="bg-white rounded-xl shadow-2xl w-full max-w-md relative">
+                    <div class="px-6 py-4 border-b border-gray-200">
+                        <h3 class="text-lg font-bold text-gray-800">{{ __("Vaznlarni taqsimlang") }}</h3>
+                        <p class="text-sm text-gray-500 mt-1">{{ __("Jami 100 bo'lishi kerak") }}</p>
+                    </div>
+                    <div class="px-6 py-4 space-y-3">
+                        @foreach([['jn','JN',$dJn],['mt','MT',$dMt],['on','ON',$dOn],['oski','OSKI',$dOski],['test','Test',$dTest]] as $w)
+                            <div class="flex items-center justify-between">
+                                <label class="text-sm font-semibold text-gray-700 w-20">{{ $w[1] }}</label>
+                                <input type="number" id="yn-weight-{{ $w[0] }}" min="0" max="100" value="{{ $w[2] }}"
+                                    class="w-24 px-3 py-2 border border-gray-300 rounded-lg text-center text-sm font-medium focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                                    oninput="updateYnWeightsTotal()">
+                            </div>
+                        @endforeach
+                        <div class="flex items-center justify-between pt-2 border-t border-gray-200">
+                            <span class="text-sm font-bold text-gray-800">{{ __("Jami") }}:</span>
+                            <span id="yn-weights-total" class="text-lg font-bold text-green-600">100</span>
+                        </div>
+                        <p id="yn-weights-error" class="text-sm text-red-600 hidden">{{ __("Jami 100 bo'lishi kerak!") }}</p>
+                    </div>
+                    <div class="px-6 py-4 border-t border-gray-200 flex justify-end space-x-3">
+                        <button type="button" onclick="closeYnWeightsModal()"
+                            class="px-4 py-2 bg-gray-200 text-gray-700 font-medium rounded-lg hover:bg-gray-300 transition text-sm">
+                            {{ __("Bekor qilish") }}
+                        </button>
+                        <button type="button" id="btn-yn-weights-submit" onclick="submitYnQaydnoma()"
+                            class="px-5 py-2.5 bg-green-600 text-white font-semibold rounded-lg hover:bg-green-700 transition shadow-sm text-sm">
+                            {{ __("Yaratish") }}
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -267,6 +305,74 @@
                 selects.forEach(s => s.addEventListener('change', applyFilters));
                 applyFilters();
             });
+        </script>
+    @endpush
+
+    @push('scripts')
+        <script>
+            function openYnWeightsModal() {
+                document.getElementById('yn-weights-modal').classList.remove('hidden');
+                updateYnWeightsTotal();
+            }
+            function closeYnWeightsModal() {
+                document.getElementById('yn-weights-modal').classList.add('hidden');
+            }
+            function ynWeightVal(id) { return parseInt(document.getElementById(id).value) || 0; }
+            function updateYnWeightsTotal() {
+                const total = ynWeightVal('yn-weight-jn') + ynWeightVal('yn-weight-mt') + ynWeightVal('yn-weight-on')
+                    + ynWeightVal('yn-weight-oski') + ynWeightVal('yn-weight-test');
+                const totalEl = document.getElementById('yn-weights-total');
+                const errEl = document.getElementById('yn-weights-error');
+                totalEl.textContent = total;
+                const ok = total === 100;
+                totalEl.style.color = ok ? '#16a34a' : '#dc2626';
+                errEl.classList.toggle('hidden', ok);
+                document.getElementById('btn-yn-weights-submit').disabled = !ok;
+            }
+            function submitYnQaydnoma() {
+                const jn = ynWeightVal('yn-weight-jn'), mt = ynWeightVal('yn-weight-mt'), on = ynWeightVal('yn-weight-on'),
+                    oski = ynWeightVal('yn-weight-oski'), test = ynWeightVal('yn-weight-test');
+                if (jn + mt + on + oski + test !== 100) { alert("Vaznlar jami 100 bo'lishi kerak!"); return; }
+
+                const btn = document.getElementById('btn-yn-weights-submit');
+                btn.disabled = true;
+                const original = btn.textContent;
+                btn.textContent = 'Yuklanmoqda...';
+
+                fetch('{{ route('admin.retake-test-markazi.yn-qaydnoma', $group->id) }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': '{{ csrf_token() }}',
+                        'Accept': 'application/octet-stream',
+                    },
+                    body: JSON.stringify({
+                        weight_jn: jn, weight_mt: mt, weight_on: on, weight_oski: oski, weight_test: test,
+                    })
+                })
+                .then(async (response) => {
+                    if (!response.ok) {
+                        let msg = 'Server xatosi';
+                        try { const j = await response.json(); msg = j.error || msg; } catch (e) {}
+                        throw new Error(msg);
+                    }
+                    const cd = response.headers.get('Content-Disposition');
+                    let fileName = 'yn_qaydnoma.xlsx';
+                    if (cd) { const m = cd.match(/filename="?([^";\n]+)"?/); if (m && m[1]) fileName = m[1]; }
+                    const blob = await response.blob();
+                    return { blob, fileName };
+                })
+                .then(({ blob, fileName }) => {
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url; a.download = fileName;
+                    document.body.appendChild(a); a.click(); a.remove();
+                    window.URL.revokeObjectURL(url);
+                    closeYnWeightsModal();
+                })
+                .catch((err) => alert('Xatolik: ' + err.message))
+                .finally(() => { btn.disabled = false; btn.textContent = original; });
+            }
         </script>
     @endpush
 </x-teacher-app-layout>

@@ -7,6 +7,17 @@
 
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
 
+        <div class="mb-4 flex items-center gap-2 border-b border-gray-200 bg-white rounded-t-xl px-4 pt-3 shadow-sm">
+            <a href="{{ route('admin.retake-statistics.index') }}"
+               class="px-5 py-3 text-sm font-semibold border-b-2 rounded-t-lg transition border-blue-600 text-blue-700 bg-blue-50">
+                {{ __("Statistika") }}
+            </a>
+            <a href="{{ route('admin.retake-application-report.index') }}"
+               class="px-5 py-3 text-sm font-semibold border-b-2 rounded-t-lg transition border-transparent text-gray-500 hover:text-gray-800 hover:bg-gray-50">
+                {{ __("Qayta o'qish arizasi hisoboti") }}
+            </a>
+        </div>
+
         @php
             $extraRowHtml = view('teacher.academic-dept.retake-statistics._filter_extras', [
                 'filters' => $filters,

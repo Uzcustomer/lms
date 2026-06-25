@@ -1116,25 +1116,24 @@
         </a>
         @endif
 
-        {{-- Qayta o'qish jurnali — o'qituvchi, dekan, registrator, o'quv bo'limi, admin --}}
-        @if($hasActiveRole(['superadmin', 'admin', 'oqituvchi', 'dekan', 'registrator_ofisi', 'oquv_bolimi', 'oquv_bolimi_boshligi']))
+        {{-- QO': Jurnal — yagona menyu, rolga qarab to'g'ri sahifaga.
+             Test markazi funksiyalari: admin/registrator/test markazi.
+             Jurnal (JN/MT kiritish): o'qituvchi/dekan/o'quv bo'limi. --}}
+        @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi', 'test_markazi']))
+        <a href="{{ route('admin.retake-test-markazi.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.retake-test-markazi.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+            QO': Jurnal
+        </a>
+        @elseif($hasActiveRole(['oqituvchi', 'dekan', 'oquv_bolimi', 'oquv_bolimi_boshligi']))
         <a href="{{ route('admin.retake-journal.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.retake-journal.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
             </svg>
             QO': Jurnal
-        </a>
-        @endif
-
-        {{-- Test markazi paneli — qayta o'qish OSKE/TEST natijalari --}}
-        @if($hasActiveRole(['superadmin', 'admin', 'test_markazi']))
-        <a href="{{ route('admin.retake-test-markazi.index') }}"
-           class="sidebar-link {{ request()->routeIs('admin.retake-test-markazi.*') ? 'sidebar-active' : '' }}">
-            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-            </svg>
-            QO': Test markazi
         </a>
         @endif
 

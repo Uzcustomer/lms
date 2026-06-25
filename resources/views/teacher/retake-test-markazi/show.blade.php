@@ -196,6 +196,10 @@
                                 $student = $app->group->student ?? null;
                                 $amaliyotAvg = $app->joriy_score !== null ? round((float) $app->joriy_score, 1) : null;
                                 $mustaqil = $mustaqilMap[$app->id] ?? null;
+                                // Testga ruxsat: JN >= 60 VA MT >= 60 (YN-oldi / jurnal mantig'i)
+                                $jnVal = $app->joriy_score !== null ? (float) $app->joriy_score : null;
+                                $mtVal = $mustaqil?->grade !== null ? (float) $mustaqil->grade : null;
+                                $allowed = $jnVal !== null && $mtVal !== null && $jnVal >= 60 && $mtVal >= 60;
                             @endphp
                         <tr class="rtm-row"
                             data-faculty="{{ $student?->department_name }}"
@@ -212,7 +216,13 @@
                             <td><span class="text-cell" style="color:#0e7490;">{{ $student?->specialty_name ?? '—' }}</span></td>
                             <td><span class="badge badge-violet">{{ $student?->level_name ?? '—' }}</span></td>
                             <td><span class="badge badge-indigo">{{ $student?->group_name ?? '—' }}</span></td>
-                            <td><span class="badge badge-green">{{ __("Testga ruxsat etilgan") }}</span></td>
+                            <td>
+                                @if($allowed)
+                                    <span class="badge badge-green">{{ __("Testga ruxsat etilgan") }}</span>
+                                @else
+                                    <span class="badge badge-red" title="JN va MT 60 dan past — testga ruxsat yo'q">{{ __("Ruxsat yo'q") }}</span>
+                                @endif
+                            </td>
                             <td style="text-align:center;"><span class="badge badge-blue">{{ $amaliyotAvg ?? '—' }}</span></td>
                             <td style="text-align:center;">
                                 <span class="badge badge-teal">{{ $mustaqil?->grade !== null ? rtrim(rtrim(number_format($mustaqil->grade, 2, '.', ''), '0'), '.') : '—' }}</span>

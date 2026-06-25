@@ -170,8 +170,8 @@
                                 <th>{{ __("Holat") }}</th>
                                 <th style="text-align:center;">JN</th>
                                 <th style="text-align:center;">MT</th>
-                                <th style="text-align:center; background:#eff6ff; color:#1d4ed8;">OSKE</th>
-                                <th style="text-align:center; background:#eff6ff; color:#1d4ed8;">TEST</th>
+                                <th style="text-align:center;">OSKE</th>
+                                <th style="text-align:center;">TEST</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -206,8 +206,8 @@
                                     </td>
                                     <td style="text-align:center;">{!! $scoreCell(true, $app->joriy_score, 'badge-blue') !!}</td>
                                     <td style="text-align:center;">{!! $scoreCell(true, $mustaqil?->grade, 'badge-green') !!}</td>
-                                    <td style="text-align:center; background:#eff6ff;">{!! $scoreCell($needsOske, $app->oske_score, 'badge-blue') !!}</td>
-                                    <td style="text-align:center; background:#eff6ff;">{!! $scoreCell($needsTest, $app->test_score, 'badge-blue') !!}</td>
+                                    <td style="text-align:center;">{!! $scoreCell($needsOske, $app->oske_score, 'badge-blue') !!}</td>
+                                    <td style="text-align:center;">{!! $scoreCell($needsTest, $app->test_score, 'badge-blue') !!}</td>
                                 </tr>
                             @endforeach
                             </tbody>

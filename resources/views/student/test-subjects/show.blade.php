@@ -15,30 +15,40 @@
         <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 space-y-5">
             <style>
                 .st-card { background:#fff; border:1px solid #dbe4ef; border-radius:22px; box-shadow:0 10px 28px rgba(15,23,42,.06); overflow:hidden; }
-                .st-head { padding:16px 20px; background:linear-gradient(135deg,#eff6ff,#dbeafe); border-bottom:1px solid #dbe4ef; }
+                .st-head { padding:14px 16px; background:linear-gradient(135deg,#eff6ff,#dbeafe); border-bottom:1px solid #dbe4ef; }
                 .st-chip { display:inline-flex; align-items:center; padding:6px 12px; border-radius:999px; font-size:12px; font-weight:800; border:1px solid transparent; }
                 .st-chip.blue { background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe; }
                 .st-chip.green { background:#ecfdf5; color:#15803d; border-color:#bbf7d0; }
                 .st-chip.orange { background:#fff7ed; color:#c2410c; border-color:#fdba74; }
                 .st-chip.red { background:#fef2f2; color:#dc2626; border-color:#fecaca; }
-                .st-stat-wrap { display:flex; gap:12px; flex-wrap:wrap; }
-                .st-stat { flex:1 1 180px; border:1px solid #dbe4ef; border-radius:16px; padding:14px 16px; background:#fff; }
+                .st-stat-wrap { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+                .st-stat { min-width:0; border:1px solid #dbe4ef; border-radius:16px; padding:12px 14px; background:#fff; }
                 .st-label { font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b; }
-                .st-value { margin-top:8px; font-size:26px; font-weight:800; color:#0f172a; }
-                .st-body { padding:18px 20px; }
+                .st-value { margin-top:6px; font-size:22px; font-weight:800; color:#0f172a; line-height:1.2; }
+                .st-body { padding:14px 16px; }
                 .st-question { border:1px solid #dbe4ef; border-radius:18px; background:#fff; overflow:hidden; }
-                .st-question-head { padding:14px 18px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
-                .st-question-body { padding:16px 18px; }
-                .st-option { display:flex; gap:10px; align-items:flex-start; padding:12px 14px; border:1px solid #dbe4ef; border-radius:14px; transition:.15s ease; }
+                .st-question-head { padding:12px 14px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+                .st-question-body { padding:14px; }
+                .st-option { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid #dbe4ef; border-radius:14px; transition:.15s ease; }
                 .st-option:hover { border-color:#93c5fd; background:#f8fbff; }
-                .st-option + .st-option { margin-top:10px; }
+                .st-option + .st-option { margin-top:8px; }
                 .st-answer-input { width:100%; border:1px solid #cbd5e1; border-radius:12px; padding:10px 12px; }
                 .st-answer-input:focus { outline:none; border-color:#3b82f6; box-shadow:0 0 0 3px rgba(59,130,246,.12); }
                 .st-submit { display:inline-flex; align-items:center; justify-content:center; gap:8px; border-radius:12px; padding:12px 18px; font-size:14px; font-weight:800; background:linear-gradient(135deg,#059669,#10b981); color:#fff; box-shadow:0 10px 24px rgba(5,150,105,.18); }
                 .st-muted { color:#64748b; font-size:13px; }
-                .st-result-box { border:1px solid #dbe4ef; border-radius:18px; background:linear-gradient(135deg,#f8fafc,#ffffff); padding:18px; }
+                .st-result-box { border:1px solid #dbe4ef; border-radius:18px; background:linear-gradient(135deg,#f8fafc,#ffffff); padding:14px; }
+                .st-result-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+                .st-back { display:inline-flex; align-items:center; justify-content:center; border-radius:12px; border:1px solid #cbd5e1; background:#fff; padding:8px 14px; font-size:13px; font-weight:700; color:#334155; width:auto; }
+                .st-title { font-size:32px; line-height:1.1; font-weight:800; color:#0f172a; }
                 @media (max-width: 768px) {
-                    .st-value { font-size:22px; }
+                    .st-head { padding:12px 14px; }
+                    .st-body { padding:12px 14px; }
+                    .st-stat-wrap { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+                    .st-result-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
+                    .st-value { font-size:18px; }
+                    .st-title { font-size:18px; }
+                    .st-chip { padding:5px 10px; font-size:11px; }
+                    .st-submit { width:100%; }
                 }
             </style>
 
@@ -58,9 +68,13 @@
                 </div>
             @endif
 
+            <div>
+                <a href="{{ route('student.subjects') }}" class="st-back">Orqaga</a>
+            </div>
+
             <div class="st-card">
                 <div class="st-head">
-                    <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="space-y-3">
                         <div class="space-y-3">
                             <div class="flex flex-wrap gap-2">
                                 <span class="st-chip blue">{{ $testSubject->name }}</span>
@@ -73,11 +87,10 @@
                                 @endif
                             </div>
                             <div>
-                                <h1 class="text-2xl font-extrabold text-slate-900">{{ $lesson->topic_title ?: ($lesson->topic_order . '-mavzu') }}</h1>
+                                <h1 class="st-title">{{ $lesson->topic_title ?: ($lesson->topic_order . '-mavzu') }}</h1>
                                 <p class="mt-1 text-sm text-slate-600">{{ $lessonTest->title }}</p>
                             </div>
                         </div>
-                        <a href="{{ route('student.subjects') }}" class="inline-flex items-center justify-center rounded-xl border border-slate-300 bg-white px-4 py-2 text-sm font-semibold text-slate-700">Orqaga</a>
                     </div>
                 </div>
 
@@ -107,22 +120,22 @@
 
             @if($submitted)
                 <div class="st-result-box">
-                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                        <div>
+                    <div class="st-result-grid">
+                        <div class="st-stat">
                             <div class="st-label">To‘plagan ball</div>
-                            <div class="text-2xl font-extrabold text-slate-900 mt-1">{{ rtrim(rtrim((string) $attempt->score, '0'), '.') }} / {{ $attempt->total_points }}</div>
+                            <div class="st-value">{{ rtrim(rtrim((string) $attempt->score, '0'), '.') }} / {{ $attempt->total_points }}</div>
                         </div>
-                        <div>
+                        <div class="st-stat">
                             <div class="st-label">Foiz</div>
-                            <div class="text-2xl font-extrabold text-slate-900 mt-1">{{ $attempt->percent }}%</div>
+                            <div class="st-value">{{ $attempt->percent }}%</div>
                         </div>
-                        <div>
+                        <div class="st-stat">
                             <div class="st-label">Javoblar</div>
-                            <div class="text-2xl font-extrabold text-slate-900 mt-1">{{ $attempt->answers_count }}</div>
+                            <div class="st-value">{{ $attempt->answers_count }}</div>
                         </div>
-                        <div>
+                        <div class="st-stat">
                             <div class="st-label">Holat</div>
-                            <div class="text-lg font-bold mt-2 {{ $attempt->is_passed ? 'text-emerald-600' : 'text-red-600' }}">
+                            <div class="mt-2 text-base font-bold {{ $attempt->is_passed ? 'text-emerald-600' : 'text-red-600' }}">
                                 {{ $attempt->is_passed ? 'Muvaffaqiyatli' : 'Qayta ishlash kerak' }}
                             </div>
                         </div>

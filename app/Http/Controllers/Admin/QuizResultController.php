@@ -1634,7 +1634,8 @@ class QuizResultController extends Controller
      *   3) fan nomi bo'yicha taxminiy (imlo farqi, masalan q/k) — >=85%
      *   4) talabaning yagona arizasi
      * Sessiya kodi (yil+fasl) bo'lsa — avval o'sha sessiya arizalari bilan
-     * cheklaymiz (fasl guard).
+     * cheklaymiz (fasl guard). Token bo'lmasa — joriy (ochiq) sessiya
+     * arizalari bilan cheklaymiz (yopilgan eski sessiyaga yozilmasin).
      */
     private function matchRetakeApp($apps, string $hemis, ?string $fanId, ?string $fanName, ?string $code): ?\App\Models\RetakeApplication
     {
@@ -1648,11 +1649,21 @@ class QuizResultController extends Controller
         }
 
         if ($code !== null) {
+            // Token bor — fasl/sessiya kodi sessiya nomidan olinadi.
             $coded = $cands->filter(
                 fn ($a) => \App\Services\Retake\RetakeSessionCode::fromSession($a->group?->window?->session) === $code
             );
             if ($coded->isNotEmpty()) {
                 $cands = $coded;
+            }
+        } else {
+            // Token yo'q — joriy (ochiq) sessiya arizalari bilan cheklaymiz.
+            $open = $cands->filter(function ($a) {
+                $s = $a->group?->window?->session;
+                return $s !== null && !$s->is_closed;
+            });
+            if ($open->isNotEmpty()) {
+                $cands = $open;
             }
         }
 

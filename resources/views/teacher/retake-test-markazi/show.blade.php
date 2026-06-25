@@ -73,11 +73,14 @@
 
         {{-- YN qaydnoma vazn taqsimlash modali (asosiy jurnaldagidek → Excel) --}}
         @php
+            // Standart vaznlar — asosiy jurnaldagi (YN qaydnoma) qiymatlar bilan bir xil.
             switch ($group->assessment_type) {
-                case 'oske':      $dJn=30; $dMt=10; $dOn=0; $dOski=60; $dTest=0;  break;
-                case 'test':      $dJn=30; $dMt=10; $dOn=0; $dOski=0;  $dTest=60; break;
-                case 'oske_test': $dJn=30; $dMt=10; $dOn=0; $dOski=30; $dTest=30; break;
-                default:          $dJn=70; $dMt=30; $dOn=0; $dOski=0;  $dTest=0;  break;
+                case 'oske':      $dJn=50; $dMt=20; $dOn=0; $dOski=30; $dTest=0;  break;
+                case 'test':      $dJn=50; $dMt=20; $dOn=0; $dOski=0;  $dTest=30; break;
+                case 'oske_test': $dJn=50; $dMt=20; $dOn=0; $dOski=15; $dTest=15; break;
+                case 'sinov':
+                case 'sinov_fan': $dJn=50; $dMt=20; $dOn=0; $dOski=0;  $dTest=30; break;
+                default:          $dJn=80; $dMt=20; $dOn=0; $dOski=0;  $dTest=0;  break;
             }
         @endphp
         <div id="yn-weights-modal" class="fixed inset-0 z-50 hidden">

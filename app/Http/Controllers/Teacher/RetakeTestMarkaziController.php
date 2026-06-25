@@ -33,16 +33,50 @@ class RetakeTestMarkaziController extends Controller
 
         $activeTab = request('tab') === 'students' ? 'students' : 'groups';
 
+        // Cascading filtrlar (talaba ma'lumotlari + fan) — JN hisoboti uslubida.
+        $studentFilters = [
+            'education_type' => request('education_type'),
+            'department' => request('department'),
+            'specialty' => request('specialty'),
+            'level_code' => request('level_code'),
+            'semester_code' => request('semester_code'),
+            'group' => request('group'),
+        ];
+        $subjectFilter = request('subject');
+        $sentStatus = request('sent_status'); // '', 'sent', 'not_sent'
+        $perPage = (int) request('per_page', 50);
+        if (!in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 50;
+        }
+        $hasStudentFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty();
+
+        $studentSub = function ($sub) use ($studentFilters) {
+            $sub->select('hemis_id')->from('students');
+            if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+            if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+            if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+            if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+            if (!empty($studentFilters['semester_code'])) $sub->where('semester_code', $studentFilters['semester_code']);
+            if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+        };
+
         // O'quv bo'limi tomonidan tasdiqlanib guruhga qo'yilgan BARCHA qayta o'qish
-        // guruhlari (sinov bilan yakunlanadigan fanlar ham). "Test markaziga
-        // yuborilgan" sharti talab qilinmaydi — tasdiqlangan talabasi bo'lsa bas.
-        $groups = RetakeGroup::query()
+        // guruhlari (sinov bilan yakunlanadigan fanlar ham).
+        $groupsQuery = RetakeGroup::query()
             ->whereHas('applications', fn ($q) => $q->where('final_status', RetakeApplication::STATUS_APPROVED))
             ->with('teacher')
             ->withCount(['applications as students_count' => fn ($q) => $q->where('final_status', RetakeApplication::STATUS_APPROVED)])
-            ->orderByDesc('start_date')
-            ->paginate(30, ['*'], 'groups_page')
-            ->withQueryString();
+            ->orderByDesc('start_date');
+        if ($subjectFilter) {
+            $groupsQuery->where('subject_id', $subjectFilter);
+        }
+        if ($hasStudentFilter) {
+            $groupsQuery->whereHas('applications', function ($q) use ($studentSub) {
+                $q->where('final_status', RetakeApplication::STATUS_APPROVED)
+                  ->whereIn('student_hemis_id', $studentSub);
+            });
+        }
+        $groups = $groupsQuery->paginate($perPage, ['*'], 'groups_page')->withQueryString();
 
         $studentSearch = trim((string) request('student_search', ''));
 
@@ -61,10 +95,21 @@ class RetakeTestMarkaziController extends Controller
                     });
             });
         }
+        if ($subjectFilter) {
+            $sentApplicationsQuery->whereHas('retakeGroup', fn ($q) => $q->where('subject_id', $subjectFilter));
+        }
+        if ($hasStudentFilter) {
+            $sentApplicationsQuery->whereIn('student_hemis_id', $studentSub);
+        }
+        if ($sentStatus === 'sent') {
+            $sentApplicationsQuery->whereNotNull('sent_to_test_markazi_at');
+        } elseif ($sentStatus === 'not_sent') {
+            $sentApplicationsQuery->whereNull('sent_to_test_markazi_at');
+        }
 
         $sentApplications = $sentApplicationsQuery
             ->orderByDesc('id')
-            ->paginate(50, ['*'], 'students_page')
+            ->paginate($perPage, ['*'], 'students_page')
             ->withQueryString();
 
         $mustaqilMap = RetakeMustaqilSubmission::query()
@@ -78,6 +123,9 @@ class RetakeTestMarkaziController extends Controller
             'mustaqilMap' => $mustaqilMap,
             'activeTab' => $activeTab,
             'studentSearch' => $studentSearch,
+            'sentStatus' => $sentStatus,
+            'educationTypes' => \App\Services\Retake\RetakeFilterCache::educationTypes(),
+            'subjects' => \App\Services\Retake\RetakeFilterCache::subjects(),
         ]);
     }
 

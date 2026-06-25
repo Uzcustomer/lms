@@ -236,9 +236,16 @@
                                         <td class="font-semibold text-slate-900">{{ $questionCount }}</td>
                                         <td class="text-right">
                                             @if($builderReady)
-                                                <a href="{{ route('teacher.test-subjects.tests.edit', [$testSubject, $lesson]) }}" class="tts-btn tts-btn-primary">
-                                                    {{ $lessonTest ? 'Testni boshqarish' : 'Test yaratish' }}
-                                                </a>
+                                                <div class="flex items-center justify-end gap-2">
+                                                    @if($lessonTest)
+                                                        <a href="{{ route('teacher.test-subjects.tests.results', [$testSubject, $lesson]) }}" class="tts-btn tts-btn-light">
+                                                            Natijalar
+                                                        </a>
+                                                    @endif
+                                                    <a href="{{ route('teacher.test-subjects.tests.edit', [$testSubject, $lesson]) }}" class="tts-btn tts-btn-primary">
+                                                        {{ $lessonTest ? 'Testni boshqarish' : 'Test yaratish' }}
+                                                    </a>
+                                                </div>
                                             @else
                                                 <span class="tts-btn tts-btn-disabled">Builder yopiq</span>
                                             @endif

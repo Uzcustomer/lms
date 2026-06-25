@@ -790,7 +790,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // O'quv reja to'g'riligi (akkreditatsiya): namunaviy <-> ishchi reja solishtirish
         Route::prefix('oquv-reja')->name('oquv-reja.')
-            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin')
+            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi')
             ->group(function () {
                 Route::get('/', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'index'])->name('index');
                 Route::post('/', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'store'])->name('store');

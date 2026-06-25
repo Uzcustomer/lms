@@ -113,10 +113,12 @@
                 }
                 .tb-question { border:1px solid #dbe4ef; border-radius:18px; overflow:hidden; background:#fff; }
                 .tb-question-head { padding:14px 18px; background:linear-gradient(135deg,#f8fafc,#f1f5f9); border-bottom:1px solid #e2e8f0; }
+                .tb-question-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; align-items:start; }
                 @media (max-width: 900px) {
                     .tb-split { flex-direction:column; }
                     .tb-inline { flex-direction:column; align-items:stretch; }
                     .tb-option-row { flex-wrap:wrap; }
+                    .tb-question-grid { grid-template-columns:1fr; }
                 }
             </style>
 
@@ -137,9 +139,13 @@
                 </div>
             @endif
 
+            <div>
+                <a href="{{ route('teacher.test-subjects.show', $testSubject) }}" class="tb-btn tb-btn-light" style="padding:6px 11px; font-size:12px; width:auto;">Orqaga</a>
+            </div>
+
             <div class="tb-card">
                 <div class="tb-head">
-                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="space-y-3">
                         <div class="space-y-3">
                             <div class="flex flex-wrap gap-2">
                                 <span class="tb-chip blue">{{ $testSubject->name }}</span>
@@ -152,7 +158,6 @@
                                 <p class="mt-1 text-sm text-slate-600">Bu mavzu uchun test yarating va savollarni boshqaring.</p>
                             </div>
                         </div>
-                        <a href="{{ route('teacher.test-subjects.show', $testSubject) }}" class="tb-btn tb-btn-light">Orqaga</a>
                     </div>
                 </div>
 
@@ -330,120 +335,124 @@
                     <p class="mt-1 text-sm text-slate-500">Har bir savolni shu yerning o'zida tahrirlash yoki o'chirish mumkin.</p>
                 </div>
 
-                @forelse($questions as $question)
-                    <div class="tb-question"
-                         x-data="questionBuilder({
-                            type: '{{ $question->type }}',
-                            options: @js($questionOptions($question)),
-                            correctOption: {{ (int) $correctOptionNumber($question) }}
-                         }, false)">
-                        <div class="tb-question-head flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                            <div class="min-w-0">
-                                <div class="flex flex-wrap items-center gap-2">
-                                    <span class="tb-chip blue">Savol {{ $question->sort_order }}</span>
-                                    <span class="tb-chip {{ $question->type === 'single_choice' ? 'green' : 'orange' }}">
-                                        {{ $question->type === 'single_choice' ? 'Multiple choice' : 'Fill in blank' }}
-                                    </span>
-                                    <span class="tb-chip gray">{{ $question->points }} ball</span>
-                                </div>
-                                <div class="mt-2 text-sm font-bold text-slate-900">{{ $question->prompt }}</div>
-                            </div>
-                            <div class="flex items-center gap-2">
-                                <button type="button" @click="open = !open" class="tb-btn tb-btn-light">
-                                    <span x-text="open ? 'Yopish' : 'Tahrirlash'"></span>
-                                </button>
-                                <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.destroy', [$testSubject, $lesson, $question]) }}" onsubmit="return confirm('Savolni o\'chirasizmi?')">
-                                    @csrf
-                                    @method('DELETE')
-                                    <button type="submit" class="tb-btn tb-btn-red">O'chirish</button>
-                                </form>
-                            </div>
-                        </div>
-
-                        <div class="tb-section border-t border-slate-100" x-show="open" x-cloak>
-                            <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.update', [$testSubject, $lesson, $question]) }}" class="space-y-4">
-                                @csrf
-                                @method('PUT')
-
-                                <div class="tb-inline">
-                                    <div class="tb-col" style="flex:1 1 240px;">
-                                        <label class="tb-label">Savol turi</label>
-                                        <select name="type" class="tb-select" x-model="type">
-                                            <option value="single_choice">Multiple choice</option>
-                                            <option value="fill_in_blank">Fill in blank</option>
-                                        </select>
-                                    </div>
-                                    <div class="tb-col" style="flex:0 0 130px;">
-                                        <label class="tb-label">Ball</label>
-                                        <input type="number" min="1" max="100" name="points" class="tb-input" value="{{ $question->points }}" required>
-                                    </div>
-                                    <div class="tb-col" style="flex:0 0 180px;">
-                                        <label class="flex items-center gap-3 text-sm text-slate-700 h-[42px]">
-                                            <input type="checkbox" name="is_active" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ $question->is_active ? 'checked' : '' }}>
-                                            Savol faol
-                                        </label>
-                                    </div>
-                                </div>
-
-                                <div class="tb-inline">
-                                    <div class="tb-col" style="flex:1 1 420px;">
-                                        <label class="tb-label">Savol matni</label>
-                                        <textarea name="prompt" class="tb-textarea" required>{{ $question->prompt }}</textarea>
-                                    </div>
-                                    <div class="tb-col" style="flex:1 1 320px;">
-                                        <label class="tb-label">Yordamchi izoh</label>
-                                        <textarea name="helper_text" class="tb-textarea">{{ $question->helper_text }}</textarea>
-                                    </div>
-                                </div>
-
-                                <div x-show="type === 'single_choice'" x-cloak class="space-y-3">
-                                    <div class="tb-soft-box">
-                                        <div class="flex items-center justify-between gap-3 mb-3">
-                                            <label class="tb-label !mb-0">Variantlar</label>
-                                            <button type="button" @click="addOption()" class="tb-btn tb-btn-ghost">+ Variant qo'shish</button>
+                @if($questions->isNotEmpty())
+                    <div class="tb-question-grid">
+                        @foreach($questions as $question)
+                            <div class="tb-question"
+                                 x-data="questionBuilder({
+                                    type: '{{ $question->type }}',
+                                    options: @js($questionOptions($question)),
+                                    correctOption: {{ (int) $correctOptionNumber($question) }}
+                                 })">
+                                <div class="tb-question-head flex flex-col gap-3">
+                                    <div class="min-w-0">
+                                        <div class="flex flex-wrap items-center gap-2">
+                                            <span class="tb-chip blue">Savol {{ $question->sort_order }}</span>
+                                            <span class="tb-chip {{ $question->type === 'single_choice' ? 'green' : 'orange' }}">
+                                                {{ $question->type === 'single_choice' ? 'Multiple choice' : 'Fill in blank' }}
+                                            </span>
+                                            <span class="tb-chip gray">{{ $question->points }} ball</span>
                                         </div>
-                                        <div class="space-y-2">
-                                            <template x-for="(option, index) in options" :key="index">
-                                                <div class="tb-option-row">
-                                                    <div class="tb-option-prefix" x-text="optionLabel(index)"></div>
-                                                    <input type="text"
-                                                           class="tb-input"
-                                                           :name="`options[${index}][text]`"
-                                                           x-model="option.text"
-                                                           placeholder="Variant matni">
-                                                    <label class="flex items-center gap-2 text-sm text-slate-700 whitespace-nowrap">
-                                                        <input type="radio" name="correct_option_number" :value="index + 1" x-model="correctOption" class="text-emerald-600 focus:ring-emerald-500">
-                                                        To'g'ri
-                                                    </label>
-                                                    <button type="button" class="tb-option-remove" @click="removeOption(index)" x-show="options.length > 2">x</button>
+                                        <div class="mt-2 text-sm font-bold text-slate-900">{{ $question->prompt }}</div>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <button type="button" @click="open = !open" class="tb-btn tb-btn-light">
+                                            <span x-text="open ? 'Yopish' : 'Ochish'"></span>
+                                        </button>
+                                        <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.destroy', [$testSubject, $lesson, $question]) }}" onsubmit="return confirm('Savolni o\'chirasizmi?')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="tb-btn tb-btn-red">O'chirish</button>
+                                        </form>
+                                    </div>
+                                </div>
+
+                                <div class="tb-section border-t border-slate-100" x-show="open" x-cloak>
+                                    <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.update', [$testSubject, $lesson, $question]) }}" class="space-y-4">
+                                        @csrf
+                                        @method('PUT')
+
+                                        <div class="tb-inline">
+                                            <div class="tb-col" style="flex:1 1 240px;">
+                                                <label class="tb-label">Savol turi</label>
+                                                <select name="type" class="tb-select" x-model="type">
+                                                    <option value="single_choice">Multiple choice</option>
+                                                    <option value="fill_in_blank">Fill in blank</option>
+                                                </select>
+                                            </div>
+                                            <div class="tb-col" style="flex:0 0 130px;">
+                                                <label class="tb-label">Ball</label>
+                                                <input type="number" min="1" max="100" name="points" class="tb-input" value="{{ $question->points }}" required>
+                                            </div>
+                                            <div class="tb-col" style="flex:0 0 180px;">
+                                                <label class="flex items-center gap-3 text-sm text-slate-700 h-[42px]">
+                                                    <input type="checkbox" name="is_active" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ $question->is_active ? 'checked' : '' }}>
+                                                    Savol faol
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div class="tb-inline">
+                                            <div class="tb-col" style="flex:1 1 420px;">
+                                                <label class="tb-label">Savol matni</label>
+                                                <textarea name="prompt" class="tb-textarea" required>{{ $question->prompt }}</textarea>
+                                            </div>
+                                            <div class="tb-col" style="flex:1 1 320px;">
+                                                <label class="tb-label">Yordamchi izoh</label>
+                                                <textarea name="helper_text" class="tb-textarea">{{ $question->helper_text }}</textarea>
+                                            </div>
+                                        </div>
+
+                                        <div x-show="type === 'single_choice'" x-cloak class="space-y-3">
+                                            <div class="tb-soft-box">
+                                                <div class="flex items-center justify-between gap-3 mb-3">
+                                                    <label class="tb-label !mb-0">Variantlar</label>
+                                                    <button type="button" @click="addOption()" class="tb-btn tb-btn-ghost">+ Variant qo'shish</button>
                                                 </div>
-                                            </template>
+                                                <div class="space-y-2">
+                                                    <template x-for="(option, index) in options" :key="index">
+                                                        <div class="tb-option-row">
+                                                            <div class="tb-option-prefix" x-text="optionLabel(index)"></div>
+                                                            <input type="text"
+                                                                   class="tb-input"
+                                                                   :name="`options[${index}][text]`"
+                                                                   x-model="option.text"
+                                                                   placeholder="Variant matni">
+                                                            <label class="flex items-center gap-2 text-sm text-slate-700 whitespace-nowrap">
+                                                                <input type="radio" name="correct_option_number" :value="index + 1" x-model="correctOption" class="text-emerald-600 focus:ring-emerald-500">
+                                                                To'g'ri
+                                                            </label>
+                                                            <button type="button" class="tb-option-remove" @click="removeOption(index)" x-show="options.length > 2">x</button>
+                                                        </div>
+                                                    </template>
+                                                </div>
+                                            </div>
                                         </div>
-                                    </div>
-                                </div>
 
-                                <div x-show="type === 'fill_in_blank'" x-cloak class="tb-inline">
-                                    <div class="tb-col" style="flex:1 1 300px;">
-                                        <label class="tb-label">To'g'ri javob</label>
-                                        <input type="text" name="correct_answer_text" class="tb-input" value="{{ $question->correct_answer_text }}">
-                                    </div>
-                                    <div class="tb-col" style="flex:0 0 220px;">
-                                        <label class="flex items-center gap-3 text-sm text-slate-700 h-[42px]">
-                                            <input type="checkbox" name="case_sensitive" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ $question->case_sensitive ? 'checked' : '' }}>
-                                            Harf kattaligi farq qilsin
-                                        </label>
-                                    </div>
-                                </div>
+                                        <div x-show="type === 'fill_in_blank'" x-cloak class="tb-inline">
+                                            <div class="tb-col" style="flex:1 1 300px;">
+                                                <label class="tb-label">To'g'ri javob</label>
+                                                <input type="text" name="correct_answer_text" class="tb-input" value="{{ $question->correct_answer_text }}">
+                                            </div>
+                                            <div class="tb-col" style="flex:0 0 220px;">
+                                                <label class="flex items-center gap-3 text-sm text-slate-700 h-[42px]">
+                                                    <input type="checkbox" name="case_sensitive" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ $question->case_sensitive ? 'checked' : '' }}>
+                                                    Harf kattaligi farq qilsin
+                                                </label>
+                                            </div>
+                                        </div>
 
-                                <button type="submit" class="tb-btn tb-btn-primary">Savolni yangilash</button>
-                            </form>
-                        </div>
+                                        <button type="submit" class="tb-btn tb-btn-primary">Savolni yangilash</button>
+                                    </form>
+                                </div>
+                            </div>
+                        @endforeach
                     </div>
-                @empty
+                @else
                     <div class="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center text-slate-500 shadow-sm">
                         Bu mavzu uchun hali savollar kiritilmagan.
                     </div>
-                @endforelse
+                @endif
             </div>
         </div>
     </div>

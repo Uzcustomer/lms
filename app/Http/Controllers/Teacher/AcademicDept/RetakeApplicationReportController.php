@@ -50,72 +50,80 @@ class RetakeApplicationReportController extends Controller
             return response()->json(['rows' => [], 'totals' => $this->emptyTotals()]);
         }
 
-        // Qarzdorlar olami (o'tgan semestrlar — academic_records asosida).
-        $debtorResults = $this->computeDebtorResults($students, 1, false, []);
+        $semNum = fn ($name) => preg_match('/(\d+)/', (string) $name, $m) ? (int) $m[1] : null;
 
-        // Talabaning joriy semestri (joriy/o'tgan ajratish uchun).
+        // Talabaning joriy semestri (raqam) — joriy/o'tgan ajratish uchun.
         $curSem = [];
         foreach ($students as $s) {
-            $curSem[(string) $s->hemis_id] = $s->semester_code !== null ? (int) $s->semester_code : null;
+            $curSem[(string) $s->hemis_id] = $semNum($s->semester_name ?: $s->semester_code);
+        }
+        $hemisIds = $students->pluck('hemis_id')->map(fn ($v) => (string) $v)->all();
+
+        $rows = [];
+        $rowFor = function ($sid, $sn, $subjName, $semName) use (&$rows) {
+            $key = $sid . '|' . $sn;
+            if (!isset($rows[$key])) {
+                $rows[$key] = $this->newRow($subjName, $semName, $sn);
+            }
+            return $key;
+        };
+
+        // 1) Arizalar — "ariza bergan" ustunlar (A/B/C). To'g'ridan-to'g'ri
+        //    arizalardan (imtihondan o'tib qarzdorlar olamidan chiqqanlar ham
+        //    "O'tgan" sifatida sanaladi).
+        $apps = RetakeApplication::query()
+            ->whereIn('student_hemis_id', $hemisIds)
+            ->with('retakeGroup')
+            ->get();
+
+        $appliedKeys = []; // hid|sid|sn => true (shu fan+semestrdan ariza bergan)
+        foreach ($apps as $a) {
+            $hid = (string) $a->student_hemis_id;
+            $sid = (string) $a->subject_id;
+            $sn = $semNum($a->semester_name ?: $a->semester_id);
+            if ($sn === null) {
+                continue;
+            }
+            $key = $rowFor($sid, $sn, $a->subject_name, $a->semester_name);
+            $appliedKeys[$hid . '|' . $sid . '|' . $sn] = true;
+            $isCurrent = ($curSem[$hid] ?? null) === $sn;
+
+            if ($a->final_status === RetakeApplication::STATUS_PENDING) {
+                $rows[$key]['in_process']++;
+                continue;
+            }
+            if ($a->final_status !== RetakeApplication::STATUS_APPROVED) {
+                continue; // rad etilgan — ustunlarga kirmaydi
+            }
+            $res = $this->examResult($a);
+            $bucket = $isCurrent ? 'current' : 'approved';
+            $rows[$key][$bucket][$res]++;
+            $rows[$key][$bucket]['jami']++;
         }
 
-        // Qatorlar: subject_id|semester_code => yig'indi.
-        $rows = [];
-        $debtorHemis = [];
+        // 2) Qarzdorlar olami (o'tgan semestrlar) — "ariza bermaganlar" (D).
+        $debtorResults = $this->computeDebtorResults($students, 1, false, []);
         foreach ($debtorResults as $r) {
             $hid = (string) $r['hemis_id'];
-            $debtorHemis[$hid] = true;
             foreach ($r['debts'] as $d) {
-                $key = $d['subject_id'] . '|' . $d['semester_code'];
-                if (!isset($rows[$key])) {
-                    $rows[$key] = $this->newRow($d['subject_name'], $d['semester_name'], (int) $d['semester_code']);
+                $sid = (string) $d['subject_id'];
+                $sn = $semNum($d['semester_name'] ?: $d['semester_code']);
+                if ($sn === null) {
+                    continue;
                 }
-                $rows[$key]['_debtors'][$hid] = (int) $d['semester_code'];
+                $key = $rowFor($sid, $sn, $d['subject_name'], $d['semester_name']);
+                if (!isset($appliedKeys[$hid . '|' . $sid . '|' . $sn])) {
+                    $rows[$key]['not_applied']++;
+                    if (($curSem[$hid] ?? null) === $sn) {
+                        $rows[$key]['current_not_applied']++;
+                    }
+                }
             }
         }
 
         if (empty($rows)) {
             return response()->json(['rows' => [], 'totals' => $this->emptyTotals()]);
         }
-
-        // Arizalar (talaba + fan bo'yicha).
-        $apps = RetakeApplication::query()
-            ->whereIn('student_hemis_id', array_keys($debtorHemis))
-            ->with('retakeGroup')
-            ->get()
-            ->groupBy(fn ($a) => (string) $a->student_hemis_id . '|' . (string) $a->subject_id);
-
-        foreach ($rows as $key => &$row) {
-            [$subjectId, $semCode] = explode('|', $key);
-            foreach ($row['_debtors'] as $hid => $debtSem) {
-                $isCurrent = $curSem[$hid] !== null && (int) $debtSem === $curSem[$hid];
-                $appList = $apps->get($hid . '|' . $subjectId);
-                $app = $appList?->first();
-
-                if (!$app) {
-                    // Ariza bermagan qarzdor.
-                    $row['not_applied']++;
-                    if ($isCurrent) $row['current_not_applied']++;
-                    continue;
-                }
-
-                if ($app->final_status === RetakeApplication::STATUS_PENDING) {
-                    $row['in_process']++;
-                    continue;
-                }
-
-                if ($app->final_status !== RetakeApplication::STATUS_APPROVED) {
-                    continue; // rad etilgan — ustunlarga kirmaydi
-                }
-
-                // Tasdiqlangan — imtihon natijasiga qarab.
-                $res = $this->examResult($app);
-                $bucket = $isCurrent ? 'current' : 'approved';
-                $row[$bucket][$res]++;
-                $row[$bucket]['jami']++;
-            }
-        }
-        unset($row);
 
         // Tartiblash: semestr → fan.
         $list = array_values($rows);
@@ -125,7 +133,6 @@ class RetakeApplicationReportController extends Controller
         $out = [];
         $i = 0;
         foreach ($list as $row) {
-            unset($row['_debtors']);
             $row['tr'] = ++$i;
             $out[] = $row;
             foreach (['approved', 'current'] as $g) {
@@ -152,7 +159,6 @@ class RetakeApplicationReportController extends Controller
             'in_process' => 0,
             'not_applied' => 0,
             'current_not_applied' => 0,
-            '_debtors' => [],
         ];
     }
 

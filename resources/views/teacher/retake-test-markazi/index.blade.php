@@ -6,6 +6,21 @@
     </x-slot>
 
     @include('partials._journal_table_styles')
+    <style>
+        /* Natija hali yo'q (baho qo'yilishi kerak, lekin hali yo'q) */
+        .rtm-await {
+            display:inline-flex; align-items:center; justify-content:center;
+            min-width:26px; height:22px; border-radius:6px;
+            background:#f8fafc; border:1px dashed #cbd5e1; color:#94a3b8;
+            font-size:13px; line-height:1;
+        }
+        /* Bu nazorat bu fanga umuman qo'yilmaydi */
+        .rtm-na {
+            display:inline-flex; align-items:center; justify-content:center;
+            min-width:26px; height:22px; border-radius:6px;
+            background:transparent; color:#cbd5e1; font-size:13px; line-height:1;
+        }
+    </style>
 
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
         @if(session('success'))
@@ -45,9 +60,16 @@
                 'sinov' => ['label' => 'Sinov', 'cls' => 'badge-teal'],
             ];
             $atype = fn ($t) => $atypeBadge[$t] ?? ['label' => $t ?: '—', 'cls' => 'badge-gray'];
-            // Faol bo'lmagan (baho qo'yilmaydigan) katak
-            $inactiveCell = '<span class="badge badge-gray" style="opacity:.45;" title="Bu fanda bu nazorat qo\'yilmaydi">—</span>';
             $fmt = fn ($v) => $v !== null ? rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.') : null;
+            // Katak: nazorat faol bo'lmasa ✕, faol-u baho yo'q bo'lsa kutilmoqda (…),
+            // baho bor bo'lsa rangli badge.
+            $scoreCell = function ($active, $value, $cls = 'badge-blue') use ($fmt) {
+                if (!$active) return '<span class="rtm-na" title="Bu fanda bu nazorat qo\'yilmaydi">✕</span>';
+                $f = $fmt($value);
+                return $f === null
+                    ? '<span class="rtm-await" title="Natija hali yo\'q">…</span>'
+                    : '<span class="badge ' . $cls . '">' . $f . '</span>';
+            };
         @endphp
 
         @if($activeTab === 'groups')
@@ -71,6 +93,7 @@
                                         <input type="checkbox" id="select-all-retake-yn" class="rounded border-gray-300">
                                     </th>
                                     <th>{{ __("Fan") }}</th>
+                                    <th>{{ __("Semestr") }}</th>
                                     <th>{{ __("Yopilish shakli") }}</th>
                                     <th>{{ __("O'qituvchi") }}</th>
                                     <th>{{ __("OSKE / TEST sanasi") }}</th>
@@ -84,19 +107,17 @@
                                         <td class="td-num" onclick="event.stopPropagation();">
                                             <input type="checkbox" name="group_ids[]" value="{{ $g->id }}" class="retake-yn-group-checkbox rounded border-gray-300">
                                         </td>
-                                        <td>
-                                            <span class="text-cell text-subject">{{ $g->subject_name }}</span>
-                                            <span class="text-cell" style="color:#64748b;font-size:11px;">{{ $g->semester_name }}</span>
-                                        </td>
+                                        <td><span class="text-cell text-subject">{{ $g->subject_name }}</span></td>
+                                        <td><span class="badge badge-teal">{{ $g->semester_name ?? '—' }}</span></td>
                                         <td>@php $b = $atype($g->assessment_type); @endphp<span class="badge {{ $b['cls'] }}">{{ $b['label'] }}</span></td>
                                         <td><span class="text-cell text-emerald">{{ $g->teacher_name ?? '—' }}</span></td>
                                         <td class="text-xs">
-                                            @if($g->oske_date)<span class="badge badge-violet">OSKE: {{ $g->oske_date->format('Y-m-d') }}</span>@endif
-                                            @if($g->test_date)<span class="badge badge-violet">TEST: {{ $g->test_date->format('Y-m-d') }}</span>@endif
+                                            @if($g->oske_date)<span class="badge badge-violet">OSKE: {{ $g->oske_date->format('d.m.Y') }}</span>@endif
+                                            @if($g->test_date)<span class="badge badge-violet">TEST: {{ $g->test_date->format('d.m.Y') }}</span>@endif
                                             @if(!$g->oske_date && !$g->test_date)—@endif
                                         </td>
                                         <td style="text-align:center;"><span class="badge badge-blue">{{ $g->students_count }}</span></td>
-                                        <td class="text-xs text-gray-500">{{ $g->sent_to_test_markazi_at?->format('Y-m-d H:i') ?? '—' }}</td>
+                                        <td class="text-xs text-gray-500">{{ $g->sent_to_test_markazi_at?->format('d.m.Y H:i') ?? '—' }}</td>
                                     </tr>
                                 @endforeach
                                 </tbody>
@@ -183,14 +204,10 @@
                                             <span class="badge badge-gray">{{ __("Yuborilmagan") }}</span>
                                         @endif
                                     </td>
-                                    <td style="text-align:center;"><span class="badge badge-blue">{{ $fmt($app->joriy_score) ?? '—' }}</span></td>
-                                    <td style="text-align:center;"><span class="badge badge-green">{{ $fmt($mustaqil?->grade) ?? '—' }}</span></td>
-                                    <td style="text-align:center; background:#eff6ff;">
-                                        @if($needsOske)<span class="badge badge-blue">{{ $fmt($app->oske_score) ?? '—' }}</span>@else{!! $inactiveCell !!}@endif
-                                    </td>
-                                    <td style="text-align:center; background:#eff6ff;">
-                                        @if($needsTest)<span class="badge badge-blue">{{ $fmt($app->test_score) ?? '—' }}</span>@else{!! $inactiveCell !!}@endif
-                                    </td>
+                                    <td style="text-align:center;">{!! $scoreCell(true, $app->joriy_score, 'badge-blue') !!}</td>
+                                    <td style="text-align:center;">{!! $scoreCell(true, $mustaqil?->grade, 'badge-green') !!}</td>
+                                    <td style="text-align:center; background:#eff6ff;">{!! $scoreCell($needsOske, $app->oske_score, 'badge-blue') !!}</td>
+                                    <td style="text-align:center; background:#eff6ff;">{!! $scoreCell($needsTest, $app->test_score, 'badge-blue') !!}</td>
                                 </tr>
                             @endforeach
                             </tbody>

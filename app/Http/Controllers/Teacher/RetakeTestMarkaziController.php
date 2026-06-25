@@ -33,21 +33,23 @@ class RetakeTestMarkaziController extends Controller
 
         $activeTab = request('tab') === 'students' ? 'students' : 'groups';
 
-        // Yuborilgan guruhlar — eng yangi avval
+        // O'quv bo'limi tomonidan tasdiqlanib guruhga qo'yilgan BARCHA qayta o'qish
+        // guruhlari (sinov bilan yakunlanadigan fanlar ham). "Test markaziga
+        // yuborilgan" sharti talab qilinmaydi — tasdiqlangan talabasi bo'lsa bas.
         $groups = RetakeGroup::query()
-            ->whereNotNull('sent_to_test_markazi_at')
-            ->whereIn('assessment_type', ['oske', 'test', 'oske_test'])
+            ->whereHas('applications', fn ($q) => $q->where('final_status', RetakeApplication::STATUS_APPROVED))
             ->with('teacher')
-            ->withCount('applications as students_count')
-            ->orderByDesc('sent_to_test_markazi_at')
+            ->withCount(['applications as students_count' => fn ($q) => $q->where('final_status', RetakeApplication::STATUS_APPROVED)])
+            ->orderByDesc('start_date')
             ->paginate(30, ['*'], 'groups_page')
             ->withQueryString();
 
         $studentSearch = trim((string) request('student_search', ''));
 
+        // Tasdiqlangan va guruhga biriktirilgan barcha talabalar.
         $sentApplicationsQuery = RetakeApplication::query()
-            ->whereNotNull('sent_to_test_markazi_at')
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
             ->with(['group.student', 'retakeGroup']);
 
         if ($studentSearch !== '') {
@@ -61,7 +63,7 @@ class RetakeTestMarkaziController extends Controller
         }
 
         $sentApplications = $sentApplicationsQuery
-            ->orderByDesc('sent_to_test_markazi_at')
+            ->orderByDesc('id')
             ->paginate(50, ['*'], 'students_page')
             ->withQueryString();
 
@@ -84,11 +86,9 @@ class RetakeTestMarkaziController extends Controller
         $this->authorize();
 
         $group = RetakeGroup::with('teacher')->findOrFail($groupId);
-        if (!$group->sent_to_test_markazi_at) {
-            abort(404, 'Bu guruh test markaziga yuborilmagan');
-        }
 
-        $applications = $this->service->sentApplications($group);
+        // Tasdiqlangan barcha talabalar (test markaziga yuborilgan bo'lishi shart emas).
+        $applications = $this->service->applications($group);
         $gradesMap = $this->service->gradesMap($group);
         $mustaqilMap = $this->service->mustaqilMap($group);
 
@@ -125,9 +125,6 @@ class RetakeTestMarkaziController extends Controller
         $this->authorize();
 
         $group = RetakeGroup::findOrFail($groupId);
-        if (!$group->sent_to_test_markazi_at) {
-            return response()->json(['success' => false, 'message' => 'Guruh test markaziga yuborilmagan'], 403);
-        }
 
         $actor = RetakeAccess::currentStaff();
 
@@ -208,8 +205,6 @@ class RetakeTestMarkaziController extends Controller
 
         $groups = RetakeGroup::query()
             ->whereIn('id', $data['group_ids'])
-            ->whereNotNull('sent_to_test_markazi_at')
-            ->whereIn('assessment_type', ['oske', 'test', 'oske_test'])
             ->with('teacher')
             ->orderBy('name')
             ->get();
@@ -305,10 +300,10 @@ class RetakeTestMarkaziController extends Controller
         $studentSearch = trim((string) $request->input('student_search', ''));
 
         $query = RetakeApplication::query()
-            ->whereNotNull('sent_to_test_markazi_at')
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
             ->with(['group.student', 'retakeGroup'])
-            ->orderBy('sent_to_test_markazi_at');
+            ->orderBy('id');
 
         if ($studentSearch !== '') {
             $query->where(function ($q) use ($studentSearch) {

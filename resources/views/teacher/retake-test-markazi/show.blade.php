@@ -197,10 +197,10 @@
                         <th style="text-align:center;">{{ __("Amaliyot o'rt.") }}</th>
                         <th style="text-align:center;">{{ __("Mustaqil") }}</th>
                         @if($needsOske)
-                            <th style="text-align:center; background:#eff6ff; color:#1d4ed8;">OSKE</th>
+                            <th style="text-align:center;">OSKE</th>
                         @endif
                         @if($needsTest)
-                            <th style="text-align:center; background:#eff6ff; color:#1d4ed8;">TEST</th>
+                            <th style="text-align:center;">TEST</th>
                         @endif
                     </tr>
                     </thead>
@@ -240,10 +240,10 @@
                             <td style="text-align:center;">{!! $cellVal($amaliyotAvg, 'badge-blue') !!}</td>
                             <td style="text-align:center;">{!! $cellVal($mustaqil?->grade, 'badge-teal') !!}</td>
                             @if($needsOske)
-                                <td style="text-align:center; background:#eff6ff;" data-oske-cell="{{ $app->id }}">{!! $cellVal($app->oske_score, 'badge-blue') !!}</td>
+                                <td style="text-align:center;" data-oske-cell="{{ $app->id }}">{!! $cellVal($app->oske_score, 'badge-blue') !!}</td>
                             @endif
                             @if($needsTest)
-                                <td style="text-align:center; background:#eff6ff;" data-test-cell="{{ $app->id }}">{!! $cellVal($app->test_score, 'badge-blue') !!}</td>
+                                <td style="text-align:center;" data-test-cell="{{ $app->id }}">{!! $cellVal($app->test_score, 'badge-blue') !!}</td>
                             @endif
                         </tr>
                     @endforeach

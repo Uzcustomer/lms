@@ -16,10 +16,13 @@ use App\Models\Semester;
 use App\Models\Setting;
 use App\Models\Student;
 use App\Models\StudentGrade;
+use App\Models\TestSubject;
+use App\Models\TestSubjectLessonTestAttempt;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use App\Services\StudentGradeService;
 use App\Models\MarkingSystemScore;
@@ -1033,8 +1036,134 @@ class StudentController extends Controller
         });
 
         $minimumLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
+        $testSubjects = $this->loadAssignedTestSubjects($student);
 
-        return view('student.subjects', ['subjects' => $subjects, 'semester' => $semester_name, 'mtDeadlineTime' => $mtDeadlineTime, 'minimumLimit' => $minimumLimit]);
+        return view('student.subjects', [
+            'subjects' => $subjects,
+            'testSubjects' => $testSubjects,
+            'semester' => $semester_name,
+            'mtDeadlineTime' => $mtDeadlineTime,
+            'minimumLimit' => $minimumLimit,
+        ]);
+    }
+
+    private function loadAssignedTestSubjects(Student $student)
+    {
+        $requiredTables = [
+            'test_subjects',
+            'test_subject_groups',
+            'test_subject_lessons',
+            'test_subject_lesson_tests',
+            'test_subject_lesson_test_questions',
+            'test_subject_lesson_test_attempts',
+            'test_subject_lesson_test_answers',
+        ];
+
+        foreach ($requiredTables as $table) {
+            if (!Schema::hasTable($table)) {
+                return collect();
+            }
+        }
+
+        $today = Carbon::now('Asia/Tashkent')->toDateString();
+
+        $subjects = TestSubject::query()
+            ->with([
+                'groups',
+                'lessons' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->orderBy('lesson_date')
+                    ->orderBy('topic_order'),
+                'lessons.lessonTest' => fn ($query) => $query->withCount([
+                    'questions' => fn ($q) => $q->where('is_active', true),
+                ]),
+            ])
+            ->where('is_active', true)
+            ->where(function ($query) use ($today) {
+                $query->whereNull('starts_on')
+                    ->orWhereDate('starts_on', '<=', $today);
+            })
+            ->where(function ($query) use ($today) {
+                $query->whereNull('ends_on')
+                    ->orWhereDate('ends_on', '>=', $today);
+            })
+            ->whereHas('groups', function ($query) use ($student) {
+                $query->where(function ($sub) use ($student) {
+                    $sub->where('group_hemis_id', $student->group_id)
+                        ->orWhere('group_id', $student->group_id);
+                });
+            })
+            ->orderBy('name')
+            ->get();
+
+        if ($subjects->isEmpty()) {
+            return collect();
+        }
+
+        $attemptsByTestId = collect();
+        $testIds = $subjects->pluck('lessons')
+            ->flatten()
+            ->pluck('lessonTest.id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if (!empty($testIds)) {
+            $attemptsByTestId = TestSubjectLessonTestAttempt::query()
+                ->where('student_id', $student->id)
+                ->whereIn('test_subject_lesson_test_id', $testIds)
+                ->get()
+                ->keyBy('test_subject_lesson_test_id');
+        }
+
+        return $subjects->map(function (TestSubject $subject) use ($today, $attemptsByTestId) {
+            $todayLesson = $subject->lessons->first(function ($lesson) use ($today) {
+                return optional($lesson->lesson_date)->format('Y-m-d') === $today;
+            });
+
+            $nextLesson = $subject->lessons->first(function ($lesson) use ($today) {
+                return optional($lesson->lesson_date)->format('Y-m-d') >= $today;
+            });
+
+            $displayLesson = $todayLesson ?: $nextLesson ?: $subject->lessons->last();
+            $todayTest = $todayLesson?->lessonTest;
+            $attempt = $todayTest ? $attemptsByTestId->get($todayTest->id) : null;
+            $questionCount = (int) ($todayTest?->questions_count ?? 0);
+            $attemptSubmitted = $attempt && $attempt->status === 'submitted';
+            $canStart = $todayTest
+                && $todayTest->is_open
+                && $todayTest->is_published
+                && $questionCount > 0
+                && !$attemptSubmitted;
+
+            return [
+                'id' => $subject->id,
+                'name' => $subject->name,
+                'teacher_name' => $subject->teacher_name,
+                'group_name' => $subject->groups->pluck('group_name')->filter()->implode(', '),
+                'starts_on' => optional($subject->starts_on)->format('d.m.Y'),
+                'ends_on' => optional($subject->ends_on)->format('d.m.Y'),
+                'lesson_topic' => $displayLesson?->topic_title ?: (($displayLesson?->topic_order ?? 1) . '-mavzu'),
+                'lesson_date' => optional($displayLesson?->lesson_date)->format('d.m.Y'),
+                'lesson_time' => $displayLesson
+                    ? trim(($displayLesson->starts_at ? substr($displayLesson->starts_at, 0, 5) : '--:--') . ' - ' . ($displayLesson->ends_at ? substr($displayLesson->ends_at, 0, 5) : '--:--'))
+                    : null,
+                'question_count' => $questionCount,
+                'test_is_open' => (bool) ($todayTest?->is_open),
+                'test_is_published' => (bool) ($todayTest?->is_published),
+                'has_today_lesson' => (bool) $todayLesson,
+                'can_start' => $canStart,
+                'attempt_submitted' => $attemptSubmitted,
+                'attempt_percent' => $attempt?->percent,
+                'attempt_score' => $attempt?->score,
+                'attempt_total_points' => $attempt?->total_points,
+                'attempt_is_passed' => (bool) ($attempt?->is_passed),
+                'show_route' => ($todayLesson && $todayTest)
+                    ? route('student.test-subjects.tests.show', [$subject, $todayLesson])
+                    : null,
+            ];
+        })->values();
     }
 
     // Fetch grades for a selected subject

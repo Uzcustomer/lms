@@ -96,6 +96,11 @@ class Student extends Authenticatable
         return $this->belongsTo(Semester::class, 'semester_id', 'semester_hemis_id');
     }
 
+    public function testSubjectAttempts()
+    {
+        return $this->hasMany(TestSubjectLessonTestAttempt::class, 'student_id');
+    }
+
 
     public function getAverageGradeForWeek($subjectId, $startDate, $endDate)
     {

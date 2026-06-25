@@ -54,4 +54,10 @@ class TestSubjectLessonTest extends Model
             ->orderBy('sort_order')
             ->orderBy('id');
     }
+
+    public function attempts()
+    {
+        return $this->hasMany(TestSubjectLessonTestAttempt::class, 'test_subject_lesson_test_id')
+            ->orderByDesc('id');
+    }
 }

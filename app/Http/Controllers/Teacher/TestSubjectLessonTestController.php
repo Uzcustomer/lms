@@ -3,12 +3,15 @@
 namespace App\Http\Controllers\Teacher;
 
 use App\Http\Controllers\Controller;
+use App\Models\Student;
 use App\Models\TestSubject;
 use App\Models\TestSubjectLesson;
 use App\Models\TestSubjectLessonTest;
+use App\Models\TestSubjectLessonTestAttempt;
 use App\Models\TestSubjectLessonTestQuestion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -26,6 +29,135 @@ class TestSubjectLessonTestController extends Controller
             'testSubject' => $testSubject->loadMissing(['groups']),
             'lesson' => $lesson,
             'test' => $test,
+        ]);
+    }
+
+    public function results(TestSubject $testSubject, TestSubjectLesson $lesson)
+    {
+        foreach ([
+            'test_subject_lesson_tests',
+            'test_subject_lesson_test_questions',
+            'test_subject_lesson_test_options',
+            'test_subject_lesson_test_attempts',
+            'test_subject_lesson_test_answers',
+        ] as $table) {
+            abort_unless(Schema::hasTable($table), 503, 'Test natijalari moduli hali to‘liq ishga tushirilmagan.');
+        }
+
+        [, $test] = $this->resolveContext($testSubject, $lesson, true);
+
+        $testSubject->loadMissing('groups');
+        $test->load([
+            'questions.options',
+            'attempts.student',
+            'attempts.answers.question.options',
+            'attempts.answers.selectedOption',
+        ]);
+
+        $groupKeys = $testSubject->groups
+            ->pluck('group_hemis_id')
+            ->filter()
+            ->map(fn ($value) => (int) $value)
+            ->unique()
+            ->values();
+
+        if ($groupKeys->isEmpty()) {
+            $groupKeys = $testSubject->groups
+                ->pluck('group_id')
+                ->filter()
+                ->map(fn ($value) => (int) $value)
+                ->unique()
+                ->values();
+        }
+
+        $students = Student::query()
+            ->select(['id', 'hemis_id', 'full_name', 'group_id', 'group_name', 'student_id_number'])
+            ->when(
+                $groupKeys->isNotEmpty(),
+                fn ($query) => $query->whereIn('group_id', $groupKeys->all()),
+                fn ($query) => $query->whereRaw('1 = 0')
+            )
+            ->orderBy('full_name')
+            ->get();
+
+        $attemptsByStudentId = $test->attempts
+            ->whereIn('student_id', $students->pluck('id'))
+            ->keyBy('student_id');
+
+        $submittedAttempts = $attemptsByStudentId
+            ->filter(fn ($attempt) => $attempt->status === 'submitted')
+            ->values();
+
+        $studentRows = $students->map(function (Student $student, int $index) use ($attemptsByStudentId, $test) {
+            /** @var TestSubjectLessonTestAttempt|null $attempt */
+            $attempt = $attemptsByStudentId->get($student->id);
+            $answersByQuestion = $attempt?->answers?->keyBy('question_id') ?? collect();
+
+            $questionDetails = $test->questions->map(function ($question) use ($answersByQuestion) {
+                $answer = $answersByQuestion->get($question->id);
+                $selectedOption = $answer?->selectedOption;
+                $correctOption = $question->options->firstWhere('is_correct', true);
+
+                return [
+                    'question_no' => $question->sort_order ?: $question->id,
+                    'prompt' => $question->prompt,
+                    'type' => $question->type,
+                    'points' => (int) $question->points,
+                    'points_earned' => (int) ($answer->points_earned ?? 0),
+                    'is_answered' => (bool) $answer,
+                    'is_correct' => (bool) ($answer->is_correct ?? false),
+                    'selected_option' => $selectedOption?->option_text,
+                    'correct_option' => $correctOption?->option_text,
+                    'answer_text' => $answer?->answer_text,
+                    'correct_answer_text' => $question->correct_answer_text,
+                ];
+            })->values();
+
+            return [
+                'row_no' => $index + 1,
+                'student' => $student,
+                'attempt' => $attempt,
+                'question_details' => $questionDetails,
+            ];
+        })->values();
+
+        $questionSummaries = $test->questions->map(function ($question) use ($submittedAttempts) {
+            $answers = $submittedAttempts
+                ->flatMap(fn ($attempt) => $attempt->answers)
+                ->where('question_id', $question->id)
+                ->values();
+
+            $answeredCount = $answers->count();
+            $correctCount = $answers->where('is_correct', true)->count();
+            $incorrectCount = $answeredCount - $correctCount;
+            $unansweredCount = max(0, $submittedAttempts->count() - $answeredCount);
+
+            return [
+                'question_no' => $question->sort_order ?: $question->id,
+                'prompt' => $question->prompt,
+                'type' => $question->type,
+                'correct_count' => $correctCount,
+                'incorrect_count' => $incorrectCount,
+                'unanswered_count' => $unansweredCount,
+            ];
+        })->values();
+
+        $summary = [
+            'total_students' => $students->count(),
+            'submitted_count' => $submittedAttempts->count(),
+            'not_submitted_count' => max(0, $students->count() - $submittedAttempts->count()),
+            'passed_count' => $submittedAttempts->where('is_passed', true)->count(),
+            'failed_count' => $submittedAttempts->where('is_passed', false)->count(),
+            'average_percent' => round((float) $submittedAttempts->avg('percent'), 2),
+        ];
+
+        return view('teacher.test-subjects.results', [
+            'testSubject' => $testSubject,
+            'lesson' => $lesson,
+            'test' => $test,
+            'summary' => $summary,
+            'studentRows' => $studentRows,
+            'questionSummaries' => $questionSummaries,
         ]);
     }
 

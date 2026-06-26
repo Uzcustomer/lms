@@ -39,7 +39,7 @@ class RetakeApplicationReportController extends Controller
 
         $r = $this->compute($request);
 
-        return response()->json(['rows' => $r['rows'], 'totals' => $r['totals']]);
+        return response()->json(['rows' => $r['rows'], 'totals' => $r['totals'], 'current_computed' => $r['current_computed'] ?? true]);
     }
 
     public function export(Request $request)
@@ -150,26 +150,11 @@ class RetakeApplicationReportController extends Controller
             $addDetail($hid, $sn, $a->subject_name, $prefix . ' — ' . $resLabel[$res], $a->oske_score, $a->test_score);
         }
 
-        // Joriy semestr qarzlari (jurnal xavflari) — computeDebtorResults'ga uzatamiz.
-        $studentSemCodes = [];
-        foreach ($students as $s) {
-            if ($s->semester_code !== null) {
-                $studentSemCodes[(string) $s->hemis_id] = (string) $s->semester_code;
-            }
-        }
-        $currentRisksMap = [];
-        try {
-            $currentRisksMap = $this->getCurrentSemesterRisks($hemisIds, $studentSemCodes);
-        } catch (\Throwable $e) {
-            \Illuminate\Support\Facades\Log::warning('[RetakeAppReport] joriy semestr xavflari: ' . $e->getMessage());
-        }
-
-        // 2) Qarzdorlar olami — o'tgan semestr (academic_records) + joriy semestr (xavflar).
-        $debtorResults = $this->computeDebtorResults($students, 1, false, $currentRisksMap);
+        // 2) Qarzdorlar olami — O'TGAN semestr (academic_records). Barcha talabalar
+        //    uchun yengil va ishonchli → "Qayta o'qishga ariza bermaganlar" (D, o'tgan).
+        $debtorResults = $this->computeDebtorResults($students, 1, false, []);
         foreach ($debtorResults as $dr) {
             $hid = (string) $dr['hemis_id'];
-
-            // O'tgan semestr qarzlari → "Qayta o'qishga ariza bermaganlar" (D).
             foreach ($dr['debts'] as $d) {
                 $sid = (string) $d['subject_id'];
                 $sn = $semNum($d['semester_name'] ?: $d['semester_code']);
@@ -177,18 +162,38 @@ class RetakeApplicationReportController extends Controller
                 $key = $rowFor($sid, $sn, $d['subject_name'], $d['semester_name']);
                 if (!isset($appliedKeys[$hid . '|' . $sid . '|' . $sn])) {
                     $rows[$key]['not_applied']++;
-                    $isCurrent = ($curSem[$hid] ?? null) === $sn;
-                    if ($isCurrent) $rows[$key]['current_not_applied']++;
-                    $addDetail($hid, $sn, $d['subject_name'], $isCurrent ? 'Joriy semestrdan ariza bermagan' : 'Ariza bermagan');
+                    $addDetail($hid, $sn, $d['subject_name'], 'Ariza bermagan');
                 }
             }
+        }
 
-            // Joriy semestr qarzlari (xavflar) → "Joriy semestrdan ariza bermagan
-            // qarzdorlar" (E) va umumiy "ariza bermaganlar" (D). Semestr raqami
-            // talabaning joriy semestri.
-            $sn = $curSem[$hid] ?? null;
-            if ($sn !== null) {
-                foreach (($dr['current_risks'] ?? []) as $cr) {
+        // 3) JORIY semestr qarzlari (jurnal xavflari) — "Joriy semestrdan ariza
+        //    bermagan qarzdorlar" (E) + umumiy D. Bu hisob OG'IR (davomat/baholar),
+        //    shuning uchun faqat filtr qo'llanganda yoki talaba soni cheklangan
+        //    bo'lganda hisoblanadi (aks holda butun universitet bo'yicha timeout).
+        $studentSemCodes = [];
+        foreach ($students as $s) {
+            if ($s->semester_code !== null) {
+                $studentSemCodes[(string) $s->hemis_id] = (string) $s->semester_code;
+            }
+        }
+        $hasFilter = collect(['education_type', 'department', 'specialty', 'level_code', 'semester_code', 'group'])
+            ->contains(fn ($k) => filled($request->input($k)));
+        $currentRisksComputed = false;
+
+        if ($hasFilter || count($hemisIds) <= 2000) {
+            $currentRisksMap = [];
+            try {
+                $currentRisksMap = $this->getCurrentSemesterRisks($hemisIds, $studentSemCodes);
+                $currentRisksComputed = true;
+            } catch (\Throwable $e) {
+                \Illuminate\Support\Facades\Log::warning('[RetakeAppReport] joriy semestr xavflari: ' . $e->getMessage());
+            }
+            foreach ($currentRisksMap as $hid => $risks) {
+                $hid = (string) $hid;
+                $sn = $curSem[$hid] ?? null;
+                if ($sn === null) continue;
+                foreach ($risks as $cr) {
                     $sid = (string) ($cr['subject_id'] ?? '');
                     if ($sid === '') continue;
                     if (isset($appliedKeys[$hid . '|' . $sid . '|' . $sn])) {
@@ -221,7 +226,7 @@ class RetakeApplicationReportController extends Controller
             $totals['current_not_applied'] += $row['current_not_applied'];
         }
 
-        return ['rows' => $out, 'totals' => $totals, 'detail' => $detail];
+        return ['rows' => $out, 'totals' => $totals, 'detail' => $detail, 'current_computed' => $currentRisksComputed];
     }
 
     private function buildSummarySheet($sheet, array $rows, array $totals): void

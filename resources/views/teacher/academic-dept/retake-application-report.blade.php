@@ -40,6 +40,10 @@
             </a>
         </div>
 
+        <div id="rar-note" class="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2" style="display:none;">
+            {{ __("Joriy semestr qarzlari (\"Joriy semestrdan ariza bermagan qarzdorlar\") faqat filtr (fakultet/kurs/yo'nalish/guruh) qo'llanganda hisoblanadi — bu og'ir hisob. Filtrlab ko'ring.") }}
+        </div>
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div id="rar-loading" class="p-10 text-center text-sm text-gray-500">{{ __("Yuklanmoqda...") }}</div>
             <div id="rar-empty" class="p-10 text-center text-sm text-gray-500" style="display:none;">{{ __("Ma'lumot topilmadi") }}</div>
@@ -120,8 +124,11 @@
                 const dataUrl = '{{ route('admin.retake-application-report.data') }}' + window.location.search;
                 fetch(dataUrl, { headers: { 'Accept': 'application/json' } })
                     .then(r => r.json())
-                    .then(({ rows, totals }) => {
+                    .then(({ rows, totals, current_computed }) => {
                         document.getElementById('rar-loading').style.display = 'none';
+                        if (current_computed === false) {
+                            document.getElementById('rar-note').style.display = '';
+                        }
                         if (!rows || !rows.length) {
                             document.getElementById('rar-empty').style.display = '';
                             return;

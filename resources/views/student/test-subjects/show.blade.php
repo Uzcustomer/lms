@@ -30,6 +30,7 @@
                 .st-question { border:1px solid #dbe4ef; border-radius:18px; background:#fff; overflow:hidden; }
                 .st-question-head { padding:12px 14px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
                 .st-question-body { padding:14px; }
+                .st-question-image { width:100%; max-height:320px; object-fit:contain; border-radius:16px; border:1px solid #dbe4ef; background:#f8fafc; margin-bottom:14px; }
                 .st-option { display:flex; gap:10px; align-items:flex-start; padding:10px 12px; border:1px solid #dbe4ef; border-radius:14px; transition:.15s ease; }
                 .st-option:hover { border-color:#93c5fd; background:#f8fbff; }
                 .st-option + .st-option { margin-top:8px; }
@@ -163,6 +164,9 @@
                                 <div class="st-chip blue">{{ $question->points }} ball</div>
                             </div>
                             <div class="st-question-body">
+                                @if($question->imageUrl())
+                                    <img src="{{ $question->imageUrl() }}" alt="Savol rasmi" class="st-question-image">
+                                @endif
                                 @if($question->helperTextFor($language))
                                     <div class="st-muted mb-3">{{ $question->helperTextFor($language) }}</div>
                                 @endif
@@ -202,6 +206,9 @@
                                 </div>
                             </div>
                             <div class="st-question-body space-y-3">
+                                @if($question->imageUrl())
+                                    <img src="{{ $question->imageUrl() }}" alt="Savol rasmi" class="st-question-image">
+                                @endif
                                 @if($question->type === 'single_choice')
                                     @foreach($question->options as $optionIndex => $option)
                                         @php

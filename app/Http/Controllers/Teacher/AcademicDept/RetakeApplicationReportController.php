@@ -31,15 +31,94 @@ class RetakeApplicationReportController extends Controller
         ]);
     }
 
+    /**
+     * Progressiv (bo'lakli) hisob — timeout'siz.
+     *
+     * Birinchi so'rov (token yo'q): yengil bazani (A/B/C ustunlar + o'tgan
+     * semestr qarzlari D) darhol qaytaradi va guruh-to'plamlari ro'yxatini
+     * keshga yozadi. Keyingi so'rovlar (token bilan) JORIY semestr qarzlarini
+     * (E ustun — og'ir jurnal mantig'i) guruh-to'plami bo'yicha bosqichma-bosqich
+     * hisoblab keshdagi natijaga qo'shadi. Front-end "done" bo'lguncha so'raydi.
+     */
     public function data(Request $request)
     {
         $this->authorizeAccess();
         @ini_set('memory_limit', '1024M');
-        @set_time_limit(300);
+        @set_time_limit(120);
 
-        $r = $this->compute($request);
+        $sig = $this->filterSignature($request);
+        $token = (string) $request->input('token', '');
 
-        return response()->json(['rows' => $r['rows'], 'totals' => $r['totals'], 'current_computed' => $r['current_computed'] ?? true]);
+        if ($token === '') {
+            // Yaqinda tugagan natija keshda bormi? — darhol qaytaramiz.
+            $done = \Illuminate\Support\Facades\Cache::get("rar:result:{$sig}");
+            if ($done) {
+                return response()->json(['status' => 'done', 'progress' => 1] + $done);
+            }
+
+            // Yangi run: yengil baza.
+            $state = $this->computeBase($request);
+            $state['sig'] = $sig;
+            $total = count($state['batches']);
+
+            if ($total === 0) {
+                $fin = $this->finalize($state);
+                \Illuminate\Support\Facades\Cache::put("rar:result:{$sig}", $fin, now()->addMinutes(10));
+                return response()->json(['status' => 'done', 'progress' => 1] + $fin);
+            }
+
+            $token = \Illuminate\Support\Str::random(20);
+            \Illuminate\Support\Facades\Cache::put("rar:state:{$token}", $state, now()->addMinutes(20));
+
+            return response()->json([
+                'status' => 'running',
+                'token' => $token,
+                'progress' => 0,
+                'batches' => $total,
+            ] + $this->finalize($state));
+        }
+
+        // Davom etayotgan run: keyingi guruh-to'plam(lar)ini hisoblaymiz.
+        $state = \Illuminate\Support\Facades\Cache::get("rar:state:{$token}");
+        if (!$state) {
+            return response()->json(['status' => 'expired']);
+        }
+
+        $i = (int) ($state['batchIndex'] ?? 0);
+        $total = count($state['batches']);
+        $deadline = microtime(true) + 45; // so'rov budjeti — web timeout'dan past
+        while ($i < $total && microtime(true) < $deadline) {
+            $this->processBatch($state, $i);
+            $i++;
+            $state['batchIndex'] = $i;
+        }
+
+        if ($i >= $total) {
+            $fin = $this->finalize($state);
+            \Illuminate\Support\Facades\Cache::put("rar:result:{$state['sig']}", $fin, now()->addMinutes(10));
+            \Illuminate\Support\Facades\Cache::forget("rar:state:{$token}");
+            return response()->json(['status' => 'done', 'progress' => 1] + $fin);
+        }
+
+        \Illuminate\Support\Facades\Cache::put("rar:state:{$token}", $state, now()->addMinutes(20));
+
+        return response()->json([
+            'status' => 'running',
+            'token' => $token,
+            'progress' => $i / max(1, $total),
+            'batches' => $total,
+        ] + $this->finalize($state));
+    }
+
+    private function filterSignature(Request $request): string
+    {
+        $keys = ['education_type', 'department', 'specialty', 'level_code', 'semester_code', 'group'];
+        $parts = [];
+        foreach ($keys as $k) {
+            $parts[$k] = (string) $request->input($k, '');
+        }
+
+        return md5(json_encode($parts));
     }
 
     public function export(Request $request)
@@ -74,32 +153,72 @@ class RetakeApplicationReportController extends Controller
      */
     private function compute(Request $request): array
     {
+        // Eksport — to'liq sinxron hisob (A/B/C/D + JORIY semestr E ham). Bu yo'l
+        // faqat fayl yuklab olishda ishlatiladi (download'da timeout chegarasi
+        // yumshoqroq). Ekrandagi hisobot esa data() orqali bo'lakli hisoblanadi.
+        $detail = [];
+        $state = $this->computeBase($request, $detail, true);
+
+        $total = count($state['batches']);
+        for ($i = 0; $i < $total; $i++) {
+            $this->processBatch($state, $i, $detail);
+        }
+
+        return $this->finalize($state) + ['detail' => $detail];
+    }
+
+    /**
+     * Yengil baza: A/B/C ustunlar (arizalar) + o'tgan semestr qarzlari (D).
+     * Hamda JORIY semestr (E) ni bo'lakli hisoblash uchun zarur holatni
+     * (guruh-to'plamlari, semestr xaritalari, ariza kalitlari) tayyorlaydi.
+     *
+     * @param  array|null  $detail  null bo'lmasa — talaba-darajasidagi tafsilot to'planadi (eksport).
+     * @param  bool  $keepStu  detail uchun talaba ma'lumotini state'da saqlash (eksport).
+     */
+    private function computeBase(Request $request, ?array &$detail = null, bool $keepStu = false): array
+    {
         $students = $this->studentQuery($request)->get();
+
+        $state = [
+            'rows' => [],
+            'appliedKeys' => [],
+            'curSem' => [],
+            'semCodes' => [],
+            'batches' => [],
+            'batchIndex' => 0,
+        ];
+
         if ($students->isEmpty()) {
-            return ['rows' => [], 'totals' => $this->emptyTotals(), 'detail' => []];
+            return $state;
         }
 
         $semNum = fn ($name) => preg_match('/(\d+)/', (string) $name, $m) ? (int) $m[1] : null;
 
         $stu = [];
-        $curSem = [];
+        $byGroup = [];
         foreach ($students as $s) {
             $hid = (string) $s->hemis_id;
             $stu[$hid] = $s;
-            $curSem[$hid] = $semNum($s->semester_name ?: $s->semester_code);
+            $state['curSem'][$hid] = $semNum($s->semester_name ?: $s->semester_code);
+            if ($s->semester_code !== null) {
+                $state['semCodes'][$hid] = (string) $s->semester_code;
+            }
+            $byGroup[(string) ($s->group_id ?? '')][] = $hid;
         }
         $hemisIds = array_keys($stu);
+        if ($keepStu) {
+            $state['stu'] = $stu;
+        }
 
-        $rows = [];
-        $detail = [];
-        $rowFor = function ($sid, $sn, $subjName, $semName) use (&$rows) {
+        $rowFor = function ($sid, $sn, $subjName, $semName) use (&$state) {
             $key = $sid . '|' . $sn;
-            if (!isset($rows[$key])) {
-                $rows[$key] = $this->newRow($subjName, $semName, $sn);
+            if (!isset($state['rows'][$key])) {
+                $state['rows'][$key] = $this->newRow($subjName, $semName, $sn);
             }
             return $key;
         };
         $addDetail = function ($hid, $sn, $subjName, $category, $oske = null, $test = null) use (&$detail, $stu) {
+            if ($detail === null) return;
             $s = $stu[$hid] ?? null;
             if (!$s) return;
             $detail[] = [
@@ -123,7 +242,6 @@ class RetakeApplicationReportController extends Controller
             ->with('retakeGroup')
             ->get();
 
-        $appliedKeys = [];
         $resLabel = ['pass' => "O'tgan", 'fail' => 'Yiqilgan', 'none' => 'Imtihon topshirmagan'];
         foreach ($apps as $a) {
             $hid = (string) $a->student_hemis_id;
@@ -131,11 +249,11 @@ class RetakeApplicationReportController extends Controller
             $sn = $semNum($a->semester_name ?: $a->semester_id);
             if ($sn === null) continue;
             $key = $rowFor($sid, $sn, $a->subject_name, $a->semester_name);
-            $appliedKeys[$hid . '|' . $sid . '|' . $sn] = true;
-            $isCurrent = ($curSem[$hid] ?? null) === $sn;
+            $state['appliedKeys'][$hid . '|' . $sid . '|' . $sn] = true;
+            $isCurrent = ($state['curSem'][$hid] ?? null) === $sn;
 
             if ($a->final_status === RetakeApplication::STATUS_PENDING) {
-                $rows[$key]['in_process']++;
+                $state['rows'][$key]['in_process']++;
                 $addDetail($hid, $sn, $a->subject_name, 'Tasdiqlanish jarayonida');
                 continue;
             }
@@ -144,14 +262,14 @@ class RetakeApplicationReportController extends Controller
             }
             $res = $this->examResult($a);
             $bucket = $isCurrent ? 'current' : 'approved';
-            $rows[$key][$bucket][$res]++;
-            $rows[$key][$bucket]['jami']++;
+            $state['rows'][$key][$bucket][$res]++;
+            $state['rows'][$key][$bucket]['jami']++;
             $prefix = $isCurrent ? 'Joriy semestr' : 'Tasdiqlangan';
             $addDetail($hid, $sn, $a->subject_name, $prefix . ' — ' . $resLabel[$res], $a->oske_score, $a->test_score);
         }
 
-        // 2) Qarzdorlar olami — O'TGAN semestr (academic_records). Barcha talabalar
-        //    uchun yengil va ishonchli → "Qayta o'qishga ariza bermaganlar" (D, o'tgan).
+        // 2) Qarzdorlar olami — O'TGAN semestr (academic_records). Yengil va ishonchli
+        //    → "Qayta o'qishga ariza bermaganlar" (D, o'tgan).
         $debtorResults = $this->computeDebtorResults($students, 1, false, []);
         foreach ($debtorResults as $dr) {
             $hid = (string) $dr['hemis_id'];
@@ -160,54 +278,108 @@ class RetakeApplicationReportController extends Controller
                 $sn = $semNum($d['semester_name'] ?: $d['semester_code']);
                 if ($sn === null) continue;
                 $key = $rowFor($sid, $sn, $d['subject_name'], $d['semester_name']);
-                if (!isset($appliedKeys[$hid . '|' . $sid . '|' . $sn])) {
-                    $rows[$key]['not_applied']++;
+                if (!isset($state['appliedKeys'][$hid . '|' . $sid . '|' . $sn])) {
+                    $state['rows'][$key]['not_applied']++;
                     $addDetail($hid, $sn, $d['subject_name'], 'Ariza bermagan');
                 }
             }
         }
 
-        // 3) JORIY semestr qarzlari (jurnal xavflari) — "Joriy semestrdan ariza
-        //    bermagan qarzdorlar" (E) + umumiy D. Bu hisob OG'IR (davomat/baholar),
-        //    shuning uchun faqat filtr qo'llanganda yoki talaba soni cheklangan
-        //    bo'lganda hisoblanadi (aks holda butun universitet bo'yicha timeout).
-        $studentSemCodes = [];
-        foreach ($students as $s) {
-            if ($s->semester_code !== null) {
-                $studentSemCodes[(string) $s->hemis_id] = (string) $s->semester_code;
+        // 3) JORIY semestr (E) uchun guruh-to'plamlari. Har bir guruh BUTUNLIGICHA
+        //    bitta to'plamda bo'ladi (JN jurnal hisobini guruhga bir marta yuritish
+        //    uchun); to'plamlar ~400 talabagacha to'planadi.
+        $batch = [];
+        $cnt = 0;
+        foreach ($byGroup as $ids) {
+            if ($cnt > 0 && $cnt + count($ids) > 400) {
+                $state['batches'][] = $batch;
+                $batch = [];
+                $cnt = 0;
+            }
+            foreach ($ids as $id) {
+                $batch[] = $id;
+            }
+            $cnt += count($ids);
+            if ($cnt >= 400) {
+                $state['batches'][] = $batch;
+                $batch = [];
+                $cnt = 0;
             }
         }
-        $hasFilter = collect(['education_type', 'department', 'specialty', 'level_code', 'semester_code', 'group'])
-            ->contains(fn ($k) => filled($request->input($k)));
-        $currentRisksComputed = false;
+        if (!empty($batch)) {
+            $state['batches'][] = $batch;
+        }
 
-        if ($hasFilter || count($hemisIds) <= 2000) {
-            $currentRisksMap = [];
-            try {
-                $currentRisksMap = $this->getCurrentSemesterRisks($hemisIds, $studentSemCodes);
-                $currentRisksComputed = true;
-            } catch (\Throwable $e) {
-                \Illuminate\Support\Facades\Log::warning('[RetakeAppReport] joriy semestr xavflari: ' . $e->getMessage());
+        return $state;
+    }
+
+    /**
+     * Bitta guruh-to'plami uchun JORIY semestr qarzlarini (E ustun) hisoblab
+     * state'dagi qatorlarga qo'shadi. $state — keshdan kelgan/qaytadigan holat.
+     */
+    private function processBatch(array &$state, int $i, ?array &$detail = null): void
+    {
+        $hemisChunk = $state['batches'][$i] ?? [];
+        if (empty($hemisChunk)) {
+            return;
+        }
+
+        $semCodesSub = [];
+        foreach ($hemisChunk as $hid) {
+            if (isset($state['semCodes'][$hid])) {
+                $semCodesSub[$hid] = $state['semCodes'][$hid];
             }
-            foreach ($currentRisksMap as $hid => $risks) {
-                $hid = (string) $hid;
-                $sn = $curSem[$hid] ?? null;
-                if ($sn === null) continue;
-                foreach ($risks as $cr) {
-                    $sid = (string) ($cr['subject_id'] ?? '');
-                    if ($sid === '') continue;
-                    if (isset($appliedKeys[$hid . '|' . $sid . '|' . $sn])) {
-                        continue; // ariza bergan — B guruhda hisoblangan
-                    }
-                    $key = $rowFor($sid, $sn, $cr['subject_name'] ?? '—', $sn . '-semestr');
-                    $rows[$key]['not_applied']++;
-                    $rows[$key]['current_not_applied']++;
-                    $addDetail($hid, $sn, $cr['subject_name'] ?? '—', 'Joriy semestrdan ariza bermagan');
+        }
+
+        try {
+            $risks = $this->getCurrentSemesterRisks($hemisChunk, $semCodesSub);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('[RetakeAppReport] joriy semestr xavflari (to\'plam): ' . $e->getMessage());
+            return;
+        }
+
+        $stu = $state['stu'] ?? [];
+        foreach ($risks as $hid => $rs) {
+            $hid = (string) $hid;
+            $sn = $state['curSem'][$hid] ?? null;
+            if ($sn === null) continue;
+            foreach ($rs as $cr) {
+                $sid = (string) ($cr['subject_id'] ?? '');
+                if ($sid === '') continue;
+                if (isset($state['appliedKeys'][$hid . '|' . $sid . '|' . $sn])) {
+                    continue; // ariza bergan — B guruhda hisoblangan
+                }
+                $key = $sid . '|' . $sn;
+                if (!isset($state['rows'][$key])) {
+                    $state['rows'][$key] = $this->newRow($cr['subject_name'] ?? '—', $sn . '-semestr', $sn);
+                }
+                $state['rows'][$key]['not_applied']++;
+                $state['rows'][$key]['current_not_applied']++;
+
+                if ($detail !== null && isset($stu[$hid])) {
+                    $s = $stu[$hid];
+                    $detail[] = [
+                        'full_name' => $s->full_name ?? '-',
+                        'faculty' => $s->department_name ?? '-',
+                        'direction' => $s->specialty_name ?? '-',
+                        'kurs' => $s->level_name ?? '-',
+                        'semester' => $s->semester_name ?? '-',
+                        'ariza_semestr' => $sn . '-semestr',
+                        'group' => $s->group_name ?? '-',
+                        'subject' => $cr['subject_name'] ?? '—',
+                        'category' => 'Joriy semestrdan ariza bermagan',
+                        'oske' => null,
+                        'test' => null,
+                    ];
                 }
             }
         }
+    }
 
-        $list = array_values($rows);
+    /** state'dagi qatorlardan saralangan ro'yxat + jami yig'indini quradi. */
+    private function finalize(array $state): array
+    {
+        $list = array_values($state['rows']);
         usort($list, fn ($a, $b) => [$a['semester_code'], $a['subject_name']] <=> [$b['semester_code'], $b['subject_name']]);
 
         $totals = $this->emptyTotals();
@@ -226,7 +398,7 @@ class RetakeApplicationReportController extends Controller
             $totals['current_not_applied'] += $row['current_not_applied'];
         }
 
-        return ['rows' => $out, 'totals' => $totals, 'detail' => $detail, 'current_computed' => $currentRisksComputed];
+        return ['rows' => $out, 'totals' => $totals];
     }
 
     private function buildSummarySheet($sheet, array $rows, array $totals): void

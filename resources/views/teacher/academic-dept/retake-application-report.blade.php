@@ -40,8 +40,14 @@
             </a>
         </div>
 
-        <div id="rar-note" class="mb-3 text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2" style="display:none;">
-            {{ __("Joriy semestr qarzlari (\"Joriy semestrdan ariza bermagan qarzdorlar\") faqat filtr (fakultet/kurs/yo'nalish/guruh) qo'llanganda hisoblanadi — bu og'ir hisob. Filtrlab ko'ring.") }}
+        <div id="rar-progress" class="mb-3" style="display:none;">
+            <div class="flex items-center justify-between text-xs text-gray-600 mb-1">
+                <span>{{ __("Joriy semestr qarzlari hisoblanmoqda... (\"Joriy semestrdan ariza bermagan qarzdorlar\" ustuni to'ldirilmoqda)") }}</span>
+                <span id="rar-progress-pct">0%</span>
+            </div>
+            <div class="h-2 rounded bg-gray-100 overflow-hidden">
+                <div id="rar-progress-bar" class="h-full bg-blue-500 rounded transition-all" style="width:0%"></div>
+            </div>
         </div>
 
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -121,26 +127,60 @@
                         </tr>`);
                 }
 
-                const dataUrl = '{{ route('admin.retake-application-report.data') }}' + window.location.search;
-                fetch(dataUrl, { headers: { 'Accept': 'application/json' } })
-                    .then(r => r.json())
-                    .then(({ rows, totals, current_computed }) => {
-                        document.getElementById('rar-loading').style.display = 'none';
-                        if (current_computed === false) {
-                            document.getElementById('rar-note').style.display = '';
-                        }
-                        if (!rows || !rows.length) {
-                            document.getElementById('rar-empty').style.display = '';
-                            return;
-                        }
-                        allRows = rows; allTotals = totals;
-                        render();
-                        document.getElementById('rar-wrap').style.display = '';
+                const baseUrl = '{{ route('admin.retake-application-report.data') }}';
+                const search = window.location.search;
+                let hookedHideEmpty = false;
+
+                function urlFor(token) {
+                    let u = baseUrl + search;
+                    if (token) u += (search ? '&' : '?') + 'token=' + encodeURIComponent(token);
+                    return u;
+                }
+
+                function setProgress(p) {
+                    const pct = Math.round((p || 0) * 100);
+                    document.getElementById('rar-progress').style.display = '';
+                    document.getElementById('rar-progress-pct').textContent = pct + '%';
+                    document.getElementById('rar-progress-bar').style.width = pct + '%';
+                }
+
+                function showPartial(rows, totals) {
+                    document.getElementById('rar-loading').style.display = 'none';
+                    if (!rows || !rows.length) {
+                        document.getElementById('rar-empty').style.display = '';
+                        return;
+                    }
+                    document.getElementById('rar-empty').style.display = 'none';
+                    allRows = rows; allTotals = totals;
+                    render();
+                    document.getElementById('rar-wrap').style.display = '';
+                    if (!hookedHideEmpty) {
                         document.getElementById('rar-hide-empty').addEventListener('change', render);
-                    })
-                    .catch(() => {
-                        document.getElementById('rar-loading').textContent = 'Xatolik yuz berdi';
-                    });
+                        hookedHideEmpty = true;
+                    }
+                }
+
+                function poll(token) {
+                    fetch(urlFor(token), { headers: { 'Accept': 'application/json' } })
+                        .then(r => r.json())
+                        .then(res => {
+                            if (res.status === 'expired') { poll(null); return; } // kesh tugadi — qaytadan
+                            if (res.rows) showPartial(res.rows, res.totals);
+                            if (res.status === 'done') {
+                                document.getElementById('rar-progress').style.display = 'none';
+                                return;
+                            }
+                            // running
+                            setProgress(res.progress);
+                            poll(res.token);
+                        })
+                        .catch(() => {
+                            document.getElementById('rar-loading').textContent = 'Xatolik yuz berdi';
+                            document.getElementById('rar-progress').style.display = 'none';
+                        });
+                }
+
+                poll(null);
             });
         </script>
     @endpush

@@ -265,7 +265,7 @@ class TestSubjectController extends Controller
 
     private function groupPayload(): array
     {
-        $groups = Group::query()
+        $groupCollection = Group::query()
             ->whereHas('curriculum', function ($query) {
                 $query->where('education_year_name', 'like', self::TARGET_EDUCATION_YEAR . '%');
             })
@@ -278,10 +278,43 @@ class TestSubjectController extends Controller
                 'department_hemis_id',
                 'specialty_hemis_id',
                 'curriculum_hemis_id',
-            ])
-            ->map(function (Group $group) {
+            ]);
+
+        $studentLevels = Student::query()
+            ->whereIn('group_id', $groupCollection->pluck('group_hemis_id')->filter()->values())
+            ->where('education_year_name', 'like', self::TARGET_EDUCATION_YEAR . '%')
+            ->whereNotNull('level_code')
+            ->where('level_code', '!=', '')
+            ->select('group_id', 'level_code', 'level_name', DB::raw('COUNT(*) as student_count'))
+            ->groupBy('group_id', 'level_code', 'level_name')
+            ->get()
+            ->groupBy('group_id')
+            ->map(function ($rows) {
+                return $rows
+                    ->sort(function ($left, $right) {
+                        $countCompare = ((int) $right->student_count) <=> ((int) $left->student_count);
+                        if ($countCompare !== 0) {
+                            return $countCompare;
+                        }
+
+                        return ((int) $right->level_code) <=> ((int) $left->level_code);
+                    })
+                    ->first();
+            });
+
+        $groups = $groupCollection
+            ->map(function (Group $group) use ($studentLevels) {
+                $studentLevel = $studentLevels->get($group->group_hemis_id);
+
                 $semester = $group->curriculum?->semesters
-                    ?->sortByDesc(fn ($item) => (int) ($item->current ? 1 : 0))
+                    ?->sort(function ($left, $right) {
+                        $currentCompare = ((int) ($right->current ? 1 : 0)) <=> ((int) ($left->current ? 1 : 0));
+                        if ($currentCompare !== 0) {
+                            return $currentCompare;
+                        }
+
+                        return ((int) ($right->level_code ?? 0)) <=> ((int) ($left->level_code ?? 0));
+                    })
                     ->first();
 
                 return [
@@ -290,8 +323,8 @@ class TestSubjectController extends Controller
                     'group_hemis_id' => (string) $group->group_hemis_id,
                     'department_hemis_id' => (string) $group->department_hemis_id,
                     'specialty_hemis_id' => (string) $group->specialty_hemis_id,
-                    'level_code' => (string) ($semester?->level_code ?? ''),
-                    'level_name' => (string) ($semester?->level_name ?? ''),
+                    'level_code' => (string) ($studentLevel->level_code ?? $semester?->level_code ?? ''),
+                    'level_name' => (string) ($studentLevel->level_name ?? $semester?->level_name ?? ''),
                 ];
             })
             ->values()

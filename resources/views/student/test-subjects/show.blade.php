@@ -9,6 +9,7 @@
         $submitted = $attempt->status === 'submitted';
         $showDetailedResult = (bool) $lessonTest->show_result_after_submit;
         $passPercent = (int) ($lessonTest->pass_percent ?? 0);
+        $langLabels = ['uz' => "O'zbek", 'ru' => 'Русский', 'en' => 'English'];
     @endphp
 
     <div class="py-6">
@@ -80,6 +81,7 @@
                                 <span class="st-chip blue">{{ $testSubject->name }}</span>
                                 <span class="st-chip green">{{ $lesson->topic_order }}-mavzu</span>
                                 <span class="st-chip orange">{{ optional($lesson->lesson_date)->format('d.m.Y') }}</span>
+                                <span class="st-chip blue">{{ $langLabels[$language] ?? "O'zbek" }}</span>
                                 @if($submitted)
                                     <span class="st-chip {{ $attempt->is_passed ? 'green' : 'red' }}">
                                         {{ $attempt->is_passed ? 'O‘tdingiz' : 'Yiqildingiz' }}
@@ -95,6 +97,13 @@
                 </div>
 
                 <div class="st-body">
+                    <div class="mb-4 flex flex-wrap items-center gap-2">
+                        <div class="st-label" style="margin-right:6px;">Test tili</div>
+                        @foreach($langLabels as $code => $label)
+                            <a href="{{ route('student.test-subjects.tests.show', [$testSubject, $lesson, 'lang' => $code]) }}"
+                               class="st-chip {{ $language === $code ? 'green' : 'blue' }}">{{ $label }}</a>
+                        @endforeach
+                    </div>
                     <div class="st-stat-wrap">
                         <div class="st-stat">
                             <div class="st-label">Savollar</div>
@@ -146,15 +155,16 @@
             @if(!$submitted)
                 <form method="POST" action="{{ route('student.test-subjects.tests.submit', [$testSubject, $lesson]) }}" class="space-y-4" onsubmit="return confirm('Testni yakunlab yuborasizmi?')">
                     @csrf
+                    <input type="hidden" name="lang" value="{{ $language }}">
                     @foreach($questions as $index => $question)
                         <div class="st-question">
                             <div class="st-question-head flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                                <div class="font-bold text-slate-900">{{ $index + 1 }}. {{ $question->prompt }}</div>
+                                <div class="font-bold text-slate-900">{{ $index + 1 }}. {{ $question->promptFor($language) }}</div>
                                 <div class="st-chip blue">{{ $question->points }} ball</div>
                             </div>
                             <div class="st-question-body">
-                                @if($question->helper_text)
-                                    <div class="st-muted mb-3">{{ $question->helper_text }}</div>
+                                @if($question->helperTextFor($language))
+                                    <div class="st-muted mb-3">{{ $question->helperTextFor($language) }}</div>
                                 @endif
 
                                 @if($question->type === 'single_choice')
@@ -163,7 +173,7 @@
                                             <input type="radio" name="answers[{{ $question->id }}][selected_option_id]" value="{{ $option->id }}" class="mt-1 text-blue-600 focus:ring-blue-500">
                                             <div class="flex-1">
                                                 <div class="text-xs font-bold uppercase tracking-[0.08em] text-slate-400">{{ chr(65 + $optionIndex) }})</div>
-                                                <div class="text-sm font-medium text-slate-800 mt-1">{{ $option->option_text }}</div>
+                                                <div class="text-sm font-medium text-slate-800 mt-1">{{ $option->textFor($language) }}</div>
                                             </div>
                                         </label>
                                     @endforeach
@@ -186,7 +196,7 @@
                         @endphp
                         <div class="st-question">
                             <div class="st-question-head flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                                <div class="font-bold text-slate-900">{{ $index + 1 }}. {{ $question->prompt }}</div>
+                                <div class="font-bold text-slate-900">{{ $index + 1 }}. {{ $question->promptFor($language) }}</div>
                                 <div class="st-chip {{ $answer?->is_correct ? 'green' : 'red' }}">
                                     {{ $answer?->is_correct ? 'To‘g‘ri' : 'Noto‘g‘ri' }}
                                 </div>
@@ -201,7 +211,7 @@
                                             <div class="mt-1 h-4 w-4 rounded-full border {{ $isSelected ? 'bg-blue-500 border-blue-500' : 'border-slate-300' }}"></div>
                                             <div class="flex-1">
                                                 <div class="text-xs font-bold uppercase tracking-[0.08em] text-slate-400">{{ chr(65 + $optionIndex) }})</div>
-                                                <div class="text-sm font-medium text-slate-800 mt-1">{{ $option->option_text }}</div>
+                                                <div class="text-sm font-medium text-slate-800 mt-1">{{ $option->textFor($language) }}</div>
                                             </div>
                                             @if($option->is_correct)
                                                 <div class="text-xs font-bold text-emerald-600">To‘g‘ri javob</div>
@@ -218,7 +228,7 @@
                                         </div>
                                         <div class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
                                             <div class="st-label">To‘g‘ri javob</div>
-                                            <div class="mt-2 text-sm font-semibold text-emerald-700">{{ $question->correct_answer_text }}</div>
+                                            <div class="mt-2 text-sm font-semibold text-emerald-700">{{ $question->correctAnswerFor($language) }}</div>
                                         </div>
                                     </div>
                                 @endif

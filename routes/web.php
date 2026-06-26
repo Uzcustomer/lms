@@ -1100,7 +1100,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('retake-application-report')->name('retake-application-report.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeApplicationReportController::class, 'index'])->name('index');
             Route::get('/data', [\App\Http\Controllers\Teacher\AcademicDept\RetakeApplicationReportController::class, 'data'])->name('data');
-            Route::get('/export', [\App\Http\Controllers\Teacher\AcademicDept\RetakeApplicationReportController::class, 'export'])->name('export');
+            Route::get('/export', [\App\Http\Controllers\Teacher\AcademicDept\RetakeApplicationReportController::class, 'exportPrepare'])->name('export');
+            Route::get('/export-download', [\App\Http\Controllers\Teacher\AcademicDept\RetakeApplicationReportController::class, 'exportDownload'])->name('export-download');
         });
 
         // O'qituvchi-fan kesimida talabalar statistikasi (faqat o'quv bo'limi)

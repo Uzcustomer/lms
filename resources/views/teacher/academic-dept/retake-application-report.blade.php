@@ -34,10 +34,13 @@
                 <input type="checkbox" id="rar-hide-empty" checked class="rounded border-gray-300">
                 {{ __("Bo'sh (hammasi nol) qatorlarni ko'rsatma") }}
             </label>
-            <a id="rar-export" href="{{ route('admin.retake-application-report.export') }}{{ request()->getQueryString() ? '?' . request()->getQueryString() : '' }}"
-               class="inline-flex items-center px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700">
-                📊 {{ __("Excelga yuklab olish") }}
-            </a>
+            <div class="flex items-center gap-3">
+                <span id="rar-export-status" class="text-xs text-gray-500" style="display:none;"></span>
+                <button type="button" id="rar-export"
+                   class="inline-flex items-center px-4 py-2 rounded-lg bg-green-600 text-white text-sm font-semibold hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed">
+                    📊 {{ __("Excelga yuklab olish") }}
+                </button>
+            </div>
         </div>
 
         <div id="rar-progress" class="mb-3" style="display:none;">
@@ -181,6 +184,48 @@
                 }
 
                 poll(null);
+
+                // --- Excel eksport (data() bilan bir xil bo'lakli mantiq) ---
+                const exportBase = '{{ route('admin.retake-application-report.export') }}';
+                const exportBtn = document.getElementById('rar-export');
+                const exportStatus = document.getElementById('rar-export-status');
+                let exporting = false;
+
+                function exportUrl(token) {
+                    let u = exportBase + search;
+                    if (token) u += (search ? '&' : '?') + 'token=' + encodeURIComponent(token);
+                    return u;
+                }
+                function setExportStatus(txt) {
+                    exportStatus.style.display = txt ? '' : 'none';
+                    exportStatus.textContent = txt || '';
+                }
+                function pollExport(token) {
+                    fetch(exportUrl(token), { headers: { 'Accept': 'application/json' } })
+                        .then(r => r.json())
+                        .then(res => {
+                            if (res.status === 'expired') { pollExport(null); return; }
+                            if (res.status === 'done') {
+                                setExportStatus('{{ __("Tayyor, yuklanmoqda...") }}');
+                                window.location.href = res.download;
+                                setTimeout(() => { setExportStatus(''); exportBtn.disabled = false; exporting = false; }, 1500);
+                                return;
+                            }
+                            setExportStatus('{{ __("Tayyorlanmoqda") }} ' + Math.round((res.progress || 0) * 100) + '%');
+                            pollExport(res.token);
+                        })
+                        .catch(() => {
+                            setExportStatus('{{ __("Xatolik") }}');
+                            exportBtn.disabled = false; exporting = false;
+                        });
+                }
+                exportBtn.addEventListener('click', function () {
+                    if (exporting) return;
+                    exporting = true;
+                    exportBtn.disabled = true;
+                    setExportStatus('{{ __("Tayyorlanmoqda") }} 0%');
+                    pollExport(null);
+                });
             });
         </script>
     @endpush

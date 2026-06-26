@@ -40,6 +40,16 @@
             </a>
         </div>
 
+        <div id="rar-progress" class="mb-3" style="display:none;">
+            <div class="flex items-center justify-between text-xs text-gray-600 mb-1">
+                <span>{{ __("Joriy semestr qarzlari hisoblanmoqda... (\"Joriy semestrdan ariza bermagan qarzdorlar\" ustuni to'ldirilmoqda)") }}</span>
+                <span id="rar-progress-pct">0%</span>
+            </div>
+            <div class="h-2 rounded bg-gray-100 overflow-hidden">
+                <div id="rar-progress-bar" class="h-full bg-blue-500 rounded transition-all" style="width:0%"></div>
+            </div>
+        </div>
+
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div id="rar-loading" class="p-10 text-center text-sm text-gray-500">{{ __("Yuklanmoqda...") }}</div>
             <div id="rar-empty" class="p-10 text-center text-sm text-gray-500" style="display:none;">{{ __("Ma'lumot topilmadi") }}</div>
@@ -117,23 +127,60 @@
                         </tr>`);
                 }
 
-                const dataUrl = '{{ route('admin.retake-application-report.data') }}' + window.location.search;
-                fetch(dataUrl, { headers: { 'Accept': 'application/json' } })
-                    .then(r => r.json())
-                    .then(({ rows, totals }) => {
-                        document.getElementById('rar-loading').style.display = 'none';
-                        if (!rows || !rows.length) {
-                            document.getElementById('rar-empty').style.display = '';
-                            return;
-                        }
-                        allRows = rows; allTotals = totals;
-                        render();
-                        document.getElementById('rar-wrap').style.display = '';
+                const baseUrl = '{{ route('admin.retake-application-report.data') }}';
+                const search = window.location.search;
+                let hookedHideEmpty = false;
+
+                function urlFor(token) {
+                    let u = baseUrl + search;
+                    if (token) u += (search ? '&' : '?') + 'token=' + encodeURIComponent(token);
+                    return u;
+                }
+
+                function setProgress(p) {
+                    const pct = Math.round((p || 0) * 100);
+                    document.getElementById('rar-progress').style.display = '';
+                    document.getElementById('rar-progress-pct').textContent = pct + '%';
+                    document.getElementById('rar-progress-bar').style.width = pct + '%';
+                }
+
+                function showPartial(rows, totals) {
+                    document.getElementById('rar-loading').style.display = 'none';
+                    if (!rows || !rows.length) {
+                        document.getElementById('rar-empty').style.display = '';
+                        return;
+                    }
+                    document.getElementById('rar-empty').style.display = 'none';
+                    allRows = rows; allTotals = totals;
+                    render();
+                    document.getElementById('rar-wrap').style.display = '';
+                    if (!hookedHideEmpty) {
                         document.getElementById('rar-hide-empty').addEventListener('change', render);
-                    })
-                    .catch(() => {
-                        document.getElementById('rar-loading').textContent = 'Xatolik yuz berdi';
-                    });
+                        hookedHideEmpty = true;
+                    }
+                }
+
+                function poll(token) {
+                    fetch(urlFor(token), { headers: { 'Accept': 'application/json' } })
+                        .then(r => r.json())
+                        .then(res => {
+                            if (res.status === 'expired') { poll(null); return; } // kesh tugadi — qaytadan
+                            if (res.rows) showPartial(res.rows, res.totals);
+                            if (res.status === 'done') {
+                                document.getElementById('rar-progress').style.display = 'none';
+                                return;
+                            }
+                            // running
+                            setProgress(res.progress);
+                            poll(res.token);
+                        })
+                        .catch(() => {
+                            document.getElementById('rar-loading').textContent = 'Xatolik yuz berdi';
+                            document.getElementById('rar-progress').style.display = 'none';
+                        });
+                }
+
+                poll(null);
             });
         </script>
     @endpush

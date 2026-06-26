@@ -9,11 +9,15 @@
             $options = $question->options
                 ->sortBy('sort_order')
                 ->values()
-                ->map(fn ($option) => ['text' => $option->option_text])
+                ->map(fn ($option) => [
+                    'text' => $option->option_text,
+                    'text_ru' => data_get($option->option_text_translations, 'ru', ''),
+                    'text_en' => data_get($option->option_text_translations, 'en', ''),
+                ])
                 ->all();
 
             while (count($options) < 3) {
-                $options[] = ['text' => ''];
+                $options[] = ['text' => '', 'text_ru' => '', 'text_en' => ''];
             }
 
             return $options;
@@ -21,6 +25,9 @@
         $correctOptionNumber = function ($question) {
             $correct = $question->options->firstWhere('is_correct', true);
             return $correct ? ($correct->sort_order ?: 1) : 1;
+        };
+        $tr = function ($array, string $key): string {
+            return (string) data_get($array, $key, '');
         };
     @endphp
 
@@ -240,7 +247,7 @@
                 <div class="tb-card tb-pane" style="flex:1 1 760px; min-width:0;"
                      x-data="questionBuilder({
                         type: '{{ old('type', 'single_choice') }}',
-                        options: @js(old('options', [['text' => ''], ['text' => ''], ['text' => '']])),
+                        options: @js(old('options', [['text' => '', 'text_ru' => '', 'text_en' => ''], ['text' => '', 'text_ru' => '', 'text_en' => ''], ['text' => '', 'text_ru' => '', 'text_en' => '']])),
                         correctOption: {{ (int) old('correct_option_number', 1) }}
                      })">
                     <div class="tb-head">
@@ -271,14 +278,33 @@
                                 </div>
                             </div>
 
-                            <div class="tb-inline">
-                                <div class="tb-col" style="flex:1 1 420px;">
-                                    <label class="tb-label">Savol matni</label>
+                            <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="tb-label">Savol matni (UZ)</label>
                                     <textarea name="prompt" class="tb-textarea" required>{{ old('prompt') }}</textarea>
                                 </div>
-                                <div class="tb-col" style="flex:1 1 320px;">
-                                    <label class="tb-label">Yordamchi izoh</label>
+                                <div>
+                                    <label class="tb-label">Savol matni (RU)</label>
+                                    <textarea name="prompt_ru" class="tb-textarea">{{ old('prompt_ru') }}</textarea>
+                                </div>
+                                <div>
+                                    <label class="tb-label">Savol matni (EN)</label>
+                                    <textarea name="prompt_en" class="tb-textarea">{{ old('prompt_en') }}</textarea>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="tb-label">Yordamchi izoh (UZ)</label>
                                     <textarea name="helper_text" class="tb-textarea">{{ old('helper_text') }}</textarea>
+                                </div>
+                                <div>
+                                    <label class="tb-label">Yordamchi izoh (RU)</label>
+                                    <textarea name="helper_text_ru" class="tb-textarea">{{ old('helper_text_ru') }}</textarea>
+                                </div>
+                                <div>
+                                    <label class="tb-label">Yordamchi izoh (EN)</label>
+                                    <textarea name="helper_text_en" class="tb-textarea">{{ old('helper_text_en') }}</textarea>
                                 </div>
                             </div>
 
@@ -293,11 +319,23 @@
                                         <template x-for="(option, index) in options" :key="index">
                                             <div class="tb-option-row">
                                                 <div class="tb-option-prefix" x-text="optionLabel(index)"></div>
-                                                <input type="text"
-                                                       class="tb-input"
-                                                       :name="`options[${index}][text]`"
-                                                       x-model="option.text"
-                                                       placeholder="Variant matni">
+                                                <div style="flex:1 1 auto; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px;">
+                                                    <input type="text"
+                                                           class="tb-input"
+                                                           :name="`options[${index}][text]`"
+                                                           x-model="option.text"
+                                                           placeholder="UZ variant">
+                                                    <input type="text"
+                                                           class="tb-input"
+                                                           :name="`options[${index}][text_ru]`"
+                                                           x-model="option.text_ru"
+                                                           placeholder="RU variant">
+                                                    <input type="text"
+                                                           class="tb-input"
+                                                           :name="`options[${index}][text_en]`"
+                                                           x-model="option.text_en"
+                                                           placeholder="EN variant">
+                                                </div>
                                                 <label class="flex items-center gap-2 text-sm text-slate-700 whitespace-nowrap">
                                                     <input type="radio" name="correct_option_number" :value="index + 1" x-model="correctOption" class="text-emerald-600 focus:ring-emerald-500">
                                                     To'g'ri
@@ -314,10 +352,18 @@
                             </div>
 
                             <div x-show="type === 'fill_in_blank'" x-cloak class="tb-inline">
-                                <div class="tb-col" style="flex:1 1 300px;">
-                                    <label class="tb-label">To'g'ri javob</label>
-                                    <input type="text" name="correct_answer_text" class="tb-input" value="{{ old('correct_answer_text') }}">
-                                </div>
+                                    <div class="tb-col" style="flex:1 1 300px;">
+                                        <label class="tb-label">To'g'ri javob (UZ)</label>
+                                        <input type="text" name="correct_answer_text" class="tb-input" value="{{ old('correct_answer_text') }}">
+                                    </div>
+                                    <div class="tb-col" style="flex:1 1 300px;">
+                                        <label class="tb-label">To'g'ri javob (RU)</label>
+                                        <input type="text" name="correct_answer_text_ru" class="tb-input" value="{{ old('correct_answer_text_ru') }}">
+                                    </div>
+                                    <div class="tb-col" style="flex:1 1 300px;">
+                                        <label class="tb-label">To'g'ri javob (EN)</label>
+                                        <input type="text" name="correct_answer_text_en" class="tb-input" value="{{ old('correct_answer_text_en') }}">
+                                    </div>
                                 <div class="tb-col" style="flex:0 0 220px;">
                                     <label class="flex items-center gap-3 text-sm text-slate-700 h-[42px]">
                                         <input type="checkbox" name="case_sensitive" value="1" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500" {{ old('case_sensitive') ? 'checked' : '' }}>
@@ -395,14 +441,33 @@
                                             </div>
                                         </div>
 
-                                        <div class="tb-inline">
-                                            <div class="tb-col" style="flex:1 1 420px;">
-                                                <label class="tb-label">Savol matni</label>
+                                        <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                                            <div>
+                                                <label class="tb-label">Savol matni (UZ)</label>
                                                 <textarea name="prompt" class="tb-textarea" required>{{ $question->prompt }}</textarea>
                                             </div>
-                                            <div class="tb-col" style="flex:1 1 320px;">
-                                                <label class="tb-label">Yordamchi izoh</label>
+                                            <div>
+                                                <label class="tb-label">Savol matni (RU)</label>
+                                                <textarea name="prompt_ru" class="tb-textarea">{{ $tr($question->prompt_translations, 'ru') }}</textarea>
+                                            </div>
+                                            <div>
+                                                <label class="tb-label">Savol matni (EN)</label>
+                                                <textarea name="prompt_en" class="tb-textarea">{{ $tr($question->prompt_translations, 'en') }}</textarea>
+                                            </div>
+                                        </div>
+
+                                        <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                                            <div>
+                                                <label class="tb-label">Yordamchi izoh (UZ)</label>
                                                 <textarea name="helper_text" class="tb-textarea">{{ $question->helper_text }}</textarea>
+                                            </div>
+                                            <div>
+                                                <label class="tb-label">Yordamchi izoh (RU)</label>
+                                                <textarea name="helper_text_ru" class="tb-textarea">{{ $tr($question->helper_text_translations, 'ru') }}</textarea>
+                                            </div>
+                                            <div>
+                                                <label class="tb-label">Yordamchi izoh (EN)</label>
+                                                <textarea name="helper_text_en" class="tb-textarea">{{ $tr($question->helper_text_translations, 'en') }}</textarea>
                                             </div>
                                         </div>
 
@@ -416,11 +481,23 @@
                                                     <template x-for="(option, index) in options" :key="index">
                                                         <div class="tb-option-row">
                                                             <div class="tb-option-prefix" x-text="optionLabel(index)"></div>
-                                                            <input type="text"
-                                                                   class="tb-input"
-                                                                   :name="`options[${index}][text]`"
-                                                                   x-model="option.text"
-                                                                   placeholder="Variant matni">
+                                                            <div style="flex:1 1 auto; display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px;">
+                                                                <input type="text"
+                                                                       class="tb-input"
+                                                                       :name="`options[${index}][text]`"
+                                                                       x-model="option.text"
+                                                                       placeholder="UZ variant">
+                                                                <input type="text"
+                                                                       class="tb-input"
+                                                                       :name="`options[${index}][text_ru]`"
+                                                                       x-model="option.text_ru"
+                                                                       placeholder="RU variant">
+                                                                <input type="text"
+                                                                       class="tb-input"
+                                                                       :name="`options[${index}][text_en]`"
+                                                                       x-model="option.text_en"
+                                                                       placeholder="EN variant">
+                                                            </div>
                                                             <label class="flex items-center gap-2 text-sm text-slate-700 whitespace-nowrap">
                                                                 <input type="radio" name="correct_option_number" :value="index + 1" x-model="correctOption" class="text-emerald-600 focus:ring-emerald-500">
                                                                 To'g'ri
@@ -434,8 +511,16 @@
 
                                         <div x-show="type === 'fill_in_blank'" x-cloak class="tb-inline">
                                             <div class="tb-col" style="flex:1 1 300px;">
-                                                <label class="tb-label">To'g'ri javob</label>
+                                                <label class="tb-label">To'g'ri javob (UZ)</label>
                                                 <input type="text" name="correct_answer_text" class="tb-input" value="{{ $question->correct_answer_text }}">
+                                            </div>
+                                            <div class="tb-col" style="flex:1 1 300px;">
+                                                <label class="tb-label">To'g'ri javob (RU)</label>
+                                                <input type="text" name="correct_answer_text_ru" class="tb-input" value="{{ $tr($question->correct_answer_translations, 'ru') }}">
+                                            </div>
+                                            <div class="tb-col" style="flex:1 1 300px;">
+                                                <label class="tb-label">To'g'ri javob (EN)</label>
+                                                <input type="text" name="correct_answer_text_en" class="tb-input" value="{{ $tr($question->correct_answer_translations, 'en') }}">
                                             </div>
                                             <div class="tb-col" style="flex:0 0 220px;">
                                                 <label class="flex items-center gap-3 text-sm text-slate-700 h-[42px]">
@@ -465,7 +550,14 @@
             return {
                 open: !collapsible,
                 type: initial.type || 'single_choice',
-                options: (initial.options && initial.options.length ? initial.options : [{ text: '' }, { text: '' }, { text: '' }]).map(option => ({ text: option.text ?? '' })),
+                options: (initial.options && initial.options.length
+                    ? initial.options
+                    : [{ text: '', text_ru: '', text_en: '' }, { text: '', text_ru: '', text_en: '' }, { text: '', text_ru: '', text_en: '' }]
+                ).map(option => ({
+                    text: option.text ?? '',
+                    text_ru: option.text_ru ?? '',
+                    text_en: option.text_en ?? '',
+                })),
                 correctOption: Number(initial.correctOption || 1),
                 init() {
                     this.ensureMinimumOptions();
@@ -480,7 +572,7 @@
                     }
 
                     while (this.options.length < 3) {
-                        this.options.push({ text: '' });
+                        this.options.push({ text: '', text_ru: '', text_en: '' });
                     }
 
                     if (this.correctOption < 1) {
@@ -488,7 +580,7 @@
                     }
                 },
                 addOption() {
-                    this.options.push({ text: '' });
+                    this.options.push({ text: '', text_ru: '', text_en: '' });
                 },
                 removeOption(index) {
                     if (this.options.length <= 2) {

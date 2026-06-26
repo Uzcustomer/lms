@@ -10,8 +10,11 @@ class TestSubjectLessonTestQuestion extends Model
         'lesson_test_id',
         'type',
         'prompt',
+        'prompt_translations',
         'helper_text',
+        'helper_text_translations',
         'correct_answer_text',
+        'correct_answer_translations',
         'case_sensitive',
         'points',
         'sort_order',
@@ -21,6 +24,9 @@ class TestSubjectLessonTestQuestion extends Model
     protected $casts = [
         'case_sensitive' => 'boolean',
         'is_active' => 'boolean',
+        'prompt_translations' => 'array',
+        'helper_text_translations' => 'array',
+        'correct_answer_translations' => 'array',
     ];
 
     public function lessonTest()
@@ -39,5 +45,41 @@ class TestSubjectLessonTestQuestion extends Model
     {
         return $this->hasMany(TestSubjectLessonTestAnswer::class, 'question_id')
             ->orderByDesc('id');
+    }
+
+    public function promptFor(?string $lang = 'uz'): string
+    {
+        return $this->translationValue('prompt_translations', $lang, $this->prompt) ?? '';
+    }
+
+    public function helperTextFor(?string $lang = 'uz'): ?string
+    {
+        return $this->translationValue('helper_text_translations', $lang, $this->helper_text);
+    }
+
+    public function correctAnswerFor(?string $lang = 'uz'): ?string
+    {
+        return $this->translationValue('correct_answer_translations', $lang, $this->correct_answer_text);
+    }
+
+    private function translationValue(string $field, ?string $lang, ?string $fallback = null): ?string
+    {
+        $lang = in_array($lang, ['uz', 'ru', 'en'], true) ? $lang : 'uz';
+        $translations = (array) ($this->{$field} ?? []);
+        $value = trim((string) ($translations[$lang] ?? ''));
+
+        if ($value !== '') {
+            return $value;
+        }
+
+        if ($lang !== 'uz') {
+            $uzValue = trim((string) ($translations['uz'] ?? ''));
+            if ($uzValue !== '') {
+                return $uzValue;
+            }
+        }
+
+        $fallback = trim((string) ($fallback ?? ''));
+        return $fallback !== '' ? $fallback : null;
     }
 }

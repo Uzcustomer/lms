@@ -21,6 +21,7 @@ class TestSubjectController extends Controller
     public function show(TestSubject $testSubject, TestSubjectLesson $lesson)
     {
         [$student, $lessonTest, $attempt] = $this->resolveStudentContext($testSubject, $lesson);
+        $language = $this->resolveLanguage(request()->query('lang'));
 
         $attempt = $attempt ?: $this->ensureAttempt($student, $testSubject, $lesson, $lessonTest);
         $questions = $this->resolveOrderedQuestions($lessonTest, $attempt);
@@ -47,17 +48,19 @@ class TestSubjectController extends Controller
             'attempt' => $attempt,
             'questions' => $questions,
             'remainingSeconds' => $remainingSeconds,
+            'language' => $language,
         ]);
     }
 
     public function submit(Request $request, TestSubject $testSubject, TestSubjectLesson $lesson)
     {
         [$student, $lessonTest, $attempt] = $this->resolveStudentContext($testSubject, $lesson);
+        $language = $this->resolveLanguage($request->input('lang'));
         $attempt = $attempt ?: $this->ensureAttempt($student, $testSubject, $lesson, $lessonTest);
 
         if ($attempt->status === 'submitted') {
             return redirect()
-                ->route('student.test-subjects.tests.show', [$testSubject, $lesson])
+                ->route('student.test-subjects.tests.show', [$testSubject, $lesson, 'lang' => $language])
                 ->with('success', 'Test natijasi allaqachon saqlangan.');
         }
 
@@ -87,7 +90,7 @@ class TestSubjectController extends Controller
                     if ($answerText !== '') {
                         $answersCount++;
                     }
-                    $correctAnswer = trim((string) ($question->correct_answer_text ?? ''));
+                    $correctAnswer = trim((string) ($question->correctAnswerFor($language) ?? ''));
                     $isCorrect = $question->case_sensitive
                         ? $answerText === $correctAnswer
                         : mb_strtolower($answerText) === mb_strtolower($correctAnswer);
@@ -130,7 +133,7 @@ class TestSubjectController extends Controller
         });
 
         return redirect()
-            ->route('student.test-subjects.tests.show', [$testSubject, $lesson])
+            ->route('student.test-subjects.tests.show', [$testSubject, $lesson, 'lang' => $language])
             ->with('success', 'Test javoblaringiz saqlandi.');
     }
 
@@ -233,5 +236,10 @@ class TestSubjectController extends Controller
             ->map(fn ($id) => $questions->firstWhere('id', $id))
             ->filter()
             ->values();
+    }
+
+    private function resolveLanguage(?string $language): string
+    {
+        return in_array($language, ['uz', 'ru', 'en'], true) ? $language : 'uz';
     }
 }

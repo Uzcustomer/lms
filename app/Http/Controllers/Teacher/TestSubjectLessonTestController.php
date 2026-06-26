@@ -229,9 +229,26 @@ class TestSubjectLessonTestController extends Controller
             $question = $test->questions()->create([
                 'type' => $validated['type'],
                 'prompt' => $validated['prompt'],
+                'prompt_translations' => $this->buildTranslations(
+                    $validated['prompt'],
+                    $validated['prompt_ru'] ?? null,
+                    $validated['prompt_en'] ?? null,
+                ),
                 'helper_text' => $validated['helper_text'] ?? null,
+                'helper_text_translations' => $this->buildTranslations(
+                    $validated['helper_text'] ?? null,
+                    $validated['helper_text_ru'] ?? null,
+                    $validated['helper_text_en'] ?? null,
+                ),
                 'correct_answer_text' => $validated['type'] === 'fill_in_blank'
                     ? ($validated['correct_answer_text'] ?? null)
+                    : null,
+                'correct_answer_translations' => $validated['type'] === 'fill_in_blank'
+                    ? $this->buildTranslations(
+                        $validated['correct_answer_text'] ?? null,
+                        $validated['correct_answer_text_ru'] ?? null,
+                        $validated['correct_answer_text_en'] ?? null,
+                    )
                     : null,
                 'case_sensitive' => $validated['type'] === 'fill_in_blank' ? $request->boolean('case_sensitive') : false,
                 'points' => $validated['points'],
@@ -264,9 +281,26 @@ class TestSubjectLessonTestController extends Controller
             $question->update([
                 'type' => $validated['type'],
                 'prompt' => $validated['prompt'],
+                'prompt_translations' => $this->buildTranslations(
+                    $validated['prompt'],
+                    $validated['prompt_ru'] ?? null,
+                    $validated['prompt_en'] ?? null,
+                ),
                 'helper_text' => $validated['helper_text'] ?? null,
+                'helper_text_translations' => $this->buildTranslations(
+                    $validated['helper_text'] ?? null,
+                    $validated['helper_text_ru'] ?? null,
+                    $validated['helper_text_en'] ?? null,
+                ),
                 'correct_answer_text' => $validated['type'] === 'fill_in_blank'
                     ? ($validated['correct_answer_text'] ?? null)
+                    : null,
+                'correct_answer_translations' => $validated['type'] === 'fill_in_blank'
+                    ? $this->buildTranslations(
+                        $validated['correct_answer_text'] ?? null,
+                        $validated['correct_answer_text_ru'] ?? null,
+                        $validated['correct_answer_text_en'] ?? null,
+                    )
                     : null,
                 'case_sensitive' => $validated['type'] === 'fill_in_blank' ? $request->boolean('case_sensitive') : false,
                 'points' => $validated['points'],
@@ -322,11 +356,19 @@ class TestSubjectLessonTestController extends Controller
         $validated = $request->validate([
             'type' => ['required', Rule::in(['single_choice', 'fill_in_blank'])],
             'prompt' => ['required', 'string'],
+            'prompt_ru' => ['nullable', 'string'],
+            'prompt_en' => ['nullable', 'string'],
             'helper_text' => ['nullable', 'string'],
+            'helper_text_ru' => ['nullable', 'string'],
+            'helper_text_en' => ['nullable', 'string'],
             'points' => ['required', 'integer', 'min:1', 'max:100'],
             'correct_answer_text' => ['nullable', 'string', 'max:255'],
+            'correct_answer_text_ru' => ['nullable', 'string', 'max:255'],
+            'correct_answer_text_en' => ['nullable', 'string', 'max:255'],
             'options' => ['nullable', 'array'],
             'options.*.text' => ['nullable', 'string', 'max:255'],
+            'options.*.text_ru' => ['nullable', 'string', 'max:255'],
+            'options.*.text_en' => ['nullable', 'string', 'max:255'],
             'correct_option_number' => ['nullable', 'integer', 'min:1'],
         ]);
 
@@ -357,7 +399,18 @@ class TestSubjectLessonTestController extends Controller
     private function normalizeOptions(array $options): array
     {
         return collect($options)
-            ->map(fn ($option) => trim((string) data_get($option, 'text')))
+            ->map(function ($option) {
+                $text = trim((string) data_get($option, 'text'));
+                if ($text === '') {
+                    return null;
+                }
+
+                return [
+                    'text' => $text,
+                    'text_ru' => trim((string) data_get($option, 'text_ru')),
+                    'text_en' => trim((string) data_get($option, 'text_en')),
+                ];
+            })
             ->filter()
             ->values()
             ->all();
@@ -370,11 +423,29 @@ class TestSubjectLessonTestController extends Controller
 
         foreach ($options as $index => $optionText) {
             $question->options()->create([
-                'option_text' => $optionText,
+                'option_text' => $optionText['text'],
+                'option_text_translations' => $this->buildTranslations(
+                    $optionText['text'],
+                    $optionText['text_ru'] ?? null,
+                    $optionText['text_en'] ?? null,
+                ),
                 'sort_order' => $index + 1,
                 'is_correct' => ($index + 1) === $correctOptionNumber,
             ]);
         }
+    }
+
+    private function buildTranslations(?string $uz, ?string $ru = null, ?string $en = null): ?array
+    {
+        $translations = [
+            'uz' => trim((string) ($uz ?? '')),
+            'ru' => trim((string) ($ru ?? '')),
+            'en' => trim((string) ($en ?? '')),
+        ];
+
+        $filtered = array_filter($translations, fn ($value) => $value !== '');
+
+        return !empty($filtered) ? $filtered : null;
     }
 
     private function syncQuestionOrdering(TestSubjectLessonTest $test): void

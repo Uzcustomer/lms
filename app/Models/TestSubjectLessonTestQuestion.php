@@ -3,7 +3,6 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Facades\Storage;
 
 class TestSubjectLessonTestQuestion extends Model
 {
@@ -72,7 +71,7 @@ class TestSubjectLessonTestQuestion extends Model
             return null;
         }
 
-        return Storage::disk('public')->url($path);
+        return route('test-subject-questions.image', $this);
     }
 
     private function translationValue(string $field, ?string $lang, ?string $fallback = null): ?string

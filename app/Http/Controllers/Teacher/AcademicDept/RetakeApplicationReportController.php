@@ -121,50 +121,114 @@ class RetakeApplicationReportController extends Controller
         return md5(json_encode($parts));
     }
 
-    public function export(Request $request)
+    /**
+     * Excel eksport — data() bilan AYNAN bir xil bo'lakli (progressiv) mantiq,
+     * lekin tafsilot (talaba-darajasi) ham to'planadi va oxirida xlsx fayl
+     * yoziladi. Front-end "done" bo'lguncha so'raydi, so'ng download'ga o'tadi.
+     */
+    public function exportPrepare(Request $request)
     {
         $this->authorizeAccess();
         @ini_set('memory_limit', '1024M');
-        @set_time_limit(300);
+        @set_time_limit(120);
 
-        $r = $this->compute($request);
+        $sig = $this->filterSignature($request);
+        $token = (string) $request->input('token', '');
+
+        if ($token === '') {
+            $done = \Illuminate\Support\Facades\Cache::get("rar:exp:result:{$sig}");
+            if ($done && is_file(storage_path('app/public/retake-reports/' . $done['file']))) {
+                return response()->json(['status' => 'done', 'progress' => 1, 'download' => $this->exportDownloadUrl($done['file'])]);
+            }
+
+            $state = $this->computeBase($request, true);
+            $state['sig'] = $sig;
+            $total = count($state['batches']);
+
+            if ($total === 0) {
+                $file = $this->buildExportFile($state);
+                \Illuminate\Support\Facades\Cache::put("rar:exp:result:{$sig}", ['file' => $file], now()->addMinutes(30));
+                return response()->json(['status' => 'done', 'progress' => 1, 'download' => $this->exportDownloadUrl($file)]);
+            }
+
+            $token = \Illuminate\Support\Str::random(20);
+            \Illuminate\Support\Facades\Cache::put("rar:exp:state:{$token}", $state, now()->addMinutes(20));
+            return response()->json(['status' => 'running', 'token' => $token, 'progress' => 0, 'batches' => $total]);
+        }
+
+        $state = \Illuminate\Support\Facades\Cache::get("rar:exp:state:{$token}");
+        if (!$state) {
+            return response()->json(['status' => 'expired']);
+        }
+
+        $i = (int) ($state['batchIndex'] ?? 0);
+        $total = count($state['batches']);
+        $deadline = microtime(true) + 45;
+        while ($i < $total && microtime(true) < $deadline) {
+            $this->processBatch($state, $i);
+            $i++;
+            $state['batchIndex'] = $i;
+        }
+
+        if ($i >= $total) {
+            $file = $this->buildExportFile($state);
+            \Illuminate\Support\Facades\Cache::put("rar:exp:result:{$state['sig']}", ['file' => $file], now()->addMinutes(30));
+            \Illuminate\Support\Facades\Cache::forget("rar:exp:state:{$token}");
+            return response()->json(['status' => 'done', 'progress' => 1, 'download' => $this->exportDownloadUrl($file)]);
+        }
+
+        \Illuminate\Support\Facades\Cache::put("rar:exp:state:{$token}", $state, now()->addMinutes(20));
+        return response()->json(['status' => 'running', 'token' => $token, 'progress' => $i / max(1, $total), 'batches' => $total]);
+    }
+
+    /** Tayyor xlsx faylni yuklab beradi. */
+    public function exportDownload(Request $request)
+    {
+        $this->authorizeAccess();
+        $file = basename((string) $request->input('file', ''));
+        if (!preg_match('/^qayta_oqish_arizasi_hisoboti_[\w]+\.xlsx$/', $file)) {
+            abort(404);
+        }
+        $path = storage_path('app/public/retake-reports/' . $file);
+        if (!is_file($path)) {
+            abort(404);
+        }
+
+        return response()->download($path, 'qayta_oqish_arizasi_hisoboti.xlsx');
+    }
+
+    private function exportDownloadUrl(string $file): string
+    {
+        return route('admin.retake-application-report.export-download', ['file' => $file]);
+    }
+
+    /** state (rows + detail) dan xlsx fayl yozadi, fayl nomini qaytaradi. */
+    private function buildExportFile(array $state): string
+    {
+        $fin = $this->finalize($state);
 
         $spreadsheet = new Spreadsheet();
-        $this->buildSummarySheet($spreadsheet->getActiveSheet(), $r['rows'], $r['totals']);
-        $this->buildDetailSheet($spreadsheet->createSheet(), $r['detail']);
+        $this->buildSummarySheet($spreadsheet->getActiveSheet(), $fin['rows'], $fin['totals']);
+        $this->buildDetailSheet($spreadsheet->createSheet(), $state['detail'] ?? []);
         $spreadsheet->setActiveSheetIndex(0);
 
-        $fileName = 'qayta_oqish_arizasi_hisoboti_' . now()->format('Ymd_His') . '.xlsx';
         $dir = storage_path('app/public/retake-reports');
         if (!is_dir($dir)) {
             @mkdir($dir, 0755, true);
         }
+        // Eski fayllarni tozalash (1 soatdan eski).
+        foreach (glob($dir . '/*.xlsx') ?: [] as $old) {
+            if (@filemtime($old) < time() - 3600) {
+                @unlink($old);
+            }
+        }
+
+        $fileName = 'qayta_oqish_arizasi_hisoboti_' . now()->format('Ymd_His') . \Illuminate\Support\Str::lower(\Illuminate\Support\Str::random(6)) . '.xlsx';
         $path = $dir . '/' . $fileName;
         \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, 'Xlsx')->save($path);
         $spreadsheet->disconnectWorksheets();
 
-        return response()->download($path, $fileName)->deleteFileAfterSend(true);
-    }
-
-    /**
-     * Asosiy hisob — summary qatorlar, jami, va tafsilot (talaba darajasi).
-     *
-     * @return array{rows:array, totals:array, detail:array}
-     */
-    private function compute(Request $request): array
-    {
-        // Eksport — to'liq sinxron hisob (A/B/C/D + JORIY semestr E ham). Bu yo'l
-        // faqat fayl yuklab olishda ishlatiladi (download'da timeout chegarasi
-        // yumshoqroq). Ekrandagi hisobot esa data() orqali bo'lakli hisoblanadi.
-        $detail = [];
-        $state = $this->computeBase($request, $detail, true);
-
-        $total = count($state['batches']);
-        for ($i = 0; $i < $total; $i++) {
-            $this->processBatch($state, $i, $detail);
-        }
-
-        return $this->finalize($state) + ['detail' => $detail];
+        return $fileName;
     }
 
     /**
@@ -172,10 +236,10 @@ class RetakeApplicationReportController extends Controller
      * Hamda JORIY semestr (E) ni bo'lakli hisoblash uchun zarur holatni
      * (guruh-to'plamlari, semestr xaritalari, ariza kalitlari) tayyorlaydi.
      *
-     * @param  array|null  $detail  null bo'lmasa — talaba-darajasidagi tafsilot to'planadi (eksport).
-     * @param  bool  $keepStu  detail uchun talaba ma'lumotini state'da saqlash (eksport).
+     * @param  bool  $wantDetail  true bo'lsa — talaba-darajasidagi tafsilot
+     *                            state['detail'] ga to'planadi (eksport uchun).
      */
-    private function computeBase(Request $request, ?array &$detail = null, bool $keepStu = false): array
+    private function computeBase(Request $request, bool $wantDetail = false): array
     {
         $students = $this->studentQuery($request)->get();
 
@@ -186,6 +250,9 @@ class RetakeApplicationReportController extends Controller
             'semCodes' => [],
             'batches' => [],
             'batchIndex' => 0,
+            'wantDetail' => $wantDetail,
+            'detail' => [],
+            'stuMeta' => [],
         ];
 
         if ($students->isEmpty()) {
@@ -194,21 +261,28 @@ class RetakeApplicationReportController extends Controller
 
         $semNum = fn ($name) => preg_match('/(\d+)/', (string) $name, $m) ? (int) $m[1] : null;
 
-        $stu = [];
         $byGroup = [];
         foreach ($students as $s) {
             $hid = (string) $s->hemis_id;
-            $stu[$hid] = $s;
             $state['curSem'][$hid] = $semNum($s->semester_name ?: $s->semester_code);
             if ($s->semester_code !== null) {
                 $state['semCodes'][$hid] = (string) $s->semester_code;
             }
             $byGroup[(string) ($s->group_id ?? '')][] = $hid;
+            if ($wantDetail) {
+                // Tafsilot uchun yengil meta — keshda saqlanadigan holatni
+                // og'irlashtirmaslik uchun faqat zarur maydonlar.
+                $state['stuMeta'][$hid] = [
+                    'full_name' => $s->full_name ?? '-',
+                    'faculty' => $s->department_name ?? '-',
+                    'direction' => $s->specialty_name ?? '-',
+                    'kurs' => $s->level_name ?? '-',
+                    'semester' => $s->semester_name ?? '-',
+                    'group' => $s->group_name ?? '-',
+                ];
+            }
         }
-        $hemisIds = array_keys($stu);
-        if ($keepStu) {
-            $state['stu'] = $stu;
-        }
+        $hemisIds = array_keys($state['curSem']);
 
         $rowFor = function ($sid, $sn, $subjName, $semName) use (&$state) {
             $key = $sid . '|' . $sn;
@@ -217,18 +291,12 @@ class RetakeApplicationReportController extends Controller
             }
             return $key;
         };
-        $addDetail = function ($hid, $sn, $subjName, $category, $oske = null, $test = null) use (&$detail, $stu) {
-            if ($detail === null) return;
-            $s = $stu[$hid] ?? null;
-            if (!$s) return;
-            $detail[] = [
-                'full_name' => $s->full_name ?? '-',
-                'faculty' => $s->department_name ?? '-',
-                'direction' => $s->specialty_name ?? '-',
-                'kurs' => $s->level_name ?? '-',
-                'semester' => $s->semester_name ?? '-',
+        $addDetail = function ($hid, $sn, $subjName, $category, $oske = null, $test = null) use (&$state) {
+            if (!$state['wantDetail']) return;
+            $m = $state['stuMeta'][$hid] ?? null;
+            if (!$m) return;
+            $state['detail'][] = $m + [
                 'ariza_semestr' => $sn . '-semestr',
-                'group' => $s->group_name ?? '-',
                 'subject' => $subjName,
                 'category' => $category,
                 'oske' => $oske !== null ? (float) $oske : null,
@@ -317,7 +385,7 @@ class RetakeApplicationReportController extends Controller
      * Bitta guruh-to'plami uchun JORIY semestr qarzlarini (E ustun) hisoblab
      * state'dagi qatorlarga qo'shadi. $state — keshdan kelgan/qaytadigan holat.
      */
-    private function processBatch(array &$state, int $i, ?array &$detail = null): void
+    private function processBatch(array &$state, int $i): void
     {
         $hemisChunk = $state['batches'][$i] ?? [];
         if (empty($hemisChunk)) {
@@ -338,7 +406,7 @@ class RetakeApplicationReportController extends Controller
             return;
         }
 
-        $stu = $state['stu'] ?? [];
+        $wantDetail = !empty($state['wantDetail']);
         foreach ($risks as $hid => $rs) {
             $hid = (string) $hid;
             $sn = $state['curSem'][$hid] ?? null;
@@ -356,16 +424,9 @@ class RetakeApplicationReportController extends Controller
                 $state['rows'][$key]['not_applied']++;
                 $state['rows'][$key]['current_not_applied']++;
 
-                if ($detail !== null && isset($stu[$hid])) {
-                    $s = $stu[$hid];
-                    $detail[] = [
-                        'full_name' => $s->full_name ?? '-',
-                        'faculty' => $s->department_name ?? '-',
-                        'direction' => $s->specialty_name ?? '-',
-                        'kurs' => $s->level_name ?? '-',
-                        'semester' => $s->semester_name ?? '-',
+                if ($wantDetail && isset($state['stuMeta'][$hid])) {
+                    $state['detail'][] = $state['stuMeta'][$hid] + [
                         'ariza_semestr' => $sn . '-semestr',
-                        'group' => $s->group_name ?? '-',
                         'subject' => $cr['subject_name'] ?? '—',
                         'category' => 'Joriy semestrdan ariza bermagan',
                         'oske' => null,

@@ -12,6 +12,12 @@ use App\Services\Retake\RetakeJournalService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
+use PhpOffice\PhpSpreadsheet\Cell\DataType;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use PhpOffice\PhpSpreadsheet\Style\Alignment;
+use PhpOffice\PhpSpreadsheet\Style\Border;
+use PhpOffice\PhpSpreadsheet\Style\Fill;
+use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 use PhpOffice\PhpWord\SimpleType\Jc;
@@ -431,6 +437,142 @@ class RetakeTestMarkaziController extends Controller
         }
         $tempPath = $tempDir . '/' . Str::slug(pathinfo($fileName, PATHINFO_FILENAME)) . '.docx';
         IOFactory::createWriter($phpWord, 'Word2007')->save($tempPath);
+
+        return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
+    }
+
+    public function exportSentStudentsExcel(Request $request)
+    {
+        $this->authorize();
+
+        $studentSearch = trim((string) $request->input('student_search', ''));
+
+        $query = RetakeApplication::query()
+            ->whereNotNull('sent_to_test_markazi_at')
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->with(['group.student', 'retakeGroup'])
+            ->orderByDesc('sent_to_test_markazi_at');
+
+        if ($studentSearch !== '') {
+            $query->where(function ($q) use ($studentSearch) {
+                $q->where('student_hemis_id', 'like', "%{$studentSearch}%")
+                    ->orWhereHas('group.student', function ($studentQuery) use ($studentSearch) {
+                        $studentQuery->where('full_name', 'like', "%{$studentSearch}%")
+                            ->orWhere('student_id_number', 'like', "%{$studentSearch}%");
+                    });
+            });
+        }
+
+        $applications = $query->get();
+        if ($applications->isEmpty()) {
+            abort(404, 'Excel uchun testga yuborilgan talabalar topilmadi');
+        }
+
+        $mustaqilMap = RetakeMustaqilSubmission::query()
+            ->whereIn('application_id', $applications->pluck('id'))
+            ->get()
+            ->keyBy('application_id');
+
+        $spreadsheet = new Spreadsheet();
+        $sheet = $spreadsheet->getActiveSheet();
+        $sheet->setTitle('Testga yuborilganlar');
+
+        $headers = [
+            'A1' => 'T/R',
+            'B1' => 'Full name',
+            'C1' => 'Fakultet',
+            'D1' => 'Kurs',
+            'E1' => 'Semester',
+            'F1' => "Qayta o'qish fani",
+            'G1' => 'Fan semestri',
+            'H1' => 'JN',
+            'I1' => 'MT',
+            'J1' => 'OSKE',
+            'K1' => 'TEST',
+        ];
+
+        foreach ($headers as $cell => $value) {
+            $sheet->setCellValue($cell, $value);
+        }
+
+        $sheet->getStyle('A1:K1')->applyFromArray([
+            'font' => [
+                'bold' => true,
+                'color' => ['rgb' => 'FFFFFF'],
+                'size' => 11,
+            ],
+            'fill' => [
+                'fillType' => Fill::FILL_SOLID,
+                'startColor' => ['rgb' => '1F6E43'],
+            ],
+            'borders' => [
+                'allBorders' => [
+                    'borderStyle' => Border::BORDER_THIN,
+                    'color' => ['rgb' => 'D1D5DB'],
+                ],
+            ],
+            'alignment' => [
+                'horizontal' => Alignment::HORIZONTAL_CENTER,
+                'vertical' => Alignment::VERTICAL_CENTER,
+            ],
+        ]);
+
+        $row = 2;
+        foreach ($applications as $index => $app) {
+            $student = $app->group?->student;
+            $retakeGroup = $app->retakeGroup;
+            $mustaqil = $mustaqilMap[$app->id] ?? null;
+
+            $sheet->setCellValue("A{$row}", $index + 1);
+            $sheet->setCellValue("B{$row}", $student?->full_name ?? '—');
+            $sheet->setCellValue("C{$row}", $student?->department_name ?? '—');
+            $sheet->setCellValue("D{$row}", $student?->level_name ?? '—');
+            $sheet->setCellValue("E{$row}", $student?->semester_name ?? '—');
+            $sheet->setCellValue("F{$row}", $retakeGroup?->subject_name ?? $app->subject_name ?? '—');
+            $sheet->setCellValue("G{$row}", $retakeGroup?->semester_name ?? $app->semester_name ?? '—');
+            $sheet->setCellValue("H{$row}", $app->joriy_score !== null ? (float) $app->joriy_score : '—');
+            $sheet->setCellValue("I{$row}", $mustaqil?->grade !== null ? (float) $mustaqil->grade : '—');
+            $sheet->setCellValue("J{$row}", $app->oske_score !== null ? (float) $app->oske_score : '—');
+            $sheet->setCellValue("K{$row}", $app->test_score !== null ? (float) $app->test_score : '—');
+
+            $sheet->setCellValueExplicit("A{$row}", (string) ($index + 1), DataType::TYPE_NUMERIC);
+            $row++;
+        }
+
+        $lastRow = $row - 1;
+        if ($lastRow >= 2) {
+            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
+                'borders' => [
+                    'allBorders' => [
+                        'borderStyle' => Border::BORDER_THIN,
+                        'color' => ['rgb' => 'E5E7EB'],
+                    ],
+                ],
+                'alignment' => [
+                    'vertical' => Alignment::VERTICAL_CENTER,
+                ],
+            ]);
+
+            $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("H2:K{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+        }
+
+        foreach (range('A', 'K') as $column) {
+            $sheet->getColumnDimension($column)->setAutoSize(true);
+        }
+
+        $sheet->freezePane('A2');
+
+        $tempDir = storage_path('app/public/retake-test-markazi');
+        if (!is_dir($tempDir)) {
+            mkdir($tempDir, 0755, true);
+        }
+
+        $fileName = 'testga_yuborilgan_talabalar_' . now()->format('Ymd_His') . '.xlsx';
+        $tempPath = $tempDir . '/' . Str::slug(pathinfo($fileName, PATHINFO_FILENAME)) . '.xlsx';
+
+        $writer = new Xlsx($spreadsheet);
+        $writer->save($tempPath);
 
         return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
     }

@@ -1087,6 +1087,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'index'])->name('index');
             Route::post('/generate-yn-oldi-word', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'generateYnOldiWord'])->name('generate-yn-oldi-word');
             Route::get('/daily-allowed-students-word', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'generateDailyAllowedStudentsWord'])->name('daily-allowed-students-word');
+            Route::get('/students-excel', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'exportSentStudentsExcel'])->name('students-excel');
             Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'show'])->name('show');
             Route::post('/{groupId}/save-score', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'saveScore'])->name('save-score');
             Route::post('/{groupId}/load-from-diagnostika', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'loadFromDiagnostika'])->name('load-from-diagnostika');

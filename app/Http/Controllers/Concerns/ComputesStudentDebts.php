@@ -578,6 +578,19 @@ trait ComputesStudentDebts
         // attempt=3: test_resit2_date / oski_resit2_date
         if (\Illuminate\Support\Facades\Schema::hasTable('exam_schedules')) {
             $today = now()->format('Y-m-d');
+
+            // O'TGAN imtihonlar: [hid|subId|semCode] => true (eng yaxshi 101/102 bahosi >= 60).
+            // Resit sanalari guruhga oldindan belgilanadi; 1-urinishda o'tgan talabaga
+            // resit kerak emas — shuning uchun "baholanmagan" deb belgilanmaydi.
+            $passedExam = [];
+            foreach ($grades as $g) {
+                if (!in_array((int) $g->training_type_code, [101, 102])) continue;
+                $val = $g->retake_grade !== null ? (float) $g->retake_grade : ($g->grade !== null ? (float) $g->grade : null);
+                if ($val !== null && $val >= 60) {
+                    $passedExam[$g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code] = true;
+                }
+            }
+
             foreach (array_chunk($studentHemisIds, 500) as $chunk) {
                 $esRows = DB::table('exam_schedules')
                     ->whereIn('student_hemis_id', $chunk)
@@ -607,6 +620,11 @@ trait ComputesStudentDebts
                     if (!empty($studentSemCodesMap)) {
                         $stu_sem = $studentSemCodesMap[$hid] ?? null;
                         if ($stu_sem !== null && (string)$semCode !== (string)$stu_sem) continue;
+                    }
+
+                    // Fanni allaqachon o'tgan (imtihon bahosi >= 60) — resit kerak emas, o'tkazib yuboramiz.
+                    if (isset($passedExam[$hid . '|' . $subId . '|' . $semCode])) {
+                        continue;
                     }
 
                     // attempt=2: test yoki oski resit sanasi o'tib ketgan va grade yo'q

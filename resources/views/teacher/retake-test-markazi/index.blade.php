@@ -140,18 +140,22 @@
                                class="w-56 rounded-lg border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
                         <select name="sent_status" onchange="this.form.submit()"
                                 class="rounded-lg border-gray-300 text-sm focus:border-blue-500 focus:ring-blue-500">
-                            <option value="">{{ __("Holat: barchasi") }}</option>
-                            <option value="sent" {{ ($sentStatus ?? '') === 'sent' ? 'selected' : '' }}>{{ __("Testga yuborilgan") }}</option>
+                            <option value="">{{ __("Barchasi") }}</option>
+                            <option value="sent" {{ ($sentStatus ?? '') === 'sent' ? 'selected' : '' }}>{{ __("Yuborilgan") }}</option>
                             <option value="not_sent" {{ ($sentStatus ?? '') === 'not_sent' ? 'selected' : '' }}>{{ __("Yuborilmagan") }}</option>
                         </select>
                         <button type="submit" class="inline-flex items-center px-4 py-2 rounded-lg bg-gray-900 text-white text-sm font-semibold hover:bg-blue-700">
                             {{ __("Qidirish") }}
                         </button>
+                        @if($studentSearch !== '' || ($sentStatus ?? '') !== '')
+                            <a href="{{ route('admin.retake-test-markazi.index', ['tab' => 'students']) }}"
+                               class="text-sm text-gray-500 hover:text-gray-800">{{ __("Tozalash") }}</a>
+                        @endif
                     </form>
 
                     <div class="flex items-center gap-2 flex-wrap">
-                        <a href="{{ route('admin.retake-test-markazi.students-excel', ['student_search' => $studentSearch]) }}"
-                           class="inline-flex items-center px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-semibold hover:bg-green-800">
+                        <a href="{{ route('admin.retake-test-markazi.students-excel', array_merge(request()->except(['page','groups_page','students_page']), ['student_search' => $studentSearch, 'sent_status' => ($sentStatus ?? '')])) }}"
+                           style="display:inline-flex;align-items:center;padding:8px 16px;border-radius:10px;background:#2563eb;color:#fff;font-size:14px;font-weight:600;text-decoration:none;">
                             {{ __("Excel chiqarish") }}
                         </a>
                         <a href="{{ route('admin.retake-test-markazi.daily-allowed-students-word', ['student_search' => $studentSearch]) }}"

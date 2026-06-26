@@ -113,7 +113,7 @@ class RetakeApplicationReportController extends Controller
     private function filterSignature(Request $request): string
     {
         $keys = ['education_type', 'department', 'specialty', 'level_code', 'semester_code', 'group'];
-        $parts = [];
+        $parts = ['_v' => 2]; // hisob mantig'i o'zgarganda oshiriladi (eski keshni bekor qilish)
         foreach ($keys as $k) {
             $parts[$k] = (string) $request->input($k, '');
         }
@@ -585,6 +585,7 @@ class RetakeApplicationReportController extends Controller
     {
         $q = DB::table('students as s')
             ->whereNotNull('s.curriculum_id')
+            ->where('s.student_status_code', 11) // faqat o'qiyotgan talabalar (chetlashgan/bitirgan emas)
             ->select('s.hemis_id', 's.full_name', 's.student_id_number', 's.department_name',
                 's.specialty_name', 's.level_name', 's.semester_name', 's.semester_code',
                 's.group_name', 's.group_id', 's.curriculum_id', 's.image');

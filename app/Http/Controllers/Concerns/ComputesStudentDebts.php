@@ -480,25 +480,23 @@ trait ComputesStudentDebts
             $subjectName = $rows->first()->subject_name ?? 'Fan';
             $reasons = [];
 
-            // 1. OSKI/Test (imtihon urinishlari) — faqat ENG OXIRGI urinish natijasiga qaraladi
-            $examRows = $rows->whereIn('training_type_code', [101, 102]);
-            if ($examRows->isNotEmpty()) {
-                $byAttempt = $examRows->groupBy('attempt');
-                $maxAttempt = (int) $examRows->max('attempt');
-                $lastAttRows = $byAttempt->get((string)$maxAttempt) ?? $byAttempt->get($maxAttempt);
-                $lastBaho = null;
-                if ($lastAttRows) {
-                    foreach ($lastAttRows as $r) {
-                        $val = $r->retake_grade !== null ? (float)$r->retake_grade : ($r->grade !== null ? (float)$r->grade : null);
-                        if ($val !== null && ($lastBaho === null || $val > $lastBaho)) {
-                            $lastBaho = $val;
-                        }
+            // 1. OSKI/Test imtihonlari — har bir tur (101=OSKI, 102=Test) bo'yicha
+            //    URINISHLARNING ENG YAXSHISIGA qaraladi. Talaba birorta urinishda
+            //    >=60 olgan bo'lsa — o'sha tur o'tilgan; keyin past urinish kelsa
+            //    (xato/dublikat yozuv) o'tganlikni bekor qilmaydi. Mavjud turdan
+            //    birortasi <60 bo'lsa (va bahosi bor bo'lsa) — imtihon qarzdorligi.
+            foreach ([101 => 'OSKI', 102 => 'Test'] as $ttCode => $ttLabel) {
+                $typeRows = $rows->where('training_type_code', $ttCode);
+                if ($typeRows->isEmpty()) continue;
+                $best = null;
+                foreach ($typeRows as $r) {
+                    $val = $r->retake_grade !== null ? (float)$r->retake_grade : ($r->grade !== null ? (float)$r->grade : null);
+                    if ($val !== null && ($best === null || $val > $best)) {
+                        $best = $val;
                     }
                 }
-                if ($lastBaho !== null && $lastBaho < 60) {
-                    if ($maxAttempt === 1) $reasons[] = '1-urinish: V<60';
-                    elseif ($maxAttempt === 2) $reasons[] = '2-urinish: V<60';
-                    elseif ($maxAttempt >= 3) $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
+                if ($best !== null && $best < 60) {
+                    $reasons[] = $ttLabel . '<60';
                 }
             }
 

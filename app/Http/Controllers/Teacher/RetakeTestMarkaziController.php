@@ -38,6 +38,7 @@ class RetakeTestMarkaziController extends Controller
         $this->authorize();
 
         $activeTab = request('tab') === 'students' ? 'students' : 'groups';
+        $studentSearch = trim((string) request('student_search', ''));
 
         // Cascading filtrlar (talaba ma'lumotlari + fan) — JN hisoboti uslubida.
         $studentFilters = [
@@ -84,9 +85,6 @@ class RetakeTestMarkaziController extends Controller
         }
         $groups = $groupsQuery->paginate($perPage, ['*'], 'groups_page')->withQueryString();
 
-        $studentSearch = trim((string) request('student_search', ''));
-
-        // Tasdiqlangan va guruhga biriktirilgan barcha talabalar.
         $sentApplicationsQuery = RetakeApplication::query()
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
             ->whereNotNull('retake_group_id')
@@ -446,12 +444,39 @@ class RetakeTestMarkaziController extends Controller
         $this->authorize();
 
         $studentSearch = trim((string) $request->input('student_search', ''));
+        $sentStatus = (string) $request->input('sent_status', 'sent');
+        $studentFilters = [
+            'education_type' => $request->input('education_type'),
+            'department' => $request->input('department'),
+            'specialty' => $request->input('specialty'),
+            'level_code' => $request->input('level_code'),
+            'semester_code' => $request->input('semester_code'),
+            'group' => $request->input('group'),
+        ];
+        $subjectFilter = $request->input('subject');
+        $hasStudentFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty();
+
+        $studentSub = function ($sub) use ($studentFilters) {
+            $sub->select('hemis_id')->from('students');
+            if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+            if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+            if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+            if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+            if (!empty($studentFilters['semester_code'])) $sub->where('semester_code', $studentFilters['semester_code']);
+            if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+        };
 
         $query = RetakeApplication::query()
-            ->whereNotNull('sent_to_test_markazi_at')
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
             ->with(['group.student', 'retakeGroup'])
             ->orderByDesc('sent_to_test_markazi_at');
+
+        if ($sentStatus === 'not_sent') {
+            $query->whereNull('sent_to_test_markazi_at');
+        } elseif ($sentStatus !== '') {
+            $query->whereNotNull('sent_to_test_markazi_at');
+        }
 
         if ($studentSearch !== '') {
             $query->where(function ($q) use ($studentSearch) {
@@ -461,6 +486,12 @@ class RetakeTestMarkaziController extends Controller
                             ->orWhere('student_id_number', 'like', "%{$studentSearch}%");
                     });
             });
+        }
+        if ($subjectFilter) {
+            $query->whereHas('retakeGroup', fn ($q) => $q->where('subject_id', $subjectFilter));
+        }
+        if ($hasStudentFilter) {
+            $query->whereIn('student_hemis_id', $studentSub);
         }
 
         $applications = $query->get();
@@ -489,13 +520,14 @@ class RetakeTestMarkaziController extends Controller
             'I1' => 'MT',
             'J1' => 'OSKE',
             'K1' => 'TEST',
+            'L1' => 'Holat',
         ];
 
         foreach ($headers as $cell => $value) {
             $sheet->setCellValue($cell, $value);
         }
 
-        $sheet->getStyle('A1:K1')->applyFromArray([
+        $sheet->getStyle('A1:L1')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'color' => ['rgb' => 'FFFFFF'],
@@ -534,6 +566,7 @@ class RetakeTestMarkaziController extends Controller
             $sheet->setCellValue("I{$row}", $mustaqil?->grade !== null ? (float) $mustaqil->grade : '—');
             $sheet->setCellValue("J{$row}", $app->oske_score !== null ? (float) $app->oske_score : '—');
             $sheet->setCellValue("K{$row}", $app->test_score !== null ? (float) $app->test_score : '—');
+            $sheet->setCellValue("L{$row}", $app->sent_to_test_markazi_at ? 'Yuborilgan' : 'Yuborilmagan');
 
             $sheet->setCellValueExplicit("A{$row}", (string) ($index + 1), DataType::TYPE_NUMERIC);
             $row++;
@@ -541,7 +574,7 @@ class RetakeTestMarkaziController extends Controller
 
         $lastRow = $row - 1;
         if ($lastRow >= 2) {
-            $sheet->getStyle("A2:K{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:L{$lastRow}")->applyFromArray([
                 'borders' => [
                     'allBorders' => [
                         'borderStyle' => Border::BORDER_THIN,
@@ -554,10 +587,10 @@ class RetakeTestMarkaziController extends Controller
             ]);
 
             $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("H2:K{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("H2:L{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         }
 
-        foreach (range('A', 'K') as $column) {
+        foreach (range('A', 'L') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
 

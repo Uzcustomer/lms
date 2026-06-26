@@ -454,6 +454,31 @@ trait ComputesStudentDebts
             }
         }
 
+        // 4) Imtihon (OSKI/Test) sana oynasi — JURNAL bilan bir xil: imtihon yozuvlari
+        //    [group|subject|sem] uchun birinchi DARS sanasidan oldin bo'lsa, ular o'tgan
+        //    semestrga tegishli (semester_code noto'g'ri teglangan bo'lishi mumkin) va
+        //    hisobga olinmaydi. Jurnal imtihonlarni semester_code emas, lesson_date
+        //    oynasi bilan ajratadi — shuni takrorlaymiz.
+        $examMinDate = []; // [group|subject|sem] => 'YYYY-MM-DD'
+        $groupIdsForSched = array_values(array_unique(array_filter(array_map('strval', $stuGroup))));
+        if (!empty($groupIdsForSched) && !empty($subjectIdsForAtt) && \Illuminate\Support\Facades\Schema::hasTable('schedules')) {
+            foreach (array_chunk($groupIdsForSched, 500) as $gchunk) {
+                $schedRows = DB::table('schedules')
+                    ->whereIn('group_id', $gchunk)
+                    ->whereIn('subject_id', $subjectIdsForAtt)
+                    ->whereIn('semester_code', $currentSemesterCodes)
+                    ->whereNull('deleted_at')
+                    ->whereNotNull('lesson_date')
+                    ->whereNotIn('training_type_code', [100, 101, 102, 103]) // imtihonlar emas — dars sanalari
+                    ->select('group_id', 'subject_id', 'semester_code', DB::raw('MIN(lesson_date) as min_date'))
+                    ->groupBy('group_id', 'subject_id', 'semester_code')
+                    ->get();
+                foreach ($schedRows as $sr) {
+                    $examMinDate[$sr->group_id . '|' . $sr->subject_id . '|' . $sr->semester_code] = substr((string) $sr->min_date, 0, 10);
+                }
+            }
+        }
+
         // Talaba+fan bo'yicha guruhlash
         $grouped = $grades->groupBy(fn($g) => $g->student_hemis_id . '|' . $g->subject_id . '|' . $g->semester_code);
 
@@ -480,25 +505,33 @@ trait ComputesStudentDebts
             $subjectName = $rows->first()->subject_name ?? 'Fan';
             $reasons = [];
 
-            // 1. OSKI/Test (imtihon urinishlari) — faqat ENG OXIRGI urinish natijasiga qaraladi
-            $examRows = $rows->whereIn('training_type_code', [101, 102]);
-            if ($examRows->isNotEmpty()) {
-                $byAttempt = $examRows->groupBy('attempt');
-                $maxAttempt = (int) $examRows->max('attempt');
-                $lastAttRows = $byAttempt->get((string)$maxAttempt) ?? $byAttempt->get($maxAttempt);
-                $lastBaho = null;
-                if ($lastAttRows) {
-                    foreach ($lastAttRows as $r) {
-                        $val = $r->retake_grade !== null ? (float)$r->retake_grade : ($r->grade !== null ? (float)$r->grade : null);
-                        if ($val !== null && ($lastBaho === null || $val > $lastBaho)) {
-                            $lastBaho = $val;
-                        }
+            // 1. OSKI/Test imtihonlari — har bir tur (101=OSKI, 102=Test) bo'yicha
+            //    URINISHLARNING ENG YAXSHISIGA qaraladi. Talaba birorta urinishda
+            //    >=60 olgan bo'lsa — o'sha tur o'tilgan; keyin past urinish kelsa
+            //    (xato/dublikat yozuv) o'tganlikni bekor qilmaydi. Mavjud turdan
+            //    birortasi <60 bo'lsa (va bahosi bor bo'lsa) — imtihon qarzdorligi.
+            $gidForExam = $stuGroup[$hemisId] ?? null;
+            $minDateForExam = $gidForExam !== null
+                ? ($examMinDate[$gidForExam . '|' . $subjectId . '|' . $semCode] ?? null)
+                : null;
+            foreach ([101 => 'OSKI', 102 => 'Test'] as $ttCode => $ttLabel) {
+                $typeRows = $rows->where('training_type_code', $ttCode);
+                // Jurnal oynasi: birinchi dars sanasidan oldingi imtihonlar (o'tgan
+                // semestr / noto'g'ri teglangan) hisobga olinmaydi.
+                if ($minDateForExam !== null) {
+                    $typeRows = $typeRows->filter(fn($r) => $r->lesson_date !== null
+                        && substr((string) $r->lesson_date, 0, 10) >= $minDateForExam);
+                }
+                if ($typeRows->isEmpty()) continue;
+                $best = null;
+                foreach ($typeRows as $r) {
+                    $val = $r->retake_grade !== null ? (float)$r->retake_grade : ($r->grade !== null ? (float)$r->grade : null);
+                    if ($val !== null && ($best === null || $val > $best)) {
+                        $best = $val;
                     }
                 }
-                if ($lastBaho !== null && $lastBaho < 60) {
-                    if ($maxAttempt === 1) $reasons[] = '1-urinish: V<60';
-                    elseif ($maxAttempt === 2) $reasons[] = '2-urinish: V<60';
-                    elseif ($maxAttempt >= 3) $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
+                if ($best !== null && $best < 60) {
+                    $reasons[] = $ttLabel . '<60';
                 }
             }
 

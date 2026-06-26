@@ -35,8 +35,28 @@ class VedomostSubmissionService
     /** Dry-run rejimida o'chiriladigan eskirgan qatorlar (sinov uchun). */
     public array $lastPruneCandidates = [];
 
-    public function __construct(private VedomostMergeService $merge)
+    private ?bool $studentGradeSababliCol = null;
+
+    public function __construct(
+        private VedomostMergeService $merge,
+        private YnStageService $ynStage
+    ) {
+    }
+
+    /**
+     * student_grades.retake_was_sababli ustuni mavjudmi (keshlanadi).
+     */
+    private function studentGradeSababliColumn(): bool
     {
+        if ($this->studentGradeSababliCol === null) {
+            try {
+                $this->studentGradeSababliCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'retake_was_sababli');
+            } catch (\Throwable $e) {
+                $this->studentGradeSababliCol = false;
+            }
+        }
+
+        return $this->studentGradeSababliCol;
     }
 
     /**
@@ -253,6 +273,13 @@ class VedomostSubmissionService
         }
 
         $keptIds = array_merge($keptIds, $this->syncResitForms($units));
+
+        // Qo'shimcha (sababli ma'lumotnoma) shakllari — 12q/12aq/12bq.
+        // YN bosqich mantig'i (YnStageService) bilan aniqlanadi.
+        $keptIds = array_merge(
+            $keptIds,
+            $this->syncQoshimchaForms($units, $groups->pluck('group_hemis_id')->map(fn($g) => (string) $g)->all(), $semByGroup)
+        );
 
         // Eskirgan qatorlarni tozalash — endi joriy bo'lmagan (masalan, faol
         // talabasi qolmagan guruh) tegilmagan vedomostlar. Faqat pending VA fayl
@@ -506,28 +533,10 @@ class VedomostSubmissionService
         // Barcha birliklar bo'yicha guruh/fan kalitlarini yig'amiz, so'ngra
         // yiqilganlar va sanalarni BITTA-ikkita to'plam (batch) so'rovda olamiz —
         // har birlik uchun alohida so'rov yubormaymiz (sync 504 bermasligi uchun).
-        $allGroupIds = [];
-        $allSubjectKeys = [];
-        $allSemCodes = [];
-        $unitByKey = []; // "group|subjectKey|sem" => unitKey
-        foreach ($units as $unitKey => $unit) {
-            $semCode = (string) $unit['semester_code'];
-            $allSemCodes[$semCode] = true;
-            foreach ($unit['group_ids'] as $gid) {
-                $allGroupIds[(int) $gid] = true;
-                foreach ($unit['subject_keys'] as $sk) {
-                    $allSubjectKeys[$sk] = true;
-                    $unitByKey[$gid . '|' . $sk . '|' . $semCode] = $unitKey;
-                }
-            }
-        }
+        [$allGroupIds, $allSubjectKeys, $allSemCodes, $unitByKey] = $this->unitKeyMaps($units);
 
-        $failures = $this->detectFailuresBatch(
-            array_keys($allGroupIds), array_keys($allSubjectKeys), array_keys($allSemCodes), $unitByKey
-        );
-        $dates = $this->examDatesBatch(
-            array_keys($allGroupIds), array_keys($allSubjectKeys), array_keys($allSemCodes), $unitByKey, $units
-        );
+        $failures = $this->detectFailuresBatch($allGroupIds, $allSubjectKeys, $allSemCodes, $unitByKey);
+        $dates = $this->examDatesBatch($allGroupIds, $allSubjectKeys, $allSemCodes, $unitByKey, $units);
 
         $keptIds = [];
         foreach ($units as $unitKey => $unit) {
@@ -551,6 +560,199 @@ class VedomostSubmissionService
         }
 
         return $keptIds;
+    }
+
+    /**
+     * Birliklar bo'yicha batch so'rovlar uchun kalit xaritalarini quradi.
+     *
+     * @return array{0:array<int>,1:array<int|string>,2:array<string>,3:array<string,string>}
+     *         [groupIds, subjectKeys, semCodes, "group|subjectKey|sem" => unitKey]
+     */
+    private function unitKeyMaps(array $units): array
+    {
+        $allGroupIds = [];
+        $allSubjectKeys = [];
+        $allSemCodes = [];
+        $unitByKey = [];
+        foreach ($units as $unitKey => $unit) {
+            $semCode = (string) $unit['semester_code'];
+            $allSemCodes[$semCode] = true;
+            foreach ($unit['group_ids'] as $gid) {
+                $allGroupIds[(int) $gid] = true;
+                foreach ($unit['subject_keys'] as $sk) {
+                    $allSubjectKeys[$sk] = true;
+                    $unitByKey[$gid . '|' . $sk . '|' . $semCode] = $unitKey;
+                }
+            }
+        }
+
+        return [array_keys($allGroupIds), array_keys($allSubjectKeys), array_keys($allSemCodes), $unitByKey];
+    }
+
+    /**
+     * Qo'shimcha (sababli ma'lumotnoma) shakllarini — 12q (har guruh alohida),
+     * 12aq/12bq (umumiy) — YN bosqich mantig'i (YnStageService) bo'yicha ochadi/yopadi.
+     *
+     * Tezlik uchun: stage hisobi OG'IR, shuning uchun faqat retake_was_sababli
+     * bahosi bor (guruh, fan, semestr) birliklarида chaqiriladi — chunki sababli
+     * baho bo'lmasa qo'shimcha shakl umuman aktivlashmaydi (V2==V1).
+     *
+     * @param  array<int,string>  $activeGroupHemisIds  joriy faol guruhlar
+     * @return array<int>  ochilgan (saqlanadigan) qator id lari
+     */
+    private function syncQoshimchaForms(array $units, array $activeGroupHemisIds, Collection $semByGroup): array
+    {
+        if (!$this->studentGradeSababliColumn() || empty($activeGroupHemisIds)) {
+            return [];
+        }
+
+        // 1. Nomzodlar: sababli baho bor (guruh, fan, semestr) — joriy faol guruhlar ichida.
+        $candidates = DB::table('student_grades as sg')
+            ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+            ->whereIn('st.group_id', $activeGroupHemisIds)
+            ->where('sg.retake_was_sababli', 1)
+            ->whereNull('sg.deleted_at')
+            ->select('st.group_id as group_hemis_id', 'sg.subject_id', 'sg.semester_code')
+            ->distinct()
+            ->get();
+
+        if ($candidates->isEmpty()) {
+            return [];
+        }
+
+        // 2. Har nomzod uchun YN aktiv shakllarini hisoblaymiz (faqat joriy semestr).
+        //    "group|subject|sem" => activeForms
+        $activeByKey = [];
+        foreach ($candidates as $c) {
+            $gid = (string) $c->group_hemis_id;
+            $sem = (string) $c->semester_code;
+            // Faqat guruhning JORIY semestri (eski semestr qo'shimchasini ochmaymiz).
+            $curSem = $semByGroup->get($gid)?->code;
+            if ($curSem === null || (string) $curSem !== $sem) {
+                continue;
+            }
+            $res = $this->ynStage->computeForGroupSubject($gid, (string) $c->subject_id, $sem);
+            if ($res !== null) {
+                $activeByKey[$gid . '|' . $c->subject_id . '|' . $sem] = $res['activeForms'];
+            }
+        }
+
+        if (empty($activeByKey)) {
+            return [];
+        }
+
+        $keptIds = [];
+
+        // 3. 12q — har guruh alohida: mavjud 12-shakl qatorini klonlaymiz.
+        foreach ($activeByKey as $key => $af) {
+            [$gid, $subjectId, $sem] = explode('|', $key);
+            $open = !empty($af[YnAttemptStatusService::FORM_12_QOSHIMCHA]);
+            $id = $this->upsertQoshimcha12Row($gid, $subjectId, $sem, $open);
+            if ($id) {
+                $keptIds[] = $id;
+            }
+        }
+
+        // 4. 12aq/12bq — umumiy (birlik bo'yicha): birlikning bironta guruhida aktiv bo'lsa.
+        [$ag, $ask, $asc, $unitByKey] = $this->unitKeyMaps($units);
+        $dates = $this->examDatesBatch($ag, $ask, $asc, $unitByKey, $units);
+
+        foreach ($units as $unitKey => $unit) {
+            $groupIds = array_values(array_unique($unit['group_ids']));
+            $sem = (string) $unit['semester_code'];
+            $subjectId = (string) $unit['subject_id'];
+
+            $any12aq = false;
+            $any12bq = false;
+            foreach ($unit['group_ids'] as $gid) {
+                $af = $activeByKey[$gid . '|' . $subjectId . '|' . $sem] ?? null;
+                if ($af === null) {
+                    continue;
+                }
+                if (!empty($af[YnAttemptStatusService::FORM_12A_QOSHIMCHA])) {
+                    $any12aq = true;
+                }
+                if (!empty($af[YnAttemptStatusService::FORM_12B_QOSHIMCHA])) {
+                    $any12bq = true;
+                }
+            }
+
+            $d = $dates[$unitKey] ?? ['attempt1' => null, 'resit' => null, 'resit2' => null];
+
+            $id12aq = $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12AQ, $any12aq, $d['resit']);
+            if ($id12aq) {
+                $keptIds[] = $id12aq;
+            }
+            $id12bq = $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12BQ, $any12bq, $d['resit2']);
+            if ($id12bq) {
+                $keptIds[] = $id12bq;
+            }
+        }
+
+        return $keptIds;
+    }
+
+    /**
+     * 12q (12-qo'shimcha) — har guruh alohida varaq. Mavjud 12-shakl qatorining
+     * ma'lumotlarini (o'qituvchi, mas'ul, sana) klonlab ochadi; aktiv bo'lmasa
+     * va hali ishlatilmagan (pending, fayl yo'q) bo'lsa olib tashlaydi.
+     *
+     * @return int|null  ochilgan qator id, aks holda null
+     */
+    private function upsertQoshimcha12Row(string $groupHemisId, string $subjectId, string $semesterCode, bool $shouldOpen): ?int
+    {
+        $keys = [
+            'group_hemis_id' => $groupHemisId,
+            'subject_id' => $subjectId,
+            'semester_code' => $semesterCode,
+            'form_type' => VedomostSubmission::FORM_12Q,
+        ];
+
+        if (!$shouldOpen) {
+            VedomostSubmission::where($keys)
+                ->where('status', VedomostSubmission::STATUS_PENDING)
+                ->whereNull('pdf_path')
+                ->delete();
+            return null;
+        }
+
+        // Asos — shu guruh×fan×semestr ning 12-shakl qatori (mavjud bo'lishi shart).
+        $base = VedomostSubmission::where([
+            'group_hemis_id' => $groupHemisId,
+            'subject_id' => $subjectId,
+            'semester_code' => $semesterCode,
+            'form_type' => VedomostSubmission::FORM_12,
+        ])->first();
+        if (!$base) {
+            return null;
+        }
+
+        $row = VedomostSubmission::updateOrCreate($keys, [
+            'education_year' => $base->education_year,
+            'group_name' => $base->group_name,
+            'curriculum_hemis_id' => $base->curriculum_hemis_id,
+            'curriculum_subject_id' => $base->curriculum_subject_id,
+            'subject_name' => $base->subject_name,
+            'department_hemis_id' => $base->department_hemis_id,
+            'department_name' => $base->department_name,
+            'specialty_name' => $base->specialty_name,
+            'closing_form' => $base->closing_form,
+            'teacher_hemis_id' => $base->teacher_hemis_id,
+            'teacher_name' => $base->teacher_name,
+            'teacher_phone' => $base->teacher_phone,
+            'fan_masuli_hemis_id' => $base->fan_masuli_hemis_id,
+            'fan_masuli_name' => $base->fan_masuli_name,
+            'fan_masuli_phone' => $base->fan_masuli_phone,
+            'kafedra_mudiri_hemis_id' => $base->kafedra_mudiri_hemis_id,
+            'kafedra_mudiri_name' => $base->kafedra_mudiri_name,
+            'kafedra_mudiri_phone' => $base->kafedra_mudiri_phone,
+            'base_type' => $base->base_type,
+            'base_date' => $base->base_date,
+            'deadline' => $base->deadline,
+            // status / fayllar / tekshiruv — atayin yangilanmaydi (oqim saqlanadi)
+        ]);
+
+        return $row->id;
     }
 
     /**

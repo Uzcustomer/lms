@@ -29,6 +29,7 @@ use App\Http\Controllers\Teacher\TestSubjectLessonTestController;
 use App\Http\Controllers\Teacher\TestSubjectController as TeacherTestSubjectController;
 use App\Http\Controllers\Teacher\TutorReportController;
 use App\Http\Controllers\Teacher\NotificationController as TeacherNotificationController;
+use App\Http\Controllers\TestSubjectQuestionImageController;
 use App\Http\Controllers\Admin\TeacherController;
 use App\Http\Controllers\Admin\TestSubjectController;
 use App\Http\Controllers\Admin\PasswordSettingsController;
@@ -100,6 +101,8 @@ Route::post('/staff-evaluate/{token}', [\App\Http\Controllers\StaffEvaluateContr
 
 // Til almashtirish (Language switch)
 Route::get('/language/{locale}', [LanguageController::class, 'switchLocale'])->name('language.switch');
+Route::get('/test-subject-question-images/{question}', [TestSubjectQuestionImageController::class, 'show'])
+    ->name('test-subject-questions.image');
 
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('guest:web')->group(function () {

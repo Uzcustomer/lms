@@ -52,6 +52,7 @@
                     background:#fff;
                 }
                 .tb-textarea { min-height:82px; resize:vertical; }
+                .tb-preview-image { width:100%; max-height:220px; object-fit:contain; border-radius:14px; border:1px solid #dbe4ef; background:#f8fafc; }
                 .tb-input:focus, .tb-textarea:focus, .tb-select:focus {
                     outline:none;
                     border-color:#3b82f6;
@@ -255,7 +256,7 @@
                         <p class="mt-1 text-sm text-slate-500">Multiple choice va fill in blank savollarni shu yerning o'zida yarating.</p>
                     </div>
                     <div class="tb-section">
-                        <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.store', [$testSubject, $lesson]) }}" class="space-y-4">
+                        <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.store', [$testSubject, $lesson]) }}" class="space-y-4" enctype="multipart/form-data">
                             @csrf
 
                             <div class="tb-inline">
@@ -305,6 +306,21 @@
                                 <div>
                                     <label class="tb-label">Yordamchi izoh (EN)</label>
                                     <textarea name="helper_text_en" class="tb-textarea">{{ old('helper_text_en') }}</textarea>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="tb-label">Savol rasmi</label>
+                                    <input type="file" name="question_image" class="tb-input" accept=".jpg,.jpeg,.png,.webp,.gif,image/*">
+                                    <div class="mt-2 text-xs text-slate-500">JPG, PNG, WEBP yoki GIF. Maksimal 4 MB.</div>
+                                </div>
+                                <div>
+                                    @if(old('question_image'))
+                                        <div class="tb-soft-box text-xs text-slate-500">Tanlangan rasm yuborilgandan keyin ko'rinadi.</div>
+                                    @else
+                                        <div class="tb-soft-box text-xs text-slate-500">Rasm savol matniga bog'liq bo'lsa shu yerga yuklang. Multiple choice va fill in blank uchun ham ishlaydi.</div>
+                                    @endif
                                 </div>
                             </div>
 
@@ -417,7 +433,7 @@
                                 </div>
 
                                 <div class="tb-section border-t border-slate-100" x-show="open" x-cloak>
-                                    <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.update', [$testSubject, $lesson, $question]) }}" class="space-y-4">
+                                    <form method="POST" action="{{ route('teacher.test-subjects.tests.questions.update', [$testSubject, $lesson, $question]) }}" class="space-y-4" enctype="multipart/form-data">
                                         @csrf
                                         @method('PUT')
 
@@ -468,6 +484,27 @@
                                             <div>
                                                 <label class="tb-label">Yordamchi izoh (EN)</label>
                                                 <textarea name="helper_text_en" class="tb-textarea">{{ $tr($question->helper_text_translations, 'en') }}</textarea>
+                                            </div>
+                                        </div>
+
+                                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                                            <div>
+                                                <label class="tb-label">Savol rasmi</label>
+                                                <input type="file" name="question_image" class="tb-input" accept=".jpg,.jpeg,.png,.webp,.gif,image/*">
+                                                <div class="mt-2 text-xs text-slate-500">Yangi rasm yuklansa eski rasm almashtiriladi.</div>
+                                            </div>
+                                            <div>
+                                                @if($question->imageUrl())
+                                                    <div class="space-y-3">
+                                                        <img src="{{ $question->imageUrl() }}" alt="Savol rasmi" class="tb-preview-image">
+                                                        <label class="flex items-center gap-3 text-sm text-slate-700">
+                                                            <input type="checkbox" name="remove_question_image" value="1" class="rounded border-slate-300 text-red-600 focus:ring-red-500">
+                                                            Joriy rasmni olib tashlash
+                                                        </label>
+                                                    </div>
+                                                @else
+                                                    <div class="tb-soft-box text-xs text-slate-500">Hozircha rasm biriktirilmagan.</div>
+                                                @endif
                                             </div>
                                         </div>
 

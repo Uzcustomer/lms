@@ -12,6 +12,7 @@ use App\Models\TestSubjectLessonTestQuestion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -224,8 +225,9 @@ class TestSubjectLessonTestController extends Controller
         [$teacher, $test] = $this->resolveContext($testSubject, $lesson);
         $test = $test ?: $this->ensureDraftTest($teacher->id, $testSubject, $lesson);
         $validated = $this->validateQuestion($request);
+        $imagePath = $this->storeQuestionImage($request);
 
-        DB::transaction(function () use ($validated, $request, $test) {
+        DB::transaction(function () use ($validated, $request, $test, $imagePath) {
             $question = $test->questions()->create([
                 'type' => $validated['type'],
                 'prompt' => $validated['prompt'],
@@ -234,6 +236,7 @@ class TestSubjectLessonTestController extends Controller
                     $validated['prompt_ru'] ?? null,
                     $validated['prompt_en'] ?? null,
                 ),
+                'image_path' => $imagePath,
                 'helper_text' => $validated['helper_text'] ?? null,
                 'helper_text_translations' => $this->buildTranslations(
                     $validated['helper_text'] ?? null,
@@ -276,8 +279,12 @@ class TestSubjectLessonTestController extends Controller
         abort_unless((int) $question->lesson_test_id === (int) $test->id, 404);
 
         $validated = $this->validateQuestion($request);
+        $newImagePath = $this->storeQuestionImage($request);
 
-        DB::transaction(function () use ($validated, $request, $question) {
+        DB::transaction(function () use ($validated, $request, $question, $newImagePath) {
+            $removeCurrentImage = $request->boolean('remove_question_image');
+            $oldImagePath = $question->image_path;
+
             $question->update([
                 'type' => $validated['type'],
                 'prompt' => $validated['prompt'],
@@ -286,6 +293,8 @@ class TestSubjectLessonTestController extends Controller
                     $validated['prompt_ru'] ?? null,
                     $validated['prompt_en'] ?? null,
                 ),
+                'image_path' => $newImagePath
+                    ?: ($removeCurrentImage ? null : $question->image_path),
                 'helper_text' => $validated['helper_text'] ?? null,
                 'helper_text_translations' => $this->buildTranslations(
                     $validated['helper_text'] ?? null,
@@ -316,6 +325,10 @@ class TestSubjectLessonTestController extends Controller
             } else {
                 $question->options()->delete();
             }
+
+            if (($newImagePath || $removeCurrentImage) && $oldImagePath) {
+                Storage::disk('public')->delete($oldImagePath);
+            }
         });
 
         return redirect()
@@ -327,6 +340,10 @@ class TestSubjectLessonTestController extends Controller
     {
         [, $test] = $this->resolveContext($testSubject, $lesson, true);
         abort_unless((int) $question->lesson_test_id === (int) $test->id, 404);
+
+        if ($question->image_path) {
+            Storage::disk('public')->delete($question->image_path);
+        }
 
         $question->delete();
         $this->syncQuestionOrdering($test);
@@ -358,6 +375,8 @@ class TestSubjectLessonTestController extends Controller
             'prompt' => ['required', 'string'],
             'prompt_ru' => ['nullable', 'string'],
             'prompt_en' => ['nullable', 'string'],
+            'question_image' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp,gif', 'max:4096'],
+            'remove_question_image' => ['nullable', 'boolean'],
             'helper_text' => ['nullable', 'string'],
             'helper_text_ru' => ['nullable', 'string'],
             'helper_text_en' => ['nullable', 'string'],
@@ -394,6 +413,15 @@ class TestSubjectLessonTestController extends Controller
         }
 
         return $validated;
+    }
+
+    private function storeQuestionImage(Request $request): ?string
+    {
+        if (!$request->hasFile('question_image')) {
+            return null;
+        }
+
+        return $request->file('question_image')->store('test-subject-questions', 'public');
     }
 
     private function normalizeOptions(array $options): array

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Storage;
 
 class TestSubjectLessonTestQuestion extends Model
 {
@@ -11,6 +12,7 @@ class TestSubjectLessonTestQuestion extends Model
         'type',
         'prompt',
         'prompt_translations',
+        'image_path',
         'helper_text',
         'helper_text_translations',
         'correct_answer_text',
@@ -60,6 +62,17 @@ class TestSubjectLessonTestQuestion extends Model
     public function correctAnswerFor(?string $lang = 'uz'): ?string
     {
         return $this->translationValue('correct_answer_translations', $lang, $this->correct_answer_text);
+    }
+
+    public function imageUrl(): ?string
+    {
+        $path = trim((string) ($this->image_path ?? ''));
+
+        if ($path === '') {
+            return null;
+        }
+
+        return Storage::disk('public')->url($path);
     }
 
     private function translationValue(string $field, ?string $lang, ?string $fallback = null): ?string

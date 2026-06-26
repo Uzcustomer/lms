@@ -122,10 +122,16 @@
                         @endif
                     </form>
 
-                    <a href="{{ route('admin.retake-test-markazi.daily-allowed-students-word', ['student_search' => $studentSearch]) }}"
-                       class="inline-flex items-center px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
-                        {{ __("Word chiqarish") }}
-                    </a>
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <a href="{{ route('admin.retake-test-markazi.students-excel', ['student_search' => $studentSearch]) }}"
+                           class="inline-flex items-center px-4 py-2 rounded-lg bg-green-700 text-white text-sm font-semibold hover:bg-green-800">
+                            {{ __("Excel chiqarish") }}
+                        </a>
+                        <a href="{{ route('admin.retake-test-markazi.daily-allowed-students-word', ['student_search' => $studentSearch]) }}"
+                           class="inline-flex items-center px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
+                            {{ __("Word chiqarish") }}
+                        </a>
+                    </div>
                 </div>
                 @if($sentApplications->isEmpty())
                     <div class="p-10 text-center text-sm text-gray-500">

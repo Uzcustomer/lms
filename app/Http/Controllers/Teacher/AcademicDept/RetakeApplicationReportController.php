@@ -113,7 +113,7 @@ class RetakeApplicationReportController extends Controller
     private function filterSignature(Request $request): string
     {
         $keys = ['education_type', 'department', 'specialty', 'level_code', 'semester_code', 'group'];
-        $parts = ['_v' => 4]; // hisob mantig'i o'zgarganda oshiriladi (eski keshni bekor qilish)
+        $parts = ['_v' => 5]; // hisob mantig'i o'zgarganda oshiriladi (eski keshni bekor qilish)
         foreach ($keys as $k) {
             $parts[$k] = (string) $request->input($k, '');
         }

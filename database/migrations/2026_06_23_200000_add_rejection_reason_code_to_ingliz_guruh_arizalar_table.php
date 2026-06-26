@@ -8,6 +8,9 @@ return new class extends Migration
 {
     public function up(): void
     {
+        if (!Schema::hasTable('ingliz_guruh_arizalar')) {
+            return;
+        }
         Schema::table('ingliz_guruh_arizalar', function (Blueprint $table) {
             if (!Schema::hasColumn('ingliz_guruh_arizalar', 'rejection_reason_code')) {
                 $table->string('rejection_reason_code', 50)->nullable()->after('english_level');
@@ -17,6 +20,9 @@ return new class extends Migration
 
     public function down(): void
     {
+        if (!Schema::hasTable('ingliz_guruh_arizalar')) {
+            return;
+        }
         Schema::table('ingliz_guruh_arizalar', function (Blueprint $table) {
             if (Schema::hasColumn('ingliz_guruh_arizalar', 'rejection_reason_code')) {
                 $table->dropColumn('rejection_reason_code');

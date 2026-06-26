@@ -566,6 +566,9 @@ class QuizResultController extends Controller
             // Har bir (student, fan, mavzu_n) uchun jurnaldagi state: NB / Baho / Retake / Bo'sh
             $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
 
+            // Qayta o'qish natijalari uchun JN/MT/OSKI — qayta o'qish jurnalidan
+            $retakeApps = $this->buildRetakeApps($results);
+
             // ====== DATA TAYYORLASH ======
             $data = [];
             $rowNum = 0;
@@ -594,8 +597,15 @@ class QuizResultController extends Controller
                     $jnGrades, $mtGrades, $oskiGrades,
                     $curriculumSubjects, $groups,
                     $testTypes, $oskiTypes,
-                    [], null, $mavzuStates
+                    [], null, $mavzuStates, $retakeApps
                 );
+
+                // Qayta o'qish jurnaliga allaqachon yuklangan natijalar
+                // "Yuklanmagan natijalar" ro'yxatida ko'rinmasligi kerak
+                // (ular student_grades'da emas, retake_applications'da).
+                if (($xulosa['code'] ?? null) === 'uploaded') {
+                    continue;
+                }
 
                 $rowNum++;
                 $studentGroup = ($student && isset($groups[$student->group_id])) ? $groups[$student->group_id] : null;
@@ -761,11 +771,15 @@ class QuizResultController extends Controller
             $dateTo   = $request->filled('date_to')   ? $request->date_to   : null;
             $hasNameSearch = $request->filled('student_name');
             $hasShaklSearch = $request->filled('shakl_search');
+            // Dublikatlarni ko'rsatish (default ON): yoqilganda dedup o'chiriladi
+            // va bir xil (talaba+fan+quiz_type+shakl) bo'yicha barcha urinishlar
+            // ko'rinadi — takroriy topshirishlarni (jiddiy xato) aniqlash uchun.
+            $showDuplicates = $request->boolean('show_duplicates', true);
 
             // Ism bilan qidirishda talabaning barcha mos yozuvlari ko'rinsin.
             // Aks holda boshqa sanadagi balandroq baho aynan kerakli yozuvni
             // yashirib yuboradi (masalan 03.06 dagi 40 bahoni 24.01 dagi 100).
-            if (!$hasNameSearch) {
+            if (!$hasNameSearch && !$showDuplicates) {
                 // Bitta (talaba, fan, quiz_type, shakl) bo'yicha eng yuqori bahoga
                 // ega bo'lgan urinishni qoldirish. Sana oralig'i tanlangan bo'lsa,
                 // dedup ham shu oralig'ning o'zida ishlaydi.
@@ -1219,6 +1233,9 @@ class QuizResultController extends Controller
             // Mavzu (N-mavzu) shakldagi natijalar uchun jurnal holati
             $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
 
+            // Qayta o'qish natijalari uchun JN/MT/OSKI — qayta o'qish jurnalidan
+            $retakeApps = $this->buildRetakeApps($results);
+
             // 4) MarkingSystemScore larni bulk yuklash (N+1 query oldini olish)
             $markingSystemCodes = $students
                 ->map(fn($s) => optional($s->curriculum)->marking_system_code)
@@ -1292,7 +1309,7 @@ class QuizResultController extends Controller
                     $jnGrades, $mtGrades, $oskiGrades,
                     $curriculumSubjects, $groups,
                     $testTypes, $oskiTypes,
-                    $studentScoreLookup, $defaultScore, $mavzuStates
+                    $studentScoreLookup, $defaultScore, $mavzuStates, $retakeApps
                 );
 
                 $rowNum++;
@@ -1355,7 +1372,7 @@ class QuizResultController extends Controller
         $curriculumSubjects, $groups,
         $testTypes, $oskiTypes,
         $studentScoreLookup = [], $defaultScore = null,
-        $mavzuStates = []
+        $mavzuStates = [], $retakeApps = null
     ) {
         $jnAvg = null;
         $mtAvg = null;
@@ -1377,6 +1394,16 @@ class QuizResultController extends Controller
                 return ['code' => 'mavzu_uploaded', 'text' => 'Jurnalga yuklangan: ' . $result->shakl, 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
             }
             return ['code' => 'uploaded', 'text' => 'Jurnalga yuklangan', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+        }
+
+        // 1.55) QAYTA O'QISH natijasi — ASOSIY jurnal mantig'idan (curriculum,
+        // joriy semestr, eski yiqilgan baho) BUTUNLAY mustaqil. Admission qayta
+        // o'qish jurnalidan: JN >= chegara va MT >= chegara bo'lsa OSKI/Test'ga
+        // ruxsat (xuddi qayta o'qish jurnali / YN-oldi mantig'i kabi). Quiz'da
+        // fan_id bo'lmasa ham, ariza nom bo'yicha topiladi.
+        if (!$isMavzuShakl
+            && \App\Services\Retake\RetakeSessionCode::isRetakeQuiz($result->attempt_name, $result->shakl)) {
+            return $this->calculateRetakeXulosa($result, $student, $ynTuri, $retakeApps, $studentScoreLookup, $defaultScore);
         }
 
         // 1.6) OSKI/Test uchun: jurnalda shu YN turi (OSKI yoki Test) bahosi bor — informativ
@@ -1504,6 +1531,9 @@ class QuizResultController extends Controller
             $oskiAvg = $oskiGrades[$gradeKey];
         }
 
+        // (Qayta o'qish natijalari yuqorida 1.55) bo'limida alohida —
+        // qayta o'qish jurnali mantig'i bilan — hisoblanadi.)
+
         // 9) YNga ruxsat tekshiruvi (MarkingSystemScore orqali)
         $markingScore = $studentScoreLookup[$student->hemis_id]
             ?? $defaultScore
@@ -1535,6 +1565,262 @@ class QuizResultController extends Controller
 
         // 10) Hammasi joyida
         return ['code' => 'ok', 'text' => 'Yuklasa bo\'ladi', 'jn_avg' => $jnAvg, 'mt_avg' => $mtAvg, 'oski_avg' => $oskiAvg];
+    }
+
+    /**
+     * Diagnostikadagi qayta o'qish natijalariga tegishli tasdiqlangan
+     * qayta o'qish arizalarini (RetakeApplication) oldindan yuklaydi.
+     * Talabaning BARCHA approved arizalari olinadi (quiz'da fan_id bo'lmasligi
+     * mumkin, shuning uchun fan bo'yicha cheklamaymiz). Har arizaga mustaqil
+     * bahosi `mustaqil_grade` atributi sifatida biriktiriladi.
+     *
+     * @return \Illuminate\Support\Collection<\App\Models\RetakeApplication>
+     */
+    private function buildRetakeApps($results): \Illuminate\Support\Collection
+    {
+        $retakeRows = collect($results)->filter(
+            fn ($r) => \App\Services\Retake\RetakeSessionCode::isRetakeQuiz($r->attempt_name, $r->shakl)
+        );
+        if ($retakeRows->isEmpty()) {
+            return collect();
+        }
+
+        $sids = $retakeRows->pluck('student_id')->filter()->unique()->values()->all();
+        $students = Student::where(function ($q) use ($sids) {
+            $q->whereIn('hemis_id', $sids)->orWhereIn('student_id_number', $sids);
+        })->get(['hemis_id', 'student_id_number']);
+
+        $hemisIds = $students->pluck('hemis_id')->filter()->unique()->values()->all();
+        if (empty($hemisIds)) {
+            return collect();
+        }
+
+        $apps = \App\Models\RetakeApplication::query()
+            ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
+            ->whereIn('student_hemis_id', $hemisIds)
+            ->with(['group.window.session'])
+            ->get();
+
+        if ($apps->isEmpty()) {
+            return $apps;
+        }
+
+        $mustaqil = \App\Models\RetakeMustaqilSubmission::query()
+            ->whereIn('application_id', $apps->pluck('id'))
+            ->get()
+            ->keyBy('application_id');
+        foreach ($apps as $a) {
+            $a->mustaqil_grade = $mustaqil->get($a->id)?->grade;
+        }
+
+        return $apps;
+    }
+
+    /**
+     * Nomni taqqoslash uchun normallashtiradi (kichik harf, faqat harf/raqam).
+     */
+    private function normName(?string $s): string
+    {
+        if ($s === null) {
+            return '';
+        }
+        return preg_replace('/[^a-z0-9]/u', '', mb_strtolower(trim($s)));
+    }
+
+    /**
+     * Quiz natijasiga mos qayta o'qish arizasini topadi. Tartib:
+     *   1) fan_id bo'yicha aniq
+     *   2) fan nomi bo'yicha aniq
+     *   3) fan nomi bo'yicha taxminiy (imlo farqi, masalan q/k) — >=85%
+     *   4) talabaning yagona arizasi
+     * Sessiya kodi (yil+fasl) bo'lsa — avval o'sha sessiya arizalari bilan
+     * cheklaymiz (fasl guard). Token bo'lmasa — joriy (ochiq) sessiya
+     * arizalari bilan cheklaymiz (yopilgan eski sessiyaga yozilmasin).
+     */
+    private function matchRetakeApp($apps, string $hemis, ?string $fanId, ?string $fanName, ?string $code): ?\App\Models\RetakeApplication
+    {
+        if (!$apps || $apps->isEmpty()) {
+            return null;
+        }
+
+        $cands = $apps->filter(fn ($a) => (string) $a->student_hemis_id === $hemis);
+        if ($cands->isEmpty()) {
+            return null;
+        }
+
+        if ($code !== null) {
+            // Token bor — fasl/sessiya kodi sessiya nomidan olinadi.
+            $coded = $cands->filter(
+                fn ($a) => \App\Services\Retake\RetakeSessionCode::fromSession($a->group?->window?->session) === $code
+            );
+            if ($coded->isNotEmpty()) {
+                $cands = $coded;
+            }
+        } else {
+            // Token yo'q — joriy (ochiq) sessiya arizalari bilan cheklaymiz.
+            $open = $cands->filter(function ($a) {
+                $s = $a->group?->window?->session;
+                return $s !== null && !$s->is_closed;
+            });
+            if ($open->isNotEmpty()) {
+                $cands = $open;
+            }
+        }
+
+        // 1) fan_id
+        if (!empty($fanId)) {
+            $m = $cands->filter(fn ($a) => (string) $a->subject_id === (string) $fanId);
+            if ($m->isNotEmpty()) {
+                return $m->sortByDesc('id')->first();
+            }
+        }
+
+        // 2) nom (aniq) va 3) nom (taxminiy)
+        $nk = $this->normName($fanName);
+        if ($nk !== '') {
+            $m = $cands->filter(fn ($a) => $this->normName($a->subject_name) === $nk);
+            if ($m->isNotEmpty()) {
+                return $m->sortByDesc('id')->first();
+            }
+            $best = null;
+            $bestPct = 0.0;
+            foreach ($cands as $a) {
+                similar_text($nk, $this->normName($a->subject_name), $pct);
+                if ($pct > $bestPct) {
+                    $bestPct = $pct;
+                    $best = $a;
+                }
+            }
+            if ($best !== null && $bestPct >= 85) {
+                return $best;
+            }
+        }
+
+        // 4) talabaning yagona arizasi
+        if ($cands->count() === 1) {
+            return $cands->first();
+        }
+
+        return null;
+    }
+
+    /**
+     * Qayta o'qish quiz natijasi uchun xulosa — ASOSIY jurnaldan mustaqil.
+     * Admission qayta o'qish jurnalidan: JN >= chegara va MT >= chegara.
+     */
+    private function calculateRetakeXulosa($result, $student, $ynTuri, $retakeApps, $studentScoreLookup, $defaultScore): array
+    {
+        $none = ['jn_avg' => null, 'mt_avg' => null, 'oski_avg' => null];
+
+        if ($ynTuri !== 'OSKI' && $ynTuri !== 'Test') {
+            return ['code' => 'unknown_type', 'text' => 'Quiz turi noma\'lum'] + $none;
+        }
+
+        $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($result->attempt_name, $result->shakl);
+        $app = $this->matchRetakeApp($retakeApps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code);
+
+        if (!$app) {
+            return ['code' => 'no_retake_app', 'text' => 'Qayta o\'qish arizasi topilmadi'] + $none;
+        }
+
+        $jn = $app->joriy_score !== null ? round((float) $app->joriy_score) : null;
+        $mt = $app->mustaqil_grade !== null ? round((float) $app->mustaqil_grade) : null;
+        $oske = $app->oske_score !== null ? round((float) $app->oske_score) : null;
+        $test = $app->test_score !== null ? round((float) $app->test_score) : null;
+
+        $avg = ['jn_avg' => $jn, 'mt_avg' => $mt, 'oski_avg' => $oske];
+
+        // Allaqachon qayta o'qish jurnaliga yuklanganmi?
+        if ($ynTuri === 'OSKI' && $oske !== null) {
+            return ['code' => 'uploaded', 'text' => "Qayta o'qish jurnalida bor ({$oske})"] + $avg;
+        }
+        if ($ynTuri === 'Test' && $test !== null) {
+            return ['code' => 'uploaded', 'text' => "Qayta o'qish jurnalida bor ({$test})"] + $avg;
+        }
+
+        if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
+            return ['code' => 'bad_grade', 'text' => 'Baho noto\'g\'ri'] + $avg;
+        }
+
+        $markingScore = $studentScoreLookup[$student->hemis_id]
+            ?? $defaultScore
+            ?? MarkingSystemScore::getDefault();
+        $jnTh = $markingScore->effectiveLimit('jn');
+        $mtTh = $markingScore->effectiveLimit('mt');
+
+        if ($jnTh > 0 && $jn !== null && $jn < $jnTh) {
+            return ['code' => 'jn_low', 'text' => 'JN yetarli emas (' . $jn . '<' . $jnTh . ')'] + $avg;
+        }
+        if ($mtTh > 0 && $mt !== null && $mt < $mtTh) {
+            return ['code' => 'mt_low', 'text' => 'MT yetarli emas (' . $mt . '<' . $mtTh . ')'] + $avg;
+        }
+
+        return ['code' => 'ok', 'text' => 'Yuklasa bo\'ladi'] + $avg;
+    }
+
+    /**
+     * Qayta o'qish quiz natijasini ASOSIY jurnalga emas, QAYTA O'QISH
+     * jurnaliga (retake_applications.oske_score / test_score) yozadi.
+     *
+     * Mos arizani (student_hemis_id + subject_id, approved) topadi. Quiz
+     * nomida sessiya tokeni (yil+fasl) bo'lsa — faqat o'sha sessiyaning
+     * arizasiga yoziladi (boshqa fasl natijasi boshqa sessiya jurnaliga
+     * o'tib ketmaydi). Yakuniy baho RetakeJournalService orqali qayta
+     * hisoblanadi.
+     */
+    private function uploadRetakeResult($result, $student, array $rowInfo, int &$successCount, array &$errors): void
+    {
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+
+        $isOske = in_array($result->quiz_type, $oskiTypes, true) || stripos((string) $result->quiz_type, 'OSKI') !== false;
+        $isTest = in_array($result->quiz_type, $testTypes, true) || stripos((string) $result->quiz_type, 'test') !== false;
+
+        if (!$isOske && !$isTest) {
+            $rowInfo['error'] = "Quiz turi aniqlanmadi (OSKI/Test emas): '{$result->quiz_type}'";
+            $errors[] = $rowInfo;
+            return;
+        }
+        if ($result->grade === null || $result->grade < 0 || $result->grade > 100) {
+            $rowInfo['error'] = "Baho noto'g'ri: {$result->grade}";
+            $errors[] = $rowInfo;
+            return;
+        }
+
+        $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($result->attempt_name, $result->shakl);
+
+        // Talabaning barcha tasdiqlangan arizalarini olib, fan_id/nom/yagona
+        // bo'yicha mos arizani topamiz (quiz'da fan_id bo'lmasligi mumkin).
+        $apps = \App\Models\RetakeApplication::query()
+            ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
+            ->where('student_hemis_id', $student->hemis_id)
+            ->with(['group.window.session'])
+            ->get();
+
+        $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code);
+
+        if (!$app) {
+            $rowInfo['error'] = "Qayta o'qish arizasi topilmadi (talaba shu fandan qayta o'qishga yozilmagan)";
+            $errors[] = $rowInfo;
+            return;
+        }
+
+        $grade = round((float) $result->grade);
+
+        $actor = \App\Services\Retake\RetakeAccess::currentStaff() ?? new \App\Models\Teacher();
+
+        try {
+            app(\App\Services\Retake\RetakeJournalService::class)->saveOskeTestScore(
+                $app,
+                $isOske ? $grade : ($app->oske_score !== null ? (float) $app->oske_score : null),
+                $isTest ? $grade : ($app->test_score !== null ? (float) $app->test_score : null),
+                $actor,
+            );
+            $successCount++;
+        } catch (\Throwable $e) {
+            $rowInfo['error'] = "Qayta o'qish jurnaliga yozishda xato: " . $e->getMessage();
+            $errors[] = $rowInfo;
+        }
     }
 
     /**
@@ -1598,7 +1884,7 @@ class QuizResultController extends Controller
             ->whereIn('student_hemis_id', $hemisIds)
             ->whereIn('subject_id', $fanIds)
             ->whereIn('semester_code', $semCodes)
-            ->select('student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'grade', 'retake_grade', 'reason', 'status')
+            ->select('student_hemis_id', 'subject_id', 'semester_code', 'lesson_date', 'lesson_pair_code', 'grade', 'retake_grade', 'reason', 'status')
             ->get();
 
         $gradesByDate = []; // hemis|fan|sem|date => [rows]
@@ -1629,9 +1915,12 @@ class QuizResultController extends Controller
             $maxGrade = null;
             $maxRetake = null;
             $hasNb = false;
+            $retakeFromNb = false;   // maxRetake NB (baho yo'q) yozuvdan kelganmi
+            $retakeNbPair = null;    // o'sha NB retake qaysi juftlikdan (pair-specific sababli uchun)
 
             foreach ($rows as $gr) {
-                if ($gr->reason === 'absent' && $gr->grade === null && $gr->retake_grade === null) {
+                $isNbRow = ($gr->reason === 'absent' && $gr->grade === null);
+                if ($isNbRow && $gr->retake_grade === null) {
                     $hasNb = true;
                     continue;
                 }
@@ -1639,21 +1928,60 @@ class QuizResultController extends Controller
                     $maxGrade = $maxGrade === null ? $gr->grade : max($maxGrade, $gr->grade);
                 }
                 if ($gr->retake_grade !== null) {
-                    $maxRetake = $maxRetake === null ? $gr->retake_grade : max($maxRetake, $gr->retake_grade);
+                    if ($maxRetake === null || $gr->retake_grade > $maxRetake) {
+                        $maxRetake = $gr->retake_grade;
+                        $retakeFromNb = $isNbRow;
+                        $retakeNbPair = $isNbRow ? $gr->lesson_pair_code : null;
+                    }
                 }
             }
 
+            // Qayta topshirish koeffitsiyenti (uploadMavzuRetake bilan bir xil):
+            //   - mavjud baho ustidan retake -> har doim 0.8
+            //   - NB ustidan retake -> sababli bo'lsa 1.0, sababsiz 0.8
+            //     (sabablilik aynan o'sha juftlik (lesson_pair_code) bo'yicha tekshiriladi)
             $stateKey = $student->hemis_id . '|' . $r->fan_id . '|' . $mavzuN;
             if ($maxRetake !== null) {
-                $states[$stateKey] = ['type' => 'retake', 'grade' => $maxGrade, 'retake' => $maxRetake];
+                $mult = $retakeFromNb
+                    ? $this->mavzuSababliMultiplier($student->hemis_id, $r->fan_id, $targetDate, $retakeNbPair)
+                    : 0.8;
+                $states[$stateKey] = ['type' => 'retake', 'grade' => $maxGrade, 'retake' => $maxRetake, 'mult' => $mult];
             } elseif ($maxGrade !== null) {
-                $states[$stateKey] = ['type' => 'grade', 'grade' => $maxGrade, 'retake' => null];
+                $states[$stateKey] = ['type' => 'grade', 'grade' => $maxGrade, 'retake' => null, 'mult' => 0.8];
             } elseif ($hasNb) {
-                $states[$stateKey] = ['type' => 'nb', 'grade' => null, 'retake' => null];
+                $states[$stateKey] = ['type' => 'nb', 'grade' => null, 'retake' => null, 'mult' => 1.0];
             }
         }
 
         return $states;
+    }
+
+    /**
+     * NB ustidan qayta topshirish koeffitsiyenti: sababli bo'lsa 1.0, sababsiz 0.8.
+     * Sababli aniqlanishi uploadMavzuRetake bilan bir xil: attendances.absent_on>0
+     * (aynan o'sha juftlik — lesson_pair_code bo'yicha) yoki shu sanani qamragan
+     * tasdiqlangan AbsenceExcuse. (Sababsiz->sababli o'tish arizani tasdiqlash +
+     * qayta yuklash orqali avtomatik 0.8->1.0 yangilanadi; bu yerda joriy holat o'qiladi.)
+     */
+    private function mavzuSababliMultiplier($hemisId, $fanId, $targetDate, $pairCode = null): float
+    {
+        $sababli = DB::table('attendances')
+            ->where('student_hemis_id', $hemisId)
+            ->where('subject_id', $fanId)
+            ->whereDate('lesson_date', $targetDate)
+            ->when($pairCode !== null, fn ($q) => $q->where('lesson_pair_code', $pairCode))
+            ->where('absent_on', '>', 0)
+            ->exists();
+
+        if (!$sababli) {
+            $sababli = \App\Models\AbsenceExcuse::where('status', 'approved')
+                ->where('student_hemis_id', $hemisId)
+                ->whereDate('start_date', '<=', $targetDate)
+                ->whereDate('end_date', '>=', $targetDate)
+                ->exists();
+        }
+
+        return $sababli ? 1.0 : 0.8;
     }
 
     /**
@@ -1736,10 +2064,116 @@ class QuizResultController extends Controller
             ];
         }
 
+        // Qayta o'qish jurnaliga yuklangan natijalar — student_grades'da emas,
+        // retake_applications'da. Ularni ham shu hisobotga qo'shamiz.
+        $this->appendRetakeUploadedRows($data, $rowNum, $request);
+
         return response()->json([
             'data' => $data,
             'total' => count($data),
         ]);
+    }
+
+    /**
+     * "Sistemaga yuklangan natijalar" hisobotiga QAYTA O'QISH jurnaliga
+     * yozilgan natijalarni qo'shadi. Qayta o'qish quiz natijasi (shakl
+     * "Qayta-o'qish") retake_applications'ga yoziladi (student_grades'ga
+     * emas), shuning uchun asosiy so'rovda ko'rinmaydi. Bu yerda: sana
+     * oralig'idagi retake quiz natijalaridan, mos arizada o'sha turdagi
+     * (OSKE/TEST) baho yozilgan va aynan shu urinish bahosiga teng
+     * bo'lganlarini "yuklangan" deb qo'shamiz.
+     */
+    private function appendRetakeUploadedRows(array &$data, int &$rowNum, Request $request): void
+    {
+        $rq = HemisQuizResult::where('is_active', 1);
+        if ($request->filled('date_from')) {
+            $rq->whereDate('date_finish', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $rq->whereDate('date_finish', '<=', $request->date_to);
+        }
+
+        $rows = $rq->get()->filter(
+            fn ($q) => \App\Services\Retake\RetakeSessionCode::isRetakeQuiz($q->attempt_name, $q->shakl)
+        );
+        if ($rows->isEmpty()) {
+            return;
+        }
+
+        $sids = $rows->pluck('student_id')->filter()->unique()->values()->all();
+        $students = Student::where(function ($q) use ($sids) {
+            $q->whereIn('hemis_id', $sids)->orWhereIn('student_id_number', $sids);
+        })->get();
+
+        $lookup = [];
+        foreach ($students as $s) {
+            $lookup[(string) $s->hemis_id] = $s;
+            if ($s->student_id_number) {
+                $lookup[(string) $s->student_id_number] = $s;
+            }
+        }
+
+        $apps = $this->buildRetakeApps($rows);
+        if ($apps->isEmpty()) {
+            return;
+        }
+
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+
+        foreach ($rows as $q) {
+            $student = $lookup[(string) $q->student_id] ?? null;
+            if (!$student) {
+                continue;
+            }
+
+            $isOske = in_array($q->quiz_type, $oskiTypes, true) || stripos((string) $q->quiz_type, 'OSKI') !== false;
+            $isTest = !$isOske && (in_array($q->quiz_type, $testTypes, true) || stripos((string) $q->quiz_type, 'test') !== false);
+            if (!$isOske && !$isTest) {
+                continue;
+            }
+
+            $grade = $q->grade !== null ? (int) round((float) $q->grade) : null;
+            if ($grade === null) {
+                continue;
+            }
+
+            $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($q->attempt_name, $q->shakl);
+            $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $q->fan_id, $q->fan_name, $code);
+            if (!$app) {
+                continue;
+            }
+
+            // Faqat aynan shu urinish bahosi jurnaldagi baho bilan teng bo'lsa.
+            $score = $isOske ? $app->oske_score : $app->test_score;
+            if ($score === null || (int) round((float) $score) !== $grade) {
+                continue;
+            }
+
+            $semLabel = $q->semester ?: $student->semester_name;
+            $semNum = ($semLabel && preg_match('/(\d+)/', (string) $semLabel, $m)) ? (int) $m[1] : null;
+
+            $rowNum++;
+            $data[] = [
+                'id'           => 'r' . $q->id,
+                'row_num'      => $rowNum,
+                'attempt_id'   => $q->attempt_id ?? '-',
+                'student_id'   => $student->id,
+                'student_name' => $student->full_name,
+                'faculty'      => $student->department_name ?? '-',
+                'direction'    => $student->specialty_name ?? '-',
+                'semester'     => $semNum ? $semNum . '-sem' : ($semLabel ?: '-'),
+                'fan_id'       => $q->fan_id,
+                'fan_name'     => $q->fan_name,
+                'quiz_type'    => $q->quiz_type ?? '-',
+                'attempt_name' => $q->attempt_name ?? '-',
+                'shakl'        => $q->shakl ?? '-',
+                'grade'        => $grade,
+                'date_start'   => $q->date_start ? $q->date_start->format('d.m.Y H:i') : '',
+                'date_finish'  => $q->date_finish ? $q->date_finish->format('d.m.Y H:i') : '',
+                'is_retake'    => true,
+            ];
+        }
     }
 
     public function index(Request $request)
@@ -2054,6 +2488,15 @@ class QuizResultController extends Controller
             if (!$student) {
                 $rowInfo['error'] = "Talaba topilmadi (student_id: {$result->student_id})";
                 $errors[] = $rowInfo;
+                continue;
+            }
+
+            // QAYTA O'QISH natijasi (shakl "Qayta-o'qish") — asosiy jurnalga
+            // (student_grades) EMAS, qayta o'qish jurnaliga (retake_applications)
+            // yoziladi. Fasl/sessiya guard bilan. Bu yerda yo'naltirib, qolgan
+            // student_grades mantig'ini o'tkazib yuboramiz.
+            if (\App\Services\Retake\RetakeSessionCode::isRetakeQuiz($result->attempt_name, $result->shakl)) {
+                $this->uploadRetakeResult($result, $student, $rowInfo, $successCount, $errors);
                 continue;
             }
 
@@ -3302,6 +3745,334 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Berilgan attempt_id lar ichidan BAKALAVRIATdan boshqa ta'lim turidagi
+     * (ordinatura, magistratura, ...) talabalarga tegishlilarini aniqlaydi.
+     * Kunlik monitoring faqat bakalavriat bo'yicha hisoblanishi uchun bular
+     * hisobdan chiqarib tashlanadi.
+     *
+     * Ta'lim turi hemis_quiz_results.student_id -> students (hemis_id yoki
+     * student_id_number) bog'lanishidan olinadi. Agar talaba topilmasa yoki
+     * ta'lim turi noma'lum bo'lsa, attempt chiqarib tashlanmaydi — shunda
+     * haqiqiy sync gap yashirilmaydi (faqat ANIQ bakalavr bo'lmaganlar olib
+     * tashlanadi).
+     *
+     * @param int[] $attemptIds
+     * @return array<int,true> hisobga olinmaydigan attempt_id lar to'plami
+     */
+    private function nonBakalavrAttemptIds(array $attemptIds): array
+    {
+        $excluded = [];
+        if (empty($attemptIds)) {
+            return $excluded;
+        }
+
+        // attempt_id -> student_id (hemis_quiz_results'dagi identifikator)
+        $qr = DB::table('hemis_quiz_results')
+            ->whereIn('attempt_id', $attemptIds)
+            ->whereNotNull('student_id')
+            ->select('attempt_id', 'student_id')
+            ->get();
+
+        if ($qr->isEmpty()) {
+            return $excluded;
+        }
+
+        $studentIds = $qr->pluck('student_id')
+            ->map(fn ($v) => (string) $v)
+            ->filter(fn ($v) => $v !== '')
+            ->unique()
+            ->all();
+
+        // student_id (hemis_id YOKI student_id_number) -> education_type_name
+        $eduByKey = [];
+        if (!empty($studentIds)) {
+            Student::query()
+                ->whereIn('hemis_id', $studentIds)
+                ->orWhereIn('student_id_number', $studentIds)
+                ->get(['hemis_id', 'student_id_number', 'education_type_name'])
+                ->each(function ($s) use (&$eduByKey) {
+                    $edu = (string) ($s->education_type_name ?? '');
+                    if (!empty($s->hemis_id)) {
+                        $eduByKey[(string) $s->hemis_id] = $edu;
+                    }
+                    if (!empty($s->student_id_number)) {
+                        $eduByKey[(string) $s->student_id_number] = $edu;
+                    }
+                });
+        }
+
+        foreach ($qr as $row) {
+            $edu = $eduByKey[(string) $row->student_id] ?? null;
+            // Faqat ta'lim turi ANIQ bo'lib, bakalavr BO'LMAGAN holatlar chiqariladi.
+            if ($edu !== null && $edu !== '' && stripos($edu, 'bakalavr') === false) {
+                $excluded[(int) $row->attempt_id] = true;
+            }
+        }
+
+        return $excluded;
+    }
+
+    /**
+     * Matndan semestr raqamini ajratib oladi ("5-semestr" -> 5, "5-sem" -> 5).
+     */
+    private function semesterNumber(?string $s): ?int
+    {
+        if ($s === null || $s === '') {
+            return null;
+        }
+        if (preg_match('/(\d+)/', $s, $m)) {
+            return (int) $m[1];
+        }
+        return null;
+    }
+
+    /**
+     * Berilgan attempt_id lar ichidan talabaning JORIY semestriga tegishli
+     * bo'lmagan (o'tgan semestr) natijalarni aniqlaydi. "Joriy semestr" toggle
+     * yoqilganda kunlik monitoringdan chiqarib tashlanadi.
+     *
+     * Joriy semestr = talaba ayni paytda turgan semestr (students.semester_name).
+     * Natija semestri (hemis_quiz_results.semester) talabaning joriy semestridan
+     * farq qilsa — chiqariladi. Semestr noma'lum bo'lsa — qoldiriladi.
+     *
+     * @param  int[]  $attemptIds
+     * @return array<int,true>  hisobga olinmaydigan attempt_id lar to'plami
+     */
+    private function nonCurrentSemesterAttemptIds(array $attemptIds): array
+    {
+        $excluded = [];
+        if (empty($attemptIds)) {
+            return $excluded;
+        }
+
+        $qr = DB::table('hemis_quiz_results')
+            ->whereIn('attempt_id', $attemptIds)
+            ->whereNotNull('student_id')
+            ->select('attempt_id', 'student_id', 'semester')
+            ->get();
+
+        if ($qr->isEmpty()) {
+            return $excluded;
+        }
+
+        $studentIds = $qr->pluck('student_id')
+            ->map(fn ($v) => (string) $v)
+            ->filter(fn ($v) => $v !== '')
+            ->unique()->all();
+
+        // student_id (hemis_id YOKI student_id_number) -> joriy semestr raqami
+        $semByKey = [];
+        if (!empty($studentIds)) {
+            Student::query()
+                ->whereIn('hemis_id', $studentIds)
+                ->orWhereIn('student_id_number', $studentIds)
+                ->get(['hemis_id', 'student_id_number', 'semester_name'])
+                ->each(function ($s) use (&$semByKey) {
+                    $num = $this->semesterNumber($s->semester_name ?? '');
+                    if (!empty($s->hemis_id)) {
+                        $semByKey[(string) $s->hemis_id] = $num;
+                    }
+                    if (!empty($s->student_id_number)) {
+                        $semByKey[(string) $s->student_id_number] = $num;
+                    }
+                });
+        }
+
+        foreach ($qr as $row) {
+            $studentSem = $semByKey[(string) $row->student_id] ?? null;
+            $resultSem = $this->semesterNumber((string) ($row->semester ?? ''));
+            // Faqat ikkala semestr ham aniq bo'lib, farq qilganda chiqariladi.
+            if ($studentSem !== null && $resultSem !== null && $resultSem !== $studentSem) {
+                $excluded[(int) $row->attempt_id] = true;
+            }
+        }
+
+        return $excluded;
+    }
+
+    /**
+     * Tafsilot ro'yxatlari uchun talaba ma'lumotlari: fakultet, yo'nalish,
+     * kurs, guruh. Kalit — student_id (hemis_id yoki student_id_number).
+     *
+     * @param  string[]  $studentIds
+     * @return array<string, array{faculty:?string, direction:?string, kurs:?string, group:?string}>
+     */
+    private function studentDetailsByKey(array $studentIds): array
+    {
+        $map = [];
+        $studentIds = array_values(array_unique(array_filter($studentIds, fn ($v) => $v !== null && $v !== '')));
+        if (empty($studentIds)) {
+            return $map;
+        }
+
+        Student::query()
+            ->whereIn('hemis_id', $studentIds)
+            ->orWhereIn('student_id_number', $studentIds)
+            ->get(['hemis_id', 'student_id_number', 'department_name', 'specialty_name', 'level_name', 'group_name'])
+            ->each(function ($s) use (&$map) {
+                $info = [
+                    'faculty'   => $s->department_name,
+                    'direction' => $s->specialty_name,
+                    'kurs'      => $s->level_name,
+                    'group'     => $s->group_name,
+                ];
+                if (!empty($s->hemis_id)) {
+                    $map[(string) $s->hemis_id] = $info;
+                }
+                if (!empty($s->student_id_number)) {
+                    $map[(string) $s->student_id_number] = $info;
+                }
+            });
+
+        return $map;
+    }
+
+    /**
+     * Mark bosqichida tushib qolgan (hemis_quiz_results'da bor, lekin
+     * student_grades'ga yuklanmagan) natijalarni ikkiga ajratadi:
+     *   - 'gap'     : haqiqatan yuklanishi kerak bo'lib unutilgan (farqda qoladi)
+     *   - 'warning' : jurnalda allaqachon yetarli baho borligi sababli yuklanmagan
+     *                 (talaba adashib qayta topshirgan yoki darsdagi baho yuqori)
+     *
+     * Faqat "N-mavzu" shakldagi natijalar uchun ogohlantirishga o'tkaziladi;
+     * OSKI/Test va boshqa shakllar 'gap' bo'lib qoladi.
+     *
+     * @param  \Illuminate\Support\Collection  $results  HemisQuizResult yozuvlari
+     * @return array<int, array{type:string, reason:?string}>  attempt_id => holat
+     */
+    private function classifyMarkGap($results): array
+    {
+        $out = [];
+        if ($results->isEmpty()) {
+            return $out;
+        }
+
+        $studentIds = $results->pluck('student_id')
+            ->filter(fn ($v) => $v !== null && $v !== '')
+            ->unique()->values()->all();
+
+        $students = !empty($studentIds)
+            ? Student::where(function ($q) use ($studentIds) {
+                $q->whereIn('hemis_id', $studentIds)
+                  ->orWhereIn('student_id_number', $studentIds);
+            })->get()
+            : collect();
+
+        $studentLookup = [];
+        foreach ($students as $s) {
+            $studentLookup[$s->hemis_id] = $s;
+            if ($s->student_id_number) {
+                $studentLookup[$s->student_id_number] = $s;
+            }
+        }
+
+        $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
+
+        // Dublikat aniqlash: shu (talaba+fan+quiz_type+shakl) bo'yicha BOSHQA
+        // urinish allaqachon jurnalga yuklangan bo'lsa, ushbu nusxa "farq" emas.
+        // (Masalan talaba bir mavzuni 2 marta ishlagan; bittasi yuklangan, ikkinchisi
+        //  Moodle kunlik ro'yxatida turibdi.) Jurnal logikasiga (is_active=0 lar ham)
+        //  mos bo'lishi uchun student_grades.quiz_result_id orqali tekshiramiz.
+        $uploadedSiblingKeys = [];
+        $fanIds = $results->pluck('fan_id')->filter()->unique()->values()->all();
+        if (!empty($studentIds) && !empty($fanIds)) {
+            DB::table('hemis_quiz_results as h')
+                ->join('student_grades as sg', 'sg.quiz_result_id', '=', 'h.id')
+                ->whereIn('h.student_id', $studentIds)
+                ->whereIn('h.fan_id', $fanIds)
+                ->whereNull('sg.deleted_at')
+                ->select('h.student_id', 'h.fan_id', 'h.quiz_type', 'h.shakl')
+                ->distinct()
+                ->get()
+                ->each(function ($s) use (&$uploadedSiblingKeys) {
+                    $uploadedSiblingKeys[$s->student_id . '|' . $s->fan_id . '|' . $s->quiz_type . '|' . $s->shakl] = true;
+                });
+        }
+
+        foreach ($results as $r) {
+            $type = 'gap';
+            $reason = null;
+
+            $sibKey = $r->student_id . '|' . $r->fan_id . '|' . $r->quiz_type . '|' . $r->shakl;
+            if (isset($uploadedSiblingKeys[$sibKey])) {
+                // Aynan shu natija (quiz_type+shakl) boshqa urinish orqali yuklangan.
+                $out[(int) $r->attempt_id] = [
+                    'type' => 'warning',
+                    'reason' => 'Dublikat: shu natija (' . $r->shakl . ') boshqa urinish orqali allaqachon jurnalga yuklangan',
+                ];
+                continue;
+            }
+
+            if ($r->shakl && preg_match('/^(\d+)-mavzu$/i', $r->shakl, $m)) {
+                $student = $studentLookup[$r->student_id] ?? null;
+                if ($student) {
+                    $mavzuN = (int) $m[1];
+                    $key = $student->hemis_id . '|' . $r->fan_id . '|' . $mavzuN;
+                    $state = $mavzuStates[$key] ?? null;
+                    if ($state) {
+                        $testGrade = $r->grade !== null ? (float) $r->grade : null;
+                        [$type, $reason] = $this->mavzuMarkVerdict($state, $testGrade, $r->shakl);
+                    }
+                }
+            }
+
+            $out[(int) $r->attempt_id] = ['type' => $type, 'reason' => $reason];
+        }
+
+        return $out;
+    }
+
+    /**
+     * Bitta mavzu natijasi uchun jurnal holati va test bahosiga qarab
+     * 'gap'/'warning' va sabab matnini aniqlaydi.
+     *
+     * @return array{0:string, 1:?string}
+     */
+    private function mavzuMarkVerdict(array $state, ?float $testGrade, string $shakl): array
+    {
+        // Jurnalda baho yo'q (NB) — test buni to'ldirishi kerak edi: haqiqiy farq.
+        if ($state['type'] === 'nb') {
+            return ['gap', null];
+        }
+
+        // Mavjud bahoga qarshi RETAKE qiymati: test × koeffitsiyent (uploadMavzuRetake
+        // bilan bir xil). Koeffitsiyent: mavjud baho ustidan = 0.8; NB sababli = 1.0.
+        // Faqat shu retake qiymati darsdagi bahodan BALAND bo'lsa jurnal yangilanadi.
+        $mult = isset($state['mult']) ? (float) $state['mult'] : 0.8;
+        $multText = rtrim(rtrim(number_format($mult, 2, '.', ''), '0'), '.');
+        $retakeValue = $testGrade !== null ? round($testGrade * $mult, 2) : null;
+        $rvText = $retakeValue !== null ? rtrim(rtrim(number_format($retakeValue, 2, '.', ''), '0'), '.') : '?';
+
+        if ($state['type'] === 'grade') {
+            $jn = (float) $state['grade'];
+            if ($jn >= 60) {
+                return ['warning', 'Jurnalda baho bor: ' . $shakl . ' (' . round($jn) . ') — 60+ bo\'lgani uchun qayta topshirilmaydi'];
+            }
+            // jn < 60: retake (test×0.8) darsdagi bahodan baland bo'lsa yuklanadi (gap),
+            // aks holda darsdagi baho baland — jurnal o'zgarmaydi (ogohlantirish).
+            if ($retakeValue !== null && $retakeValue > $jn) {
+                return ['gap', null];
+            }
+            return ['warning', 'Jurnalda baho bor: ' . $shakl . ' (' . round($jn) . ') — retake (test×' . $multText . '=' . $rvText . ') darsdagi bahodan past'];
+        }
+
+        if ($state['type'] === 'retake') {
+            $eff = max((float) ($state['grade'] ?? 0), (float) $state['retake']);
+            if ($retakeValue !== null && $retakeValue > $eff) {
+                return ['gap', null];
+            }
+            $orig = $state['grade'] !== null ? round((float) $state['grade']) : null;
+            $rt = round((float) $state['retake']);
+            $txt = $orig !== null
+                ? 'Jurnalda retake bor: ' . $shakl . ' (' . $orig . '→' . $rt . ')'
+                : 'Jurnalda retake bor: ' . $shakl . ' (' . $rt . ')';
+            return ['warning', $txt . ' — retake (test×' . $multText . '=' . $rvText . ') past'];
+        }
+
+        return ['gap', null];
+    }
+
+    /**
      * Kunlik monitoring uchun AJAX data. Moodle WS'dan kunlik attempt_id
      * ro'yxati olinadi, LMS'dagi hemis_quiz_results va student_grades bilan
      * solishtirilib, har kun uchun yo'qotish statistikasi qaytariladi.
@@ -3338,6 +4109,14 @@ class QuizResultController extends Controller
             }
             $allMoodleIds = array_keys($allMoodleIds);
 
+            // Faqat bakalavriat: ANIQ bakalavr bo'lmagan attempt'larni chiqaramiz.
+            $excludedIds = $this->nonBakalavrAttemptIds($allMoodleIds);
+
+            // Joriy semestr toggle (default ON): o'tgan semestr natijalarini chiqaramiz.
+            if ($request->boolean('current_semester', true)) {
+                $excludedIds += $this->nonCurrentSemesterAttemptIds($allMoodleIds);
+            }
+
             // Hozirgi LMS holatini bulk olamiz: attempt_id => hemis_quiz_results.id.
             // Hajm cheklangan (62 kun * kunlik attempts), shuning uchun get() yetarli.
             $syncedMap = []; // attempt_id => quiz_result_id
@@ -3370,41 +4149,47 @@ class QuizResultController extends Controller
             $totSynced = 0;
             $totGraded = 0;
 
+            // Mark bosqichida tushib qolgan attempt_id lar (kun bo'yicha) —
+            // keyin "farq" (unutilgan) va "ogohlantirish" (sababli) ga ajratiladi.
+            $markGapByDay = [];
+            $allMarkGapIds = [];
+
             foreach ($days as $d) {
                 $date = (string) $d['date'];
                 $attemptIds = array_map('intval', (array) ($d['attempt_ids'] ?? []));
-                $moodleCount = (int) ($d['count'] ?? count($attemptIds));
+                if (!empty($excludedIds)) {
+                    $attemptIds = array_values(array_filter($attemptIds, fn ($a) => !isset($excludedIds[$a])));
+                }
+                // Bakalavr bo'lmaganlar chiqarilgani uchun WS'ning 'count' i emas,
+                // filtrlangan ro'yxat soni ishlatiladi.
+                $moodleCount = count($attemptIds);
 
                 $syncedCount = 0;
                 $gradedCount = 0;
+                $dayMarkGapIds = [];
                 foreach ($attemptIds as $aid) {
                     if (isset($syncedMap[$aid])) {
                         $syncedCount++;
                         $qrId = $syncedMap[$aid];
                         if (isset($gradedQuizResultIds[$qrId])) {
                             $gradedCount++;
+                        } else {
+                            $dayMarkGapIds[] = $aid;
                         }
                     }
                 }
 
-                $syncGap = $moodleCount - $syncedCount;
-                $markGap = $syncedCount - $gradedCount;
-
-                $status = 'ok';
-                if ($syncGap > 0) {
-                    $status = 'sync_gap';
-                } elseif ($markGap > 0) {
-                    $status = 'mark_gap';
+                $markGapByDay[$date] = $dayMarkGapIds;
+                foreach ($dayMarkGapIds as $aid) {
+                    $allMarkGapIds[] = $aid;
                 }
 
-                $result[] = [
+                $result[$date] = [
                     'date'         => $date,
                     'moodle_count' => $moodleCount,
                     'synced_count' => $syncedCount,
                     'graded_count' => $gradedCount,
-                    'sync_gap'     => $syncGap,
-                    'mark_gap'     => $markGap,
-                    'status'       => $status,
+                    'sync_gap'     => $moodleCount - $syncedCount,
                 ];
 
                 $totMoodle += $moodleCount;
@@ -3412,15 +4197,57 @@ class QuizResultController extends Controller
                 $totGraded += $gradedCount;
             }
 
+            // Mark-gap natijalarni klassifikatsiya qilamiz: mavzu bo'yicha
+            // jurnalda baho borlar "ogohlantirish"ga, qolganlari "farq"ga.
+            $markClass = [];
+            if (!empty($allMarkGapIds)) {
+                $mgRows = HemisQuizResult::whereIn('attempt_id', array_values(array_unique($allMarkGapIds)))
+                    ->get(['attempt_id', 'student_id', 'fan_id', 'shakl', 'grade']);
+                $markClass = $this->classifyMarkGap($mgRows);
+            }
+
+            $resultDays = [];
+            $totMarkGap = 0;
+            $totWarning = 0;
+            foreach ($result as $date => $row) {
+                $gap = 0;
+                $warn = 0;
+                foreach (($markGapByDay[$date] ?? []) as $aid) {
+                    if (($markClass[$aid]['type'] ?? 'gap') === 'warning') {
+                        $warn++;
+                    } else {
+                        $gap++;
+                    }
+                }
+
+                $status = 'ok';
+                if ($row['sync_gap'] > 0) {
+                    $status = 'sync_gap';
+                } elseif ($gap > 0) {
+                    $status = 'mark_gap';
+                } elseif ($warn > 0) {
+                    $status = 'warning';
+                }
+
+                $row['mark_gap'] = $gap;
+                $row['warning_count'] = $warn;
+                $row['status'] = $status;
+                $resultDays[] = $row;
+
+                $totMarkGap += $gap;
+                $totWarning += $warn;
+            }
+
             return response()->json([
                 'success' => true,
-                'days' => $result,
+                'days' => $resultDays,
                 'totals' => [
-                    'moodle_count' => $totMoodle,
-                    'synced_count' => $totSynced,
-                    'graded_count' => $totGraded,
-                    'sync_gap'     => $totMoodle - $totSynced,
-                    'mark_gap'     => $totSynced - $totGraded,
+                    'moodle_count'  => $totMoodle,
+                    'synced_count'  => $totSynced,
+                    'graded_count'  => $totGraded,
+                    'sync_gap'      => $totMoodle - $totSynced,
+                    'mark_gap'      => $totMarkGap,
+                    'warning_count' => $totWarning,
                 ],
             ]);
         } catch (\Throwable $e) {
@@ -3489,12 +4316,20 @@ class QuizResultController extends Controller
         }
         $allMoodleIds = array_keys($allMoodleIds);
 
+        // Faqat bakalavriat: ANIQ bakalavr bo'lmagan attempt'larni chiqaramiz.
+        $excludedIds = $this->nonBakalavrAttemptIds($allMoodleIds);
+
+        // Joriy semestr toggle (default ON): o'tgan semestr natijalarini chiqaramiz.
+        if ($request->boolean('current_semester', true)) {
+            $excludedIds += $this->nonCurrentSemesterAttemptIds($allMoodleIds);
+        }
+
         // Sync qilinganlar (attempt_id => row)
         $syncedByAttempt = collect();
         if (!empty($allMoodleIds)) {
             $syncedByAttempt = DB::table('hemis_quiz_results')
                 ->whereIn('attempt_id', $allMoodleIds)
-                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_name', 'quiz_type', 'attempt_name', 'date_finish', 'grade')
+                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_id', 'fan_name', 'shakl', 'quiz_type', 'attempt_name', 'date_finish', 'grade')
                 ->get()
                 ->keyBy('attempt_id');
         }
@@ -3511,19 +4346,30 @@ class QuizResultController extends Controller
             }
         }
 
+        // Mark bosqichida tushib qolganlarni (synced, lekin gradega tushmagan)
+        // mavzu jurnali holatiga qarab "farq" / "ogohlantirish"ga ajratamiz.
+        $markGapRows = $syncedByAttempt->filter(fn ($row) => !isset($gradedIds[(int) $row->id]))->values();
+        $markClass = $this->classifyMarkGap($markGapRows);
+
         // Kun bo'yicha summary va sync/mark gap ro'yxatlari
         $summaryDays = [];
         $missingSync = []; // date => [attempt_ids]
-        $missingMark = []; // date => [{attempt_id, student_id, ...}]
+        $missingMark = []; // date => [{attempt_id, student_id, ...}] — unutilgan
+        $warnings    = []; // date => [{..., reason}] — sababli yuklanmaganlar
 
         foreach ($days as $d) {
             $date = (string) $d['date'];
             $attemptIds = $perDay[$date] ?? [];
-            $moodleCount = (int) ($d['count'] ?? count($attemptIds));
+            if (!empty($excludedIds)) {
+                $attemptIds = array_values(array_filter($attemptIds, fn ($a) => !isset($excludedIds[$a])));
+            }
+            // Faqat bakalavriat — filtrlangan ro'yxat soni.
+            $moodleCount = count($attemptIds);
 
             $syncedAttemptIds = [];
             $markedDayCount = 0;
             $dayMissingMark = [];
+            $dayWarnings = [];
 
             foreach ($attemptIds as $aid) {
                 if ($syncedByAttempt->has($aid)) {
@@ -3533,7 +4379,8 @@ class QuizResultController extends Controller
                     if (isset($gradedIds[$qrId])) {
                         $markedDayCount++;
                     } else {
-                        $dayMissingMark[] = [
+                        $verdict = $markClass[(int) $row->attempt_id] ?? ['type' => 'gap', 'reason' => null];
+                        $entry = [
                             'attempt_id'   => (int) $row->attempt_id,
                             'student_id'   => $row->student_id,
                             'student_name' => $row->student_name,
@@ -3543,6 +4390,12 @@ class QuizResultController extends Controller
                             'date_finish'  => $row->date_finish,
                             'grade'        => $row->grade,
                         ];
+                        if (($verdict['type'] ?? 'gap') === 'warning') {
+                            $entry['reason'] = $verdict['reason'];
+                            $dayWarnings[] = $entry;
+                        } else {
+                            $dayMissingMark[] = $entry;
+                        }
                     }
                 }
             }
@@ -3550,20 +4403,23 @@ class QuizResultController extends Controller
             $dayMissingSync = array_values(array_diff($attemptIds, $syncedAttemptIds));
             $syncedCount = count($syncedAttemptIds);
             $syncGap = $moodleCount - $syncedCount;
-            $markGap = $syncedCount - $markedDayCount;
+            $markGap = count($dayMissingMark);   // faqat unutilganlar
+            $warningCount = count($dayWarnings);
 
             $status = 'ok';
             if ($syncGap > 0) $status = 'sync_gap';
             elseif ($markGap > 0) $status = 'mark_gap';
+            elseif ($warningCount > 0) $status = 'warning';
 
             $summaryDays[] = [
-                'date'         => $date,
-                'moodle_count' => $moodleCount,
-                'synced_count' => $syncedCount,
-                'graded_count' => $markedDayCount,
-                'sync_gap'     => $syncGap,
-                'mark_gap'     => $markGap,
-                'status'       => $status,
+                'date'          => $date,
+                'moodle_count'  => $moodleCount,
+                'synced_count'  => $syncedCount,
+                'graded_count'  => $markedDayCount,
+                'sync_gap'      => $syncGap,
+                'mark_gap'      => $markGap,
+                'warning_count' => $warningCount,
+                'status'        => $status,
             ];
 
             if (!empty($dayMissingSync)) {
@@ -3572,12 +4428,15 @@ class QuizResultController extends Controller
             if (!empty($dayMissingMark)) {
                 $missingMark[$date] = $dayMissingMark;
             }
+            if (!empty($dayWarnings)) {
+                $warnings[$date] = $dayWarnings;
+            }
         }
 
         $filename = 'kunlik-monitoring_' . $dateFrom . '_' . $dateTo . '.xlsx';
 
         return \Maatwebsite\Excel\Facades\Excel::download(
-            new \App\Exports\KunlikMonitoringExport($summaryDays, $missingSync, $missingMark, $dateFrom, $dateTo),
+            new \App\Exports\KunlikMonitoringExport($summaryDays, $missingSync, $missingMark, $warnings, $dateFrom, $dateTo),
             $filename
         );
     }
@@ -3613,6 +4472,16 @@ class QuizResultController extends Controller
                 }
             }
 
+            // Faqat bakalavriat: ANIQ bakalavr bo'lmagan attempt'larni chiqaramiz.
+            $excludedIds = $this->nonBakalavrAttemptIds($moodleIds);
+            // Joriy semestr toggle (default ON): o'tgan semestr natijalarini chiqaramiz.
+            if ($request->boolean('current_semester', true)) {
+                $excludedIds += $this->nonCurrentSemesterAttemptIds($moodleIds);
+            }
+            if (!empty($excludedIds)) {
+                $moodleIds = array_values(array_filter($moodleIds, fn ($a) => !isset($excludedIds[$a])));
+            }
+
             if (empty($moodleIds)) {
                 return response()->json([
                     'success' => true,
@@ -3620,13 +4489,14 @@ class QuizResultController extends Controller
                     'moodle_count' => 0,
                     'missing_sync' => [],
                     'missing_mark' => [],
+                    'warnings' => [],
                 ]);
             }
 
             // hemis_quiz_results ichidagilar — attempt_id => row.
             $synced = DB::table('hemis_quiz_results')
                 ->whereIn('attempt_id', $moodleIds)
-                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_name', 'quiz_type', 'attempt_name', 'date_finish', 'grade')
+                ->select('id', 'attempt_id', 'student_id', 'student_name', 'fan_id', 'fan_name', 'shakl', 'quiz_type', 'attempt_name', 'date_finish', 'grade')
                 ->get()
                 ->keyBy('attempt_id');
 
@@ -3646,19 +4516,40 @@ class QuizResultController extends Controller
                 }
             }
 
+            // Mark bosqichida tushib qolganlarni klassifikatsiya qilamiz:
+            // "farq" (unutilgan) va "ogohlantirish" (jurnalda baho bor).
+            $markGapRows = $synced->filter(fn ($row) => !isset($gradedIds[(int) $row->id]))->values();
+            $markClass = $this->classifyMarkGap($markGapRows);
+
+            // Talaba ma'lumotlari (fakultet/yo'nalish/kurs/guruh) — tafsilot uchun.
+            $details = $this->studentDetailsByKey(
+                $markGapRows->pluck('student_id')->map(fn ($v) => (string) $v)->all()
+            );
+
             $missingMark = [];
-            foreach ($synced as $row) {
-                if (!isset($gradedIds[(int) $row->id])) {
-                    $missingMark[] = [
-                        'attempt_id'   => (int) $row->attempt_id,
-                        'student_id'   => $row->student_id,
-                        'student_name' => $row->student_name,
-                        'fan_name'     => $row->fan_name,
-                        'quiz_type'    => $row->quiz_type,
-                        'attempt_name' => $row->attempt_name,
-                        'date_finish'  => $row->date_finish,
-                        'grade'        => $row->grade,
-                    ];
+            $warnings = [];
+            foreach ($markGapRows as $row) {
+                $verdict = $markClass[(int) $row->attempt_id] ?? ['type' => 'gap', 'reason' => null];
+                $info = $details[(string) $row->student_id] ?? ['faculty' => null, 'direction' => null, 'kurs' => null, 'group' => null];
+                $entry = [
+                    'attempt_id'   => (int) $row->attempt_id,
+                    'student_id'   => $row->student_id,
+                    'student_name' => $row->student_name,
+                    'faculty'      => $info['faculty'],
+                    'direction'    => $info['direction'],
+                    'kurs'         => $info['kurs'],
+                    'group'        => $info['group'],
+                    'fan_name'     => $row->fan_name,
+                    'quiz_type'    => $row->quiz_type,
+                    'attempt_name' => $row->attempt_name,
+                    'date_finish'  => $row->date_finish,
+                    'grade'        => $row->grade,
+                ];
+                if (($verdict['type'] ?? 'gap') === 'warning') {
+                    $entry['reason'] = $verdict['reason'];
+                    $warnings[] = $entry;
+                } else {
+                    $missingMark[] = $entry;
                 }
             }
 
@@ -3668,6 +4559,7 @@ class QuizResultController extends Controller
                 'moodle_count' => count($moodleIds),
                 'missing_sync' => $missingSyncIds,
                 'missing_mark' => $missingMark,
+                'warnings' => $warnings,
             ]);
         } catch (\Throwable $e) {
             Log::error('kunlikMonitoringMissing failed', [

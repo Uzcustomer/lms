@@ -5,50 +5,86 @@ namespace App\Console\Commands;
 use App\Services\HemisService;
 use App\Services\TelegramService;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 
 class ImportAcademicRecords extends Command
 {
-    /**
-     * The name and signature of the console command.
-     *
-     * @var string
-     */
     protected $signature = 'import:academic-records';
-
-    /**
-     * The console command description.
-     *
-     * @var string
-     */
     protected $description = 'Import academic records from HEMIS API';
 
-    /**
-     * Execute the console command.
-     */
     public function handle(TelegramService $telegram, HemisService $hemisService)
     {
-        $telegram->notify("🟢 Akademik qaydlar importi boshlandi");
-        $this->info('Fetching academic records from HEMIS API...');
-        $this->info('Bu jarayon biroz vaqt olishi mumkin (359,000+ yozuv)...');
+        // Parallel ishga tushishni oldini olish
+        if (Cache::get('academic_import_lock')) {
+            $this->warn('Import allaqachon ketayapti. Qayta ishga tushirilmadi.');
+            $telegram->notify("⚠️ Akademik qaydlar importi allaqachon ketayapti — qayta bosmaslik kerak!");
+            return;
+        }
+        Cache::put('academic_import_lock', true, 3600);
 
+        $this->info('Fetching academic records from HEMIS API...');
         $startTime = microtime(true);
         $skippedCount = 0;
+        $lastTelegramPct = -1;
 
-        $totalImported = $hemisService->importAcademicRecords(function ($page, $totalPages, $imported, $totalCount) use (&$skippedCount) {
-            $processed = $page * 200; // ~200 yozuv har sahifada
-            $skippedCount = max(0, $processed - $imported);
-            $percent = round(($page / $totalPages) * 100, 1);
-            $this->output->write("\r  Sahifa: {$page}/{$totalPages} | Yangi/o'zgargan: {$imported} | O'tkazib: {$skippedCount} | {$percent}%");
-        });
+        Cache::put('academic_import_progress', [
+            'status'     => 'running',
+            'page'       => 0,
+            'pages'      => 1,
+            'imported'   => 0,
+            'percent'    => 0,
+            'started_at' => now()->toDateTimeString(),
+        ], 3600);
+
+        $telegram->notify("🟢 Akademik qaydlar importi boshlandi");
+
+        try {
+            $totalImported = $hemisService->importAcademicRecords(
+                function ($page, $totalPages, $imported, $totalCount) use (&$skippedCount, &$lastTelegramPct, $telegram) {
+                    $processed = $page * 200;
+                    $skippedCount = max(0, $processed - $imported);
+                    $percent = round(($page / $totalPages) * 100, 1);
+
+                    $this->output->write("\r  Sahifa: {$page}/{$totalPages} | Yangi: {$imported} | {$percent}%");
+
+                    Cache::put('academic_import_progress', [
+                        'status'     => 'running',
+                        'page'       => $page,
+                        'pages'      => $totalPages,
+                        'imported'   => $imported,
+                        'percent'    => $percent,
+                        'started_at' => now()->toDateTimeString(),
+                    ], 3600);
+
+                    // Har 25% da Telegram xabari
+                    $milestone = (int)($percent / 25) * 25;
+                    if ($milestone > $lastTelegramPct && $milestone > 0 && $milestone < 100) {
+                        $telegram->notify("📊 Akademik qaydlar import: {$milestone}% ({$page}/{$totalPages} sahifa, yangi: {$imported} ta)");
+                        $lastTelegramPct = $milestone;
+                    }
+                }
+            );
+        } finally {
+            Cache::forget('academic_import_lock');
+        }
 
         $duration = round((microtime(true) - $startTime) / 60, 1);
 
         $this->newLine();
-        $this->info("Import tugadi! Yangi/o'zgargan: {$totalImported} ta, O'tkazib yuborildi: {$skippedCount} ta, Vaqt: {$duration} daqiqa");
-        $telegram->notify("✅ Akademik qaydlar importi tugadi. Yangi/o'zgargan: {$totalImported} ta, Vaqt: {$duration} daqiqa");
+        $this->info("Import tugadi! Yangi/o'zgargan: {$totalImported} ta, O'tkazib: {$skippedCount} ta, Vaqt: {$duration} daqiqa");
 
-        // Talabaga biriktirilgan fanlarni ham yangilash (debt hisobi uchun)
-        $this->info('Talabalarning biriktirilgan fanlari (student-subjects) import qilinmoqda...');
+        Cache::put('academic_import_progress', [
+            'status'      => 'done',
+            'imported'    => $totalImported,
+            'skipped'     => $skippedCount,
+            'percent'     => 100,
+            'duration'    => $duration,
+            'finished_at' => now()->toDateTimeString(),
+        ], 3600);
+
+        $telegram->notify("✅ Akademik qaydlar importi tugadi!\nYangi/o'zgargan: {$totalImported} ta\nO'tkazib: {$skippedCount} ta\nVaqt: {$duration} daqiqa");
+
+        $this->info("Talabalarning biriktirilgan fanlari (student-subjects) import qilinmoqda...");
         $this->call('import:student-subjects');
     }
 }

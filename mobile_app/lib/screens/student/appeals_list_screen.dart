@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../utils/page_transitions.dart';
@@ -65,6 +66,7 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final cardColor = ClinicTheme.surfaceOf(context);
     final textColor = ClinicTheme.inkOf(context);
     final subColor = ClinicTheme.mutedOf(context);
@@ -82,13 +84,16 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
         backgroundColor: ClinicTheme.teal,
         foregroundColor: Colors.white,
         icon: const Icon(Icons.add),
-        label: const Text('Yangi apellyatsiya', style: TextStyle(fontWeight: FontWeight.w700)),
+        label: Text(
+          l.pick(uz: 'Yangi apellyatsiya', ru: 'Новая апелляция', en: 'New appeal'),
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
       ),
       body: Column(
         children: [
           ClinicHeader(
-            overline: 'XIZMATLAR',
-            title: 'Apellyatsiya',
+            overline: l.services.toUpperCase(),
+            title: l.appeal,
             onBack: () => Navigator.pop(context),
           ),
           Expanded(
@@ -101,7 +106,7 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
                           children: [
                             Text(_error!, style: TextStyle(color: subColor)),
                             const SizedBox(height: 12),
-                            TextButton(onPressed: _loadData, child: const Text('Qayta yuklash')),
+                            TextButton(onPressed: _loadData, child: Text(l.reload)),
                           ],
                         ),
                       )
@@ -113,12 +118,20 @@ class _AppealsListScreenState extends State<AppealsListScreen> {
                                 Icon(Icons.gavel_outlined, size: 64, color: subColor.withAlpha(80)),
                                 const SizedBox(height: 12),
                                 Text(
-                                  "Hali apellyatsiya topshirilmagan",
+                                  l.pick(
+                                    uz: 'Hali apellyatsiya topshirilmagan',
+                                    ru: 'Апелляции пока не поданы',
+                                    en: 'No appeals submitted yet',
+                                  ),
                                   style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: subColor),
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  "24 soat ichidagi baholarga apellyatsiya topshirish mumkin",
+                                  l.pick(
+                                    uz: '24 soat ichidagi baholarga apellyatsiya topshirish mumkin',
+                                    ru: 'Апелляцию можно подать на оценки за последние 24 часа',
+                                    en: 'You can appeal grades within 24 hours',
+                                  ),
                                   textAlign: TextAlign.center,
                                   style: TextStyle(fontSize: 12, color: subColor.withAlpha(160)),
                                 ),

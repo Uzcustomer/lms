@@ -161,6 +161,10 @@ class StudentsExport implements FromQuery, WithHeadings, ShouldAutoSize, WithMap
             }
         }
 
+        if (!empty($this->filters['student_status'])) {
+            $query->where('student_status_code', $this->filters['student_status']);
+        }
+
         return $query->orderBy('department_name')->orderBy('group_name')->orderBy('full_name');
     }
 

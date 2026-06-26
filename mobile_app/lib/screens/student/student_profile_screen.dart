@@ -140,8 +140,16 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
       body: Column(
         children: [
           ClinicHeader(
-            overline: 'PROFIL · TALABA',
-            title: 'Mening hisobim',
+            overline: l.pick(
+              uz: 'PROFIL · TALABA',
+              ru: 'ПРОФИЛЬ · СТУДЕНТ',
+              en: 'PROFILE · STUDENT',
+            ),
+            title: l.pick(
+              uz: 'Mening hisobim',
+              ru: 'Мой аккаунт',
+              en: 'My account',
+            ),
             onBack: () => StudentHomeScreen.switchToHome(context),
             actions: [
               ClinicIconButton(
@@ -638,9 +646,13 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 onTap: () {
                   Clipboard.setData(ClipboardData(text: _verificationCode!));
                   ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                        content: Text('Kod nusxalandi'),
-                        duration: Duration(seconds: 1)),
+                    SnackBar(
+                        content: Text(AppLocalizations.of(context).pick(
+                          uz: 'Kod nusxalandi',
+                          ru: 'Код скопирован',
+                          en: 'Code copied',
+                        )),
+                        duration: const Duration(seconds: 1)),
                   );
                 },
                 child: Row(
@@ -648,7 +660,11 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                   children: [
                     Icon(Icons.copy, size: 14, color: muted),
                     const SizedBox(width: 4),
-                    Text('Nusxalash',
+                    Text(AppLocalizations.of(context).pick(
+                      uz: 'Nusxalash',
+                      ru: 'Копировать',
+                      en: 'Copy',
+                    ),
                         style: TextStyle(fontSize: 12, color: muted)),
                   ],
                 ),
@@ -667,7 +683,11 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 ? () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(
-                        content: Text('Telegram botga o\'ting: $_botLink'),
+                        content: Text(AppLocalizations.of(context).pick(
+                          uz: 'Telegram botga o\'ting: $_botLink',
+                          ru: 'Перейдите в Telegram бот: $_botLink',
+                          en: 'Open the Telegram bot: $_botLink',
+                        )),
                         duration: const Duration(seconds: 5),
                         action: SnackBarAction(label: 'OK', onPressed: () {}),
                       ),
@@ -717,7 +737,11 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                 _botLink = null;
               });
             },
-            child: Text('Username o\'zgartirish',
+            child: Text(AppLocalizations.of(context).pick(
+              uz: 'Username o\'zgartirish',
+              ru: 'Изменить username',
+              en: 'Change username',
+            ),
                 style: TextStyle(fontSize: 12, color: muted)),
           ),
         ),
@@ -823,9 +847,13 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
               onTap: () {
                 Clipboard.setData(ClipboardData(text: value));
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                      content: Text('Nusxalandi'),
-                      duration: Duration(seconds: 1)),
+                  SnackBar(
+                      content: Text(AppLocalizations.of(context).pick(
+                        uz: 'Nusxalandi',
+                        ru: 'Скопировано',
+                        en: 'Copied',
+                      )),
+                      duration: const Duration(seconds: 1)),
                 );
               },
               child: Icon(Icons.copy_rounded, size: 16, color: muted),
@@ -886,4 +914,3 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
     );
   }
 }
-

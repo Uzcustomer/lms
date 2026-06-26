@@ -40,6 +40,10 @@ class ApiConfig {
   static const String studentExcuses = '/student/excuses';
   static const String studentExcuseMissedAssessments = '/student/excuses/missed-assessments';
 
+  // Retake application endpoints
+  static const String studentRetake = '/student/retake';
+  static const String studentRetakeJournal = '/student/retake/journal';
+
   // Club endpoints
   static const String studentClubs = '/student/clubs';
   static const String studentMyClubs = '/student/clubs/my';
@@ -49,6 +53,9 @@ class ApiConfig {
   // Exam appeal endpoints
   static const String studentAppeals = '/student/appeals';
   static const String studentAppealAvailableGrades = '/student/appeals/available-grades';
+
+  // English group application
+  static const String studentEnglishGroupApplications = '/student/english-group-application';
 
   // Chat endpoints
   static const String chatContacts = '/chat/contacts';

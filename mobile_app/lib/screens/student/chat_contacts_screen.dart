@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 import '../../config/api_config.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
@@ -54,37 +55,54 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Scaffold(
       backgroundColor: ClinicTheme.bgOf(context),
       body: Column(
         children: [
           ClinicHeader(
-            overline: 'FOYDALI',
-            title: 'Xabarlar',
+            overline: l.useful.toUpperCase(),
+            title: l.pick(uz: 'Xabarlar', ru: 'Сообщения', en: 'Messages'),
             onBack: () => Navigator.pop(context),
             actions: const [NotificationBell()],
           ),
           Container(
-            decoration: BoxDecoration(
-              color: ClinicTheme.surfaceOf(context),
-              border: Border(
-                bottom: BorderSide(color: ClinicTheme.dividerOf(context), width: 1),
+            color: ClinicTheme.surfaceOf(context),
+            padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+            child: Container(
+              height: 44,
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: ClinicTheme.dividerOf(context).withAlpha(55),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: ClinicTheme.dividerOf(context)),
               ),
-            ),
-            child: TabBar(
-              controller: _tabController,
-              indicatorColor: ClinicTheme.teal,
-              indicatorWeight: 2.5,
-              indicatorSize: TabBarIndicatorSize.tab,
-              labelColor: ClinicTheme.teal,
-              unselectedLabelColor: ClinicTheme.mutedOf(context),
-              labelStyle: const TextStyle(fontSize: 13, fontWeight: FontWeight.w800),
-              unselectedLabelStyle:
-                  const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              tabs: const [
-                Tab(text: 'Foydalanuvchilar'),
-                Tab(text: 'Guruh'),
-              ],
+              child: TabBar(
+                controller: _tabController,
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  color: ClinicTheme.teal,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: ClinicTheme.teal.withAlpha(35),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                labelColor: Colors.white,
+                unselectedLabelColor: ClinicTheme.mutedOf(context),
+                labelStyle:
+                    const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w900),
+                unselectedLabelStyle:
+                    const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                tabs: [
+                  Tab(text: l.pick(uz: 'Foydalanuvchilar', ru: 'Пользователи', en: 'Users')),
+                  Tab(text: l.group),
+                ],
+              ),
             ),
           ),
           Expanded(
@@ -102,6 +120,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
   }
 
   Widget _buildContactsTab() {
+    final l = AppLocalizations.of(context);
     if (_loading) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -114,14 +133,18 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
               width: 80,
               height: 80,
               decoration: BoxDecoration(
-                color: ClinicTheme.teal.withOpacity(0.10),
-                shape: BoxShape.circle,
+                color: ClinicTheme.teal.withAlpha(18),
+                borderRadius: BorderRadius.circular(24),
               ),
               child: Icon(Icons.chat_bubble_outline_rounded,
                   size: 36, color: ClinicTheme.teal),
             ),
             const SizedBox(height: 16),
-            Text('Guruhda boshqa talaba topilmadi',
+            Text(l.pick(
+              uz: 'Guruhda boshqa talaba topilmadi',
+              ru: 'В группе нет других студентов',
+              en: 'No other students found in the group',
+            ),
                 style: TextStyle(
                     color: ClinicTheme.mutedOf(context),
                     fontSize: 14,
@@ -141,6 +164,7 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
   }
 
   Widget _buildContact(dynamic c) {
+    final l = AppLocalizations.of(context);
     final ink = ClinicTheme.inkOf(context);
     final muted = ClinicTheme.mutedOf(context);
     final name = c['name']?.toString() ?? '';
@@ -173,10 +197,10 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: ClinicTheme.surfaceOf(context),
-        borderRadius: BorderRadius.circular(14),
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
         child: InkWell(
-          borderRadius: BorderRadius.circular(14),
+          borderRadius: BorderRadius.circular(18),
           onTap: () async {
             await Navigator.push(
               context,
@@ -191,14 +215,22 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
             _load();
           },
           child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
+              color: ClinicTheme.surfaceOf(context),
+              borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: unread > 0 ? ClinicTheme.teal : ClinicTheme.dividerOf(context),
+                color:
+                    unread > 0 ? ClinicTheme.teal : ClinicTheme.dividerOf(context),
                 width: unread > 0 ? 1.5 : 1,
               ),
-              boxShadow: ClinicTheme.cardShadow,
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFF0F172A).withAlpha(14),
+                  blurRadius: 18,
+                  offset: const Offset(0, 8),
+                ),
+              ],
             ),
             child: Row(
               children: [
@@ -250,7 +282,12 @@ class _ChatContactsScreenState extends State<ChatContactsScreen>
                             ),
                           Expanded(
                             child: Text(
-                              lastMsg ?? 'Xabar yo\'q',
+                              lastMsg ??
+                                  l.pick(
+                                    uz: 'Xabar yo\'q',
+                                    ru: 'Нет сообщений',
+                                    en: 'No messages',
+                                  ),
                               style: TextStyle(
                                   fontSize: 12,
                                   color: unread > 0 ? ink : muted,

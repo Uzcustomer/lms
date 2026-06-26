@@ -76,6 +76,23 @@ class RetakeGroup extends Model
         return $this->hasMany(RetakeApplication::class, 'retake_group_id');
     }
 
+    /**
+     * Guruh tegishli bo'lgan qayta o'qish sessiyasining kanonik kodi
+     * (YYYY-YYYY-fasl). Ariza → application-group → oyna → sessiya zanjiri
+     * orqali aniqlanadi. Diagnostika natijalarini fasl bo'yicha filtrlash
+     * (qishki natija yozgi jurnalga tushmasligi) uchun ishlatiladi.
+     */
+    public function sessionCode(): ?string
+    {
+        $app = $this->applications()
+            ->with('group.window.session')
+            ->first();
+
+        $session = $app?->group?->window?->session;
+
+        return \App\Services\Retake\RetakeSessionCode::fromSession($session);
+    }
+
     public function isEditable(): bool
     {
         return in_array($this->status, [self::STATUS_FORMING, self::STATUS_SCHEDULED], true);

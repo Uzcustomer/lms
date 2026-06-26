@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../l10n/app_localizations.dart';
 import '../../services/api_service.dart';
 import '../../services/student_service.dart';
 import '../../widgets/clinic_header.dart';
@@ -96,6 +97,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final textColor = ClinicTheme.inkOf(context);
     final subColor = ClinicTheme.mutedOf(context);
@@ -107,8 +109,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
       body: Column(
         children: [
           ClinicHeader(
-            overline: 'XABARLAR',
-            title: 'Bildirishnomalar',
+            overline: l.pick(uz: 'XABARLAR', ru: 'СООБЩЕНИЯ', en: 'MESSAGES'),
+            title: l.pick(uz: 'Bildirishnomalar', ru: 'Уведомления', en: 'Notifications'),
             onBack: () => Navigator.pop(context),
             actions: [
               if (hasUnread)
@@ -122,9 +124,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                       height: 38,
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       alignment: Alignment.center,
-                      child: const Text(
-                        'Hammasi',
-                        style: TextStyle(
+                      child: Text(
+                        l.pick(uz: 'Hammasi', ru: 'Все', en: 'All'),
+                        style: const TextStyle(
                           fontSize: 12,
                           color: Colors.white,
                           fontWeight: FontWeight.w700,
@@ -158,6 +160,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildEmpty(Color subColor) {
+    final l = AppLocalizations.of(context);
     return ListView(
       padding: EdgeInsets.zero,
       children: [
@@ -169,7 +172,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               children: [
                 Icon(Icons.notifications_none_rounded, size: 56, color: subColor),
                 const SizedBox(height: 12),
-                Text('Bildirishnoma yo\'q', style: TextStyle(fontSize: 14, color: subColor)),
+                Text(
+                  l.pick(uz: 'Bildirishnoma yo\'q', ru: 'Уведомлений нет', en: 'No notifications'),
+                  style: TextStyle(fontSize: 14, color: subColor),
+                ),
               ],
             ),
           ),
@@ -179,6 +185,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   Widget _buildError(Color subColor) {
+    final l = AppLocalizations.of(context);
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -190,7 +197,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
             child: Text(_error ?? '', style: TextStyle(color: subColor), textAlign: TextAlign.center),
           ),
           const SizedBox(height: 16),
-          ElevatedButton(onPressed: _load, child: const Text('Qayta urinish')),
+          ElevatedButton(
+            onPressed: _load,
+            child: Text(l.pick(uz: 'Qayta urinish', ru: 'Повторить', en: 'Try again')),
+          ),
         ],
       ),
     );
@@ -297,6 +307,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return ClinicTheme.green;
       case 'excuse':
       case 'appeal':
+      case 'english_group_application':
         return const Color(0xFF6D28D9);
       case 'warning':
         return const Color(0xFFBE123C);
@@ -313,6 +324,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         return Icons.grade_outlined;
       case 'excuse':
       case 'appeal':
+      case 'english_group_application':
         return Icons.assignment_outlined;
       case 'warning':
         return Icons.warning_amber_rounded;

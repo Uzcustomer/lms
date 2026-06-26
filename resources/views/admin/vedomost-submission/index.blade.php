@@ -17,6 +17,12 @@
             'oski' => 'Faqat OSKI', 'test' => 'Faqat Test', 'oski_test' => 'OSKI + Test',
             'normativ' => 'Normativ', 'sinov' => 'Sinov (test)',
         ];
+        // Shakl badge: [matn rang, fon rang]
+        $formBadge = [
+            '12'  => ['#1a3268', '#e0e7ff'],
+            '12a' => ['#9a3412', '#ffedd5'],
+            '12b' => ['#9d174d', '#fce7f3'],
+        ];
 
         $curSort = request('sort');
         $curDir = request('dir') === 'desc' ? 'desc' : 'asc';
@@ -134,6 +140,15 @@
                                     @endforeach
                                 </select>
                             </div>
+                            <div class="filter-item" style="min-width:130px;">
+                                <label class="filter-label"><span class="fl-dot" style="background:#6366f1;"></span> Shakl</label>
+                                <select name="form_type" id="form_type" class="select2" style="width:100%;">
+                                    <option value="">Barchasi</option>
+                                    @foreach($formLabels as $k => $label)
+                                        <option value="{{ $k }}" {{ request('form_type') === $k ? 'selected' : '' }}>{{ $label }}</option>
+                                    @endforeach
+                                </select>
+                            </div>
                             <div class="filter-item" style="min-width:150px;">
                                 <label class="filter-label"><span class="fl-dot" style="background:#64748b;"></span> Status</label>
                                 <select name="status" id="status" class="select2" style="width:100%;">
@@ -173,6 +188,11 @@
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;flex-wrap:wrap;gap:8px;">
                     <span style="font-size:13px;color:#64748b;">Jami: {{ $submissions->total() }} ta</span>
                     <div style="display:flex;gap:8px;">
+                        <a href="{{ route('admin.vedomost-submission.report', request()->query()) }}"
+                           style="background:#1a3268;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
+                            <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6h13M9 17H4V5a2 2 0 012-2h7l5 5v9h-5M9 17v4h10v-4"/></svg>
+                            Hisobot
+                        </a>
                         <a href="{{ route('admin.vedomost-submission.export', request()->query()) }}"
                            style="background:#1d6f42;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
                             <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5 5-5M12 15V3"/></svg>
@@ -194,6 +214,8 @@
                             <tr>
                                 <th>#</th>
                                 <th><a href="{{ $sortUrl('group') }}">Guruh {!! $arrow('group') !!}</a></th>
+                                <th>Shakl</th>
+                                <th>Fakultet</th>
                                 <th>Yo'nalish</th>
                                 <th><a href="{{ $sortUrl('subject') }}">Fan {!! $arrow('subject') !!}</a></th>
                                 <th><a href="{{ $sortUrl('department') }}">Kafedra {!! $arrow('department') !!}</a></th>
@@ -214,10 +236,15 @@
                                     <td style="color:#94a3b8;">{{ $submissions->firstItem() + $i }}</td>
                                     <td style="font-weight:600;">
                                         {{ $v->group_name }}
-                                        @if(($v->merge_count ?? 1) > 1)
+                                        @if(($v->merge_count ?? 1) > 1 && ($v->form_type ?? '12') === '12')
                                             <span class="vd-merge" title="Guruhchalar: {{ $v->subgroup_label }}">{{ $v->merge_count }} guruhcha</span>
                                         @endif
                                     </td>
+                                    <td>
+                                        @php $fb = $formBadge[$v->form_type ?? '12'] ?? ['#475569','#f1f5f9']; @endphp
+                                        <span style="background:{{ $fb[1] }};color:{{ $fb[0] }};padding:2px 9px;border-radius:999px;font-size:11px;font-weight:700;white-space:nowrap;">{{ \App\Models\VedomostSubmission::formLabel($v->form_type ?? '12') }}</span>
+                                    </td>
+                                    <td style="color:#64748b;">{{ $v->faculty_name ?? '—' }}</td>
                                     <td style="color:#64748b;">{{ $v->specialty_name }}</td>
                                     <td>{{ $v->subject_name }}</td>
                                     <td style="color:#64748b;">{{ $v->department_name }}</td>
@@ -248,7 +275,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="13" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
+                                <tr><td colspan="15" style="padding:40px;text-align:center;color:#94a3b8;">Ma'lumot yo'q. "Joriy semestr bo'yicha yangilash" tugmasini bosing.</td></tr>
                             @endforelse
                         </tbody>
                     </table>

@@ -55,6 +55,19 @@ class VedomostMergeService
     }
 
     /**
+     * O'zak guruh nomini birlashtirish uchun NORMALIZATSIYA qiladi: nuqta, bo'shliq
+     * kabi nomuvofiq belgilarni olib tashlab, kichik harfga keltiradi. HEMIS'da
+     * bitta kohortaning guruhchalari turlicha yozilishi mumkin:
+     *   "tibprof23-02a"  -> o'zak "tibprof23-02"  -> normal "tibprof23-02"
+     *   "tib.prof23-02b" -> o'zak "tib.prof23-02" -> normal "tibprof23-02"
+     * Shunda nuqtali/nuqtasiz variantlar BITTA vedomostga birlashadi.
+     */
+    public function normalizedRootGroup(?string $name): string
+    {
+        return mb_strtolower(str_replace([' ', '.'], '', $this->rootGroupName($name)));
+    }
+
+    /**
      * Fan nomidan variant qo'shimchasini ("(a)", "(б)", "(1)") kesib, o'zak fanni qaytaradi.
      */
     public function rootSubjectName(?string $name): string
@@ -65,15 +78,25 @@ class VedomostMergeService
     /**
      * Bitta yozuv uchun birlashtirish kaliti — bir xil kalitli yozuvlar bitta
      * vedomost hisoblanadi.
+     *
+     * 12-shakl: o'zak guruh kalitga kiradi (har guruh alohida varaq).
+     * 12a/12b : o'zak guruh kalitdan CHIQARILADI, lekin FAKULTET (reja) saqlanadi —
+     *           yo'nalish × fan bo'yicha bitta FAKULTETning barcha guruhlari bitta
+     *           umumiy varaqqa jamlanadi (har fakultet alohida varaq).
      */
     public function mergeKey(object $row): string
     {
+        $formType = $row->form_type ?? VedomostSubmission::FORM_12;
+        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true);
+
         return implode('|', [
+            $formType,
             $row->education_year ?? '',
             $row->semester_code ?? '',
             $row->specialty_name ?? '',
             $row->closing_form ?? '',
-            $this->rootGroupName($row->group_name ?? ''),
+            // 12a/12b — guruh o'rniga fakultet (reja) belgisi; 12 — o'zak guruh.
+            $isCombined ? ('*' . ($row->curriculum_hemis_id ?? '')) : $this->normalizedRootGroup($row->group_name ?? ''),
             $this->rootSubjectName($row->subject_name ?? ''),
         ]);
     }
@@ -110,7 +133,16 @@ class VedomostMergeService
             ->sortBy(fn($s) => self::STATUS_PRIORITY[$s] ?? 99)
             ->first();
 
+        $formType = $rep->form_type ?? VedomostSubmission::FORM_12;
+        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true);
+
         $subgroups = $group->pluck('group_name')->filter()->unique()->sort()->values();
+
+        // 12a/12b — umumiy varaq: "Guruh" ustuni umumlashtiriladi.
+        // 12-shakl — o'zak guruh nomi (guruchalar kesilgan).
+        $groupNameOut = $isCombined
+            ? ($rep->group_name ?: 'Barcha guruhlar')
+            : $this->rootGroupName($rep->group_name);
 
         // Ism va telefonni MOSLAB chiqaramiz: "A, B, C" -> "-, +998.., +998.."
         // (telefoni yo'q o'qituvchi o'rnida "-").
@@ -121,18 +153,20 @@ class VedomostMergeService
         $out = (object) [
             'id' => $rep->id,
             'ids' => $group->pluck('id')->all(),
+            'created_at' => $rep->created_at ?? null,
             'merge_count' => $group->count(),
             'subgroup_names' => $subgroups->all(),
             'subgroup_label' => $subgroups->implode(', '),
 
             'education_year' => $rep->education_year,
             'semester_code' => $rep->semester_code,
-            'group_name' => $this->rootGroupName($rep->group_name),
+            'group_name' => $groupNameOut,
             'subject_name' => $this->rootSubjectName($rep->subject_name),
             'specialty_name' => $rep->specialty_name,
             'department_name' => $this->joinDistinct($group, 'department_name'),
             'faculty_name' => $rep->faculty_name ?? null,
             'closing_form' => $rep->closing_form,
+            'form_type' => $formType,
             'level_name' => $rep->level_name ?? null,
             'level_code' => $rep->level_code ?? null,
 
@@ -146,6 +180,14 @@ class VedomostMergeService
             'base_type' => $deadlineRep->base_type,
             'base_date' => $deadlineRep->base_date,
             'deadline' => $deadlineRep->deadline,
+
+            // Rad etilish bildirgilari (inbox) uchun — vakil yozuv qiymatlari.
+            // Rad etishda barcha guruhchalarga bir xil reviewed_at/sabab yoziladi.
+            'reviewed_at' => $rep->reviewed_at ?? null,
+            'reviewed_by_name' => $rep->reviewed_by_name ?? null,
+            'rejection_reason' => $rep->rejection_reason ?? null,
+            'reupload_allowed_at' => $rep->reupload_allowed_at ?? null,
+            'reupload_allowed_by_name' => $rep->reupload_allowed_by_name ?? null,
 
             'status' => $status,
             'status_counts' => $statusCounts->all(),
@@ -214,6 +256,9 @@ class VedomostMergeService
      */
     public function siblingsOf(VedomostSubmission $v): Collection
     {
+        $formType = $v->form_type ?? VedomostSubmission::FORM_12;
+        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true);
+
         $query = VedomostSubmission::query()
             // Faqat FAOL guruhlar — index ro'yxati bilan mos bo'lishi uchun.
             ->whereIn('group_hemis_id', function ($q) {
@@ -221,7 +266,8 @@ class VedomostMergeService
             })
             ->where('education_year', $v->education_year)
             ->where('semester_code', $v->semester_code)
-            ->where('closing_form', $v->closing_form);
+            ->where('closing_form', $v->closing_form)
+            ->where('form_type', $formType);
 
         if ($v->specialty_name === null) {
             $query->whereNull('specialty_name');
@@ -229,11 +275,19 @@ class VedomostMergeService
             $query->where('specialty_name', $v->specialty_name);
         }
 
-        $rootGroup = $this->rootGroupName($v->group_name);
+        // 12a/12b — har fakultet alohida varaq: bir xil reja (fakultet) doirasida.
+        if ($isCombined) {
+            $query->where('curriculum_hemis_id', $v->curriculum_hemis_id);
+        }
+
+        $rootGroup = $this->normalizedRootGroup($v->group_name);
         $rootSubject = $this->rootSubjectName($v->subject_name);
 
-        return $query->get()->filter(function (VedomostSubmission $row) use ($rootGroup, $rootSubject) {
-            return $this->rootGroupName($row->group_name) === $rootGroup
+        return $query->get()->filter(function (VedomostSubmission $row) use ($isCombined, $rootGroup, $rootSubject) {
+            // 12a/12b — guruh sharti yo'q (hamma guruh bitta vedomost).
+            $groupMatch = $isCombined || $this->normalizedRootGroup($row->group_name) === $rootGroup;
+
+            return $groupMatch
                 && $this->rootSubjectName($row->subject_name) === $rootSubject;
         })->values();
     }

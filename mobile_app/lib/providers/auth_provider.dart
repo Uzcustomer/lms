@@ -15,7 +15,6 @@ class AuthProvider extends ChangeNotifier {
   Map<String, dynamic>? _user;
   String? _errorMessage;
   String? _guard;
-  String? _pendingLogin;
   int? _pendingUserId;
   bool _profileComplete = true;
   bool _telegramVerified = false;
@@ -114,6 +113,7 @@ class AuthProvider extends ChangeNotifier {
 
   void _handleLoginResponse(Map<String, dynamic> response, String guard) {
     _viaLogin = true;
+    _loggedOut = false;
     _user = response['user'] as Map<String, dynamic>?;
     _guard = guard;
     _profileComplete = response['profile_complete'] == true;
@@ -135,6 +135,7 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final response = await _authService.studentFaceLogin(login, photo);
+      await StudentDataCache().clear();
       _handleLoginResponse(response, 'student');
       notifyListeners();
       return true;
@@ -162,12 +163,12 @@ class AuthProvider extends ChangeNotifier {
       if (response['requires_2fa'] == true) {
         _state = AuthState.requires2fa;
         _guard = 'student';
-        _pendingLogin = login;
         _pendingUserId = response['student_id'] as int?;
         notifyListeners();
         return false;
       }
 
+      await StudentDataCache().clear();
       _handleLoginResponse(response, 'student');
       notifyListeners();
       return true;
@@ -195,7 +196,6 @@ class AuthProvider extends ChangeNotifier {
       if (response['requires_2fa'] == true) {
         _state = AuthState.requires2fa;
         _guard = 'teacher';
-        _pendingLogin = login;
         _pendingUserId = response['teacher_id'] as int?;
         notifyListeners();
         return false;
@@ -227,6 +227,9 @@ class AuthProvider extends ChangeNotifier {
 
     try {
       final response = await _authService.verify2fa(_guard!, _pendingUserId!, code);
+      if (_guard == 'student') {
+        await StudentDataCache().clear();
+      }
       _handleLoginResponse(response, _guard!);
       notifyListeners();
       return true;
@@ -327,7 +330,6 @@ class AuthProvider extends ChangeNotifier {
     await StudentDataCache().clear();
     _user = null;
     _guard = null;
-    _pendingLogin = null;
     _pendingUserId = null;
     _profileComplete = true;
     _telegramVerified = false;

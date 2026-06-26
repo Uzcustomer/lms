@@ -3,6 +3,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
+import 'dart:math' as math;
 import '../../config/theme.dart';
 import '../../config/api_config.dart';
 import '../../providers/student_provider.dart';
@@ -879,11 +880,23 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
     final textColor = isDark ? Colors.white : AppTheme.textPrimary;
     final subTextColor = isDark ? Colors.white70 : AppTheme.textSecondary;
 
+    final currentContract = _selectCurrentContract(contractList, contractData);
     final summary = contractData?['summary'] as Map<String, dynamic>?;
-    final totalAmount = (summary?['total_amount'] ?? 0).toDouble();
-    final paidAmount = (summary?['paid_amount'] ?? 0).toDouble();
-    final remainingAmount = (summary?['remaining_amount'] ?? 0).toDouble();
-    final progress = totalAmount > 0 ? (paidAmount / totalAmount).clamp(0.0, 1.0) : 0.0;
+    final totalAmount = currentContract != null
+        ? _toDouble(currentContract['contract_amount'])
+        : _toDouble(summary?['total_amount']);
+    final paidAmount = currentContract != null
+        ? _toDouble(currentContract['paid_amount'])
+        : _toDouble(summary?['paid_amount']);
+    final rawRemainingAmount = currentContract != null
+        ? _toDouble(currentContract['unpaid_amount'])
+        : _toDouble(summary?['remaining_amount']);
+    final remainingAmount = rawRemainingAmount < 0 ? 0.0 : rawRemainingAmount;
+    final progress =
+        totalAmount > 0 ? (paidAmount / totalAmount).clamp(0.0, 1.0) : 0.0;
+    final currentContractPaid =
+        currentContract?['status']?.toString() == 'paid' || remainingAmount <= 0;
+    final currentContractYear = _contractYearLabel(currentContract, contractData);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -914,7 +927,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
                       color: isContract
-                          ? AppTheme.warningColor.withAlpha(25)
+                          ? AppTheme.primaryColor.withAlpha(25)
                           : AppTheme.successColor.withAlpha(25),
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -924,7 +937,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                         Icon(
                           isContract ? Icons.receipt_long : Icons.school,
                           size: 14,
-                          color: isContract ? AppTheme.warningColor : AppTheme.successColor,
+                          color: isContract ? AppTheme.primaryColor : AppTheme.successColor,
                         ),
                         const SizedBox(width: 4),
                         Text(
@@ -934,7 +947,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
                           style: TextStyle(
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
-                            color: isContract ? AppTheme.warningColor : AppTheme.successColor,
+                            color: isContract ? AppTheme.primaryColor : AppTheme.successColor,
                           ),
                         ),
                       ],
@@ -944,70 +957,54 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
               ),
               if (isContract) ...[
                 const SizedBox(height: 16),
-                // Payment progress
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(
-                      l.paid,
-                      style: TextStyle(fontSize: 13, color: subTextColor),
+                    _buildContractDonut(
+                      progress: progress,
+                      remainingAmount: remainingAmount,
+                      isPaid: currentContractPaid,
                     ),
-                    Text(
-                      '${_formatMoney(paidAmount)} / ${_formatMoney(totalAmount)} so\'m',
-                      style: TextStyle(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                        color: textColor,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(4),
-                  child: LinearProgressIndicator(
-                    value: progress,
-                    backgroundColor: isDark ? AppTheme.darkDivider : const Color(0xFFE0E0E0),
-                    valueColor: AlwaysStoppedAnimation<Color>(
-                      remainingAmount <= 0 ? AppTheme.successColor : AppTheme.warningColor,
-                    ),
-                    minHeight: 6,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                // Remaining
-                Row(
-                  children: [
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(l.remaining, style: TextStyle(fontSize: 11, color: subTextColor)),
-                          const SizedBox(height: 2),
                           Text(
-                            '${_formatMoney(remainingAmount)} so\'m',
-                            style: TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.bold,
-                              color: remainingAmount <= 0 ? AppTheme.successColor : AppTheme.warningColor,
-                            ),
+                            l.paid,
+                            style: TextStyle(fontSize: 12, color: subTextColor),
                           ),
-                        ],
-                      ),
-                    ),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(l.deadline, style: TextStyle(fontSize: 11, color: subTextColor)),
-                          const SizedBox(height: 2),
+                          const SizedBox(height: 3),
                           Text(
-                            contractData?['education_year']?.toString() ?? '--',
+                            '${_formatMoney(paidAmount)} / ${_formatMoney(totalAmount)} so\'m',
                             style: TextStyle(
                               fontSize: 14,
-                              fontWeight: FontWeight.bold,
+                              fontWeight: FontWeight.w800,
                               color: textColor,
                             ),
+                          ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: _buildContractMiniMetric(
+                                  l.remaining,
+                                  '${_formatMoney(remainingAmount)} so\'m',
+                                  remainingAmount <= 0
+                                      ? AppTheme.successColor
+                                      : AppTheme.warningColor,
+                                  subTextColor,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              _buildContractMiniMetric(
+                                l.deadline,
+                                currentContractYear,
+                                textColor,
+                                subTextColor,
+                                alignEnd: true,
+                              ),
+                            ],
                           ),
                         ],
                       ),
@@ -1029,11 +1026,14 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
           ),
         ),
         ),
-        // Contract list section
-        if (isContract && contractList != null && contractList.isNotEmpty) ...[
+        if (isContract && currentContract != null) ...[
           const SizedBox(height: 20),
           Text(
-            l.contractList,
+            l.pick(
+              uz: 'Joriy shartnoma',
+              ru: 'Текущий договор',
+              en: 'Current contract',
+            ),
             style: TextStyle(
               fontSize: 17,
               fontWeight: FontWeight.w800,
@@ -1042,91 +1042,249 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
             ),
           ),
           const SizedBox(height: 12),
-          ...contractList.map((contract) {
-            final c = contract as Map<String, dynamic>;
-            final cAmount = (c['contract_amount'] ?? 0).toDouble();
-            final cPaid = (c['paid_amount'] ?? 0).toDouble();
-            final cUnpaid = (c['unpaid_amount'] ?? 0).toDouble();
-            final cStatus = c['status']?.toString() ?? '';
-            final educYear = c['education_year']?.toString() ?? '';
-            final isPaid = cStatus == 'paid';
-
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: _buildGlassCard(
-                isDark: isDark,
-                borderRadius: 14,
-                cardColor: const Color(0xFF4A6CF7),
-                child: Padding(
-                  padding: const EdgeInsets.all(14),
-                  child: Column(
+          _buildGlassCard(
+            isDark: isDark,
+            borderRadius: 14,
+            cardColor: const Color(0xFF4A6CF7),
+            child: Padding(
+              padding: const EdgeInsets.all(14),
+              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Education year & status row
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      if (educYear.isNotEmpty)
-                        Text(
-                          educYear,
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: textColor,
-                          ),
+                      Text(
+                        _contractFullYearLabel(currentContract, contractData),
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: textColor,
                         ),
+                      ),
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: isPaid
+                          color: currentContractPaid
                               ? AppTheme.successColor.withAlpha(25)
                               : AppTheme.errorColor.withAlpha(25),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
-                          isPaid ? l.statusPaid : l.statusUnpaid,
+                          currentContractPaid ? l.statusPaid : l.statusUnpaid,
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
-                            color: isPaid ? AppTheme.successColor : AppTheme.errorColor,
+                            color: currentContractPaid
+                                ? AppTheme.successColor
+                                : AppTheme.errorColor,
                           ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 10),
-                  // Contract amount
                   _buildContractRow(
                     l.contractAmount,
-                    '${_formatMoney(cAmount)} so\'m',
+                    '${_formatMoney(totalAmount)} so\'m',
                     subTextColor,
                     textColor,
                   ),
                   const SizedBox(height: 6),
-                  // Paid amount
                   _buildContractRow(
                     l.paidAmount,
-                    '${_formatMoney(cPaid)} so\'m',
+                    '${_formatMoney(paidAmount)} so\'m',
                     subTextColor,
                     AppTheme.successColor,
                   ),
                   const SizedBox(height: 6),
-                  // Unpaid amount
                   _buildContractRow(
                     l.unpaidAmount,
-                    '${_formatMoney(cUnpaid)} so\'m',
+                    '${_formatMoney(remainingAmount)} so\'m',
                     subTextColor,
-                    cUnpaid > 0 ? AppTheme.errorColor : AppTheme.successColor,
+                    remainingAmount > 0
+                        ? AppTheme.errorColor
+                        : AppTheme.successColor,
                   ),
                 ],
               ),
             ),
-            ),
-            );
-          }),
+          ),
         ],
       ],
     );
+  }
+
+  Widget _buildContractMiniMetric(
+    String label,
+    String value,
+    Color valueColor,
+    Color labelColor, {
+    bool alignEnd = false,
+  }) {
+    return Column(
+      crossAxisAlignment:
+          alignEnd ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: TextStyle(fontSize: 11, color: labelColor),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          value,
+          textAlign: alignEnd ? TextAlign.end : TextAlign.start,
+          style: TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w800,
+            color: valueColor,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildContractDonut({
+    required double progress,
+    required double remainingAmount,
+    required bool isPaid,
+  }) {
+    final percent = (progress.clamp(0.0, 1.0) * 100).round();
+    final accent = isPaid ? AppTheme.successColor : AppTheme.warningColor;
+
+    return SizedBox(
+      width: 92,
+      height: 92,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          CustomPaint(
+            size: const Size.square(92),
+            painter: _ContractDonutPainter(
+              progress: progress,
+              paidColor: accent,
+              trackColor: _divider,
+              remainingColor: remainingAmount > 0
+                  ? AppTheme.errorColor.withAlpha(42)
+                  : AppTheme.successColor.withAlpha(30),
+            ),
+          ),
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                '$percent%',
+                style: TextStyle(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w900,
+                  color: accent,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                AppLocalizations.of(context).pick(
+                  uz: 'to\'landi',
+                  ru: 'оплачено',
+                  en: 'paid',
+                ),
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                  color: _muted,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Map<String, dynamic>? _selectCurrentContract(
+    List<dynamic>? contractList,
+    Map<String, dynamic>? contractData,
+  ) {
+    if (contractList == null || contractList.isEmpty) return null;
+
+    final contracts = contractList
+        .whereType<Map>()
+        .map((c) => Map<String, dynamic>.from(c))
+        .toList();
+    if (contracts.isEmpty) return null;
+
+    final currentYear = contractData?['education_year']?.toString().trim();
+    final currentCourse = contractData?['course']?.toString().trim();
+
+    bool matchesYear(Map<String, dynamic> c) {
+      if (currentYear == null || currentYear.isEmpty) return true;
+      final educationYear = c['education_year']?.toString() ?? '';
+      final eduYear = c['edu_year']?.toString() ?? '';
+      return educationYear == currentYear || eduYear.startsWith(currentYear);
+    }
+
+    bool matchesCourse(Map<String, dynamic> c) {
+      if (currentCourse == null || currentCourse.isEmpty) return true;
+      final course = c['edu_course']?.toString().trim() ?? '';
+      return course.isEmpty || course == currentCourse;
+    }
+
+    var candidates =
+        contracts.where((c) => matchesYear(c) && matchesCourse(c)).toList();
+    if (candidates.isEmpty) {
+      candidates = contracts.where(matchesYear).toList();
+    }
+    if (candidates.isEmpty) candidates = contracts;
+
+    candidates.sort(_compareContractsDesc);
+    return candidates.first;
+  }
+
+  int _compareContractsDesc(Map<String, dynamic> a, Map<String, dynamic> b) {
+    final dateCompare = _contractDateValue(b).compareTo(_contractDateValue(a));
+    if (dateCompare != 0) return dateCompare;
+
+    final yearCompare = _contractYearValue(b).compareTo(_contractYearValue(a));
+    if (yearCompare != 0) return yearCompare;
+
+    return _toDouble(b['id']).compareTo(_toDouble(a['id']));
+  }
+
+  int _contractDateValue(Map<String, dynamic> contract) {
+    for (final key in ['updated_at', 'created_at']) {
+      final parsed = DateTime.tryParse(contract[key]?.toString() ?? '');
+      if (parsed != null) return parsed.millisecondsSinceEpoch;
+    }
+    return 0;
+  }
+
+  int _contractYearValue(Map<String, dynamic> contract) {
+    final direct = int.tryParse(contract['education_year']?.toString() ?? '');
+    if (direct != null) return direct;
+
+    final eduYear = contract['edu_year']?.toString() ?? '';
+    final match = RegExp(r'\d{4}').firstMatch(eduYear);
+    return int.tryParse(match?.group(0) ?? '') ?? 0;
+  }
+
+  String _contractYearLabel(
+    Map<String, dynamic>? contract,
+    Map<String, dynamic>? contractData,
+  ) {
+    final value = contract?['education_year'] ?? contractData?['education_year'];
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? '--' : text;
+  }
+
+  String _contractFullYearLabel(
+    Map<String, dynamic>? contract,
+    Map<String, dynamic>? contractData,
+  ) {
+    final value = contract?['edu_year'] ??
+        contract?['education_year'] ??
+        contractData?['education_year'];
+    final text = value?.toString().trim() ?? '';
+    return text.isEmpty ? '--' : text;
   }
 
   Widget _buildContractRow(String label, String value, Color labelColor, Color valueColor) {
@@ -1150,6 +1308,7 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
   }
 
   Widget _buildLiveClassCard() {
+    final l = AppLocalizations.of(context);
     final lesson = _getCurrentOrNextLesson();
 
     if (lesson == null) {
@@ -1170,19 +1329,36 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
     if (isActive) {
       remaining = end.difference(_now);
-      statusText = 'HOZIR DAVOM ETMOQDA';
+      statusText = l.pick(
+        uz: 'HOZIR DAVOM ETMOQDA',
+        ru: 'ИДЕТ СЕЙЧАС',
+        en: 'IN PROGRESS',
+      );
     } else {
       remaining = start.difference(_now);
-      statusText = 'KEYINGI DARS';
+      statusText = l.pick(
+        uz: 'KEYINGI DARS',
+        ru: 'СЛЕДУЮЩЕЕ ЗАНЯТИЕ',
+        en: 'NEXT LESSON',
+      );
     }
 
     final hours = remaining.inHours;
     final minutes = remaining.inMinutes % 60;
     String timeLeft;
     if (hours > 0) {
-      timeLeft = '$hours soat $minutes daqiqa qoldi';
+      timeLeft = l.pick(
+        uz: '$hours soat $minutes daqiqa qoldi',
+        ru: 'осталось $hours ч. $minutes мин.',
+        en: '$hours h $minutes min left',
+      );
     } else {
-      timeLeft = '${minutes > 0 ? minutes : 1} daqiqa qoldi';
+      final safeMinutes = minutes > 0 ? minutes : 1;
+      timeLeft = l.pick(
+        uz: '$safeMinutes daqiqa qoldi',
+        ru: 'осталось $safeMinutes мин.',
+        en: '$safeMinutes min left',
+      );
     }
 
     final progress = isActive
@@ -1619,6 +1795,75 @@ class _StudentDashboardScreenState extends State<StudentDashboardScreen> {
 
 /// Animated ECG / heartbeat line for the weekly-activity card — a bright
 /// pulse sweeps along a faint baseline trace, like a heart monitor.
+class _ContractDonutPainter extends CustomPainter {
+  final double progress;
+  final Color paidColor;
+  final Color trackColor;
+  final Color remainingColor;
+
+  const _ContractDonutPainter({
+    required this.progress,
+    required this.paidColor,
+    required this.trackColor,
+    required this.remainingColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final strokeWidth = size.width * 0.12;
+    final rect = Offset(strokeWidth / 2, strokeWidth / 2) &
+        Size(size.width - strokeWidth, size.height - strokeWidth);
+    final start = -math.pi / 2;
+    final clamped = progress.clamp(0.0, 1.0).toDouble();
+    final paidSweep = clamped * math.pi * 2;
+    final remainingSweep = math.pi * 2 - paidSweep;
+
+    final trackPaint = Paint()
+      ..color = trackColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final remainingPaint = Paint()
+      ..color = remainingColor
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    final paidPaint = Paint()
+      ..shader = SweepGradient(
+        startAngle: start,
+        endAngle: start + math.pi * 2,
+        colors: [paidColor.withAlpha(190), paidColor],
+      ).createShader(rect)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = strokeWidth
+      ..strokeCap = StrokeCap.round;
+
+    canvas.drawArc(rect, 0, math.pi * 2, false, trackPaint);
+    if (remainingSweep > 0.01) {
+      canvas.drawArc(
+        rect,
+        start + paidSweep + 0.03,
+        math.max(0.0, remainingSweep - 0.06),
+        false,
+        remainingPaint,
+      );
+    }
+    if (paidSweep > 0.01) {
+      canvas.drawArc(rect, start, paidSweep, false, paidPaint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(_ContractDonutPainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.paidColor != paidColor ||
+        oldDelegate.trackColor != trackColor ||
+        oldDelegate.remainingColor != remainingColor;
+  }
+}
+
 class _EcgLine extends StatefulWidget {
   const _EcgLine();
 

@@ -648,6 +648,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('vedomost-submission')->name('vedomost-submission.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'index'])->name('index');
             Route::get('/export', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'export'])->name('export');
+            Route::get('/report', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'report'])->name('report');
             Route::post('/sync', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'sync'])->name('sync');
             Route::post('/toggle-notify', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'toggleNotify'])->name('toggle-notify');
             Route::get('/{id}', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'show'])->whereNumber('id')->name('show');
@@ -655,9 +656,17 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/{id}/review', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'review'])->whereNumber('id')->name('review');
             Route::post('/{id}/approve', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'approve'])->whereNumber('id')->name('approve');
             Route::post('/{id}/reject', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'reject'])->whereNumber('id')->name('reject');
+            Route::post('/{id}/allow-reupload', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'allowReupload'])->whereNumber('id')->name('allow-reupload');
             Route::post('/{id}/ai-check', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'aiCheck'])->whereNumber('id')->name('ai-check');
             Route::get('/{id}/ai-status', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'aiStatus'])->whereNumber('id')->name('ai-status');
             Route::get('/{id}/file/{type}', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'downloadFile'])->whereNumber('id')->name('file');
+        });
+
+        // Vedomost rad etilish bildirgilari (Gmail uslubidagi inbox — o'quv prorektori)
+        Route::prefix('vedomost-rejections')->name('vedomost-rejections.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\VedomostRejectionInboxController::class, 'index'])->name('index');
+            Route::post('/read-all', [\App\Http\Controllers\Admin\VedomostRejectionInboxController::class, 'markAllRead'])->name('read-all');
+            Route::post('/{id}/read', [\App\Http\Controllers\Admin\VedomostRejectionInboxController::class, 'markRead'])->whereNumber('id')->name('read');
         });
 
         // To'garak arizalari
@@ -722,13 +731,24 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/reports/debtors/export-academic-records/start', [ReportController::class, 'startAcademicRecordsExport'])->name('reports.debtors.export-academic-records.start');
         Route::get('/reports/debtors/export-academic-records/status', [ReportController::class, 'academicRecordsExportStatus'])->name('reports.debtors.export-academic-records.status');
         Route::get('/reports/debtors/export-academic-records/download', [ReportController::class, 'academicRecordsExportDownload'])->name('reports.debtors.export-academic-records.download');
+
+        // Qayta o'qishga ariza topshirmaganlar — faqat admin va registrator ofisi
+        Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi'])->group(function () {
+            Route::get('/reports/retake-not-applied', [ReportController::class, 'retakeNotAppliedReport'])->name('reports.retake-not-applied');
+            Route::get('/reports/retake-not-applied/data', [ReportController::class, 'retakeNotAppliedReportData'])->name('reports.retake-not-applied.data');
+        });
+
         Route::get('/reports/student-semester-grades', [ReportController::class, 'studentSemesterGrades'])->name('reports.student-semester-grades');
         Route::get('/reports/student-all-records', [ReportController::class, 'studentAllRecords'])->name('reports.student-all-records');
         Route::get('/reports/debug-student-subjects', [ReportController::class, 'debugStudentSubjects'])->name('reports.debug-student-subjects');
+        Route::get('/reports/debug-debt', [ReportController::class, 'debugDebt'])->name('reports.debug-debt');
 
         Route::get('/reports/sababli-check', [ReportController::class, 'sababliCheckReport'])->name('reports.sababli-check');
         Route::get('/reports/sababli-check/data', [ReportController::class, 'sababliCheckData'])->name('reports.sababli-check.data');
         Route::get('/reports/sababli-check/attendance-detail', [ReportController::class, 'sababliCheckAttendanceDetail'])->name('reports.sababli-check.attendance-detail');
+
+        Route::get('/reports/manual-retake-gaps', [ReportController::class, 'manualRetakeGaps'])->name('reports.manual-retake-gaps');
+        Route::get('/reports/manual-retake-gaps/data', [ReportController::class, 'manualRetakeGapsData'])->name('reports.manual-retake-gaps.data');
 
         Route::get('/reports/top-students', [ReportController::class, 'topStudents'])->name('reports.top-students');
         Route::get('/reports/top-students/data', [ReportController::class, 'topStudentsData'])->name('reports.top-students.data');
@@ -799,6 +819,24 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::prefix('grade-history')->name('grade-history.')->group(function () {
             Route::get('/', [GradeHistoryController::class, 'index'])->name('index');
         });
+
+        // O'quv reja to'g'riligi (akkreditatsiya): namunaviy <-> ishchi reja solishtirish
+        Route::prefix('oquv-reja')->name('oquv-reja.')
+            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'index'])->name('index');
+                Route::post('/', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'store'])->name('store');
+                Route::get('/options', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'options'])->name('options');
+                Route::get('/compare', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compare'])->name('compare');
+                Route::get('/compare/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'compareExport'])->name('compare-export');
+                Route::delete('/comparisons/{comparison}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroyComparison'])->name('comparisons.destroy');
+                Route::get('/{curriculum}/export', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'export'])->name('export');
+                Route::post('/{curriculum}/subjects', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'storeSubject'])->name('subjects.store');
+                Route::put('/{curriculum}/subjects/{subject}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'updateSubject'])->name('subjects.update');
+                Route::delete('/{curriculum}/subjects/{subject}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroySubject'])->name('subjects.destroy');
+                Route::get('/{curriculum}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'show'])->name('show');
+                Route::delete('/{curriculum}', [\App\Http\Controllers\Admin\CurriculumCheckController::class, 'destroy'])->name('destroy');
+            });
 
         Route::prefix('student-photos')->name('student-photos.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\StudentPhotoReportController::class, 'index'])->name('index');
@@ -1052,12 +1090,22 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/students-excel', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'exportSentStudentsExcel'])->name('students-excel');
             Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'show'])->name('show');
             Route::post('/{groupId}/save-score', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'saveScore'])->name('save-score');
+            Route::post('/{groupId}/load-from-diagnostika', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'loadFromDiagnostika'])->name('load-from-diagnostika');
+            Route::post('/{groupId}/yn-qaydnoma', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'generateYnQaydnoma'])->name('yn-qaydnoma');
         });
 
         // Statistika va eksport
         Route::prefix('retake-statistics')->name('retake-statistics.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeStatisticsController::class, 'index'])->name('index');
             Route::get('/export', [\App\Http\Controllers\Teacher\AcademicDept\RetakeStatisticsController::class, 'exportExcel'])->name('export');
+        });
+
+        // Qayta o'qish arizasi hisoboti (fan + ariza semestri kesimida)
+        Route::prefix('retake-application-report')->name('retake-application-report.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Teacher\AcademicDept\RetakeApplicationReportController::class, 'index'])->name('index');
+            Route::get('/data', [\App\Http\Controllers\Teacher\AcademicDept\RetakeApplicationReportController::class, 'data'])->name('data');
+            Route::get('/export', [\App\Http\Controllers\Teacher\AcademicDept\RetakeApplicationReportController::class, 'exportPrepare'])->name('export');
+            Route::get('/export-download', [\App\Http\Controllers\Teacher\AcademicDept\RetakeApplicationReportController::class, 'exportDownload'])->name('export-download');
         });
 
         // O'qituvchi-fan kesimida talabalar statistikasi (faqat o'quv bo'limi)
@@ -1094,6 +1142,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/synchronize/attendance-controls', [DashboardController::class, 'importAttendanceControls'])->name('synchronize.attendance-controls');
         Route::post('/synchronize/curriculum-subject-teachers', [DashboardController::class, 'importCurriculumSubjectTeachers'])->name('synchronize.curriculum-subject-teachers');
         Route::post('/synchronize/academic-records', [DashboardController::class, 'importAcademicRecords'])->name('synchronize.academic-records');
+        Route::get('/synchronize/academic-records/progress', [DashboardController::class, 'academicRecordsProgress'])->name('synchronize.academic-records.progress');
+        Route::post('/synchronize/academic-records/clear-lock', [DashboardController::class, 'clearAcademicImportLock'])->name('synchronize.academic-records.clear-lock');
         Route::post('/synchronize/marking-systems', [SettingsController::class, 'syncMarkingSystems'])->name('synchronize.marking-systems');
 
         // Talabalar so'rovnomasi natijalari + Telegramga e'lon/eslatma
@@ -1399,6 +1449,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::get('/reports/absence-74', [TutorReportController::class, 'absenceReport74'])->name('reports.absence-74');
         Route::get('/reports/absence-25', [TutorReportController::class, 'absenceReport25'])->name('reports.absence-25');
         Route::get('/reports/debtors', [TutorReportController::class, 'debtorsReport'])->name('reports.debtors');
+        Route::get('/reports/debtors/data', [TutorReportController::class, 'debtorsReportData'])->name('reports.debtors.data');
         Route::get('/reports/top-students', [TutorReportController::class, 'topStudentsReport'])->name('reports.top-students');
         Route::get('/reports/unrated', [TutorReportController::class, 'unratedReport'])->name('reports.unrated');
         Route::get('/reports/contracts', [TutorReportController::class, 'contractsReport'])->name('reports.contracts');

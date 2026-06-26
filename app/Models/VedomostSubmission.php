@@ -15,6 +15,14 @@ class VedomostSubmission extends Model
     public const STATUS_APPROVED = 'approved';    // tasdiqlandi
     public const STATUS_REJECTED = 'rejected';    // rad etildi
 
+    /** Vedomost shakllari. */
+    public const FORM_12 = '12';     // 1-urinish (joriy) — har guruh alohida
+    public const FORM_12A = '12a';   // 2-urinish (1-qayta topshirish) — barcha guruhlar bitta varaqda
+    public const FORM_12B = '12b';   // 3-urinish (2-qayta topshirish) — barcha guruhlar bitta varaqda
+
+    /** 12a/12b umumiy (guruhsiz, hamma guruh bitta varaqda) shakllar. */
+    public const COMBINED_FORMS = [self::FORM_12A, self::FORM_12B];
+
     protected $fillable = [
         'education_year',
         'semester_code',
@@ -28,6 +36,7 @@ class VedomostSubmission extends Model
         'department_name',
         'specialty_name',
         'closing_form',
+        'form_type',
         'teacher_hemis_id',
         'teacher_name',
         'teacher_phone',
@@ -50,6 +59,9 @@ class VedomostSubmission extends Model
         'reviewed_by_name',
         'reviewed_at',
         'rejection_reason',
+        'reupload_allowed_at',
+        'reupload_allowed_by',
+        'reupload_allowed_by_name',
         'ai_check_status',
         'ai_verdict',
         'ai_summary',
@@ -66,6 +78,7 @@ class VedomostSubmission extends Model
         'deadline' => 'date',
         'uploaded_at' => 'datetime',
         'reviewed_at' => 'datetime',
+        'reupload_allowed_at' => 'datetime',
         'ai_checked_at' => 'datetime',
         'ai_result' => 'array',
         'prorektor_notified_at' => 'datetime',
@@ -106,6 +119,40 @@ class VedomostSubmission extends Model
     public function getStatusLabelAttribute(): string
     {
         return self::statusLabels()[$this->status] ?? $this->status;
+    }
+
+    /**
+     * Vedomost shakli yorliqlari.
+     */
+    public static function formLabels(): array
+    {
+        return [
+            self::FORM_12 => '12-shakl',
+            self::FORM_12A => '12a-shakl',
+            self::FORM_12B => '12b-shakl',
+        ];
+    }
+
+    public static function formLabel(?string $formType): string
+    {
+        return self::formLabels()[$formType] ?? ($formType ?: '12-shakl');
+    }
+
+    /**
+     * 12a/12b — umumiy (guruhsiz, hamma guruh bitta varaqda) shaklmi?
+     */
+    public function isCombinedForm(): bool
+    {
+        return in_array($this->form_type, self::COMBINED_FORMS, true);
+    }
+
+    /**
+     * Rad etilgan vedomostni qayta yuklash mumkinmi?
+     * Faqat o'quv prorektori ruxsat bergan (reupload_allowed_at to'ldirilgan) bo'lsa.
+     */
+    public function reuploadPermitted(): bool
+    {
+        return $this->status === self::STATUS_REJECTED && $this->reupload_allowed_at !== null;
     }
 
     /**

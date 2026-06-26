@@ -38,8 +38,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final auth = context.read<AuthProvider>();
-      _checkBiometric(autoPrompt: !auth.loggedOut);
+      _checkBiometric();
     });
   }
 
@@ -104,15 +103,21 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (!mounted) return;
 
-    // Stash the credentials so biometric re-login works after logout.
     if (auth.state == AuthState.authenticated ||
         auth.state == AuthState.profileIncomplete) {
-      await _bio.saveCredentials(
-        login: login,
-        password: password,
-        role: _isStudent ? 'student' : 'staff',
-      );
+      if (_remember) {
+        // Stash the latest account so biometric re-login cannot reuse an old one.
+        await _bio.saveCredentials(
+          login: login,
+          password: password,
+          role: _isStudent ? 'student' : 'staff',
+        );
+      } else {
+        await _bio.clearCredentials();
+      }
     }
+
+    if (!mounted) return;
 
     if (auth.state == AuthState.requires2fa) {
       Navigator.of(context).push(
@@ -578,7 +583,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
             const SizedBox(width: 10),
             const Text(
-              'Tezkor kirish',
+              'Biometrik kirish',
               style: TextStyle(
                 color: _ink,
                 fontSize: 13.5,

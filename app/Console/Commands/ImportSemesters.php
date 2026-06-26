@@ -47,6 +47,21 @@ class ImportSemesters extends Command
                 $this->info("Processing page $page of $totalPages for semesters...");
 
                 foreach ($semesters as $semesterData) {
+                    // Compute current flag from actual week date ranges instead of
+                    // HEMIS's current field, which only reflects educationYear.current
+                    // and misses ongoing semesters from older cohorts.
+                    $isCurrent = false;
+                    $now = now();
+                    foreach ($semesterData['curriculumWeeks'] as $weekData) {
+                        if ($now->between(
+                            \Carbon\Carbon::createFromTimestamp($weekData['start_date']),
+                            \Carbon\Carbon::createFromTimestamp($weekData['end_date'])
+                        )) {
+                            $isCurrent = true;
+                            break;
+                        }
+                    }
+
                     $semester = Semester::updateOrCreate(
                         ['semester_hemis_id' => $semesterData['id']],
                         [
@@ -56,7 +71,7 @@ class ImportSemesters extends Command
                             'education_year' => $semesterData['_education_year'],
                             'level_code' => $semesterData['level']['code'] ?? null,
                             'level_name' => $semesterData['level']['name'] ?? null,
-                            'current' => $semesterData['current'],
+                            'current' => $isCurrent,
                         ]
                     );
 

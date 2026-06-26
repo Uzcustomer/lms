@@ -20,7 +20,12 @@
         $b = $statusBadge[$submission->status] ?? ['—','#475569','#f1f5f9'];
         $v = $submission;
         $overdue = $v->deadline && \Carbon\Carbon::parse($v->deadline)->isPast() && !\Carbon\Carbon::parse($v->deadline)->isToday() && $v->status !== 'approved';
-        $actionLabels = ['upload'=>'Yuklandi','review'=>'Tekshirishga olindi','approve'=>'Tasdiqlandi','reject'=>'Rad etildi'];
+        $actionLabels = ['upload'=>'Yuklandi','review'=>'Tekshirishga olindi','approve'=>'Tasdiqlandi','reject'=>'Rad etildi','reupload_permit'=>'Qayta yuklashga ruxsat berildi'];
+        $activeRole = session('active_role', '');
+        $isAdminActor = in_array($activeRole, ['superadmin','admin','kichik_admin','registrator_ofisi'], true);
+        $isViceRector = in_array($activeRole, ['superadmin','oquv_prorektori'], true);
+        $reuploadPermitted = $v->status === 'rejected' && $v->reupload_allowed_at;
+        $canUploadNow = in_array($v->status, ['pending','received']) || $reuploadPermitted;
     @endphp
 
     <div class="py-4">
@@ -57,6 +62,7 @@
                     <div><span style="color:#94a3b8;">Yo'nalish:</span> {{ $v->specialty_name }}</div>
                     <div><span style="color:#94a3b8;">Kafedra:</span> {{ $m->department_name ?? $v->department_name }}</div>
                     <div><span style="color:#94a3b8;">Yopilish shakli:</span> {{ $closingFormLabels[$v->closing_form] ?? $v->closing_form }}</div>
+                    <div><span style="color:#94a3b8;">Shakl:</span> <b>{{ \App\Models\VedomostSubmission::formLabel($v->form_type ?? '12') }}</b></div>
                     <div><span style="color:#94a3b8;">O'qituvchi(lar):</span> {{ $m->teacher_name ?? '—' }} <span style="color:#94a3b8;">{{ $m->teacher_phone ? '('.$m->teacher_phone.')' : '' }}</span></div>
                     <div><span style="color:#94a3b8;">Fan mas'uli:</span> {{ $m->fan_masuli_name ?? '—' }} <span style="color:#94a3b8;">{{ $m->fan_masuli_phone ? '('.$m->fan_masuli_phone.')' : '' }}</span></div>
                     <div><span style="color:#94a3b8;">Kafedra mudiri:</span> {{ $m->kafedra_mudiri_name ?? '—' }} <span style="color:#94a3b8;">{{ $m->kafedra_mudiri_phone ? '('.$m->kafedra_mudiri_phone.')' : '' }}</span></div>
@@ -84,14 +90,42 @@
                         <div style="color:#7f1d1d;font-size:14px;white-space:pre-wrap;">{{ $v->rejection_reason }}</div>
                     </div>
                 @endif
+
+                @if($reuploadPermitted)
+                    <div style="margin-top:14px;background:#ecfdf5;border:1px solid #a7f3d0;border-radius:8px;padding:12px;">
+                        <div style="font-weight:700;color:#047857;font-size:13px;">✔ Qayta yuklashga ruxsat berilgan</div>
+                        <div style="color:#065f46;font-size:13px;margin-top:2px;">
+                            Ruxsat bergan: <b>{{ $v->reupload_allowed_by_name ?? '—' }}</b>
+                            · {{ \Carbon\Carbon::parse($v->reupload_allowed_at)->format('d.m.Y H:i') }}
+                        </div>
+                    </div>
+                @endif
             </div>
 
             {{-- Amallar --}}
             <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="padding:18px;margin-top:14px;">
                 <h3 style="font-size:16px;font-weight:700;color:#1e293b;margin-bottom:12px;">Amallar</h3>
 
-                @if(in_array($v->status, ['pending','rejected','received']))
-                    {{-- Yuklash / almashtirish --}}
+                {{-- Rad etilgan: qayta yuklash uchun o'quv prorektori ruxsati kerak --}}
+                @if($v->status === 'rejected' && !$reuploadPermitted)
+                    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px;margin-bottom:12px;">
+                        <div style="color:#92400e;font-size:13px;">
+                            ⚠ Bu vedomost rad etilgan. Qayta yuklash uchun avval <b>o'quv prorektori</b> ruxsat berishi kerak.
+                        </div>
+                        @if($isViceRector)
+                            <form method="POST" action="{{ route('admin.vedomost-submission.allow-reupload', $v->id) }}" style="margin-top:10px;"
+                                  onsubmit="return confirm('Bu vedomostni qayta yuklashga ruxsat berilsinmi?');">
+                                @csrf
+                                <button type="submit" style="background:#047857;color:#fff;border:none;padding:9px 18px;border-radius:8px;cursor:pointer;">
+                                    🔓 Qayta yuklashga ruxsat berish
+                                </button>
+                            </form>
+                        @endif
+                    </div>
+                @endif
+
+                {{-- Yuklash / almashtirish — admin/registrator uchun --}}
+                @if($canUploadNow && $isAdminActor)
                     @if($v->status === 'received')
                         <div style="font-size:12px;color:#b45309;margin-bottom:8px;">
                             Vedomost hali tekshirishga olinmagan — fayl noto'g'ri bo'lsa, almashtirishingiz mumkin.
@@ -113,14 +147,14 @@
                     </form>
                 @endif
 
-                @if($v->status === 'received')
+                @if($v->status === 'received' && $isAdminActor)
                     <form method="POST" action="{{ route('admin.vedomost-submission.review', $v->id) }}" style="display:inline-block;margin-right:8px;">
                         @csrf
                         <button type="submit" style="background:#b45309;color:#fff;border:none;padding:9px 18px;border-radius:8px;cursor:pointer;">Tekshirishga olish</button>
                     </form>
                 @endif
 
-                @if(in_array($v->status, ['received','reviewing']))
+                @if(in_array($v->status, ['received','reviewing']) && $isAdminActor)
                     <form method="POST" action="{{ route('admin.vedomost-submission.approve', $v->id) }}" style="display:inline-block;margin-right:8px;"
                           onsubmit="return confirm('Vedomost tasdiqlansinmi?');">
                         @csrf
@@ -147,7 +181,7 @@
             <div class="bg-white rounded-xl shadow-sm border border-gray-100" style="padding:18px;margin-top:14px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
                     <h3 style="font-size:16px;font-weight:700;color:#1e293b;">🤖 AI tekshiruv <span style="font-weight:400;color:#94a3b8;font-size:13px;">(tavsiya — yakuniy qaror registratorda)</span></h3>
-                    @if($v->pdf_path && $aiConfigured && !in_array($v->ai_check_status, ['queued','running']))
+                    @if($v->pdf_path && $aiConfigured && $isAdminActor && !in_array($v->ai_check_status, ['queued','running']))
                         <form method="POST" action="{{ route('admin.vedomost-submission.ai-check', $v->id) }}">
                             @csrf
                             <button type="submit" style="background:#6d28d9;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;">

@@ -69,6 +69,7 @@
                         <div class="filter-item" style="min-width: 130px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Min. qarzdorlik</label>
                             <select id="min_debt_count" class="select2" style="width: 100%;">
+                                <option value="0">Barchasi</option>
                                 @foreach([1, 2, 3, 4, 5, 6, 7, 8] as $cnt)
                                     <option value="{{ $cnt }}" {{ $cnt == 4 ? 'selected' : '' }}>&ge; {{ $cnt }} ta fan</option>
                                 @endforeach
@@ -181,7 +182,8 @@
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;"><a href="#" class="sort-link" data-sort="student_type_name">Toifa <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Qarzlar soni (curriculum da bor, academic records da yo'q)"><a href="#" class="sort-link" data-sort="debt_count">Qarzlar soni <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="Qarzlar soni (curriculum da bor, academic records da yo'q)"><a href="#" class="sort-link" data-sort="debt_count">O'tgan semestr <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="Joriy semestr — journal ma'lumotlaridan"><a href="#" class="sort-link" data-sort="current_risk_count">Joriy semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         @unless($isExpelledPage ?? false)
                                         <th><a href="#" class="sort-link" data-sort="lesson_days">Darslar soni <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         @endunless
@@ -258,7 +260,7 @@
                 student_status: $('#student_status').val() || '',
                 student_type: $('#student_type').val() || '',
                 current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
-                min_debt_count: ($('#min_debt_count').length ? ($('#min_debt_count').val() || 4) : 4),
+                min_debt_count: ($('#min_debt_count').length ? ($('#min_debt_count').val() ?? '') : 4),
                 student_name: $('#student_name').val() || '',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
@@ -352,6 +354,13 @@
                 html += '</td>';
                 html += '<td><span class="badge badge-violet">' + esc(r.semester_name) + '</span></td>';
                 html += '<td style="text-align:center;"><span class="badge badge-debt">' + r.debt_count + '</span></td>';
+                // Joriy semestr xavfi
+                var crCount = r.current_risk_count || 0;
+                if (crCount > 0) {
+                    html += '<td style="text-align:center;"><span style="background:#d97706;color:#fff;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700;" title="Joriy semestr xavfi">' + crCount + ' ta</span></td>';
+                } else {
+                    html += '<td style="text-align:center;color:#94a3b8;font-size:12px;">—</td>';
+                }
                 if (!isExpelledPage) {
                     html += '<td style="text-align:center;"><span class="badge badge-violet">' + (r.lesson_days || 0) + ' kun</span></td>';
                 }
@@ -383,6 +392,29 @@
 
             var journalBase = '{{ url("/admin/journal/show") }}';
             var html = '';
+
+            // Joriy semestr xavflari (journal ma'lumotlaridan)
+            var currentRisks = r.current_risks || [];
+            if (currentRisks.length > 0) {
+                html += '<div style="padding:14px 20px 8px;font-weight:700;color:#d97706;font-size:13px;text-transform:uppercase;letter-spacing:.05em;">Joriy semestr xavflari (' + currentRisks.length + ' ta fan)</div>';
+                html += '<div style="padding:0 20px 12px;">';
+                var riskColors = {'Akademik qarzdor':'#dc2626','3-urinish':'#dc2626','Davomat':'#be123c','2-urinish':'#d97706','1-urinish':'#ca8a04','MT<60':'#b45309','JN<60':'#b45309'};
+                for (var ri = 0; ri < currentRisks.length; ri++) {
+                    var risk = currentRisks[ri];
+                    html += '<div style="margin-bottom:6px;display:flex;align-items:flex-start;gap:8px;">';
+                    html += '<span style="font-size:12px;color:#0f172a;font-weight:600;min-width:150px;">' + esc(risk.subject_name) + '</span>';
+                    html += '<div style="display:flex;flex-wrap:wrap;gap:3px;">';
+                    for (var rj = 0; rj < risk.reasons.length; rj++) {
+                        var reason = risk.reasons[rj];
+                        var color = '#b45309';
+                        for (var k in riskColors) { if (reason.indexOf(k) !== -1) { color = riskColors[k]; break; } }
+                        html += '<span style="background:' + color + ';color:#fff;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;">' + esc(reason) + '</span>';
+                    }
+                    html += '</div></div>';
+                }
+                html += '</div>';
+                html += '<div style="border-top:1px solid #fde68a;margin:0 20px 8px;"></div>';
+            }
 
             // Barcha semestrlar — har doim tepada
             html += '<div style="padding:16px 20px 8px;font-weight:700;color:#1a3268;font-size:14px;">Semestrlar</div>';
@@ -435,10 +467,15 @@
                         dh += '</tr></thead><tbody>';
                         for (var i = 0; i < debtsAll.length; i++) {
                             var row = debtsAll[i];
-                            dh += '<tr>';
+                            var isNoaniq = row.status === 'noaniq';
+                            dh += '<tr' + (isNoaniq ? ' style="background:#fef9c3;"' : '') + '>';
                             dh += '<td>' + (i+1) + '</td>';
                             dh += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(row.semester_name) + '</span></td>';
-                            dh += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(row.subject_name) + '</td>';
+                            dh += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(row.subject_name);
+                            if (isNoaniq) {
+                                dh += ' <span style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 5px;font-weight:600;vertical-align:middle;">Fan biriktirilmagan</span>';
+                            }
+                            dh += '</td>';
                             dh += '<td>' + esc(row.credit) + '</td>';
                             dh += '<td>' + esc(row.total_acload) + '</td>';
                             dh += '</tr>';

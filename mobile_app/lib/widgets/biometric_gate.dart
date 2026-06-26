@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../l10n/app_localizations.dart';
 import '../providers/auth_provider.dart';
 import '../services/biometric_service.dart';
 
@@ -66,8 +67,13 @@ class _BiometricGateState extends State<BiometricGate>
   Future<void> _prompt() async {
     if (_authing) return;
     _authing = true;
+    final l = AppLocalizations.of(context);
     final ok = await _bio.authenticate(
-      reason: 'Ilovaga kirish uchun qurilma himoyasini tasdiqlang',
+      reason: l.pick(
+        uz: 'Ilovaga kirish uchun qurilma himoyasini tasdiqlang',
+        ru: 'Подтвердите вход в приложение защитой устройства',
+        en: 'Confirm with your device security to open the app',
+      ),
     );
     _authing = false;
     if (ok && mounted) setState(() => _locked = false);
@@ -75,27 +81,47 @@ class _BiometricGateState extends State<BiometricGate>
 
   Future<void> _offerEnable() async {
     if (!mounted) return;
+    final l = AppLocalizations.of(context);
     final yes = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Tezkor kirish'),
-        content: const Text(
-            'Keyingi safar ilovaga barmoq izi, Face ID yoki qurilma paroli bilan kirishni xohlaysizmi?'),
+        title: Text(l.pick(
+          uz: 'Tezkor kirish',
+          ru: 'Быстрый вход',
+          en: 'Quick access',
+        )),
+        content: Text(l.pick(
+          uz: 'Keyingi safar ilovaga barmoq izi, Face ID yoki qurilma paroli bilan kirishni xohlaysizmi?',
+          ru: 'Хотите в следующий раз входить в приложение по отпечатку, Face ID или паролю устройства?',
+          en: 'Would you like to use fingerprint, Face ID, or device passcode next time?',
+        )),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Hozir emas'),
+            child: Text(l.pick(
+              uz: 'Hozir emas',
+              ru: 'Не сейчас',
+              en: 'Not now',
+            )),
           ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Yoqish'),
+            child: Text(l.pick(
+              uz: 'Yoqish',
+              ru: 'Включить',
+              en: 'Enable',
+            )),
           ),
         ],
       ),
     );
     if (yes == true) {
       final ok = await _bio.authenticate(
-        reason: 'Tasdiqlash uchun qurilma himoyasini tekshiring',
+        reason: l.pick(
+          uz: 'Tasdiqlash uchun qurilma himoyasini tekshiring',
+          ru: 'Подтвердите действие защитой устройства',
+          en: 'Confirm with your device security',
+        ),
       );
       if (ok) {
         await _bio.setEnabled(true);
@@ -121,6 +147,7 @@ class _LockScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
     return Material(
       child: Container(
         decoration: const BoxDecoration(
@@ -148,9 +175,13 @@ class _LockScreen extends StatelessWidget {
                       color: Colors.white, size: 52),
                 ),
                 const SizedBox(height: 22),
-                const Text(
-                  'Ilova qulflangan',
-                  style: TextStyle(
+                Text(
+                  l.pick(
+                    uz: 'Ilova qulflangan',
+                    ru: 'Приложение заблокировано',
+                    en: 'App locked',
+                  ),
+                  style: const TextStyle(
                     color: Colors.white,
                     fontSize: 20,
                     fontWeight: FontWeight.w800,
@@ -158,7 +189,11 @@ class _LockScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Davom etish uchun barmoq izi, Face ID\nyoki qurilma paroli bilan tasdiqlang',
+                  l.pick(
+                    uz: 'Davom etish uchun barmoq izi, Face ID\nyoki qurilma paroli bilan tasdiqlang',
+                    ru: 'Для продолжения подтвердите отпечатком,\nFace ID или паролем устройства',
+                    en: 'Confirm with fingerprint, Face ID,\nor device passcode to continue',
+                  ),
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.85),
@@ -172,7 +207,11 @@ class _LockScreen extends StatelessWidget {
                   child: ElevatedButton.icon(
                     onPressed: onUnlock,
                     icon: const Icon(Icons.lock_open_rounded, size: 18),
-                    label: const Text('Ochish'),
+                    label: Text(l.pick(
+                      uz: 'Ochish',
+                      ru: 'Открыть',
+                      en: 'Unlock',
+                    )),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Colors.white,
                       foregroundColor: const Color(0xFF0D9488),
@@ -188,7 +227,11 @@ class _LockScreen extends StatelessWidget {
                 TextButton(
                   onPressed: () => context.read<AuthProvider>().logout(),
                   child: Text(
-                    'Parol bilan kirish',
+                    l.pick(
+                      uz: 'Parol bilan kirish',
+                      ru: 'Войти по паролю',
+                      en: 'Sign in with password',
+                    ),
                     style: TextStyle(
                       color: Colors.white.withOpacity(0.9),
                       fontWeight: FontWeight.w700,

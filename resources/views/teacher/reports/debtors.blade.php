@@ -1,26 +1,109 @@
 <x-teacher-app-layout>
     <x-slot name="header">
-        <h2 class="text-xl font-semibold leading-tight text-gray-800">4 va undan ortiq qarzdorlar hisoboti</h2>
+        <h2 class="text-xl font-semibold leading-tight text-gray-800">
+            Qarzdorlar hisoboti
+        </h2>
     </x-slot>
 
     <div class="py-4">
         <div class="max-w-full mx-auto sm:px-4 lg:px-6">
             <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
 
+                <!-- Filters -->
                 <div class="filter-container">
+                    <!-- Row 1 -->
                     <div class="filter-row">
-                        <div class="filter-item" style="min-width: 170px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
-                            <select name="group" id="group-select" class="filter-select">
+                        <div class="filter-item" style="min-width: 160px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#3b82f6;"></span> Ta'lim turi</label>
+                            <select id="education_type" class="select2" style="width: 100%;">
                                 <option value="">Barchasi</option>
-                                @foreach($tutorGroups as $group)
-                                    <option value="{{ $group->group_hemis_id }}" {{ request('group') == $group->group_hemis_id ? 'selected' : '' }}>{{ $group->name }}</option>
+                                @foreach($educationTypes as $type)
+                                    <option value="{{ $type->education_type_code }}" {{ ($selectedEducationType ?? '') == $type->education_type_code ? 'selected' : '' }}>
+                                        {{ $type->education_type_name }}
+                                    </option>
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 120px;">
+                        <div class="filter-item" style="flex: 1; min-width: 200px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
+                            <select id="faculty" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($faculties as $faculty)
+                                    <option value="{{ $faculty->id }}">{{ $faculty->name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item" style="flex: 1; min-width: 240px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Yo'nalish</label>
+                            <select id="specialty" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="min-width: 170px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#ef4444;"></span> Chetlashganlik holati</label>
+                            <select id="student_status" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($studentStatuses as $status)
+                                    <option value="{{ $status->student_status_code }}"
+                                        {{ str_contains(mb_strtolower($status->student_status_name ?? ''), 'qimoqda') ? 'selected' : '' }}>
+                                        {{ $status->student_status_name }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item" style="min-width: 90px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#94a3b8;"></span> Sahifada</label>
+                            <select id="per_page" class="select2" style="width: 100%;">
+                                @foreach([10, 25, 50, 100] as $ps)
+                                    <option value="{{ $ps }}" {{ $ps == 50 ? 'selected' : '' }}>{{ $ps }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item" style="min-width: 130px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Min. qarzdorlik</label>
+                            <select id="min_debt_count" class="select2" style="width: 100%;">
+                                <option value="0">Barchasi</option>
+                                @foreach([1, 2, 3, 4, 5, 6, 7, 8] as $cnt)
+                                    <option value="{{ $cnt }}" {{ $cnt == 4 ? 'selected' : '' }}>&ge; {{ $cnt }} ta fan</option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <!-- Row 2 -->
+                    <div class="filter-row">
+                        <div class="filter-item" style="min-width: 140px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Kurs</label>
+                            <select id="level_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="min-width: 150px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#14b8a6;"></span> Semestr</label>
+                            <select id="semester_code" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="min-width: 170px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#1a3268;"></span> Guruh</label>
+                            <select id="group" class="select2" style="width: 100%;"><option value="">Barchasi</option></select>
+                        </div>
+                        <div class="filter-item" style="flex: 1; min-width: 220px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f59e0b;"></span> F.I.SH</label>
+                            <input id="student_name" type="text" class="w-full h-9 rounded-lg border border-slate-300 px-3 text-sm" placeholder="Talaba ismi..." style="height:36px;border-radius:8px;border:1px solid #cbd5e1;font-size:0.8rem;" />
+                        </div>
+                        <div class="filter-item" style="min-width: 170px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#0ea5e9;"></span> Talaba toifasi</label>
+                            <select id="student_type" class="select2" style="width: 100%;">
+                                <option value="">Barchasi</option>
+                                @foreach($studentTypes ?? [] as $type)
+                                    <option value="{{ $type->student_type_code }}">{{ $type->student_type_name }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="filter-item" style="min-width: 160px;">
                             <label class="filter-label">&nbsp;</label>
-                            <button type="button" class="btn-calc" onclick="applyFilter()">
+                            <div class="toggle-switch" id="current-semester-toggle" onclick="toggleSemester()">
+                                <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                                <span class="toggle-label">Joriy semestr</span>
+                            </div>
+                        </div>
+                        <div class="filter-item" style="min-width: 140px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
                                 <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                 Hisoblash
                             </button>
@@ -28,66 +111,402 @@
                     </div>
                 </div>
 
-                <div style="padding:10px 20px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;align-items:center;gap:12px;">
-                    <span class="badge" style="background:#dc2626;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;">4+ qarzdor: {{ count($results ?? []) }} ta</span>
-                </div>
-
-                <div style="max-height:calc(100vh - 300px);overflow-y:auto;overflow-x:auto;">
-                    <table class="journal-table">
-                        <thead>
-                        <tr>
-                            <th class="th-num">#</th>
-                            <th>Talaba FISH</th>
-                            <th>Guruh</th>
-                            <th style="text-align:center;">Qarzlar soni</th>
-                            <th>Qarz fanlari</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        @forelse($results ?? [] as $i => $row)
-                            <tr>
-                                <td class="td-num">{{ $i + 1 }}</td>
-                                <td>
-                                    <div class="student-name-cell">
-                                        @if($row['image'])
-                                            <img src="{{ $row['image'] }}" class="student-avatar">
-                                        @else
-                                            <div class="student-avatar-placeholder">{{ mb_substr($row['full_name'], 0, 1) }}</div>
-                                        @endif
-                                        <span class="text-cell" style="font-weight:700;color:#0f172a;">{{ $row['full_name'] }}</span>
-                                    </div>
-                                </td>
-                                <td><span class="badge badge-indigo">{{ $row['group_name'] }}</span></td>
-                                <td style="text-align:center;">
-                                    <span class="badge badge-grade-red" style="font-size:14px;">{{ $row['debt_count'] }}</span>
-                                </td>
-                                <td>
-                                    <div style="display:flex;flex-wrap:wrap;gap:4px;">
-                                        @foreach($row['debts'] as $debt)
-                                            <span class="badge badge-grade-yellow" style="font-size:10px;" title="{{ $debt['semester_code'] }}-semestr">
-                                                {{ Str::limit($debt['subject_name'], 25) }}
-                                            </span>
-                                        @endforeach
-                                    </div>
-                                </td>
-                            </tr>
-                        @empty
-                            <tr><td colspan="5" style="padding:40px;text-align:center;color:#94a3b8;font-size:14px;">4+ qarzdor talaba topilmadi</td></tr>
-                        @endforelse
-                        </tbody>
-                    </table>
+                <!-- Result Area -->
+                <div id="result-area">
+                    <div id="empty-state" style="padding: 60px 20px; text-align: center;">
+                        <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+                        <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Qarzdor talabalar ro'yxati</p>
+                    </div>
+                    <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
+                        <div class="spinner"></div>
+                        <p style="color:#2b5ea7;font-size:14px;margin-top:16px;font-weight:600;">Hisoblanmoqda...</p>
+                        <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
+                    </div>
+                    <div id="table-area" style="display:none;">
+                        <div style="padding:10px 20px;background:#fef2f2;border-bottom:1px solid #fecaca;display:flex;align-items:center;gap:12px;">
+                            <span id="total-badge" class="badge" style="background:#dc2626;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
+                            <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
+                        </div>
+                        <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
+                            <table class="journal-table">
+                                <thead>
+                                    <tr>
+                                        <th class="th-num">#</th>
+                                        <th><a href="#" class="sort-link" data-sort="full_name">Talaba FISH <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="department_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;"><a href="#" class="sort-link" data-sort="student_type_name">Toifa <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="Qarzlar soni (curriculum da bor, academic records da yo'q)"><a href="#" class="sort-link" data-sort="debt_count">O'tgan semestr <span class="sort-icon active">&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="Joriy semestr — journal ma'lumotlaridan"><a href="#" class="sort-link" data-sort="current_risk_count">Joriy semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;width:90px;">Batafsil</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="table-body"></tbody>
+                            </table>
+                        </div>
+                        <div id="pagination-area" style="padding:12px 20px;border-top:1px solid #e2e8f0;background:#f8fafc;display:flex;align-items:center;justify-content:center;gap:6px;flex-wrap:wrap;"></div>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
 
-    @include('teacher.reports.partials.report-styles')
+    <!-- Detail Modal -->
+    <div id="detail-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeModal()">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 id="modal-title">Batafsil ma'lumot</h3>
+                <button onclick="closeModal()" class="modal-close">&times;</button>
+            </div>
+            <div id="modal-student-info" class="modal-info"></div>
+            <div id="modal-body" style="max-height:60vh;overflow-y:auto;padding:0;"></div>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+
     <script>
-        function applyFilter() {
-            var group = document.getElementById('group-select').value;
-            var url = '{{ route("teacher.reports.debtors") }}';
-            if (group) url += '?group=' + encodeURIComponent(group);
-            window.location.href = url;
+        let currentSort = 'debt_count';
+        let currentDirection = 'desc';
+        let currentPage = 1;
+        let reportData = [];
+
+        function stripSpecialChars(s) { return s.replace(/[\/\(\),\-\.\s]/g, '').toLowerCase(); }
+        function fuzzyMatcher(params, data) {
+            if ($.trim(params.term) === '') return data;
+            if (typeof data.text === 'undefined') return null;
+            if (stripSpecialChars(data.text).indexOf(stripSpecialChars(params.term)) > -1) return $.extend({}, data, true);
+            if (data.text.toLowerCase().indexOf(params.term.toLowerCase()) > -1) return $.extend({}, data, true);
+            return null;
         }
+
+        function toggleSemester() {
+            document.getElementById('current-semester-toggle').classList.toggle('active');
+        }
+
+        function getFilters() {
+            return {
+                education_type: $('#education_type').val() || '',
+                faculty: $('#faculty').val() || '',
+                specialty: $('#specialty').val() || '',
+                level_code: $('#level_code').val() || '',
+                semester_code: $('#semester_code').val() || '',
+                group: $('#group').val() || '',
+                student_status: $('#student_status').val() || '',
+                student_type: $('#student_type').val() || '',
+                current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0',
+                min_debt_count: ($('#min_debt_count').val() ?? '4'),
+                student_name: $('#student_name').val() || '',
+                per_page: $('#per_page').val() || 50,
+                sort: currentSort,
+                direction: currentDirection,
+            };
+        }
+
+        function loadReport(page) {
+            currentPage = page || 1;
+            var params = getFilters();
+            params.page = currentPage;
+
+            $('#empty-state').hide();
+            $('#table-area').hide();
+            $('#loading-state').show();
+            $('#btn-calculate').prop('disabled', true).css('opacity', '0.6');
+
+            var startTime = performance.now();
+
+            $.ajax({
+                url: '{{ route("teacher.reports.debtors.data") }}',
+                type: 'GET',
+                data: params,
+                timeout: 180000,
+                success: function(res) {
+                    var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+                    $('#loading-state').hide();
+                    $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+
+                    if (!res.data || res.data.length === 0) {
+                        $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
+                        $('#table-area').hide();
+                        return;
+                    }
+
+                    reportData = res.data;
+                    $('#total-badge').text('Jami: ' + res.total + ' ta qarzdor talaba');
+                    $('#time-badge').text(elapsed + ' soniyada hisoblandi');
+
+                    renderTable(res.data);
+                    renderPagination(res);
+                    $('#table-area').show();
+                },
+                error: function(xhr) {
+                    $('#loading-state').hide();
+                    $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+                    var msg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        msg += ' (' + xhr.responseJSON.error + ')';
+                    } else if (xhr.status) {
+                        msg += ' (HTTP ' + xhr.status + ')';
+                    }
+                    $('#empty-state').show().find('p:first').text(msg);
+                    console.error('Debtors report error:', xhr.status, xhr.responseText ? xhr.responseText.substring(0, 500) : '');
+                }
+            });
+        }
+
+        function esc(s) { return $('<span>').text(s || '-').html(); }
+
+        function renderTable(data) {
+            var html = '';
+            for (var i = 0; i < data.length; i++) {
+                var r = data[i];
+                html += '<tr class="journal-row">';
+                html += '<td class="td-num">' + r.row_num + '</td>';
+                html += '<td><span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span>';
+                html += '<span style="font-size:11px;color:#94a3b8;display:block;">' + esc(r.student_id_number) + '</span></td>';
+                html += '<td><span class="text-cell text-emerald">' + esc(r.department_name) + '</span></td>';
+                html += '<td><span class="text-cell text-cyan">' + esc(r.specialty_name) + '</span></td>';
+                html += '<td><span class="badge badge-violet">' + esc(r.level_name) + '</span></td>';
+                html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td style="text-align:center;">';
+                if (r.student_type_name) {
+                    var isAcMob = r.student_type_name.toLowerCase().indexOf('mobil') !== -1;
+                    html += '<span style="background:' + (isAcMob ? '#fef3c7' : '#f1f5f9') + ';color:' + (isAcMob ? '#b45309' : '#475569') + ';border:1px solid ' + (isAcMob ? '#fcd34d' : '#cbd5e1') + ';border-radius:6px;padding:3px 7px;font-size:11px;font-weight:600;white-space:nowrap;">' + esc(r.student_type_name) + '</span>';
+                } else {
+                    html += '<span style="color:#94a3b8;font-size:12px;">—</span>';
+                }
+                html += '</td>';
+                html += '<td><span class="badge badge-violet">' + esc(r.semester_name) + '</span></td>';
+                html += '<td style="text-align:center;"><span class="badge badge-debt">' + r.debt_count + '</span></td>';
+                var crCount = r.current_risk_count || 0;
+                if (crCount > 0) {
+                    html += '<td style="text-align:center;"><span style="background:#d97706;color:#fff;border-radius:6px;padding:3px 10px;font-size:12px;font-weight:700;" title="Joriy semestr xavfi">' + crCount + ' ta</span></td>';
+                } else {
+                    html += '<td style="text-align:center;color:#94a3b8;font-size:12px;">—</td>';
+                }
+                html += '<td style="text-align:center;"><button class="btn-detail" onclick="showDetail(' + i + ')"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg> Batafsil</button></td>';
+                html += '</tr>';
+            }
+            $('#table-body').html(html);
+        }
+
+        function showDetail(idx) {
+            var r = reportData[idx];
+            if (!r) return;
+
+            $('#modal-title').text(r.full_name + ' — Qarzdorliklar');
+
+            var info = '<div class="info-grid">';
+            info += '<div><div class="info-label">Talaba</div><div class="info-value">' + esc(r.full_name) + '</div></div>';
+            info += '<div><div class="info-label">ID raqam</div><div class="info-value">' + esc(r.student_id_number) + '</div></div>';
+            info += '<div><div class="info-label">Guruh</div><div class="info-value">' + esc(r.group_name) + '</div></div>';
+            info += '<div><div class="info-label">Fakultet</div><div class="info-value">' + esc(r.department_name) + '</div></div>';
+            info += '<div><div class="info-label">Yo\'nalish</div><div class="info-value">' + esc(r.specialty_name) + '</div></div>';
+            info += '<div><div class="info-label">Bosqich</div><div class="info-value">' + esc(r.level_name) + ' / ' + esc(r.semester_name) + '</div></div>';
+            info += '</div>';
+            $('#modal-student-info').html(info);
+
+            var html = '';
+
+            // Joriy semestr xavflari
+            var currentRisks = r.current_risks || [];
+            if (currentRisks.length > 0) {
+                html += '<div style="padding:14px 20px 8px;font-weight:700;color:#d97706;font-size:13px;text-transform:uppercase;letter-spacing:.05em;">Joriy semestr xavflari (' + currentRisks.length + ' ta fan)</div>';
+                html += '<div style="padding:0 20px 12px;">';
+                var riskColors = {'Akademik qarzdor':'#dc2626','3-urinish':'#dc2626','Davomat':'#be123c','2-urinish':'#d97706','1-urinish':'#ca8a04','MT<60':'#b45309','JN<60':'#b45309'};
+                for (var ri = 0; ri < currentRisks.length; ri++) {
+                    var risk = currentRisks[ri];
+                    html += '<div style="margin-bottom:6px;display:flex;align-items:flex-start;gap:8px;">';
+                    html += '<span style="font-size:12px;color:#0f172a;font-weight:600;min-width:150px;">' + esc(risk.subject_name) + '</span>';
+                    html += '<div style="display:flex;flex-wrap:wrap;gap:3px;">';
+                    for (var rj = 0; rj < risk.reasons.length; rj++) {
+                        var reason = risk.reasons[rj];
+                        var color = '#b45309';
+                        for (var k in riskColors) { if (reason.indexOf(k) !== -1) { color = riskColors[k]; break; } }
+                        html += '<span style="background:' + color + ';color:#fff;font-size:10px;padding:2px 7px;border-radius:4px;font-weight:600;">' + esc(reason) + '</span>';
+                    }
+                    html += '</div></div>';
+                }
+                html += '</div>';
+                html += '<div style="border-top:1px solid #fde68a;margin:0 20px 8px;"></div>';
+            }
+
+            // O'tgan semestr qarzlari
+            var debts = r.debts || [];
+            html += '<div style="padding:8px 16px 6px;display:flex;align-items:center;gap:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">';
+            html += '<span style="font-weight:700;color:#dc2626;font-size:13px;">O\'tgan semestr qarzlari: ' + debts.length + ' ta fan</span></div>';
+            if (debts.length === 0) {
+                html += '<div style="padding:12px 20px;color:#16a34a;font-size:13px;">O\'tgan semestr qarzdorligi yo\'q</div>';
+            } else {
+                html += '<table class="detail-table"><thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Soat</th></tr></thead><tbody>';
+                for (var i = 0; i < debts.length; i++) {
+                    var row = debts[i];
+                    var isNoaniq = row.status === 'noaniq';
+                    html += '<tr' + (isNoaniq ? ' style="background:#fef9c3;"' : '') + '>';
+                    html += '<td>' + (i+1) + '</td>';
+                    html += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(row.semester_name || (row.semester_code + '-sem')) + '</span></td>';
+                    html += '<td style="font-weight:600;color:#0f172a;min-width:200px;text-align:left;">' + esc(row.subject_name);
+                    if (isNoaniq) {
+                        html += ' <span style="font-size:10px;background:#f59e0b;color:#fff;border-radius:4px;padding:1px 5px;font-weight:600;vertical-align:middle;">Fan biriktirilmagan</span>';
+                    }
+                    html += '</td>';
+                    html += '<td>' + esc(row.credit) + '</td>';
+                    html += '<td>' + esc(row.total_acload) + '</td>';
+                    html += '</tr>';
+                }
+                html += '</tbody></table>';
+            }
+
+            $('#modal-body').html(html);
+            $('#detail-modal').fadeIn(150);
+        }
+
+        function closeModal() { $('#detail-modal').fadeOut(150); }
+
+        function renderPagination(res) {
+            if (res.last_page <= 1) { $('#pagination-area').html(''); return; }
+            var html = '';
+            if (res.current_page > 1)
+                html += '<button class="pg-btn" onclick="loadReport(' + (res.current_page - 1) + ')">&laquo; Oldingi</button>';
+            for (var p = 1; p <= res.last_page; p++) {
+                if (p === 1 || p === res.last_page || (p >= res.current_page - 2 && p <= res.current_page + 2)) {
+                    html += '<button class="pg-btn' + (p === res.current_page ? ' pg-active' : '') + '" onclick="loadReport(' + p + ')">' + p + '</button>';
+                } else if (p === res.current_page - 3 || p === res.current_page + 3) {
+                    html += '<span style="color:#94a3b8;padding:0 4px;">...</span>';
+                }
+            }
+            if (res.current_page < res.last_page)
+                html += '<button class="pg-btn" onclick="loadReport(' + (res.current_page + 1) + ')">Keyingi &raquo;</button>';
+            $('#pagination-area').html(html);
+        }
+
+        $(document).keydown(function(e) { if (e.keyCode === 27) closeModal(); });
+
+        $(document).ready(function() {
+            $(document).on('click', '.sort-link', function(e) {
+                e.preventDefault();
+                var col = $(this).data('sort');
+                if (currentSort === col) {
+                    currentDirection = currentDirection === 'asc' ? 'desc' : 'asc';
+                } else {
+                    currentSort = col;
+                    currentDirection = 'asc';
+                }
+                $('.sort-link .sort-icon').removeClass('active').html('&#9650;&#9660;');
+                $(this).find('.sort-icon').addClass('active').html(currentDirection === 'asc' ? '&#9650;' : '&#9660;');
+                loadReport(1);
+            });
+
+            $('.select2').each(function() {
+                $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text(), matcher: fuzzyMatcher })
+                .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
+            });
+
+            function fp() { return { education_type: $('#education_type').val()||'', faculty_id: $('#faculty').val()||'', specialty_id: $('#specialty').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'', current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1' : '0' }; }
+            function rd(el) { $(el).empty().append('<option value="">Barchasi</option>'); }
+            function pd(url, p, el, cb) { $.get(url, p, function(d) { $.each(d, function(k,v){ $(el).append('<option value="'+k+'">'+v+'</option>'); }); if(cb) cb(); }); }
+            function pdu(url, p, el, cb) { $.get(url, p, function(d) { var u={}; $.each(d, function(k,v){ if(!u[v]) u[v]=k; }); $.each(u, function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb) cb(); }); }
+
+            function rSpec() { rd('#specialty'); pdu('{{ route("teacher.reports.jn.specialties") }}', fp(), '#specialty'); }
+            function rGrp() { rd('#group'); pd('{{ route("teacher.reports.jn.groups") }}', fp(), '#group'); }
+
+            $('#education_type').change(function() { rSpec(); rGrp(); });
+            $('#faculty').change(function() { rSpec(); rGrp(); });
+            $('#specialty').change(function() { rGrp(); });
+            $('#level_code').change(function() { var lc=$(this).val(); rd('#semester_code'); if(lc) pd('{{ route("teacher.reports.jn.semesters") }}', {level_code:lc}, '#semester_code'); rGrp(); });
+            $('#semester_code').change(function() { rGrp(); });
+
+            pdu('{{ route("teacher.reports.jn.specialties") }}', fp(), '#specialty');
+            pd('{{ route("teacher.reports.jn.level-codes") }}', {}, '#level_code');
+            pd('{{ route("teacher.reports.jn.semesters") }}', {}, '#semester_code');
+            pd('{{ route("teacher.reports.jn.groups") }}', fp(), '#group');
+        });
     </script>
+
+    <style>
+        .filter-container { padding: 16px 20px 12px; background: linear-gradient(135deg, #f0f4f8, #e8edf5); border-bottom: 2px solid #dbe4ef; }
+        .filter-row { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; align-items: flex-end; }
+        .filter-row:last-child { margin-bottom: 0; }
+        .filter-label { display: flex; align-items: center; gap: 5px; margin-bottom: 4px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #475569; }
+        .fl-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+
+        .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
+        .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
+
+        .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .select2-container--classic .select2-selection--single:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }
+        .select2-container--classic .select2-selection--single .select2-selection__rendered { line-height: 34px; padding-left: 10px; padding-right: 52px; color: #1e293b; font-size: 0.8rem; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .select2-container--classic .select2-selection--single .select2-selection__arrow { height: 34px; width: 22px; background: transparent; border-left: none; right: 0; }
+        .select2-dropdown { font-size: 0.8rem; border-radius: 8px; border: 1px solid #cbd5e1; box-shadow: 0 8px 24px rgba(0,0,0,0.12); }
+        .select2-container--classic .select2-results__option--highlighted { background-color: #2b5ea7; }
+
+        .toggle-switch { display: inline-flex; align-items: center; gap: 10px; cursor: pointer; padding: 6px 0; height: 36px; user-select: none; }
+        .toggle-track { width: 40px; height: 22px; background: #cbd5e1; border-radius: 11px; position: relative; transition: background 0.25s; flex-shrink: 0; }
+        .toggle-switch.active .toggle-track { background: linear-gradient(135deg, #2b5ea7, #3b7ddb); }
+        .toggle-thumb { width: 18px; height: 18px; background: #fff; border-radius: 50%; position: absolute; top: 2px; left: 2px; transition: transform 0.25s; box-shadow: 0 1px 4px rgba(0,0,0,0.2); }
+        .toggle-switch.active .toggle-thumb { transform: translateX(18px); }
+        .toggle-label { font-size: 12px; font-weight: 600; color: #64748b; white-space: nowrap; }
+        .toggle-switch.active .toggle-label { color: #1e3a5f; }
+
+        .journal-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 13px; }
+        .journal-table thead { position: sticky; top: 0; z-index: 10; }
+        .journal-table thead tr { background: linear-gradient(135deg, #e8edf5, #dbe4ef, #d1d9e6); }
+        .journal-table th { padding: 14px 10px; text-align: left; font-weight: 600; font-size: 11px; color: #334155; text-transform: uppercase; letter-spacing: 0.05em; white-space: nowrap; border-bottom: 2px solid #cbd5e1; }
+        .journal-table th.th-num { padding: 14px 10px 14px 16px; width: 44px; }
+        .sort-link { display: inline-flex; align-items: center; gap: 4px; color: #334155; text-decoration: none; cursor: pointer; }
+        .sort-link:hover { opacity: 0.75; }
+        .sort-icon { font-size: 8px; opacity: 0.4; }
+        .sort-icon.active { font-size: 11px; opacity: 1; color: #ef4444; }
+
+        .journal-table tbody tr { transition: all 0.15s; border-bottom: 1px solid #f1f5f9; }
+        .journal-table tbody tr:nth-child(even) { background: #f8fafc; }
+        .journal-table tbody tr:nth-child(odd) { background: #fff; }
+        .journal-table tbody tr:hover { background: #fef2f2 !important; box-shadow: inset 4px 0 0 #dc2626; }
+        .journal-table td { padding: 10px 10px; vertical-align: middle; line-height: 1.4; }
+        .td-num { padding-left: 16px !important; font-weight: 700; color: #dc2626; font-size: 13px; }
+
+        .badge { display: inline-block; padding: 3px 9px; border-radius: 6px; font-size: 11.5px; font-weight: 600; line-height: 1.4; }
+        .badge-violet { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; white-space: nowrap; }
+        .badge-indigo { background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; border: none; white-space: nowrap; }
+        .badge-debt { background: linear-gradient(135deg, #dc2626, #ef4444); color: #fff; border: none; padding: 4px 14px; font-size: 14px; font-weight: 800; border-radius: 8px; min-width: 36px; display: inline-block; text-align: center; }
+
+        .text-cell { font-size: 12.5px; font-weight: 500; line-height: 1.35; display: block; }
+        .text-emerald { color: #047857; }
+        .text-cyan { color: #0e7490; max-width: 220px; white-space: normal; word-break: break-word; }
+
+        .btn-detail { display: inline-flex; align-items: center; gap: 5px; padding: 6px 12px; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 6px; color: #2b5ea7; font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+        .btn-detail:hover { background: #2b5ea7; color: #fff; border-color: #2b5ea7; }
+
+        .pg-btn { padding: 6px 12px; border: 1px solid #cbd5e1; background: #fff; border-radius: 6px; font-size: 12px; font-weight: 600; color: #334155; cursor: pointer; transition: all 0.15s; }
+        .pg-btn:hover { background: #fef2f2; border-color: #dc2626; color: #dc2626; }
+        .pg-active { background: linear-gradient(135deg, #dc2626, #ef4444) !important; color: #fff !important; border-color: #dc2626 !important; }
+
+        .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center; padding: 20px; backdrop-filter: blur(4px); }
+        .modal-box { background: #fff; border-radius: 16px; width: 100%; max-width: 1100px; box-shadow: 0 25px 60px rgba(0,0,0,0.25); overflow: hidden; }
+        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; background: linear-gradient(135deg, #1a3268, #2b5ea7); color: #fff; }
+        .modal-header h3 { margin: 0; font-size: 15px; font-weight: 700; color: #fff; }
+        .modal-close { width: 32px; height: 32px; border: none; background: rgba(255,255,255,0.15); color: #fff; border-radius: 8px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+        .modal-close:hover { background: rgba(255,255,255,0.3); }
+        .modal-info { padding: 14px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+        .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 20px; }
+        .info-label { font-size: 11px; font-weight: 700; color: #64748b; text-transform: uppercase; }
+        .info-value { font-size: 13px; font-weight: 600; color: #0f172a; }
+
+        .detail-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .detail-table thead tr { background: #f8fafc; }
+        .detail-table th { padding: 10px 12px; text-align: left; font-weight: 700; font-size: 11px; color: #475569; text-transform: uppercase; border-bottom: 2px solid #e2e8f0; white-space: nowrap; }
+        .detail-table td { padding: 10px 12px; border-bottom: 1px solid #f1f5f9; text-align: center; }
+        .detail-table td:first-child { text-align: center; font-weight: 700; color: #64748b; width: 40px; }
+        .detail-table td:nth-child(2) { text-align: left; }
+        .detail-table td:nth-child(3) { text-align: left; }
+    </style>
 </x-teacher-app-layout>

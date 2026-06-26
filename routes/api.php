@@ -13,7 +13,9 @@ use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\AbsenceExcuseApiController;
 use App\Http\Controllers\Api\V1\ChatApiController;
 use App\Http\Controllers\Api\V1\ClubApiController;
+use App\Http\Controllers\Api\V1\EnglishGroupApplicationApiController;
 use App\Http\Controllers\Api\V1\ExamAppealApiController;
+use App\Http\Controllers\Api\V1\RetakeApplicationApiController;
 use App\Http\Controllers\Api\V1\StudentApiController;
 use App\Http\Controllers\Api\V1\TeacherApiController;
 use App\Http\Controllers\Api\V1\TutorApiController;
@@ -154,6 +156,13 @@ Route::prefix('v1')->group(function () {
             Route::get('/excuses/{id}/download', [AbsenceExcuseApiController::class, 'download']);
             Route::get('/excuses/{id}/download-pdf', [AbsenceExcuseApiController::class, 'downloadPdf']);
 
+            // Retake applications
+            Route::get('/retake', [RetakeApplicationApiController::class, 'index']);
+            Route::post('/retake', [RetakeApplicationApiController::class, 'store']);
+            Route::get('/retake/journal', [RetakeApplicationApiController::class, 'journal']);
+            Route::post('/retake/journal/{applicationId}/mustaqil', [RetakeApplicationApiController::class, 'uploadMustaqil']);
+            Route::post('/retake/groups/{groupId}/payment', [RetakeApplicationApiController::class, 'uploadPayment']);
+
             // Clubs
             Route::get('/clubs', [ClubApiController::class, 'index']);
             Route::get('/clubs/my', [ClubApiController::class, 'myClubs']);
@@ -167,6 +176,11 @@ Route::prefix('v1')->group(function () {
             Route::get('/appeals/{id}', [ExamAppealApiController::class, 'show']);
             Route::post('/appeals/{id}/comment', [ExamAppealApiController::class, 'addComment']);
             Route::get('/appeals/{id}/download', [ExamAppealApiController::class, 'download']);
+
+            // English group application
+            Route::get('/english-group-application', [EnglishGroupApplicationApiController::class, 'index']);
+            Route::post('/english-group-application', [EnglishGroupApplicationApiController::class, 'store']);
+            Route::get('/english-group-application/{id}/certificate', [EnglishGroupApplicationApiController::class, 'certificate']);
         });
 
         // ── Chat endpoints ───────────────────────────────

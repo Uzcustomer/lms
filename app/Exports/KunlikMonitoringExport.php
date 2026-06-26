@@ -12,10 +12,11 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 use PhpOffice\PhpSpreadsheet\Style\Fill;
 
 /**
- * Kunlik monitoring Excel eksporti — uchta sahifa:
+ * Kunlik monitoring Excel eksporti — to'rt sahifa:
  *   1) Kunlik xulosa (asosiy jadval)
  *   2) Sync gap — Moodle'da bor, LMS'da yo'q attempt_id lar
- *   3) Mark gap — LMS'da bor, mark'da yo'q yozuvlar (talaba/fan bilan)
+ *   3) Mark gap — LMS'da bor, mark'da yo'q (haqiqatan unutilgan) yozuvlar
+ *   4) Ogohlantirish — yuklanmagan, lekin jurnalda baho borligi sababli (sabab bilan)
  */
 class KunlikMonitoringExport implements WithMultipleSheets
 {
@@ -23,6 +24,7 @@ class KunlikMonitoringExport implements WithMultipleSheets
         private array $days,
         private array $missingSync,
         private array $missingMark,
+        private array $warnings,
         private string $dateFrom,
         private string $dateTo,
     ) {}
@@ -33,6 +35,7 @@ class KunlikMonitoringExport implements WithMultipleSheets
             new KunlikMonitoringSummarySheet($this->days, $this->dateFrom, $this->dateTo),
             new KunlikMonitoringSyncGapSheet($this->missingSync),
             new KunlikMonitoringMarkGapSheet($this->missingMark),
+            new KunlikMonitoringWarningSheet($this->warnings),
         ];
     }
 }
@@ -52,7 +55,7 @@ class KunlikMonitoringSummarySheet implements FromArray, WithHeadings, WithStyle
 
     public function headings(): array
     {
-        return ['Sana', 'Moodle', 'LMS sync', 'Markda', 'Sync farq', 'Mark farq', 'Status'];
+        return ['Sana', 'Moodle', 'LMS sync', 'Markda', 'Sync farq', 'Mark farq', 'Ogohlantirish', 'Status'];
     }
 
     public function array(): array
@@ -63,11 +66,13 @@ class KunlikMonitoringSummarySheet implements FromArray, WithHeadings, WithStyle
         $totGraded = 0;
         $totSyncGap = 0;
         $totMarkGap = 0;
+        $totWarning = 0;
 
         foreach ($this->days as $d) {
             $status = match ($d['status'] ?? 'ok') {
                 'sync_gap' => 'Sync gap',
                 'mark_gap' => 'Mark gap',
+                'warning'  => 'Ogohlantirish',
                 default    => 'OK',
             };
             $rows[] = [
@@ -77,6 +82,7 @@ class KunlikMonitoringSummarySheet implements FromArray, WithHeadings, WithStyle
                 (int) $d['graded_count'],
                 (int) $d['sync_gap'],
                 (int) $d['mark_gap'],
+                (int) ($d['warning_count'] ?? 0),
                 $status,
             ];
             $totMoodle += (int) $d['moodle_count'];
@@ -84,9 +90,10 @@ class KunlikMonitoringSummarySheet implements FromArray, WithHeadings, WithStyle
             $totGraded += (int) $d['graded_count'];
             $totSyncGap += (int) $d['sync_gap'];
             $totMarkGap += (int) $d['mark_gap'];
+            $totWarning += (int) ($d['warning_count'] ?? 0);
         }
 
-        $rows[] = ['JAMI (' . $this->dateFrom . ' — ' . $this->dateTo . ')', $totMoodle, $totSynced, $totGraded, $totSyncGap, $totMarkGap, ''];
+        $rows[] = ['JAMI (' . $this->dateFrom . ' — ' . $this->dateTo . ')', $totMoodle, $totSynced, $totGraded, $totSyncGap, $totMarkGap, $totWarning, ''];
 
         return $rows;
     }
@@ -190,6 +197,61 @@ class KunlikMonitoringMarkGapSheet implements FromArray, WithHeadings, WithStyle
             1 => [
                 'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFD97706']],
+            ],
+        ];
+    }
+}
+
+/**
+ * Ogohlantirish sahifasi — natija yuklanmagan, lekin jurnalda allaqachon baho
+ * borligi sababli (talaba adashib qayta topshirgan yoki darsdagi baho yuqori).
+ * Bular "farq" emas — shuning uchun sabab ustuni bilan alohida ko'rsatiladi.
+ */
+class KunlikMonitoringWarningSheet implements FromArray, WithHeadings, WithStyles, WithTitle, ShouldAutoSize
+{
+    public function __construct(private array $warnings) {}
+
+    public function title(): string
+    {
+        return 'Ogohlantirish';
+    }
+
+    public function headings(): array
+    {
+        return ['Sana', 'attempt_id', 'HEMIS ID', "F.I.Sh.", 'Fan', 'Quiz turi', 'Quiz to\'liq nomi', 'Tugatildi', 'Baho', 'Sabab'];
+    }
+
+    public function array(): array
+    {
+        $rows = [];
+        foreach ($this->warnings as $date => $items) {
+            foreach ($items as $r) {
+                $rows[] = [
+                    $date,
+                    (int) ($r['attempt_id'] ?? 0),
+                    $r['student_id'] ?? '',
+                    $r['student_name'] ?? '',
+                    $r['fan_name'] ?? '',
+                    $r['quiz_type'] ?? '',
+                    $r['attempt_name'] ?? '',
+                    $r['date_finish'] ?? '',
+                    $r['grade'] ?? '',
+                    $r['reason'] ?? '',
+                ];
+            }
+        }
+        if (empty($rows)) {
+            $rows[] = ['', '', '', '', '', '', '', '', '', "Ogohlantirish yo'q ✓"];
+        }
+        return $rows;
+    }
+
+    public function styles(Worksheet $sheet): array
+    {
+        return [
+            1 => [
+                'font' => ['bold' => true, 'color' => ['argb' => 'FFFFFFFF']],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['argb' => 'FFCA8A04']],
             ],
         ];
     }

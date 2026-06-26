@@ -39,21 +39,57 @@ class RetakeTestMarkaziController extends Controller
 
         $activeTab = request('tab') === 'students' ? 'students' : 'groups';
 
-        // Yuborilgan guruhlar — eng yangi avval
-        $groups = RetakeGroup::query()
-            ->whereNotNull('sent_to_test_markazi_at')
-            ->whereIn('assessment_type', ['oske', 'test', 'oske_test'])
+        // Cascading filtrlar (talaba ma'lumotlari + fan) — JN hisoboti uslubida.
+        $studentFilters = [
+            'education_type' => request('education_type'),
+            'department' => request('department'),
+            'specialty' => request('specialty'),
+            'level_code' => request('level_code'),
+            'semester_code' => request('semester_code'),
+            'group' => request('group'),
+        ];
+        $subjectFilter = request('subject');
+        $sentStatus = request('sent_status'); // '', 'sent', 'not_sent'
+        $perPage = (int) request('per_page', 50);
+        if (!in_array($perPage, [10, 25, 50, 100], true)) {
+            $perPage = 50;
+        }
+        $hasStudentFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty();
+
+        $studentSub = function ($sub) use ($studentFilters) {
+            $sub->select('hemis_id')->from('students');
+            if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+            if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+            if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+            if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+            if (!empty($studentFilters['semester_code'])) $sub->where('semester_code', $studentFilters['semester_code']);
+            if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+        };
+
+        // O'quv bo'limi tomonidan tasdiqlanib guruhga qo'yilgan BARCHA qayta o'qish
+        // guruhlari (sinov bilan yakunlanadigan fanlar ham).
+        $groupsQuery = RetakeGroup::query()
+            ->whereHas('applications', fn ($q) => $q->where('final_status', RetakeApplication::STATUS_APPROVED))
             ->with('teacher')
-            ->withCount('applications as students_count')
-            ->orderByDesc('sent_to_test_markazi_at')
-            ->paginate(30, ['*'], 'groups_page')
-            ->withQueryString();
+            ->withCount(['applications as students_count' => fn ($q) => $q->where('final_status', RetakeApplication::STATUS_APPROVED)])
+            ->orderByDesc('start_date');
+        if ($subjectFilter) {
+            $groupsQuery->where('subject_id', $subjectFilter);
+        }
+        if ($hasStudentFilter) {
+            $groupsQuery->whereHas('applications', function ($q) use ($studentSub) {
+                $q->where('final_status', RetakeApplication::STATUS_APPROVED)
+                  ->whereIn('student_hemis_id', $studentSub);
+            });
+        }
+        $groups = $groupsQuery->paginate($perPage, ['*'], 'groups_page')->withQueryString();
 
         $studentSearch = trim((string) request('student_search', ''));
 
+        // Tasdiqlangan va guruhga biriktirilgan barcha talabalar.
         $sentApplicationsQuery = RetakeApplication::query()
-            ->whereNotNull('sent_to_test_markazi_at')
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
             ->with(['group.student', 'retakeGroup']);
 
         if ($studentSearch !== '') {
@@ -65,10 +101,21 @@ class RetakeTestMarkaziController extends Controller
                     });
             });
         }
+        if ($subjectFilter) {
+            $sentApplicationsQuery->whereHas('retakeGroup', fn ($q) => $q->where('subject_id', $subjectFilter));
+        }
+        if ($hasStudentFilter) {
+            $sentApplicationsQuery->whereIn('student_hemis_id', $studentSub);
+        }
+        if ($sentStatus === 'sent') {
+            $sentApplicationsQuery->whereNotNull('sent_to_test_markazi_at');
+        } elseif ($sentStatus === 'not_sent') {
+            $sentApplicationsQuery->whereNull('sent_to_test_markazi_at');
+        }
 
         $sentApplications = $sentApplicationsQuery
-            ->orderByDesc('sent_to_test_markazi_at')
-            ->paginate(50, ['*'], 'students_page')
+            ->orderByDesc('id')
+            ->paginate($perPage, ['*'], 'students_page')
             ->withQueryString();
 
         $mustaqilMap = RetakeMustaqilSubmission::query()
@@ -82,6 +129,9 @@ class RetakeTestMarkaziController extends Controller
             'mustaqilMap' => $mustaqilMap,
             'activeTab' => $activeTab,
             'studentSearch' => $studentSearch,
+            'sentStatus' => $sentStatus,
+            'educationTypes' => \App\Services\Retake\RetakeFilterCache::educationTypes(),
+            'subjects' => \App\Services\Retake\RetakeFilterCache::subjects(),
         ]);
     }
 
@@ -90,11 +140,9 @@ class RetakeTestMarkaziController extends Controller
         $this->authorize();
 
         $group = RetakeGroup::with('teacher')->findOrFail($groupId);
-        if (!$group->sent_to_test_markazi_at) {
-            abort(404, 'Bu guruh test markaziga yuborilmagan');
-        }
 
-        $applications = $this->service->sentApplications($group);
+        // Tasdiqlangan barcha talabalar (test markaziga yuborilgan bo'lishi shart emas).
+        $applications = $this->service->applications($group);
         $gradesMap = $this->service->gradesMap($group);
         $mustaqilMap = $this->service->mustaqilMap($group);
 
@@ -106,35 +154,36 @@ class RetakeTestMarkaziController extends Controller
         ]);
     }
 
+    /**
+     * Qo'lda baho kiritish O'CHIRILGAN. OSKE/TEST natijalari faqat
+     * diagnostika orqali (Test markazi → "Sistemaga yuklash") tushadi.
+     * Bu endpoint endi qabul qilmaydi — eski/tashqi so'rovlarga ham yopiq.
+     */
     public function saveScore(Request $request, int $groupId): JsonResponse
     {
         $this->authorize();
 
-        $data = $request->validate([
-            'application_id' => 'required|integer',
-            'oske_score' => 'nullable|numeric|min:0|max:100',
-            'test_score' => 'nullable|numeric|min:0|max:100',
-        ]);
+        return response()->json([
+            'success' => false,
+            'message' => "Qo'lda kiritish o'chirilgan. OSKE/TEST natijalari faqat diagnostika orqali (Sistemaga yuklash) tushadi.",
+        ], 403);
+    }
+
+    /**
+     * Diagnostika orqali — Moodle qayta o'qish quiz natijalarini (OSKE/TEST)
+     * shu guruh sessiyasiga mos kelganlarini avtomatik yuklaydi. Boshqa
+     * fasl/o'quv yili natijalari rad etiladi.
+     */
+    public function loadFromDiagnostika(int $groupId): JsonResponse
+    {
+        $this->authorize();
 
         $group = RetakeGroup::findOrFail($groupId);
-        if (!$group->sent_to_test_markazi_at) {
-            return response()->json(['success' => false, 'message' => 'Guruh test markaziga yuborilmagan'], 403);
-        }
-
-        $app = RetakeApplication::query()
-            ->where('id', $data['application_id'])
-            ->where('retake_group_id', $group->id)
-            ->firstOrFail();
 
         $actor = RetakeAccess::currentStaff();
 
         try {
-            $this->service->saveOskeTestScore(
-                $app,
-                $data['oske_score'] !== null && $data['oske_score'] !== '' ? (float) $data['oske_score'] : null,
-                $data['test_score'] !== null && $data['test_score'] !== '' ? (float) $data['test_score'] : null,
-                $actor,
-            );
+            $stats = $this->service->fetchRetakeResultsFromQuiz($group, $actor);
         } catch (ValidationException $e) {
             return response()->json([
                 'success' => false,
@@ -142,13 +191,61 @@ class RetakeTestMarkaziController extends Controller
             ], 422);
         }
 
-        $fresh = $app->refresh();
+        $parts = [];
+        if ($stats['fetched_oske'] > 0) $parts[] = "OSKE: {$stats['fetched_oske']} ta";
+        if ($stats['fetched_test'] > 0) $parts[] = "TEST: {$stats['fetched_test']} ta";
+        $loaded = empty($parts) ? 'Yangi natija topilmadi' : ('Yuklandi — ' . implode(', ', $parts));
+        if ($stats['rejected_other_session'] > 0) {
+            $loaded .= ". Boshqa sessiyaga tegishli {$stats['rejected_other_session']} natija rad etildi";
+        }
+
         return response()->json([
             'success' => true,
-            'oske_score' => $fresh->oske_score,
-            'test_score' => $fresh->test_score,
-            'final_grade' => $fresh->final_grade_value,
+            'message' => $loaded,
+            'stats' => $stats,
         ]);
+    }
+
+    /**
+     * YN qaydnoma (Excel) — vazn taqsimoti bilan, asosiy jurnal logikasidek.
+     * RetakeJournalService::buildVedomostExcel orqali yn_qaydnoma shablonidan.
+     */
+    public function generateYnQaydnoma(Request $request, int $groupId)
+    {
+        $this->authorize();
+
+        $request->validate([
+            'weight_jn'   => 'required|integer|min:0|max:100',
+            'weight_mt'   => 'required|integer|min:0|max:100',
+            'weight_on'   => 'nullable|integer|min:0|max:100',
+            'weight_oski' => 'nullable|integer|min:0|max:100',
+            'weight_test' => 'nullable|integer|min:0|max:100',
+            'semester'    => 'nullable|integer|min:1|max:20',
+        ]);
+
+        $group = RetakeGroup::with('teacher')->findOrFail($groupId);
+
+        $weights = [
+            'jn'   => (int) $request->input('weight_jn'),
+            'mt'   => (int) $request->input('weight_mt'),
+            'on'   => (int) ($request->input('weight_on') ?? 0),
+            'oski' => (int) ($request->input('weight_oski') ?? 0),
+            'test' => (int) ($request->input('weight_test') ?? 0),
+        ];
+
+        if (array_sum($weights) !== 100) {
+            return response()->json(['error' => "Vaznlar jami 100 bo'lishi kerak"], 422);
+        }
+
+        $semesterNumber = $request->filled('semester') ? (int) $request->input('semester') : null;
+
+        try {
+            $built = $this->service->buildVedomostExcel($group, $weights, $semesterNumber);
+        } catch (ValidationException $e) {
+            return response()->json(['error' => collect($e->errors())->flatten()->first()], 422);
+        }
+
+        return response()->download($built['path'], $built['filename'])->deleteFileAfterSend(false);
     }
 
     public function generateYnOldiWord(Request $request)
@@ -162,8 +259,6 @@ class RetakeTestMarkaziController extends Controller
 
         $groups = RetakeGroup::query()
             ->whereIn('id', $data['group_ids'])
-            ->whereNotNull('sent_to_test_markazi_at')
-            ->whereIn('assessment_type', ['oske', 'test', 'oske_test'])
             ->with('teacher')
             ->orderBy('name')
             ->get();
@@ -259,10 +354,10 @@ class RetakeTestMarkaziController extends Controller
         $studentSearch = trim((string) $request->input('student_search', ''));
 
         $query = RetakeApplication::query()
-            ->whereNotNull('sent_to_test_markazi_at')
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
             ->with(['group.student', 'retakeGroup'])
-            ->orderBy('sent_to_test_markazi_at');
+            ->orderBy('id');
 
         if ($studentSearch !== '') {
             $query->where(function ($q) use ($studentSearch) {
@@ -491,6 +586,7 @@ class RetakeTestMarkaziController extends Controller
             ProjectRole::SUPERADMIN->value,
             ProjectRole::ADMIN->value,
             ProjectRole::TEST_CENTER->value,
+            ProjectRole::REGISTRAR_OFFICE->value,
         ]);
         if (!$allowed) {
             abort(403, 'Sizda test markaziga ruxsat yo\'q');

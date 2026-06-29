@@ -1124,17 +1124,43 @@ class RetakeJournalService
             ->where('fan_id', $group->subject_id)
             ->whereIn('student_id', $hemisIds)
             ->whereIn('quiz_type', $relevantTypes)
-            ->get(['student_id', 'quiz_type', 'attempt_name', 'shakl', 'grade']);
+            ->get(['student_id', 'quiz_type', 'attempt_name', 'shakl', 'grade', 'date_finish']);
+
+        // Tokensiz qayta o'qish quizlari (nomida yil-fasl yo'q, faqat "Qayta-o'qish")
+        // uchun — matchRetakeApp dagi kabi — guruh sessiyasi OCHIQ bo'lsa qabul qilamiz.
+        $session = $group->resolveSession();
+        $sessionOpen = $session !== null && !$session->is_closed;
+        $cutoff = config('retake.tokenless_open_cutoff');
 
         // [hemis_id]['oske'|'test'] => eng yuqori baho (faqat shu sessiya).
         $best = [];
         $rejected = 0;
         foreach ($rows as $row) {
-            $rowCode = RetakeSessionCode::fromQuizName($row->attempt_name, $row->shakl);
-            if ($rowCode !== $sessionCode) {
-                // Boshqa fasl/o'quv yili yoki qayta o'qish bo'lmagan oddiy quiz.
+            // Oddiy (qayta o'qish bo'lmagan) quizlar — rad etiladi.
+            if (!RetakeSessionCode::isRetakeQuiz($row->attempt_name, $row->shakl)) {
                 $rejected++;
                 continue;
+            }
+            $rowCode = RetakeSessionCode::fromQuizName($row->attempt_name, $row->shakl);
+            if ($rowCode !== null) {
+                // Token bor — qat'iy fasl/o'quv yili mosligi.
+                if ($rowCode !== $sessionCode) {
+                    $rejected++;
+                    continue;
+                }
+            } else {
+                // Tokensiz qayta o'qish — faqat guruh sessiyasi OCHIQ va urinish
+                // cutoff sanasidan keyin bo'lsa (yozgi 2025-2026: 2026-05-07 dan).
+                // Undan oldingilari o'tgan fasl (qishki) — joriyga olinmaydi.
+                if (!$sessionOpen) {
+                    $rejected++;
+                    continue;
+                }
+                if ($cutoff !== null && $row->date_finish !== null
+                    && substr((string) $row->date_finish, 0, 10) < $cutoff) {
+                    $rejected++;
+                    continue;
+                }
             }
             if ($row->grade === null) {
                 continue;

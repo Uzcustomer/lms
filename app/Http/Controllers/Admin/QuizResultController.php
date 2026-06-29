@@ -1637,7 +1637,7 @@ class QuizResultController extends Controller
      * cheklaymiz (fasl guard). Token bo'lmasa — joriy (ochiq) sessiya
      * arizalari bilan cheklaymiz (yopilgan eski sessiyaga yozilmasin).
      */
-    private function matchRetakeApp($apps, string $hemis, ?string $fanId, ?string $fanName, ?string $code): ?\App\Models\RetakeApplication
+    private function matchRetakeApp($apps, string $hemis, ?string $fanId, ?string $fanName, ?string $code, ?string $attemptDate = null): ?\App\Models\RetakeApplication
     {
         if (!$apps || $apps->isEmpty()) {
             return null;
@@ -1657,7 +1657,15 @@ class QuizResultController extends Controller
                 $cands = $coded;
             }
         } else {
-            // Token yo'q — joriy (ochiq) sessiya arizalari bilan cheklaymiz.
+            // Token yo'q — tokensiz urinish faqat cutoff sanasidan keyin joriy
+            // (ochiq) sessiyaga tegishli. Undan oldingisi o'tgan faslga tegishli
+            // (qishki natija yozgi sessiyaga oqib o'tmasligi uchun) — mos kelmaydi.
+            $cutoff = config('retake.tokenless_open_cutoff');
+            if ($cutoff !== null && $attemptDate !== null
+                && substr((string) $attemptDate, 0, 10) < $cutoff) {
+                return null;
+            }
+            // Joriy (ochiq) sessiya arizalari bilan cheklaymiz.
             $open = $cands->filter(function ($a) {
                 $s = $a->group?->window?->session;
                 return $s !== null && !$s->is_closed;
@@ -1717,7 +1725,7 @@ class QuizResultController extends Controller
         }
 
         $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($result->attempt_name, $result->shakl);
-        $app = $this->matchRetakeApp($retakeApps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code);
+        $app = $this->matchRetakeApp($retakeApps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code, (string) $result->date_finish);
 
         if (!$app) {
             return ['code' => 'no_retake_app', 'text' => 'Qayta o\'qish arizasi topilmadi'] + $none;
@@ -1797,7 +1805,7 @@ class QuizResultController extends Controller
             ->with(['group.window.session'])
             ->get();
 
-        $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code);
+        $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code, (string) $result->date_finish);
 
         if (!$app) {
             $rowInfo['error'] = "Qayta o'qish arizasi topilmadi (talaba shu fandan qayta o'qishga yozilmagan)";
@@ -2139,7 +2147,7 @@ class QuizResultController extends Controller
             }
 
             $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($q->attempt_name, $q->shakl);
-            $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $q->fan_id, $q->fan_name, $code);
+            $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $q->fan_id, $q->fan_name, $code, (string) $q->date_finish);
             if (!$app) {
                 continue;
             }

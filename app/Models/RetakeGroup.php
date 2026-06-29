@@ -84,13 +84,19 @@ class RetakeGroup extends Model
      */
     public function sessionCode(): ?string
     {
+        return \App\Services\Retake\RetakeSessionCode::fromSession($this->resolveSession());
+    }
+
+    /**
+     * Guruh arizalari orqali bog'liq qayta o'qish sessiyasini qaytaradi.
+     */
+    public function resolveSession(): ?\App\Models\RetakeWindowSession
+    {
         $app = $this->applications()
             ->with('group.window.session')
             ->first();
 
-        $session = $app?->group?->window?->session;
-
-        return \App\Services\Retake\RetakeSessionCode::fromSession($session);
+        return $app?->group?->window?->session;
     }
 
     public function isEditable(): bool

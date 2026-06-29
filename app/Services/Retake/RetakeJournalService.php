@@ -1126,13 +1126,30 @@ class RetakeJournalService
             ->whereIn('quiz_type', $relevantTypes)
             ->get(['student_id', 'quiz_type', 'attempt_name', 'shakl', 'grade']);
 
+        // Tokensiz qayta o'qish quizlari (nomida yil-fasl yo'q, faqat "Qayta-o'qish")
+        // uchun — matchRetakeApp dagi kabi — guruh sessiyasi OCHIQ bo'lsa qabul qilamiz.
+        $session = $group->resolveSession();
+        $sessionOpen = $session !== null && !$session->is_closed;
+
         // [hemis_id]['oske'|'test'] => eng yuqori baho (faqat shu sessiya).
         $best = [];
         $rejected = 0;
         foreach ($rows as $row) {
+            // Oddiy (qayta o'qish bo'lmagan) quizlar — rad etiladi.
+            if (!RetakeSessionCode::isRetakeQuiz($row->attempt_name, $row->shakl)) {
+                $rejected++;
+                continue;
+            }
             $rowCode = RetakeSessionCode::fromQuizName($row->attempt_name, $row->shakl);
-            if ($rowCode !== $sessionCode) {
-                // Boshqa fasl/o'quv yili yoki qayta o'qish bo'lmagan oddiy quiz.
+            if ($rowCode !== null) {
+                // Token bor — qat'iy fasl/o'quv yili mosligi.
+                if ($rowCode !== $sessionCode) {
+                    $rejected++;
+                    continue;
+                }
+            } elseif (!$sessionOpen) {
+                // Tokensiz, lekin guruh sessiyasi yopiq — boshqa faslga oqib
+                // ketmasligi uchun rad etamiz (faqat ochiq sessiyaga yuklanadi).
                 $rejected++;
                 continue;
             }

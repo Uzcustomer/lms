@@ -8,6 +8,20 @@ class YnGradeCalculator {
     final grades = gradesRaw is Map
         ? Map<String, dynamic>.from(gradesRaw)
         : <String, dynamic>{};
+    final closingForm = _normalizeClosingForm(
+      subject['closing_form'] ??
+          subject['yopilish_shakli'] ??
+          subject['assessment_type'],
+    );
+
+    if (_isSinovTestForm(closingForm)) {
+      return _computeSinovTestYn(
+        jn: _toRoundedInt(grades['jn']) ?? 0,
+        mt: _toRoundedInt(grades['mt']) ?? 0,
+        davPercent: _toDouble(subject['dav_percent']) ?? 0,
+      );
+    }
+
     final weights = _weightsForSubject(subject, grades);
 
     return computeFromGrades(
@@ -130,6 +144,22 @@ class YnGradeCalculator {
 
   static String _normalizeClosingForm(dynamic raw) {
     return raw?.toString().trim().toLowerCase().replaceAll('-', '_') ?? '';
+  }
+
+  static bool _isSinovTestForm(String closingForm) {
+    return closingForm == 'sinov_test' ||
+        closingForm == 'sinovtest' ||
+        (closingForm.contains('sinov') && closingForm.contains('test'));
+  }
+
+  static int? _computeSinovTestYn({
+    required int jn,
+    required int mt,
+    required double davPercent,
+  }) {
+    if (jn == 0 && mt == 0) return null;
+    if (davPercent >= 25) return -3;
+    return jn;
   }
 
   static bool _isExplicitFalse(dynamic raw) {

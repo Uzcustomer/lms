@@ -1374,6 +1374,17 @@
                     html += '</td>';
                     html += '<td><div style="font-weight:600;">' + esc(g.original_fan_name) + '</div><div style="font-size:11px;color:#94a3b8;">ID: ' + g.original_fan_id + '</div></td>';
                     html += '<td><span class="reupload-grade-badge">' + g.grade_count + ' ta</span></td>';
+                    var shaklRaw = String(g.shakl || '');
+                    var attemptMatch = shaklRaw.match(/^\s*(\d+)\s*-\s*urinish/i);
+                    var defaultAttempt = attemptMatch && attemptMatch[1] ? attemptMatch[1] : '1';
+                    html += '<td>';
+                    html += '<select class="reupload-shakl-select" data-key="' + esc(g.key) + '" style="padding:5px;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;min-width:155px;">';
+                    html += '<option value="1"' + (defaultAttempt === '1' ? ' selected' : '') + '>1-urinish</option>';
+                    html += '<option value="2"' + (defaultAttempt === '2' ? ' selected' : '') + '>2-urinish</option>';
+                    html += '<option value="3"' + (defaultAttempt === '3' ? ' selected' : '') + '>3-urinish</option>';
+                    html += '<option value="retake">Qayta o&#039;qish</option>';
+                    html += '</select>';
+                    html += '</td>';
                     // YN turi tanlovi: OSKI/Test + mavzular (1..N). Default — qatordagi qiymat.
                     var defaultYnTuri = '';
                     if (g.yn_turi === 'oski' || g.yn_turi === 'test') {
@@ -1491,7 +1502,7 @@
                         url: reuploadUrl, type: 'POST',
                         headers: { 'X-CSRF-TOKEN': csrfToken },
                         contentType: 'application/json',
-                        data: JSON.stringify({ ids: ids, subject_overrides: overrides, yn_turi_overrides: ynTuriOverrides, semester_overrides: semesterOverrides }),
+                        data: JSON.stringify({ ids: ids, subject_overrides: overrides, yn_turi_overrides: ynTuriOverrides, semester_overrides: semesterOverrides, attempt_overrides: attemptOverrides }),
                         success: function(data) {
                             closeReuploadModal();
                             var html = '';

@@ -494,7 +494,15 @@ class RetakeTestMarkaziController extends Controller
             $query->whereIn('student_hemis_id', $studentSub);
         }
 
-        $applications = $query->get();
+        $applications = $query->get()
+            ->sortBy(function ($app) {
+                $studentName = $app->group?->student?->full_name ?? '';
+                $subjectName = $app->retakeGroup?->subject_name ?? $app->subject_name ?? '';
+                $semesterName = $app->retakeGroup?->semester_name ?? $app->semester_name ?? '';
+
+                return mb_strtolower($studentName . '|' . $subjectName . '|' . $semesterName);
+            })
+            ->values();
         if ($applications->isEmpty()) {
             abort(404, 'Excel uchun testga yuborilgan talabalar topilmadi');
         }
@@ -516,18 +524,20 @@ class RetakeTestMarkaziController extends Controller
             'E1' => 'Semester',
             'F1' => "Qayta o'qish fani",
             'G1' => 'Fan semestri',
-            'H1' => 'JN',
-            'I1' => 'MT',
-            'J1' => 'OSKE',
-            'K1' => 'TEST',
-            'L1' => 'Holat',
+            'H1' => 'Yopilish shakli',
+            'I1' => 'Test sanasi',
+            'J1' => 'JN',
+            'K1' => 'MT',
+            'L1' => 'OSKE',
+            'M1' => 'TEST',
+            'N1' => 'Holat',
         ];
 
         foreach ($headers as $cell => $value) {
             $sheet->setCellValue($cell, $value);
         }
 
-        $sheet->getStyle('A1:L1')->applyFromArray([
+        $sheet->getStyle('A1:N1')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'color' => ['rgb' => 'FFFFFF'],
@@ -554,6 +564,16 @@ class RetakeTestMarkaziController extends Controller
             $student = $app->group?->student;
             $retakeGroup = $app->retakeGroup;
             $mustaqil = $mustaqilMap[$app->id] ?? null;
+            $assessmentLabel = match ($retakeGroup?->assessment_type) {
+                'oske' => 'OSKE',
+                'test' => 'TEST',
+                'oske_test' => 'OSKE + TEST',
+                'sinov', 'sinov_fan' => 'Sinov',
+                default => '-',
+            };
+            $testDate = $retakeGroup?->test_date
+                ? $retakeGroup->test_date->format('d.m.Y')
+                : '-';
 
             $sheet->setCellValue("A{$row}", $index + 1);
             $sheet->setCellValue("B{$row}", $student?->full_name ?? '—');
@@ -562,11 +582,13 @@ class RetakeTestMarkaziController extends Controller
             $sheet->setCellValue("E{$row}", $student?->semester_name ?? '—');
             $sheet->setCellValue("F{$row}", $retakeGroup?->subject_name ?? $app->subject_name ?? '—');
             $sheet->setCellValue("G{$row}", $retakeGroup?->semester_name ?? $app->semester_name ?? '—');
-            $sheet->setCellValue("H{$row}", $app->joriy_score !== null ? (float) $app->joriy_score : '—');
-            $sheet->setCellValue("I{$row}", $mustaqil?->grade !== null ? (float) $mustaqil->grade : '—');
-            $sheet->setCellValue("J{$row}", $app->oske_score !== null ? (float) $app->oske_score : '—');
-            $sheet->setCellValue("K{$row}", $app->test_score !== null ? (float) $app->test_score : '—');
-            $sheet->setCellValue("L{$row}", $app->sent_to_test_markazi_at ? 'Yuborilgan' : 'Yuborilmagan');
+            $sheet->setCellValue("H{$row}", $assessmentLabel);
+            $sheet->setCellValue("I{$row}", $testDate);
+            $sheet->setCellValue("J{$row}", $app->joriy_score !== null ? (float) $app->joriy_score : '-');
+            $sheet->setCellValue("K{$row}", $mustaqil?->grade !== null ? (float) $mustaqil->grade : '-');
+            $sheet->setCellValue("L{$row}", $app->oske_score !== null ? (float) $app->oske_score : '-');
+            $sheet->setCellValue("M{$row}", $app->test_score !== null ? (float) $app->test_score : '-');
+            $sheet->setCellValue("N{$row}", $app->sent_to_test_markazi_at ? 'Yuborilgan' : 'Yuborilmagan');
 
             $sheet->setCellValueExplicit("A{$row}", (string) ($index + 1), DataType::TYPE_NUMERIC);
             $row++;
@@ -574,7 +596,7 @@ class RetakeTestMarkaziController extends Controller
 
         $lastRow = $row - 1;
         if ($lastRow >= 2) {
-            $sheet->getStyle("A2:L{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:N{$lastRow}")->applyFromArray([
                 'borders' => [
                     'allBorders' => [
                         'borderStyle' => Border::BORDER_THIN,
@@ -587,10 +609,10 @@ class RetakeTestMarkaziController extends Controller
             ]);
 
             $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("H2:L{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("H2:N{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         }
 
-        foreach (range('A', 'L') as $column) {
+        foreach (range('A', 'N') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
 

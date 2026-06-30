@@ -86,8 +86,8 @@ class WhyQoshimcha extends Command
                 $qoshCnt = $hasQosh ? (clone $gq)->where('sg.is_qoshimcha', 1)->count() : 0;
                 $this->line("      sababli baholar: {$sababliCnt} | is_qoshimcha baholar: {$qoshCnt}");
 
-                if ($sababliCnt === 0) {
-                    $this->line("      → Sababli baho YO'Q — qo'shimcha shakl pre-filterдан o'tmaydi (V2==V1).");
+                if ($sababliCnt === 0 && $qoshCnt === 0) {
+                    $this->line("      → Na sababli, na is_qoshimcha baho bor — qo'shimcha shakl pre-filterдан o'tmaydi.");
                 }
 
                 // Stage hisobi

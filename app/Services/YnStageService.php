@@ -12,16 +12,19 @@ use Illuminate\Support\Facades\Schema;
 
 /**
  * YN bosqich (stage) va aktiv shakllarini bitta (guruh, fan, semestr) uchun
- * hisoblaydi — JournalController::exportYnQaydnoma() dagi AYNAN bir xil mantiq
- * (faqat bosqich/activeForms uchun kerakli qism; Excel/sarlavha/o'qituvchi qismi yo'q).
+ * hisoblaydi — JournalController::showJournal() (xodimlar ko'radigan JURNAL
+ * KO'RINISHI) dagi mantiq bilan mos.
  *
- * Maqsad: qaydnoma va vedomost "qo'shimcha shakl" aniqlashda BIR manbadan
- * foydalanishi (mantiq farqlanmasligi uchun). Faqat o'qiydi — hech narsani
- * o'zgartirmaydi (exportYnQaydnoma dagi sinov backfill bu yerda CHAQIRILMAYDI).
+ * MUHIM: jurnal ko'rinishi qo'shimcha shaklni `is_qoshimcha` (farmoyish) imtihon
+ * baholaridan aniqlaydi — asosiy ssenariydan is_qoshimcha CHIQARILADI, qo'shimcha
+ * ssenariy esa is_qoshimcha baholaridan quriladi. (Qaydnoma EKSPORTI esa boshqacha:
+ * is_qoshimcha'ni asosiyga qo'shib yuboradi — shu sabab eksport modelи qo'shimcha
+ * sheet ochmasdi.) Vedomost xodimlar kutgan jurnal modelига tayanadi.
  *
- * Eslatma: V hisobi imtihon vaznlariga bog'liq. Qaydnomada operator qo'lda
- * kiritadi; vedomost sync uchun vaznlar closing_form'dan keltiriladi
- * (weightsForClosingForm()).
+ * Faqat o'qiydi — hech narsani o'zgartirmaydi.
+ *
+ * V hisobi imtihon vaznlariga bog'liq; vedomost uchun vaznlar closing_form'dan
+ * keltiriladi (weightsForClosingForm()).
  */
 class YnStageService
 {
@@ -64,6 +67,7 @@ class YnStageService
     ): ?array {
         $hasSababliCol = Schema::hasColumn('student_grades', 'retake_was_sababli');
         $hasAttemptCol = Schema::hasColumn('student_grades', 'attempt');
+        $hasQoshimchaCol = Schema::hasColumn('student_grades', 'is_qoshimcha');
 
         $group = Group::where('group_hemis_id', $groupHemisId)->first();
         if (!$group) {
@@ -82,7 +86,6 @@ class YnStageService
             return null;
         }
 
-        // Vaznlar berilmagan bo'lsa — closing_form'dan.
         if ($weightJn === null) {
             $w = self::weightsForClosingForm($subject->closing_form ?? null);
             $weightJn = $w['jn']; $weightMt = $w['mt']; $weightOn = $w['on'];
@@ -97,7 +100,6 @@ class YnStageService
 
         $curriculum = Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->first();
 
-        // O'quv yili kodi (exportYnQaydnoma bilan bir xil).
         $educationYearCode = $curriculum?->education_year_code;
         $scheduleEducationYear = DB::table('schedules')
             ->where('group_id', $groupHemisId)
@@ -115,7 +117,7 @@ class YnStageService
         $excludedTrainingTypes = ["Ma'ruza", "Mustaqil ta'lim", "Oraliq nazorat", "Oski", "Yakuniy test", "Quiz test"];
         $excludedTrainingCodes = config('app.training_type_code', [11, 99, 100, 101, 102, 103]);
 
-        // JB (amaliyot) jadval sanalari
+        // ── JB (amaliyot) jadval sanalari ──────────────────────────────────────
         $jbScheduleRows = DB::table('schedules')
             ->where('group_id', $groupHemisId)
             ->where('subject_id', $subjectId)
@@ -150,7 +152,7 @@ class YnStageService
         $jbLessonDatesForAverageLookup = array_flip($jbLessonDatesForAverage);
         $totalJbDaysForAverage = count($jbLessonDatesForAverage);
 
-        // MT jadval sanalari
+        // ── MT jadval sanalari ─────────────────────────────────────────────────
         $mtScheduleRows = DB::table('schedules')
             ->where('group_id', $groupHemisId)
             ->where('subject_id', $subjectId)
@@ -183,7 +185,7 @@ class YnStageService
             ->merge($mtColumns->pluck('date'))
             ->min();
 
-        // JB/MT dars baholari (attempt=1)
+        // ── JB/MT dars baholari (attempt=1) — sababli retake'lar QO'LLANILADI ───
         $allGradesRaw = DB::table('student_grades')
             ->whereNull('deleted_at')
             ->whereIn('student_hemis_id', $studentHemisIds)
@@ -233,22 +235,21 @@ class YnStageService
             return null;
         };
 
-        $jbGradesV1 = [];
-        $jbGradesV2 = [];
-        $mtGradesMapV1 = [];
-        $mtGradesMapV2 = [];
+        // JN/MT — jurnal stage hisobi bilan bir xil: sababli retake'lar bilan (yagona versiya).
+        $jbGrades = [];
+        $mtGradesMap = [];
         foreach ($allGradesRaw as $g) {
             $normalizedDate = \Carbon\Carbon::parse($g->lesson_date)->format('Y-m-d');
             $key = $normalizedDate . '_' . $g->lesson_pair_code;
-            $effV1 = $getEffectiveGrade($g, false);
-            $effV2 = $getEffectiveGrade($g, true);
+            $eff = $getEffectiveGrade($g, true);
+            if ($eff === null) {
+                continue;
+            }
             if (isset($jbDatePairSet[$key])) {
-                if ($effV1 !== null) $jbGradesV1[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effV1;
-                if ($effV2 !== null) $jbGradesV2[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effV2;
+                $jbGrades[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $eff;
             }
             if (isset($mtDatePairSet[$key])) {
-                if ($effV1 !== null) $mtGradesMapV1[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effV1;
-                if ($effV2 !== null) $mtGradesMapV2[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $effV2;
+                $mtGradesMap[$g->student_hemis_id][$normalizedDate][$g->lesson_pair_code] = $eff;
             }
         }
 
@@ -264,58 +265,48 @@ class YnStageService
             ->get()
             ->keyBy('student_hemis_id');
 
-        $computeJnMt = function (array $jbGradesMap, array $mtGradesMapLocal) use (
-            $studentHemisIds, $jbLessonDates, $jbPairsPerDay, $jbLessonDatesForAverageLookup,
-            $totalJbDaysForAverage, $mtLessonDates, $mtPairsPerDay, $totalMtDays, $manualMtGrades
-        ) {
-            $jn = [];
-            $mt = [];
-            foreach ($studentHemisIds as $hemisId) {
-                $dailySum = 0;
-                $studentDayGrades = $jbGradesMap[$hemisId] ?? [];
-                foreach ($jbLessonDates as $date) {
-                    $dayGrades = $studentDayGrades[$date] ?? [];
-                    $pairsInDay = $jbPairsPerDay[$date] ?? 1;
-                    $gradeSum = array_sum($dayGrades);
-                    $dayAverage = round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                    if (isset($jbLessonDatesForAverageLookup[$date])) {
-                        $dailySum += $dayAverage;
-                    }
-                }
-                $jn[$hemisId] = $totalJbDaysForAverage > 0
-                    ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
-                    : 0;
-
-                $mtDailySum = 0;
-                $studentMtGrades = $mtGradesMapLocal[$hemisId] ?? [];
-                foreach ($mtLessonDates as $date) {
-                    $dayGrades = $studentMtGrades[$date] ?? [];
-                    $pairsInDay = $mtPairsPerDay[$date] ?? 1;
-                    $gradeSum = array_sum($dayGrades);
-                    $mtDailySum += round($gradeSum / $pairsInDay, 0, PHP_ROUND_HALF_UP);
-                }
-                $mt[$hemisId] = $totalMtDays > 0
-                    ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
-                    : 0;
-
-                if (isset($manualMtGrades[$hemisId])) {
-                    $mt[$hemisId] = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
+        $jn = [];
+        $mt = [];
+        foreach ($studentHemisIds as $hemisId) {
+            $dailySum = 0;
+            $studentDayGrades = $jbGrades[$hemisId] ?? [];
+            foreach ($jbLessonDates as $date) {
+                $dayGrades = $studentDayGrades[$date] ?? [];
+                $pairsInDay = $jbPairsPerDay[$date] ?? 1;
+                $dayAverage = round(array_sum($dayGrades) / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+                if (isset($jbLessonDatesForAverageLookup[$date])) {
+                    $dailySum += $dayAverage;
                 }
             }
-            return [$jn, $mt];
-        };
+            $jn[$hemisId] = $totalJbDaysForAverage > 0
+                ? round($dailySum / $totalJbDaysForAverage, 0, PHP_ROUND_HALF_UP)
+                : 0;
 
-        [$calculatedJnGradesV1, $calculatedMtGradesV1] = $computeJnMt($jbGradesV1, $mtGradesMapV1);
-        [$calculatedJnGradesV2, $calculatedMtGradesV2] = $computeJnMt($jbGradesV2, $mtGradesMapV2);
+            $mtDailySum = 0;
+            $studentMtGrades = $mtGradesMap[$hemisId] ?? [];
+            foreach ($mtLessonDates as $date) {
+                $dayGrades = $studentMtGrades[$date] ?? [];
+                $pairsInDay = $mtPairsPerDay[$date] ?? 1;
+                $mtDailySum += round(array_sum($dayGrades) / $pairsInDay, 0, PHP_ROUND_HALF_UP);
+            }
+            $mt[$hemisId] = $totalMtDays > 0
+                ? round($mtDailySum / $totalMtDays, 0, PHP_ROUND_HALF_UP)
+                : 0;
 
-        $fetchOtherGradesByAttempt = function (?int $attempt) use ($studentHemisIds, $subjectId, $semesterCode, $educationYearCode, $minScheduleDate, $hasSababliCol, $hasAttemptCol) {
+            if (isset($manualMtGrades[$hemisId])) {
+                $mt[$hemisId] = round((float) $manualMtGrades[$hemisId]->grade, 0, PHP_ROUND_HALF_UP);
+            }
+        }
+
+        // ── ON/OSKI/Test (100/101/102/103) — urinish va is_qoshimcha bo'yicha ────
+        $fetchOther = function (int $attempt, ?bool $qosh) use ($studentHemisIds, $subjectId, $semesterCode, $educationYearCode, $minScheduleDate, $hasSababliCol, $hasAttemptCol, $hasQoshimchaCol) {
             return DB::table('student_grades')
                 ->whereNull('deleted_at')
                 ->whereIn('student_hemis_id', $studentHemisIds)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
                 ->whereIn('training_type_code', [100, 101, 102, 103])
-                ->when($hasAttemptCol && $attempt !== null, function ($q) use ($attempt) {
+                ->when($hasAttemptCol, function ($q) use ($attempt) {
                     if ($attempt === 1) {
                         $q->where(function ($qq) {
                             $qq->where('attempt', 1)->orWhereNull('attempt');
@@ -324,6 +315,7 @@ class YnStageService
                         $q->where('attempt', $attempt);
                     }
                 })
+                ->when($hasQoshimchaCol && $qosh !== null, fn($q) => $q->where('is_qoshimcha', $qosh ? 1 : 0))
                 ->when($educationYearCode !== null, fn($q) => $q->where(function ($q2) use ($educationYearCode, $minScheduleDate) {
                     $q2->where('education_year_code', $educationYearCode)
                         ->orWhere(function ($q3) use ($minScheduleDate) {
@@ -338,10 +330,6 @@ class YnStageService
                 ))
                 ->get();
         };
-
-        $otherGradesAttempt1 = $fetchOtherGradesByAttempt(1);
-        $otherGradesAttempt2 = $hasAttemptCol ? $fetchOtherGradesByAttempt(2) : collect();
-        $otherGradesAttempt3 = $hasAttemptCol ? $fetchOtherGradesByAttempt(3) : collect();
 
         $buildOtherGrades = function ($rows, bool $includeSababli) use ($getEffectiveGrade) {
             $grouped = [];
@@ -372,14 +360,24 @@ class YnStageService
             return $byType;
         };
 
-        $gradesByTypeV1 = $buildOtherGrades($otherGradesAttempt1, false);
-        $gradesByTypeV2 = $buildOtherGrades($otherGradesAttempt1, true);
-        $gradesByTypeAv1 = $buildOtherGrades($otherGradesAttempt2, false);
-        $gradesByTypeAv2 = $buildOtherGrades($otherGradesAttempt2, true);
-        $gradesByTypeBv1 = $buildOtherGrades($otherGradesAttempt3, false);
-        $gradesByTypeBv2 = $buildOtherGrades($otherGradesAttempt3, true);
+        // Jurnal modeli (showJournal):
+        //  - asosiy: attempt=1, is_qoshimcha=0 (sababli bilan)
+        //  - 12-qo'shimcha: attempt=1, is_qoshimcha=1 (farmoyish)
+        //  - 12a: attempt=2 sababsiz (av1) / 12a-qo'shimcha: attempt=2 sababli (av2)
+        //  - 12b: attempt=3 sababsiz (bv1) / 12b-qo'shimcha: attempt=3 sababli (bv2)
+        $rowsA1Main = $fetchOther(1, false);
+        $rowsA1Qosh = $fetchOther(1, true);
+        $rowsA2 = $hasAttemptCol ? $fetchOther(2, false) : collect();
+        $rowsA3 = $hasAttemptCol ? $fetchOther(3, false) : collect();
 
-        // Davomat (auditoriya soatlariga nisbatan absent_off foizi)
+        $gradesMain  = $buildOtherGrades($rowsA1Main, true);
+        $gradesQosh1 = $buildOtherGrades($rowsA1Qosh, true);
+        $av1 = $buildOtherGrades($rowsA2, false);  // 12a sababsiz
+        $av2 = $buildOtherGrades($rowsA2, true);   // 12a sababli (qo'shimcha)
+        $bv1 = $buildOtherGrades($rowsA3, false);  // 12b sababsiz
+        $bv2 = $buildOtherGrades($rowsA3, true);   // 12b sababli (qo'shimcha)
+
+        // ── Davomat ─────────────────────────────────────────────────────────────
         $excludedAttendanceCodes = [99, 100, 101, 102];
         $attendanceByStudent = DB::table('attendances')
             ->whereIn('student_hemis_id', $studentHemisIds)
@@ -413,7 +411,7 @@ class YnStageService
                 : 0.0;
         }
 
-        // 12a/12b fallback chain (exportYnQaydnoma bilan bir xil)
+        // OSKI/Test fallback chain (showJournal: ?? zanjiri bilan bir xil).
         $mergeOskiTest = function (array $primary, array $fallback) use ($studentHemisIds) {
             $result = [100 => [], 101 => [], 102 => []];
             foreach ($studentHemisIds as $hid) {
@@ -427,112 +425,42 @@ class YnStageService
             return $result;
         };
 
-        $gradesByType12aMain = $mergeOskiTest($gradesByTypeAv1, $gradesByTypeV2);
-        $gradesByType12aQosh = $mergeOskiTest($gradesByTypeAv2, $gradesByTypeV2);
-        $gradesByType12bMain = $mergeOskiTest($gradesByTypeBv1, $gradesByType12aMain);
-        $gradesByType12bQosh = $mergeOskiTest($gradesByTypeBv2, $gradesByType12aQosh);
+        $qoshOf = $mergeOskiTest($gradesMain, $gradesQosh1); // qo'shimcha: asosiy ?? farmoyish
+        $aOf    = $mergeOskiTest($av1, $gradesMain);
+        $aqOf   = $mergeOskiTest($av2, $gradesMain);
+        $bOf    = $mergeOskiTest($bv1, $aOf);
+        $bqOf   = $mergeOskiTest($bv2, $aqOf);
 
-        $levelCodeForRounding = (string) ($semester?->level_code ?? '');
+        $levelCode = (string) ($semester?->level_code ?? '');
 
-        $computeV = function (
-            int $jnVal, int $mtVal, ?float $onRaw, ?float $oskiRaw, ?float $testRaw, float $davomatPct
-        ) use ($weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $levelCodeForRounding) {
-            $onVal = $onRaw !== null ? (int) round((float) $onRaw) : 0;
-            $oskiVal = $oskiRaw !== null ? (int) round((float) $oskiRaw) : 0;
-            $testVal = $testRaw !== null ? (int) round((float) $testRaw) : 0;
-            $davomatFailed = $davomatPct >= 25;
-            $roundJnMtToInt = in_array($levelCodeForRounding, ['14', '15'], true);
+        $has = fn(array $map, $h) => isset($map[101][$h]) || isset($map[102][$h]);
 
-            if ($roundJnMtToInt) {
-                $eBall = $jnVal >= 60 ? (int) floor($jnVal * $weightJn / 100 + 0.5) : 0;
-                $hBall = $mtVal >= 60 ? (int) floor($mtVal * $weightMt / 100 + 0.5) : 0;
-                $kBall = $onVal >= 60 ? (int) floor($onVal * $weightOn / 100 + 0.5) : 0;
-            } else {
-                $eBall = $jnVal >= 60 ? round($jnVal * $weightJn / 100, 1) : 0;
-                $hBall = $mtVal >= 60 ? round($mtVal * $weightMt / 100, 1) : 0;
-                $kBall = $onVal >= 60 ? round($onVal * $weightOn / 100, 1) : 0;
-            }
-            if ($weightOski > 0 && $weightTest > 0) {
-                $qBall = $oskiVal >= 60 ? $oskiVal * $weightOski / 100 : 0;
-                $tBall = $testVal >= 60 ? $testVal * $weightTest / 100 : 0;
-            } elseif ($weightOski > 0) {
-                $qBall = $oskiVal >= 60 ? (int) round($oskiVal * $weightOski / 100) : 0;
-                $tBall = 0;
-            } elseif ($weightTest > 0) {
-                $qBall = 0;
-                $tBall = $testVal >= 60 ? (int) round($testVal * $weightTest / 100) : 0;
-            } else {
-                $qBall = 0; $tBall = 0;
-            }
-
-            $maxJbMtOn = $weightJn + $weightMt + $weightOn;
-            $mSum = (($jnVal < 60) || ($mtVal < 60)) ? 0 : round($eBall + $hBall + $kBall, 1);
-            $nPct = $maxJbMtOn > 0 ? $mSum / $maxJbMtOn : 0;
-
-            if ($jnVal === 0 && $mtVal === 0) {
-                $v = '';
-            } elseif ($davomatFailed) {
-                $v = -3;
-            } elseif ($nPct < 0.6) {
-                $v = -2;
-            } elseif (($weightOski > 0 && $oskiVal == 0) || ($weightTest > 0 && $testVal == 0)) {
-                $v = -1;
-            } elseif (($weightJn > 0 && $jnVal < 60) || ($weightMt > 0 && $mtVal < 60)
-                || ($weightOn > 0 && $onVal < 60)
-                || ($weightOski > 0 && $oskiVal < 60) || ($weightTest > 0 && $testVal < 60)) {
-                $v = 0;
-            } else {
-                $jbMtOnSum = (int) floor($eBall + $hBall + $kBall + 0.5);
-                if ($weightOski > 0 && $weightTest > 0) {
-                    $examSum = (int) floor($qBall + $tBall + 0.5);
-                } elseif ($weightOski > 0) {
-                    $examSum = (int) floor($qBall + 0.5);
-                } elseif ($weightTest > 0) {
-                    $examSum = (int) floor($tBall + 0.5);
-                } else {
-                    $examSum = 0;
-                }
-                $v = $jbMtOnSum + $examSum;
-            }
-
-            return $v;
-        };
-
-        // Har talaba uchun 6 ssenariy → bosqich (exportYnQaydnoma:9546-9589 bilan bir xil)
         $stages = [];
         $studentScenarios = [];
         foreach ($students as $stu) {
             $h = $stu->hemis_id;
             $davomatPct = (float) ($davomatByStudent[$h] ?? 0);
+            $jnVal = (int) ($jn[$h] ?? 0);
+            $mtVal = (int) ($mt[$h] ?? 0);
 
-            $build = function (int $jn, int $mt, array $other) use ($h, $computeV, $davomatPct) {
-                $on = $other[100][$h] ?? null;
-                $oski = $other[101][$h] ?? null;
-                $test = $other[102][$h] ?? null;
-                return [
-                    'v' => $computeV($jn, $mt, $on, $oski, $test, $davomatPct),
-                    'jn' => $jn, 'mt' => $mt,
-                    'oski' => $oski !== null ? (int) round((float) $oski) : null,
-                    'test' => $test !== null ? (int) round((float) $test) : null,
-                ];
+            $scen = function (array $map) use ($h, $jnVal, $mtVal, $davomatPct, $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $levelCode) {
+                return YnAttemptStatusService::buildScenario(
+                    $jnVal, $mtVal,
+                    $map[100][$h] ?? null,
+                    $map[101][$h] ?? null,
+                    $map[102][$h] ?? null,
+                    $davomatPct,
+                    $weightJn, $weightMt, $weightOn, $weightOski, $weightTest, $levelCode
+                );
             };
 
-            $jn1 = (int) ($calculatedJnGradesV1[$h] ?? 0);
-            $mt1 = (int) ($calculatedMtGradesV1[$h] ?? 0);
-            $jn2 = (int) ($calculatedJnGradesV2[$h] ?? 0);
-            $mt2 = (int) ($calculatedMtGradesV2[$h] ?? 0);
-
-            $main       = $build($jn1, $mt1, $gradesByTypeV1);
-            $qoshimcha  = $build($jn2, $mt2, $gradesByTypeV2);
-            $aHas       = isset($gradesByTypeAv1[100][$h]) || isset($gradesByTypeAv1[101][$h]) || isset($gradesByTypeAv1[102][$h]);
-            $aQHas      = isset($gradesByTypeAv2[100][$h]) || isset($gradesByTypeAv2[101][$h]) || isset($gradesByTypeAv2[102][$h]);
-            $bHas       = isset($gradesByTypeBv1[100][$h]) || isset($gradesByTypeBv1[101][$h]) || isset($gradesByTypeBv1[102][$h]);
-            $bQHas      = isset($gradesByTypeBv2[100][$h]) || isset($gradesByTypeBv2[101][$h]) || isset($gradesByTypeBv2[102][$h]);
-
-            $a          = $aHas ? $build($jn2, $mt2, $gradesByType12aMain) : null;
-            $aQoshimcha = $aQHas ? $build($jn2, $mt2, $gradesByType12aQosh) : null;
-            $b          = $bHas ? $build($jn2, $mt2, $gradesByType12bMain) : null;
-            $bQoshimcha = $bQHas ? $build($jn2, $mt2, $gradesByType12bQosh) : null;
+            $main       = $scen($gradesMain);
+            $hasQosh1   = isset($gradesQosh1[101][$h]) || isset($gradesQosh1[102][$h]);
+            $qoshimcha  = $hasQosh1 ? $scen($qoshOf) : null;
+            $a          = $has($av1, $h) ? $scen($aOf) : null;
+            $aQoshimcha = $has($av2, $h) ? $scen($aqOf) : null;
+            $b          = $has($bv1, $h) ? $scen($bOf) : null;
+            $bQoshimcha = $has($bv2, $h) ? $scen($bqOf) : null;
 
             $stage = YnAttemptStatusService::determineStage(
                 $main, $qoshimcha, $a, $aQoshimcha, $b, $bQoshimcha

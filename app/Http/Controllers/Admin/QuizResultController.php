@@ -633,6 +633,7 @@ class QuizResultController extends Controller
                     'jn_avg' => $xulosa['jn_avg'],
                     'mt_avg' => $xulosa['mt_avg'],
                     'oski_avg' => $xulosa['oski_avg'],
+                    'retake_group_id' => $xulosa['retake_group_id'] ?? null,
                 ];
             }
 
@@ -1340,6 +1341,7 @@ class QuizResultController extends Controller
                     'jn_avg' => $xulosa['jn_avg'],
                     'mt_avg' => $xulosa['mt_avg'],
                     'oski_avg' => $xulosa['oski_avg'],
+                    'retake_group_id' => $xulosa['retake_group_id'] ?? null,
                 ];
             }
 
@@ -1740,7 +1742,9 @@ class QuizResultController extends Controller
         $oske = $app->oske_score !== null ? round((float) $app->oske_score) : null;
         $test = $app->test_score !== null ? round((float) $app->test_score) : null;
 
-        $avg = ['jn_avg' => $jn, 'mt_avg' => $mt, 'oski_avg' => $oske];
+        // retake_group_id — diagnostika ko'z (👁) tugmasi qayta o'qish jurnaliga
+        // (test markazi guruhiga) yo'naltirishi uchun.
+        $avg = ['jn_avg' => $jn, 'mt_avg' => $mt, 'oski_avg' => $oske, 'retake_group_id' => $app->retake_group_id];
 
         // Allaqachon qayta o'qish jurnaliga yuklanganmi?
         if ($ynTuri === 'OSKI' && $oske !== null) {

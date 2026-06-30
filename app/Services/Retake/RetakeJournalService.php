@@ -1119,12 +1119,34 @@ class RetakeJournalService
             ->values()
             ->all();
 
+        // Talaba kaliti: hemis_quiz_results.student_id = students.student_id_number
+        // (Moodle id), ariza esa student_hemis_id (LMS hemis_id) bilan ishlaydi.
+        // Shuning uchun hemis_id <-> student_id_number xaritasini quramiz.
+        $hemisToSid = [];
+        $sidToHemis = [];
+        foreach (\App\Models\Student::whereIn('hemis_id', $hemisIds)->get(['hemis_id', 'student_id_number']) as $st) {
+            $h = (string) $st->hemis_id;
+            $sid = (string) $st->student_id_number;
+            if ($sid !== '') {
+                $hemisToSid[$h] = $sid;
+                $sidToHemis[$sid] = $h;
+            }
+        }
+        $quizStudentIds = array_values(array_unique($hemisToSid));
+        if (empty($quizStudentIds)) {
+            return $base;
+        }
+
+        // Fan id uchta xil id-makonda bo'lishi mumkin (HEMIS 171 / ariza 78 /
+        // guruh 142), nomi esa bir xil — shuning uchun fan_id YOKI NOM bo'yicha
+        // moslaymiz (matchRetakeApp kabi).
+        $groupSubjectNorm = $this->normSubjectName($group->subject_name);
+
         $rows = HemisQuizResult::query()
             ->where('is_active', 1)
-            ->where('fan_id', $group->subject_id)
-            ->whereIn('student_id', $hemisIds)
+            ->whereIn('student_id', $quizStudentIds)
             ->whereIn('quiz_type', $relevantTypes)
-            ->get(['student_id', 'quiz_type', 'attempt_name', 'shakl', 'grade', 'date_finish']);
+            ->get(['student_id', 'quiz_type', 'attempt_name', 'shakl', 'grade', 'date_finish', 'fan_id', 'fan_name']);
 
         // Tokensiz qayta o'qish quizlari (nomida yil-fasl yo'q, faqat "Qayta-o'qish")
         // uchun — matchRetakeApp dagi kabi — guruh sessiyasi OCHIQ bo'lsa qabul qilamiz.
@@ -1136,6 +1158,12 @@ class RetakeJournalService
         $best = [];
         $rejected = 0;
         foreach ($rows as $row) {
+            // Fan mosligi: id (HEMIS) yoki nom bo'yicha.
+            $sameSubject = ((string) $row->fan_id === (string) $group->subject_id)
+                || ($groupSubjectNorm !== '' && $this->normSubjectName($row->fan_name) === $groupSubjectNorm);
+            if (!$sameSubject) {
+                continue;
+            }
             // Oddiy (qayta o'qish bo'lmagan) quizlar — rad etiladi.
             if (!RetakeSessionCode::isRetakeQuiz($row->attempt_name, $row->shakl)) {
                 $rejected++;
@@ -1167,7 +1195,10 @@ class RetakeJournalService
             }
             $grade = (float) $row->grade;
             $kind = in_array($row->quiz_type, $oskiTypes, true) ? 'oske' : 'test';
-            $hid = (string) $row->student_id;
+            $hid = $sidToHemis[(string) $row->student_id] ?? null; // student_id_number -> hemis_id
+            if ($hid === null) {
+                continue;
+            }
             if (!isset($best[$hid][$kind]) || $grade > $best[$hid][$kind]) {
                 $best[$hid][$kind] = $grade;
             }
@@ -1220,5 +1251,21 @@ class RetakeJournalService
             'rejected_other_session' => $rejected,
             'session_code' => $sessionCode,
         ];
+    }
+
+    /**
+     * Fan nomini taqqoslash uchun normallashtiradi. Vedomost mantig'i bilan
+     * bir xil: fan nomidan variant suffiksini ("(a)","(b)","(c)","(1)") kesib
+     * o'zak fanni oladi (VedomostMergeService::rootSubjectName), so'ng kichik
+     * harf + bo'shliqlarni tartibga keltiradi.
+     */
+    private function normSubjectName(?string $s): string
+    {
+        if ($s === null || $s === '') {
+            return '';
+        }
+        $root = app(\App\Services\VedomostMergeService::class)->rootSubjectName($s);
+
+        return trim(preg_replace('/\s+/u', ' ', mb_strtolower($root)));
     }
 }

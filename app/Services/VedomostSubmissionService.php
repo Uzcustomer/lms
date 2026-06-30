@@ -38,10 +38,8 @@ class VedomostSubmissionService
     private ?bool $studentGradeSababliCol = null;
     private ?bool $studentGradeQoshimchaCol = null;
 
-    public function __construct(
-        private VedomostMergeService $merge,
-        private YnStageService $ynStage
-    ) {
+    public function __construct(private VedomostMergeService $merge)
+    {
     }
 
     /**
@@ -607,80 +605,72 @@ class VedomostSubmissionService
     }
 
     /**
-     * Qo'shimcha (sababli ma'lumotnoma) shakllarini — 12q (har guruh alohida),
-     * 12aq/12bq (umumiy) — YN bosqich mantig'i (YnStageService) bo'yicha ochadi/yopadi.
+     * Qo'shimcha (farmoyish) shakllarini — 12q (har guruh alohida), 12aq/12bq
+     * (umumiy) — ochadi/yopadi.
      *
-     * Tezlik uchun: stage hisobi OG'IR, shuning uchun faqat is_qoshimcha (farmoyish)
-     * YOKI retake_was_sababli bahosi bor (guruh, fan, semestr) birliklarида
-     * chaqiriladi — chunki bu signallar bo'lmasa qo'shimcha shakl umuman
-     * aktivlashmaydi (asosiy va qo'shimcha ssenariy bir xil bo'ladi).
+     * MUHIM: qo'shimcha varaq farmoyish IMTIHONI o'tkazilgani uchun ochiladi
+     * (talaba o'tdimi-yiqildimi ahamiyatsiz — varaq topshirilishi kerak). Shuning
+     * uchun trigger = is_qoshimcha (101/102) imtihon bahosi MAVJUDLIGI, urinish
+     * (attempt) darajasi bo'yicha:
+     *   attempt=1 → 12-qo'shimcha, attempt=2 → 12a-qo'shimcha, attempt=3 → 12b-qo'shimcha.
+     * (YnStageService "qoshimcha_passed" bosqichi — bu o'tganlik; varaq ochish
+     * uchun ishlatilmaydi, chunki yiqilgan farmoyishchi ham varaqda bo'lishi kerak.)
      *
      * @param  array<int,string>  $activeGroupHemisIds  joriy faol guruhlar
      * @return array<int>  ochilgan (saqlanadigan) qator id lari
      */
     private function syncQoshimchaForms(array $units, array $activeGroupHemisIds, Collection $semByGroup): array
     {
-        $hasSababli = $this->studentGradeSababliColumn();
-        $hasQoshimcha = $this->studentGradeQoshimchaColumn();
-        if ((!$hasSababli && !$hasQoshimcha) || empty($activeGroupHemisIds)) {
+        if (!$this->studentGradeQoshimchaColumn() || empty($activeGroupHemisIds)) {
             return [];
         }
 
-        // 1. Nomzodlar: is_qoshimcha YOKI sababli bahosi bor (guruh, fan, semestr).
-        $candidates = DB::table('student_grades as sg')
+        $hasAttempt = $this->studentGradeAttemptColumn();
+
+        // is_qoshimcha (farmoyish) OSKI/Test imtihon baholari — (guruh, fan, sem, urinish).
+        $rows = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereIn('st.group_id', $activeGroupHemisIds)
+            ->where('sg.is_qoshimcha', 1)
+            ->whereIn('sg.training_type_code', [101, 102])
             ->whereNull('sg.deleted_at')
-            ->where(function ($q) use ($hasSababli, $hasQoshimcha) {
-                if ($hasQoshimcha) {
-                    $q->orWhere('sg.is_qoshimcha', 1);
-                }
-                if ($hasSababli) {
-                    $q->orWhere('sg.retake_was_sababli', 1);
-                }
-            })
-            ->select('st.group_id as group_hemis_id', 'sg.subject_id', 'sg.semester_code')
+            ->select(
+                'st.group_id as group_hemis_id',
+                'sg.subject_id',
+                'sg.semester_code',
+                $hasAttempt ? 'sg.attempt' : DB::raw('1 as attempt')
+            )
             ->distinct()
             ->get();
 
-        if ($candidates->isEmpty()) {
-            return [];
-        }
-
-        // 2. Har nomzod uchun YN aktiv shakllarini hisoblaymiz (faqat joriy semestr).
-        //    "group|subject|sem" => activeForms
-        $activeByKey = [];
-        foreach ($candidates as $c) {
-            $gid = (string) $c->group_hemis_id;
-            $sem = (string) $c->semester_code;
-            // Faqat guruhning JORIY semestri (eski semestr qo'shimchasini ochmaymiz).
+        // "group|subject|sem" => [urinish => true]  (faqat joriy semestr).
+        $attemptsByKey = [];
+        foreach ($rows as $r) {
+            $gid = (string) $r->group_hemis_id;
+            $sem = (string) $r->semester_code;
             $curSem = $semByGroup->get($gid)?->code;
             if ($curSem === null || (string) $curSem !== $sem) {
                 continue;
             }
-            $res = $this->ynStage->computeForGroupSubject($gid, (string) $c->subject_id, $sem);
-            if ($res !== null) {
-                $activeByKey[$gid . '|' . $c->subject_id . '|' . $sem] = $res['activeForms'];
+            $att = (int) ($r->attempt ?? 1);
+            if ($att < 1) {
+                $att = 1;
             }
-        }
-
-        if (empty($activeByKey)) {
-            return [];
+            $attemptsByKey[$gid . '|' . $r->subject_id . '|' . $sem][$att] = true;
         }
 
         $keptIds = [];
 
-        // 3. 12q — har guruh alohida: mavjud 12-shakl qatorini klonlaymiz.
-        foreach ($activeByKey as $key => $af) {
+        // 12q — har guruh alohida: farmoyish imtihoni (attempt=1) bo'lsa, 12-shakl qatorini klonlaymiz.
+        foreach ($attemptsByKey as $key => $atts) {
             [$gid, $subjectId, $sem] = explode('|', $key);
-            $open = !empty($af[YnAttemptStatusService::FORM_12_QOSHIMCHA]);
-            $id = $this->upsertQoshimcha12Row($gid, $subjectId, $sem, $open);
+            $id = $this->upsertQoshimcha12Row($gid, $subjectId, $sem, !empty($atts[1]));
             if ($id) {
                 $keptIds[] = $id;
             }
         }
 
-        // 4. 12aq/12bq — umumiy (birlik bo'yicha): birlikning bironta guruhida aktiv bo'lsa.
+        // 12aq/12bq — umumiy (birlik bo'yicha): birlikning bironta guruhida attempt=2/3 farmoyish bo'lsa.
         [$ag, $ask, $asc, $unitByKey] = $this->unitKeyMaps($units);
         $dates = $this->examDatesBatch($ag, $ask, $asc, $unitByKey, $units);
 
@@ -692,14 +682,11 @@ class VedomostSubmissionService
             $any12aq = false;
             $any12bq = false;
             foreach ($unit['group_ids'] as $gid) {
-                $af = $activeByKey[$gid . '|' . $subjectId . '|' . $sem] ?? null;
-                if ($af === null) {
-                    continue;
-                }
-                if (!empty($af[YnAttemptStatusService::FORM_12A_QOSHIMCHA])) {
+                $atts = $attemptsByKey[$gid . '|' . $subjectId . '|' . $sem] ?? [];
+                if (!empty($atts[2])) {
                     $any12aq = true;
                 }
-                if (!empty($af[YnAttemptStatusService::FORM_12B_QOSHIMCHA])) {
+                if (!empty($atts[3])) {
                     $any12bq = true;
                 }
             }

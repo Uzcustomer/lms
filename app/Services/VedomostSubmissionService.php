@@ -936,7 +936,14 @@ class VedomostSubmissionService
             return $result;
         }
 
-        $byUnit = []; // unitKey => ['attempt1' => [], 'resit' => [], 'resit2' => []]
+        // unitKey => ['attempt1'=>[], 'resit'=>[], 'resit2'=>[], 'resit_g'=>[], 'resit2_g'=>[]]
+        // *_g — student_grades attempt sanalaridan fallback (exam_schedules sana yo'q bo'lsa).
+        $byUnit = [];
+        $ensureUnit = function (string $unitKey) use (&$byUnit) {
+            if (!isset($byUnit[$unitKey])) {
+                $byUnit[$unitKey] = ['attempt1' => [], 'resit' => [], 'resit2' => [], 'resit_g' => [], 'resit2_g' => []];
+            }
+        };
 
         $cursor = ExamSchedule::whereNull('student_hemis_id')
             ->whereIn('group_hemis_id', $groupIds)
@@ -953,9 +960,7 @@ class VedomostSubmissionService
             $wantOski = in_array($cf, ['oski', 'oski_test'], true);
             $wantTest = in_array($cf, ['test', 'oski_test'], true);
 
-            if (!isset($byUnit[$unitKey])) {
-                $byUnit[$unitKey] = ['attempt1' => [], 'resit' => [], 'resit2' => []];
-            }
+            $ensureUnit($unitKey);
             if ($wantOski) {
                 if (!$r->oski_na && $r->oski_date) {
                     $byUnit[$unitKey]['attempt1'][] = $r->oski_date->toDateString();
@@ -980,11 +985,46 @@ class VedomostSubmissionService
             }
         }
 
+        // Fallback: exam_schedules da resit/resit2 sanasi belgilanmagan bo'lsa,
+        // student_grades dagi attempt=2/3 OSKI/Test baholarining eng kech sanasini
+        // ishlatamiz (showJournal bilan bir xil — imtihon bo'lib o'tgani baholar bor).
+        if ($this->studentGradeAttemptColumn()) {
+            $gradeDates = DB::table('student_grades as sg')
+                ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                ->whereIn('st.group_id', $groupIds)
+                ->whereIn('sg.subject_id', $subjectKeys)
+                ->whereIn('sg.semester_code', $semCodes)
+                ->whereIn('sg.training_type_code', [101, 102])
+                ->whereIn('sg.attempt', [2, 3])
+                ->whereNotNull('sg.lesson_date')
+                ->whereNull('sg.deleted_at')
+                ->selectRaw('st.group_id, sg.subject_id, sg.semester_code, sg.attempt, MAX(sg.lesson_date) as max_date')
+                ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.attempt')
+                ->get();
+
+            foreach ($gradeDates as $g) {
+                $unitKey = $unitByKey[$g->group_id . '|' . $g->subject_id . '|' . $g->semester_code] ?? null;
+                if ($unitKey === null || empty($g->max_date)) {
+                    continue;
+                }
+                $ensureUnit($unitKey);
+                $date = substr((string) $g->max_date, 0, 10);
+                if ((int) $g->attempt === 2) {
+                    $byUnit[$unitKey]['resit_g'][] = $date;
+                } elseif ((int) $g->attempt === 3) {
+                    $byUnit[$unitKey]['resit2_g'][] = $date;
+                }
+            }
+        }
+
         foreach ($byUnit as $unitKey => $d) {
             $result[$unitKey] = [
                 'attempt1' => !empty($d['attempt1']) ? max($d['attempt1']) : null,
-                'resit' => !empty($d['resit']) ? max($d['resit']) : null,
-                'resit2' => !empty($d['resit2']) ? max($d['resit2']) : null,
+                // resit/resit2 — avval exam_schedules, bo'lmasa baho sanalari (fallback).
+                'resit' => !empty($d['resit']) ? max($d['resit'])
+                    : (!empty($d['resit_g']) ? max($d['resit_g']) : null),
+                'resit2' => !empty($d['resit2']) ? max($d['resit2'])
+                    : (!empty($d['resit2_g']) ? max($d['resit2_g']) : null),
             ];
         }
 

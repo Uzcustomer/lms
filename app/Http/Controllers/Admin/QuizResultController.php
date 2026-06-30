@@ -63,12 +63,21 @@ class QuizResultController extends Controller
      */
     public static function parseAttemptFromShakl(?string $shakl, $attemptNumber = null): int
     {
-        if (is_string($shakl) && preg_match('/^(\d+)-urinish$/i', trim($shakl), $m)) {
+        if (is_string($shakl) && preg_match('/^\s*(\d+)\s*-\s*urinish\b/iu', trim($shakl), $m)) {
             $n = (int) $m[1];
             if ($n >= 1 && $n <= 3) return $n;
         }
         $n = (int) ($attemptNumber ?? 1);
         return $n >= 1 ? $n : 1;
+    }
+
+    public static function isQoshimchaFarmoyishShakl(?string $shakl): bool
+    {
+        $compact = preg_replace('/[^\p{L}]+/u', '', mb_strtolower((string) $shakl));
+
+        return str_contains($compact, 'qoshimcha')
+            || str_contains($compact, 'farmoyish')
+            || str_contains($compact, 'farmoiy');
     }
 
     /**
@@ -2689,7 +2698,7 @@ class QuizResultController extends Controller
                     'quiz_result_id' => $result->id,
                     'is_final' => true,
                     'attempt' => $effectiveAttempt,
-                    'is_qoshimcha' => $hasQoshimchaPre = (preg_match('/\(.*qo\'?shimcha.*\)/iu', $shaklRaw) || mb_stripos($shaklRaw, 'farmoyish') !== false),
+                    'is_qoshimcha' => $hasQoshimchaPre = self::isQoshimchaFarmoyishShakl($shaklRaw),
                 ]);
 
                 // Qo'shimcha yuklanganda — bu talaba qo'shimcha farmoyish orqali

@@ -1254,18 +1254,18 @@ class RetakeJournalService
     }
 
     /**
-     * Fan nomini taqqoslash uchun normallashtiradi: kichik harf, "(a)"/"(c)"
-     * kabi variant suffikslari va belgilar olib tashlanadi, q/k birlashtiriladi.
+     * Fan nomini taqqoslash uchun normallashtiradi. Vedomost mantig'i bilan
+     * bir xil: fan nomidan variant suffiksini ("(a)","(b)","(c)","(1)") kesib
+     * o'zak fanni oladi (VedomostMergeService::rootSubjectName), so'ng kichik
+     * harf + bo'shliqlarni tartibga keltiradi.
      */
     private function normSubjectName(?string $s): string
     {
-        if ($s === null) {
+        if ($s === null || $s === '') {
             return '';
         }
-        $s = mb_strtolower(trim($s));
-        $s = preg_replace('/\([a-zа-я]\)/u', ' ', $s); // "(a)", "(c)" variantlar
-        $s = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $s);
-        $s = str_replace('q', 'k', $s); // q/k imlo farqi
-        return trim(preg_replace('/\s+/', ' ', $s));
+        $root = app(\App\Services\VedomostMergeService::class)->rootSubjectName($s);
+
+        return trim(preg_replace('/\s+/u', ' ', mb_strtolower($root)));
     }
 }

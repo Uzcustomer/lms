@@ -1624,6 +1624,10 @@ class QuizResultController extends Controller
         if ($s === null) {
             return '';
         }
+        // Vedomost mantig'i: avval fan nomidan variant suffiksini ("(a)","(b)",
+        // "(c)","(1)") kesamiz, so'ng belgilarni tozalaymiz.
+        $s = app(\App\Services\VedomostMergeService::class)->rootSubjectName($s);
+
         return preg_replace('/[^a-z0-9]/u', '', mb_strtolower(trim($s)));
     }
 

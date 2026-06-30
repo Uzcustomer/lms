@@ -1758,8 +1758,8 @@ class JournalController extends Controller
 
             $av1 = $fetchAttemptOskiTest(2, true, false);  // 12a sababsiz, asosiy
             $av2 = $fetchAttemptOskiTest(2, false, false); // 12a sababli bilan, asosiy
-            $bv1 = $fetchAttemptOskiTest(3, true);  // 12b sababsiz
-            $bv2 = $fetchAttemptOskiTest(3, false); // 12b sababli bilan
+            $bv1 = $fetchAttemptOskiTest(3, true, false);  // 12b sababsiz, asosiy
+            $bv2 = $fetchAttemptOskiTest(3, false, false); // 12b sababli bilan, asosiy
 
             // 2-urinish (attempt=2) sanalarini ikki darajada yig'amiz:
             //  - guruh bo'yicha: bironta talabada attempt=2 baho yozilgan eng so'nggi
@@ -1831,6 +1831,7 @@ class JournalController extends Controller
             // Qo'shimcha (sababli farmoyish) baholar — alohida ustunlar
             $aq = $fetchAttemptOskiTest(1, false, true);   // 1-urinish qo'shimcha
             $aq2 = $fetchAttemptOskiTest(2, false, true);  // 2-urinish qo'shimcha
+            $aq3 = $fetchAttemptOskiTest(3, false, true);  // 3-urinish qo'shimcha
 
             // Bladega ham uzatamiz: 2-urinish va 3-urinish OSKI/Test ustunlari uchun
             $oskiAttempt2Map = $av2[101] ?? [];
@@ -1843,6 +1844,8 @@ class JournalController extends Controller
             $testQosh1Map = $aq[102] ?? [];
             $oskiQosh2Map = $aq2[101] ?? [];
             $testQosh2Map = $aq2[102] ?? [];
+            $oskiQosh3Map = $aq3[101] ?? [];
+            $testQosh3Map = $aq3[102] ?? [];
 
             // Pullik/stage hisobida ishlatiladigan JN/MT o'rtacha jurnal
             // jadvalida KO'RSATILADIGAN qiymat bilan AYNI bo'lishi shart:
@@ -1958,10 +1961,10 @@ class JournalController extends Controller
                         $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
                 }
                 $bQoshimcha = null;
-                if (isset($bv2[101][$h]) || isset($bv2[102][$h])) {
+                if (isset($aq3[101][$h]) || isset($aq3[102][$h])) {
                     $bQoshimcha = $svc::buildScenario($jn, $mt, $other['on'] ?? null,
-                        $bv2[101][$h] ?? $av2[101][$h] ?? $other['oski'] ?? null,
-                        $bv2[102][$h] ?? $av2[102][$h] ?? $other['test'] ?? null, $davomatPct,
+                        $aq3[101][$h] ?? $av2[101][$h] ?? $other['oski'] ?? null,
+                        $aq3[102][$h] ?? $av2[102][$h] ?? $other['test'] ?? null, $davomatPct,
                         $defaultWeights['jn'], $defaultWeights['mt'], $defaultWeights['on'], $defaultWeights['oski'], $defaultWeights['test'], $stageLevelCode);
                 }
 
@@ -2193,6 +2196,8 @@ class JournalController extends Controller
             'testQosh1Map',
             'oskiQosh2Map',
             'testQosh2Map',
+            'oskiQosh3Map',
+            'testQosh3Map',
             'oskiAttempt1DateMap',
             'testAttempt1DateMap',
             'oskiAttempt2DateMap',

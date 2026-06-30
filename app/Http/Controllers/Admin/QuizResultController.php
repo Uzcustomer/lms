@@ -3443,6 +3443,37 @@ class QuizResultController extends Controller
     }
 
     /**
+     * Quiz natijasining shakl matnini yangilash (inline edit).
+     */
+    public function updateShakl(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer|exists:hemis_quiz_results,id',
+            'shakl' => 'required|string|max:255',
+        ]);
+
+        $shakl = trim((string) $request->input('shakl'));
+        if ($shakl === '') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Shakl bo\'sh bo\'lishi mumkin emas',
+            ], 422);
+        }
+
+        DB::table('hemis_quiz_results')
+            ->where('id', $request->id)
+            ->update([
+                'shakl' => $shakl,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'shakl' => $shakl,
+        ]);
+    }
+
+    /**
      * Moodle quiz results cron ni qo'lda ishga tushirish.
      */
     public function triggerCron()

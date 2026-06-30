@@ -735,7 +735,7 @@
             filteredData.forEach(function(r) {
                 if (r.xulosa_code === 'ok') okCount++;
                 else if (r.xulosa_code === 'mavzu' || r.xulosa_code === 'mavzu_nb' || r.xulosa_code === 'mavzu_grade') mavzuCount++;
-                else if (r.xulosa_code === 'uploaded' || r.xulosa_code === 'mavzu_uploaded') uploadedCount++;
+                else if (isUploadedRow(r)) uploadedCount++;
                 else errCount++;
             });
             var parts = 'Jami: ' + allData.length + ' | Ko\'rsatilmoqda: ' + filteredData.length + ' | <span style="color:#16a34a;">Yuklasa bo\'ladi: ' + okCount + '</span>';
@@ -874,12 +874,22 @@
         }
 
         // ========== JADVAL RENDERI ==========
+        function isUploadedRow(r) {
+            var code = r.xulosa_code || '';
+            var text = String(r.xulosa || '').toLowerCase();
+            return code === 'uploaded'
+                || code === 'mavzu_uploaded'
+                || code === 'retake_uploaded'
+                || text.indexOf("qayta o'qish jurnalida") !== -1
+                || text.indexOf("qayta o‘qish jurnalida") !== -1;
+        }
+
         function renderTable(data) {
             // Jurnalga yuklanganlar pastga tushadi, yuklanmaganlarning HAMMASI
             // (yuklasa bo'ladi, baho bor, mavzu, xato va h.k.) tepada joylashadi
             data.sort(function(a, b) {
-                var ua = (a.xulosa_code === 'uploaded' || a.xulosa_code === 'mavzu_uploaded') ? 1 : 0;
-                var ub = (b.xulosa_code === 'uploaded' || b.xulosa_code === 'mavzu_uploaded') ? 1 : 0;
+                var ua = isUploadedRow(a) ? 1 : 0;
+                var ub = isUploadedRow(b) ? 1 : 0;
                 return ua - ub;
             });
             // Dublikatlarni aniqlash: bir xil (talaba+fan+yn_turi+shakl) bo'yicha
@@ -899,7 +909,7 @@
                         : esc(r.yn_turi));
 
                 var isOk = r.xulosa_code === 'ok';
-                var rowClass = (r.xulosa_code === 'uploaded' || r.xulosa_code === 'mavzu_uploaded') ? 'journal-row row-uploaded' : 'journal-row';
+                var rowClass = isUploadedRow(r) ? 'journal-row row-uploaded' : 'journal-row';
 
                 var nameCell = '<span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span>';
                 var fanCell = '<span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span>';
@@ -928,7 +938,7 @@
                 var dupBadge = (dupCount[dupKey] > 1)
                     ? ' <span class="badge" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;font-weight:700;" title="Bir xil natija ' + dupCount[dupKey] + ' marta topshirilgan — takroriy urinish">DUBLIKAT ×' + dupCount[dupKey] + '</span>'
                     : '';
-                html += '<td><span class="text-cell">' + esc(r.shakl) + '</span>' + dupBadge + '</td>';
+                html += '<td><span class="text-cell editable-shakl" data-id="' + r.id + '" onclick="editShakl(this,' + r.id + ')" title="Shaklni tahrirlash uchun bosing" style="cursor:pointer;border-bottom:1px dashed #94a3b8;">' + esc(r.shakl) + '</span>' + dupBadge + '</td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade editable-grade" data-id="' + r.id + '" onclick="editGrade(this,' + r.id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + esc(r.grade) + '</span></td>';
                 html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date) + '</td>';
                 html += '<td>' + getXulosaBadge(r.xulosa_code, r.xulosa, r.id) + '</td>';
@@ -960,7 +970,7 @@
             var hasUploaded = false;
             ids.forEach(function(id) {
                 var row = allData.find(function(r) { return r.id === id; });
-                if (row && row.xulosa_code === 'uploaded') hasUploaded = true;
+                if (row && isUploadedRow(row)) hasUploaded = true;
             });
             $('#btn-delete-grades').prop('disabled', !hasUploaded);
             $('#btn-compare').prop('disabled', count === 0);
@@ -1221,6 +1231,63 @@
                 input.addEventListener('keydown', function(e) {
                     if (e.key === 'Enter') { e.preventDefault(); saveFanId(); }
                     if (e.key === 'Escape') { restore(currentFanId); }
+                });
+            };
+
+            window.editShakl = function(el, id) {
+                var currentShakl = el.textContent.trim();
+                var td = el.parentNode;
+                var input = document.createElement('input');
+                input.type = 'text';
+                input.value = currentShakl;
+                input.style.cssText = 'width:230px;max-width:100%;padding:4px 6px;font-size:12px;font-weight:600;border:2px solid #3b82f6;border-radius:6px;outline:none;';
+                td.innerHTML = '';
+                td.appendChild(input);
+                input.focus();
+                input.select();
+
+                function restore(val) {
+                    td.innerHTML = '<span class="text-cell editable-shakl" data-id="' + id + '" onclick="editShakl(this,' + id + ')" title="Shaklni tahrirlash uchun bosing" style="cursor:pointer;border-bottom:1px dashed #94a3b8;">' + esc(val || '-') + '</span>';
+                }
+
+                function saveShakl() {
+                    var newShakl = input.value.trim();
+                    if (!newShakl) {
+                        alert('Shakl bo\'sh bo\'lishi mumkin emas!');
+                        input.focus();
+                        return;
+                    }
+                    if (newShakl === currentShakl) {
+                        restore(currentShakl);
+                        return;
+                    }
+                    $.ajax({
+                        url: '{{ route($routePrefix . ".quiz-results.update-shakl") }}',
+                        type: 'POST',
+                        headers: { 'X-CSRF-TOKEN': csrfToken },
+                        data: { id: id, shakl: newShakl },
+                        success: function(data) {
+                            if (!data.success) {
+                                alert(data.message || 'Xatolik');
+                                restore(currentShakl);
+                                return;
+                            }
+                            var row = allData.find(function(r) { return r.id === id; });
+                            if (row) row.shakl = data.shakl;
+                            restore(data.shakl);
+                            loadTartibgaSol();
+                        },
+                        error: function(xhr) {
+                            alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                            restore(currentShakl);
+                        }
+                    });
+                }
+
+                input.addEventListener('blur', saveShakl);
+                input.addEventListener('keydown', function(e) {
+                    if (e.key === 'Enter') { e.preventDefault(); saveShakl(); }
+                    if (e.key === 'Escape') { restore(currentShakl); }
                 });
             };
 

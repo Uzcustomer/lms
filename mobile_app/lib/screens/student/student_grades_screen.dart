@@ -188,6 +188,55 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
     return count > 0 ? sum / count : 0;
   }
 
+  String _getSubjectTypeLabel(Map<String, dynamic> subject, AppLocalizations l) {
+    final grades = subject['grades'] as Map<String, dynamic>? ?? {};
+    final raw = subject['closing_form'] ??
+        subject['yopilish_shakli'] ??
+        subject['assessment_type'];
+    final normalized = raw?.toString().trim().toLowerCase().replaceAll('-', '_') ?? '';
+
+    if (normalized == 'sinov_test' ||
+        normalized == 'sinovtest' ||
+        (normalized.contains('sinov') && normalized.contains('test'))) {
+      return l.pick(uz: 'Fan turi: Sinov test', ru: 'Тип предмета: Синов тест', en: 'Type: Sinov test');
+    }
+    if (normalized == 'sinov') {
+      return l.pick(uz: 'Fan turi: Sinov', ru: 'Тип предмета: Синов', en: 'Type: Sinov');
+    }
+    if (normalized == 'test') {
+      return l.pick(uz: 'Fan turi: Test', ru: 'Тип предмета: Тест', en: 'Type: Test');
+    }
+    if (normalized == 'oski' || normalized == 'oske') {
+      return l.pick(uz: 'Fan turi: OSKI', ru: 'Тип предмета: ОСКИ', en: 'Type: OSKI');
+    }
+    if (normalized == 'oski_test' || normalized == 'oske_test') {
+      return l.pick(uz: 'Fan turi: OSKI + Test', ru: 'Тип предмета: ОСКИ + Тест', en: 'Type: OSKI + Test');
+    }
+    if (raw == null || raw.toString().trim().isEmpty) {
+      final hasOski = grades['oski'] != null;
+      final hasTest = grades['test'] != null;
+
+      if (hasTest && !hasOski) {
+        return l.pick(uz: 'Fan turi: Test', ru: 'Тип предмета: Тест', en: 'Type: Test');
+      }
+      if (hasOski && !hasTest) {
+        return l.pick(uz: 'Fan turi: OSKI', ru: 'Тип предмета: ОСКИ', en: 'Type: OSKI');
+      }
+      if (hasOski && hasTest) {
+        return l.pick(uz: 'Fan turi: OSKI + Test', ru: 'Тип предмета: ОСКИ + Тест', en: 'Type: OSKI + Test');
+      }
+      if (grades['jn'] != null || grades['mt'] != null) {
+        return l.pick(uz: 'Fan turi: Sinov', ru: 'Тип предмета: Синов', en: 'Type: Sinov');
+      }
+      return '';
+    }
+    return l.pick(
+      uz: 'Fan turi: ${raw.toString()}',
+      ru: 'Тип предмета: ${raw.toString()}',
+      en: 'Type: ${raw.toString()}',
+    );
+  }
+
   List<Map<String, dynamic>> _filterSubjects(List subjects) {
     final all = subjects.whereType<Map<String, dynamic>>().toList();
     if (_selectedFilter == 1) return all.where((s) => _isSubjectCompleted(s)).toList();
@@ -669,6 +718,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   Widget _buildSubjectCard(BuildContext context, Map<String, dynamic> subject, AppLocalizations l) {
     final grades = subject['grades'] as Map<String, dynamic>? ?? {};
     final name = subject['subject_name']?.toString() ?? '';
+    final subjectTypeLabel = _getSubjectTypeLabel(subject, l);
     final computedYn = _getYn(subject);
     final total = computedYn;
     final isCompleted = _isSubjectCompleted(subject);
@@ -697,11 +747,29 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Expanded(
-                child: Text(
-                  name,
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _ink),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name,
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _ink),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if (subjectTypeLabel.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        subjectTypeLabel,
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: _calmFaint,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
                 ),
               ),
               const SizedBox(width: 12),

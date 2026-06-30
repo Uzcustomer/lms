@@ -19,9 +19,12 @@
         ];
         // Shakl badge: [matn rang, fon rang]
         $formBadge = [
-            '12'  => ['#1a3268', '#e0e7ff'],
-            '12a' => ['#9a3412', '#ffedd5'],
-            '12b' => ['#9d174d', '#fce7f3'],
+            '12'   => ['#1a3268', '#e0e7ff'],
+            '12q'  => ['#3730a3', '#eef2ff'],
+            '12a'  => ['#9a3412', '#ffedd5'],
+            '12aq' => ['#b45309', '#fef3c7'],
+            '12b'  => ['#9d174d', '#fce7f3'],
+            '12bq' => ['#a21caf', '#fae8ff'],
         ];
 
         $curSort = request('sort');

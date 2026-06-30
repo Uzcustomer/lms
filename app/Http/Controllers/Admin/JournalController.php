@@ -1847,6 +1847,45 @@ class JournalController extends Controller
             $oskiQosh3Map = $aq3[101] ?? [];
             $testQosh3Map = $aq3[102] ?? [];
 
+            // Qo'shimcha (farmoyish) baho TOPSHIRILGAN SANALARI — tooltip uchun.
+            // is_qoshimcha=1 baholar $otherGradesRaw dan chiqarilgan (is_qoshimcha=0),
+            // shuning uchun sanalarni alohida olamiz.
+            $oskiQosh1DateMap = [];
+            $testQosh1DateMap = [];
+            $oskiQosh2DateMap = [];
+            $testQosh2DateMap = [];
+            $oskiQosh3DateMap = [];
+            $testQosh3DateMap = [];
+            if ($hasQoshimchaCol) {
+                $qoshDateRows = DB::table('student_grades')
+                    ->whereNull('deleted_at')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->where('subject_id', $subjectId)
+                    ->where('semester_code', $semesterCode)
+                    ->whereIn('training_type_code', [101, 102])
+                    ->where('is_qoshimcha', 1)
+                    ->whereIn('attempt', [1, 2, 3])
+                    ->select('student_hemis_id', 'training_type_code', 'attempt', 'lesson_date', 'updated_at')
+                    ->get();
+                $qoshDateTargets = [
+                    '101_1' => &$oskiQosh1DateMap, '102_1' => &$testQosh1DateMap,
+                    '101_2' => &$oskiQosh2DateMap, '102_2' => &$testQosh2DateMap,
+                    '101_3' => &$oskiQosh3DateMap, '102_3' => &$testQosh3DateMap,
+                ];
+                foreach ($qoshDateRows as $r) {
+                    $d = $r->lesson_date ?: $r->updated_at;
+                    if (!$d) {
+                        continue;
+                    }
+                    $att = (int) ($r->attempt ?? 1);
+                    $key = $r->training_type_code . '_' . $att;
+                    if (isset($qoshDateTargets[$key])) {
+                        $qoshDateTargets[$key][$r->student_hemis_id] = $formatDate($d);
+                    }
+                }
+                unset($qoshDateTargets);
+            }
+
             // Pullik/stage hisobida ishlatiladigan JN/MT o'rtacha jurnal
             // jadvalida KO'RSATILADIGAN qiymat bilan AYNI bo'lishi shart:
             // maxraj = grading cutoff (bugun) ichidagi BARCHA dars kunlari;
@@ -2198,6 +2237,12 @@ class JournalController extends Controller
             'testQosh2Map',
             'oskiQosh3Map',
             'testQosh3Map',
+            'oskiQosh1DateMap',
+            'testQosh1DateMap',
+            'oskiQosh2DateMap',
+            'testQosh2DateMap',
+            'oskiQosh3DateMap',
+            'testQosh3DateMap',
             'oskiAttempt1DateMap',
             'testAttempt1DateMap',
             'oskiAttempt2DateMap',

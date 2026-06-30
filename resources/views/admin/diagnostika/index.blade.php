@@ -938,7 +938,7 @@
                 var dupBadge = (dupCount[dupKey] > 1)
                     ? ' <span class="badge" style="background:#fee2e2;color:#991b1b;border:1px solid #fca5a5;font-weight:700;" title="Bir xil natija ' + dupCount[dupKey] + ' marta topshirilgan — takroriy urinish">DUBLIKAT ×' + dupCount[dupKey] + '</span>'
                     : '';
-                html += '<td><span class="text-cell editable-shakl" data-id="' + r.id + '" onclick="editShakl(this,' + r.id + ')" title="Shaklni tahrirlash uchun bosing" style="cursor:pointer;border-bottom:1px dashed #94a3b8;">' + esc(r.shakl) + '</span>' + dupBadge + '</td>';
+                html += '<td><span class="text-cell editable-shakl" data-id="' + r.id + '" onclick="editShakl(this,' + r.id + ')" title="Shaklni tahrirlash uchun bosing" style="cursor:pointer;">' + esc(r.shakl) + '</span>' + dupBadge + '</td>';
                 html += '<td style="text-align:center;"><span class="badge badge-grade editable-grade" data-id="' + r.id + '" onclick="editGrade(this,' + r.id + ')" title="Tahrirlash uchun bosing" style="cursor:pointer;">' + esc(r.grade) + '</span></td>';
                 html += '<td style="font-size:12px;white-space:nowrap;color:#475569;">' + esc(r.date) + '</td>';
                 html += '<td>' + getXulosaBadge(r.xulosa_code, r.xulosa, r.id) + '</td>';
@@ -1247,7 +1247,7 @@
                 input.select();
 
                 function restore(val) {
-                    td.innerHTML = '<span class="text-cell editable-shakl" data-id="' + id + '" onclick="editShakl(this,' + id + ')" title="Shaklni tahrirlash uchun bosing" style="cursor:pointer;border-bottom:1px dashed #94a3b8;">' + esc(val || '-') + '</span>';
+                    td.innerHTML = '<span class="text-cell editable-shakl" data-id="' + id + '" onclick="editShakl(this,' + id + ')" title="Shaklni tahrirlash uchun bosing" style="cursor:pointer;">' + esc(val || '-') + '</span>';
                 }
 
                 function saveShakl() {

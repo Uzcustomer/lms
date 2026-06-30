@@ -36,6 +36,7 @@ class VedomostSubmissionService
     public array $lastPruneCandidates = [];
 
     private ?bool $studentGradeSababliCol = null;
+    private ?bool $studentGradeQoshimchaCol = null;
 
     public function __construct(
         private VedomostMergeService $merge,
@@ -57,6 +58,22 @@ class VedomostSubmissionService
         }
 
         return $this->studentGradeSababliCol;
+    }
+
+    /**
+     * student_grades.is_qoshimcha ustuni mavjudmi (keshlanadi).
+     */
+    private function studentGradeQoshimchaColumn(): bool
+    {
+        if ($this->studentGradeQoshimchaCol === null) {
+            try {
+                $this->studentGradeQoshimchaCol = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'is_qoshimcha');
+            } catch (\Throwable $e) {
+                $this->studentGradeQoshimchaCol = false;
+            }
+        }
+
+        return $this->studentGradeQoshimchaCol;
     }
 
     /**
@@ -593,25 +610,35 @@ class VedomostSubmissionService
      * Qo'shimcha (sababli ma'lumotnoma) shakllarini — 12q (har guruh alohida),
      * 12aq/12bq (umumiy) — YN bosqich mantig'i (YnStageService) bo'yicha ochadi/yopadi.
      *
-     * Tezlik uchun: stage hisobi OG'IR, shuning uchun faqat retake_was_sababli
-     * bahosi bor (guruh, fan, semestr) birliklarида chaqiriladi — chunki sababli
-     * baho bo'lmasa qo'shimcha shakl umuman aktivlashmaydi (V2==V1).
+     * Tezlik uchun: stage hisobi OG'IR, shuning uchun faqat is_qoshimcha (farmoyish)
+     * YOKI retake_was_sababli bahosi bor (guruh, fan, semestr) birliklarида
+     * chaqiriladi — chunki bu signallar bo'lmasa qo'shimcha shakl umuman
+     * aktivlashmaydi (asosiy va qo'shimcha ssenariy bir xil bo'ladi).
      *
      * @param  array<int,string>  $activeGroupHemisIds  joriy faol guruhlar
      * @return array<int>  ochilgan (saqlanadigan) qator id lari
      */
     private function syncQoshimchaForms(array $units, array $activeGroupHemisIds, Collection $semByGroup): array
     {
-        if (!$this->studentGradeSababliColumn() || empty($activeGroupHemisIds)) {
+        $hasSababli = $this->studentGradeSababliColumn();
+        $hasQoshimcha = $this->studentGradeQoshimchaColumn();
+        if ((!$hasSababli && !$hasQoshimcha) || empty($activeGroupHemisIds)) {
             return [];
         }
 
-        // 1. Nomzodlar: sababli baho bor (guruh, fan, semestr) — joriy faol guruhlar ichida.
+        // 1. Nomzodlar: is_qoshimcha YOKI sababli bahosi bor (guruh, fan, semestr).
         $candidates = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereIn('st.group_id', $activeGroupHemisIds)
-            ->where('sg.retake_was_sababli', 1)
             ->whereNull('sg.deleted_at')
+            ->where(function ($q) use ($hasSababli, $hasQoshimcha) {
+                if ($hasQoshimcha) {
+                    $q->orWhere('sg.is_qoshimcha', 1);
+                }
+                if ($hasSababli) {
+                    $q->orWhere('sg.retake_was_sababli', 1);
+                }
+            })
             ->select('st.group_id as group_hemis_id', 'sg.subject_id', 'sg.semester_code')
             ->distinct()
             ->get();

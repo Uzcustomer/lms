@@ -86,23 +86,27 @@ class WhyQoshimcha extends Command
                 $qoshCnt = $hasQosh ? (clone $gq)->where('sg.is_qoshimcha', 1)->count() : 0;
                 $this->line("      sababli baholar: {$sababliCnt} | is_qoshimcha baholar: {$qoshCnt}");
 
-                if ($sababliCnt === 0 && $qoshCnt === 0) {
-                    $this->line("      → Na sababli, na is_qoshimcha baho bor — qo'shimcha shakl pre-filterдан o'tmaydi.");
-                }
+                // VEDOMOST qo'shimcha varaq ochish mantig'i: is_qoshimcha (101/102)
+                // IMTIHON bahosi MAVJUDLIGI (o'tdi-yiqildi ahamiyatsiz), urinish bo'yicha.
+                $qoshAttempts = $hasQosh
+                    ? (clone $gq)->where('sg.is_qoshimcha', 1)
+                        ->whereIn('sg.training_type_code', [101, 102])
+                        ->select('sg.attempt')->distinct()->pluck('attempt')
+                        ->map(fn($a) => (int) ($a ?? 1))->unique()->sort()->values()->all()
+                    : [];
+                $opensMap = [1 => '12-qo\'shimcha', 2 => '12a-qo\'shimcha', 3 => '12b-qo\'shimcha'];
+                $opens = collect($qoshAttempts)->map(fn($a) => $opensMap[$a] ?? null)->filter()->implode(', ');
+                $this->line("      → VEDOMOST ochadi (farmoyish imtihoni bor): " . ($opens ?: '— (farmoyish imtihoni yo\'q)'));
 
-                // Stage hisobi
+                // Stage hisobi (informativ — qaydnoma bosqichi; varaq ochishga ta'sir qilmaydi)
                 $res = $stage->computeForGroupSubject($gid, $subjectId, (string) $curSem);
-                if ($res === null) {
-                    $this->warn("      ⚠ computeForGroupSubject null qaytardi (fan/guruh CurriculumSubjectда topilmadi).");
-                } else {
+                if ($res !== null) {
                     $byStage = [];
                     foreach ($res['stages'] as $s) {
                         $byStage[$s] = ($byStage[$s] ?? 0) + 1;
                     }
                     arsort($byStage);
-                    $this->line("      Bosqichlar: " . collect($byStage)->map(fn($c, $s) => "$s=$c")->implode(', '));
-                    $active = collect($res['activeForms'])->filter()->keys()->implode(', ');
-                    $this->line("      Aktiv shakllar: " . ($active ?: '—'));
+                    $this->line("      Bosqichlar (informativ): " . collect($byStage)->map(fn($c, $s) => "$s=$c")->implode(', '));
                 }
 
                 // Bazadagi mavjud vedomost shakllar (shu fan+semestr bo'yicha).

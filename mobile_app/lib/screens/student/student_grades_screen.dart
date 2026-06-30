@@ -189,6 +189,7 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
   }
 
   String _getSubjectTypeLabel(Map<String, dynamic> subject, AppLocalizations l) {
+    final grades = subject['grades'] as Map<String, dynamic>? ?? {};
     final raw = subject['closing_form'] ??
         subject['yopilish_shakli'] ??
         subject['assessment_type'];
@@ -212,6 +213,21 @@ class _StudentGradesScreenState extends State<StudentGradesScreen> {
       return l.pick(uz: 'Fan turi: OSKI + Test', ru: 'Тип предмета: ОСКИ + Тест', en: 'Type: OSKI + Test');
     }
     if (raw == null || raw.toString().trim().isEmpty) {
+      final hasOski = grades['oski'] != null;
+      final hasTest = grades['test'] != null;
+
+      if (hasTest && !hasOski) {
+        return l.pick(uz: 'Fan turi: Test', ru: 'Тип предмета: Тест', en: 'Type: Test');
+      }
+      if (hasOski && !hasTest) {
+        return l.pick(uz: 'Fan turi: OSKI', ru: 'Тип предмета: ОСКИ', en: 'Type: OSKI');
+      }
+      if (hasOski && hasTest) {
+        return l.pick(uz: 'Fan turi: OSKI + Test', ru: 'Тип предмета: ОСКИ + Тест', en: 'Type: OSKI + Test');
+      }
+      if (grades['jn'] != null || grades['mt'] != null) {
+        return l.pick(uz: 'Fan turi: Sinov', ru: 'Тип предмета: Синов', en: 'Type: Sinov');
+      }
       return '';
     }
     return l.pick(

@@ -1793,7 +1793,7 @@ class QuizResultController extends Controller
      * o'tib ketmaydi). Yakuniy baho RetakeJournalService orqali qayta
      * hisoblanadi.
      */
-    private function uploadRetakeResult($result, $student, array $rowInfo, int &$successCount, array &$errors): void
+    private function uploadRetakeResult($result, $student, array $rowInfo, int &$successCount, array &$errors, ?string $fanIdOverride = null, ?string $fanNameOverride = null): void
     {
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
         $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
@@ -1822,7 +1822,13 @@ class QuizResultController extends Controller
             ->with(['group.window.session'])
             ->get();
 
-        $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code, (string) $result->date_finish);
+        $app = $this->matchRetakeApp(
+            $apps,
+            (string) $student->hemis_id,
+            $fanIdOverride ?: $result->fan_id,
+            $fanNameOverride ?: $result->fan_name,
+            $code
+        );
 
         if (!$app) {
             $rowInfo['error'] = "Qayta o'qish arizasi topilmadi (talaba shu fandan qayta o'qishga yozilmagan)";
@@ -2432,6 +2438,7 @@ class QuizResultController extends Controller
             'ids.*' => 'integer|exists:hemis_quiz_results,id',
             'subject_overrides' => 'nullable|array',
             'semester_overrides' => 'nullable|array',
+            'attempt_overrides' => 'nullable|array',
         ]);
 
         $results = HemisQuizResult::whereIn('id', $request->ids)->get();
@@ -2442,6 +2449,7 @@ class QuizResultController extends Controller
         // semester_overrides — modalda qo'lda tanlangan semestr kodlari
         // Format: { "<original_fan_id>_<group_id>": <semester_code> }
         $semesterOverrides = $request->input('semester_overrides', []);
+        $attemptOverrides = $request->input('attempt_overrides', []);
 
         $successCount = 0;
         $errors = [];
@@ -2520,6 +2528,19 @@ class QuizResultController extends Controller
             // (student_grades) EMAS, qayta o'qish jurnaliga (retake_applications)
             // yoziladi. Fasl/sessiya guard bilan. Bu yerda yo'naltirib, qolgan
             // student_grades mantig'ini o'tkazib yuboramiz.
+            $overrideKey = $result->fan_id . '_' . ($student->group_id ?? '');
+            $attemptOverrideRaw = $attemptOverrides[$overrideKey] ?? null;
+            if ($attemptOverrideRaw === 'retake') {
+                $targetFanId = $subjectOverrides[$overrideKey] ?? $result->fan_id;
+                $targetFanName = $result->fan_name;
+                if ((string) $targetFanId !== (string) $result->fan_id) {
+                    $targetSubject = CurriculumSubject::where('subject_id', $targetFanId)->first();
+                    $targetFanName = $targetSubject->subject_name ?? $targetFanName;
+                }
+                $this->uploadRetakeResult($result, $student, $rowInfo, $successCount, $errors, (string) $targetFanId, $targetFanName);
+                continue;
+            }
+
             if (\App\Services\Retake\RetakeSessionCode::isRetakeQuiz($result->attempt_name, $result->shakl)) {
                 $this->uploadRetakeResult($result, $student, $rowInfo, $successCount, $errors);
                 continue;
@@ -3139,6 +3160,7 @@ class QuizResultController extends Controller
             'ids.*' => 'integer|exists:hemis_quiz_results,id',
             'subject_overrides' => 'nullable|array',
             'semester_overrides' => 'nullable|array',
+            'attempt_overrides' => 'nullable|array',
         ]);
 
         // Qayta yuklashdan oldin eski yozuvlarni tozalash. Ikki xil mantiq:

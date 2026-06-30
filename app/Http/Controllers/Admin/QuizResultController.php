@@ -2537,6 +2537,21 @@ class QuizResultController extends Controller
                     $targetSubject = CurriculumSubject::where('subject_id', $targetFanId)->first();
                     $targetFanName = $targetSubject->subject_name ?? $targetFanName;
                 }
+                DB::table('hemis_quiz_results')
+                    ->where('id', $result->id)
+                    ->update([
+                        'fan_id' => $targetFanId,
+                        'fan_name' => $targetFanName,
+                        'shakl' => \App\Services\Retake\RetakeSessionCode::hasRetakeMarker($result->shakl)
+                            ? $result->shakl
+                            : \App\Services\Retake\RetakeSessionCode::MARKER,
+                        'updated_at' => now(),
+                    ]);
+                $result->fan_id = $targetFanId;
+                $result->fan_name = $targetFanName;
+                $result->shakl = \App\Services\Retake\RetakeSessionCode::hasRetakeMarker($result->shakl)
+                    ? $result->shakl
+                    : \App\Services\Retake\RetakeSessionCode::MARKER;
                 $this->uploadRetakeResult($result, $student, $rowInfo, $successCount, $errors, (string) $targetFanId, $targetFanName);
                 continue;
             }

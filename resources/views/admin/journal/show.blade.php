@@ -1463,7 +1463,7 @@
                                             </td>
                                             {{-- Qo'shimcha OSKI ustuni (sababli farmoyish) --}}
                                             @if($showOskiQ1Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="OSKI qo'shimcha (farmoyish){{ isset($oskiQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh1DateMap[$student->hemis_id] : '' }}">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh1DateMap[$student->hemis_id] : '' }}">
                                                     @if($oskiQ1 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -1499,7 +1499,7 @@
                                             @endif
                                             {{-- 2-urinish qo'shimcha OSKI ustuni --}}
                                             @if($showOskiQ2Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish OSKI qo'shimcha (farmoyish){{ isset($oskiQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh2DateMap[$student->hemis_id] : '' }}">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh2DateMap[$student->hemis_id] : '' }}">
                                                     @if($oskiQ2 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -1535,7 +1535,7 @@
                                             @endif
                                             {{-- 3-urinish qo'shimcha OSKI ustuni --}}
                                             @if($showOskiQ3Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish OSKI qo'shimcha (farmoyish){{ isset($oskiQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh3DateMap[$student->hemis_id] : '' }}">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh3DateMap[$student->hemis_id] : '' }}">
                                                     @if($oskiQ3 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
                                                 </td>
                                             @endif
@@ -1595,7 +1595,7 @@
                                             @endif
                                             {{-- Qo'shimcha Test ustuni (sababli farmoyish) --}}
                                             @if($showTestQ1Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish){{ isset($testQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh1DateMap[$student->hemis_id] : '' }}">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh1DateMap[$student->hemis_id] : '' }}">
                                                     @if($testQ1 !== null)<span class="font-bold text-emerald-700">{{ $testQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -1631,7 +1631,7 @@
                                             @endif
                                             {{-- 2-urinish qo'shimcha Test ustuni --}}
                                             @if($showTestQ2Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish Test qo'shimcha (farmoyish){{ isset($testQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh2DateMap[$student->hemis_id] : '' }}">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh2DateMap[$student->hemis_id] : '' }}">
                                                     @if($testQ2 !== null)<span class="font-bold text-emerald-700">{{ $testQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -1667,7 +1667,7 @@
                                             @endif
                                             {{-- 3-urinish qo'shimcha Test ustuni --}}
                                             @if($showTestQ3Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish Test qo'shimcha (farmoyish){{ isset($testQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh3DateMap[$student->hemis_id] : '' }}">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh3DateMap[$student->hemis_id] : '' }}">
                                                     @if($testQ3 !== null)<span class="font-bold text-emerald-700">{{ $testQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
                                                 </td>
                                             @endif
@@ -2252,7 +2252,7 @@
                                             </td>
                                             {{-- Qo'shimcha OSKI ustuni (sababli farmoyish) --}}
                                             @if($showOskiQ1Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="OSKI qo'shimcha (farmoyish){{ isset($oskiQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh1DateMap[$student->hemis_id] : '' }}">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh1DateMap[$student->hemis_id] : '' }}">
                                                     @if($oskiQ1 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -2288,7 +2288,7 @@
                                             @endif
                                             {{-- 2-urinish qo'shimcha OSKI ustuni --}}
                                             @if($showOskiQ2Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish OSKI qo'shimcha (farmoyish){{ isset($oskiQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh2DateMap[$student->hemis_id] : '' }}">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh2DateMap[$student->hemis_id] : '' }}">
                                                     @if($oskiQ2 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -2324,7 +2324,7 @@
                                             @endif
                                             {{-- 3-urinish qo'shimcha OSKI ustuni --}}
                                             @if($showOskiQ3Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish OSKI qo'shimcha (farmoyish){{ isset($oskiQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh3DateMap[$student->hemis_id] : '' }}">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish OSKI qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($oskiQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$oskiQosh3DateMap[$student->hemis_id] : '' }}">
                                                     @if($oskiQ3 !== null)<span class="font-bold text-emerald-700">{{ $oskiQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
                                                 </td>
                                             @endif
@@ -2384,7 +2384,7 @@
                                             @endif
                                             {{-- Qo'shimcha Test ustuni (sababli farmoyish) --}}
                                             @if($showTestQ1Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish){{ isset($testQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh1DateMap[$student->hemis_id] : '' }}">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh1DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh1DateMap[$student->hemis_id] : '' }}">
                                                     @if($testQ1 !== null)<span class="font-bold text-emerald-700">{{ $testQ1 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -2420,7 +2420,7 @@
                                             @endif
                                             {{-- 2-urinish qo'shimcha Test ustuni --}}
                                             @if($showTestQ2Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish Test qo'shimcha (farmoyish){{ isset($testQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh2DateMap[$student->hemis_id] : '' }}">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="2-urinish Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh2DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh2DateMap[$student->hemis_id] : '' }}">
                                                     @if($testQ2 !== null)<span class="font-bold text-emerald-700">{{ $testQ2 }}</span>@else<span class="text-gray-300 text-xs">—</span>@endif
                                                 </td>
                                             @endif
@@ -2456,7 +2456,7 @@
                                             @endif
                                             {{-- 3-urinish qo'shimcha Test ustuni --}}
                                             @if($showTestQ3Col)
-                                                <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish Test qo'shimcha (farmoyish){{ isset($testQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh3DateMap[$student->hemis_id] : '' }}">
+                                                <td class="px-1 py-1 text-center bg-emerald-50" title="3-urinish Test qo'shimcha (farmoyish){{ $canSeeExamDateTooltip && isset($testQosh3DateMap[$student->hemis_id]) ? ' · topshirilgan: '.$testQosh3DateMap[$student->hemis_id] : '' }}">
                                                     @if($testQ3 !== null)<span class="font-bold text-emerald-700">{{ $testQ3 }}</span>@else<span class="text-gray-300 text-xs">&mdash;</span>@endif
                                                 </td>
                                             @endif

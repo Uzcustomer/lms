@@ -428,6 +428,12 @@
                     `;
                 }
 
+                if (detail.correct_explanation) {
+                    answerBlock += `
+                        <div><span class="font-semibold">Izoh:</span> ${escapeHtml(detail.correct_explanation)}</div>
+                    `;
+                }
+
                 return `
                     <div class="tr-answer-item ${boxClass}">
                         <div class="flex items-center justify-between gap-3">

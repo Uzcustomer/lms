@@ -309,6 +309,21 @@
                                 </div>
                             </div>
 
+                            <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                                <div>
+                                    <label class="tb-label">To'g'ri javob izohi (UZ)</label>
+                                    <textarea name="correct_explanation" class="tb-textarea">{{ old('correct_explanation') }}</textarea>
+                                </div>
+                                <div>
+                                    <label class="tb-label">To'g'ri javob izohi (RU)</label>
+                                    <textarea name="correct_explanation_ru" class="tb-textarea">{{ old('correct_explanation_ru') }}</textarea>
+                                </div>
+                                <div>
+                                    <label class="tb-label">To'g'ri javob izohi (EN)</label>
+                                    <textarea name="correct_explanation_en" class="tb-textarea">{{ old('correct_explanation_en') }}</textarea>
+                                </div>
+                            </div>
+
                             <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
                                 <div>
                                     <label class="tb-label">Savol rasmi</label>
@@ -484,6 +499,21 @@
                                             <div>
                                                 <label class="tb-label">Yordamchi izoh (EN)</label>
                                                 <textarea name="helper_text_en" class="tb-textarea">{{ $tr($question->helper_text_translations, 'en') }}</textarea>
+                                            </div>
+                                        </div>
+
+                                        <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+                                            <div>
+                                                <label class="tb-label">To'g'ri javob izohi (UZ)</label>
+                                                <textarea name="correct_explanation" class="tb-textarea">{{ $question->correct_explanation }}</textarea>
+                                            </div>
+                                            <div>
+                                                <label class="tb-label">To'g'ri javob izohi (RU)</label>
+                                                <textarea name="correct_explanation_ru" class="tb-textarea">{{ $tr($question->correct_explanation_translations, 'ru') }}</textarea>
+                                            </div>
+                                            <div>
+                                                <label class="tb-label">To'g'ri javob izohi (EN)</label>
+                                                <textarea name="correct_explanation_en" class="tb-textarea">{{ $tr($question->correct_explanation_translations, 'en') }}</textarea>
                                             </div>
                                         </div>
 

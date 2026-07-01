@@ -111,6 +111,7 @@ class TestSubjectLessonTestController extends Controller
                     'correct_option' => $correctOption?->option_text,
                     'answer_text' => $answer?->answer_text,
                     'correct_answer_text' => $question->correct_answer_text,
+                    'correct_explanation' => $question->correct_explanation,
                 ];
             })->values();
 
@@ -243,6 +244,12 @@ class TestSubjectLessonTestController extends Controller
                     $validated['helper_text_ru'] ?? null,
                     $validated['helper_text_en'] ?? null,
                 ),
+                'correct_explanation' => $validated['correct_explanation'] ?? null,
+                'correct_explanation_translations' => $this->buildTranslations(
+                    $validated['correct_explanation'] ?? null,
+                    $validated['correct_explanation_ru'] ?? null,
+                    $validated['correct_explanation_en'] ?? null,
+                ),
                 'correct_answer_text' => $validated['type'] === 'fill_in_blank'
                     ? ($validated['correct_answer_text'] ?? null)
                     : null,
@@ -300,6 +307,12 @@ class TestSubjectLessonTestController extends Controller
                     $validated['helper_text'] ?? null,
                     $validated['helper_text_ru'] ?? null,
                     $validated['helper_text_en'] ?? null,
+                ),
+                'correct_explanation' => $validated['correct_explanation'] ?? null,
+                'correct_explanation_translations' => $this->buildTranslations(
+                    $validated['correct_explanation'] ?? null,
+                    $validated['correct_explanation_ru'] ?? null,
+                    $validated['correct_explanation_en'] ?? null,
                 ),
                 'correct_answer_text' => $validated['type'] === 'fill_in_blank'
                     ? ($validated['correct_answer_text'] ?? null)
@@ -380,6 +393,9 @@ class TestSubjectLessonTestController extends Controller
             'helper_text' => ['nullable', 'string'],
             'helper_text_ru' => ['nullable', 'string'],
             'helper_text_en' => ['nullable', 'string'],
+            'correct_explanation' => ['nullable', 'string'],
+            'correct_explanation_ru' => ['nullable', 'string'],
+            'correct_explanation_en' => ['nullable', 'string'],
             'points' => ['required', 'integer', 'min:1', 'max:100'],
             'correct_answer_text' => ['nullable', 'string', 'max:255'],
             'correct_answer_text_ru' => ['nullable', 'string', 'max:255'],

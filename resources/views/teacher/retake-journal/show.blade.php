@@ -295,7 +295,10 @@
                                 </div>
 
                                 <div class="flex items-center gap-2 flex-wrap">
-                                    @if($canEdit && !$group->sent_to_test_markazi_at)
+                                    {{-- Sinov guruhlar uchun bu tugma yashirilgan — natija faqat
+                                         Test markazi sahifasidagi "Diagnostika orqali yuklash"
+                                         (sessiya/cutoff bilan xavfsiz) orqali tushadi. --}}
+                                    @if($canEdit && !$group->sent_to_test_markazi_at && !in_array($group->assessment_type, ['sinov', 'sinov_fan'], true))
                                         <form method="POST" action="{{ route('admin.retake-journal.fetch-results', $group->id) }}"
                                               onsubmit="return confirm('{{ __("HEMIS'dan OSKE va Test natijalarini tortishni tasdiqlaysizmi?") }}')">
                                             @csrf

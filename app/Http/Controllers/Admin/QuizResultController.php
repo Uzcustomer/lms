@@ -4151,15 +4151,20 @@ class QuizResultController extends Controller
             return null;
         }
 
-        $quizType = $r->quiz_type ?? null;
-        $ynTuri = null;
-        if (in_array($quizType, ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'], true)) {
-            $ynTuri = 'Test';
-        } elseif (in_array($quizType, ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'], true)) {
-            $ynTuri = 'OSKI';
-        } else {
+        // uploadRetakeResult()/appendRetakeUploadedRows() bilan bir xil aniqlash
+        // mantig'i: aniq ro'yxat YOKI quiz_type ichida "OSKI"/"test" so'zi bo'lsa.
+        $quizType = (string) ($r->quiz_type ?? '');
+        $isOske = in_array($quizType, ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'], true)
+            || stripos($quizType, 'OSKI') !== false;
+        $isTest = !$isOske && (
+            in_array($quizType, ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'], true)
+            || stripos($quizType, 'test') !== false
+        );
+
+        if (!$isOske && !$isTest) {
             return null;
         }
+        $ynTuri = $isOske ? 'OSKI' : 'Test';
 
         $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($r->attempt_name ?? null, $r->shakl);
         $app = $this->matchRetakeApp(

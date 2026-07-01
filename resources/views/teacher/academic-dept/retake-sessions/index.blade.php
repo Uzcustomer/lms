@@ -372,6 +372,12 @@
                             </p>
                         </div>
 
+                        @if(!($isSuperAdminOverride ?? false))
+                            <div class="mx-6 mt-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                <strong>{{ __("Diqqat:") }}</strong>
+                                {{ __("O'quv bo'limi va boshliq uchun sessiya override faqat 1 marta ishlaydi. Saqlagandan keyin bu sessiyada override yopiladi.") }}
+                            </div>
+                        @endif
                         <form :action="`{{ url('/admin/retake-sessions') }}/${overrideSessionId}/bulk-override-dates`" method="POST">
                             @csrf
                             <div class="px-6 py-5 space-y-3">

@@ -299,6 +299,12 @@
                     <div class="relative bg-white rounded-2xl shadow-xl max-w-md w-full p-6 z-10">
                         <h3 class="text-base font-bold text-gray-900 mb-1">{{ __("Sanalarni override qilish") }}</h3>
                         <p class="text-xs text-red-600 mb-4">⚠️ {{ __("Faqat istisno holatlarda ishlating") }}</p>
+                        @if(!($isSuperAdminOverride ?? false))
+                            <div class="mb-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                <strong>{{ __("Diqqat:") }}</strong>
+                                {{ __("O'quv bo'limi va boshliq uchun override faqat 1 marta ishlaydi. Saqlagandan keyin bu oynada override yopiladi.") }}
+                            </div>
+                        @endif
                         <form :action="`{{ url('/admin/retake-windows') }}/${overrideId}/override-dates`" method="POST" class="space-y-3">
                             @csrf
                             <div>

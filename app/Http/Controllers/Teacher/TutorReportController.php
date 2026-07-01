@@ -1284,6 +1284,22 @@ class TutorReportController extends Controller
             ->toArray();
         $jnGroupCache = [];
 
+        // Sinov fanlari uchun "Sinov (test)" bahosi student_grades'dagi xom
+        // urinish yozuvidan emas, sinov_test_grades'dagi qulflangan/override
+        // qiymatdan olinadi — bu jurnalda ko'rsatilgan yakuniy natija.
+        $sinovGradeMap = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('sinov_test_grades')) {
+            foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                $sinovRows = DB::table('sinov_test_grades')
+                    ->whereIn('student_hemis_id', $chunk)
+                    ->get(['student_hemis_id', 'subject_id', 'semester_code', 'default_grade', 'override_grade']);
+                foreach ($sinovRows as $sr) {
+                    $val = $sr->override_grade !== null ? (float) $sr->override_grade : ((float) $sr->default_grade);
+                    $sinovGradeMap[$sr->student_hemis_id . '|' . $sr->subject_id . '|' . $sr->semester_code] = $val;
+                }
+            }
+        }
+
         // 3) Auditoriya soatlari: [curricula|subject|sem] va fallback [subject|sem]
         $auditMap = [];
         $auditAnyMap = [];
@@ -1336,23 +1352,34 @@ class TutorReportController extends Controller
             $subjectName = $rows->first()->subject_name ?? 'Fan';
             $reasons = [];
 
-            // 1. OSKI/Test (imtihon urinishlari) — faqat ENG OXIRGI (sana bo'yicha) yozuvga qaraladi.
-            // "attempt" raqami qayta sinxronlashda barqaror bo'lmasligi mumkun (masalan,
-            // tuzatilgan yakuniy baho eski attempt raqami bilan qayta yozilishi mumkin),
-            // shuning uchun lesson_date bo'yicha eng so'nggi yozuv joriy holat deb olinadi.
-            $examRows = $rows->whereIn('training_type_code', [101, 102]);
-            if ($examRows->isNotEmpty()) {
-                $latestRow = $examRows->sortByDesc(fn($r) => (string) ($r->lesson_date ?? ''))->first();
-                $lastBaho = null;
-                $lastAttempt = 1;
-                if ($latestRow) {
-                    $lastBaho = $latestRow->retake_grade !== null ? (float)$latestRow->retake_grade : ($latestRow->grade !== null ? (float)$latestRow->grade : null);
-                    $lastAttempt = (int) $latestRow->attempt;
+            // 1. Sinov fanlari uchun jurnaldagi "Sinov (test)" ustuni sinov_test_grades'dan
+            // (qulflangan/override qiymat, odatda JN o'rtachasi) keladi — bu joriy
+            // haqiqiy natija. student_grades'dagi xom urinish yozuvlari sinov
+            // mexanizmidan oldingi eskirgan ma'lumot bo'lishi mumkin.
+            $sinovKey = $hemisId . '|' . $subjectId . '|' . $semCode;
+            if (isset($sinovGradeMap[$sinovKey])) {
+                if ($sinovGradeMap[$sinovKey] < 60) {
+                    $reasons[] = '1-urinish: V<60';
                 }
-                if ($lastBaho !== null && $lastBaho < 60) {
-                    if ($lastAttempt <= 1) $reasons[] = '1-urinish: V<60';
-                    elseif ($lastAttempt === 2) $reasons[] = '2-urinish: V<60';
-                    else $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
+            } else {
+                // OSKI/Test (imtihon urinishlari) — faqat ENG OXIRGI (sana bo'yicha) yozuvga qaraladi.
+                // "attempt" raqami qayta sinxronlashda barqaror bo'lmasligi mumkun (masalan,
+                // tuzatilgan yakuniy baho eski attempt raqami bilan qayta yozilishi mumkin),
+                // shuning uchun lesson_date bo'yicha eng so'nggi yozuv joriy holat deb olinadi.
+                $examRows = $rows->whereIn('training_type_code', [101, 102]);
+                if ($examRows->isNotEmpty()) {
+                    $latestRow = $examRows->sortByDesc(fn($r) => (string) ($r->lesson_date ?? ''))->first();
+                    $lastBaho = null;
+                    $lastAttempt = 1;
+                    if ($latestRow) {
+                        $lastBaho = $latestRow->retake_grade !== null ? (float)$latestRow->retake_grade : ($latestRow->grade !== null ? (float)$latestRow->grade : null);
+                        $lastAttempt = (int) $latestRow->attempt;
+                    }
+                    if ($lastBaho !== null && $lastBaho < 60) {
+                        if ($lastAttempt <= 1) $reasons[] = '1-urinish: V<60';
+                        elseif ($lastAttempt === 2) $reasons[] = '2-urinish: V<60';
+                        else $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
+                    }
                 }
             }
 

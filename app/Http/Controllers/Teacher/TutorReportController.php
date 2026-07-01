@@ -1336,25 +1336,23 @@ class TutorReportController extends Controller
             $subjectName = $rows->first()->subject_name ?? 'Fan';
             $reasons = [];
 
-            // 1. OSKI/Test (imtihon urinishlari) — faqat ENG OXIRGI urinish natijasiga qaraladi
+            // 1. OSKI/Test (imtihon urinishlari) — faqat ENG OXIRGI (sana bo'yicha) yozuvga qaraladi.
+            // "attempt" raqami qayta sinxronlashda barqaror bo'lmasligi mumkun (masalan,
+            // tuzatilgan yakuniy baho eski attempt raqami bilan qayta yozilishi mumkin),
+            // shuning uchun lesson_date bo'yicha eng so'nggi yozuv joriy holat deb olinadi.
             $examRows = $rows->whereIn('training_type_code', [101, 102]);
             if ($examRows->isNotEmpty()) {
-                $byAttempt = $examRows->groupBy('attempt');
-                $maxAttempt = (int) $examRows->max('attempt');
-                $lastAttRows = $byAttempt->get((string)$maxAttempt) ?? $byAttempt->get($maxAttempt);
+                $latestRow = $examRows->sortByDesc(fn($r) => (string) ($r->lesson_date ?? ''))->first();
                 $lastBaho = null;
-                if ($lastAttRows) {
-                    foreach ($lastAttRows as $r) {
-                        $val = $r->retake_grade !== null ? (float)$r->retake_grade : ($r->grade !== null ? (float)$r->grade : null);
-                        if ($val !== null && ($lastBaho === null || $val > $lastBaho)) {
-                            $lastBaho = $val;
-                        }
-                    }
+                $lastAttempt = 1;
+                if ($latestRow) {
+                    $lastBaho = $latestRow->retake_grade !== null ? (float)$latestRow->retake_grade : ($latestRow->grade !== null ? (float)$latestRow->grade : null);
+                    $lastAttempt = (int) $latestRow->attempt;
                 }
                 if ($lastBaho !== null && $lastBaho < 60) {
-                    if ($maxAttempt === 1) $reasons[] = '1-urinish: V<60';
-                    elseif ($maxAttempt === 2) $reasons[] = '2-urinish: V<60';
-                    elseif ($maxAttempt >= 3) $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
+                    if ($lastAttempt <= 1) $reasons[] = '1-urinish: V<60';
+                    elseif ($lastAttempt === 2) $reasons[] = '2-urinish: V<60';
+                    else $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
                 }
             }
 

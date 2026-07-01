@@ -7,6 +7,7 @@ use App\Models\RetakeApplicationWindow;
 use App\Models\RetakeGroup;
 use App\Models\Student;
 use App\Models\Teacher;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Validation\ValidationException;
@@ -90,7 +91,7 @@ class RetakeWindowService
     /**
      * Sanalarni o'zgartirish — faqat super-admin override.
      */
-    public function overrideDates(RetakeApplicationWindow $window, string $startDate, string $endDate): void
+    public function overrideDates(RetakeApplicationWindow $window, string $startDate, string $endDate, ?Model $actor = null, bool $countOverride = true): void
     {
         $this->validateDateRange($startDate, $endDate);
 
@@ -104,6 +105,14 @@ class RetakeWindowService
         // (Migration ishga tushgan bo'lsagina — aks holda jim qoladi.)
         if (RetakeApplicationWindow::supportsReopen()) {
             $update['application_reopen_until'] = $this->reopenUntil($window->end_date, $endDate);
+        }
+
+        if ($countOverride && RetakeApplicationWindow::supportsOverrideTracking()) {
+            $update['override_count'] = (int) ($window->override_count ?? 0) + 1;
+            $update['override_last_at'] = now();
+            $update['override_last_by_name'] = $actor?->full_name
+                ?? $actor?->name
+                ?? $window->override_last_by_name;
         }
 
         $window->update($update);

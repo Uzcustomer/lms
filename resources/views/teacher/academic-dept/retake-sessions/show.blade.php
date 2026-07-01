@@ -152,7 +152,8 @@
                                 <td class="px-3 py-2.5 text-right whitespace-nowrap">
                                     <a href="{{ route('admin.retake-windows.show', $w->id) }}"
                                        class="text-xs text-blue-600 hover:underline mr-2">{{ __("Ko'rish") }}</a>
-                                    @if($canOverride)
+                                    @php $canOverrideThisWindow = ($isSuperAdminOverride ?? false) || !$w->hasConsumedSingleOverride(); @endphp
+                                    @if($canOverride && $canOverrideThisWindow)
                                         <button type="button"
                                                 @click="overrideId = {{ $w->id }}; overrideStart = '{{ $w->start_date->format('Y-m-d') }}'; overrideEnd = '{{ $w->end_date->format('Y-m-d') }}'"
                                                 class="text-xs text-blue-600 hover:underline mr-2">
@@ -174,6 +175,8 @@
                                                 </button>
                                             </form>
                                         @endif
+                                    @elseif($canOverride && !($isSuperAdminOverride ?? false))
+                                        <span class="text-[11px] text-gray-400 mr-2">{{ __("Override yopilgan") }}</span>
                                     @endif
                                 </td>
                             </tr>

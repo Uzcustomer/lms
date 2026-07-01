@@ -187,13 +187,21 @@
                                    class="px-3 py-1.5 text-xs bg-blue-50 text-blue-700 rounded hover:bg-blue-100">
                                     {{ __("Oynalar") }}
                                 </a>
-                                @if(!$session->is_closed && ($canOverride ?? false))
+                                @php
+                                    $sessionOverrideClosed = !($isSuperAdminOverride ?? false)
+                                        && in_array($session->id, $sessionsWithUsedOverride ?? [], true);
+                                @endphp
+                                @if(!$session->is_closed && ($canOverride ?? false) && !$sessionOverrideClosed)
                                     <button type="button"
                                             @click="openOverride({{ $session->id }}, '', '')"
                                             class="px-3 py-1.5 text-xs bg-amber-50 text-amber-700 rounded hover:bg-amber-100"
                                             title="{{ __("Sessiya ichidagi barcha oynalar sanasini bir marta o'zgartirish") }}">
                                         📅 {{ __("Sanani o'zgartirish") }}
                                     </button>
+                                @elseif(!$session->is_closed && ($canOverride ?? false) && $sessionOverrideClosed)
+                                    <span class="px-3 py-1.5 text-xs bg-gray-100 text-gray-400 rounded">
+                                        {{ __("Override yopilgan") }}
+                                    </span>
                                 @endif
                                 @if(!$session->is_closed)
                                     <form method="POST"

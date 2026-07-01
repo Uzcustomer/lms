@@ -103,10 +103,7 @@ class RetakeWindowService
         // bugundan boshlab shuncha kun ariza qabuli qayta ochiladi.
         // (Migration ishga tushgan bo'lsagina — aks holda jim qoladi.)
         if (RetakeApplicationWindow::supportsReopen()) {
-            $reopen = $this->reopenUntil($window->end_date, $endDate);
-            if ($reopen !== null) {
-                $update['application_reopen_until'] = $reopen;
-            }
+            $update['application_reopen_until'] = $this->reopenUntil($window->end_date, $endDate);
         }
 
         $window->update($update);
@@ -194,7 +191,7 @@ class RetakeWindowService
             // Guruh sanasi oynaning eng kech sanasiga teng bo'lsin
             // (faqat oldinga — qisqartirmaymiz, boshqa ishlar buzilmasin uchun).
             $curEnd = $group->end_date ? Carbon::parse($group->end_date)->startOfDay() : null;
-            if ($curEnd === null || $curEnd->lt($targetEnd)) {
+            if ($curEnd === null || !$curEnd->equalTo($targetEnd)) {
                 $update['end_date'] = $targetEnd->toDateString();
             }
 
@@ -214,6 +211,8 @@ class RetakeWindowService
                         ? RetakeGroup::STATUS_SCHEDULED
                         : RetakeGroup::STATUS_IN_PROGRESS;
                 }
+            } elseif ($effectiveEnd && $effectiveEnd->lt($today) && $group->status !== RetakeGroup::STATUS_COMPLETED) {
+                $update['status'] = RetakeGroup::STATUS_COMPLETED;
             }
 
             if (!empty($update)) {

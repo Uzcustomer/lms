@@ -4061,6 +4061,12 @@ class QuizResultController extends Controller
 
         $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
 
+        // Qayta o'qish (retake) natijalari asosiy jurnalga (student_grades) EMAS,
+        // qayta o'qish jurnaliga (retake_applications.oske_score/test_score) yoziladi.
+        // Diagnostika ularni "Qayta o'qish jurnalida bor" deb ko'rsatadi; monitoring
+        // ham shu holatni "farq" emas, balki "ogohlantirish" deb hisoblashi kerak.
+        $retakeApps = $this->buildRetakeApps($results);
+
         // Dublikat aniqlash: shu (talaba+fan+quiz_type+shakl) bo'yicha BOSHQA
         // urinish allaqachon jurnalga yuklangan bo'lsa, ushbu nusxa "farq" emas.
         // (Masalan talaba bir mavzuni 2 marta ishlagan; bittasi yuklangan, ikkinchisi
@@ -4085,6 +4091,17 @@ class QuizResultController extends Controller
         foreach ($results as $r) {
             $type = 'gap';
             $reason = null;
+
+            // Qayta o'qish natijasi qayta o'qish jurnaliga allaqachon yozilgan
+            // bo'lsa — asosiy jurnalda baho yo'qligi FARQ emas (diagnostika bilan
+            // bir xil mantiq: "Qayta o'qish jurnalida bor").
+            if (\App\Services\Retake\RetakeSessionCode::isRetakeQuiz($r->attempt_name ?? null, $r->shakl)) {
+                $verdict = $this->retakeUploadedVerdict($r, $studentLookup, $retakeApps);
+                if ($verdict !== null) {
+                    $out[(int) $r->attempt_id] = $verdict;
+                    continue;
+                }
+            }
 
             $sibKey = $r->student_id . '|' . $r->fan_id . '|' . $r->quiz_type . '|' . $r->shakl;
             if (isset($uploadedSiblingKeys[$sibKey])) {
@@ -4113,6 +4130,58 @@ class QuizResultController extends Controller
         }
 
         return $out;
+    }
+
+    /**
+     * Qayta o'qish natijasi qayta o'qish jurnaliga (retake_applications) allaqachon
+     * yozilganmi tekshiradi. Yozilgan bo'lsa 'warning' verdikti (diagnostikadagi
+     * "Qayta o'qish jurnalida bor" bilan bir xil), aks holda null — u holda
+     * odatdagi mantiq davom etib, natija haqiqiy FARQ deb qoladi.
+     *
+     * @return array{type:string, reason:string}|null
+     */
+    private function retakeUploadedVerdict($r, array $studentLookup, $retakeApps): ?array
+    {
+        if ($retakeApps === null || $retakeApps->isEmpty()) {
+            return null;
+        }
+
+        $student = $studentLookup[$r->student_id] ?? null;
+        if (!$student) {
+            return null;
+        }
+
+        $quizType = $r->quiz_type ?? null;
+        $ynTuri = null;
+        if (in_array($quizType, ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'], true)) {
+            $ynTuri = 'Test';
+        } elseif (in_array($quizType, ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'], true)) {
+            $ynTuri = 'OSKI';
+        } else {
+            return null;
+        }
+
+        $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($r->attempt_name ?? null, $r->shakl);
+        $app = $this->matchRetakeApp(
+            $retakeApps,
+            (string) $student->hemis_id,
+            $r->fan_id,
+            $r->fan_name ?? null,
+            $code,
+            (string) ($r->date_finish ?? '')
+        );
+        if (!$app) {
+            return null;
+        }
+
+        if ($ynTuri === 'OSKI' && $app->oske_score !== null) {
+            return ['type' => 'warning', 'reason' => "Qayta o'qish jurnalida bor (" . round((float) $app->oske_score) . ")"];
+        }
+        if ($ynTuri === 'Test' && $app->test_score !== null) {
+            return ['type' => 'warning', 'reason' => "Qayta o'qish jurnalida bor (" . round((float) $app->test_score) . ")"];
+        }
+
+        return null;
     }
 
     /**
@@ -4295,7 +4364,7 @@ class QuizResultController extends Controller
             $markClass = [];
             if (!empty($allMarkGapIds)) {
                 $mgRows = HemisQuizResult::whereIn('attempt_id', array_values(array_unique($allMarkGapIds)))
-                    ->get(['attempt_id', 'student_id', 'fan_id', 'shakl', 'grade']);
+                    ->get(['attempt_id', 'student_id', 'fan_id', 'fan_name', 'shakl', 'quiz_type', 'attempt_name', 'date_finish', 'grade']);
                 $markClass = $this->classifyMarkGap($mgRows);
             }
 

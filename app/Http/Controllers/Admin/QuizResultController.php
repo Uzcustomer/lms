@@ -4105,9 +4105,11 @@ class QuizResultController extends Controller
 
             $sibKey = $r->student_id . '|' . $r->fan_id . '|' . $r->quiz_type . '|' . $r->shakl;
             if (isset($uploadedSiblingKeys[$sibKey])) {
-                // Aynan shu natija (quiz_type+shakl) boshqa urinish orqali yuklangan.
+                // Aynan shu natija (quiz_type+shakl) boshqa urinish orqali allaqachon
+                // asosiy jurnalga yuklangan — to'liq hal qilingan, farq ham,
+                // ogohlantirish ham emas.
                 $out[(int) $r->attempt_id] = [
-                    'type' => 'warning',
+                    'type' => 'ok',
                     'reason' => 'Dublikat: shu natija (' . $r->shakl . ') boshqa urinish orqali allaqachon jurnalga yuklangan',
                 ];
                 continue;
@@ -4134,9 +4136,9 @@ class QuizResultController extends Controller
 
     /**
      * Qayta o'qish natijasi qayta o'qish jurnaliga (retake_applications) allaqachon
-     * yozilganmi tekshiradi. Yozilgan bo'lsa 'warning' verdikti (diagnostikadagi
-     * "Qayta o'qish jurnalida bor" bilan bir xil), aks holda null — u holda
-     * odatdagi mantiq davom etib, natija haqiqiy FARQ deb qoladi.
+     * yozilganmi tekshiradi. Yozilgan bo'lsa 'ok' verdikti (to'liq hal qilingan —
+     * na farq, na ogohlantirish), aks holda null — u holda odatdagi mantiq
+     * davom etib, natija haqiqiy FARQ deb qoladi.
      *
      * @return array{type:string, reason:string}|null
      */
@@ -4179,11 +4181,13 @@ class QuizResultController extends Controller
             return null;
         }
 
+        // Natija qayta o'qish jurnaliga allaqachon yozilgan — to'liq hal qilingan,
+        // farq ham, ogohlantirish ham emas ("Markda" hisobiga qo'shiladi).
         if ($ynTuri === 'OSKI' && $app->oske_score !== null) {
-            return ['type' => 'warning', 'reason' => "Qayta o'qish jurnalida bor (" . round((float) $app->oske_score) . ")"];
+            return ['type' => 'ok', 'reason' => "Qayta o'qish jurnalida bor (" . round((float) $app->oske_score) . ")"];
         }
         if ($ynTuri === 'Test' && $app->test_score !== null) {
-            return ['type' => 'warning', 'reason' => "Qayta o'qish jurnalida bor (" . round((float) $app->test_score) . ")"];
+            return ['type' => 'ok', 'reason' => "Qayta o'qish jurnalida bor (" . round((float) $app->test_score) . ")"];
         }
 
         return null;
@@ -4379,8 +4383,12 @@ class QuizResultController extends Controller
             foreach ($result as $date => $row) {
                 $gap = 0;
                 $warn = 0;
+                $resolved = 0;
                 foreach (($markGapByDay[$date] ?? []) as $aid) {
-                    if (($markClass[$aid]['type'] ?? 'gap') === 'warning') {
+                    $t = $markClass[$aid]['type'] ?? 'gap';
+                    if ($t === 'ok') {
+                        $resolved++;
+                    } elseif ($t === 'warning') {
                         $warn++;
                     } else {
                         $gap++;
@@ -4396,6 +4404,7 @@ class QuizResultController extends Controller
                     $status = 'warning';
                 }
 
+                $row['graded_count'] += $resolved;
                 $row['mark_gap'] = $gap;
                 $row['warning_count'] = $warn;
                 $row['status'] = $status;
@@ -4403,6 +4412,7 @@ class QuizResultController extends Controller
 
                 $totMarkGap += $gap;
                 $totWarning += $warn;
+                $totGraded += $resolved;
             }
 
             return response()->json([
@@ -4547,6 +4557,13 @@ class QuizResultController extends Controller
                         $markedDayCount++;
                     } else {
                         $verdict = $markClass[(int) $row->attempt_id] ?? ['type' => 'gap', 'reason' => null];
+                        $vtype = $verdict['type'] ?? 'gap';
+                        if ($vtype === 'ok') {
+                            // Boshqa joyda (asosiy yoki qayta o'qish jurnalida) allaqachon
+                            // yuklangan — to'liq hal qilingan, "markda" hisobiga qo'shiladi.
+                            $markedDayCount++;
+                            continue;
+                        }
                         $entry = [
                             'attempt_id'   => (int) $row->attempt_id,
                             'student_id'   => $row->student_id,
@@ -4557,7 +4574,7 @@ class QuizResultController extends Controller
                             'date_finish'  => $row->date_finish,
                             'grade'        => $row->grade,
                         ];
-                        if (($verdict['type'] ?? 'gap') === 'warning') {
+                        if ($vtype === 'warning') {
                             $entry['reason'] = $verdict['reason'];
                             $dayWarnings[] = $entry;
                         } else {
@@ -4697,6 +4714,11 @@ class QuizResultController extends Controller
             $warnings = [];
             foreach ($markGapRows as $row) {
                 $verdict = $markClass[(int) $row->attempt_id] ?? ['type' => 'gap', 'reason' => null];
+                if (($verdict['type'] ?? 'gap') === 'ok') {
+                    // Boshqa joyda (asosiy yoki qayta o'qish jurnalida) allaqachon
+                    // yuklangan — to'liq hal qilingan, ro'yxatlarda ko'rinmaydi.
+                    continue;
+                }
                 $info = $details[(string) $row->student_id] ?? ['faculty' => null, 'direction' => null, 'kurs' => null, 'group' => null];
                 $entry = [
                     'attempt_id'   => (int) $row->attempt_id,

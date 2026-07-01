@@ -4115,16 +4115,24 @@ class QuizResultController extends Controller
                 continue;
             }
 
+            $student = $studentLookup[$r->student_id] ?? null;
+            if (!$student) {
+                // Talabalar jadvalida topilmadi — test/admin akkaunt (mas., "admin2")
+                // haqiqiy talaba emas, shuning uchun FARQ emas, OGOHLANTIRISHga chiqadi.
+                $out[(int) $r->attempt_id] = [
+                    'type' => 'warning',
+                    'reason' => "Talaba topilmadi (HEMIS ID: {$r->student_id}) — test/admin akkaunt bo'lishi mumkin",
+                ];
+                continue;
+            }
+
             if ($r->shakl && preg_match('/^(\d+)-mavzu$/i', $r->shakl, $m)) {
-                $student = $studentLookup[$r->student_id] ?? null;
-                if ($student) {
-                    $mavzuN = (int) $m[1];
-                    $key = $student->hemis_id . '|' . $r->fan_id . '|' . $mavzuN;
-                    $state = $mavzuStates[$key] ?? null;
-                    if ($state) {
-                        $testGrade = $r->grade !== null ? (float) $r->grade : null;
-                        [$type, $reason] = $this->mavzuMarkVerdict($state, $testGrade, $r->shakl);
-                    }
+                $mavzuN = (int) $m[1];
+                $key = $student->hemis_id . '|' . $r->fan_id . '|' . $mavzuN;
+                $state = $mavzuStates[$key] ?? null;
+                if ($state) {
+                    $testGrade = $r->grade !== null ? (float) $r->grade : null;
+                    [$type, $reason] = $this->mavzuMarkVerdict($state, $testGrade, $r->shakl);
                 }
             }
 

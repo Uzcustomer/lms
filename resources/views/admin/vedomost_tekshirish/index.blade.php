@@ -356,6 +356,13 @@
         }
         function toggleSemester() {
             document.getElementById('current-semester-toggle').classList.toggle('active');
+            if (window.reloadVedomostDependentFilters) {
+                window.reloadVedomostDependentFilters({
+                    keepSpecialty: false,
+                    keepLevel: false,
+                    keepSemester: false
+                });
+            }
         }
 
         $(document).ready(function () {
@@ -387,11 +394,39 @@
                     current_semester: document.getElementById('current-semester-toggle').classList.contains('active') ? '1':'0',
                 };
             }
-            function rd(el){ $(el).empty().append('<option value="">Barchasi</option>'); }
-            function pd(url,p,el,cb){ $.get(url,p,function(d){ $.each(d,function(k,v){ $(el).append('<option value="'+k+'">'+v+'</option>'); }); if(cb)cb(); }); }
-            function pdu(url,p,el,cb){ $.get(url,p,function(d){ var u={}; $.each(d,function(k,v){ if(!u[v])u[v]=k; }); $.each(u,function(n,k){ $(el).append('<option value="'+k+'">'+n+'</option>'); }); if(cb)cb(); }); }
+            function rd(el){
+                $(el).empty().append('<option value="">Barchasi</option>').val('').trigger('change.select2');
+            }
+            function pd(url,p,el,selectedValue,cb){
+                var $el=$(el);
+                $.get(url,p,function(d){
+                    rd(el);
+                    $.each(d,function(k,v){ $el.append('<option value="'+k+'">'+v+'</option>'); });
+                    if(selectedValue && $el.find('option[value="'+selectedValue+'"]').length){
+                        $el.val(selectedValue);
+                    }
+                    $el.trigger('change.select2');
+                    if(cb)cb();
+                });
+            }
+            function pdu(url,p,el,selectedValue,cb){
+                var $el=$(el);
+                $.get(url,p,function(d){
+                    rd(el);
+                    var u={};
+                    $.each(d,function(k,v){ if(!u[v])u[v]=k; });
+                    $.each(u,function(n,k){ $el.append('<option value="'+k+'">'+n+'</option>'); });
+                    if(selectedValue && $el.find('option[value="'+selectedValue+'"]').length){
+                        $el.val(selectedValue);
+                    }
+                    $el.trigger('change.select2');
+                    if(cb)cb();
+                });
+            }
 
-            function rSpec(){ rd('#specialty'); pdu('{{ route("admin.journal.get-specialties") }}',fp(),'#specialty'); }
+            function rSpec(keepSpecialty){
+                pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty', keepSpecialty || '');
+            }
             function rGrp(){
                 var prev=getCbValues('groups');
                 $.get('{{ route("admin.journal.get-groups") }}',fp(),function(d){
@@ -409,22 +444,49 @@
                 });
             }
 
-            $('#education_type').change(function(){ rSpec(); rSubj(); rGrp(); });
-            $('#faculty').change(function(){ rSpec(); rSubj(); rGrp(); });
-            $('#specialty').change(function(){ rGrp(); rSubj(); });
+            function reloadSemesters(keepSemester, cb) {
+                pd('{{ route("admin.journal.get-semesters") }}', fp(), '#semester_code', keepSemester || '', cb);
+            }
+
+            function reloadLevelsAndSemesters(options) {
+                options = options || {};
+                pd('{{ route("admin.journal.get-level-codes") }}', fp(), '#level_code', options.keepLevel || '', function(){
+                    reloadSemesters(options.keepSemester || '', function(){
+                        rSubj();
+                        rGrp();
+                        if (options.after) options.after();
+                    });
+                });
+            }
+
+            function reloadAllDependentFilters(options) {
+                options = options || {};
+                rSpec(options.keepSpecialty || '');
+                reloadLevelsAndSemesters(options);
+            }
+
+            window.reloadVedomostDependentFilters = reloadAllDependentFilters;
+
+            $('#education_type').change(function(){
+                reloadAllDependentFilters({ keepSpecialty:false, keepLevel:false, keepSemester:false });
+            });
+            $('#faculty').change(function(){
+                reloadAllDependentFilters({ keepSpecialty:false, keepLevel:false, keepSemester:false });
+            });
+            $('#specialty').change(function(){
+                reloadLevelsAndSemesters({ keepLevel:false, keepSemester:false });
+            });
             $('#department').change(function(){ rSubj(); rGrp(); });
             $('#level_code').change(function(){
-                var lc=$(this).val(); rd('#semester_code');
-                if(lc) pd('{{ route("admin.journal.get-semesters") }}',{level_code:lc},'#semester_code');
-                rSubj(); rGrp();
+                reloadSemesters('', function(){
+                    rSubj();
+                    rGrp();
+                });
             });
             $('#semester_code').change(function(){ rSubj(); rGrp(); });
 
             // Initial load
-            pdu('{{ route("admin.journal.get-specialties") }}',fp(),'#specialty');
-            pd('{{ route("admin.journal.get-level-codes") }}',{},'#level_code');
-            pd('{{ route("admin.journal.get-semesters") }}',{},'#semester_code');
-            rSubj(); rGrp();
+            reloadAllDependentFilters({ keepSpecialty:false, keepLevel:false, keepSemester:false });
         });
 
         function doSearch() {

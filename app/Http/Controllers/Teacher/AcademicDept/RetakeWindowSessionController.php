@@ -44,10 +44,22 @@ class RetakeWindowSessionController extends Controller
                 ->all();
         }
 
+        $sessionsWithUsedOverride = [];
+        if (RetakeApplicationWindow::supportsOverrideTracking()) {
+            $sessionsWithUsedOverride = RetakeApplicationWindow::query()
+                ->whereIn('session_id', $sessions->pluck('id'))
+                ->where('override_count', '>', 0)
+                ->distinct()
+                ->pluck('session_id')
+                ->all();
+        }
+
         return view('teacher.academic-dept.retake-sessions.index', [
             'sessions' => $sessions,
             'sessionsWithApps' => $sessionsWithApps,
             'canOverride' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
+            'isSuperAdminOverride' => RetakeAccess::isSuperAdminLike(RetakeAccess::currentStaff()),
+            'sessionsWithUsedOverride' => $sessionsWithUsedOverride,
         ]);
     }
 
@@ -107,7 +119,10 @@ class RetakeWindowSessionController extends Controller
      */
     public function bulkOverrideDates(Request $request, int $sessionId): RedirectResponse
     {
-        if (!\App\Services\Retake\RetakeAccess::canOverride(\App\Services\Retake\RetakeAccess::currentStaff())) {
+        $actor = \App\Services\Retake\RetakeAccess::currentStaff();
+        $isSuperAdmin = \App\Services\Retake\RetakeAccess::isSuperAdminLike($actor);
+
+        if (!\App\Services\Retake\RetakeAccess::canOverride($actor)) {
             abort(403, "Sizda sanalarni o'zgartirish ruxsati yo'q");
         }
 
@@ -125,8 +140,14 @@ class RetakeWindowSessionController extends Controller
 
         $windows = \App\Models\RetakeApplicationWindow::query()
             ->where('session_id', $session->id)
-            ->get(['id', 'end_date']);
+            ->get(['id', 'end_date', 'override_count']);
         $windowIds = $windows->pluck('id');
+
+        if (!$isSuperAdmin && $windows->contains(fn ($w) => (int) ($w->override_count ?? 0) > 0)) {
+            return redirect()->back()->withErrors([
+                'session' => "Bu sessiyadagi oynalardan kamida bittasi allaqachon override qilingan. Endi bulk override faqat superadmin uchun ochiq.",
+            ]);
+        }
 
         // Har oyna uchun alohida: tugash sanasi uzaytirilgan bo'lsa,
         // necha kunga uzaytirilgan bo'lsa shuncha kun ariza qabuli qayta
@@ -141,9 +162,12 @@ class RetakeWindowSessionController extends Controller
             ];
             if ($supportsReopen) {
                 $reopen = $windowService->reopenUntil($w->end_date, $data['end_date']);
-                if ($reopen !== null) {
-                    $update['application_reopen_until'] = $reopen;
-                }
+                $update['application_reopen_until'] = $reopen;
+            }
+            if (!$isSuperAdmin && \App\Models\RetakeApplicationWindow::supportsOverrideTracking()) {
+                $update['override_count'] = (int) ($w->override_count ?? 0) + 1;
+                $update['override_last_at'] = now();
+                $update['override_last_by_name'] = $actor?->full_name ?? $actor?->name;
             }
             \App\Models\RetakeApplicationWindow::whereKey($w->id)->update($update);
             $count++;
@@ -513,6 +537,7 @@ class RetakeWindowSessionController extends Controller
             'departmentIdFilter' => $departmentId,
             'levelCodeFilter' => $levelCode,
             'canOverride' => RetakeAccess::canOverride(RetakeAccess::currentStaff()),
+            'isSuperAdminOverride' => RetakeAccess::isSuperAdminLike(RetakeAccess::currentStaff()),
             'educationTypes' => $educationTypes,
         ]);
     }

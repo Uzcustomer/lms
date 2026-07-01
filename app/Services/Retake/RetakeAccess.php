@@ -158,6 +158,15 @@ class RetakeAccess
             ]);
     }
 
+    public static function isSuperAdminLike(?Model $actor): bool
+    {
+        if (!$actor) {
+            return false;
+        }
+
+        return self::isSuperAdmin($actor);
+    }
+
     /**
      * Loyihaning xodimlari teachers yoki users jadvalida bo'lishi mumkin —
      * ikkalasi ham HasRoles trait'iga ega.

@@ -144,6 +144,7 @@ class RetakeWindowController extends Controller
             'departmentIdFilter' => $departmentId,
             'levelCodeFilter' => $levelCode,
             'canOverride' => $this->canOverride(),
+            'isSuperAdminOverride' => RetakeAccess::isSuperAdminLike(RetakeAccess::currentStaff()),
             'canManage' => $this->canManage(),
             'educationTypes' => $educationTypes,
         ]);
@@ -348,9 +349,17 @@ class RetakeWindowController extends Controller
         ]);
 
         $window = RetakeApplicationWindow::findOrFail($windowId);
+        $actor = RetakeAccess::currentStaff();
+        $isSuperAdmin = RetakeAccess::isSuperAdminLike($actor);
+
+        if (!$isSuperAdmin && $window->hasConsumedSingleOverride()) {
+            return redirect()->back()->withErrors([
+                'window' => "Bu oynaning sanasi allaqachon bir marta override qilingan. Endi faqat superadmin o'zgartira oladi.",
+            ]);
+        }
 
         try {
-            $this->windowService->overrideDates($window, $data['start_date'], $data['end_date']);
+            $this->windowService->overrideDates($window, $data['start_date'], $data['end_date'], $actor, !$isSuperAdmin);
         } catch (ValidationException $e) {
             return redirect()->back()->withErrors($e->errors());
         }

@@ -239,6 +239,13 @@
                                         </div>
                                     </div>
                                 @endif
+
+                                @if($submitted && $question->correctExplanationFor($language))
+                                    <div class="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
+                                        <div class="st-label">To'g'ri javob izohi</div>
+                                        <div class="mt-2 text-sm font-medium text-slate-800">{{ $question->correctExplanationFor($language) }}</div>
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     @endforeach

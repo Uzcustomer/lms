@@ -14,6 +14,8 @@ class TestSubjectLessonTestQuestion extends Model
         'image_path',
         'helper_text',
         'helper_text_translations',
+        'correct_explanation',
+        'correct_explanation_translations',
         'correct_answer_text',
         'correct_answer_translations',
         'case_sensitive',
@@ -27,6 +29,7 @@ class TestSubjectLessonTestQuestion extends Model
         'is_active' => 'boolean',
         'prompt_translations' => 'array',
         'helper_text_translations' => 'array',
+        'correct_explanation_translations' => 'array',
         'correct_answer_translations' => 'array',
     ];
 
@@ -61,6 +64,11 @@ class TestSubjectLessonTestQuestion extends Model
     public function correctAnswerFor(?string $lang = 'uz'): ?string
     {
         return $this->translationValue('correct_answer_translations', $lang, $this->correct_answer_text);
+    }
+
+    public function correctExplanationFor(?string $lang = 'uz'): ?string
+    {
+        return $this->translationValue('correct_explanation_translations', $lang, $this->correct_explanation);
     }
 
     public function imageUrl(): ?string

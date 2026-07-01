@@ -679,7 +679,10 @@ class RetakeJournalService
                 return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 0,  'test' => 60];
             case 'oske_test':
                 return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 30, 'test' => 30];
+            case 'sinov':
             case 'sinov_fan':
+                // Sinov (test) — jurnal/test-markazi standart taqsimoti bilan bir xil.
+                return ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0,  'test' => 30];
             default:
                 return ['jn' => 70, 'mt' => 30, 'on' => 0, 'oski' => 0,  'test' => 0];
         }
@@ -987,6 +990,12 @@ class RetakeJournalService
 
         $hemisIds = $applications->pluck('student_hemis_id')->filter()->unique()->values();
 
+        // DIQQAT: bu metod (eski "Natijalarni tortish" yo'li) FASL/sessiya
+        // filtri va sana chegarasi (test_date) ixtiyoriy bo'lgani uchun sinov
+        // guruhlarda xavfli — test_date bo'sh bo'lsa, shu talaba+fandagi
+        // BARCHA (istalgan semestr/sessiya) 102-baholari o'rtachalanib yoziladi.
+        // Sinov uchun sessiya-xavfsiz yo'l — fetchRetakeResultsFromQuiz
+        // ("Diagnostika orqali yuklash", test markazi sahifasi).
         $needsOske = in_array($group->assessment_type, ['oske', 'oske_test'], true);
         $needsTest = in_array($group->assessment_type, ['test', 'oske_test'], true);
 
@@ -1102,7 +1111,7 @@ class RetakeJournalService
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
 
         $needsOske = in_array($group->assessment_type, ['oske', 'oske_test'], true);
-        $needsTest = in_array($group->assessment_type, ['test', 'oske_test'], true);
+        $needsTest = in_array($group->assessment_type, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
 
         $relevantTypes = array_merge(
             $needsOske ? $oskiTypes : [],

@@ -988,7 +988,7 @@ class RetakeJournalService
         $hemisIds = $applications->pluck('student_hemis_id')->filter()->unique()->values();
 
         $needsOske = in_array($group->assessment_type, ['oske', 'oske_test'], true);
-        $needsTest = in_array($group->assessment_type, ['test', 'oske_test'], true);
+        $needsTest = in_array($group->assessment_type, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
 
         $oskeMap = collect();
         $testMap = collect();
@@ -1102,7 +1102,7 @@ class RetakeJournalService
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
 
         $needsOske = in_array($group->assessment_type, ['oske', 'oske_test'], true);
-        $needsTest = in_array($group->assessment_type, ['test', 'oske_test'], true);
+        $needsTest = in_array($group->assessment_type, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
 
         $relevantTypes = array_merge(
             $needsOske ? $oskiTypes : [],

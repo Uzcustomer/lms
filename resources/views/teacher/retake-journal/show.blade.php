@@ -251,7 +251,7 @@
                     @endif
 
                     {{-- OSKI / Test natijalari paneli --}}
-                    @if(in_array($group->assessment_type, ['oske', 'test', 'oske_test'], true))
+                    @if(in_array($group->assessment_type, ['oske', 'test', 'oske_test', 'sinov', 'sinov_fan'], true))
                         <div class="bg-white rounded-xl shadow-sm border border-gray-100 mt-3 p-4">
                             <div class="flex items-start justify-between flex-wrap gap-3">
                                 <div class="flex items-start gap-3">

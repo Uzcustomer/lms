@@ -327,7 +327,7 @@ class RetakeJournalController extends Controller
         $group = RetakeGroup::findOrFail($groupId);
         $this->authorizeView($actor, $group);
 
-        if (!in_array($group->assessment_type, ['oske', 'test', 'oske_test'], true)) {
+        if (!in_array($group->assessment_type, ['oske', 'test', 'oske_test', 'sinov', 'sinov_fan'], true)) {
             return redirect()->back()->withErrors([
                 'assessment_type' => "Bu guruh uchun OSKE/Test natijalari kerak emas",
             ]);

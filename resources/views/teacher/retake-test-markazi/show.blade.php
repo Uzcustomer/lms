@@ -38,11 +38,13 @@
 
         @php
             $needsOske = in_array($group->assessment_type, ['oske', 'oske_test'], true);
-            $needsTest = in_array($group->assessment_type, ['test', 'oske_test'], true);
+            $needsTest = in_array($group->assessment_type, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
             $atypeLabels = [
                 'oske' => 'OSKE',
                 'test' => 'TEST',
                 'oske_test' => 'OSKE + TEST',
+                'sinov' => 'Sinov (test)',
+                'sinov_fan' => 'Sinov (test)',
             ];
         @endphp
 

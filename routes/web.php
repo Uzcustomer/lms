@@ -1263,36 +1263,7 @@ Route::prefix('student')->name('student.')->group(function () {
 
         // Xizmatlar sahifasi
         Route::get('/services', function () {
-            /** @var \App\Models\Student $student */
-            $student = Auth::guard('student')->user();
-            /** @var \App\Services\Retake\RetakeWindowService $retakeWindowService */
-            $retakeWindowService = app(\App\Services\Retake\RetakeWindowService::class);
-
-            $activeRetakeWindow = $retakeWindowService->activeWindowForStudent($student);
-            $latestRetakeWindow = $retakeWindowService->windowsForStudent($student)->first();
-
-            $retakeApplicationsClosed = false;
-            if (!$activeRetakeWindow && $latestRetakeWindow?->end_date) {
-                $retakeApplicationsClosed = $latestRetakeWindow->end_date->lt(now()->startOfDay());
-            }
-
-            $retakeAcademicYear = null;
-            $sessionCode = $latestRetakeWindow?->session?->resolvedCode();
-            if ($sessionCode && preg_match('/^(\d{4})-(\d{4})-/', $sessionCode, $m)) {
-                $retakeAcademicYear = $m[1] . '-' . $m[2];
-            }
-
-            if (!$retakeAcademicYear) {
-                $retakeAcademicYear = $student->education_year_name
-                    ?: ($latestRetakeWindow?->start_date?->year && $latestRetakeWindow?->end_date?->year
-                        ? $latestRetakeWindow->start_date->year . '-' . $latestRetakeWindow->end_date->year
-                        : null);
-            }
-
-            return view('student.services', [
-                'retakeApplicationsClosed' => $retakeApplicationsClosed,
-                'retakeAcademicYear' => $retakeAcademicYear,
-            ]);
+            return view('student.services');
         })->name('services');
         Route::get('/documents', [\App\Http\Controllers\Student\StudentDocumentController::class, 'index'])->name('documents.index');
         Route::get('/documents/{file}/download', [\App\Http\Controllers\Student\StudentDocumentController::class, 'download'])->name('documents.download');

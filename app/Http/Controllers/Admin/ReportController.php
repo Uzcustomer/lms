@@ -9762,21 +9762,29 @@ class ReportController extends Controller
                     // lekin talabada 101/102 yozuvi bo'lmasa — u kelmagan, avtomatik yiqilgan
                     // (jurnal ham missing test'ni o'tib ketgan sanada yiqilgan deb hisoblaydi).
                     $gid = $stuGroup[$hemisId] ?? null;
-                    $sched = $examSchedInd[$hemisId . '|' . $subjectId . '|' . $semCode]
-                        ?? ($gid !== null ? ($examSchedGroup[$subjectId . '|' . $semCode . '|' . $gid] ?? null) : null);
-                    if ($sched) {
+                    $indSched = $examSchedInd[$hemisId . '|' . $subjectId . '|' . $semCode] ?? null;
+                    $grpSched = $gid !== null ? ($examSchedGroup[$subjectId . '|' . $semCode . '|' . $gid] ?? null) : null;
+                    if ($indSched || $grpSched) {
+                        // Individual yozuv faqat override qilingan bitta ustun bilan yaratiladi
+                        // (qolgan sanalar null qoladi), shuning uchun HAR BIR sanani birlashtiramiz:
+                        // individualda qiymat bo'lsa undan, aks holda guruh jadvalidan olamiz.
+                        $pick = fn($f) => ($indSched && $indSched->$f !== null) ? $indSched->$f : ($grpSched->$f ?? null);
+                        // na (imtihon turi fanga umuman qo'llaniladimi) — fan/guruh darajasidagi
+                        // xususiyat, shuning uchun guruh yozuvidan olinadi (bo'lmasa individualdan).
+                        $naTest = $grpSched ? (int) ($grpSched->test_na ?? 1) : (int) ($indSched->test_na ?? 1);
+                        $naOski = $grpSched ? (int) ($grpSched->oski_na ?? 1) : (int) ($indSched->oski_na ?? 1);
                         $d = fn($v) => $v ? substr((string) $v, 0, 10) : null;
                         $noShowLabel = null;
                         // Test talab qilinadi va sanasi o'tgan bo'lsa
-                        if ((int) ($sched->test_na ?? 1) === 0) {
-                            $td = $d($sched->test_date); $tr1 = $d($sched->test_resit_date); $tr2 = $d($sched->test_resit2_date);
+                        if ($naTest === 0) {
+                            $td = $d($pick('test_date')); $tr1 = $d($pick('test_resit_date')); $tr2 = $d($pick('test_resit2_date'));
                             if ($tr2 !== null && $tr2 <= $todayStr) $noShowLabel = 'Akademik qarzdor (imtihonga kelmagan, 3-urinish)';
                             elseif ($tr1 !== null && $tr1 <= $todayStr) $noShowLabel = 'Imtihonga kelmagan (2-urinish)';
                             elseif ($td !== null && $td <= $todayStr) $noShowLabel = 'Imtihonga kelmagan (1-urinish)';
                         }
                         // OSKI talab qilinadi va sanasi o'tgan bo'lsa (test topilmagan bo'lsa)
-                        if ($noShowLabel === null && (int) ($sched->oski_na ?? 1) === 0) {
-                            $od = $d($sched->oski_date); $or1 = $d($sched->oski_resit_date); $or2 = $d($sched->oski_resit2_date);
+                        if ($noShowLabel === null && $naOski === 0) {
+                            $od = $d($pick('oski_date')); $or1 = $d($pick('oski_resit_date')); $or2 = $d($pick('oski_resit2_date'));
                             if ($or2 !== null && $or2 <= $todayStr) $noShowLabel = 'Akademik qarzdor (imtihonga kelmagan, 3-urinish)';
                             elseif ($or1 !== null && $or1 <= $todayStr) $noShowLabel = 'Imtihonga kelmagan (2-urinish)';
                             elseif ($od !== null && $od <= $todayStr) $noShowLabel = 'Imtihonga kelmagan (1-urinish)';

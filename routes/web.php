@@ -1272,6 +1272,8 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/services', function () {
             return view('student.services');
         })->name('services');
+        Route::get('/documents', [\App\Http\Controllers\Student\StudentDocumentController::class, 'index'])->name('documents.index');
+        Route::get('/documents/{file}/download', [\App\Http\Controllers\Student\StudentDocumentController::class, 'download'])->name('documents.download');
 
         // Visa application (xalqaro talabalar)
         Route::get('/visa-application', [\App\Http\Controllers\Student\VisaApplicationController::class, 'create'])->name('visa-application.create');

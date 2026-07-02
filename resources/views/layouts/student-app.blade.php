@@ -604,7 +604,7 @@
         elseif (request()->routeIs('student.schedule')) $activeTab = 'jadval';
         elseif (request()->routeIs('student.dashboard')) $activeTab = 'asosiy';
         elseif (request()->routeIs('student.independents')) $activeTab = 'mt';
-        elseif (request()->routeIs('student.exam-schedule') || request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.contracts.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons') || request()->routeIs('student.visa-info.*') || request()->routeIs('student.retake.*') || request()->routeIs('student.retake-journal.*')) $activeTab = 'foydali';
+        elseif (request()->routeIs('student.exam-schedule') || request()->routeIs('student.services') || request()->routeIs('student.absence-excuses.*') || request()->routeIs('student.contracts.*') || request()->routeIs('student.attendance') || request()->routeIs('student.pending-lessons') || request()->routeIs('student.visa-info.*') || request()->routeIs('student.retake.*') || request()->routeIs('student.retake-journal.*') || request()->routeIs('student.documents.*')) $activeTab = 'foydali';
     @endphp
     <div x-data="{ boshqalarOpen: false }" class="sm:hidden" style="position:fixed !important;bottom:0 !important;left:0 !important;right:0 !important;z-index:9999 !important;">
         <!-- Boshqalar popup overlay -->
@@ -637,13 +637,13 @@
                     </div>
                     <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __('Davomat') }}</span>
                 </a>
-                <a href="{{ route('student.pending-lessons') }}" class="flex items-center rounded-xl border border-gray-200 transition {{ request()->routeIs('student.pending-lessons') ? 'bg-indigo-50 border-indigo-300' : 'bg-white hover:bg-gray-50' }}" style="padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
-                    <div class="rounded-xl bg-red-100 dark:bg-red-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
-                        <svg class="w-6 h-6 text-red-600 dark:text-red-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M2.985 19.644l3.181-3.182" />
+                <a href="{{ route('student.documents.index') }}" class="flex items-center rounded-xl border border-gray-200 transition {{ request()->routeIs('student.documents.*') ? 'bg-indigo-50 border-indigo-300' : 'bg-white hover:bg-gray-50' }}" style="padding:10px;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+                    <div class="rounded-xl bg-amber-100 dark:bg-amber-900/40 flex items-center justify-center flex-shrink-0" style="width:50px;height:50px;">
+                        <svg class="w-6 h-6 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                         </svg>
                     </div>
-                    <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __('Qayta topshirish') }}</span>
+                    <span class="flex-1 text-sm font-semibold text-gray-700 dark:text-gray-300 leading-tight ml-3">{{ __("Mening hujjat va ma'lumotlarim") }}</span>
                 </a>
                 @php $mobileStudent = auth()->guard('student')->user(); @endphp
                 @if($mobileStudent && (str_starts_with(strtolower($mobileStudent->group_name ?? ''), 'xd') || str_contains(strtolower($mobileStudent->citizenship_name ?? ''), 'orijiy')))

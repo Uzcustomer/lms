@@ -85,6 +85,25 @@
         /* === SPINNER === */
         .spinner { width: 36px; height: 36px; margin: 0 auto; border: 3px solid #e2e8f0; border-top-color: #16a34a; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Apelyatsiya */
+        .appeal-btn { padding:4px 10px; font-size:11px; font-weight:700; color:#fff; background:linear-gradient(135deg,#d97706,#f59e0b); border:none; border-radius:6px; cursor:pointer; white-space:nowrap; }
+        .appeal-btn:hover { background:linear-gradient(135deg,#b45309,#d97706); }
+        .appeal-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:1000; align-items:center; justify-content:center; padding:16px; }
+        .appeal-modal { background:#fff; border-radius:14px; max-width:520px; width:100%; box-shadow:0 20px 60px rgba(0,0,0,0.35); overflow:hidden; }
+        .appeal-modal-head { padding:14px 18px; border-bottom:1px solid #e2e8f0; display:flex; align-items:center; justify-content:space-between; background:linear-gradient(135deg,#fff7ed,#ffedd5); }
+        .appeal-modal-title { font-size:16px; font-weight:800; color:#9a3412; }
+        .appeal-close { background:transparent; border:none; font-size:24px; line-height:1; cursor:pointer; color:#64748b; }
+        .appeal-close:hover { color:#dc2626; }
+        .appeal-modal-body { padding:16px 18px; }
+        .appeal-info { background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 12px; font-size:13px; color:#334155; margin-bottom:14px; line-height:1.7; }
+        .appeal-label { display:block; font-size:12px; font-weight:700; color:#475569; margin:10px 0 4px; }
+        .appeal-input { width:100%; padding:8px 10px; border:1px solid #cbd5e1; border-radius:8px; font-size:13px; box-sizing:border-box; }
+        .appeal-input:focus { outline:none; border-color:#d97706; box-shadow:0 0 0 3px rgba(217,119,6,0.15); }
+        .appeal-error { color:#b91c1c; font-size:12px; font-weight:600; margin-top:8px; min-height:16px; }
+        .appeal-btn-cancel { padding:8px 16px; border:1px solid #d1d5db; border-radius:8px; background:#fff; color:#374151; font-size:13px; font-weight:600; cursor:pointer; }
+        .appeal-btn-submit { padding:8px 16px; border:none; border-radius:8px; background:linear-gradient(135deg,#d97706,#f59e0b); color:#fff; font-size:13px; font-weight:700; cursor:pointer; }
+        .appeal-btn-submit:disabled { opacity:.6; cursor:not-allowed; }
     </style>
 
     <div class="py-4">
@@ -156,6 +175,7 @@
                                         <th>Baho</th>
                                         <th>Boshlanish</th>
                                         <th>Tugash</th>
+                                        @if($canAppeal ?? false)<th style="text-align:center;">Amallar</th>@endif
                                     </tr>
                                     <tr class="filter-header-row">
                                         <th></th>
@@ -200,6 +220,7 @@
                                         </th>
                                         <th></th>
                                         <th></th>
+                                        @if($canAppeal ?? false)<th></th>@endif
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -216,8 +237,59 @@
     <link href="/css/scroll-calendar.css" rel="stylesheet" />
     <script src="/js/scroll-calendar.js"></script>
 
+    @if($canAppeal ?? false)
+    <!-- Apelyatsiya modal (faqat o'quv prorektori / superadmin) -->
+    <div id="appealOverlay" class="appeal-overlay">
+        <div class="appeal-modal">
+            <div class="appeal-modal-head">
+                <div class="appeal-modal-title">Test bahosi apelyatsiyasi</div>
+                <button type="button" class="appeal-close" onclick="closeAppeal()">&times;</button>
+            </div>
+            <div class="appeal-modal-body">
+                <div class="appeal-info" id="appealInfo"></div>
+                <form id="appealForm" enctype="multipart/form-data">
+                    @csrf
+                    <input type="hidden" name="student_grade_id" id="ap_grade_id">
+                    <label class="appeal-label">Amal</label>
+                    <div style="display:flex;gap:16px;margin-bottom:10px;">
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="radio" name="action" value="replace" checked onchange="apToggleAction()"> Bahoni almashtirish
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                            <input type="radio" name="action" value="delete" onchange="apToggleAction()"> Bahoni o'chirish
+                        </label>
+                    </div>
+                    <div id="ap_grade_wrap">
+                        <label class="appeal-label">Yangi baho (0–100)</label>
+                        <input type="number" name="new_grade" id="ap_new_grade" class="appeal-input" min="0" max="100" step="0.01" placeholder="Masalan: 85">
+                    </div>
+                    <label class="appeal-label">Sabab / asoslash</label>
+                    <textarea name="reason" id="ap_reason" class="appeal-input" rows="3" placeholder="Nima uchun tuzatilyapti..."></textarea>
+                    <label class="appeal-label">Asoslovchi hujjat (PDF/JPG/PNG, ≤5MB) — majburiy</label>
+                    <input type="file" name="document" id="ap_document" class="appeal-input" accept=".pdf,.jpg,.jpeg,.png">
+                    <div id="ap_error" class="appeal-error"></div>
+                    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:14px;">
+                        <button type="button" class="appeal-btn-cancel" onclick="closeAppeal()">Bekor qilish</button>
+                        <button type="submit" class="appeal-btn-submit" id="ap_submit">Qo'llash</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    @endif
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+    <link href="/css/scroll-calendar.css" rel="stylesheet" />
+    <script src="/js/scroll-calendar.js"></script>
+
     <script>
         var dataUrl = '{{ route($routePrefix . ".saqlangan-hisobot.data") }}';
+        var canAppeal = @json($canAppeal ?? false);
+        @if($canAppeal ?? false)
+        var appealStoreUrl = '{{ route($routePrefix . ".quiz-grade-appeals.store") }}';
+        var appealCsrf = '{{ csrf_token() }}';
+        @endif
 
         var allData = [];
         var filteredData = [];
@@ -401,6 +473,15 @@
                 html += '<td style="text-align:center;"><span class="badge badge-grade">' + esc(r.grade) + '</span></td>';
                 html += '<td style="font-size:11px;white-space:nowrap;color:#475569;">' + esc(r.date_start) + '</td>';
                 html += '<td style="font-size:11px;white-space:nowrap;color:#475569;">' + esc(r.date_finish) + '</td>';
+                if (canAppeal) {
+                    html += '<td style="text-align:center;white-space:nowrap;">'
+                        + '<button type="button" class="appeal-btn" '
+                        + 'data-id="' + esc(r.id) + '" '
+                        + 'data-student="' + esc(r.student_name) + '" '
+                        + 'data-fan="' + esc(r.fan_name) + '" '
+                        + 'data-grade="' + esc(r.grade) + '">Apelyatsiya</button>'
+                        + '</td>';
+                }
                 html += '</tr>';
             }
             $('#table-body').html(html);
@@ -437,6 +518,61 @@
             XLSX.utils.book_append_sheet(wb, ws, 'Natijalar');
             XLSX.writeFile(wb, 'sistemaga_yuklangan_' + new Date().toISOString().slice(0, 10) + '.xlsx');
         }
+
+        // ========== APELYATSIYA (o'quv prorektori) ==========
+        function apToggleAction() {
+            var act = $('input[name="action"]:checked').val();
+            $('#ap_grade_wrap').toggle(act === 'replace');
+        }
+        function openAppeal(btn) {
+            var $b = $(btn);
+            $('#ap_grade_id').val($b.data('id'));
+            $('#appealInfo').html(
+                '<div><strong>Talaba:</strong> ' + esc($b.data('student')) + '</div>' +
+                '<div><strong>Fan:</strong> ' + esc($b.data('fan')) + '</div>' +
+                '<div><strong>Joriy baho:</strong> ' + esc($b.data('grade')) + '</div>'
+            );
+            $('#appealForm')[0].reset();
+            $('#ap_grade_id').val($b.data('id'));
+            $('#ap_error').text('');
+            apToggleAction();
+            $('#appealOverlay').css('display', 'flex');
+        }
+        function closeAppeal() { $('#appealOverlay').hide(); }
+
+        $(document).on('click', '.appeal-btn', function() { openAppeal(this); });
+
+        $(document).on('submit', '#appealForm', function(e) {
+            e.preventDefault();
+            var act = $('input[name="action"]:checked').val();
+            if (act === 'replace' && $('#ap_new_grade').val() === '') {
+                $('#ap_error').text('Yangi bahoni kiriting.'); return;
+            }
+            if (($('#ap_reason').val() || '').trim().length < 5) {
+                $('#ap_error').text('Sabab kamida 5 belgi bo\'lsin.'); return;
+            }
+            if (!$('#ap_document')[0].files.length) {
+                $('#ap_error').text('Asoslovchi hujjatni yuklang.'); return;
+            }
+            var fd = new FormData(document.getElementById('appealForm'));
+            var $btn = $('#ap_submit').prop('disabled', true).text('Yuborilmoqda...');
+            fetch(appealStoreUrl, {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': appealCsrf, 'Accept': 'application/json' },
+                body: fd
+            }).then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
+              .then(function(res) {
+                if (res.ok && res.j.success) {
+                    closeAppeal();
+                    alert(res.j.message || 'Bajarildi.');
+                    loadData();
+                } else {
+                    var msg = res.j.message || (res.j.errors ? Object.values(res.j.errors)[0][0] : 'Xatolik yuz berdi.');
+                    $('#ap_error').text(msg);
+                }
+              }).catch(function(err) { $('#ap_error').text('Xato: ' + err.message); })
+              .finally(function() { $btn.prop('disabled', false).text('Qo\'llash'); });
+        });
 
         // ========== DOCUMENT READY ==========
         $(document).ready(function() {

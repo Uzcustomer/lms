@@ -50,6 +50,25 @@ class QuizGradeAppealController extends Controller
     }
 
     /**
+     * Moodle orqali yuklangan natija ikki xil ko'rinishda saqlanadi:
+     *  - 'quiz'  : OSKI/Test — reason='quiz_result', qiymat `grade` ustunida
+     *              (uploadToGrades orqali yaratilgan yangi qator).
+     *  - 'mavzu' : "N-mavzu" qayta topshirish — reason o'zgarmaydi
+     *              ('absent'/'low_grade'), qiymat `retake_grade` ustunida
+     *              (uploadMavzuRetake orqali mavjud qatorga yozilgan).
+     * quiz_result_id ikkalasida ham to'ldiriladi — shu orqali ajratamiz.
+     */
+    private function gradeKind(StudentGrade $g): string
+    {
+        return $g->reason === 'quiz_result' ? 'quiz' : 'mavzu';
+    }
+
+    private function currentValue(StudentGrade $g): ?float
+    {
+        return $this->gradeKind($g) === 'quiz' ? $g->grade : $g->retake_grade;
+    }
+
+    /**
      * Apelyatsiyalar tarixi.
      */
     public function index(Request $request)
@@ -66,8 +85,10 @@ class QuizGradeAppealController extends Controller
 
     /**
      * FISH / HEMIS ID / Talaba ID bo'yicha talabani qidirib, uning sistemaga
-     * yuklangan (reason='quiz_result') barcha test baholarini qaytaradi —
-     * prorektor to'g'ridan-to'g'ri shu ro'yxatdan apelyatsiya qila oladi.
+     * Moodle orqali yuklangan BARCHA natijalarini qaytaradi — OSKI/Test
+     * (reason='quiz_result') va "N-mavzu" qayta topshirish (retake_grade)
+     * ikkalasi ham. Prorektor to'g'ridan-to'g'ri shu ro'yxatdan apelyatsiya
+     * qila oladi.
      */
     public function searchGrades(Request $request)
     {
@@ -99,8 +120,12 @@ class QuizGradeAppealController extends Controller
             }
         }
 
-        $grades = StudentGrade::where('reason', 'quiz_result')
-            ->whereNotNull('quiz_result_id')
+        // whereNotNull('quiz_result_id') — Moodle orqali yuklangan HAR QANDAY
+        // natija (OSKI/Test HAM, mavzu qayta topshirish HAM shu maydon bilan
+        // belgilanadi). reason bo'yicha filtrlamaymiz — aks holda mavzu
+        // qayta topshirish natijalari (reason='absent'/'low_grade') chiqib
+        // ketardi.
+        $grades = StudentGrade::whereNotNull('quiz_result_id')
             ->whereIn('student_hemis_id', array_unique($ids))
             ->orderByDesc('lesson_date')
             ->limit(500)
@@ -113,6 +138,7 @@ class QuizGradeAppealController extends Controller
         $rows = $grades->map(function ($g) use ($quizResults, $studentLookup) {
             $student = $studentLookup[$g->student_hemis_id] ?? null;
             $quiz = $quizResults[$g->quiz_result_id] ?? null;
+            $kind = $this->gradeKind($g);
 
             return [
                 'id'           => $g->id,
@@ -125,7 +151,9 @@ class QuizGradeAppealController extends Controller
                 'quiz_type'    => $quiz->quiz_type ?? '-',
                 'shakl'        => $quiz->shakl ?? '-',
                 'attempt_name' => $quiz->attempt_name ?? '-',
-                'grade'        => $g->grade,
+                'kind'         => $kind, // 'quiz' (OSKI/Test) | 'mavzu' (qayta topshirish)
+                'kind_label'   => $kind === 'mavzu' ? 'Qayta topshirish' : 'OSKI/Test',
+                'grade'        => $this->currentValue($g),
                 'date'         => $quiz && $quiz->date_finish ? $quiz->date_finish->format('d.m.Y') : '-',
             ];
         })->values();
@@ -160,13 +188,20 @@ class QuizGradeAppealController extends Controller
         ]);
 
         $grade = StudentGrade::findOrFail($data['student_grade_id']);
+        if (!$grade->quiz_result_id) {
+            return response()->json([
+                'success' => false,
+                'message' => "Bu yozuv Moodle orqali yuklangan test natijasi emas — apelyatsiya doirasida emas.",
+            ], 422);
+        }
+
         $user = auth()->user() ?? auth()->guard('teacher')->user();
+        $kind = $this->gradeKind($grade); // 'quiz' | 'mavzu'
+        $oldGrade = $this->currentValue($grade);
+        $isReplace = $data['action'] === QuizGradeAppeal::ACTION_REPLACE;
 
         $file = $request->file('document');
         $path = $file->store('quiz-grade-appeals/' . $grade->id, 'public');
-
-        $oldGrade = $grade->grade;
-        $isReplace = $data['action'] === QuizGradeAppeal::ACTION_REPLACE;
 
         $appeal = QuizGradeAppeal::create([
             'student_grade_id'       => $grade->id,
@@ -187,20 +222,38 @@ class QuizGradeAppealController extends Controller
             'performed_by_role'      => session('active_role'),
         ]);
 
-        // Bahoni qo'llash — Eloquent orqali (LogsActivity trait avtomatik audit qiladi)
+        // Bahoni qo'llash — Eloquent orqali (LogsActivity trait avtomatik audit qiladi).
+        // OSKI/Test ('quiz') natijasi `grade` ustunida, mavzu qayta topshirish
+        // ('mavzu') natijasi `retake_grade` ustunida saqlanadi — noto'g'ri
+        // ustunga yozish klassik jurnal bahosini buzib qo'yishi mumkin.
         if ($isReplace) {
-            $grade->grade = $data['new_grade'];
+            if ($kind === 'quiz') {
+                $grade->grade = $data['new_grade'];
+            } else {
+                $grade->retake_grade = $data['new_grade'];
+            }
             $grade->save();
         } else {
-            $grade->delete(); // soft delete
+            if ($kind === 'quiz') {
+                // Butun qator faqat shu quiz yuklamasi tufayli mavjud — to'liq o'chiramiz.
+                $grade->delete(); // soft delete
+            } else {
+                // Qator asl (darsdagi) baho yozuvi — uni o'chirmaymiz, faqat
+                // Moodle orqali qo'yilgan retake bog'lanishini bekor qilamiz.
+                $grade->retake_grade = null;
+                $grade->retake_comment = null;
+                $grade->retake_was_sababli = null;
+                $grade->quiz_result_id = null;
+                $grade->save();
+            }
         }
 
         ActivityLogService::log(
             'update',
             'student_grade',
             $isReplace
-                ? "Apelyatsiya (prorektor): test bahosi {$oldGrade} -> {$data['new_grade']} almashtirildi"
-                : "Apelyatsiya (prorektor): test bahosi ({$oldGrade}) o'chirildi",
+                ? "Apelyatsiya (prorektor, {$kind}): test bahosi {$oldGrade} -> {$data['new_grade']} almashtirildi"
+                : "Apelyatsiya (prorektor, {$kind}): test bahosi ({$oldGrade}) o'chirildi",
             $appeal
         );
 

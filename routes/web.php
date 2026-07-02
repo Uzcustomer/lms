@@ -865,6 +865,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Test bahosi apelyatsiyasi (o'quv prorektori) — controller ichida rol tekshiriladi
         Route::prefix('quiz-grade-appeals')->name('quiz-grade-appeals.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'index'])->name('index');
+            Route::get('/search', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'searchGrades'])->name('search');
             Route::post('/', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'store'])->name('store');
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'download'])->whereNumber('id')->name('download');
         });
@@ -1550,6 +1551,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         // Test bahosi apelyatsiyasi (o'quv prorektori) — controller ichida rol tekshiriladi
         Route::prefix('quiz-grade-appeals')->name('quiz-grade-appeals.')->group(function () {
             Route::get('/', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'index'])->name('index');
+            Route::get('/search', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'searchGrades'])->name('search');
             Route::post('/', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'store'])->name('store');
             Route::get('/{id}/download', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'download'])->whereNumber('id')->name('download');
         });

@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\HemisQuizResult;
 use App\Models\QuizGradeAppeal;
+use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Services\ActivityLogService;
 use Illuminate\Http\Request;
@@ -60,6 +62,79 @@ class QuizGradeAppealController extends Controller
             : null;
 
         return view('admin.quiz-grade-appeals.index', compact('appeals', 'routePrefix'));
+    }
+
+    /**
+     * FISH / HEMIS ID / Talaba ID bo'yicha talabani qidirib, uning sistemaga
+     * yuklangan (reason='quiz_result') barcha test baholarini qaytaradi —
+     * prorektor to'g'ridan-to'g'ri shu ro'yxatdan apelyatsiya qila oladi.
+     */
+    public function searchGrades(Request $request)
+    {
+        $this->checkAccess();
+
+        $request->validate(['q' => 'required|string|min:2']);
+        $q = trim($request->q);
+
+        $students = Student::where('full_name', 'LIKE', '%' . $q . '%')
+            ->orWhere('student_id_number', 'LIKE', '%' . $q . '%')
+            ->orWhere('hemis_id', 'LIKE', '%' . $q . '%')
+            ->limit(20)
+            ->get(['id', 'hemis_id', 'student_id_number', 'full_name', 'department_name', 'specialty_name', 'group_name']);
+
+        if ($students->isEmpty()) {
+            return response()->json(['success' => true, 'rows' => [], 'students_found' => 0]);
+        }
+
+        $studentLookup = [];
+        $ids = [];
+        foreach ($students as $s) {
+            if ($s->hemis_id) {
+                $studentLookup[$s->hemis_id] = $s;
+                $ids[] = $s->hemis_id;
+            }
+            if ($s->student_id_number) {
+                $studentLookup[$s->student_id_number] = $s;
+                $ids[] = $s->student_id_number;
+            }
+        }
+
+        $grades = StudentGrade::where('reason', 'quiz_result')
+            ->whereNotNull('quiz_result_id')
+            ->whereIn('student_hemis_id', array_unique($ids))
+            ->orderByDesc('lesson_date')
+            ->limit(500)
+            ->get();
+
+        $quizResults = HemisQuizResult::whereIn('id', $grades->pluck('quiz_result_id')->unique())
+            ->get()
+            ->keyBy('id');
+
+        $rows = $grades->map(function ($g) use ($quizResults, $studentLookup) {
+            $student = $studentLookup[$g->student_hemis_id] ?? null;
+            $quiz = $quizResults[$g->quiz_result_id] ?? null;
+
+            return [
+                'id'           => $g->id,
+                'student_hemis_id' => $g->student_hemis_id,
+                'student_name' => $student->full_name ?? '-',
+                'faculty'      => $student->department_name ?? '-',
+                'direction'    => $student->specialty_name ?? '-',
+                'group'        => $student->group_name ?? '-',
+                'fan_name'     => $g->subject_name,
+                'quiz_type'    => $quiz->quiz_type ?? '-',
+                'shakl'        => $quiz->shakl ?? '-',
+                'attempt_name' => $quiz->attempt_name ?? '-',
+                'grade'        => $g->grade,
+                'date'         => $quiz && $quiz->date_finish ? $quiz->date_finish->format('d.m.Y') : '-',
+            ];
+        })->values();
+
+        return response()->json([
+            'success'        => true,
+            'rows'           => $rows,
+            'students_found' => $students->count(),
+        ]);
     }
 
     /**

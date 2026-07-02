@@ -9660,12 +9660,20 @@ class ReportController extends Controller
         // exam_schedules dan sana va na (talab qilinadi/qilinmaydi) belgilarini olamiz.
         $examSchedGroup = [];   // subject|sem|group_hemis_id => row
         $examSchedInd   = [];   // student|subject|sem => row (individual, ustunlik beradi)
-        if (\Illuminate\Support\Facades\Schema::hasTable('exam_schedules') && !empty($subjectIdsForAtt)) {
+        // Jadval imtihon yozuvi bor fanlar bilan cheklanmasin — biriktirilgan (lekin
+        // baho yozuvi umuman yo'q) fanlar ham no-show uchun tekshirilishi kerak.
+        $schedSubjectIds = $subjectIdsForAtt;
+        foreach ($enrolledCur as $subs) {
+            $schedSubjectIds = array_merge($schedSubjectIds, array_keys($subs));
+        }
+        $schedSubjectIds = array_values(array_unique($schedSubjectIds));
+        $schedSubjectName = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('exam_schedules') && !empty($schedSubjectIds)) {
             $esRows = DB::table('exam_schedules')
-                ->whereIn('subject_id', $subjectIdsForAtt)
+                ->whereIn('subject_id', $schedSubjectIds)
                 ->whereIn('semester_code', $currentSemesterCodes)
                 ->get([
-                    'student_hemis_id', 'group_hemis_id', 'subject_id', 'semester_code',
+                    'student_hemis_id', 'group_hemis_id', 'subject_id', 'subject_name', 'semester_code',
                     'test_na', 'test_date', 'test_resit_date', 'test_resit2_date',
                     'oski_na', 'oski_date', 'oski_resit_date', 'oski_resit2_date',
                 ]);
@@ -9675,9 +9683,41 @@ class ReportController extends Controller
                 } else {
                     $examSchedGroup[$es->subject_id . '|' . $es->semester_code . '|' . $es->group_hemis_id] = $es;
                 }
+                if ($es->subject_name && !isset($schedSubjectName[$es->subject_id])) {
+                    $schedSubjectName[$es->subject_id] = $es->subject_name;
+                }
             }
         }
         $todayStr = now()->format('Y-m-d');
+
+        // Imtihonga kelmagan (no-show) aniqlash — jurnal mantig'i: test/oski talab
+        // qilingan (na=0) va sanasi o'tgan bo'lsa, lekin talabada imtihon bahosi
+        // bo'lmasa — u avtomatik yiqilgan. Individual jadval faqat override qilingan
+        // sanani saqlaydi, shuning uchun har bir sana individual→guruh tartibida
+        // birlashtiriladi; na bayrog'i esa fan/guruh darajasidan olinadi.
+        $computeNoShow = function ($hid, $sid, $sem) use ($examSchedInd, $examSchedGroup, $stuGroup, $todayStr) {
+            $gid = $stuGroup[$hid] ?? null;
+            $indSched = $examSchedInd[$hid . '|' . $sid . '|' . $sem] ?? null;
+            $grpSched = $gid !== null ? ($examSchedGroup[$sid . '|' . $sem . '|' . $gid] ?? null) : null;
+            if (!$indSched && !$grpSched) return null;
+            $pick = fn($f) => ($indSched && $indSched->$f !== null) ? $indSched->$f : ($grpSched->$f ?? null);
+            $naTest = $grpSched ? (int) ($grpSched->test_na ?? 1) : (int) ($indSched->test_na ?? 1);
+            $naOski = $grpSched ? (int) ($grpSched->oski_na ?? 1) : (int) ($indSched->oski_na ?? 1);
+            $d = fn($v) => $v ? substr((string) $v, 0, 10) : null;
+            if ($naTest === 0) {
+                $td = $d($pick('test_date')); $tr1 = $d($pick('test_resit_date')); $tr2 = $d($pick('test_resit2_date'));
+                if ($tr2 !== null && $tr2 <= $todayStr) return 'Akademik qarzdor (imtihonga kelmagan, 3-urinish)';
+                if ($tr1 !== null && $tr1 <= $todayStr) return 'Imtihonga kelmagan (2-urinish)';
+                if ($td !== null && $td <= $todayStr) return 'Imtihonga kelmagan (1-urinish)';
+            }
+            if ($naOski === 0) {
+                $od = $d($pick('oski_date')); $or1 = $d($pick('oski_resit_date')); $or2 = $d($pick('oski_resit2_date'));
+                if ($or2 !== null && $or2 <= $todayStr) return 'Akademik qarzdor (imtihonga kelmagan, 3-urinish)';
+                if ($or1 !== null && $or1 <= $todayStr) return 'Imtihonga kelmagan (2-urinish)';
+                if ($od !== null && $od <= $todayStr) return 'Imtihonga kelmagan (1-urinish)';
+            }
+            return null;
+        };
 
         $auditMap = [];
         $auditAnyMap = [];
@@ -9758,39 +9798,8 @@ class ReportController extends Controller
                     }
                 } else {
                     // Imtihon yozuvi UMUMAN yo'q — talaba imtihonga kelmaganmi tekshiramiz.
-                    // exam_schedules da imtihon belgilangan (na=0) va sanasi o'tgan bo'lsa,
-                    // lekin talabada 101/102 yozuvi bo'lmasa — u kelmagan, avtomatik yiqilgan
-                    // (jurnal ham missing test'ni o'tib ketgan sanada yiqilgan deb hisoblaydi).
-                    $gid = $stuGroup[$hemisId] ?? null;
-                    $indSched = $examSchedInd[$hemisId . '|' . $subjectId . '|' . $semCode] ?? null;
-                    $grpSched = $gid !== null ? ($examSchedGroup[$subjectId . '|' . $semCode . '|' . $gid] ?? null) : null;
-                    if ($indSched || $grpSched) {
-                        // Individual yozuv faqat override qilingan bitta ustun bilan yaratiladi
-                        // (qolgan sanalar null qoladi), shuning uchun HAR BIR sanani birlashtiramiz:
-                        // individualda qiymat bo'lsa undan, aks holda guruh jadvalidan olamiz.
-                        $pick = fn($f) => ($indSched && $indSched->$f !== null) ? $indSched->$f : ($grpSched->$f ?? null);
-                        // na (imtihon turi fanga umuman qo'llaniladimi) — fan/guruh darajasidagi
-                        // xususiyat, shuning uchun guruh yozuvidan olinadi (bo'lmasa individualdan).
-                        $naTest = $grpSched ? (int) ($grpSched->test_na ?? 1) : (int) ($indSched->test_na ?? 1);
-                        $naOski = $grpSched ? (int) ($grpSched->oski_na ?? 1) : (int) ($indSched->oski_na ?? 1);
-                        $d = fn($v) => $v ? substr((string) $v, 0, 10) : null;
-                        $noShowLabel = null;
-                        // Test talab qilinadi va sanasi o'tgan bo'lsa
-                        if ($naTest === 0) {
-                            $td = $d($pick('test_date')); $tr1 = $d($pick('test_resit_date')); $tr2 = $d($pick('test_resit2_date'));
-                            if ($tr2 !== null && $tr2 <= $todayStr) $noShowLabel = 'Akademik qarzdor (imtihonga kelmagan, 3-urinish)';
-                            elseif ($tr1 !== null && $tr1 <= $todayStr) $noShowLabel = 'Imtihonga kelmagan (2-urinish)';
-                            elseif ($td !== null && $td <= $todayStr) $noShowLabel = 'Imtihonga kelmagan (1-urinish)';
-                        }
-                        // OSKI talab qilinadi va sanasi o'tgan bo'lsa (test topilmagan bo'lsa)
-                        if ($noShowLabel === null && $naOski === 0) {
-                            $od = $d($pick('oski_date')); $or1 = $d($pick('oski_resit_date')); $or2 = $d($pick('oski_resit2_date'));
-                            if ($or2 !== null && $or2 <= $todayStr) $noShowLabel = 'Akademik qarzdor (imtihonga kelmagan, 3-urinish)';
-                            elseif ($or1 !== null && $or1 <= $todayStr) $noShowLabel = 'Imtihonga kelmagan (2-urinish)';
-                            elseif ($od !== null && $od <= $todayStr) $noShowLabel = 'Imtihonga kelmagan (1-urinish)';
-                        }
-                        if ($noShowLabel !== null) $reasons[] = $noShowLabel;
-                    }
+                    $noShowLabel = $computeNoShow($hemisId, $subjectId, $semCode);
+                    if ($noShowLabel !== null) $reasons[] = $noShowLabel;
                 }
             }
 
@@ -9849,6 +9858,32 @@ class ReportController extends Controller
 
             if (!empty($reasons)) {
                 $risks[$hemisId][] = ['subject_name' => $subjectName, 'reasons' => $reasons];
+            }
+        }
+
+        // Ikkinchi o'tish: biriktirilgan-u student_grades da UMUMAN yozuvi yo'q fanlar.
+        // Birinchi sikl faqat baho yozuvi bor (grouped) fanlarni ko'radi. Talaba
+        // biror fanga qatnashmagan (JN/MT ham yo'q) bo'lsa, u $grouped da yo'q —
+        // lekin imtihon jadvali o'tgan bo'lsa, u ham no-show (avtomatik yiqilgan).
+        foreach ($studentHemisIds as $hid) {
+            $sem = (string) ($studentSemCodeMap[$hid] ?? '');
+            if ($sem === '') continue;
+            foreach (array_keys($enrolledCur[$hid] ?? []) as $sid) {
+                $key = $hid . '|' . $sid . '|' . $sem;
+                if (isset($grouped[$key])) continue;         // birinchi siklda ko'rilgan
+                // Sinov fani — sinov_test_grades orqali (jurnaldagi yakuniy natija)
+                if (isset($sinovGradeMap[$key])) {
+                    if ($sinovGradeMap[$key] < 60) {
+                        $nm = $schedSubjectName[$sid] ?? 'Fan';
+                        $risks[$hid][] = ['subject_name' => $nm, 'reasons' => ['1-urinish: V<60']];
+                    }
+                    continue;
+                }
+                $noShowLabel = $computeNoShow($hid, $sid, $sem);
+                if ($noShowLabel !== null) {
+                    $nm = $schedSubjectName[$sid] ?? 'Fan';
+                    $risks[$hid][] = ['subject_name' => $nm, 'reasons' => [$noShowLabel]];
+                }
             }
         }
 

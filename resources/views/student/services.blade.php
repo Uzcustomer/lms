@@ -5,7 +5,7 @@
         </h2>
     </x-slot>
 
-    <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3">
+    <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 px-3" x-data="{ retakeClosedModal: false }">
         <div class="grid grid-cols-2 gap-3">
 
             {{-- 1. Sababli ariza --}}
@@ -35,17 +35,32 @@
             </a>
 
             {{-- 3. Qayta o'qish arizasi --}}
-            <a href="{{ route('student.retake.index') }}"
-               class="flex flex-col items-center bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-[0.98] transition-all duration-150"
-               style="padding:16px 10px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
-                <div class="w-14 h-14 rounded-2xl bg-rose-100 flex items-center justify-center mb-3">
-                    <svg class="w-7 h-7 text-rose-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
-                    </svg>
-                </div>
-                <span class="text-sm font-bold text-gray-800 text-center leading-tight">{{ __("Qayta o'qish arizasi") }}</span>
-                <span class="text-[11px] text-gray-400 mt-1 text-center">{{ __("Akademik qarzdorliklar uchun") }}</span>
-            </a>
+            @if(!empty($retakeApplicationsClosed))
+                <button type="button"
+                        @click="retakeClosedModal = true"
+                        class="flex flex-col items-center bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-[0.98] transition-all duration-150"
+                        style="padding:16px 10px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
+                    <div class="w-14 h-14 rounded-2xl bg-rose-100 flex items-center justify-center mb-3">
+                        <svg class="w-7 h-7 text-rose-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm font-bold text-gray-800 text-center leading-tight">{{ __("Qayta o'qish arizasi") }}</span>
+                    <span class="text-[11px] text-gray-400 mt-1 text-center">{{ __("Akademik qarzdorliklar uchun") }}</span>
+                </button>
+            @else
+                <a href="{{ route('student.retake.index') }}"
+                   class="flex flex-col items-center bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-[0.98] transition-all duration-150"
+                   style="padding:16px 10px; box-shadow: 0 4px 14px rgba(59, 130, 246, 0.25);">
+                    <div class="w-14 h-14 rounded-2xl bg-rose-100 flex items-center justify-center mb-3">
+                        <svg class="w-7 h-7 text-rose-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99"/>
+                        </svg>
+                    </div>
+                    <span class="text-sm font-bold text-gray-800 text-center leading-tight">{{ __("Qayta o'qish arizasi") }}</span>
+                    <span class="text-[11px] text-gray-400 mt-1 text-center">{{ __("Akademik qarzdorliklar uchun") }}</span>
+                </a>
+            @endif
 
             <a href="{{ route('student.english-group-application.create') }}"
                class="flex flex-col items-center bg-white rounded-xl border border-gray-200 overflow-hidden active:scale-[0.98] transition-all duration-150"
@@ -133,6 +148,40 @@
             </a>
             @endif
 
+        </div>
+
+        <div x-show="retakeClosedModal"
+             x-cloak
+             style="position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;background:rgba(15,23,42,0.58);padding:18px;"
+             @click.self="retakeClosedModal = false">
+            <div class="w-full max-w-md rounded-[28px] bg-white shadow-2xl overflow-hidden">
+                <div class="px-6 pt-6 pb-4 bg-gradient-to-r from-rose-50 via-white to-orange-50 border-b border-slate-100">
+                    <div class="mx-auto w-16 h-16 rounded-3xl bg-rose-100 flex items-center justify-center mb-4">
+                        <svg class="w-8 h-8 text-rose-600" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m0 3.75h.008v.008H12v-.008zm8.25-3.75a8.25 8.25 0 11-16.5 0 8.25 8.25 0 0116.5 0z" />
+                        </svg>
+                    </div>
+                    <h3 class="text-center text-lg font-bold text-slate-900">{{ __("Ariza qabuli yopilgan") }}</h3>
+                </div>
+
+                <div class="px-6 py-6">
+                    <p class="text-center text-[15px] leading-7 text-slate-700 font-medium">
+                        {{ __("Xurmatli talaba yozgi qayta o'qish muddati tugagni sababli arizalar endi qabul qilinmaydi") }}
+                    </p>
+
+                    <div class="mt-6 text-center text-sm font-semibold text-slate-500">
+                        {{ ($retakeAcademicYear ?: '2025-2026') . " " . __("o'quv yili") }}
+                    </div>
+
+                    <div class="mt-6 flex justify-center">
+                        <button type="button"
+                                @click="retakeClosedModal = false"
+                                class="inline-flex items-center justify-center px-6 py-3 rounded-2xl bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition">
+                            {{ __("Tushunarli") }}
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     </div>
 </x-student-app-layout>

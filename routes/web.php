@@ -841,6 +841,13 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/data', [QuizResultController::class, 'saqlanganHisobot'])->name('data');
         });
 
+        // Test bahosi apelyatsiyasi (o'quv prorektori) — controller ichida rol tekshiriladi
+        Route::prefix('quiz-grade-appeals')->name('quiz-grade-appeals.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'store'])->name('store');
+            Route::get('/{id}/download', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'download'])->whereNumber('id')->name('download');
+        });
+
         // Sistemaga yuklanmagan natijalar sahifasi
         Route::prefix('yuklanmagan-natijalar')->name('yuklanmagan-natijalar.')->group(function () {
             Route::get('/', [QuizResultController::class, 'yuklanmaganNatijalarPage'])->name('index');
@@ -1481,6 +1488,13 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
         Route::prefix('saqlangan-hisobot')->name('saqlangan-hisobot.')->group(function () {
             Route::get('/', [QuizResultController::class, 'saqlanganHisobotPage'])->name('index');
             Route::get('/data', [QuizResultController::class, 'saqlanganHisobot'])->name('data');
+        });
+
+        // Test bahosi apelyatsiyasi (o'quv prorektori) — controller ichida rol tekshiriladi
+        Route::prefix('quiz-grade-appeals')->name('quiz-grade-appeals.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'index'])->name('index');
+            Route::post('/', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'store'])->name('store');
+            Route::get('/{id}/download', [\App\Http\Controllers\Admin\QuizGradeAppealController::class, 'download'])->whereNumber('id')->name('download');
         });
 
         // Sistemaga yuklanmagan natijalar sahifasi

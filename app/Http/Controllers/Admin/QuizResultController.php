@@ -87,8 +87,10 @@ class QuizResultController extends Controller
     public function saqlanganHisobotPage(Request $request)
     {
         $routePrefix = $this->routePrefix();
+        // Faqat o'quv prorektori / superadmin apelyatsiya (baho tuzatish) qila oladi.
+        $canAppeal = \App\Http\Controllers\Admin\QuizGradeAppealController::canAppeal();
 
-        return view('admin.saqlangan-hisobot.index', compact('routePrefix'));
+        return view('admin.saqlangan-hisobot.index', compact('routePrefix', 'canAppeal'));
     }
 
     /**

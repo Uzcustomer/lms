@@ -9654,6 +9654,31 @@ class ReportController extends Controller
             }
         }
 
+        // test/oski yopilishli fanda talaba imtihonga UMUMAN kelmagan bo'lsa
+        // (student_grades da 101/102 yozuvi yo'q), lekin guruhga imtihon
+        // belgilangan va sanasi o'tgan bo'lsa — bu no-show (avtomatik yiqilgan).
+        // exam_schedules dan sana va na (talab qilinadi/qilinmaydi) belgilarini olamiz.
+        $examSchedGroup = [];   // subject|sem|group_hemis_id => row
+        $examSchedInd   = [];   // student|subject|sem => row (individual, ustunlik beradi)
+        if (\Illuminate\Support\Facades\Schema::hasTable('exam_schedules') && !empty($subjectIdsForAtt)) {
+            $esRows = DB::table('exam_schedules')
+                ->whereIn('subject_id', $subjectIdsForAtt)
+                ->whereIn('semester_code', $currentSemesterCodes)
+                ->get([
+                    'student_hemis_id', 'group_hemis_id', 'subject_id', 'semester_code',
+                    'test_na', 'test_date', 'test_resit_date', 'test_resit2_date',
+                    'oski_na', 'oski_date', 'oski_resit_date', 'oski_resit2_date',
+                ]);
+            foreach ($esRows as $es) {
+                if ($es->student_hemis_id !== null) {
+                    $examSchedInd[$es->student_hemis_id . '|' . $es->subject_id . '|' . $es->semester_code] = $es;
+                } else {
+                    $examSchedGroup[$es->subject_id . '|' . $es->semester_code . '|' . $es->group_hemis_id] = $es;
+                }
+            }
+        }
+        $todayStr = now()->format('Y-m-d');
+
         $auditMap = [];
         $auditAnyMap = [];
         if (!empty($subjectIdsForAtt)) {
@@ -9730,6 +9755,33 @@ class ReportController extends Controller
                         if ($lastAttempt <= 1) $reasons[] = '1-urinish: V<60';
                         elseif ($lastAttempt === 2) $reasons[] = '2-urinish: V<60';
                         else $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
+                    }
+                } else {
+                    // Imtihon yozuvi UMUMAN yo'q — talaba imtihonga kelmaganmi tekshiramiz.
+                    // exam_schedules da imtihon belgilangan (na=0) va sanasi o'tgan bo'lsa,
+                    // lekin talabada 101/102 yozuvi bo'lmasa — u kelmagan, avtomatik yiqilgan
+                    // (jurnal ham missing test'ni o'tib ketgan sanada yiqilgan deb hisoblaydi).
+                    $gid = $stuGroup[$hemisId] ?? null;
+                    $sched = $examSchedInd[$hemisId . '|' . $subjectId . '|' . $semCode]
+                        ?? ($gid !== null ? ($examSchedGroup[$subjectId . '|' . $semCode . '|' . $gid] ?? null) : null);
+                    if ($sched) {
+                        $d = fn($v) => $v ? substr((string) $v, 0, 10) : null;
+                        $noShowLabel = null;
+                        // Test talab qilinadi va sanasi o'tgan bo'lsa
+                        if ((int) ($sched->test_na ?? 1) === 0) {
+                            $td = $d($sched->test_date); $tr1 = $d($sched->test_resit_date); $tr2 = $d($sched->test_resit2_date);
+                            if ($tr2 !== null && $tr2 <= $todayStr) $noShowLabel = 'Akademik qarzdor (imtihonga kelmagan, 3-urinish)';
+                            elseif ($tr1 !== null && $tr1 <= $todayStr) $noShowLabel = 'Imtihonga kelmagan (2-urinish)';
+                            elseif ($td !== null && $td <= $todayStr) $noShowLabel = 'Imtihonga kelmagan (1-urinish)';
+                        }
+                        // OSKI talab qilinadi va sanasi o'tgan bo'lsa (test topilmagan bo'lsa)
+                        if ($noShowLabel === null && (int) ($sched->oski_na ?? 1) === 0) {
+                            $od = $d($sched->oski_date); $or1 = $d($sched->oski_resit_date); $or2 = $d($sched->oski_resit2_date);
+                            if ($or2 !== null && $or2 <= $todayStr) $noShowLabel = 'Akademik qarzdor (imtihonga kelmagan, 3-urinish)';
+                            elseif ($or1 !== null && $or1 <= $todayStr) $noShowLabel = 'Imtihonga kelmagan (2-urinish)';
+                            elseif ($od !== null && $od <= $todayStr) $noShowLabel = 'Imtihonga kelmagan (1-urinish)';
+                        }
+                        if ($noShowLabel !== null) $reasons[] = $noShowLabel;
                     }
                 }
             }

@@ -79,6 +79,7 @@
                             <th>Yo'nalish</th>
                             <th>Guruh</th>
                             <th>Fan</th>
+                            <th>Turi</th>
                             <th>Quiz turi</th>
                             <th>Shakl</th>
                             <th>Sana</th>
@@ -87,7 +88,7 @@
                         </tr>
                     </thead>
                     <tbody id="qaResultsBody">
-                        <tr><td colspan="10" class="qa-empty">Talabani qidiring.</td></tr>
+                        <tr><td colspan="11" class="qa-empty">Talabani qidiring.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -188,6 +189,7 @@
                         <label class="appeal-label">Yangi baho (0–100)</label>
                         <input type="number" name="new_grade" id="ap_new_grade" class="appeal-input" min="0" max="100" step="0.01" placeholder="Masalan: 85">
                     </div>
+                    <div id="ap_delete_hint" style="display:none;font-size:11.5px;color:#9a3412;background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:8px 10px;margin-top:4px;"></div>
                     <label class="appeal-label">Sabab / asoslash</label>
                     <textarea name="reason" id="ap_reason" class="appeal-input" rows="3" placeholder="Nima uchun tuzatilyapti..."></textarea>
                     <label class="appeal-label">Asoslovchi hujjat (PDF/JPG/PNG, ≤5MB) — majburiy</label>
@@ -215,17 +217,17 @@
         function qaSearch() {
             var q = ($('#qaSearchInput').val() || '').trim();
             if (q.length < 2) {
-                $('#qaResultsBody').html('<tr><td colspan="10" class="qa-empty">Kamida 2 ta belgi kiriting.</td></tr>');
+                $('#qaResultsBody').html('<tr><td colspan="11" class="qa-empty">Kamida 2 ta belgi kiriting.</td></tr>');
                 return;
             }
             $('#qaSearchBtn').prop('disabled', true);
-            $('#qaResultsBody').html('<tr><td colspan="10" class="qa-empty"><span class="qa-spinner"></span>Qidirilmoqda...</td></tr>');
+            $('#qaResultsBody').html('<tr><td colspan="11" class="qa-empty"><span class="qa-spinner"></span>Qidirilmoqda...</td></tr>');
 
             $.ajax({
                 url: searchUrl, type: 'GET', data: { q: q }, timeout: 60000,
                 success: function(res) {
                     if (!res.success) {
-                        $('#qaResultsBody').html('<tr><td colspan="10" class="qa-empty" style="color:#b91c1c;">Xatolik yuz berdi.</td></tr>');
+                        $('#qaResultsBody').html('<tr><td colspan="11" class="qa-empty" style="color:#b91c1c;">Xatolik yuz berdi.</td></tr>');
                         return;
                     }
                     qaLastRows = res.rows || [];
@@ -233,7 +235,7 @@
                 },
                 error: function(xhr) {
                     var msg = (xhr.responseJSON && (xhr.responseJSON.message || (xhr.responseJSON.errors && Object.values(xhr.responseJSON.errors)[0][0]))) || 'Xatolik yuz berdi.';
-                    $('#qaResultsBody').html('<tr><td colspan="10" class="qa-empty" style="color:#b91c1c;">' + esc(msg) + '</td></tr>');
+                    $('#qaResultsBody').html('<tr><td colspan="11" class="qa-empty" style="color:#b91c1c;">' + esc(msg) + '</td></tr>');
                 },
                 complete: function() { $('#qaSearchBtn').prop('disabled', false); }
             });
@@ -241,7 +243,7 @@
 
         function qaRenderResults(rows) {
             if (!rows.length) {
-                $('#qaResultsBody').html('<tr><td colspan="10" class="qa-empty">Natija topilmadi.</td></tr>');
+                $('#qaResultsBody').html('<tr><td colspan="11" class="qa-empty">Natija topilmadi.</td></tr>');
                 return;
             }
             var html = '';
@@ -252,6 +254,8 @@
                 html += '<td>' + esc(r.direction) + '</td>';
                 html += '<td>' + esc(r.group) + '</td>';
                 html += '<td>' + esc(r.fan_name) + '</td>';
+                var kindColor = r.kind === 'mavzu' ? 'background:#fef3c7;color:#92400e;border:1px solid #fde68a;' : 'background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;';
+                html += '<td><span class="qa-badge" style="' + kindColor + '">' + esc(r.kind_label) + '</span></td>';
                 html += '<td>' + esc(r.quiz_type) + '</td>';
                 html += '<td>' + esc(r.shakl) + '</td>';
                 html += '<td style="white-space:nowrap;">' + esc(r.date) + '</td>';
@@ -261,6 +265,7 @@
                     + 'data-id="' + esc(r.id) + '" '
                     + 'data-student="' + esc(r.student_name) + '" '
                     + 'data-fan="' + esc(r.fan_name) + '" '
+                    + 'data-kind="' + esc(r.kind) + '" '
                     + 'data-grade="' + esc(r.grade) + '">Apelyatsiya</button>'
                     + '</td>';
                 html += '</tr>';
@@ -269,17 +274,30 @@
         }
 
         // ========== APELYATSIYA ==========
+        var apCurrentKind = 'quiz';
+
         function apToggleAction() {
             var act = $('input[name="action"]:checked').val();
             $('#ap_grade_wrap').toggle(act === 'replace');
+            var $hint = $('#ap_delete_hint');
+            if (act === 'delete' && apCurrentKind === 'mavzu') {
+                $hint.text("Diqqat: bu \"N-mavzu\" qayta topshirish natijasi. O'chirish faqat Moodle orqali qo'yilgan qayta topshirish bahosini bekor qiladi — darsdagi asl baho (agar bo'lsa) o'zgarmaydi.").show();
+            } else if (act === 'delete') {
+                $hint.text("Bu Moodle orqali yuklangan yozuvning o'zi butunlay o'chiriladi.").show();
+            } else {
+                $hint.hide();
+            }
         }
         function openAppeal(btn) {
             var $b = $(btn);
             $('#appealForm')[0].reset();
             $('#ap_grade_id').val($b.data('id'));
+            apCurrentKind = $b.data('kind') === 'mavzu' ? 'mavzu' : 'quiz';
+            var kindText = apCurrentKind === 'mavzu' ? "Qayta topshirish (mavzu)" : 'OSKI/Test';
             $('#appealInfo').html(
                 '<div><strong>Talaba:</strong> ' + esc($b.data('student')) + '</div>' +
                 '<div><strong>Fan:</strong> ' + esc($b.data('fan')) + '</div>' +
+                '<div><strong>Turi:</strong> ' + esc(kindText) + '</div>' +
                 '<div><strong>Joriy baho:</strong> ' + esc($b.data('grade')) + '</div>'
             );
             $('#ap_error').text('');

@@ -244,6 +244,12 @@
 
                             <div style="padding-top:6px; border-top:1px dashed #dbe4ef;">
                                 <div class="tb-label" style="margin-bottom:8px;">Talabalar uchun sahifa</div>
+                                <a href="{{ route('student.test-kiosk.index') }}"
+                                   class="tb-btn tb-btn-primary w-full"
+                                   target="_blank" rel="noopener"
+                                   style="margin-bottom:8px;">
+                                    Umumiy kiosk sahifasi
+                                </a>
                                 <a href="{{ route('teacher.test-subjects.student-preview', $testSubject) }}"
                                    class="tb-btn tb-btn-light w-full"
                                    target="_blank" rel="noopener">

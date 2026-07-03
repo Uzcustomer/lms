@@ -532,6 +532,6 @@ class TestKioskController extends Controller
             return true;
         }
 
-        return $now->betweenIncluded($startsAt, $endsAt);
+        return $now->between($startsAt, $endsAt, true);
     }
 }

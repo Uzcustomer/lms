@@ -171,7 +171,13 @@ class TestKioskController extends Controller
 
         return redirect()
             ->route('student.test-kiosk.tests.show', [$student->student_id_number, $testSubject, $lesson, 'lang' => $language])
-            ->with('success', 'Test javoblaringiz saqlandi.');
+            ->with('submission_result', [
+                'message' => 'Test javoblaringiz muvaffaqqiyatli saqlandi.',
+                'score' => $attempt->fresh()->score,
+                'total_points' => $attempt->fresh()->total_points,
+                'percent' => $attempt->fresh()->percent,
+                'is_passed' => (bool) $attempt->fresh()->is_passed,
+            ]);
     }
 
     private function resolveStudent(string $studentIdNumber): Student

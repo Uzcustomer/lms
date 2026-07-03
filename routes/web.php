@@ -1408,6 +1408,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             ->group(function () {
                 Route::get('/', [TeacherTestSubjectController::class, 'index'])->name('index');
                 Route::get('/{testSubject}', [TeacherTestSubjectController::class, 'show'])->name('show');
+                Route::get('/{testSubject}/student-preview', [TeacherTestSubjectController::class, 'studentPreview'])->name('student-preview');
                 Route::get('/{testSubject}/lessons/{lesson}/test', [TestSubjectLessonTestController::class, 'edit'])->name('tests.edit');
                 Route::get('/{testSubject}/lessons/{lesson}/test/results', [TestSubjectLessonTestController::class, 'results'])->name('tests.results');
                 Route::post('/{testSubject}/lessons/{lesson}/test', [TestSubjectLessonTestController::class, 'upsert'])->name('tests.upsert');

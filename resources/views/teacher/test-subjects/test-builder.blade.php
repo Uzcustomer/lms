@@ -244,10 +244,10 @@
 
                             <div style="padding-top:6px; border-top:1px dashed #dbe4ef;">
                                 <div class="tb-label" style="margin-bottom:8px;">Talabalar uchun sahifa</div>
-                                <a href="{{ route('student.test-subjects.subject', $testSubject) }}"
+                                <a href="{{ route('teacher.test-subjects.student-preview', $testSubject) }}"
                                    class="tb-btn tb-btn-light w-full"
                                    target="_blank" rel="noopener">
-                                    Student test sahifasi linki
+                                    Test sahifasini ko'rish
                                 </a>
                             </div>
                         </form>

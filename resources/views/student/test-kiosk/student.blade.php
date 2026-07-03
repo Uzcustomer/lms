@@ -8,18 +8,18 @@
     <style>
         body{margin:0;font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a}
         .wrap{max-width:1200px;margin:0 auto;padding:24px}
-        .top,.card,.lesson{background:#fff;border:1px solid #dbe4ef;border-radius:24px;box-shadow:0 10px 28px rgba(15,23,42,.06)}
-        .top{padding:22px 24px;background:linear-gradient(135deg,#eff6ff,#dbeafe)}
+        .top,.card,.lesson{background:#fff;border:1px solid #dbe4ef;border-radius:18px;box-shadow:0 8px 24px rgba(15,23,42,.05)}
+        .top{padding:20px 22px;background:#f8fbff}
         .card{padding:18px 20px}
         .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
         .lessons{display:grid;gap:14px}
         .lesson-top{padding:18px 20px;border-bottom:1px solid #eef2f7;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
         .lesson-bottom{padding:18px 20px;display:flex;justify-content:space-between;gap:16px;align-items:center;flex-wrap:wrap}
-        .chip{display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:800;border:1px solid transparent}
+        .chip{display:inline-flex;align-items:center;padding:6px 12px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid transparent}
         .green{background:#ecfdf5;color:#15803d;border-color:#bbf7d0}.blue{background:#eff6ff;color:#1d4ed8;border-color:#bfdbfe}
         .orange{background:#fff7ed;color:#c2410c;border-color:#fdba74}.gray{background:#f8fafc;color:#475569;border-color:#cbd5e1}
-        .btn{display:inline-flex;align-items:center;justify-content:center;padding:13px 18px;border-radius:14px;font-size:14px;font-weight:800;text-decoration:none}
-        .btn-primary{background:linear-gradient(135deg,#059669,#10b981);color:#fff}.btn-light{background:#fff;color:#334155;border:1px solid #cbd5e1}
+        .btn{display:inline-flex;align-items:center;justify-content:center;padding:12px 18px;border-radius:12px;font-size:14px;font-weight:600;text-decoration:none}
+        .btn-primary{background:#059669;color:#fff}.btn-light{background:#fff;color:#334155;border:1px solid #cbd5e1}
         .muted{color:#64748b;font-size:14px;line-height:1.6}
     </style>
 </head>
@@ -33,8 +33,8 @@
     <div class="top">
         <div style="display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;">
             <div>
-                <div style="font-size:13px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#1d4ed8;">Talaba topildi</div>
-                <h1 style="margin:10px 0 0;font-size:32px;line-height:1.1;">{{ $student->full_name }}</h1>
+                <div style="font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1d4ed8;">Talaba topildi</div>
+                <h1 style="margin:10px 0 0;font-size:28px;line-height:1.2;font-weight:600;">{{ $student->full_name }}</h1>
                 <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
                     <span class="chip blue">{{ $student->student_id_number }}</span>
                     <span class="chip green">{{ $student->group_name ?: 'Guruh yo‘q' }}</span>
@@ -62,16 +62,16 @@
     @else
         <div class="grid" style="margin-bottom:16px;">
             <div class="card">
-                <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;">Bugungi darslar</div>
-                <div style="margin-top:8px;font-size:28px;font-weight:800;">{{ $lessonRows->count() }}</div>
+                <div style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#64748b;">Bugungi darslar</div>
+                <div style="margin-top:8px;font-size:28px;font-weight:600;">{{ $lessonRows->count() }}</div>
             </div>
             <div class="card">
-                <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;">Hozir ochiq test</div>
-                <div style="margin-top:8px;font-size:28px;font-weight:800;">{{ $lessonRows->where('can_start', true)->count() }}</div>
+                <div style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#64748b;">Hozir ochiq test</div>
+                <div style="margin-top:8px;font-size:28px;font-weight:600;">{{ $lessonRows->where('can_start', true)->count() }}</div>
             </div>
             <div class="card">
-                <div style="font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#64748b;">Yakunlangan</div>
-                <div style="margin-top:8px;font-size:28px;font-weight:800;">{{ $lessonRows->where('is_submitted', true)->count() }}</div>
+                <div style="font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#64748b;">Yakunlangan</div>
+                <div style="margin-top:8px;font-size:28px;font-weight:600;">{{ $lessonRows->where('is_submitted', true)->count() }}</div>
             </div>
         </div>
 
@@ -80,7 +80,7 @@
                 <div class="lesson">
                     <div class="lesson-top">
                         <div>
-                            <div style="font-size:22px;font-weight:800;">{{ $row['subject']->name }}</div>
+                            <div style="font-size:22px;font-weight:600;">{{ $row['subject']->name }}</div>
                             <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
                                 <span class="chip blue">{{ $row['lesson']->topic_title ?: (($row['lesson']->topic_order ?? 1) . '-mavzu') }}</span>
                                 <span class="chip gray">{{ optional($row['lesson']->lesson_date)->format('d.m.Y') }}</span>

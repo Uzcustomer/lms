@@ -18,6 +18,72 @@ use Illuminate\Support\Facades\Schema;
 
 class TestSubjectController extends Controller
 {
+    public function index()
+    {
+        /** @var Student $student */
+        $student = Auth::guard('student')->user();
+
+        return view('student.test-subjects.index', [
+            'student' => $student,
+            'subjects' => $this->loadAssignedSubjects($student),
+        ]);
+    }
+
+    public function subject(TestSubject $testSubject)
+    {
+        /** @var Student $student */
+        $student = Auth::guard('student')->user();
+        $subject = $this->resolveAccessibleSubject($testSubject, $student);
+        $now = now('Asia/Tashkent');
+        $attemptsByTestId = $this->attemptsByTestId($student, $subject);
+
+        $lessons = $subject->lessons->map(function (TestSubjectLesson $lesson) use ($attemptsByTestId, $now, $subject) {
+            $lessonTest = $lesson->lessonTest;
+            $attempt = $lessonTest ? $attemptsByTestId->get($lessonTest->id) : null;
+            $questionCount = (int) ($lessonTest?->questions_count ?? 0);
+            $isScheduledNow = $this->isLessonScheduledNow($lesson, $now);
+            $isPast = $this->lessonEndsAt($lesson)?->lt($now)
+                || (optional($lesson->lesson_date)->format('Y-m-d') < $now->toDateString());
+            $isFuture = $this->lessonStartsAt($lesson)?->gt($now)
+                || (optional($lesson->lesson_date)->format('Y-m-d') > $now->toDateString());
+            $isSubmitted = $attempt && $attempt->status === 'submitted';
+            $canStart = $lessonTest
+                && $lessonTest->is_open
+                && $lessonTest->is_published
+                && $questionCount > 0
+                && !$isSubmitted
+                && $isScheduledNow;
+
+            return [
+                'id' => $lesson->id,
+                'topic_order' => (int) ($lesson->topic_order ?? 0),
+                'topic_title' => $lesson->topic_title ?: (($lesson->topic_order ?? 1) . '-mavzu'),
+                'lesson_date' => optional($lesson->lesson_date)->format('d.m.Y'),
+                'lesson_time' => $this->lessonTimeText($lesson),
+                'question_count' => $questionCount,
+                'is_open' => (bool) ($lessonTest?->is_open),
+                'is_published' => (bool) ($lessonTest?->is_published),
+                'is_submitted' => $isSubmitted,
+                'is_scheduled_now' => $isScheduledNow,
+                'is_past' => $isPast,
+                'is_future' => $isFuture,
+                'attempt_percent' => $attempt?->percent,
+                'attempt_is_passed' => (bool) ($attempt?->is_passed),
+                'attempt_status' => $attempt?->status,
+                'test_route' => $lessonTest
+                    ? route('student.test-subjects.tests.show', [$subject, $lesson])
+                    : null,
+            ];
+        })->values();
+
+        return view('student.test-subjects.subject', [
+            'student' => $student,
+            'testSubject' => $subject,
+            'lessons' => $lessons,
+            'now' => $now,
+        ]);
+    }
+
     public function show(TestSubject $testSubject, TestSubjectLesson $lesson)
     {
         [$student, $lessonTest, $attempt] = $this->resolveStudentContext($testSubject, $lesson);
@@ -148,19 +214,12 @@ class TestSubjectController extends Controller
 
         /** @var Student $student */
         $student = Auth::guard('student')->user();
+        $testSubject = $this->resolveAccessibleSubject($testSubject, $student);
         abort_unless((int) $lesson->test_subject_id === (int) $testSubject->id, 404);
         abort_unless($testSubject->is_active && $lesson->is_active, 404);
 
-        $groupLinked = $testSubject->groups()
-            ->where(function ($query) use ($student) {
-                $query->where('group_hemis_id', $student->group_id)
-                    ->orWhere('group_id', $student->group_id);
-            })
-            ->exists();
-        abort_unless($groupLinked, 403);
-
-        $today = now('Asia/Tashkent')->toDateString();
-        abort_unless(optional($lesson->lesson_date)->format('Y-m-d') === $today, 403);
+        $now = now('Asia/Tashkent');
+        $scheduledNow = $this->isLessonScheduledNow($lesson, $now);
 
         $lessonTest = $lesson->lessonTest()
             ->with([
@@ -176,6 +235,7 @@ class TestSubjectController extends Controller
             ->first();
 
         $canAccessClosedResult = $attempt && $attempt->status === 'submitted';
+        abort_unless($scheduledNow || $canAccessClosedResult, 403);
         abort_unless($lessonTest->is_open || $canAccessClosedResult, 403);
 
         if ($lessonTest->questions->isEmpty()) {
@@ -241,5 +301,204 @@ class TestSubjectController extends Controller
     private function resolveLanguage(?string $language): string
     {
         return in_array($language, ['uz', 'ru', 'en'], true) ? $language : 'uz';
+    }
+
+    private function loadAssignedSubjects(Student $student): Collection
+    {
+        foreach ([
+            'test_subjects',
+            'test_subject_groups',
+            'test_subject_lessons',
+            'test_subject_lesson_tests',
+        ] as $table) {
+            if (!Schema::hasTable($table)) {
+                return collect();
+            }
+        }
+
+        $today = Carbon::now('Asia/Tashkent')->toDateString();
+
+        $subjects = TestSubject::query()
+            ->with([
+                'groups',
+                'lessons' => fn ($query) => $query
+                    ->where('is_active', true)
+                    ->orderBy('lesson_date')
+                    ->orderBy('topic_order'),
+                'lessons.lessonTest' => fn ($query) => $query->withCount([
+                    'questions' => fn ($q) => $q->where('is_active', true),
+                ]),
+            ])
+            ->where('is_active', true)
+            ->where(function ($query) use ($today) {
+                $query->whereNull('starts_on')
+                    ->orWhereDate('starts_on', '<=', $today);
+            })
+            ->where(function ($query) use ($today) {
+                $query->whereNull('ends_on')
+                    ->orWhereDate('ends_on', '>=', $today);
+            })
+            ->whereHas('groups', function ($query) use ($student) {
+                $query->where(function ($sub) use ($student) {
+                    $sub->where('group_hemis_id', $student->group_id)
+                        ->orWhere('group_id', $student->group_id);
+                });
+            })
+            ->orderBy('name')
+            ->get();
+
+        if ($subjects->isEmpty()) {
+            return collect();
+        }
+
+        $attemptsByTestId = $this->attemptsByTestId($student, $subjects);
+        $now = now('Asia/Tashkent');
+
+        return $subjects->map(function (TestSubject $subject) use ($attemptsByTestId, $now) {
+            $lessons = $subject->lessons->map(function (TestSubjectLesson $lesson) use ($attemptsByTestId, $now, $subject) {
+                $lessonTest = $lesson->lessonTest;
+                $attempt = $lessonTest ? $attemptsByTestId->get($lessonTest->id) : null;
+                $questionCount = (int) ($lessonTest?->questions_count ?? 0);
+                $isSubmitted = $attempt && $attempt->status === 'submitted';
+                $isScheduledNow = $this->isLessonScheduledNow($lesson, $now);
+
+                return [
+                    'id' => $lesson->id,
+                    'title' => $lesson->topic_title ?: (($lesson->topic_order ?? 1) . '-mavzu'),
+                    'date' => optional($lesson->lesson_date)->format('d.m.Y'),
+                    'time' => $this->lessonTimeText($lesson),
+                    'question_count' => $questionCount,
+                    'is_submitted' => $isSubmitted,
+                    'can_start' => $lessonTest
+                        && $lessonTest->is_open
+                        && $lessonTest->is_published
+                        && $questionCount > 0
+                        && !$isSubmitted
+                        && $isScheduledNow,
+                    'route' => $lessonTest
+                        ? route('student.test-subjects.tests.show', [$subject, $lesson])
+                        : null,
+                ];
+            })->values();
+
+            return [
+                'id' => $subject->id,
+                'name' => $subject->name,
+                'teacher_name' => $subject->teacher_name,
+                'group_name' => $subject->groups->pluck('group_name')->filter()->implode(', '),
+                'starts_on' => optional($subject->starts_on)->format('d.m.Y'),
+                'ends_on' => optional($subject->ends_on)->format('d.m.Y'),
+                'subject_route' => route('student.test-subjects.subject', $subject),
+                'open_count' => collect($lessons)->where('can_start', true)->count(),
+                'lessons_count' => $lessons->count(),
+                'lessons' => $lessons,
+            ];
+        })->values();
+    }
+
+    private function attemptsByTestId(Student $student, $subjects): Collection
+    {
+        $subjectsCollection = $subjects instanceof Collection ? $subjects : collect([$subjects]);
+
+        $testIds = $subjectsCollection->pluck('lessons')
+            ->flatten()
+            ->pluck('lessonTest.id')
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if (empty($testIds)) {
+            return collect();
+        }
+
+        return TestSubjectLessonTestAttempt::query()
+            ->where('student_id', $student->id)
+            ->whereIn('test_subject_lesson_test_id', $testIds)
+            ->get()
+            ->keyBy('test_subject_lesson_test_id');
+    }
+
+    private function resolveAccessibleSubject(TestSubject $testSubject, Student $student): TestSubject
+    {
+        $testSubject->loadMissing([
+            'groups',
+            'lessons' => fn ($query) => $query
+                ->where('is_active', true)
+                ->orderBy('lesson_date')
+                ->orderBy('topic_order'),
+            'lessons.lessonTest' => fn ($query) => $query->withCount([
+                'questions' => fn ($q) => $q->where('is_active', true),
+            ]),
+        ]);
+
+        abort_unless($testSubject->is_active, 404);
+
+        $today = now('Asia/Tashkent')->toDateString();
+        if ($testSubject->starts_on) {
+            abort_unless($testSubject->starts_on->format('Y-m-d') <= $today, 403);
+        }
+        if ($testSubject->ends_on) {
+            abort_unless($testSubject->ends_on->format('Y-m-d') >= $today, 403);
+        }
+
+        $groupLinked = $testSubject->groups->first(function ($group) use ($student) {
+            return (string) $group->group_hemis_id === (string) $student->group_id
+                || (string) $group->group_id === (string) $student->group_id;
+        });
+
+        abort_unless($groupLinked, 403);
+
+        return $testSubject;
+    }
+
+    private function lessonStartsAt(TestSubjectLesson $lesson): ?Carbon
+    {
+        $date = optional($lesson->lesson_date)->format('Y-m-d');
+        if (!$date) {
+            return null;
+        }
+
+        return Carbon::parse($date . ' ' . ($lesson->starts_at ?: '00:00:00'), 'Asia/Tashkent');
+    }
+
+    private function lessonEndsAt(TestSubjectLesson $lesson): ?Carbon
+    {
+        $date = optional($lesson->lesson_date)->format('Y-m-d');
+        if (!$date) {
+            return null;
+        }
+
+        return Carbon::parse($date . ' ' . ($lesson->ends_at ?: '23:59:59'), 'Asia/Tashkent');
+    }
+
+    private function isLessonScheduledNow(TestSubjectLesson $lesson, Carbon $now): bool
+    {
+        $lessonDate = optional($lesson->lesson_date)->format('Y-m-d');
+        if ($lessonDate !== $now->toDateString()) {
+            return false;
+        }
+
+        $startsAt = $this->lessonStartsAt($lesson);
+        $endsAt = $this->lessonEndsAt($lesson);
+
+        if (!$startsAt || !$endsAt) {
+            return true;
+        }
+
+        return $now->betweenIncluded($startsAt, $endsAt);
+    }
+
+    private function lessonTimeText(TestSubjectLesson $lesson): ?string
+    {
+        if (!$lesson->starts_at && !$lesson->ends_at) {
+            return null;
+        }
+
+        return trim(
+            ($lesson->starts_at ? substr($lesson->starts_at, 0, 5) : '--:--')
+            . ' - ' .
+            ($lesson->ends_at ? substr($lesson->ends_at, 0, 5) : '--:--')
+        );
     }
 }

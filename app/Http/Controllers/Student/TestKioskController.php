@@ -282,8 +282,8 @@ class TestKioskController extends Controller
         $attemptsByTestId = $this->attemptsByTestId($student, $subjects);
         $now = now('Asia/Tashkent');
 
-        return $subjects->flatMap(function (TestSubject $subject) use ($attemptsByTestId, $now) {
-            return $subject->lessons->map(function (TestSubjectLesson $lesson) use ($subject, $attemptsByTestId, $now) {
+        return $subjects->flatMap(function (TestSubject $subject) use ($student, $attemptsByTestId, $now) {
+            return $subject->lessons->map(function (TestSubjectLesson $lesson) use ($student, $subject, $attemptsByTestId, $now) {
                 $lessonTest = $lesson->lessonTest;
                 $attempt = $lessonTest ? $attemptsByTestId->get($lessonTest->id) : null;
                 $questionCount = (int) ($lessonTest?->questions_count ?? 0);

@@ -71,7 +71,7 @@
             @endif
 
             <div>
-                <a href="{{ route('student.subjects') }}" class="st-back">Orqaga</a>
+                <a href="{{ route('student.test-subjects.subject', $testSubject) }}" class="st-back">Orqaga</a>
             </div>
 
             <div class="st-card">

@@ -1250,6 +1250,8 @@ Route::prefix('student')->name('student.')->group(function () {
         Route::get('/subjects', [StudentController::class, 'getSubjects'])->name('subjects');
         Route::get('/subject/{id}', [StudentController::class, 'getSubjectGrades'])->name('subject.grades');
         Route::prefix('test-subjects')->name('test-subjects.')->group(function () {
+            Route::get('/', [\App\Http\Controllers\Student\TestSubjectController::class, 'index'])->name('index');
+            Route::get('/{testSubject}', [\App\Http\Controllers\Student\TestSubjectController::class, 'subject'])->name('subject');
             Route::get('/{testSubject}/lessons/{lesson}/test', [\App\Http\Controllers\Student\TestSubjectController::class, 'show'])->name('tests.show');
             Route::post('/{testSubject}/lessons/{lesson}/test', [\App\Http\Controllers\Student\TestSubjectController::class, 'submit'])->name('tests.submit');
         });

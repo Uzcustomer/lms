@@ -1036,11 +1036,8 @@ class StudentController extends Controller
         });
 
         $minimumLimit = MarkingSystemScore::getByStudentHemisId($student->hemis_id)->minimum_limit;
-        $testSubjects = $this->loadAssignedTestSubjects($student);
-
         return view('student.subjects', [
             'subjects' => $subjects,
-            'testSubjects' => $testSubjects,
             'semester' => $semester_name,
             'mtDeadlineTime' => $mtDeadlineTime,
             'minimumLimit' => $minimumLimit,

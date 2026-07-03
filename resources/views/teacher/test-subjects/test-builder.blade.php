@@ -241,6 +241,15 @@
                             </div>
 
                             <button type="submit" class="tb-btn tb-btn-primary w-full">Sozlamalarni saqlash</button>
+
+                            <div style="padding-top:6px; border-top:1px dashed #dbe4ef;">
+                                <div class="tb-label" style="margin-bottom:8px;">Talabalar uchun sahifa</div>
+                                <a href="{{ route('student.test-subjects.subject', $testSubject) }}"
+                                   class="tb-btn tb-btn-light w-full"
+                                   target="_blank" rel="noopener">
+                                    Student test sahifasi linki
+                                </a>
+                            </div>
                         </form>
                     </div>
                 </div>

@@ -1232,6 +1232,14 @@ Route::prefix('student')->name('student.')->group(function () {
         }
     })->name('login');
 
+    Route::prefix('test-kiosk')->name('test-kiosk.')->group(function () {
+        Route::get('/', [\App\Http\Controllers\Student\TestKioskController::class, 'index'])->name('index');
+        Route::post('/', [\App\Http\Controllers\Student\TestKioskController::class, 'lookup'])->name('lookup');
+        Route::get('/{studentIdNumber}', [\App\Http\Controllers\Student\TestKioskController::class, 'student'])->name('student');
+        Route::get('/{studentIdNumber}/subjects/{testSubject}/lessons/{lesson}/test', [\App\Http\Controllers\Student\TestKioskController::class, 'show'])->name('tests.show');
+        Route::post('/{studentIdNumber}/subjects/{testSubject}/lessons/{lesson}/test', [\App\Http\Controllers\Student\TestKioskController::class, 'submit'])->name('tests.submit');
+    });
+
     Route::middleware(['auth:student', 'force.student.contact', 'ensure.survey.completed'])->group(function () {
         Route::get('/', function () {
             return redirect()->route('student.dashboard');

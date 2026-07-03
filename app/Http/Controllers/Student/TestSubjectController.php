@@ -486,7 +486,7 @@ class TestSubjectController extends Controller
             return true;
         }
 
-        return $now->betweenIncluded($startsAt, $endsAt);
+        return $now->between($startsAt, $endsAt, true);
     }
 
     private function lessonTimeText(TestSubjectLesson $lesson): ?string

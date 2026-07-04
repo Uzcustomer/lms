@@ -16,6 +16,8 @@ class QuizGradeAppeal extends Model
     protected $fillable = [
         'student_grade_id',
         'quiz_result_id',
+        'retake_application_id',
+        'retake_component',
         'student_hemis_id',
         'student_name',
         'subject_id',

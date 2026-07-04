@@ -8,12 +8,12 @@
         body{margin:0;font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a}
         .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
         .card{width:100%;max-width:700px;background:#fff;border:1px solid #dbe4ef;border-radius:20px;box-shadow:0 12px 32px rgba(15,23,42,.08);overflow:hidden}
-        .head{padding:28px 30px 22px;background:linear-gradient(180deg,#f8fbff 0%,#f2f7ff 100%);border-bottom:1px solid #dbe4ef}
+        .head{padding:28px 30px 22px;background:#344e99;border-bottom:1px solid #2a407d}
         .body{padding:24px}
-        .eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#1d4ed8}
-        .title{margin:10px 0 0;font-size:28px;line-height:1.15;font-weight:700}
-        .tab-shell{margin-top:20px;padding:6px;background:#eaf1fb;border:1px solid #d6e2f2;border-radius:16px;display:flex;gap:8px}
-        .tab-btn{flex:1;border:none;background:transparent;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:600;color:#475569;cursor:pointer;transition:.2s ease}
+        .eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#cfe0ff}
+        .title{margin:10px 0 0;font-size:28px;line-height:1.15;font-weight:700;color:#fff;text-align:center}
+        .tab-shell{margin-top:20px;padding:8px;background:#eaf1fb;border:1px solid #d6e2f2;border-radius:18px;display:flex;gap:8px}
+        .tab-btn{flex:1;border:none;background:transparent;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:600;color:#344e99;cursor:pointer;transition:.2s ease}
         .tab-btn.active{background:#fff;color:#1d4ed8;box-shadow:0 4px 14px rgba(37,99,235,.12)}
         .panel{display:none;border:1px solid #dbe4ef;border-radius:18px;background:#fff;overflow:hidden}
         .panel.active{display:block}
@@ -24,8 +24,8 @@
         .input{width:100%;border:1px solid #cbd5e1;border-radius:14px;padding:16px 18px;font-size:24px;font-weight:700;box-sizing:border-box;background:#fff}
         .input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 4px rgba(59,130,246,.12)}
         .button-grid{margin-top:18px;display:grid;gap:10px}
-        .btn{display:inline-flex;align-items:center;justify-content:center;width:100%;border:none;border-radius:14px;padding:14px 18px;background:#2563eb;color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:.2s ease}
-        .btn:hover{background:#1d4ed8}
+        .btn{display:inline-flex;align-items:center;justify-content:center;width:100%;border:none;border-radius:14px;padding:14px 18px;background:#344e99;color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:.2s ease}
+        .btn:hover{background:#2a407d}
         .btn-secondary{background:#fff;color:#1e40af;border:1px solid #bfdbfe}
         .btn-secondary:hover{background:#eff6ff}
         .error{margin-top:14px;padding:12px 14px;border-radius:12px;background:#fef2f2;border:1px solid #fecaca;color:#dc2626}
@@ -56,8 +56,8 @@
             <div class="eyebrow">Test kiosk</div>
             <h1 class="title">Test sahifasiga kirish</h1>
             <div class="tab-shell">
-                <button type="button" class="tab-btn active" data-tab-target="tab-only-id" onclick="window.__kioskActivateTab && window.__kioskActivateTab('tab-only-id')">Only ID bilan kirish</button>
-                <button type="button" class="tab-btn" data-tab-target="tab-face-verify" onclick="window.__kioskActivateTab && window.__kioskActivateTab('tab-face-verify')">ID + Face Verify</button>
+                <button type="button" class="tab-btn active" data-tab-target="tab-only-id" onclick="kioskActivateTab('tab-only-id')">Talaba ID orqali kirish</button>
+                <button type="button" class="tab-btn" data-tab-target="tab-face-verify" onclick="kioskActivateTab('tab-face-verify')">Face ID orqali kirish</button>
             </div>
         </div>
         <div class="body">
@@ -138,6 +138,19 @@
         </div>
     </div>
 </div>
+<script>
+    function kioskActivateTab(targetId) {
+        document.querySelectorAll('.tab-btn').forEach(function (btn) {
+            btn.classList.toggle('active', btn.getAttribute('data-tab-target') === targetId);
+        });
+        document.querySelectorAll('.panel').forEach(function (panel) {
+            panel.classList.toggle('active', panel.id === targetId);
+        });
+        if (targetId !== 'tab-face-verify' && typeof window.__kioskStopFace === 'function') {
+            window.__kioskStopFace();
+        }
+    }
+</script>
 <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
 <script>
     (function () {
@@ -167,20 +180,6 @@
                 $('student_id_number_face').value = $('student_id_number').value;
             }
         }
-
-        function activateTab(targetId) {
-            document.querySelectorAll('.tab-btn').forEach(function (btn) {
-                btn.classList.toggle('active', btn.getAttribute('data-tab-target') === targetId);
-            });
-            document.querySelectorAll('.panel').forEach(function (panel) {
-                panel.classList.toggle('active', panel.id === targetId);
-            });
-            if (targetId !== 'tab-face-verify') {
-                stopCamera();
-                resetFaceUi();
-            }
-        }
-        window.__kioskActivateTab = activateTab;
 
         function setOverlay(icon, title, sub) {
             $('camera-icon').textContent = icon;
@@ -228,6 +227,10 @@
                 state.stream = null;
             }
         }
+        window.__kioskStopFace = function () {
+            stopCamera();
+            resetFaceUi();
+        };
 
         async function loadModels() {
             await faceapi.nets.tinyFaceDetector.loadFromUri(CFG.modelsPath);
@@ -377,11 +380,6 @@
 
         $('student_id_number').addEventListener('input', function () { syncStudentInputs(false); });
         $('student_id_number_face').addEventListener('input', function () { syncStudentInputs(true); });
-        document.querySelectorAll('.tab-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                activateTab(btn.getAttribute('data-tab-target'));
-            });
-        });
         $('btn-face-verify').addEventListener('click', beginFaceFlow);
         $('btn-face-cancel').addEventListener('click', function () {
             stopCamera();

@@ -77,3 +77,51 @@ FROM hemis_quiz_results
 GROUP BY shakl
 ORDER BY cnt DESC
 LIMIT 40;
+
+
+-- ---------------------------------------------------------------------
+-- Q5) TO'LIQ JURNAL RASMI: shu talabaning student_grades'dagi BARCHA
+--     yozuvlari — apelyatsiya aynan shu yozuvlarni (quiz_result_id IS NOT
+--     NULL bo'lganlarini) ko'rsatadi. attempt = urinish (12=1, 12a=2,
+--     12b=3). training_type_code: 101=OSKE, 102=Test. Qayta-o'qish
+--     natijasi ham (diagnostika orqali yuklangan bo'lsa) shu yerda
+--     quiz_result_id bilan turadi.
+-- ---------------------------------------------------------------------
+SELECT
+    sg.id                AS student_grade_id,
+    sg.subject_name,
+    sg.training_type_code,
+    sg.attempt,
+    sg.reason,
+    sg.grade,
+    sg.retake_grade,
+    sg.quiz_result_id,
+    DATE(sg.lesson_date) AS sana,
+    sg.is_qoshimcha
+FROM student_grades sg
+JOIN students s
+      ON s.hemis_id COLLATE utf8mb4_unicode_ci = sg.student_hemis_id COLLATE utf8mb4_unicode_ci
+WHERE s.full_name LIKE '%AVAZXONOV%'
+  AND sg.deleted_at IS NULL
+ORDER BY sg.subject_name, sg.training_type_code, sg.attempt, sg.lesson_date;
+
+
+-- ---------------------------------------------------------------------
+-- Q6) 2/3-URINISH HAQIQATAN YUKLANADIMI: attempt>1 va quiz_result_id li
+--     yozuvlar — bular apelyatsiyada ko'rinadi (quiz_result_id bor).
+--     Bo'sh bo'lmasa -> multi-urinish apelyatsiyada chiqadi; muammo
+--     faqat shu talabada 2/3-urinish YO'Qligida.
+-- ---------------------------------------------------------------------
+SELECT
+    sg.student_hemis_id,
+    sg.subject_name,
+    sg.training_type_code,
+    sg.attempt,
+    sg.grade,
+    sg.quiz_result_id
+FROM student_grades sg
+WHERE sg.deleted_at IS NULL
+  AND sg.attempt > 1
+  AND sg.quiz_result_id IS NOT NULL
+ORDER BY sg.student_hemis_id, sg.subject_name, sg.attempt
+LIMIT 30;

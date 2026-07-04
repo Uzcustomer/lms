@@ -60,12 +60,31 @@ class QuizGradeAppealController extends Controller
      */
     private function gradeKind(StudentGrade $g): string
     {
-        return $g->reason === 'quiz_result' ? 'quiz' : 'mavzu';
+        // 'mavzu' — mavjud jurnal (dars) qatoriga yozilgan qayta topshirish:
+        //   quiz_result_id bor, lekin reason o'zgarmagan ('absent'/'low_grade'),
+        //   qiymat retake_grade ustunida (uploadMavzuRetake).
+        // 'quiz'  — OSKI/Test natijasi: reason='quiz_result' (Moodle yuklamasi)
+        //   YOKI quiz_result_id BO'LMAGAN, ammo training_type 101/102 bo'lgan
+        //   test yozuvi (masalan sinov YN test). Qiymat grade ustunida.
+        return ($g->quiz_result_id && $g->reason !== 'quiz_result') ? 'mavzu' : 'quiz';
     }
 
     private function currentValue(StudentGrade $g): ?float
     {
         return $this->gradeKind($g) === 'quiz' ? $g->grade : $g->retake_grade;
+    }
+
+    /**
+     * training_type_code -> ko'rinadigan nom (Moodle quiz natijasi bilan
+     * bog'lanmagan 101/102 test yozuvlari uchun).
+     */
+    private function trainingTypeLabel($code): string
+    {
+        return match ((int) $code) {
+            101 => 'OSKE',
+            102 => 'Yakuniy test',
+            default => 'Test',
+        };
     }
 
     /**
@@ -115,10 +134,12 @@ class QuizGradeAppealController extends Controller
 
         $studentLookup = [];
         $nameIds = [];
+        $hemisIds = [];
         foreach ($students as $s) {
             if ($s->hemis_id) {
                 $studentLookup[$s->hemis_id] = $s;
                 $nameIds[] = $s->hemis_id;
+                $hemisIds[] = $s->hemis_id;
             }
             if ($s->student_id_number) {
                 $studentLookup[$s->student_id_number] = $s;
@@ -127,7 +148,7 @@ class QuizGradeAppealController extends Controller
         }
 
         // 2) hemis_quiz_results ni TO'G'RIDAN-TO'G'RI qidiramiz (Moodle
-        //    manbasi) — students jadvalidagi mos yozuvga bog'liq emas.
+        //    manbasi) — bular quiz_result_id orqali student_grades ga bog'langan.
         $quizResultIds = HemisQuizResult::where(function ($qq) use ($q, $nameIds) {
                 $qq->where('student_name', 'LIKE', '%' . $q . '%')
                    ->orWhere('student_id', 'LIKE', '%' . $q . '%');
@@ -138,20 +159,43 @@ class QuizGradeAppealController extends Controller
             ->limit(1000)
             ->pluck('id');
 
-        if ($quizResultIds->isEmpty()) {
+        // Na Moodle natijasi, na students yozuvi topilmasa — bo'sh qaytaramiz
+        // (aks holda quyidagi shartsiz so'rov barcha yozuvlarni tortib yuborardi).
+        if ($quizResultIds->isEmpty() && empty($hemisIds)) {
             return response()->json(['success' => true, 'rows' => [], 'students_found' => $students->count()]);
         }
 
-        $grades = StudentGrade::whereIn('quiz_result_id', $quizResultIds)
+        // 3) student_grades ni ikki yo'l bilan qamraymiz:
+        //    (a) quiz_result_id orqali bog'langan HAR QANDAY Moodle yuklamasi
+        //        (OSKI/Test + "N-mavzu" qayta topshirish), va
+        //    (b) quiz_result_id BO'LMAGAN, ammo training_type_code 101/102
+        //        (OSKE/Test) bo'lgan yozuvlar — masalan "sinov YN test".
+        //    "Adashib yuklangan test natijasi" shu ikkalasini o'z ichiga oladi;
+        //    JN/mavzu (haftalik) baholariga tegmaymiz (faqat 101/102 va quiz).
+        $grades = StudentGrade::where(function ($qb) use ($quizResultIds, $hemisIds) {
+                if ($quizResultIds->isNotEmpty()) {
+                    $qb->whereIn('quiz_result_id', $quizResultIds);
+                }
+                if (!empty($hemisIds)) {
+                    $qb->orWhere(function ($q2) use ($hemisIds) {
+                        $q2->whereIn('student_hemis_id', $hemisIds)
+                           ->whereIn('training_type_code', [101, 102]);
+                    });
+                }
+            })
             ->orderByDesc('lesson_date')
-            ->limit(500)
+            ->limit(1000)
             ->get();
 
-        $quizResults = HemisQuizResult::whereIn('id', $grades->pluck('quiz_result_id')->unique())
+        if ($grades->isEmpty()) {
+            return response()->json(['success' => true, 'rows' => [], 'students_found' => $students->count()]);
+        }
+
+        $quizResults = HemisQuizResult::whereIn('id', $grades->pluck('quiz_result_id')->filter()->unique())
             ->get()
             ->keyBy('id');
 
-        // 3) Dastlabki ism-qidiruvida topilmagan student_hemis_id lar uchun
+        // 4) Dastlabki ism-qidiruvida topilmagan student_hemis_id lar uchun
         //    qo'shimcha (aniq) qidiruv — grade qatorining o'z hemis_id/
         //    student_id_number qiymati bo'yicha.
         $missingIds = $grades->pluck('student_hemis_id')
@@ -178,7 +222,7 @@ class QuizGradeAppealController extends Controller
 
         $rows = $grades->map(function ($g) use ($quizResults, $studentLookup) {
             $student = $studentLookup[$g->student_hemis_id] ?? null;
-            $quiz = $quizResults[$g->quiz_result_id] ?? null;
+            $quiz = $g->quiz_result_id ? ($quizResults[$g->quiz_result_id] ?? null) : null;
             $kind = $this->gradeKind($g);
 
             return [
@@ -191,13 +235,17 @@ class QuizGradeAppealController extends Controller
                 'direction'    => $student?->specialty_name ?? '-',
                 'group'        => $student?->group_name ?? '-',
                 'fan_name'     => $g->subject_name,
-                'quiz_type'    => $quiz?->quiz_type ?? '-',
-                'shakl'        => $quiz?->shakl ?? '-',
+                // Moodle natijasi bo'lsa o'shandan; aks holda grade qatorining
+                // o'zidan (quiz_result_id siz 101/102 test yozuvi).
+                'quiz_type'    => $quiz?->quiz_type ?? $this->trainingTypeLabel($g->training_type_code),
+                'shakl'        => $quiz?->shakl ?? (((int) $g->attempt) > 1 ? $g->attempt . '-urinish' : '1-urinish'),
                 'attempt_name' => $quiz?->attempt_name ?? '-',
                 'kind'         => $kind, // 'quiz' (OSKI/Test) | 'mavzu' (qayta topshirish)
                 'kind_label'   => $kind === 'mavzu' ? 'Qayta topshirish' : 'OSKI/Test',
                 'grade'        => $this->currentValue($g),
-                'date'         => $quiz && $quiz->date_finish ? $quiz->date_finish->format('d.m.Y') : '-',
+                'date'         => $quiz && $quiz->date_finish
+                    ? $quiz->date_finish->format('d.m.Y')
+                    : ($g->lesson_date ? \Illuminate\Support\Carbon::parse($g->lesson_date)->format('d.m.Y') : '-'),
             ];
         })->values();
 
@@ -231,10 +279,14 @@ class QuizGradeAppealController extends Controller
         ]);
 
         $grade = StudentGrade::findOrFail($data['student_grade_id']);
-        if (!$grade->quiz_result_id) {
+        // Apelyatsiya faqat test natijalari uchun: (a) Moodle yuklamasi
+        // (quiz_result_id bor) YOKI (b) OSKE/Test yozuvi (training_type 101/102).
+        // Haftalik JN/mavzu (dars) baholariga tegishga yo'l qo'ymaymiz.
+        $isTestRow = in_array((int) $grade->training_type_code, [101, 102], true);
+        if (!$grade->quiz_result_id && !$isTestRow) {
             return response()->json([
                 'success' => false,
-                'message' => "Bu yozuv Moodle orqali yuklangan test natijasi emas — apelyatsiya doirasida emas.",
+                'message' => "Bu yozuv test natijasi emas (OSKE/Test yoki Moodle yuklamasi emas) — apelyatsiya doirasida emas.",
             ], 422);
         }
 

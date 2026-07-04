@@ -283,7 +283,7 @@
             if (act === 'delete' && apCurrentKind === 'mavzu') {
                 $hint.text("Diqqat: bu \"N-mavzu\" qayta topshirish natijasi. O'chirish faqat Moodle orqali qo'yilgan qayta topshirish bahosini bekor qiladi — darsdagi asl baho (agar bo'lsa) o'zgarmaydi.").show();
             } else if (act === 'delete') {
-                $hint.text("Bu Moodle orqali yuklangan yozuvning o'zi butunlay o'chiriladi.").show();
+                $hint.text("Bu test natijasi yozuvining o'zi butunlay o'chiriladi.").show();
             } else {
                 $hint.hide();
             }

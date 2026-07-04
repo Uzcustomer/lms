@@ -125,3 +125,52 @@ WHERE sg.deleted_at IS NULL
   AND sg.quiz_result_id IS NOT NULL
 ORDER BY sg.student_hemis_id, sg.subject_name, sg.attempt
 LIMIT 30;
+
+
+-- ---------------------------------------------------------------------
+-- Q7) QAYTA O'QISH natijalari qayerda: retake_applications.oske_score/
+--     test_score (student_grades EMAS). Odam anatomiyasi TEST=57 shu
+--     yerda turishi kerak. Apelyatsiya buni ko'rmaydi, chunki u
+--     student_grades ni o'qiydi.
+-- ---------------------------------------------------------------------
+SELECT
+    ra.id            AS application_id,
+    ra.student_hemis_id,
+    ra.semester_name,
+    rg.subject_name,
+    rg.name          AS guruh,
+    rg.assessment_type,
+    ra.joriy_score,
+    ra.oske_score,
+    ra.test_score,
+    ra.final_grade_value
+FROM retake_applications ra
+JOIN retake_groups rg ON rg.id = ra.retake_group_id
+JOIN students s
+      ON s.hemis_id COLLATE utf8mb4_unicode_ci = ra.student_hemis_id COLLATE utf8mb4_unicode_ci
+WHERE s.full_name LIKE '%AVAZXONOV%'
+  AND ra.deleted_at IS NULL
+ORDER BY rg.subject_name, ra.semester_name;
+
+
+-- ---------------------------------------------------------------------
+-- Q8) Nazorat: Odam anatomiyasi 101/102 student_grades'da 57 bormi?
+--     (soft-delete qilinganlarni ham ko'ramiz). Agar bo'sh bo'lsa ->
+--     57 faqat retake_applications'da (Q7).
+-- ---------------------------------------------------------------------
+SELECT
+    sg.id,
+    sg.student_hemis_id,
+    sg.subject_name,
+    sg.training_type_code,
+    sg.grade,
+    sg.semester_name,
+    sg.quiz_result_id,
+    DATE(sg.lesson_date) AS sana,
+    sg.deleted_at
+FROM student_grades sg
+JOIN students s
+      ON s.hemis_id COLLATE utf8mb4_unicode_ci = sg.student_hemis_id COLLATE utf8mb4_unicode_ci
+WHERE s.full_name LIKE '%AVAZXONOV%'
+  AND sg.subject_name LIKE 'Odam anatomiyasi%'
+  AND sg.training_type_code IN (101, 102);

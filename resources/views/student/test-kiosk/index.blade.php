@@ -7,88 +7,165 @@
     <style>
         body{margin:0;font-family:Arial,sans-serif;background:#f8fafc;color:#0f172a}
         .wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-        .card{width:100%;max-width:620px;background:#fff;border:1px solid #dbe4ef;border-radius:18px;box-shadow:0 8px 24px rgba(15,23,42,.06);overflow:hidden}
-        .head{padding:24px 26px;background:#f8fbff;border-bottom:1px solid #dbe4ef}
-        .body{padding:28px 30px}
-        .label{display:block;font-size:12px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#475569;margin-bottom:8px}
-        .input{width:100%;border:1px solid #cbd5e1;border-radius:12px;padding:15px 16px;font-size:24px;font-weight:600;box-sizing:border-box}
+        .card{width:100%;max-width:700px;background:#fff;border:1px solid #dbe4ef;border-radius:20px;box-shadow:0 12px 32px rgba(15,23,42,.08);overflow:hidden}
+        .head{padding:28px 30px 22px;background:linear-gradient(180deg,#f8fbff 0%,#f2f7ff 100%);border-bottom:1px solid #dbe4ef}
+        .body{padding:24px}
+        .eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#1d4ed8}
+        .title{margin:10px 0 0;font-size:28px;line-height:1.15;font-weight:700}
+        .subtitle{margin:12px 0 0;font-size:14px;line-height:1.7;color:#475569;max-width:560px}
+        .tab-shell{margin-top:20px;padding:6px;background:#eaf1fb;border:1px solid #d6e2f2;border-radius:16px;display:flex;gap:8px}
+        .tab-btn{flex:1;border:none;background:transparent;border-radius:12px;padding:12px 14px;font-size:14px;font-weight:600;color:#475569;cursor:pointer;transition:.2s ease}
+        .tab-btn.active{background:#fff;color:#1d4ed8;box-shadow:0 4px 14px rgba(37,99,235,.12)}
+        .panel{display:none;border:1px solid #dbe4ef;border-radius:18px;background:#fff;overflow:hidden}
+        .panel.active{display:block}
+        .panel-head{padding:22px 24px 16px;background:#fbfdff;border-bottom:1px solid #e2e8f0}
+        .panel-title{margin:0;font-size:24px;line-height:1.2;font-weight:700}
+        .panel-subtitle{margin:10px 0 0;font-size:14px;line-height:1.7;color:#475569}
+        .panel-body{padding:24px}
+        .label{display:block;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#475569;margin-bottom:8px}
+        .input{width:100%;border:1px solid #cbd5e1;border-radius:14px;padding:16px 18px;font-size:24px;font-weight:700;box-sizing:border-box;background:#fff}
         .input:focus{outline:none;border-color:#3b82f6;box-shadow:0 0 0 4px rgba(59,130,246,.12)}
-        .btn{display:inline-flex;align-items:center;justify-content:center;width:100%;border:none;border-radius:12px;padding:14px 18px;background:#2563eb;color:#fff;font-size:15px;font-weight:600;cursor:pointer}
+        .button-grid{margin-top:18px;display:grid;gap:10px}
+        .btn{display:inline-flex;align-items:center;justify-content:center;width:100%;border:none;border-radius:14px;padding:14px 18px;background:#2563eb;color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:.2s ease}
+        .btn:hover{background:#1d4ed8}
         .btn-secondary{background:#fff;color:#1e40af;border:1px solid #bfdbfe}
+        .btn-secondary:hover{background:#eff6ff}
         .error{margin-top:14px;padding:12px 14px;border-radius:12px;background:#fef2f2;border:1px solid #fecaca;color:#dc2626}
-        .hint{margin-top:16px;font-size:14px;line-height:1.7;color:#64748b}
-        .student-box{margin-top:16px;padding:14px;border-radius:12px;background:#f8fbff;border:1px solid #dbe4ef;display:none;align-items:center;gap:12px}
+        .feature-box{margin-top:16px;padding:14px 16px;border-radius:14px;background:#f8fbff;border:1px solid #dbe4ef}
+        .feature-title{font-size:13px;font-weight:700;color:#0f172a;margin:0 0 6px}
+        .feature-text{font-size:13px;line-height:1.6;color:#64748b;margin:0}
+        .student-box{margin-top:16px;padding:14px;border-radius:14px;background:#f8fbff;border:1px solid #dbe4ef;display:none;align-items:center;gap:12px}
         .student-photo{width:46px;height:46px;border-radius:50%;object-fit:cover;border:2px solid #bfdbfe;background:#fff}
         .camera-box{margin-top:16px;display:none}
         .camera-frame{position:relative;width:100%;max-width:360px;margin:0 auto}
-        .camera-video{width:100%;border-radius:14px;background:#0f172a;transform:scaleX(-1);aspect-ratio:3/4;object-fit:cover}
-        .camera-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:14px;background:rgba(15,23,42,.55);color:#fff;text-align:center;padding:16px}
+        .camera-video{width:100%;border-radius:16px;background:#0f172a;transform:scaleX(-1);aspect-ratio:3/4;object-fit:cover}
+        .camera-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;border-radius:16px;background:rgba(15,23,42,.55);color:#fff;text-align:center;padding:16px}
         .result{display:none;margin-top:16px;padding:12px 14px;border-radius:12px;font-size:14px;line-height:1.6}
         .muted-line{margin-top:12px;font-size:13px;color:#64748b;text-align:center}
+        @media (max-width: 640px){
+            .wrap{padding:14px}
+            .head{padding:22px 18px 18px}
+            .body{padding:16px}
+            .panel-head,.panel-body{padding:18px}
+            .title{font-size:24px}
+            .panel-title{font-size:22px}
+            .input{font-size:21px}
+            .tab-shell{flex-direction:column}
+        }
     </style>
 </head>
 <body>
 <div class="wrap">
     <div class="card">
         <div class="head">
-            <div style="font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:#1d4ed8;">Test kiosk</div>
-            <h1 style="margin:10px 0 0;font-size:32px;line-height:1.1;font-weight:600;">Student ID bilan kirish</h1>
-            <p style="margin:12px 0 0;font-size:15px;line-height:1.7;color:#475569;">
-                Talaba o'zining Student ID raqamini kiritadi. Agar hozirgi dars uchun test ochiq bo'lsa, shu yerdan testni boshlaydi.
+            <div class="eyebrow">Test kiosk</div>
+            <h1 class="title">Test sahifasiga kirish</h1>
+            <p class="subtitle">
+                Talaba Student ID orqali yoki Student ID + Face ID tasdiqlash bilan tizimga kiradi.
+                Qaysi usul qulay bo'lsa, shu tabni tanlab davom eting.
             </p>
+            <div class="tab-shell">
+                <button type="button" class="tab-btn active" data-tab-target="tab-only-id">Only ID bilan kirish</button>
+                <button type="button" class="tab-btn" data-tab-target="tab-face-verify">ID + Face Verify</button>
+            </div>
         </div>
         <div class="body">
-            <form method="POST" action="{{ route('student.test-kiosk.lookup') }}" id="kiosk-id-form">
-                @csrf
-                <label class="label">Student ID</label>
-                <input
-                    type="text"
-                    id="student_id_number"
-                    name="student_id_number"
-                    class="input"
-                    value="{{ old('student_id_number') }}"
-                    placeholder="Masalan: 368251100277"
-                    autofocus
-                    autocomplete="off"
-                >
-                @error('student_id_number')
-                    <div class="error">{{ $message }}</div>
-                @enderror
-                <div style="margin-top:18px;display:grid;gap:10px;">
-                    <button type="submit" class="btn">Davom etish</button>
-                    <button type="button" class="btn btn-secondary" id="btn-face-verify">Face ID bilan tasdiqlash</button>
+            <div class="panel active" id="tab-only-id">
+                <div class="panel-head">
+                    <h2 class="panel-title">Student ID bilan kirish</h2>
+                    <p class="panel-subtitle">
+                        Talaba o'zining Student ID raqamini kiritadi. Agar hozirgi dars uchun test ochiq bo'lsa,
+                        shu yerdan testni boshlaydi.
+                    </p>
                 </div>
-            </form>
-
-            <div class="student-box" id="student-box">
-                <img src="" alt="" id="student-photo" class="student-photo" style="display:none;">
-                <div style="flex:1;">
-                    <div id="student-name" style="font-size:15px;font-weight:600;color:#0f172a;"></div>
-                    <div id="student-id" style="font-size:13px;color:#64748b;margin-top:3px;"></div>
-                </div>
-            </div>
-
-            <div class="camera-box" id="camera-box">
-                <div class="camera-frame">
-                    <video id="camera-video" class="camera-video" autoplay playsinline muted></video>
-                    <div class="camera-overlay" id="camera-overlay">
-                        <div>
-                            <div id="camera-icon" style="font-size:32px;">📷</div>
-                            <div id="camera-title" style="font-size:14px;font-weight:600;margin-top:8px;">Kamera ochilmoqda...</div>
-                            <div id="camera-sub" style="font-size:12px;opacity:.85;margin-top:4px;"></div>
+                <div class="panel-body">
+                    <form method="POST" action="{{ route('student.test-kiosk.lookup') }}" id="kiosk-id-form">
+                        @csrf
+                        <label class="label">Student ID</label>
+                        <input
+                            type="text"
+                            id="student_id_number"
+                            name="student_id_number"
+                            class="input"
+                            value="{{ old('student_id_number') }}"
+                            placeholder="Masalan: 368251100277"
+                            autofocus
+                            autocomplete="off"
+                        >
+                        @error('student_id_number')
+                            <div class="error">{{ $message }}</div>
+                        @enderror
+                        <div class="button-grid">
+                            <button type="submit" class="btn">Davom etish</button>
                         </div>
+                    </form>
+                    <div class="feature-box">
+                        <p class="feature-title">Qanday ishlaydi?</p>
+                        <p class="feature-text">
+                            Test hali ochilmagan bo'lsa, keyingi oynada kutish holati chiqadi.
+                            O'qituvchi testni ochgandan keyin `Testni boshlash` tugmasi paydo bo'ladi.
+                        </p>
                     </div>
                 </div>
-                <div class="result" id="face-result"></div>
-                <div style="margin-top:12px;display:grid;gap:10px;">
-                    <button type="button" class="btn" id="btn-face-retry" style="display:none;">Qayta urinish</button>
-                    <button type="button" class="btn btn-secondary" id="btn-face-cancel">Bekor qilish</button>
-                </div>
-                <div class="muted-line">Talaba ID saqlanadi, Face ID esa shu talabani tasdiqlash uchun ishlatiladi.</div>
             </div>
 
-            <div class="hint">
-                Test hali ochilmagan bo'lsa, keyingi oynada kutish holati chiqadi. O'qituvchi testni ochgandan keyin `Testni boshlash` tugmasi paydo bo'ladi.
+            <div class="panel" id="tab-face-verify">
+                <div class="panel-head">
+                    <h2 class="panel-title">ID + Face Verify</h2>
+                    <p class="panel-subtitle">
+                        Avval Student ID kiritiladi, so'ng kamera orqali talaba yuzi tasdiqlanadi.
+                        Bu usul kiosk kompyuterlar uchun xavfsizroq.
+                    </p>
+                </div>
+                <div class="panel-body">
+                    <label class="label">Student ID</label>
+                    <input
+                        type="text"
+                        id="student_id_number_face"
+                        class="input"
+                        value="{{ old('student_id_number') }}"
+                        placeholder="Masalan: 368251100277"
+                        autocomplete="off"
+                    >
+                    <div class="button-grid">
+                        <button type="button" class="btn" id="btn-face-verify">Face ID bilan tasdiqlash</button>
+                    </div>
+
+                    <div class="student-box" id="student-box">
+                        <img src="" alt="" id="student-photo" class="student-photo" style="display:none;">
+                        <div style="flex:1;">
+                            <div id="student-name" style="font-size:15px;font-weight:600;color:#0f172a;"></div>
+                            <div id="student-id" style="font-size:13px;color:#64748b;margin-top:3px;"></div>
+                        </div>
+                    </div>
+
+                    <div class="camera-box" id="camera-box">
+                        <div class="camera-frame">
+                            <video id="camera-video" class="camera-video" autoplay playsinline muted></video>
+                            <div class="camera-overlay" id="camera-overlay">
+                                <div>
+                                    <div id="camera-icon" style="font-size:30px;">📷</div>
+                                    <div id="camera-title" style="font-size:14px;font-weight:600;margin-top:8px;">Kamera ochilmoqda...</div>
+                                    <div id="camera-sub" style="font-size:12px;opacity:.85;margin-top:4px;"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="result" id="face-result"></div>
+                        <div class="button-grid" style="margin-top:12px;">
+                            <button type="button" class="btn" id="btn-face-retry" style="display:none;">Qayta urinish</button>
+                            <button type="button" class="btn btn-secondary" id="btn-face-cancel">Bekor qilish</button>
+                        </div>
+                        <div class="muted-line">Talaba ID saqlanadi, Face ID esa shu talabani tasdiqlash uchun ishlatiladi.</div>
+                    </div>
+
+                    <div class="feature-box">
+                        <p class="feature-title">Face verify eslatmasi</p>
+                        <p class="feature-text">
+                            Talaba rasmi tizimda tasdiqlangan bo'lishi kerak. Kamera ochilgach, yuz aniq ko'rinadigan
+                            holatda ekranga qarab turing.
+                        </p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -114,6 +191,27 @@
         };
 
         const $ = (id) => document.getElementById(id);
+
+        function syncStudentInputs(fromFaceInput) {
+            if (fromFaceInput) {
+                $('student_id_number').value = $('student_id_number_face').value;
+            } else {
+                $('student_id_number_face').value = $('student_id_number').value;
+            }
+        }
+
+        function activateTab(targetId) {
+            document.querySelectorAll('.tab-btn').forEach(function (btn) {
+                btn.classList.toggle('active', btn.getAttribute('data-tab-target') === targetId);
+            });
+            document.querySelectorAll('.panel').forEach(function (panel) {
+                panel.classList.toggle('active', panel.id === targetId);
+            });
+            if (targetId !== 'tab-face-verify') {
+                stopCamera();
+                resetFaceUi();
+            }
+        }
 
         function setOverlay(icon, title, sub) {
             $('camera-icon').textContent = icon;
@@ -202,7 +300,7 @@
                     'X-CSRF-TOKEN': CFG.csrfToken
                 },
                 body: JSON.stringify({
-                    student_id_number: $('student_id_number').value.trim(),
+                    student_id_number: $('student_id_number_face').value.trim(),
                     liveness_passed: true,
                     snapshot: snapshot
                 })
@@ -265,14 +363,15 @@
                 }
 
                 stopCamera();
-                setOverlay('❌', 'Mos kelmadi', result.data.error || 'Face ID tekshiruvi o‘tmadi.');
+                setOverlay('✖', 'Mos kelmadi', result.data.error || 'Face ID tekshiruvi o'tmadi.');
                 showResult((result.data.error || 'Yuz mos kelmadi.') + (result.data.confidence ? ' (' + result.data.confidence + '%)' : ''), 'error');
                 $('btn-face-retry').style.display = 'inline-flex';
             }, 250);
         }
 
         async function beginFaceFlow() {
-            const studentIdNumber = $('student_id_number').value.trim();
+            syncStudentInputs(true);
+            const studentIdNumber = $('student_id_number_face').value.trim();
             const fieldError = document.querySelector('.error');
             if (fieldError) fieldError.style.display = 'none';
             if (!studentIdNumber) {
@@ -300,13 +399,20 @@
                 setOverlay('📷', 'Kamera ochilmoqda...', '');
                 await startCamera();
             } catch (error) {
-                alert(error.message || 'Face ID oqimini boshlab bo‘lmadi.');
+                alert(error.message || 'Face ID oqimini boshlab bo'lmadi.');
             } finally {
                 $('btn-face-verify').disabled = false;
                 $('btn-face-verify').textContent = 'Face ID bilan tasdiqlash';
             }
         }
 
+        $('student_id_number').addEventListener('input', function () { syncStudentInputs(false); });
+        $('student_id_number_face').addEventListener('input', function () { syncStudentInputs(true); });
+        document.querySelectorAll('.tab-btn').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                activateTab(btn.getAttribute('data-tab-target'));
+            });
+        });
         $('btn-face-verify').addEventListener('click', beginFaceFlow);
         $('btn-face-cancel').addEventListener('click', function () {
             stopCamera();

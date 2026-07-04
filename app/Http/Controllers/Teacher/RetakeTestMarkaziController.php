@@ -564,7 +564,8 @@ class RetakeTestMarkaziController extends Controller
             $student = $app->group?->student;
             $retakeGroup = $app->retakeGroup;
             $mustaqil = $mustaqilMap[$app->id] ?? null;
-            $assessmentLabel = match ($retakeGroup?->assessment_type) {
+            $at = $retakeGroup?->assessment_type;
+            $assessmentLabel = match ($at) {
                 'oske' => 'OSKE',
                 'test' => 'TEST',
                 'oske_test' => 'OSKE + TEST',
@@ -574,6 +575,16 @@ class RetakeTestMarkaziController extends Controller
             $testDate = $retakeGroup?->test_date
                 ? $retakeGroup->test_date->format('d.m.Y')
                 : '-';
+
+            $needsOske = in_array($at, ['oske', 'oske_test'], true);
+            $needsTest = in_array($at, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
+            $isSinov = in_array($at, ['sinov', 'sinov_fan'], true);
+            // Sinov fanlarda Sinov(test) bahosi = JN (avtomatik).
+            $effTest = $isSinov ? $app->joriy_score : $app->test_score;
+
+            // Katak qiymati: yopilish shaklida bu nazorat KO'ZDA TUTILMAGAN bo'lsa
+            // 'X'; baho qo'yilishi kerak-u, hali yo'q bo'lsa '-'; bor bo'lsa qiymat.
+            $ctrlCell = fn (bool $needs, $value) => !$needs ? 'X' : ($value !== null ? (float) $value : '-');
 
             $sheet->setCellValue("A{$row}", $index + 1);
             $sheet->setCellValue("B{$row}", $student?->full_name ?? '—');
@@ -586,8 +597,8 @@ class RetakeTestMarkaziController extends Controller
             $sheet->setCellValue("I{$row}", $testDate);
             $sheet->setCellValue("J{$row}", $app->joriy_score !== null ? (float) $app->joriy_score : '-');
             $sheet->setCellValue("K{$row}", $mustaqil?->grade !== null ? (float) $mustaqil->grade : '-');
-            $sheet->setCellValue("L{$row}", $app->oske_score !== null ? (float) $app->oske_score : '-');
-            $sheet->setCellValue("M{$row}", $app->test_score !== null ? (float) $app->test_score : '-');
+            $sheet->setCellValue("L{$row}", $ctrlCell($needsOske, $app->oske_score));
+            $sheet->setCellValue("M{$row}", $ctrlCell($needsTest, $effTest));
             $sheet->setCellValue("N{$row}", $app->sent_to_test_markazi_at ? 'Yuborilgan' : 'Yuborilmagan');
 
             $sheet->setCellValueExplicit("A{$row}", (string) ($index + 1), DataType::TYPE_NUMERIC);

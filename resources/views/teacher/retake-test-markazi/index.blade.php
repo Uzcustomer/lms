@@ -195,6 +195,9 @@
                                     $at = $retakeGroup?->assessment_type;
                                     $needsOske = in_array($at, ['oske', 'oske_test'], true);
                                     $needsTest = in_array($at, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
+                                    $isSinov = in_array($at, ['sinov', 'sinov_fan'], true);
+                                    // Sinov fanlarda Sinov(test) bahosi = JN (avtomatik).
+                                    $effTest = $isSinov ? $app->joriy_score : $app->test_score;
                                     $b = $atype($at);
                                 @endphp
                                 <tr @if($rgId) onclick="window.location='{{ route('admin.retake-test-markazi.show', $rgId) }}'" @endif>
@@ -218,7 +221,7 @@
                                     <td style="text-align:center;">{!! $scoreCell(true, $app->joriy_score, 'badge-blue') !!}</td>
                                     <td style="text-align:center;">{!! $scoreCell(true, $mustaqil?->grade, 'badge-green') !!}</td>
                                     <td style="text-align:center;">{!! $scoreCell($needsOske, $app->oske_score, 'badge-blue') !!}</td>
-                                    <td style="text-align:center;">{!! $scoreCell($needsTest, $app->test_score, 'badge-blue') !!}</td>
+                                    <td style="text-align:center;">{!! $scoreCell($needsTest, $effTest, 'badge-blue') !!}</td>
                                 </tr>
                             @endforeach
                             </tbody>

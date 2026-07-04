@@ -155,7 +155,7 @@
 <script>
     (function () {
         const CFG = {
-            checkUrl: @json(route('student.face-id.check-student')),
+            checkUrl: @json(route('student.test-kiosk.check-student')),
             verifyUrl: @json(route('student.test-kiosk.face-verify')),
             csrfToken: @json(csrf_token()),
             modelsPath: @json(asset('face-models')),

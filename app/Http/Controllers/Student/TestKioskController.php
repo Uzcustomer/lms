@@ -32,9 +32,7 @@ class TestKioskController extends Controller
         ]);
 
         $studentIdNumber = trim((string) $validated['student_id_number']);
-        $student = Student::query()
-            ->where('student_id_number', $studentIdNumber)
-            ->first();
+        $student = $this->findStudentByIdentifier($studentIdNumber);
 
         if (!$student) {
             return back()
@@ -42,7 +40,35 @@ class TestKioskController extends Controller
                 ->withErrors(['student_id_number' => 'Bunday Student ID topilmadi.']);
         }
 
-        return redirect()->route('student.test-kiosk.student', $studentIdNumber);
+        return redirect()->route('student.test-kiosk.student', $student->student_id_number);
+    }
+
+    public function checkStudent(Request $request)
+    {
+        $request->validate([
+            'student_id_number' => ['required', 'string', 'max:50'],
+        ]);
+
+        $idNumber = trim((string) $request->input('student_id_number'));
+        $student = $this->findStudentByIdentifier($idNumber);
+
+        if (!$student) {
+            return response()->json(['error' => 'Talaba topilmadi.'], 404);
+        }
+
+        if (!FaceIdService::isEnabledForStudent($student)) {
+            return response()->json(['error' => 'Bu talaba uchun Face ID o\'chirilgan.'], 403);
+        }
+
+        if (FaceIdService::isArcFaceEnabled() && !FaceIdService::hasApprovedPhoto($student)) {
+            return response()->json(['error' => 'Tasdiqlangan rasm topilmadi.'], 403);
+        }
+
+        return response()->json([
+            'student_id' => $student->id,
+            'full_name' => $student->full_name,
+            'photo_url' => route('student.face-id.photo', ['id' => $student->id]),
+        ]);
     }
 
     public function faceVerify(Request $request)
@@ -68,9 +94,7 @@ class TestKioskController extends Controller
             'student_id_number' => $idNumber,
         ];
 
-        $student = Student::query()
-            ->where('student_id_number', $idNumber)
-            ->first();
+        $student = $this->findStudentByIdentifier($idNumber);
 
         if (!$student) {
             FaceIdService::logAttempt(array_merge($commonLog, [
@@ -320,13 +344,22 @@ class TestKioskController extends Controller
 
     private function resolveStudent(string $studentIdNumber): Student
     {
-        $student = Student::query()
-            ->where('student_id_number', trim($studentIdNumber))
-            ->first();
+        $student = $this->findStudentByIdentifier($studentIdNumber);
 
         abort_unless($student, 404);
 
         return $student;
+    }
+
+    private function findStudentByIdentifier(string $identifier): ?Student
+    {
+        $identifier = trim($identifier);
+
+        return Student::query()
+            ->where('student_id_number', $identifier)
+            ->orWhere('hemis_id', $identifier)
+            ->orWhere('id', $identifier)
+            ->first();
     }
 
     private function resolveKioskContext(string $studentIdNumber, TestSubject $testSubject, TestSubjectLesson $lesson): array

@@ -5,9 +5,11 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\HemisQuizResult;
 use App\Models\QuizGradeAppeal;
+use App\Models\RetakeApplication;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Services\ActivityLogService;
+use App\Services\Retake\RetakeJournalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -85,6 +87,24 @@ class QuizGradeAppealController extends Controller
             102 => 'Yakuniy test',
             default => 'Test',
         };
+    }
+
+    /**
+     * Semestr nomi/raqamidan kurs (o'quv yili) ni chiqarish:
+     *   1-2 semestr -> 1-kurs, 3-4 -> 2-kurs, 5-6 -> 3-kurs ...
+     */
+    private function kursFromSemester($semester): ?string
+    {
+        if (!$semester) {
+            return null;
+        }
+        if (preg_match('/(\d+)/', (string) $semester, $m)) {
+            $sem = (int) $m[1];
+            if ($sem > 0) {
+                return (string) ((int) ceil($sem / 2)) . '-kurs';
+            }
+        }
+        return null;
     }
 
     /**
@@ -226,7 +246,8 @@ class QuizGradeAppealController extends Controller
             $kind = $this->gradeKind($g);
 
             return [
-                'id'           => $g->id,
+                'source'       => 'grade',
+                'id'           => $g->id, // student_grade_id
                 'student_hemis_id' => $g->student_hemis_id,
                 // Students jadvalida yozuv topilmasa — Moodle'dagi xom ismga tushamiz
                 // (diagnostika sahifasi ham xuddi shunday qiladi).
@@ -235,6 +256,8 @@ class QuizGradeAppealController extends Controller
                 'direction'    => $student?->specialty_name ?? '-',
                 'group'        => $student?->group_name ?? '-',
                 'fan_name'     => $g->subject_name,
+                'kurs'         => $this->kursFromSemester($g->semester_name) ?? '-',
+                'semester'     => $g->semester_name ?: '-',
                 // Moodle natijasi bo'lsa o'shandan; aks holda grade qatorining
                 // o'zidan (quiz_result_id siz 101/102 test yozuvi).
                 'quiz_type'    => $quiz?->quiz_type ?? $this->trainingTypeLabel($g->training_type_code),
@@ -247,7 +270,57 @@ class QuizGradeAppealController extends Controller
                     ? $quiz->date_finish->format('d.m.Y')
                     : ($g->lesson_date ? \Illuminate\Support\Carbon::parse($g->lesson_date)->format('d.m.Y') : '-'),
             ];
-        })->values();
+        })->values()->all();
+
+        // 5) QAYTA O'QISH natijalari — retake_applications.oske_score/test_score.
+        //    Bular student_grades da EMAS (test markazi to'g'ridan-to'g'ri
+        //    retake_applications ga yozadi), shuning uchun alohida qatorlar
+        //    sifatida qo'shamiz. Har bir mavjud komponent (OSKE/Test) bitta qator.
+        if (!empty($hemisIds)) {
+            $retakeApps = RetakeApplication::with(['group.student', 'retakeGroup'])
+                ->whereIn('student_hemis_id', $hemisIds)
+                ->where('final_status', RetakeApplication::STATUS_APPROVED)
+                ->where(function ($qb) {
+                    $qb->whereNotNull('oske_score')->orWhereNotNull('test_score');
+                })
+                ->limit(500)
+                ->get();
+
+            foreach ($retakeApps as $app) {
+                $student = $studentLookup[$app->student_hemis_id] ?? ($app->group->student ?? null);
+                $subjectName = $app->retakeGroup->subject_name ?? $app->subject_name ?? '-';
+                $semester = $app->semester_name ?: ($app->retakeGroup->semester_name ?? null);
+                $date = $app->final_grade_set_at ? $app->final_grade_set_at->format('d.m.Y') : '-';
+
+                foreach (['oske' => $app->oske_score, 'test' => $app->test_score] as $component => $score) {
+                    if ($score === null) {
+                        continue;
+                    }
+                    $componentLabel = $component === 'oske' ? 'OSKE' : 'Test';
+                    $rows[] = [
+                        'source'       => 'retake',
+                        'id'           => 'ra-' . $app->id . '-' . $component, // faqat UI kaliti
+                        'retake_application_id' => $app->id,
+                        'component'    => $component,
+                        'student_hemis_id' => $app->student_hemis_id,
+                        'student_name' => $student?->full_name ?? '-',
+                        'faculty'      => $student?->department_name ?? '-',
+                        'direction'    => $student?->specialty_name ?? '-',
+                        'group'        => $student?->group_name ?? '-',
+                        'fan_name'     => $subjectName,
+                        'kurs'         => $this->kursFromSemester($semester) ?? '-',
+                        'semester'     => $semester ?: '-',
+                        'quiz_type'    => "Qayta o'qish",
+                        'shakl'        => $componentLabel,
+                        'attempt_name' => '-',
+                        'kind'         => 'retake',
+                        'kind_label'   => "Qayta o'qish ({$componentLabel})",
+                        'grade'        => (float) $score,
+                        'date'         => $date,
+                    ];
+                }
+            }
+        }
 
         return response()->json([
             'success'        => true,
@@ -264,11 +337,14 @@ class QuizGradeAppealController extends Controller
         $this->checkAccess();
 
         $data = $request->validate([
-            'student_grade_id' => 'required|integer|exists:student_grades,id',
-            'action'           => 'required|in:replace,delete',
-            'new_grade'        => 'required_if:action,replace|nullable|numeric|min:0|max:100',
-            'reason'           => 'required|string|min:5|max:2000',
-            'document'         => 'required|file|max:5120|mimes:pdf,jpg,jpeg,png',
+            'source'                => 'nullable|in:grade,retake',
+            'student_grade_id'      => 'required_without:retake_application_id|nullable|integer|exists:student_grades,id',
+            'retake_application_id' => 'nullable|integer|exists:retake_applications,id',
+            'component'             => 'nullable|in:oske,test',
+            'action'                => 'required|in:replace,delete',
+            'new_grade'             => 'required_if:action,replace|nullable|numeric|min:0|max:100',
+            'reason'                => 'required|string|min:5|max:2000',
+            'document'              => 'required|file|max:5120|mimes:pdf,jpg,jpeg,png',
         ], [
             'new_grade.required_if' => 'Almashtirish uchun yangi baho kiritilishi shart.',
             'reason.required'       => 'Sabab (asoslash) kiritilishi shart.',
@@ -277,6 +353,11 @@ class QuizGradeAppealController extends Controller
             'document.mimes'        => 'Hujjat PDF, JPG yoki PNG bo\'lishi kerak.',
             'document.max'          => 'Hujjat hajmi 5MB dan oshmasin.',
         ]);
+
+        // Qayta o'qish (retake_applications) OSKE/Test natijasi bo'lsa — alohida oqim.
+        if (($data['source'] ?? null) === 'retake' || !empty($data['retake_application_id'])) {
+            return $this->storeRetake($request, $data);
+        }
 
         $grade = StudentGrade::findOrFail($data['student_grade_id']);
         // Apelyatsiya faqat test natijalari uchun: (a) Moodle yuklamasi
@@ -355,6 +436,83 @@ class QuizGradeAppealController extends Controller
         return response()->json([
             'success' => true,
             'message' => $isReplace ? 'Baho almashtirildi.' : 'Baho o\'chirildi.',
+        ]);
+    }
+
+    /**
+     * Qayta o'qish (retake_applications) OSKE/Test natijasini tuzatish.
+     * Bu baho student_grades da emas — test markazi to'g'ridan-to'g'ri
+     * retake_applications.oske_score/test_score ga yozadi. Shu qiymatni
+     * almashtiramiz yoki o'chiramiz (null) va yakuniy bahoni (final_grade_value)
+     * mavjud RetakeJournalService logikasi orqali qayta hisoblaymiz.
+     */
+    private function storeRetake(Request $request, array $data)
+    {
+        if (empty($data['retake_application_id']) || empty($data['component'])) {
+            return response()->json([
+                'success' => false,
+                'message' => "Qayta o'qish yozuvi to'liq ko'rsatilmagan (ariza yoki komponent yo'q).",
+            ], 422);
+        }
+
+        $component = $data['component']; // 'oske' | 'test'
+        $col = $component === 'oske' ? 'oske_score' : 'test_score';
+        $componentLabel = $component === 'oske' ? 'OSKE' : 'Test';
+
+        $app = RetakeApplication::with(['group.student', 'retakeGroup'])
+            ->findOrFail($data['retake_application_id']);
+
+        $oldGrade = $app->$col !== null ? (float) $app->$col : null;
+        $isReplace = $data['action'] === QuizGradeAppeal::ACTION_REPLACE;
+
+        $user = auth()->user() ?? auth()->guard('teacher')->user();
+        $file = $request->file('document');
+        $path = $file->store('quiz-grade-appeals/retake-' . $app->id, 'public');
+
+        $subjectName = $app->retakeGroup->subject_name ?? $app->subject_name;
+
+        $appeal = QuizGradeAppeal::create([
+            'student_grade_id'       => null,
+            'quiz_result_id'         => null,
+            'retake_application_id'  => $app->id,
+            'retake_component'       => $component,
+            'student_hemis_id'       => $app->student_hemis_id,
+            'student_name'           => optional($app->group->student ?? null)->full_name,
+            'subject_id'             => $app->subject_id,
+            'subject_name'           => trim(($subjectName ?: '-') . " (qayta o'qish, {$componentLabel})"),
+            'action'                 => $data['action'],
+            'old_grade'              => $oldGrade,
+            'new_grade'              => $isReplace ? $data['new_grade'] : null,
+            'reason'                 => $data['reason'],
+            'document_path'          => $path,
+            'document_original_name' => $file->getClientOriginalName(),
+            'performed_by_guard'     => auth()->guard('teacher')->check() ? 'teacher' : 'web',
+            'performed_by_id'        => $user?->id,
+            'performed_by_name'      => $user->full_name ?? $user->name ?? null,
+            'performed_by_role'      => session('active_role'),
+        ]);
+
+        // Yangi qiymatlar: tuzatilayotgan komponent o'zgaradi, ikkinchisi
+        // o'zgarmaydi. saveOskeTestScore ikkalasini qabul qilib, final_grade_value
+        // ni qayta hisoblaydi.
+        $newVal = $isReplace ? (float) $data['new_grade'] : null;
+        $newOske = $component === 'oske' ? $newVal : ($app->oske_score !== null ? (float) $app->oske_score : null);
+        $newTest = $component === 'test' ? $newVal : ($app->test_score !== null ? (float) $app->test_score : null);
+
+        app(RetakeJournalService::class)->saveOskeTestScore($app, $newOske, $newTest);
+
+        ActivityLogService::log(
+            'update',
+            'student_grade',
+            $isReplace
+                ? "Apelyatsiya (prorektor, qayta o'qish {$componentLabel}): {$oldGrade} -> {$data['new_grade']} almashtirildi"
+                : "Apelyatsiya (prorektor, qayta o'qish {$componentLabel}): ({$oldGrade}) o'chirildi",
+            $appeal
+        );
+
+        return response()->json([
+            'success' => true,
+            'message' => $isReplace ? 'Qayta o\'qish bahosi almashtirildi.' : 'Qayta o\'qish bahosi o\'chirildi.',
         ]);
     }
 

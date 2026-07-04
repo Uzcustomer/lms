@@ -78,6 +78,8 @@
                             <th>Fakultet</th>
                             <th>Yo'nalish</th>
                             <th>Guruh</th>
+                            <th>Kurs</th>
+                            <th>Semestr</th>
                             <th>Fan</th>
                             <th>Turi</th>
                             <th>Quiz turi</th>
@@ -88,7 +90,7 @@
                         </tr>
                     </thead>
                     <tbody id="qaResultsBody">
-                        <tr><td colspan="11" class="qa-empty">Talabani qidiring.</td></tr>
+                        <tr><td colspan="13" class="qa-empty">Talabani qidiring.</td></tr>
                     </tbody>
                 </table>
             </div>
@@ -175,7 +177,10 @@
                 <div class="appeal-info" id="appealInfo"></div>
                 <form id="appealForm" enctype="multipart/form-data">
                     @csrf
+                    <input type="hidden" name="source" id="ap_source" value="grade">
                     <input type="hidden" name="student_grade_id" id="ap_grade_id">
+                    <input type="hidden" name="retake_application_id" id="ap_retake_id">
+                    <input type="hidden" name="component" id="ap_component">
                     <label class="appeal-label">Amal</label>
                     <div style="display:flex;gap:16px;margin-bottom:10px;">
                         <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
@@ -217,17 +222,17 @@
         function qaSearch() {
             var q = ($('#qaSearchInput').val() || '').trim();
             if (q.length < 2) {
-                $('#qaResultsBody').html('<tr><td colspan="11" class="qa-empty">Kamida 2 ta belgi kiriting.</td></tr>');
+                $('#qaResultsBody').html('<tr><td colspan="13" class="qa-empty">Kamida 2 ta belgi kiriting.</td></tr>');
                 return;
             }
             $('#qaSearchBtn').prop('disabled', true);
-            $('#qaResultsBody').html('<tr><td colspan="11" class="qa-empty"><span class="qa-spinner"></span>Qidirilmoqda...</td></tr>');
+            $('#qaResultsBody').html('<tr><td colspan="13" class="qa-empty"><span class="qa-spinner"></span>Qidirilmoqda...</td></tr>');
 
             $.ajax({
                 url: searchUrl, type: 'GET', data: { q: q }, timeout: 60000,
                 success: function(res) {
                     if (!res.success) {
-                        $('#qaResultsBody').html('<tr><td colspan="11" class="qa-empty" style="color:#b91c1c;">Xatolik yuz berdi.</td></tr>');
+                        $('#qaResultsBody').html('<tr><td colspan="13" class="qa-empty" style="color:#b91c1c;">Xatolik yuz berdi.</td></tr>');
                         return;
                     }
                     qaLastRows = res.rows || [];
@@ -235,7 +240,7 @@
                 },
                 error: function(xhr) {
                     var msg = (xhr.responseJSON && (xhr.responseJSON.message || (xhr.responseJSON.errors && Object.values(xhr.responseJSON.errors)[0][0]))) || 'Xatolik yuz berdi.';
-                    $('#qaResultsBody').html('<tr><td colspan="11" class="qa-empty" style="color:#b91c1c;">' + esc(msg) + '</td></tr>');
+                    $('#qaResultsBody').html('<tr><td colspan="13" class="qa-empty" style="color:#b91c1c;">' + esc(msg) + '</td></tr>');
                 },
                 complete: function() { $('#qaSearchBtn').prop('disabled', false); }
             });
@@ -243,7 +248,7 @@
 
         function qaRenderResults(rows) {
             if (!rows.length) {
-                $('#qaResultsBody').html('<tr><td colspan="11" class="qa-empty">Natija topilmadi.</td></tr>');
+                $('#qaResultsBody').html('<tr><td colspan="13" class="qa-empty">Natija topilmadi.</td></tr>');
                 return;
             }
             var html = '';
@@ -253,8 +258,12 @@
                 html += '<td>' + esc(r.faculty) + '</td>';
                 html += '<td>' + esc(r.direction) + '</td>';
                 html += '<td>' + esc(r.group) + '</td>';
+                html += '<td style="white-space:nowrap;">' + esc(r.kurs) + '</td>';
+                html += '<td style="white-space:nowrap;">' + esc(r.semester) + '</td>';
                 html += '<td>' + esc(r.fan_name) + '</td>';
-                var kindColor = r.kind === 'mavzu' ? 'background:#fef3c7;color:#92400e;border:1px solid #fde68a;' : 'background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;';
+                var kindColor = r.kind === 'mavzu' ? 'background:#fef3c7;color:#92400e;border:1px solid #fde68a;'
+                    : (r.kind === 'retake' ? 'background:#dcfce7;color:#166534;border:1px solid #86efac;'
+                    : 'background:#dbeafe;color:#1e40af;border:1px solid #93c5fd;');
                 html += '<td><span class="qa-badge" style="' + kindColor + '">' + esc(r.kind_label) + '</span></td>';
                 html += '<td>' + esc(r.quiz_type) + '</td>';
                 html += '<td>' + esc(r.shakl) + '</td>';
@@ -263,9 +272,14 @@
                 html += '<td style="text-align:center;white-space:nowrap;">'
                     + '<button type="button" class="appeal-btn" '
                     + 'data-id="' + esc(r.id) + '" '
+                    + 'data-source="' + esc(r.source || 'grade') + '" '
+                    + 'data-retake-id="' + esc(r.retake_application_id || '') + '" '
+                    + 'data-component="' + esc(r.component || '') + '" '
                     + 'data-student="' + esc(r.student_name) + '" '
                     + 'data-fan="' + esc(r.fan_name) + '" '
+                    + 'data-semester="' + esc(r.semester) + '" '
                     + 'data-kind="' + esc(r.kind) + '" '
+                    + 'data-kindlabel="' + esc(r.kind_label) + '" '
                     + 'data-grade="' + esc(r.grade) + '">Apelyatsiya</button>'
                     + '</td>';
                 html += '</tr>';
@@ -282,6 +296,8 @@
             var $hint = $('#ap_delete_hint');
             if (act === 'delete' && apCurrentKind === 'mavzu') {
                 $hint.text("Diqqat: bu \"N-mavzu\" qayta topshirish natijasi. O'chirish faqat Moodle orqali qo'yilgan qayta topshirish bahosini bekor qiladi — darsdagi asl baho (agar bo'lsa) o'zgarmaydi.").show();
+            } else if (act === 'delete' && apCurrentKind === 'retake') {
+                $hint.text("Bu qayta o'qish (retake) natijasi. O'chirilsa tegishli OSKE/Test qiymati bo'shatiladi va yakuniy baho qayta hisoblanadi.").show();
             } else if (act === 'delete') {
                 $hint.text("Bu test natijasi yozuvining o'zi butunlay o'chiriladi.").show();
             } else {
@@ -291,12 +307,27 @@
         function openAppeal(btn) {
             var $b = $(btn);
             $('#appealForm')[0].reset();
-            $('#ap_grade_id').val($b.data('id'));
-            apCurrentKind = $b.data('kind') === 'mavzu' ? 'mavzu' : 'quiz';
-            var kindText = apCurrentKind === 'mavzu' ? "Qayta topshirish (mavzu)" : 'OSKI/Test';
+            var source = $b.data('source') || 'grade';
+            var kind = $b.data('kind');
+            apCurrentKind = kind === 'mavzu' ? 'mavzu' : (kind === 'retake' ? 'retake' : 'quiz');
+
+            $('#ap_source').val(source);
+            if (source === 'retake') {
+                $('#ap_grade_id').val('');
+                $('#ap_retake_id').val($b.data('retake-id'));
+                $('#ap_component').val($b.data('component'));
+            } else {
+                $('#ap_grade_id').val($b.data('id'));
+                $('#ap_retake_id').val('');
+                $('#ap_component').val('');
+            }
+
+            var kindText = $b.data('kindlabel')
+                || (apCurrentKind === 'mavzu' ? "Qayta topshirish (mavzu)" : 'OSKI/Test');
             $('#appealInfo').html(
                 '<div><strong>Talaba:</strong> ' + esc($b.data('student')) + '</div>' +
                 '<div><strong>Fan:</strong> ' + esc($b.data('fan')) + '</div>' +
+                '<div><strong>Semestr:</strong> ' + esc($b.data('semester')) + '</div>' +
                 '<div><strong>Turi:</strong> ' + esc(kindText) + '</div>' +
                 '<div><strong>Joriy baho:</strong> ' + esc($b.data('grade')) + '</div>'
             );

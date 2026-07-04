@@ -572,7 +572,7 @@ class RetakeJournalService
         RetakeApplication $app,
         ?float $oskeScore,
         ?float $testScore,
-        Teacher $actor,
+        ?Teacher $actor = null,
     ): RetakeApplication {
         if ($oskeScore !== null && ($oskeScore < 0 || $oskeScore > 100)) {
             throw ValidationException::withMessages(['oske_score' => 'OSKE 0..100']);

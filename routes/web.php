@@ -1235,6 +1235,7 @@ Route::prefix('student')->name('student.')->group(function () {
     Route::prefix('test-kiosk')->name('test-kiosk.')->group(function () {
         Route::get('/', [\App\Http\Controllers\Student\TestKioskController::class, 'index'])->name('index');
         Route::post('/', [\App\Http\Controllers\Student\TestKioskController::class, 'lookup'])->name('lookup');
+        Route::post('/face-verify', [\App\Http\Controllers\Student\TestKioskController::class, 'faceVerify'])->name('face-verify');
         Route::get('/{studentIdNumber}', [\App\Http\Controllers\Student\TestKioskController::class, 'student'])->name('student');
         Route::get('/{studentIdNumber}/subjects/{testSubject}/lessons/{lesson}/test', [\App\Http\Controllers\Student\TestKioskController::class, 'show'])->name('tests.show');
         Route::post('/{studentIdNumber}/subjects/{testSubject}/lessons/{lesson}/test', [\App\Http\Controllers\Student\TestKioskController::class, 'submit'])->name('tests.submit');

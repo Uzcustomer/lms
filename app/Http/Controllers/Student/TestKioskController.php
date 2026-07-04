@@ -9,10 +9,13 @@ use App\Models\TestSubjectLesson;
 use App\Models\TestSubjectLessonTest;
 use App\Models\TestSubjectLessonTestAnswer;
 use App\Models\TestSubjectLessonTestAttempt;
+use App\Services\FaceIdService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Schema;
 
 class TestKioskController extends Controller
@@ -40,6 +43,141 @@ class TestKioskController extends Controller
         }
 
         return redirect()->route('student.test-kiosk.student', $studentIdNumber);
+    }
+
+    public function faceVerify(Request $request)
+    {
+        $request->validate([
+            'student_id_number' => ['required', 'string', 'max:50'],
+            'snapshot' => ['required', 'string', 'max:500000'],
+            'liveness_passed' => ['required', 'boolean'],
+        ]);
+
+        $idNumber = trim((string) $request->input('student_id_number'));
+        $key = 'test_kiosk_face_verify:' . $request->ip();
+
+        if (RateLimiter::tooManyAttempts($key, 60)) {
+            return response()->json(['error' => 'Juda ko‘p urinish. Biroz kuting.'], 429);
+        }
+
+        RateLimiter::hit($key, 60);
+
+        $commonLog = [
+            'ip_address' => $request->ip(),
+            'user_agent' => $request->userAgent(),
+            'student_id_number' => $idNumber,
+        ];
+
+        $student = Student::query()
+            ->where('student_id_number', $idNumber)
+            ->first();
+
+        if (!$student) {
+            FaceIdService::logAttempt(array_merge($commonLog, [
+                'result' => 'not_found',
+                'failure_reason' => 'Kiosk: talaba topilmadi',
+            ]));
+
+            return response()->json(['error' => 'Talaba topilmadi.'], 404);
+        }
+
+        $commonLog['student_id'] = $student->id;
+
+        if (!FaceIdService::isGloballyEnabled() || !FaceIdService::isArcFaceEnabled()) {
+            return response()->json(['error' => 'Face ID hozircha o‘chiq emas.'], 403);
+        }
+
+        if (!FaceIdService::isEnabledForStudent($student)) {
+            FaceIdService::logAttempt(array_merge($commonLog, [
+                'result' => 'disabled',
+                'failure_reason' => 'Kiosk: Face ID o‘chirilgan',
+            ]));
+
+            return response()->json(['error' => 'Bu talaba uchun Face ID o‘chirilgan.'], 403);
+        }
+
+        if (!$request->boolean('liveness_passed')) {
+            FaceIdService::logAttempt(array_merge($commonLog, [
+                'result' => 'liveness_failed',
+                'failure_reason' => 'Kiosk: liveness muvaffaqiyatsiz',
+                'snapshot' => $request->input('snapshot'),
+            ]));
+
+            return response()->json(['error' => 'Jonlilik tekshiruvi o‘tmadi.'], 422);
+        }
+
+        $approvedPhoto = FaceIdService::getApprovedStudentPhoto($student);
+        if (!$approvedPhoto) {
+            FaceIdService::logAttempt(array_merge($commonLog, [
+                'result' => 'failed',
+                'failure_reason' => 'Kiosk: approved rasm topilmadi',
+                'snapshot' => $request->input('snapshot'),
+            ]));
+
+            return response()->json(['error' => 'Tasdiqlangan rasm topilmadi.'], 403);
+        }
+
+        $liveTmp = FaceIdService::saveTemporarySnapshot((string) $request->input('snapshot'));
+        if (!$liveTmp) {
+            return response()->json(['error' => 'Yuz rasmini saqlashda xato.'], 422);
+        }
+
+        try {
+            $compareResult = FaceIdService::compareViaArcFace($liveTmp['url'], asset($approvedPhoto->photo_path));
+        } finally {
+            FaceIdService::deleteTemporarySnapshot($liveTmp['rel']);
+        }
+
+        if (!$compareResult) {
+            FaceIdService::logAttempt(array_merge($commonLog, [
+                'result' => 'failed',
+                'failure_reason' => 'Kiosk: ArcFace service javob bermadi',
+                'snapshot' => $request->input('snapshot'),
+            ]));
+
+            return response()->json(['error' => 'Yuz tekshirish xizmati javob bermadi.'], 503);
+        }
+
+        $similarityPercent = (float) $compareResult['similarity_percent'];
+        $distance = (float) $compareResult['distance'];
+        $threshold = FaceIdService::getArcFaceThreshold();
+
+        Log::info('[TestKiosk/FaceID] Taqqoslash', [
+            'student' => $idNumber,
+            'similarity' => round($similarityPercent, 2),
+            'threshold' => $threshold,
+            'distance' => round($distance, 4),
+            'match' => $compareResult['match'] ?? false,
+        ]);
+
+        if ($similarityPercent < $threshold) {
+            FaceIdService::logAttempt(array_merge($commonLog, [
+                'result' => 'failed',
+                'confidence' => round($similarityPercent / 100, 4),
+                'distance' => round($distance, 4),
+                'failure_reason' => "Kiosk: yuz mos kelmadi ({$similarityPercent}% < {$threshold}%)",
+                'snapshot' => $request->input('snapshot'),
+            ]));
+
+            return response()->json([
+                'error' => 'Yuz mos kelmadi. Iltimos, kameraga to‘g‘ri qarab qayta urinib ko‘ring.',
+                'confidence' => round($similarityPercent, 1),
+            ], 422);
+        }
+
+        FaceIdService::logAttempt(array_merge($commonLog, [
+            'result' => 'success',
+            'confidence' => round($similarityPercent / 100, 4),
+            'distance' => round($distance, 4),
+            'snapshot' => $request->input('snapshot'),
+        ]));
+
+        return response()->json([
+            'success' => true,
+            'redirect' => route('student.test-kiosk.student', $student->student_id_number),
+            'student_name' => $student->full_name,
+            'confidence' => round($similarityPercent, 1),
+        ]);
     }
 
     public function student(string $studentIdNumber)

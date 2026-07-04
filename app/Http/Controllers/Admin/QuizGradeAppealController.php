@@ -22,11 +22,13 @@ use Illuminate\Support\Facades\Storage;
  */
 class QuizGradeAppealController extends Controller
 {
+    // Baho tuzatish (almashtirish/o'chirish) — faqat o'quv prorektori/superadmin.
     private const ALLOWED_ROLES = ['superadmin', 'oquv_prorektori'];
+    // Apelyatsiyalar TARIXINI ko'rish — yuqoridagilar + admin (faqat o'qish).
+    private const VIEW_ROLES = ['superadmin', 'oquv_prorektori', 'admin'];
 
     /**
-     * Faqat o'quv prorektori (yoki superadmin) — session active_role bo'yicha.
-     * VedomostRejectionInboxController bilan bir xil uslub.
+     * Amal qilish (qidiruv/tuzatish) huquqi — faqat o'quv prorektori/superadmin.
      */
     private function checkAccess(): void
     {
@@ -35,16 +37,38 @@ class QuizGradeAppealController extends Controller
             abort(403);
         }
         if (!in_array(session('active_role', ''), self::ALLOWED_ROLES, true)) {
-            abort(403, "Bu bo'limni faqat o'quv prorektori ko'ra oladi.");
+            abort(403, "Bu amalni faqat o'quv prorektori bajara oladi.");
         }
     }
 
     /**
-     * Joriy foydalanuvchi apelyatsiya qila oladimi (menyu/tugma ko'rsatish uchun).
+     * Tarix/hujjatni ko'rish huquqi — prorektor/superadmin va admin (o'qish).
+     */
+    private function checkViewAccess(): void
+    {
+        $user = auth()->user() ?? auth()->guard('teacher')->user();
+        if (!$user) {
+            abort(403);
+        }
+        if (!in_array(session('active_role', ''), self::VIEW_ROLES, true)) {
+            abort(403, "Bu bo'limni ko'rish huquqingiz yo'q.");
+        }
+    }
+
+    /**
+     * Joriy foydalanuvchi apelyatsiya qila oladimi (tuzatish tugmasi uchun).
      */
     public static function canAppeal(): bool
     {
         return in_array(session('active_role', ''), self::ALLOWED_ROLES, true);
+    }
+
+    /**
+     * Joriy foydalanuvchi apelyatsiyalar tarixini ko'ra oladimi (menyu uchun).
+     */
+    public static function canView(): bool
+    {
+        return in_array(session('active_role', ''), self::VIEW_ROLES, true);
     }
 
     private function routePrefix(): string
@@ -113,14 +137,15 @@ class QuizGradeAppealController extends Controller
      */
     public function index(Request $request)
     {
-        $this->checkAccess();
+        $this->checkViewAccess();
         $routePrefix = $this->routePrefix();
+        $canPerform = self::canAppeal(); // admin uchun false — faqat tarix ko'rinadi
 
         $appeals = Schema::hasTable('quiz_grade_appeals')
             ? QuizGradeAppeal::orderByDesc('created_at')->paginate(50)
             : null;
 
-        return view('admin.quiz-grade-appeals.index', compact('appeals', 'routePrefix'));
+        return view('admin.quiz-grade-appeals.index', compact('appeals', 'routePrefix', 'canPerform'));
     }
 
     /**
@@ -554,7 +579,7 @@ class QuizGradeAppealController extends Controller
      */
     public function download($id)
     {
-        $this->checkAccess();
+        $this->checkViewAccess();
 
         $appeal = QuizGradeAppeal::findOrFail($id);
         if (!$appeal->document_path || !Storage::disk('public')->exists($appeal->document_path)) {

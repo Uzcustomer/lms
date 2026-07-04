@@ -70,6 +70,7 @@
     </style>
 
     <div class="qa-wrap">
+        @if($canPerform ?? true)
         <!-- Qidiruv + amal -->
         <div class="qa-card">
             <div class="qa-note">
@@ -111,11 +112,19 @@
                 </table>
             </div>
         </div>
+        @else
+        <div class="qa-card">
+            <div class="qa-note">
+                Siz <strong>apelyatsiyalar tarixini</strong> faqat ko'rish huquqiga egasiz.
+                Bahoni almashtirish yoki o'chirishni o'quv prorektori bajaradi.
+            </div>
+        </div>
+        @endif
 
         <!-- Tarix -->
         <div class="qa-card">
             <div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;font-weight:800;color:#334155;font-size:13px;">
-                So'nggi apelyatsiyalar
+                @if($canPerform ?? true) So'nggi apelyatsiyalar @else Apelyatsiyalar tarixi @endif
             </div>
             <div class="qa-table-wrap">
                 <table class="qa-table">
@@ -182,6 +191,7 @@
         </div>
     </div>
 
+    @if($canPerform ?? true)
     <!-- Apelyatsiya modal -->
     <div id="appealOverlay" class="appeal-overlay">
         <div class="appeal-modal">
@@ -234,6 +244,7 @@
             <button type="button" class="qfp-btn primary" id="qfpApply">Qo'llash</button>
         </div>
     </div>
+    @endif
 
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>

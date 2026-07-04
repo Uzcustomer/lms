@@ -10,6 +10,7 @@ use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Services\ActivityLogService;
 use App\Services\Retake\RetakeJournalService;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -21,11 +22,13 @@ use Illuminate\Support\Facades\Storage;
  */
 class QuizGradeAppealController extends Controller
 {
+    // Baho tuzatish (almashtirish/o'chirish) — faqat o'quv prorektori/superadmin.
     private const ALLOWED_ROLES = ['superadmin', 'oquv_prorektori'];
+    // Apelyatsiyalar TARIXINI ko'rish — yuqoridagilar + admin (faqat o'qish).
+    private const VIEW_ROLES = ['superadmin', 'oquv_prorektori', 'admin'];
 
     /**
-     * Faqat o'quv prorektori (yoki superadmin) — session active_role bo'yicha.
-     * VedomostRejectionInboxController bilan bir xil uslub.
+     * Amal qilish (qidiruv/tuzatish) huquqi — faqat o'quv prorektori/superadmin.
      */
     private function checkAccess(): void
     {
@@ -34,16 +37,38 @@ class QuizGradeAppealController extends Controller
             abort(403);
         }
         if (!in_array(session('active_role', ''), self::ALLOWED_ROLES, true)) {
-            abort(403, "Bu bo'limni faqat o'quv prorektori ko'ra oladi.");
+            abort(403, "Bu amalni faqat o'quv prorektori bajara oladi.");
         }
     }
 
     /**
-     * Joriy foydalanuvchi apelyatsiya qila oladimi (menyu/tugma ko'rsatish uchun).
+     * Tarix/hujjatni ko'rish huquqi — prorektor/superadmin va admin (o'qish).
+     */
+    private function checkViewAccess(): void
+    {
+        $user = auth()->user() ?? auth()->guard('teacher')->user();
+        if (!$user) {
+            abort(403);
+        }
+        if (!in_array(session('active_role', ''), self::VIEW_ROLES, true)) {
+            abort(403, "Bu bo'limni ko'rish huquqingiz yo'q.");
+        }
+    }
+
+    /**
+     * Joriy foydalanuvchi apelyatsiya qila oladimi (tuzatish tugmasi uchun).
      */
     public static function canAppeal(): bool
     {
         return in_array(session('active_role', ''), self::ALLOWED_ROLES, true);
+    }
+
+    /**
+     * Joriy foydalanuvchi apelyatsiyalar tarixini ko'ra oladimi (menyu uchun).
+     */
+    public static function canView(): bool
+    {
+        return in_array(session('active_role', ''), self::VIEW_ROLES, true);
     }
 
     private function routePrefix(): string
@@ -112,14 +137,15 @@ class QuizGradeAppealController extends Controller
      */
     public function index(Request $request)
     {
-        $this->checkAccess();
+        $this->checkViewAccess();
         $routePrefix = $this->routePrefix();
+        $canPerform = self::canAppeal(); // admin uchun false — faqat tarix ko'rinadi
 
         $appeals = Schema::hasTable('quiz_grade_appeals')
             ? QuizGradeAppeal::orderByDesc('created_at')->paginate(50)
             : null;
 
-        return view('admin.quiz-grade-appeals.index', compact('appeals', 'routePrefix'));
+        return view('admin.quiz-grade-appeals.index', compact('appeals', 'routePrefix', 'canPerform'));
     }
 
     /**
@@ -433,6 +459,8 @@ class QuizGradeAppealController extends Controller
             $appeal
         );
 
+        $this->sendAppealTelegram($appeal, $kind === 'mavzu' ? 'Qayta topshirish (mavzu)' : 'OSKI/Test');
+
         return response()->json([
             'success' => true,
             'message' => $isReplace ? 'Baho almashtirildi.' : 'Baho o\'chirildi.',
@@ -510,6 +538,8 @@ class QuizGradeAppealController extends Controller
             $appeal
         );
 
+        $this->sendAppealTelegram($appeal, "Qayta o'qish ({$componentLabel})");
+
         return response()->json([
             'success' => true,
             'message' => $isReplace ? 'Qayta o\'qish bahosi almashtirildi.' : 'Qayta o\'qish bahosi o\'chirildi.',
@@ -517,11 +547,39 @@ class QuizGradeAppealController extends Controller
     }
 
     /**
+     * Apelyatsiya (baho almashtirildi/o'chirildi) haqida Telegram xabari.
+     * Xato bo'lsa amalni buzmaydi (TelegramService jim log qiladi).
+     */
+    private function sendAppealTelegram(QuizGradeAppeal $appeal, string $typeLabel): void
+    {
+        $isDelete = $appeal->action === QuizGradeAppeal::ACTION_DELETE;
+        $old = $appeal->old_grade !== null ? rtrim(rtrim(number_format($appeal->old_grade, 2, '.', ''), '0'), '.') : '—';
+        $new = $appeal->new_grade !== null ? rtrim(rtrim(number_format($appeal->new_grade, 2, '.', ''), '0'), '.') : '—';
+
+        $lines = [
+            "🔔 Test bahosi apelyatsiyasi",
+            "👤 Talaba: " . ($appeal->student_name ?: '—') . " (" . ($appeal->student_hemis_id ?: '—') . ")",
+            "📚 Fan: " . ($appeal->subject_name ?: '—'),
+            "🏷 Turi: " . $typeLabel,
+            "⚙️ Amal: " . ($isDelete ? "Baho o'chirildi" : "Baho almashtirildi"),
+            "📊 Baho: " . ($isDelete ? "{$old} → o'chirildi" : "{$old} → {$new}"),
+            "📝 Sabab: " . ($appeal->reason ?: '—'),
+            "👮 Kim: " . ($appeal->performed_by_name ?: '—') . " (" . ($appeal->performed_by_role ?: '—') . ")",
+            "🕒 " . ($appeal->created_at?->format('d.m.Y H:i') ?? now()->format('d.m.Y H:i')),
+        ];
+
+        app(TelegramService::class)->notifyChat(
+            config('services.telegram.appeal_chat_id'),
+            implode("\n", $lines)
+        );
+    }
+
+    /**
      * Asoslovchi hujjatni yuklab olish.
      */
     public function download($id)
     {
-        $this->checkAccess();
+        $this->checkViewAccess();
 
         $appeal = QuizGradeAppeal::findOrFail($id);
         if (!$appeal->document_path || !Storage::disk('public')->exists($appeal->document_path)) {

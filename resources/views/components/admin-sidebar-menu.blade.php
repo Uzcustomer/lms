@@ -350,7 +350,7 @@
         </a>
         @endif
 
-        @if($hasActiveRole(['superadmin', 'oquv_prorektori']))
+        @if($hasActiveRole(['superadmin', 'oquv_prorektori', 'admin']))
         <a href="{{ $r('admin.quiz-grade-appeals.index', 'teacher.quiz-grade-appeals.index') }}"
            class="sidebar-link {{ $isActive('admin.quiz-grade-appeals.*', 'teacher.quiz-grade-appeals.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

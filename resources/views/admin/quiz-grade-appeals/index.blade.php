@@ -51,9 +51,26 @@
         .appeal-btn-cancel { padding:8px 16px; border:1px solid #d1d5db; border-radius:8px; background:#fff; color:#374151; font-size:13px; font-weight:600; cursor:pointer; }
         .appeal-btn-submit { padding:8px 16px; border:none; border-radius:8px; background:linear-gradient(135deg,#d97706,#f59e0b); color:#fff; font-size:13px; font-weight:700; cursor:pointer; }
         .appeal-btn-submit:disabled { opacity:.6; cursor:not-allowed; }
+
+        .qa-th { display:inline-flex; align-items:center; gap:4px; }
+        .qa-filter-ico { cursor:pointer; font-size:11px; color:#64748b; border:1px solid #c7d2fe; background:#eef2ff; border-radius:4px; padding:0 4px; line-height:16px; user-select:none; }
+        .qa-filter-ico:hover { background:#c7d2fe; color:#1e293b; }
+        .qa-filter-ico.active { background:#d97706; color:#fff; border-color:#b45309; }
+        .qa-filter-pop { position:absolute; z-index:1100; width:240px; background:#fff; border:1px solid #cbd5e1; border-radius:10px; box-shadow:0 12px 32px rgba(0,0,0,0.18); display:none; overflow:hidden; }
+        .qa-filter-pop .qfp-search { padding:8px; border-bottom:1px solid #eef2f7; }
+        .qa-filter-pop .qfp-search input { width:100%; box-sizing:border-box; padding:6px 8px; border:1px solid #cbd5e1; border-radius:6px; font-size:12px; }
+        .qa-filter-pop .qfp-list { max-height:220px; overflow-y:auto; padding:4px 0; }
+        .qa-filter-pop .qfp-item { display:flex; align-items:center; gap:8px; padding:5px 10px; font-size:12.5px; color:#334155; cursor:pointer; }
+        .qa-filter-pop .qfp-item:hover { background:#f1f5f9; }
+        .qa-filter-pop .qfp-item input { margin:0; }
+        .qa-filter-pop .qfp-empty { padding:10px; text-align:center; color:#94a3b8; font-size:12px; }
+        .qa-filter-pop .qfp-foot { display:flex; justify-content:space-between; gap:8px; padding:8px; border-top:1px solid #eef2f7; }
+        .qa-filter-pop .qfp-btn { flex:1; padding:6px 8px; border-radius:6px; font-size:12px; font-weight:700; cursor:pointer; border:1px solid #cbd5e1; background:#fff; color:#334155; }
+        .qa-filter-pop .qfp-btn.primary { background:linear-gradient(135deg,#d97706,#f59e0b); color:#fff; border:none; }
     </style>
 
     <div class="qa-wrap">
+        @if($canPerform ?? true)
         <!-- Qidiruv + amal -->
         <div class="qa-card">
             <div class="qa-note">
@@ -75,15 +92,15 @@
                     <thead>
                         <tr>
                             <th>F.I.Sh.</th>
-                            <th>Fakultet</th>
-                            <th>Yo'nalish</th>
-                            <th>Guruh</th>
-                            <th>Kurs</th>
-                            <th>Semestr</th>
-                            <th>Fan</th>
-                            <th>Turi</th>
-                            <th>Quiz turi</th>
-                            <th>Shakl</th>
+                            <th><span class="qa-th">Fakultet<span class="qa-filter-ico" data-field="faculty" title="Filtr">▾</span></span></th>
+                            <th><span class="qa-th">Yo'nalish<span class="qa-filter-ico" data-field="direction" title="Filtr">▾</span></span></th>
+                            <th><span class="qa-th">Guruh<span class="qa-filter-ico" data-field="group" title="Filtr">▾</span></span></th>
+                            <th><span class="qa-th">Kurs<span class="qa-filter-ico" data-field="kurs" title="Filtr">▾</span></span></th>
+                            <th><span class="qa-th">Semestr<span class="qa-filter-ico" data-field="semester" title="Filtr">▾</span></span></th>
+                            <th><span class="qa-th">Fan<span class="qa-filter-ico" data-field="fan_name" title="Filtr">▾</span></span></th>
+                            <th><span class="qa-th">Turi<span class="qa-filter-ico" data-field="kind_label" title="Filtr">▾</span></span></th>
+                            <th><span class="qa-th">Quiz turi<span class="qa-filter-ico" data-field="quiz_type" title="Filtr">▾</span></span></th>
+                            <th><span class="qa-th">Shakl<span class="qa-filter-ico" data-field="shakl" title="Filtr">▾</span></span></th>
                             <th>Sana</th>
                             <th>Baho</th>
                             <th style="text-align:center;">Amallar</th>
@@ -95,11 +112,19 @@
                 </table>
             </div>
         </div>
+        @else
+        <div class="qa-card">
+            <div class="qa-note">
+                Siz <strong>apelyatsiyalar tarixini</strong> faqat ko'rish huquqiga egasiz.
+                Bahoni almashtirish yoki o'chirishni o'quv prorektori bajaradi.
+            </div>
+        </div>
+        @endif
 
         <!-- Tarix -->
         <div class="qa-card">
             <div style="padding:12px 16px;border-bottom:1px solid #e2e8f0;font-weight:800;color:#334155;font-size:13px;">
-                So'nggi apelyatsiyalar
+                @if($canPerform ?? true) So'nggi apelyatsiyalar @else Apelyatsiyalar tarixi @endif
             </div>
             <div class="qa-table-wrap">
                 <table class="qa-table">
@@ -166,6 +191,7 @@
         </div>
     </div>
 
+    @if($canPerform ?? true)
     <!-- Apelyatsiya modal -->
     <div id="appealOverlay" class="appeal-overlay">
         <div class="appeal-modal">
@@ -209,6 +235,17 @@
         </div>
     </div>
 
+    <!-- Ustun filtri (unikal qiymatlar + ichida qidiruv) -->
+    <div id="qaFilterPop" class="qa-filter-pop">
+        <div class="qfp-search"><input type="text" id="qfpSearch" placeholder="Qidirish..."></div>
+        <div class="qfp-list" id="qfpList"></div>
+        <div class="qfp-foot">
+            <button type="button" class="qfp-btn" id="qfpClear">Tozalash</button>
+            <button type="button" class="qfp-btn primary" id="qfpApply">Qo'llash</button>
+        </div>
+    </div>
+    @endif
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
         var searchUrl = '{{ route($routePrefix . ".quiz-grade-appeals.search") }}';
@@ -236,7 +273,8 @@
                         return;
                     }
                     qaLastRows = res.rows || [];
-                    qaRenderResults(qaLastRows);
+                    qaFilters = {};            // yangi qidiruv — filtrlarni tozalaymiz
+                    qaApplyFilters();
                 },
                 error: function(xhr) {
                     var msg = (xhr.responseJSON && (xhr.responseJSON.message || (xhr.responseJSON.errors && Object.values(xhr.responseJSON.errors)[0][0]))) || 'Xatolik yuz berdi.';
@@ -286,6 +324,112 @@
             });
             $('#qaResultsBody').html(html);
         }
+
+        // ========== USTUN FILTRLARI ==========
+        // qaFilters: { field: Set(tanlangan qiymatlar) }. Field yo'q bo'lsa = hammasi.
+        var qaFilters = {};
+        var qfpField = null; // hozir ochiq popup qaysi ustun uchun
+
+        function qaRowVal(r, f) { return String(r[f] === null || r[f] === undefined ? '' : r[f]); }
+
+        function qaApplyFilters() {
+            var fields = Object.keys(qaFilters);
+            var rows = qaLastRows.filter(function(r) {
+                return fields.every(function(f) {
+                    var sel = qaFilters[f];
+                    if (!sel) return true;
+                    return sel.has(qaRowVal(r, f));
+                });
+            });
+            qaRenderResults(rows);
+            // Filtr ikonkalarini yangilash (faol bo'lsa rangli)
+            $('.qa-filter-ico').each(function() {
+                $(this).toggleClass('active', !!qaFilters[$(this).data('field')]);
+            });
+        }
+
+        function qaCloseFilterPop() { $('#qaFilterPop').hide(); qfpField = null; }
+
+        function qaOpenFilterPop(ico) {
+            var $ico = $(ico);
+            var field = $ico.data('field');
+            qfpField = field;
+
+            // Ushbu ustun bo'yicha unikal qiymatlar (butun natijadan)
+            var seen = {};
+            qaLastRows.forEach(function(r) { seen[qaRowVal(r, field)] = true; });
+            var uniq = Object.keys(seen).sort(function(a, b) {
+                return a.localeCompare(b, 'uz', { numeric: true });
+            });
+
+            var sel = qaFilters[field]; // Set yoki undefined
+            var listHtml = '';
+            uniq.forEach(function(v, i) {
+                var checked = !sel || sel.has(v) ? 'checked' : '';
+                var label = v === '' ? '(bo\'sh)' : v;
+                listHtml += '<label class="qfp-item" data-val="' + esc(v) + '">'
+                    + '<input type="checkbox" class="qfp-cb" value="' + esc(v) + '" ' + checked + '>'
+                    + '<span>' + esc(label) + '</span></label>';
+            });
+            if (!uniq.length) listHtml = '<div class="qfp-empty">Qiymat yo\'q</div>';
+            $('#qfpList').html(listHtml);
+            $('#qfpSearch').val('');
+
+            // Popupni ikonka tagiga joylashtirish
+            var off = $ico.offset();
+            var popW = 240;
+            var left = Math.min(off.left, $(window).width() - popW - 10);
+            $('#qaFilterPop').css({ top: off.top + $ico.outerHeight() + 4, left: Math.max(8, left) }).show();
+        }
+
+        // Popup ichida qidiruv
+        $(document).on('input', '#qfpSearch', function() {
+            var q = ($(this).val() || '').toLowerCase();
+            $('#qfpList .qfp-item').each(function() {
+                var v = String($(this).data('val')).toLowerCase();
+                $(this).toggle(v.indexOf(q) !== -1);
+            });
+        });
+
+        // Filtr ikonkasini bosish
+        $(document).on('click', '.qa-filter-ico', function(e) {
+            e.stopPropagation();
+            if (qfpField === $(this).data('field') && $('#qaFilterPop').is(':visible')) {
+                qaCloseFilterPop();
+            } else {
+                qaOpenFilterPop(this);
+            }
+        });
+
+        // Qo'llash
+        $(document).on('click', '#qfpApply', function() {
+            if (!qfpField) return;
+            var all = $('#qfpList .qfp-cb');
+            var checked = $('#qfpList .qfp-cb:checked');
+            if (checked.length === 0 || checked.length === all.length) {
+                // Hech biri yoki hammasi tanlangan bo'lsa — filtrni olib tashlaymiz
+                // (bo'sh tanlov = filtr yo'q, chalkashmaslik uchun).
+                delete qaFilters[qfpField];
+            } else {
+                var set = new Set();
+                checked.each(function() { set.add(String($(this).val())); });
+                qaFilters[qfpField] = set;
+            }
+            qaCloseFilterPop();
+            qaApplyFilters();
+        });
+
+        // Tozalash (shu ustun filtrini)
+        $(document).on('click', '#qfpClear', function() {
+            if (qfpField) delete qaFilters[qfpField];
+            qaCloseFilterPop();
+            qaApplyFilters();
+        });
+
+        // Tashqariga bosilsa popup yopiladi
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('#qaFilterPop, .qa-filter-ico').length) qaCloseFilterPop();
+        });
 
         // ========== APELYATSIYA ==========
         var apCurrentKind = 'quiz';

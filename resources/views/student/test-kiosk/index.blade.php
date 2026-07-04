@@ -335,7 +335,7 @@
                 }
 
                 stopCamera();
-                setOverlay('✖', 'Mos kelmadi', result.data.error || 'Face ID tekshiruvi o'tmadi.');
+                setOverlay('✖', 'Mos kelmadi', result.data.error || "Face ID tekshiruvi o'tmadi.");
                 showResult((result.data.error || 'Yuz mos kelmadi.') + (result.data.confidence ? ' (' + result.data.confidence + '%)' : ''), 'error');
                 $('btn-face-retry').style.display = 'inline-flex';
             }, 250);
@@ -371,7 +371,7 @@
                 setOverlay('📷', 'Kamera ochilmoqda...', '');
                 await startCamera();
             } catch (error) {
-                alert(error.message || 'Face ID oqimini boshlab bo'lmadi.');
+                alert(error.message || "Face ID oqimini boshlab bo'lmadi.");
             } finally {
                 $('btn-face-verify').disabled = false;
                 $('btn-face-verify').textContent = 'Face ID bilan tasdiqlash';

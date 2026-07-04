@@ -85,10 +85,18 @@ class QuizGradeAppealController extends Controller
 
     /**
      * FISH / HEMIS ID / Talaba ID bo'yicha talabani qidirib, uning sistemaga
-     * Moodle orqali yuklangan BARCHA natijalarini qaytaradi — OSKI/Test
-     * (reason='quiz_result') va "N-mavzu" qayta topshirish (retake_grade)
-     * ikkalasi ham. Prorektor to'g'ridan-to'g'ri shu ro'yxatdan apelyatsiya
-     * qila oladi.
+     * Moodle orqali yuklangan BARCHA natijalarini qaytaradi — OSKI/Test,
+     * "N-mavzu" qayta topshirish va "Qayta o'qish" (kurs qayta o'qish)
+     * turlarining barchasi.
+     *
+     * Diagnostika (tartibgaSol) bilan bir xil strategiya: qidiruv AVVAL
+     * hemis_quiz_results.student_name/student_id ga to'g'ridan-to'g'ri
+     * qaraladi (Moodle manbasi), students jadvaliga esa faqat ism/fakultet
+     * kabi ko'rinish ma'lumotlarini to'ldirish uchun ishlatiladi. Aks holda
+     * (avvalgi versiyada bo'lgani kabi) talabaning students jadvalidagi
+     * yozuvi topilmasa yoki quiz natijasi boshqa student_hemis_id bilan
+     * bog'langan bo'lsa (masalan alohida "qayta o'qish" yozuvi), natija
+     * butunlay ko'rinmay qolardi.
      */
     public function searchGrades(Request $request)
     {
@@ -97,36 +105,44 @@ class QuizGradeAppealController extends Controller
         $request->validate(['q' => 'required|string|min:2']);
         $q = trim($request->q);
 
+        // 1) students jadvalidan mos hemis_id/student_id_number lar — Moodle
+        //    tomonidagi student_id ko'pincha shularga teng bo'ladi.
         $students = Student::where('full_name', 'LIKE', '%' . $q . '%')
             ->orWhere('student_id_number', 'LIKE', '%' . $q . '%')
             ->orWhere('hemis_id', 'LIKE', '%' . $q . '%')
-            ->limit(20)
+            ->limit(50)
             ->get(['id', 'hemis_id', 'student_id_number', 'full_name', 'department_name', 'specialty_name', 'group_name']);
 
-        if ($students->isEmpty()) {
-            return response()->json(['success' => true, 'rows' => [], 'students_found' => 0]);
-        }
-
         $studentLookup = [];
-        $ids = [];
+        $nameIds = [];
         foreach ($students as $s) {
             if ($s->hemis_id) {
                 $studentLookup[$s->hemis_id] = $s;
-                $ids[] = $s->hemis_id;
+                $nameIds[] = $s->hemis_id;
             }
             if ($s->student_id_number) {
                 $studentLookup[$s->student_id_number] = $s;
-                $ids[] = $s->student_id_number;
+                $nameIds[] = $s->student_id_number;
             }
         }
 
-        // whereNotNull('quiz_result_id') — Moodle orqali yuklangan HAR QANDAY
-        // natija (OSKI/Test HAM, mavzu qayta topshirish HAM shu maydon bilan
-        // belgilanadi). reason bo'yicha filtrlamaymiz — aks holda mavzu
-        // qayta topshirish natijalari (reason='absent'/'low_grade') chiqib
-        // ketardi.
-        $grades = StudentGrade::whereNotNull('quiz_result_id')
-            ->whereIn('student_hemis_id', array_unique($ids))
+        // 2) hemis_quiz_results ni TO'G'RIDAN-TO'G'RI qidiramiz (Moodle
+        //    manbasi) — students jadvalidagi mos yozuvga bog'liq emas.
+        $quizResultIds = HemisQuizResult::where(function ($qq) use ($q, $nameIds) {
+                $qq->where('student_name', 'LIKE', '%' . $q . '%')
+                   ->orWhere('student_id', 'LIKE', '%' . $q . '%');
+                if (!empty($nameIds)) {
+                    $qq->orWhereIn('student_id', $nameIds);
+                }
+            })
+            ->limit(1000)
+            ->pluck('id');
+
+        if ($quizResultIds->isEmpty()) {
+            return response()->json(['success' => true, 'rows' => [], 'students_found' => $students->count()]);
+        }
+
+        $grades = StudentGrade::whereIn('quiz_result_id', $quizResultIds)
             ->orderByDesc('lesson_date')
             ->limit(500)
             ->get();
@@ -134,6 +150,31 @@ class QuizGradeAppealController extends Controller
         $quizResults = HemisQuizResult::whereIn('id', $grades->pluck('quiz_result_id')->unique())
             ->get()
             ->keyBy('id');
+
+        // 3) Dastlabki ism-qidiruvida topilmagan student_hemis_id lar uchun
+        //    qo'shimcha (aniq) qidiruv — grade qatorining o'z hemis_id/
+        //    student_id_number qiymati bo'yicha.
+        $missingIds = $grades->pluck('student_hemis_id')
+            ->unique()
+            ->filter()
+            ->reject(fn ($id) => isset($studentLookup[$id]))
+            ->values();
+
+        if ($missingIds->isNotEmpty()) {
+            Student::where(function ($qb) use ($missingIds) {
+                    $qb->whereIn('hemis_id', $missingIds)
+                       ->orWhereIn('student_id_number', $missingIds);
+                })
+                ->get(['hemis_id', 'student_id_number', 'full_name', 'department_name', 'specialty_name', 'group_name'])
+                ->each(function ($s) use (&$studentLookup) {
+                    if ($s->hemis_id) {
+                        $studentLookup[$s->hemis_id] = $s;
+                    }
+                    if ($s->student_id_number) {
+                        $studentLookup[$s->student_id_number] = $s;
+                    }
+                });
+        }
 
         $rows = $grades->map(function ($g) use ($quizResults, $studentLookup) {
             $student = $studentLookup[$g->student_hemis_id] ?? null;
@@ -143,14 +184,16 @@ class QuizGradeAppealController extends Controller
             return [
                 'id'           => $g->id,
                 'student_hemis_id' => $g->student_hemis_id,
-                'student_name' => $student->full_name ?? '-',
-                'faculty'      => $student->department_name ?? '-',
-                'direction'    => $student->specialty_name ?? '-',
-                'group'        => $student->group_name ?? '-',
+                // Students jadvalida yozuv topilmasa — Moodle'dagi xom ismga tushamiz
+                // (diagnostika sahifasi ham xuddi shunday qiladi).
+                'student_name' => $student?->full_name ?? $quiz?->student_name ?? '-',
+                'faculty'      => $student?->department_name ?? '-',
+                'direction'    => $student?->specialty_name ?? '-',
+                'group'        => $student?->group_name ?? '-',
                 'fan_name'     => $g->subject_name,
-                'quiz_type'    => $quiz->quiz_type ?? '-',
-                'shakl'        => $quiz->shakl ?? '-',
-                'attempt_name' => $quiz->attempt_name ?? '-',
+                'quiz_type'    => $quiz?->quiz_type ?? '-',
+                'shakl'        => $quiz?->shakl ?? '-',
+                'attempt_name' => $quiz?->attempt_name ?? '-',
                 'kind'         => $kind, // 'quiz' (OSKI/Test) | 'mavzu' (qayta topshirish)
                 'kind_label'   => $kind === 'mavzu' ? 'Qayta topshirish' : 'OSKI/Test',
                 'grade'        => $this->currentValue($g),

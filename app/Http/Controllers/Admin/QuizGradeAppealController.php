@@ -10,6 +10,7 @@ use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Services\ActivityLogService;
 use App\Services\Retake\RetakeJournalService;
+use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
@@ -433,6 +434,8 @@ class QuizGradeAppealController extends Controller
             $appeal
         );
 
+        $this->sendAppealTelegram($appeal, $kind === 'mavzu' ? 'Qayta topshirish (mavzu)' : 'OSKI/Test');
+
         return response()->json([
             'success' => true,
             'message' => $isReplace ? 'Baho almashtirildi.' : 'Baho o\'chirildi.',
@@ -510,10 +513,40 @@ class QuizGradeAppealController extends Controller
             $appeal
         );
 
+        $this->sendAppealTelegram($appeal, "Qayta o'qish ({$componentLabel})");
+
         return response()->json([
             'success' => true,
             'message' => $isReplace ? 'Qayta o\'qish bahosi almashtirildi.' : 'Qayta o\'qish bahosi o\'chirildi.',
         ]);
+    }
+
+    /**
+     * Apelyatsiya (baho almashtirildi/o'chirildi) haqida Telegram xabari.
+     * Xato bo'lsa amalni buzmaydi (TelegramService jim log qiladi).
+     */
+    private function sendAppealTelegram(QuizGradeAppeal $appeal, string $typeLabel): void
+    {
+        $isDelete = $appeal->action === QuizGradeAppeal::ACTION_DELETE;
+        $old = $appeal->old_grade !== null ? rtrim(rtrim(number_format($appeal->old_grade, 2, '.', ''), '0'), '.') : '—';
+        $new = $appeal->new_grade !== null ? rtrim(rtrim(number_format($appeal->new_grade, 2, '.', ''), '0'), '.') : '—';
+
+        $lines = [
+            "🔔 Test bahosi apelyatsiyasi",
+            "👤 Talaba: " . ($appeal->student_name ?: '—') . " (" . ($appeal->student_hemis_id ?: '—') . ")",
+            "📚 Fan: " . ($appeal->subject_name ?: '—'),
+            "🏷 Turi: " . $typeLabel,
+            "⚙️ Amal: " . ($isDelete ? "Baho o'chirildi" : "Baho almashtirildi"),
+            "📊 Baho: " . ($isDelete ? "{$old} → o'chirildi" : "{$old} → {$new}"),
+            "📝 Sabab: " . ($appeal->reason ?: '—'),
+            "👮 Kim: " . ($appeal->performed_by_name ?: '—') . " (" . ($appeal->performed_by_role ?: '—') . ")",
+            "🕒 " . ($appeal->created_at?->format('d.m.Y H:i') ?? now()->format('d.m.Y H:i')),
+        ];
+
+        app(TelegramService::class)->notifyChat(
+            config('services.telegram.appeal_chat_id'),
+            implode("\n", $lines)
+        );
     }
 
     /**

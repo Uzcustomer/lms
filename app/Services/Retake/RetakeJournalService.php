@@ -890,7 +890,11 @@ class RetakeJournalService
 
             // OSKI / TEST
             $oskiVal = $app->oske_score !== null ? (int) round((float) $app->oske_score) : 0;
-            $testVal = $app->test_score !== null ? (int) round((float) $app->test_score) : 0;
+            // Sinov fanlarda Test komponenti = JN (jadval/eksport bilan bir xil).
+            $testSource = in_array($group->assessment_type, ['sinov', 'sinov_fan'], true)
+                ? $app->joriy_score
+                : $app->test_score;
+            $testVal = $testSource !== null ? (int) round((float) $testSource) : 0;
             $onVal = 0;
 
             $sheet->setCellValue('B' . $row, $student?->full_name ?? '—');

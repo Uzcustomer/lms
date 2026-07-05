@@ -1734,9 +1734,12 @@ class QuizResultController extends Controller
             if ($m->isNotEmpty()) {
                 return $narrowBySem($m)->sortByDesc('id')->first();
             }
+            // Taxminiy (fuzzy) moslashdan OLDIN semestr bo'yicha cheklaymiz — aks
+            // holda boshqa semestr arizasi nomi yuqori foiz berib, natija noto'g'ri
+            // semestrga yozilishi mumkin (Codex P1).
             $best = null;
             $bestPct = 0.0;
-            foreach ($cands as $a) {
+            foreach ($narrowBySem($cands) as $a) {
                 foreach ($appNames($a) as $an) {
                     similar_text($nk, $an, $pct);
                     if ($pct > $bestPct) {

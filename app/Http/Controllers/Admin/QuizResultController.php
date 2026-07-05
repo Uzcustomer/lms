@@ -1654,7 +1654,7 @@ class QuizResultController extends Controller
      * cheklaymiz (fasl guard). Token bo'lmasa — joriy (ochiq) sessiya
      * arizalari bilan cheklaymiz (yopilgan eski sessiyaga yozilmasin).
      */
-    private function matchRetakeApp($apps, string $hemis, ?string $fanId, ?string $fanName, ?string $code, ?string $attemptDate = null): ?\App\Models\RetakeApplication
+    private function matchRetakeApp($apps, string $hemis, ?string $fanId, ?string $fanName, ?string $code, ?string $attemptDate = null, ?string $quizSemester = null): ?\App\Models\RetakeApplication
     {
         if (!$apps || $apps->isEmpty()) {
             return null;
@@ -1664,6 +1664,23 @@ class QuizResultController extends Controller
         if ($cands->isEmpty()) {
             return null;
         }
+
+        // Bitta talabada bir xil fandan bir nechta semestr arizasi bo'lishi mumkin
+        // (mas. 3-sem va 4-sem). Quiz semestri bo'yicha to'g'ri arizani ajratamiz.
+        $quizSemNum = ($quizSemester !== null && preg_match('/(\d+)/', $quizSemester, $qm)) ? (int) $qm[1] : null;
+        $narrowBySem = function ($matched) use ($quizSemNum) {
+            // Yagona ariza — o'zi (semestr belgisidan qat'i nazar).
+            if ($matched->count() <= 1) {
+                return $matched;
+            }
+            // Bir nechta ariza-yu quiz semestri noma'lum — ajratib bo'lmaydi (eski xatti-harakat).
+            if ($quizSemNum === null) {
+                return $matched;
+            }
+            // Bir nechta ariza: FAQAT quiz semestriga mos arizalar. Mos yo'q bo'lsa —
+            // bo'sh qaytaramiz (boshqa semestr arizasiga YOZMAYMIZ → rad).
+            return $matched->filter(fn ($a) => preg_match('/(\d+)/', (string) $a->semester_name, $am) && (int) $am[1] === $quizSemNum);
+        };
 
         if ($code !== null) {
             // Token bor — fasl/sessiya kodi sessiya nomidan olinadi.
@@ -1696,7 +1713,7 @@ class QuizResultController extends Controller
         if (!empty($fanId)) {
             $m = $cands->filter(fn ($a) => (string) $a->subject_id === (string) $fanId);
             if ($m->isNotEmpty()) {
-                return $m->sortByDesc('id')->first();
+                return $narrowBySem($m)->sortByDesc('id')->first();
             }
         }
 
@@ -1705,7 +1722,7 @@ class QuizResultController extends Controller
         if ($nk !== '') {
             $m = $cands->filter(fn ($a) => $this->normName($a->subject_name) === $nk);
             if ($m->isNotEmpty()) {
-                return $m->sortByDesc('id')->first();
+                return $narrowBySem($m)->sortByDesc('id')->first();
             }
             $best = null;
             $bestPct = 0.0;
@@ -1742,7 +1759,7 @@ class QuizResultController extends Controller
         }
 
         $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($result->attempt_name, $result->shakl);
-        $app = $this->matchRetakeApp($retakeApps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code, (string) $result->date_finish);
+        $app = $this->matchRetakeApp($retakeApps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code, (string) $result->date_finish, $result->semester);
 
         if (!$app) {
             return ['code' => 'no_retake_app', 'text' => 'Qayta o\'qish arizasi topilmadi'] + $none;
@@ -1829,7 +1846,9 @@ class QuizResultController extends Controller
             (string) $student->hemis_id,
             $fanIdOverride ?: $result->fan_id,
             $fanNameOverride ?: $result->fan_name,
-            $code
+            $code,
+            (string) $result->date_finish,
+            $result->semester
         );
 
         if (!$app) {
@@ -2172,7 +2191,7 @@ class QuizResultController extends Controller
             }
 
             $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($q->attempt_name, $q->shakl);
-            $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $q->fan_id, $q->fan_name, $code, (string) $q->date_finish);
+            $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $q->fan_id, $q->fan_name, $code, (string) $q->date_finish, $q->semester);
             if (!$app) {
                 continue;
             }
@@ -4185,7 +4204,8 @@ class QuizResultController extends Controller
             $r->fan_id,
             $r->fan_name ?? null,
             $code,
-            (string) ($r->date_finish ?? '')
+            (string) ($r->date_finish ?? ''),
+            $r->semester ?? null
         );
         if (!$app) {
             return null;

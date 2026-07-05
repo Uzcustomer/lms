@@ -110,4 +110,21 @@ class RetakeSessionCode
             || self::hasRetakeMarker($shakl)
             || self::hasRetakeMarker($attemptName);
     }
+
+    /**
+     * Quiz natijasidan semestr RAQAMINI aniqlaydi. Ko'p qayta o'qish quizlarida
+     * `semester` maydoni bo'sh (NULL) bo'ladi — semestr faqat nomida ("...6-sem...")
+     * ko'rsatiladi. Shuning uchun avval `semester` maydoni, bo'lmasa `attempt_name`
+     * ichidagi "N-sem" naqshi ishlatiladi.
+     */
+    public static function semesterNumber(?string $semesterField, ?string $attemptName = null): ?int
+    {
+        if ($semesterField !== null && trim($semesterField) !== '' && preg_match('/(\d+)/', $semesterField, $m)) {
+            return (int) $m[1];
+        }
+        if ($attemptName !== null && preg_match('/(\d+)\s*-\s*sem/iu', $attemptName, $m)) {
+            return (int) $m[1];
+        }
+        return null;
+    }
 }

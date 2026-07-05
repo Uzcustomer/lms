@@ -106,7 +106,8 @@ class ReconcileRetakeScores extends Command
                 }
                 $hid = $sidToHemis[(string) $r->student_id] ?? null;
                 if ($hid === null) continue;
-                $sn = $semNum($r->semester) ?? 0;
+                // Semestr: `semester` maydoni ko'pincha NULL — nomidan ("N-sem") olamiz.
+                $sn = RetakeSessionCode::semesterNumber($r->semester, $r->attempt_name) ?? 0;
                 $kind = $isOske ? 'oske' : 'test';
                 $g = (float) $r->grade;
                 if (!isset($best[$hid][$sn][$kind]) || $g > $best[$hid][$sn][$kind]) {

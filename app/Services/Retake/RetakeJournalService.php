@@ -1214,7 +1214,8 @@ class RetakeJournalService
             if ($hid === null) {
                 continue;
             }
-            $semKey = preg_match('/(\d+)/', (string) $row->semester, $sm) ? (int) $sm[1] : 0; // 0 = noma'lum
+            // Semestr: `semester` maydoni ko'pincha NULL — nomidan ("N-sem") olamiz.
+            $semKey = RetakeSessionCode::semesterNumber($row->semester, $row->attempt_name) ?? 0; // 0 = noma'lum
             if (!isset($best[$hid][$semKey][$kind]) || $grade > $best[$hid][$semKey][$kind]) {
                 $best[$hid][$semKey][$kind] = $grade;
             }

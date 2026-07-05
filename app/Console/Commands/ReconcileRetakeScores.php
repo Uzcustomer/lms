@@ -31,6 +31,7 @@ class ReconcileRetakeScores extends Command
     {
         $apply = (bool) $this->option('apply');
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
         $cutoff = config('retake.tokenless_open_cutoff');
 
         $normSubj = fn (?string $s) => $s === null ? '' : trim(preg_replace('/\s+/u', ' ', mb_strtolower($merge->rootSubjectName($s))));
@@ -97,10 +98,17 @@ class ReconcileRetakeScores extends Command
                     if (!$sessionOpen) continue;
                     if ($cutoff !== null && $r->date_finish !== null && substr((string) $r->date_finish, 0, 10) < $cutoff) continue;
                 }
+                // FAQAT OSKI / YN test turlari — mavzu va boshqa quizlar hisobga olinmaydi.
+                $isOske = in_array($r->quiz_type, $oskiTypes, true);
+                $isTest = in_array($r->quiz_type, $testTypes, true);
+                if (!$isOske && !$isTest) {
+                    continue;
+                }
                 $hid = $sidToHemis[(string) $r->student_id] ?? null;
                 if ($hid === null) continue;
-                $sn = $semNum($r->semester) ?? 0;
-                $kind = in_array($r->quiz_type, $oskiTypes, true) ? 'oske' : 'test';
+                // Semestr: `semester` maydoni ko'pincha NULL — nomidan ("N-sem") olamiz.
+                $sn = RetakeSessionCode::semesterNumber($r->semester, $r->attempt_name) ?? 0;
+                $kind = $isOske ? 'oske' : 'test';
                 $g = (float) $r->grade;
                 if (!isset($best[$hid][$sn][$kind]) || $g > $best[$hid][$sn][$kind]) {
                     $best[$hid][$sn][$kind] = $g;
@@ -174,7 +182,9 @@ class ReconcileRetakeScores extends Command
     private function belongsToOtherSem(array $byHidBest, ?int $appSem, string $kind, float $val): bool
     {
         foreach ($byHidBest as $sem => $kinds) {
-            if ((int) $sem === (int) $appSem) continue;
+            // Semestrsiz (0) quiz "boshqa semestr" emas — u shu arizaga ham tegishli
+            // bo'lishi mumkin, shuning uchun kontaminatsiya deb hisoblamaymiz.
+            if ((int) $sem === 0 || (int) $sem === (int) $appSem) continue;
             if (isset($kinds[$kind]) && (float) round($kinds[$kind]) === (float) round($val)) {
                 return true;
             }

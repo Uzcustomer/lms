@@ -1759,7 +1759,7 @@ class QuizResultController extends Controller
         }
 
         $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($result->attempt_name, $result->shakl);
-        $app = $this->matchRetakeApp($retakeApps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code, (string) $result->date_finish, $result->semester);
+        $app = $this->matchRetakeApp($retakeApps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code, (string) $result->date_finish, (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($result->semester, $result->attempt_name) ?? ''));
 
         if (!$app) {
             return ['code' => 'no_retake_app', 'text' => 'Qayta o\'qish arizasi topilmadi'] + $none;
@@ -1848,7 +1848,7 @@ class QuizResultController extends Controller
             $fanNameOverride ?: $result->fan_name,
             $code,
             (string) $result->date_finish,
-            $result->semester
+            (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($result->semester, $result->attempt_name) ?? '')
         );
 
         if (!$app) {
@@ -2191,7 +2191,7 @@ class QuizResultController extends Controller
             }
 
             $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($q->attempt_name, $q->shakl);
-            $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $q->fan_id, $q->fan_name, $code, (string) $q->date_finish, $q->semester);
+            $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $q->fan_id, $q->fan_name, $code, (string) $q->date_finish, (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($q->semester, $q->attempt_name) ?? ''));
             if (!$app) {
                 continue;
             }
@@ -4205,7 +4205,7 @@ class QuizResultController extends Controller
             $r->fan_name ?? null,
             $code,
             (string) ($r->date_finish ?? ''),
-            $r->semester ?? null
+            (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($r->semester ?? null, $r->attempt_name ?? null) ?? '')
         );
         if (!$app) {
             return null;

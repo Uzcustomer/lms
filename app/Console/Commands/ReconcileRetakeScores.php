@@ -23,13 +23,14 @@ use Illuminate\Console\Command;
  */
 class ReconcileRetakeScores extends Command
 {
-    protected $signature = 'retake:reconcile-scores {--apply : Haqiqatan yozadi (aks holda dry-run)} {--group= : Faqat shu retake_group id}';
+    protected $signature = 'retake:reconcile-scores {--apply : Haqiqatan yozadi (aks holda dry-run)} {--group= : Faqat shu retake_group id} {--all-approved : Faqat ko\'p semestrli emas, BARCHA approved arizalarni tekshiradi (boshqa semestr natijasini tozalaydi)}';
 
     protected $description = "Turli semestr arizalariga noto'g'ri tushgan qayta o'qish OSKE/TEST ballarini semestr bo'yicha qayta taqsimlaydi";
 
     public function handle(RetakeJournalService $svc, VedomostMergeService $merge): int
     {
         $apply = (bool) $this->option('apply');
+        $allApproved = (bool) $this->option('all-approved');
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
         $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
         $cutoff = config('retake.tokenless_open_cutoff');
@@ -52,11 +53,16 @@ class ReconcileRetakeScores extends Command
                 ->where('final_status', RetakeApplication::STATUS_APPROVED)
                 ->get();
 
-            // Bir talabada turli semestrli >1 ariza bo'lganlarni ajratamiz.
-            $byStudent = $apps->groupBy('student_hemis_id')->filter(
-                fn ($set) => $set->count() > 1
-                    && $set->pluck('semester_name')->map($semNum)->filter()->unique()->count() > 1
-            );
+            // Standart: bir talabada turli semestrli >1 ariza bo'lganlar.
+            // --all-approved: BARCHA approved arizalar (yagona bo'lsa ham — boshqa
+            // semestr natijasi tushib qolgan bo'lsa tozalash uchun).
+            $byStudent = $apps->groupBy('student_hemis_id');
+            if (!$allApproved) {
+                $byStudent = $byStudent->filter(
+                    fn ($set) => $set->count() > 1
+                        && $set->pluck('semester_name')->map($semNum)->filter()->unique()->count() > 1
+                );
+            }
             if ($byStudent->isEmpty()) {
                 continue;
             }

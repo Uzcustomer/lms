@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="text-xl font-semibold leading-tight text-gray-800">
-            Qayta o'qishga ariza topshirmaganlar
+            Qarzdorlar — akademik ma'lumotlar (academic records)
         </h2>
     </x-slot>
 
@@ -92,11 +92,11 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 210px;">
+                        <div class="filter-item" style="min-width: 180px;">
                             <label class="filter-label">&nbsp;</label>
-                            <div class="toggle-switch active" id="only-not-applied-toggle" onclick="this.classList.toggle('active')">
+                            <div class="toggle-switch active" id="only-debtors-toggle" onclick="this.classList.toggle('active')">
                                 <div class="toggle-track"><div class="toggle-thumb"></div></div>
-                                <span class="toggle-label">Faqat ariza bermaganlar</span>
+                                <span class="toggle-label">Faqat qarzdorlar</span>
                             </div>
                         </div>
                         <div class="filter-item" style="min-width: 130px;">
@@ -114,7 +114,7 @@
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
                         <svg style="width:56px;height:56px;margin:0 auto 12px;color:#cbd5e1;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                         <p style="color:#64748b;font-size:15px;font-weight:600;">Filtrlarni tanlang va "Hisoblash" tugmasini bosing</p>
-                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Tugagan semestrlarda bahosi yo'q (qarz) fanlari bo'lib, qayta o'qishga ariza bermagan talabalar</p>
+                        <p style="color:#94a3b8;font-size:13px;margin-top:4px;">Talabalarning academic records yozuvlari bo'yicha qarzdor (bahosi yo'q / yiqilgan) fanlar ro'yxati</p>
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>
@@ -131,17 +131,20 @@
                                 <thead>
                                     <tr>
                                         <th class="th-num">#</th>
-                                        <th><a href="#" class="sort-link" data-sort="full_name">Talaba FISH <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="full_name">Talaba FISH <span class="sort-icon active">&#9650;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="department_name">Fakultet <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="specialty_name">Yo'nalish <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="level_name">Kurs <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th><a href="#" class="sort-link" data-sort="group_name">Guruh <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th><a href="#" class="sort-link" data-sort="subject_name">Fan <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th>Yopilish shakli</th>
                                         <th><a href="#" class="sort-link" data-sort="semester_name">Semestr <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Bahosi yo'q (rejada bor, academic records'da baho yo'q)"><a href="#" class="sort-link" data-sort="no_grade_count">Bahosi yo'q <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Bahosi yo'q fanlardan qayta o'qishga ariza bermaganlari"><a href="#" class="sort-link" data-sort="not_applied_count">Ariza bermagan <span class="sort-icon active">&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Rejada yo'q, academic records'da bor"><a href="#" class="sort-link" data-sort="extra_count">Ortiqcha <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;" title="Joriy semestr — potensial yiqilganlar"><a href="#" class="sort-link" data-sort="current_risk_count">Joriy xavf <span class="sort-icon">&#9650;&#9660;</span></a></th>
-                                        <th style="text-align:center;width:90px;">Batafsil</th>
+                                        <th style="text-align:center;">Soat</th>
+                                        <th style="text-align:center;">Kredit</th>
+                                        <th style="text-align:center;"><a href="#" class="sort-link" data-sort="total_point">Olgan bali <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;"><a href="#" class="sort-link" data-sort="grade">Olgan bahosi <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th title="Qayta o'qishga ariza berganlik holati">Qayta o'qish holati</th>
+                                        <th title="O'qishi holati">O'qish holati</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -154,25 +157,13 @@
         </div>
     </div>
 
-    <!-- Detail Modal -->
-    <div id="detail-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeModal()">
-        <div class="modal-box">
-            <div class="modal-header">
-                <h3 id="modal-title">Batafsil ma'lumot</h3>
-                <button onclick="closeModal()" class="modal-close">&times;</button>
-            </div>
-            <div id="modal-student-info" class="modal-info"></div>
-            <div id="modal-body" style="max-height:65vh;overflow-y:auto;padding:0 4px 8px;"></div>
-        </div>
-    </div>
-
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
     <script>
-        let currentSort = 'not_applied_count';
-        let currentDirection = 'desc';
+        let currentSort = 'full_name';
+        let currentDirection = 'asc';
         let currentPage = 1;
         let reportData = [];
 
@@ -196,7 +187,7 @@
                 group: $('#group').val() || '',
                 student_status: $('#student_status').val() || '',
                 student_type: $('#student_type').val() || '',
-                only_not_applied: document.getElementById('only-not-applied-toggle').classList.contains('active') ? '1' : '0',
+                only_debtors: document.getElementById('only-debtors-toggle').classList.contains('active') ? '1' : '0',
                 student_name: $('#student_name').val() || '',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
@@ -233,7 +224,7 @@
                     }
 
                     reportData = res.data;
-                    $('#total-badge').text('Jami: ' + res.total + ' ta talaba');
+                    $('#total-badge').text('Jami: ' + res.total + ' ta yozuv');
                     $('#time-badge').text(elapsed + ' soniyada hisoblandi');
 
                     renderTable(res.data);
@@ -256,12 +247,28 @@
         }
 
         function esc(s) { return $('<span>').text((s === 0 || s) ? s : '-').html(); }
-        function fmtCredit(c) { var n = parseFloat(c); if (isNaN(n)) return '-'; return (Math.round(n * 100) / 100).toString(); }
+        function fmtNum(c) {
+            if (c === null || c === '' || typeof c === 'undefined') return '<span style="color:#94a3b8;">-</span>';
+            var n = parseFloat(c);
+            if (isNaN(n)) return esc(c);
+            return (Math.round(n * 100) / 100).toString();
+        }
 
-        function cnt(n, color) {
-            n = n || 0;
-            if (n === 0) return '<span style="color:#94a3b8;">0</span>';
-            return '<span class="badge-cnt" style="background:' + color + ';">' + n + '</span>';
+        function retakePill(status) {
+            var map = {
+                'Ariza bermagan': 'pill-red',
+                "Ko'rib chiqilmoqda": 'pill-gray',
+                "To'lovini qilmagan": 'pill-amber',
+                "To'lov tekshirilmoqda": 'pill-blue',
+                "To'lov tasdiqlandi": 'pill-teal',
+                'Guruhga tasdiqlangan': 'pill-green'
+            };
+            return '<span class="pill ' + (map[status] || 'pill-gray') + '">' + esc(status) + '</span>';
+        }
+
+        function studyPill(code, label) {
+            var map = { passed: 'pill-green', failed: 'pill-red', not_examined: 'pill-amber', not_graded: 'pill-gray' };
+            return '<span class="pill ' + (map[code] || 'pill-gray') + '">' + esc(label) + '</span>';
         }
 
         function renderTable(data) {
@@ -275,81 +282,21 @@
                 html += '<td><span class="text-cell">' + esc(r.specialty_name) + '</span></td>';
                 html += '<td><span class="text-cell">' + esc(r.level_name) + '</span></td>';
                 html += '<td><span class="badge badge-indigo">' + esc(r.group_name) + '</span></td>';
+                html += '<td><span class="text-cell">' + esc(r.subject_name) + '</span></td>';
+                html += '<td><span class="text-cell">' + esc(r.closing_form) + '</span></td>';
                 html += '<td><span class="text-cell">' + esc(r.semester_name) + '</span></td>';
-                html += '<td style="text-align:center;">' + cnt(r.no_grade_count, '#64748b') + '</td>';
-                html += '<td style="text-align:center;">' + cnt(r.not_applied_count, 'linear-gradient(135deg,#dc2626,#ef4444)') + '</td>';
-                html += '<td style="text-align:center;">' + cnt(r.extra_count, 'linear-gradient(135deg,#7c3aed,#a855f7)') + '</td>';
-                html += '<td style="text-align:center;">' + cnt(r.current_risk_count, 'linear-gradient(135deg,#d97706,#f59e0b)') + '</td>';
-                html += '<td style="text-align:center;"><button class="btn-detail" onclick="showDetail(' + i + ')">Ko\'rish</button></td>';
+                html += '<td style="text-align:center;">' + fmtNum(r.total_acload) + '</td>';
+                html += '<td style="text-align:center;">' + fmtNum(r.credit) + '</td>';
+                html += '<td style="text-align:center;font-weight:700;">' + fmtNum(r.total_point) + '</td>';
+                var gradeStyle = r.is_debt ? 'color:#dc2626;font-weight:800;' : 'color:#15803d;font-weight:800;';
+                var gradeVal = (r.grade === null || typeof r.grade === 'undefined') ? '<span style="color:#94a3b8;">-</span>' : '<span style="' + gradeStyle + '">' + esc(r.grade) + '</span>';
+                html += '<td style="text-align:center;">' + gradeVal + '</td>';
+                html += '<td>' + retakePill(r.retake_status) + '</td>';
+                html += '<td>' + studyPill(r.study_status_code, r.study_status) + '</td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
         }
-
-        function showDetail(idx) {
-            var r = reportData[idx];
-            if (!r) return;
-            $('#modal-title').text(r.full_name);
-            $('#modal-student-info').html(
-                '<div class="mi-grid">' +
-                '<div><span class="mi-l">ID</span><span class="mi-v">' + esc(r.student_id_number) + '</span></div>' +
-                '<div><span class="mi-l">Fakultet</span><span class="mi-v">' + esc(r.department_name) + '</span></div>' +
-                '<div><span class="mi-l">Yo\'nalish</span><span class="mi-v">' + esc(r.specialty_name) + '</span></div>' +
-                '<div><span class="mi-l">Guruh</span><span class="mi-v">' + esc(r.group_name) + '</span></div>' +
-                '<div><span class="mi-l">Semestr</span><span class="mi-v">' + esc(r.semester_name) + '</span></div>' +
-                '</div>'
-            );
-
-            var body = '';
-
-            // 1. Bahosi yo'q (yetmayotgan) + qayta o'qish holati
-            body += '<div class="sec-title" style="color:#dc2626;">Bahosi yo\'q (yetmayotgan) fanlar — qayta o\'qish holati</div>';
-            if (r.no_grade_subjects && r.no_grade_subjects.length) {
-                body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th style="text-align:center;">Semestr</th><th style="text-align:center;">Kredit</th><th style="text-align:center;">Qayta o\'qishga ariza</th></tr></thead><tbody>';
-                for (var j = 0; j < r.no_grade_subjects.length; j++) {
-                    var d = r.no_grade_subjects[j];
-                    var statusCell = d.has_application
-                        ? '<span class="pill pill-green">Bergan' + (d.application_status ? ' — ' + esc(d.application_status) : '') + '</span>'
-                        : '<span class="pill pill-red">Bermagan</span>';
-                    body += '<tr><td>' + (j + 1) + '</td><td>' + esc(d.subject_name) + '</td><td style="text-align:center;">' + esc(d.semester_name || d.semester_code) + '</td><td style="text-align:center;">' + fmtCredit(d.credit) + '</td><td style="text-align:center;">' + statusCell + '</td></tr>';
-                }
-                body += '</tbody></table>';
-            } else {
-                body += '<div class="sec-empty">Yo\'q</div>';
-            }
-
-            // 2. Ortiqcha
-            body += '<div class="sec-title" style="color:#7c3aed;">Ortiqcha fanlar (rejada yo\'q, academic records\'da bor)</div>';
-            if (r.extra_subjects && r.extra_subjects.length) {
-                body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th style="text-align:center;">Semestr</th><th style="text-align:center;">Kredit</th></tr></thead><tbody>';
-                for (var k = 0; k < r.extra_subjects.length; k++) {
-                    var e = r.extra_subjects[k];
-                    body += '<tr><td>' + (k + 1) + '</td><td>' + esc(e.subject_name) + '</td><td style="text-align:center;">' + esc(e.semester_code) + '</td><td style="text-align:center;">' + fmtCredit(e.credit) + '</td></tr>';
-                }
-                body += '</tbody></table>';
-            } else {
-                body += '<div class="sec-empty">Yo\'q</div>';
-            }
-
-            // 3. Joriy semestr xavf
-            body += '<div class="sec-title" style="color:#d97706;">Joriy semestr — potensial yiqilganlar</div>';
-            if (r.current_risks && r.current_risks.length) {
-                body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th>Sabablar</th></tr></thead><tbody>';
-                for (var m = 0; m < r.current_risks.length; m++) {
-                    var cr = r.current_risks[m];
-                    var reasons = (cr.reasons || []).map(function(x){ return '<span class="pill pill-amber">' + esc(x) + '</span>'; }).join(' ');
-                    body += '<tr><td>' + (m + 1) + '</td><td>' + esc(cr.subject_name) + '</td><td>' + reasons + '</td></tr>';
-                }
-                body += '</tbody></table>';
-            } else {
-                body += '<div class="sec-empty">Yo\'q</div>';
-            }
-
-            $('#modal-body').html(body);
-            $('#detail-modal').css('display', 'flex');
-        }
-
-        function closeModal() { $('#detail-modal').hide(); }
 
         function renderPagination(res) {
             var total = res.last_page || 1;
@@ -366,8 +313,6 @@
             html += '<button class="pg-btn" ' + (cur >= total ? 'disabled' : '') + ' onclick="loadReport(' + (cur + 1) + ')">›</button>';
             $('#pagination-area').html(html);
         }
-
-        $(document).keydown(function(e) { if (e.keyCode === 27) closeModal(); });
 
         $(document).ready(function() {
             $(document).on('click', '.sort-link', function(e) {
@@ -468,26 +413,12 @@
         .pg-btn.active { background: #2b5ea7; color: #fff; border-color: #2b5ea7; }
         .pg-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
-        .modal-overlay { position: fixed; inset: 0; background: rgba(15,23,42,0.55); z-index: 9999; align-items: center; justify-content: center; padding: 20px; }
-        .modal-box { background: #fff; border-radius: 14px; width: 100%; max-width: 920px; max-height: 90vh; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,0.3); display: flex; flex-direction: column; }
-        .modal-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 22px; border-bottom: 1px solid #e2e8f0; background: linear-gradient(135deg, #f0f4f8, #e8edf5); }
-        .modal-header h3 { font-size: 16px; font-weight: 700; color: #1e293b; }
-        .modal-close { font-size: 26px; line-height: 1; color: #94a3b8; background: none; border: none; cursor: pointer; }
-        .modal-close:hover { color: #ef4444; }
-        .modal-info { padding: 14px 22px; border-bottom: 1px solid #f1f5f9; background: #fafbfc; }
-        .mi-grid { display: flex; flex-wrap: wrap; gap: 18px; }
-        .mi-l { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: 0.05em; color: #94a3b8; font-weight: 700; }
-        .mi-v { display: block; font-size: 13px; color: #1e293b; font-weight: 600; }
-
-        .sec-title { margin: 16px 22px 8px; font-size: 13px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.03em; }
-        .sec-empty { margin: 0 22px 8px; font-size: 13px; color: #94a3b8; padding: 6px 0; }
-        .det-table { width: calc(100% - 44px); margin: 0 22px 8px; border-collapse: collapse; font-size: 12.5px; }
-        .det-table th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 700; color: #475569; border-bottom: 1px solid #e2e8f0; }
-        .det-table td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; color: #334155; vertical-align: middle; }
-
-        .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11.5px; font-weight: 700; line-height: 1.4; white-space: nowrap; }
+        .pill { display: inline-block; padding: 3px 10px; border-radius: 999px; font-size: 11px; font-weight: 700; line-height: 1.4; white-space: nowrap; }
         .pill-red { background: #fee2e2; color: #b91c1c; }
         .pill-green { background: #dcfce7; color: #15803d; }
         .pill-amber { background: #fef3c7; color: #b45309; margin: 1px; }
+        .pill-gray { background: #e2e8f0; color: #475569; }
+        .pill-blue { background: #dbeafe; color: #1d4ed8; }
+        .pill-teal { background: #ccfbf1; color: #0f766e; }
     </style>
 </x-app-layout>

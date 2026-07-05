@@ -1669,13 +1669,17 @@ class QuizResultController extends Controller
         // (mas. 3-sem va 4-sem). Quiz semestri bo'yicha to'g'ri arizani ajratamiz.
         $quizSemNum = ($quizSemester !== null && preg_match('/(\d+)/', $quizSemester, $qm)) ? (int) $qm[1] : null;
         $narrowBySem = function ($matched) use ($quizSemNum) {
-            if ($quizSemNum !== null && $matched->count() > 1) {
-                $bySem = $matched->filter(fn ($a) => preg_match('/(\d+)/', (string) $a->semester_name, $am) && (int) $am[1] === $quizSemNum);
-                if ($bySem->isNotEmpty()) {
-                    return $bySem;
-                }
+            // Yagona ariza — o'zi (semestr belgisidan qat'i nazar).
+            if ($matched->count() <= 1) {
+                return $matched;
             }
-            return $matched;
+            // Bir nechta ariza-yu quiz semestri noma'lum — ajratib bo'lmaydi (eski xatti-harakat).
+            if ($quizSemNum === null) {
+                return $matched;
+            }
+            // Bir nechta ariza: FAQAT quiz semestriga mos arizalar. Mos yo'q bo'lsa —
+            // bo'sh qaytaramiz (boshqa semestr arizasiga YOZMAYMIZ → rad).
+            return $matched->filter(fn ($a) => preg_match('/(\d+)/', (string) $a->semester_name, $am) && (int) $am[1] === $quizSemNum);
         };
 
         if ($code !== null) {

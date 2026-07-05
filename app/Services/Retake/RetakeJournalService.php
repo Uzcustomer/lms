@@ -1225,12 +1225,22 @@ class RetakeJournalService
         // o'shani oladi (bir xil talabaning shu guruhdagi yagona arizasi holati).
         $pickBest = function (string $hid, ?int $appSem, string $kind) use ($best) {
             $byHid = $best[$hid] ?? [];
+            // 1) Aniq semestr mosligi.
             if ($appSem !== null && isset($byHid[$appSem][$kind])) {
                 return $byHid[$appSem][$kind];
             }
-            $withKind = array_filter($byHid, fn ($b) => isset($b[$kind]));
-            if (count($withKind) === 1) {
-                return reset($withKind)[$kind];
+            // 2) Semestri belgilanmagan (0) quiz natijasi — istalgan arizaga tegishli.
+            if (isset($byHid[0][$kind])) {
+                return $byHid[0][$kind];
+            }
+            // 3) Ariza semestri NOMA'LUM bo'lsa-yu, faqat bitta semestr guruhi bo'lsa —
+            //    o'shani ol. Ariza semestri ma'lum bo'lsa, boshqa semestr natijasiga
+            //    TUSHMAYMIZ (cross-semester contamination oldini olish).
+            if ($appSem === null) {
+                $withKind = array_filter($byHid, fn ($b) => isset($b[$kind]));
+                if (count($withKind) === 1) {
+                    return reset($withKind)[$kind];
+                }
             }
             return null;
         };

@@ -5174,8 +5174,8 @@ class ReportController extends Controller
      * AJAX: Qarzdorlar — talabalarning academic_records yozuvlari (har fan alohida qator).
      *
      * Har bir qator = bitta academic_records yozuvi. "Faqat qarzdorlar" toggle yoqilganda
-     * faqat qarz (bahosi yo'q / yiqilgan / retraining) yozuvlar chiqadi. Toggle o'chirilsa
-     * talabaning barcha academic_records fanlari ko'rsatiladi.
+     * faqat qarz (HEMIS "O'zlashtirgan" = Yo'q, ya'ni finish_credit_status = false) yozuvlar
+     * chiqadi. Toggle o'chirilsa talabaning barcha academic_records fanlari ko'rsatiladi.
      */
     public function retakeNotAppliedReportData(Request $request)
     {
@@ -5240,15 +5240,14 @@ class ReportController extends Controller
                 $query->whereIn('s.group_id', $nazoratchiHemisIds);
             }
 
-            // ── Qarzdorlik filtri (isAcademicRecordDebt() ning SQL ko'rinishi) ──
-            //  Debt = bahosi bo'sh/NULL YOKI retraining YOKI (numerik va baho 0 yoki 2).
-            //  Numerik bo'lmagan (matnli) baholar qarz emas — bu PHP helperga mos.
+            // ── Qarzdorlik filtri ────────────────────────────────────────
+            //  Qarzdor = HEMIS "O'zlashtirgan" ustuni "Yo'q" (finish_credit_status = false).
+            //  Kredit tizimida "O'tdi" (pass/fail) fanlarning bahosi 0.00 bo'lsa-da,
+            //  finish_credit_status = true bo'ladi — bunday fanlar QARZ EMAS.
             if ($onlyDebtors) {
                 $query->where(function ($q) {
-                    $q->whereNull('ar.grade')
-                        ->orWhere('ar.grade', '=', '')
-                        ->orWhere('ar.retraining_status', 1)
-                        ->orWhereRaw("(ar.grade REGEXP '^[0-9]+([.][0-9]+)?\$' AND CAST(ar.grade AS DECIMAL(10,2)) IN (0, 2))");
+                    $q->where('ar.finish_credit_status', 0)
+                        ->orWhereNull('ar.finish_credit_status');
                 });
             }
 
@@ -5285,7 +5284,7 @@ class ReportController extends Controller
                     'ar.id as ar_id', 'ar.student_id', 'ar.subject_id', 'ar.subject_name',
                     'ar.semester_id', 'ar.semester_name as ar_semester_name', 'ar.credit',
                     'ar.total_acload', 'ar.total_point', 'ar.grade', 'ar.retraining_status',
-                    'ar.curriculum_id as ar_curriculum_id',
+                    'ar.finish_credit_status', 'ar.curriculum_id as ar_curriculum_id',
                     's.full_name', 's.student_id_number', 's.department_name', 's.specialty_name',
                     's.level_name', 's.group_name'
                 )
@@ -5398,7 +5397,7 @@ class ReportController extends Controller
                     'retake_status'     => $retakeStatus,
                     'study_status'      => $study['label'],
                     'study_status_code' => $study['code'],
-                    'is_debt'           => $this->isAcademicRecordDebt($r),
+                    'is_debt'           => !((bool) ($r->finish_credit_status ?? false)),
                 ];
             }
 
@@ -5417,37 +5416,34 @@ class ReportController extends Controller
 
     /**
      * Academic record yozuvining "o'qish holati" (talaba nuqtai nazaridan).
-     *   - baho_qoyilmagan : o'qituvchi bahosini qo'ymagan (baho ham, ball ham yo'q)
-     *   - imtihonga_kirmagan : ball to'plangan, ammo yakuniy baho yo'q (imtihonga kirmagan)
-     *   - yiqilgan : baho 0 yoki 2
-     *   - otgan : muvaffaqiyatli o'tgan (baho >= 3 yoki matnli o'tish bahosi)
+     *   - passed       : muvaffaqiyatli o'tgan — HEMIS "O'zlashtirgan" = Ha
+     *                    (finish_credit_status = true; "O'tdi" pass/fail fanlar ham shu yerda)
+     *   - not_graded   : o'qituvchi bahosini qo'ymagan (baho ham, ball ham yo'q)
+     *   - not_examined : ball to'plangan, ammo yakuniy baho yo'q (imtihonga kirmagan)
+     *   - failed       : yiqilgan (kredit olinmagan, baho mavjud)
      */
     private function academicRecordStudyStatus($ar): array
     {
+        // Kredit olingan (O'zlashtirgan = Ha) — baho 0.00 bo'lsa ham o'tgan hisoblanadi.
+        if ((bool) ($ar->finish_credit_status ?? false)) {
+            return ['code' => 'passed', 'label' => "Muvaffaqiyatli o'tgan"];
+        }
+
         $grade = $ar->grade;
         $gradeEmpty = ($grade === null || trim((string) $grade) === '');
 
-        $point = $ar->total_point ?? null;
-        $pointVal = ($point === null || trim((string) $point) === '' || !is_numeric($point))
-            ? null : (float) $point;
-
         if ($gradeEmpty) {
+            $point = $ar->total_point ?? null;
+            $pointVal = ($point === null || trim((string) $point) === '' || !is_numeric($point))
+                ? null : (float) $point;
             if ($pointVal !== null && $pointVal > 0) {
                 return ['code' => 'not_examined', 'label' => 'Imtihonga kirmagan'];
             }
             return ['code' => 'not_graded', 'label' => "O'qituvchi bahosini qo'ymagan"];
         }
 
-        if (!is_numeric($grade)) {
-            return ['code' => 'passed', 'label' => "Muvaffaqiyatli o'tgan"];
-        }
-
-        $g = round((float) $grade, 2);
-        if ($g < 3.0) {
-            return ['code' => 'failed', 'label' => 'Yiqilgan'];
-        }
-
-        return ['code' => 'passed', 'label' => "Muvaffaqiyatli o'tgan"];
+        // Baho bor, lekin kredit olinmagan → yiqilgan.
+        return ['code' => 'failed', 'label' => 'Yiqilgan'];
     }
 
     /**

@@ -181,7 +181,9 @@ class ReconcileRetakeScores extends Command
     private function belongsToOtherSem(array $byHidBest, ?int $appSem, string $kind, float $val): bool
     {
         foreach ($byHidBest as $sem => $kinds) {
-            if ((int) $sem === (int) $appSem) continue;
+            // Semestrsiz (0) quiz "boshqa semestr" emas — u shu arizaga ham tegishli
+            // bo'lishi mumkin, shuning uchun kontaminatsiya deb hisoblamaymiz.
+            if ((int) $sem === 0 || (int) $sem === (int) $appSem) continue;
             if (isset($kinds[$kind]) && (float) round($kinds[$kind]) === (float) round($val)) {
                 return true;
             }

@@ -210,7 +210,8 @@
                                     <td><span class="badge badge-indigo">{{ $student?->group_name ?? '—' }}</span></td>
                                     <td><span class="text-cell text-subject">{{ $retakeGroup?->subject_name ?? $app->subject_name }}</span></td>
                                     <td><span class="badge {{ $b['cls'] }}">{{ $b['label'] }}</span></td>
-                                    <td><span class="badge badge-teal">{{ $retakeGroup?->semester_name ?? $app->semester_name }}</span></td>
+                                    {{-- Semestr — ARIZANIKI (guruh bir nechta semestrni birlashtirishi mumkin). --}}
+                                    <td><span class="badge badge-teal">{{ $app->semester_name ?? $retakeGroup?->semester_name }}</span></td>
                                     <td>
                                         @if($app->sent_to_test_markazi_at)
                                             <span class="badge badge-green">{{ __("Yuborilgan") }}</span>

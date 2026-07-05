@@ -1611,7 +1611,7 @@ class QuizResultController extends Controller
         $apps = \App\Models\RetakeApplication::query()
             ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
             ->whereIn('student_hemis_id', $hemisIds)
-            ->with(['group.window.session'])
+            ->with(['group.window.session', 'retakeGroup'])
             ->get();
 
         if ($apps->isEmpty()) {
@@ -1709,28 +1709,40 @@ class QuizResultController extends Controller
             }
         }
 
-        // 1) fan_id
+        // Ariza subject_id/nomi HEMIS quizidagi qiymatdan farq qilishi mumkin
+        // (uch xil id-makon, imlo/uzunlik farqi). Shuning uchun ARIZA hamda GURUH
+        // (retakeGroup) subject_id/nomlarini ham hisobga olamiz — guruh nomi
+        // odatda quiz nomi bilan bir xil.
+        $appSubjectIds = fn ($a) => array_filter([(string) $a->subject_id, (string) ($a->retakeGroup?->subject_id ?? '')], fn ($v) => $v !== '');
+        $appNames = fn ($a) => array_values(array_filter([
+            $this->normName($a->subject_name),
+            $this->normName($a->retakeGroup?->subject_name),
+        ], fn ($v) => $v !== ''));
+
+        // 1) fan_id (ariza yoki guruh subject_id)
         if (!empty($fanId)) {
-            $m = $cands->filter(fn ($a) => (string) $a->subject_id === (string) $fanId);
+            $m = $cands->filter(fn ($a) => in_array((string) $fanId, $appSubjectIds($a), true));
             if ($m->isNotEmpty()) {
                 return $narrowBySem($m)->sortByDesc('id')->first();
             }
         }
 
-        // 2) nom (aniq) va 3) nom (taxminiy)
+        // 2) nom (aniq) va 3) nom (taxminiy) — ariza yoki guruh nomi bo'yicha
         $nk = $this->normName($fanName);
         if ($nk !== '') {
-            $m = $cands->filter(fn ($a) => $this->normName($a->subject_name) === $nk);
+            $m = $cands->filter(fn ($a) => in_array($nk, $appNames($a), true));
             if ($m->isNotEmpty()) {
                 return $narrowBySem($m)->sortByDesc('id')->first();
             }
             $best = null;
             $bestPct = 0.0;
             foreach ($cands as $a) {
-                similar_text($nk, $this->normName($a->subject_name), $pct);
-                if ($pct > $bestPct) {
-                    $bestPct = $pct;
-                    $best = $a;
+                foreach ($appNames($a) as $an) {
+                    similar_text($nk, $an, $pct);
+                    if ($pct > $bestPct) {
+                        $bestPct = $pct;
+                        $best = $a;
+                    }
                 }
             }
             if ($best !== null && $bestPct >= 85) {
@@ -1838,7 +1850,7 @@ class QuizResultController extends Controller
         $apps = \App\Models\RetakeApplication::query()
             ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
             ->where('student_hemis_id', $student->hemis_id)
-            ->with(['group.window.session'])
+            ->with(['group.window.session', 'retakeGroup'])
             ->get();
 
         $app = $this->matchRetakeApp(

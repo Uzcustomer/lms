@@ -260,9 +260,19 @@
                     <p class="mt-1 text-sm text-slate-500">Natijalar biriktirilgan guruhlar bo'yicha alohida chiqariladi. Har bir talabada batafsil javoblarni ham ko'rishingiz mumkin.</p>
                 </div>
                 <div class="tr-section">
+                    <div class="mb-5">
+                        <label for="group-results-filter" class="block text-xs font-extrabold uppercase tracking-[0.08em] text-slate-500">Guruh qidirish</label>
+                        <input
+                            id="group-results-filter"
+                            type="text"
+                            placeholder="Masalan: d1/d25-01(a)"
+                            class="mt-2 w-full max-w-md rounded-xl border border-slate-300 px-4 py-3 text-sm text-slate-700 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-100"
+                        >
+                    </div>
+
                     <div class="space-y-5">
                         @forelse($groupedStudentRows as $groupBlock)
-                            <div class="rounded-2xl border border-slate-200 overflow-hidden">
+                            <div class="rounded-2xl border border-slate-200 overflow-hidden js-group-result-block" data-group-name="{{ mb_strtolower($groupBlock['group_name']) }}">
                                 <div class="px-4 py-4 bg-slate-50 border-b border-slate-200">
                                     <div class="flex items-start justify-between gap-4 flex-wrap">
                                         <div>
@@ -356,6 +366,10 @@
                         @empty
                             <div class="py-10 text-center text-slate-500">Bu test uchun talabalar topilmadi.</div>
                         @endforelse
+
+                        <div id="group-results-empty" class="hidden py-10 text-center text-slate-500">
+                            Bunday guruh topilmadi.
+                        </div>
                     </div>
                 </div>
             </div>
@@ -401,6 +415,9 @@
             const scoreEl = document.getElementById('result-modal-score');
             const statusEl = document.getElementById('result-modal-status');
             const answersEl = document.getElementById('result-modal-answers');
+            const groupFilterInput = document.getElementById('group-results-filter');
+            const groupBlocks = Array.from(document.querySelectorAll('.js-group-result-block'));
+            const groupEmpty = document.getElementById('group-results-empty');
 
             if (!backdrop || !closeBtn || !studentEl || !metaEl || !groupEl || !scoreEl || !statusEl || !answersEl) {
                 return;
@@ -503,6 +520,28 @@
                     closeModal();
                 }
             });
+
+            if (groupFilterInput && groupBlocks.length) {
+                const applyGroupFilter = () => {
+                    const query = (groupFilterInput.value || '').trim().toLowerCase();
+                    let visibleCount = 0;
+
+                    groupBlocks.forEach((block) => {
+                        const groupName = block.getAttribute('data-group-name') || '';
+                        const isMatch = !query || groupName.includes(query);
+                        block.style.display = isMatch ? '' : 'none';
+                        if (isMatch) {
+                            visibleCount++;
+                        }
+                    });
+
+                    if (groupEmpty) {
+                        groupEmpty.classList.toggle('hidden', visibleCount !== 0);
+                    }
+                };
+
+                groupFilterInput.addEventListener('input', applyGroupFilter);
+            }
         })();
     </script>
 </x-app-layout>

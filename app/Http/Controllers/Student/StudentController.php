@@ -14,6 +14,7 @@ use App\Models\IndependentSubmission;
 use App\Models\Schedule;
 use App\Models\Semester;
 use App\Models\Setting;
+use App\Models\SinovTestGrade;
 use App\Models\Student;
 use App\Models\StudentGrade;
 use App\Models\TestSubject;
@@ -490,6 +491,13 @@ class StudentController extends Controller
         // 7) Quiz results (legacy code 103) — bir so'rov
         $allQuizResultIds = $allOtherGrades->flatten()->where('training_type_code', 103)->pluck('quiz_result_id')->filter()->unique()->toArray();
         $quizTypes = [];
+        $allSinovTestGrades = SinovTestGrade::query()
+            ->whereIn('subject_id', $subjectIds)
+            ->where('semester_code', $semesterCode)
+            ->where('group_hemis_id', $groupHemisId)
+            ->where('student_hemis_id', $studentHemisId)
+            ->get()
+            ->keyBy('subject_id');
         if (!empty($allQuizResultIds)) {
             $quizTypes = DB::table('hemis_quiz_results')
                 ->whereIn('id', $allQuizResultIds)
@@ -533,7 +541,7 @@ class StudentController extends Controller
             $mtHour, $mtMinute, $mtMaxResubmissions, $mtDeadlineTime, $mtDeadlineType,
             $allScheduleDatesBySubject,
             $allSchedules, $allStudentGrades, $allOtherGrades, $allAttendance, $allDetailGrades,
-            $allManualMt, $quizTypes, $mtHistoryCounts
+            $allManualMt, $quizTypes, $allSinovTestGrades, $mtHistoryCounts
         ) {
             $subjectId = $cs->subject_id;
 
@@ -788,6 +796,16 @@ class StudentController extends Controller
             $otherGrades['on'] = $pickLatestAttempt($otherByType[100] ?? null);
             $otherGrades['oski'] = $pickLatestAttempt($otherByType[101] ?? null);
             $otherGrades['test'] = $pickLatestAttempt($otherByType[102] ?? null);
+
+            if (($cs->closing_form ?? null) === 'sinov') {
+                $sinovRow = $allSinovTestGrades->get($subjectId);
+                if ($sinovRow) {
+                    $sinovValue = $sinovRow->override_grade ?? $sinovRow->default_grade;
+                    if ($sinovValue !== null) {
+                        $otherGrades['test'] = (int) round((float) $sinovValue, 0, PHP_ROUND_HALF_UP);
+                    }
+                }
+            }
 
             // ---- Davomat (in-memory filter) ----
             $excludedAttendanceCodes = [99, 100, 101, 102];

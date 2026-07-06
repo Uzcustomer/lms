@@ -123,6 +123,31 @@ class TestSubjectLessonTestController extends Controller
             ];
         })->values();
 
+        $groupedStudentRows = $studentRows
+            ->groupBy(fn ($row) => $row['student']->group_name ?: 'Guruhsiz')
+            ->map(function ($rows, $groupName) {
+                $rows = collect($rows)->values()->map(function ($row, int $index) {
+                    $row['group_row_no'] = $index + 1;
+
+                    return $row;
+                })->values();
+
+                $submittedCount = $rows->filter(fn ($row) => ($row['attempt']->status ?? null) === 'submitted')->count();
+                $passedCount = $rows->filter(fn ($row) => ($row['attempt']->status ?? null) === 'submitted' && ($row['attempt']->is_passed ?? false))->count();
+
+                return [
+                    'group_name' => $groupName,
+                    'rows' => $rows,
+                    'total_students' => $rows->count(),
+                    'submitted_count' => $submittedCount,
+                    'not_submitted_count' => max(0, $rows->count() - $submittedCount),
+                    'passed_count' => $passedCount,
+                    'failed_count' => max(0, $submittedCount - $passedCount),
+                ];
+            })
+            ->sortKeys()
+            ->values();
+
         $questionSummaries = $test->questions->map(function ($question) use ($submittedAttempts) {
             $answers = $submittedAttempts
                 ->flatMap(fn ($attempt) => $attempt->answers)
@@ -159,6 +184,7 @@ class TestSubjectLessonTestController extends Controller
             'test' => $test,
             'summary' => $summary,
             'studentRows' => $studentRows,
+            'groupedStudentRows' => $groupedStudentRows,
             'questionSummaries' => $questionSummaries,
         ]);
     }

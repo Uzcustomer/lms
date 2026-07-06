@@ -47,12 +47,19 @@ class TestSubjectController extends Controller
             $isFuture = $this->lessonStartsAt($lesson)?->gt($now)
                 || (optional($lesson->lesson_date)->format('Y-m-d') > $now->toDateString());
             $isSubmitted = $attempt && $attempt->status === 'submitted';
-            $canStart = $lessonTest
+            $canContinueAttempt = $lessonTest
+                && $attempt
+                && $attempt->status === 'in_progress'
+                && $this->attemptHasRemainingTime($lessonTest, $attempt, $now);
+            $isEffectivelyOpen = $lessonTest
                 && $lessonTest->is_open
+                && !$isPast;
+            $canStart = $lessonTest
+                && ($isEffectivelyOpen || $canContinueAttempt)
                 && $lessonTest->is_published
                 && $questionCount > 0
                 && !$isSubmitted
-                && $isScheduledNow;
+                && ($isScheduledNow || $canContinueAttempt);
 
             return [
                 'id' => $lesson->id,
@@ -61,7 +68,7 @@ class TestSubjectController extends Controller
                 'lesson_date' => optional($lesson->lesson_date)->format('d.m.Y'),
                 'lesson_time' => $this->lessonTimeText($lesson),
                 'question_count' => $questionCount,
-                'is_open' => (bool) ($lessonTest?->is_open),
+                'is_open' => (bool) $isEffectivelyOpen,
                 'is_published' => (bool) ($lessonTest?->is_published),
                 'is_submitted' => $isSubmitted,
                 'is_scheduled_now' => $isScheduledNow,
@@ -70,6 +77,7 @@ class TestSubjectController extends Controller
                 'attempt_percent' => $attempt?->percent,
                 'attempt_is_passed' => (bool) ($attempt?->is_passed),
                 'attempt_status' => $attempt?->status,
+                'can_start' => $canStart,
                 'test_route' => $lessonTest
                     ? route('student.test-subjects.tests.show', [$subject, $lesson])
                     : null,
@@ -101,10 +109,7 @@ class TestSubjectController extends Controller
             ? $attempt->started_at->diffInSeconds(now('Asia/Tashkent'))
             : 0;
 
-        $remainingSeconds = max(
-            0,
-            ($lessonTest->duration_minutes * 60) - $elapsedSeconds
-        );
+        $remainingSeconds = $this->resolveRemainingSeconds($lesson, $lessonTest, $attempt, $elapsedSeconds);
 
         return view('student.test-subjects.show', [
             'student' => $student,
@@ -235,8 +240,14 @@ class TestSubjectController extends Controller
             ->first();
 
         $canAccessClosedResult = $attempt && $attempt->status === 'submitted';
-        abort_unless($scheduledNow || $canAccessClosedResult, 403);
-        abort_unless($lessonTest->is_open || $canAccessClosedResult, 403);
+        $canContinueAttempt = $attempt
+            && $attempt->status === 'in_progress'
+            && $this->attemptHasRemainingTime($lessonTest, $attempt, $now);
+        $isPast = $this->lessonEndsAt($lesson)?->lt($now)
+            || (optional($lesson->lesson_date)->format('Y-m-d') < $now->toDateString());
+        $isEffectivelyOpen = $lessonTest->is_open && !$isPast;
+        abort_unless($scheduledNow || $canAccessClosedResult || $canContinueAttempt, 403);
+        abort_unless($isEffectivelyOpen || $canAccessClosedResult || $canContinueAttempt, 403);
 
         if ($lessonTest->questions->isEmpty()) {
             abort(403, 'Bu test uchun savollar hali tayyor emas.');
@@ -266,6 +277,30 @@ class TestSubjectController extends Controller
         }
 
         return $attempt;
+    }
+
+    private function resolveRemainingSeconds(
+        TestSubjectLesson $lesson,
+        TestSubjectLessonTest $lessonTest,
+        TestSubjectLessonTestAttempt $attempt,
+        int $elapsedSeconds
+    ): int {
+        return max(0, ($lessonTest->duration_minutes * 60) - $elapsedSeconds);
+    }
+
+    private function attemptHasRemainingTime(
+        TestSubjectLessonTest $lessonTest,
+        TestSubjectLessonTestAttempt $attempt,
+        ?Carbon $now = null
+    ): bool {
+        if (!$attempt->started_at) {
+            return false;
+        }
+
+        $now = $now ?: now('Asia/Tashkent');
+        $expiresAt = $attempt->started_at->copy()->addMinutes((int) $lessonTest->duration_minutes);
+
+        return $expiresAt->gt($now);
     }
 
     private function resolveOrderedQuestions(TestSubjectLessonTest $lessonTest, TestSubjectLessonTestAttempt $attempt): Collection

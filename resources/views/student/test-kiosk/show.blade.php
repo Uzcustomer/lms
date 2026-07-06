@@ -112,7 +112,7 @@
     <div style="height:16px;"></div>
 
     @if(!$submitted)
-        <form method="POST" action="{{ route('student.test-kiosk.tests.submit', [$student->student_id_number, $testSubject, $lesson]) }}" onsubmit="return confirm('Testni yakunlab yuborasizmi?')" style="display:grid;gap:14px;">
+        <form id="kiosk-test-form" method="POST" action="{{ route('student.test-kiosk.tests.submit', [$student->student_id_number, $testSubject, $lesson]) }}" onsubmit="return confirm('Testni yakunlab yuborasizmi?')" style="display:grid;gap:14px;">
             @csrf
             <input type="hidden" name="lang" value="{{ $language }}">
             @foreach($questions as $index => $question)
@@ -229,6 +229,11 @@
             var secs = String(remaining % 60).padStart(2, '0');
             if (el) el.textContent = hrs + ':' + mins + ':' + secs;
             if (remaining <= 0) {
+                var form = document.getElementById('kiosk-test-form');
+                if (form) {
+                    form.submit();
+                    return;
+                }
                 window.location.reload();
                 return;
             }

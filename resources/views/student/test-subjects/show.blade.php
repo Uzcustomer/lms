@@ -154,7 +154,7 @@
             @endif
 
             @if(!$submitted)
-                <form method="POST" action="{{ route('student.test-subjects.tests.submit', [$testSubject, $lesson]) }}" class="space-y-4" onsubmit="return confirm('Testni yakunlab yuborasizmi?')">
+                <form id="student-test-form" method="POST" action="{{ route('student.test-subjects.tests.submit', [$testSubject, $lesson]) }}" class="space-y-4" onsubmit="return confirm('Testni yakunlab yuborasizmi?')">
                     @csrf
                     <input type="hidden" name="lang" value="{{ $language }}">
                     @foreach($questions as $index => $question)
@@ -274,6 +274,10 @@
                     if (seconds <= 0) {
                         clearInterval(timer);
                         el.textContent = '00:00:00';
+                        const form = document.getElementById('student-test-form');
+                        if (form) {
+                            form.submit();
+                        }
                         return;
                     }
                     seconds--;

@@ -47,8 +47,11 @@ class TestSubjectController extends Controller
             $isFuture = $this->lessonStartsAt($lesson)?->gt($now)
                 || (optional($lesson->lesson_date)->format('Y-m-d') > $now->toDateString());
             $isSubmitted = $attempt && $attempt->status === 'submitted';
-            $canStart = $lessonTest
+            $isEffectivelyOpen = $lessonTest
                 && $lessonTest->is_open
+                && !$isPast;
+            $canStart = $lessonTest
+                && $isEffectivelyOpen
                 && $lessonTest->is_published
                 && $questionCount > 0
                 && !$isSubmitted
@@ -61,7 +64,7 @@ class TestSubjectController extends Controller
                 'lesson_date' => optional($lesson->lesson_date)->format('d.m.Y'),
                 'lesson_time' => $this->lessonTimeText($lesson),
                 'question_count' => $questionCount,
-                'is_open' => (bool) ($lessonTest?->is_open),
+                'is_open' => (bool) $isEffectivelyOpen,
                 'is_published' => (bool) ($lessonTest?->is_published),
                 'is_submitted' => $isSubmitted,
                 'is_scheduled_now' => $isScheduledNow,
@@ -101,10 +104,7 @@ class TestSubjectController extends Controller
             ? $attempt->started_at->diffInSeconds(now('Asia/Tashkent'))
             : 0;
 
-        $remainingSeconds = max(
-            0,
-            ($lessonTest->duration_minutes * 60) - $elapsedSeconds
-        );
+        $remainingSeconds = $this->resolveRemainingSeconds($lesson, $lessonTest, $attempt, $elapsedSeconds);
 
         return view('student.test-subjects.show', [
             'student' => $student,
@@ -235,8 +235,11 @@ class TestSubjectController extends Controller
             ->first();
 
         $canAccessClosedResult = $attempt && $attempt->status === 'submitted';
+        $isPast = $this->lessonEndsAt($lesson)?->lt($now)
+            || (optional($lesson->lesson_date)->format('Y-m-d') < $now->toDateString());
+        $isEffectivelyOpen = $lessonTest->is_open && !$isPast;
         abort_unless($scheduledNow || $canAccessClosedResult, 403);
-        abort_unless($lessonTest->is_open || $canAccessClosedResult, 403);
+        abort_unless($isEffectivelyOpen || $canAccessClosedResult, 403);
 
         if ($lessonTest->questions->isEmpty()) {
             abort(403, 'Bu test uchun savollar hali tayyor emas.');
@@ -266,6 +269,24 @@ class TestSubjectController extends Controller
         }
 
         return $attempt;
+    }
+
+    private function resolveRemainingSeconds(
+        TestSubjectLesson $lesson,
+        TestSubjectLessonTest $lessonTest,
+        TestSubjectLessonTestAttempt $attempt,
+        int $elapsedSeconds
+    ): int {
+        $durationRemaining = max(0, ($lessonTest->duration_minutes * 60) - $elapsedSeconds);
+        $lessonEndsAt = $this->lessonEndsAt($lesson);
+
+        if (!$lessonEndsAt) {
+            return $durationRemaining;
+        }
+
+        $lessonRemaining = max(0, now('Asia/Tashkent')->diffInSeconds($lessonEndsAt, false));
+
+        return min($durationRemaining, $lessonRemaining);
     }
 
     private function resolveOrderedQuestions(TestSubjectLessonTest $lessonTest, TestSubjectLessonTestAttempt $attempt): Collection

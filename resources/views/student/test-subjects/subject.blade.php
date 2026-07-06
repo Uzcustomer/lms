@@ -134,7 +134,7 @@
                             <div>
                                 @if($lesson['test_route'] && $lesson['is_submitted'])
                                     <a href="{{ $lesson['test_route'] }}" class="tsp-btn secondary">Natijani ko'rish</a>
-                                @elseif($lesson['test_route'] && $lesson['is_open'] && $lesson['is_published'] && $lesson['is_scheduled_now'] && !$lesson['is_submitted'])
+                                @elseif($lesson['test_route'] && $lesson['can_start'])
                                     <a href="{{ $lesson['test_route'] }}" class="tsp-btn primary">Testni boshlash</a>
                                 @else
                                     <span class="tsp-btn secondary" style="opacity:.7; cursor:default;">Kutilmoqda</span>

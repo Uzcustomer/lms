@@ -9640,11 +9640,13 @@ class ReportController extends Controller
 
         $auditMap = [];
         $auditAnyMap = [];
+        $closingFormMap = [];
+        $closingFormAnyMap = [];
         if (!empty($subjectIdsForAtt)) {
             $csRows = \App\Models\CurriculumSubject::whereIn('semester_code', $currentSemesterCodes)
                 ->whereIn('subject_id', $subjectIdsForAtt)
                 ->orderByDesc('is_active')
-                ->get(['subject_id', 'semester_code', 'curricula_hemis_id', 'total_acload', 'subject_details']);
+                ->get(['subject_id', 'semester_code', 'curricula_hemis_id', 'total_acload', 'subject_details', 'closing_form']);
             foreach ($csRows as $cs) {
                 $h = 0.0;
                 if (is_array($cs->subject_details)) {
@@ -9658,8 +9660,10 @@ class ReportController extends Controller
                 if ($h <= 0) $h = (float) ($cs->total_acload ?? 0);
                 $kc = $cs->curricula_hemis_id . '|' . $cs->subject_id . '|' . $cs->semester_code;
                 if (!isset($auditMap[$kc])) $auditMap[$kc] = $h;
+                if (!isset($closingFormMap[$kc])) $closingFormMap[$kc] = (string) ($cs->closing_form ?? '');
                 $ka = $cs->subject_id . '|' . $cs->semester_code;
                 if (!isset($auditAnyMap[$ka])) $auditAnyMap[$ka] = $h;
+                if (!isset($closingFormAnyMap[$ka])) $closingFormAnyMap[$ka] = (string) ($cs->closing_form ?? '');
             }
         }
 
@@ -9685,6 +9689,13 @@ class ReportController extends Controller
 
             $subjectName = $rows->first()->subject_name ?? 'Fan';
             $reasons = [];
+            $cur = $stuCurricula[$hemisId] ?? null;
+            $closingForm = $cur !== null
+                ? ($closingFormMap[$cur . '|' . $subjectId . '|' . $semCode] ?? '')
+                : '';
+            if ($closingForm === '') {
+                $closingForm = $closingFormAnyMap[$subjectId . '|' . $semCode] ?? '';
+            }
 
             // Imtihon urinishlari (OSKI/Test) — faqat ENG OXIRGI urinish natijasiga qaraladi
             $examRows = $rows->whereIn('training_type_code', [101, 102]);
@@ -9717,6 +9728,8 @@ class ReportController extends Controller
                     if ($val !== null && ($mtGrade === null || $val > $mtGrade)) $mtGrade = $val;
                 }
                 if ($mtGrade !== null && $mtGrade < 60) $reasons[] = 'MT<60';
+            } elseif (in_array($closingForm, ['test', 'oski_test'], true)) {
+                $reasons[] = 'MT yo\'q';
             }
 
             // JN o'rtachasi — jurnaldagi AYNAN bir xil hisob (computeJnAveragesForGroup)
@@ -9747,7 +9760,6 @@ class ReportController extends Controller
             // Sababsiz davomat >= 25% (jurnal mantig'i: qoldirilgan soat / auditoriya soati)
             $absH = $absentHours[$hemisId . '|' . $subjectId . '|' . $semCode] ?? 0;
             if ($absH > 0) {
-                $cur = $stuCurricula[$hemisId] ?? null;
                 $audH = ($cur !== null) ? ($auditMap[$cur . '|' . $subjectId . '|' . $semCode] ?? 0) : 0;
                 if ($audH <= 0) {
                     $audH = $auditAnyMap[$subjectId . '|' . $semCode] ?? 0;

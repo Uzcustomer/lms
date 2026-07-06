@@ -257,57 +257,46 @@
             <div class="tr-card">
                 <div class="tr-head">
                     <h2 class="text-lg font-bold text-slate-900">Talabalar natijalari</h2>
-                    <p class="mt-1 text-sm text-slate-500">Qatorni ochib har bir talabaga qaysi savolda nima javob berganini ko'rishingiz mumkin.</p>
+                    <p class="mt-1 text-sm text-slate-500">Natijalar biriktirilgan guruhlar bo'yicha alohida chiqariladi. Har bir talabada batafsil javoblarni ham ko'rishingiz mumkin.</p>
                 </div>
                 <div class="tr-section">
-                    <div class="tr-table-wrap">
-                        <table class="tr-table text-sm">
-                            <thead>
-                            <tr>
-                                <th class="text-left">#</th>
-                                <th class="text-left">Talaba</th>
-                                <th class="text-left">Guruh</th>
-                                <th class="text-left">Topshirgan vaqti</th>
-                                <th class="text-left">Ball</th>
-                                <th class="text-left">Foiz</th>
-                                <th class="text-left">Holat</th>
-                                <th class="text-left">Batafsil</th>
-                            </tr>
-                            </thead>
-                            <tbody class="divide-y divide-slate-100">
-                            @forelse($studentRows as $row)
-                                @php
-                                    $attempt = $row['attempt'];
-                                    $submitted = $attempt && $attempt->status === 'submitted';
-                                @endphp
-                                <tr>
-                                    <td class="font-bold text-slate-900">{{ $row['row_no'] }}</td>
-                                    <td>
-                                        <div class="font-semibold text-slate-900">{{ $row['student']->full_name }}</div>
-                                        <div class="mt-1 text-xs text-slate-500">ID: {{ $row['student']->student_id_number ?: $row['student']->hemis_id }}</div>
-                                    </td>
-                                    <td class="text-slate-700">{{ $row['student']->group_name ?: '-' }}</td>
-                                    <td class="text-slate-700">
-                                        {{ $submitted ? optional($attempt->submitted_at)->format('d.m.Y H:i') : '-' }}
-                                    </td>
-                                    <td class="font-semibold text-slate-900">
-                                        {{ $submitted ? (rtrim(rtrim((string) $attempt->score, '0'), '.') . ' / ' . $attempt->total_points) : '-' }}
-                                    </td>
-                                    <td class="font-semibold text-slate-900">{{ $submitted ? ($attempt->percent . '%') : '-' }}</td>
-                                    <td>
-                                        @if(!$attempt)
-                                            <span class="tr-status gray">Kirmagan</span>
-                                        @elseif(!$submitted)
-                                            <span class="tr-status orange">Yakunlamagan</span>
-                                        @elseif($attempt->is_passed)
-                                            <span class="tr-status green">O'tgan</span>
-                                        @else
-                                            <span class="tr-status red">Yiqilgan</span>
-                                        @endif
-                                    </td>
-                                    <td>
-                                        @if($attempt)
+                    <div class="space-y-5">
+                        @forelse($groupedStudentRows as $groupBlock)
+                            <div class="rounded-2xl border border-slate-200 overflow-hidden">
+                                <div class="px-4 py-4 bg-slate-50 border-b border-slate-200">
+                                    <div class="flex items-start justify-between gap-4 flex-wrap">
+                                        <div>
+                                            <h3 class="text-base font-extrabold text-slate-900">{{ $groupBlock['group_name'] }}</h3>
+                                            <p class="mt-1 text-sm text-slate-500">Shu guruhdagi talabalar natijalari.</p>
+                                        </div>
+                                        <div class="flex flex-wrap gap-2">
+                                            <span class="tr-chip blue">Jami: {{ $groupBlock['total_students'] }}</span>
+                                            <span class="tr-chip green">Bajargan: {{ $groupBlock['submitted_count'] }}</span>
+                                            <span class="tr-chip orange">Bajarmagan: {{ $groupBlock['not_submitted_count'] }}</span>
+                                            <span class="tr-chip green">O'tgan: {{ $groupBlock['passed_count'] }}</span>
+                                            <span class="tr-chip orange">Yiqilgan: {{ $groupBlock['failed_count'] }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="tr-table-wrap">
+                                    <table class="tr-table text-sm">
+                                        <thead>
+                                        <tr>
+                                            <th class="text-left">#</th>
+                                            <th class="text-left">Talaba</th>
+                                            <th class="text-left">Topshirgan vaqti</th>
+                                            <th class="text-left">Ball</th>
+                                            <th class="text-left">Foiz</th>
+                                            <th class="text-left">Holat</th>
+                                            <th class="text-left">Batafsil</th>
+                                        </tr>
+                                        </thead>
+                                        <tbody class="divide-y divide-slate-100">
+                                        @foreach($groupBlock['rows'] as $row)
                                             @php
+                                                $attempt = $row['attempt'];
+                                                $submitted = $attempt && $attempt->status === 'submitted';
                                                 $modalPayload = [
                                                     'student_name' => $row['student']->full_name,
                                                     'group_name' => $row['student']->group_name ?: '-',
@@ -318,28 +307,55 @@
                                                     'question_details' => $row['question_details'],
                                                 ];
                                             @endphp
-                                            <button
-                                                type="button"
-                                                class="tr-btn tr-btn-light js-open-result-modal"
-                                                data-modal-json-id="result-modal-json-{{ $row['student']->id }}"
-                                            >
-                                                Javoblarni ko'rish
-                                            </button>
-                                            <script type="application/json" id="result-modal-json-{{ $row['student']->id }}">
-                                                @json($modalPayload)
-                                            </script>
-                                        @else
-                                            <span class="text-slate-400">-</span>
-                                        @endif
-                                    </td>
-                                </tr>
-                            @empty
-                                <tr>
-                                    <td colspan="8" class="py-10 text-center text-slate-500">Bu test uchun talabalar topilmadi.</td>
-                                </tr>
-                            @endforelse
-                            </tbody>
-                        </table>
+                                            <tr>
+                                                <td class="font-bold text-slate-900">{{ $row['group_row_no'] }}</td>
+                                                <td>
+                                                    <div class="font-semibold text-slate-900">{{ $row['student']->full_name }}</div>
+                                                    <div class="mt-1 text-xs text-slate-500">ID: {{ $row['student']->student_id_number ?: $row['student']->hemis_id }}</div>
+                                                </td>
+                                                <td class="text-slate-700">
+                                                    {{ $submitted ? optional($attempt->submitted_at)->format('d.m.Y H:i') : '-' }}
+                                                </td>
+                                                <td class="font-semibold text-slate-900">
+                                                    {{ $submitted ? (rtrim(rtrim((string) $attempt->score, '0'), '.') . ' / ' . $attempt->total_points) : '-' }}
+                                                </td>
+                                                <td class="font-semibold text-slate-900">{{ $submitted ? ($attempt->percent . '%') : '-' }}</td>
+                                                <td>
+                                                    @if(!$attempt)
+                                                        <span class="tr-status gray">Kirmagan</span>
+                                                    @elseif(!$submitted)
+                                                        <span class="tr-status orange">Yakunlamagan</span>
+                                                    @elseif($attempt->is_passed)
+                                                        <span class="tr-status green">O'tgan</span>
+                                                    @else
+                                                        <span class="tr-status red">Yiqilgan</span>
+                                                    @endif
+                                                </td>
+                                                <td>
+                                                    @if($attempt)
+                                                        <button
+                                                            type="button"
+                                                            class="tr-btn tr-btn-light js-open-result-modal"
+                                                            data-modal-json-id="result-modal-json-{{ $row['student']->id }}"
+                                                        >
+                                                            Javoblarni ko'rish
+                                                        </button>
+                                                        <script type="application/json" id="result-modal-json-{{ $row['student']->id }}">
+                                                            @json($modalPayload)
+                                                        </script>
+                                                    @else
+                                                        <span class="text-slate-400">-</span>
+                                                    @endif
+                                                </td>
+                                            </tr>
+                                        @endforeach
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="py-10 text-center text-slate-500">Bu test uchun talabalar topilmadi.</div>
+                        @endforelse
                     </div>
                 </div>
             </div>

@@ -127,13 +127,13 @@
                                 <span id="total-badge" class="badge" style="background:#2b5ea7;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                                 <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
                             </div>
-                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-                                <select id="retake_status_filter" class="select2" style="width:220px;">
+                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
+                                <select id="retake_status_filter" class="select2" style="width:260px;">
                                     <option value="">Barchasi</option>
                                     <option value="no_application">Ariza bermaganlar</option>
                                     <option value="group_assigned">Guruhga biriktirilganlar</option>
                                 </select>
-                                <button type="button" onclick="exportRetakeNotAppliedExcel()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(22,163,74,0.3);white-space:nowrap;">
+                                <button type="button" onclick="exportRetakeNotAppliedExcel()" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;height:38px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(22,163,74,0.3);white-space:nowrap;flex:0 0 auto;">
                                     Excel
                                 </button>
                             </div>

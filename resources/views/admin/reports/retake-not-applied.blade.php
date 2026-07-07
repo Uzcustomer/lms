@@ -169,6 +169,16 @@
         </div>
     </div>
 
+    <div id="score-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeScoreModal()">
+        <div class="modal-box" style="max-width:760px;">
+            <div class="modal-header">
+                <h3 id="score-modal-title">Qayta o'qish baholari</h3>
+                <button onclick="closeScoreModal()" class="modal-close">&times;</button>
+            </div>
+            <div id="score-modal-body" style="max-height:65vh;overflow-y:auto;padding:0 4px 8px;"></div>
+        </div>
+    </div>
+
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
@@ -293,6 +303,9 @@
             var html = '';
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
+                var scoreBtn = r.has_score_details
+                    ? '<button class="btn-detail" onclick="showScoreDetail(' + i + ')">Ko\\'rish</button>'
+                    : '<span style="color:#94a3b8;">-</span>';
                 html += '<tr class="journal-row">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
                 html += '<td><span class="text-cell" style="font-weight:600;color:#1e293b;">' + esc(r.full_name) + '</span><span style="font-size:11px;color:#94a3b8;">' + esc(r.student_id_number) + '</span></td>';
@@ -305,7 +318,7 @@
                 html += '<td><span class="text-cell">' + esc(r.semester_name) + '</span></td>';
                 html += '<td style="text-align:center;">' + fmtNum(r.total_acload) + '</td>';
                 html += '<td style="text-align:center;">' + fmtNum(r.credit) + '</td>';
-                html += '<td style="text-align:center;font-weight:700;">' + fmtNum(r.total_point) + '</td>';
+                html += '<td style="text-align:center;">' + scoreBtn + '</td>';
                 var gradeStyle = r.is_debt ? 'color:#dc2626;font-weight:800;' : 'color:#15803d;font-weight:800;';
                 var gradeVal = (r.grade === null || typeof r.grade === 'undefined') ? '<span style="color:#94a3b8;">-</span>' : '<span style="' + gradeStyle + '">' + esc(r.grade) + '</span>';
                 html += '<td style="text-align:center;">' + gradeVal + '</td>';
@@ -315,6 +328,46 @@
                 html += '</tr>';
             }
             $('#table-body').html(html);
+        }
+
+        function showScoreDetail(idx) {
+            var r = reportData[idx];
+            if (!r) return;
+
+            var rows = Array.isArray(r.score_details) ? r.score_details : [];
+            $('#score-modal-title').text("Qayta o'qish baholari");
+
+            if (!rows.length) {
+                $('#score-modal-body').html('<div class="sec-empty">Baholar topilmadi</div>');
+                $('#score-modal').css('display', 'flex');
+                return;
+            }
+
+            var html = '';
+            html += '<div class="modal-info" style="margin-bottom:12px;">';
+            html += '<div class="mi-grid">';
+            html += '<div><span class="mi-l">Talaba</span><span class="mi-v">' + esc(r.full_name) + '</span></div>';
+            html += '<div><span class="mi-l">ID</span><span class="mi-v">' + esc(r.student_id_number) + '</span></div>';
+            html += '<div><span class="mi-l">Fan</span><span class="mi-v">' + esc(r.subject_name) + '</span></div>';
+            html += '<div><span class="mi-l">Semestr</span><span class="mi-v">' + esc(r.semester_name) + '</span></div>';
+            html += '</div>';
+            html += '</div>';
+
+            html += '<table class="det-table">';
+            html += '<thead><tr><th style="width:120px;">Baho turi</th><th style="text-align:center;width:120px;">Qiymat</th><th>O\\'qituvchi</th><th style="width:170px;">Sana</th></tr></thead><tbody>';
+            for (var i = 0; i < rows.length; i++) {
+                var s = rows[i];
+                html += '<tr>';
+                html += '<td><span class="pill pill-blue">' + esc(s.type) + '</span></td>';
+                html += '<td style="text-align:center;font-weight:800;color:#1e293b;">' + fmtNum(s.score) + '</td>';
+                html += '<td>' + esc(s.teacher || '—') + '</td>';
+                html += '<td>' + esc(s.date || '—') + '</td>';
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+
+            $('#score-modal-body').html(html);
+            $('#score-modal').css('display', 'flex');
         }
 
         function showDetail(idx) {
@@ -387,6 +440,10 @@
 
         function closeDetailModal() {
             $('#detail-modal').hide();
+        }
+
+        function closeScoreModal() {
+            $('#score-modal').hide();
         }
 
         function renderPagination(res) {

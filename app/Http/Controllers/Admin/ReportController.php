@@ -5603,6 +5603,7 @@ class ReportController extends Controller
                     \App\Models\RetakeApplication::STATUS_APPROVED,
                 ])
                 ->get([
+                    'id',
                     'group_id',
                     'student_hemis_id',
                     'subject_id',
@@ -5611,6 +5612,13 @@ class ReportController extends Controller
                     'dean_status',
                     'registrar_status',
                     'retake_group_id',
+                    'joriy_score',
+                    'joriy_graded_by_name',
+                    'joriy_graded_at',
+                    'oske_score',
+                    'test_score',
+                    'final_grade_value',
+                    'final_grade_set_at',
                 ]);
 
             $retakeGroupIds = $retakeApps->pluck('group_id')->filter()->unique()->values()->all();
@@ -5620,7 +5628,15 @@ class ReportController extends Controller
                     ->get(['id', 'payment_uploaded_at', 'payment_verification_status'])
                     ->keyBy('id');
 
+            $mustaqilMap = empty($retakeApps->pluck('id')->all())
+                ? collect()
+                : \App\Models\RetakeMustaqilSubmission::query()
+                    ->whereIn('application_id', $retakeApps->pluck('id')->all())
+                    ->get(['application_id', 'grade', 'graded_by_name', 'graded_at'])
+                    ->keyBy('application_id');
+
             $retakeMap = [];
+            $retakeAppDataMap = [];
             $retakePriority = [
                 'Ariza bermagan' => 0,
                 "Ko'rib chiqilmoqda" => 1,
@@ -5634,6 +5650,7 @@ class ReportController extends Controller
                 $label = $this->retakeApplicationStatusLabel($app, $retakeGroups->get($app->group_id));
                 if (!isset($retakeMap[$key]) || ($retakePriority[$label] ?? 0) > ($retakePriority[$retakeMap[$key]] ?? 0)) {
                     $retakeMap[$key] = $label;
+                    $retakeAppDataMap[$key] = $app;
                 }
             }
 
@@ -5671,6 +5688,44 @@ class ReportController extends Controller
                         }
 
                         $retakeKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $semCode;
+                        $retakeApp = $retakeAppDataMap[$retakeKey] ?? null;
+                        $mustaqil = $retakeApp ? ($mustaqilMap->get($retakeApp->id) ?? null) : null;
+                        $scoreDetails = [];
+                        if ($retakeApp) {
+                            if ($retakeApp->joriy_score !== null) {
+                                $scoreDetails[] = [
+                                    'type' => 'JN',
+                                    'score' => (float) $retakeApp->joriy_score,
+                                    'teacher' => $retakeApp->joriy_graded_by_name ?: null,
+                                    'date' => $retakeApp->joriy_graded_at ? \Carbon\Carbon::parse($retakeApp->joriy_graded_at)->format('d.m.Y H:i') : null,
+                                ];
+                            }
+                            if ($mustaqil && $mustaqil->grade !== null) {
+                                $scoreDetails[] = [
+                                    'type' => 'MT',
+                                    'score' => (float) $mustaqil->grade,
+                                    'teacher' => $mustaqil->graded_by_name ?: null,
+                                    'date' => $mustaqil->graded_at ? \Carbon\Carbon::parse($mustaqil->graded_at)->format('d.m.Y H:i') : null,
+                                ];
+                            }
+                            if ($retakeApp->oske_score !== null) {
+                                $scoreDetails[] = [
+                                    'type' => 'OSKI',
+                                    'score' => (float) $retakeApp->oske_score,
+                                    'teacher' => null,
+                                    'date' => $retakeApp->final_grade_set_at ? \Carbon\Carbon::parse($retakeApp->final_grade_set_at)->format('d.m.Y H:i') : null,
+                                ];
+                            }
+                            if ($retakeApp->test_score !== null) {
+                                $scoreDetails[] = [
+                                    'type' => 'TEST',
+                                    'score' => (float) $retakeApp->test_score,
+                                    'teacher' => null,
+                                    'date' => $retakeApp->final_grade_set_at ? \Carbon\Carbon::parse($retakeApp->final_grade_set_at)->format('d.m.Y H:i') : null,
+                                ];
+                            }
+                        }
+
                         $data[] = [
                             'hemis_id' => $st->hemis_id,
                             'full_name' => $st->full_name ?? '-',
@@ -5691,6 +5746,8 @@ class ReportController extends Controller
                             'study_status' => $study['label'],
                             'study_status_code' => $study['code'],
                             'is_debt' => $study['code'] !== 'passed',
+                            'score_details' => $scoreDetails,
+                            'has_score_details' => !empty($scoreDetails),
                         ];
                     }
                 }

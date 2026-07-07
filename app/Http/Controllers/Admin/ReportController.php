@@ -5386,6 +5386,7 @@ class ReportController extends Controller
                 }
 
                 $noGrade = [];        // yetmayotgan (bahosi yo'q) + ariza holati
+                $plannedSubjects = []; // o'quv rejadagi fanlar
                 $expectedKeysBySem = []; // [sem] => ['normname|credit' => true]
 
                 foreach ($studentPairs as $semCode => $currId) {
@@ -5409,12 +5410,24 @@ class ReportController extends Controller
                         $expectedKeysBySem[$semKey][$nkNoSem] = true;
 
                         $nk = $nkNoSem . '|' . $semKey;
+                        $hasGrade = isset($gradedKeySet[$st->hemis_id][$nk]);
+                        $appLabel = $retakeKeySet[$st->hemis_id][$nk] ?? null;
+
+                        $plannedSubjects[] = [
+                            'subject_name'       => $effName,
+                            'semester_code'      => $sub->semester_code,
+                            'semester_name'      => $sub->semester_name,
+                            'credit'             => $sub->credit,
+                            'has_grade'          => $hasGrade,
+                            'has_application'    => $appLabel !== null,
+                            'application_status' => $appLabel,
+                        ];
+
                         if (isset($gradedKeySet[$st->hemis_id][$nk])) {
                             continue; // baho bor → qarz emas
                         }
 
                         // Bahosi yo'q → yetmayotgan. Qayta o'qish arizasi bormi?
-                        $appLabel = $retakeKeySet[$st->hemis_id][$nk] ?? null;
                         $noGrade[] = [
                             'subject_name'       => $effName,
                             'semester_code'      => $sub->semester_code,
@@ -5442,6 +5455,14 @@ class ReportController extends Controller
                     }
                 }
 
+                usort($plannedSubjects, function ($a, $b) {
+                    $semCmp = ((int) ($a['semester_code'] ?? 0)) <=> ((int) ($b['semester_code'] ?? 0));
+                    if ($semCmp !== 0) {
+                        return $semCmp;
+                    }
+
+                    return strcasecmp((string) ($a['subject_name'] ?? ''), (string) ($b['subject_name'] ?? ''));
+                });
                 usort($noGrade, fn ($a, $b) => $a['semester_code'] <=> $b['semester_code']);
                 usort($extra, fn ($a, $b) => $a['semester_code'] <=> $b['semester_code']);
 
@@ -5467,6 +5488,7 @@ class ReportController extends Controller
                     'group_name'         => $st->group_name ?? '-',
                     'group_id'           => $st->group_id ?? '',
                     'student_type_name'  => $st->student_type_name ?? null,
+                    'planned_subjects'   => $plannedSubjects,
                     'no_grade_subjects'  => $noGrade,
                     'no_grade_count'     => count($noGrade),
                     'not_applied_count'  => $notAppliedCount,

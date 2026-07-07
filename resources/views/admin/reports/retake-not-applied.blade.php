@@ -302,7 +302,23 @@
 
             var body = '';
 
-            // 1. Bahosi yo'q (yetmayotgan) + qayta o'qish holati
+            // 1. O'quv rejadagi fanlar
+            body += '<div class="sec-title" style="color:#2563eb;">O\\'quv rejadagi fanlar</div>';
+            if (r.planned_subjects && r.planned_subjects.length) {
+                body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th style="text-align:center;">Semestr</th><th style="text-align:center;">Kredit</th><th style="text-align:center;">Holat</th></tr></thead><tbody>';
+                for (var p = 0; p < r.planned_subjects.length; p++) {
+                    var ps = r.planned_subjects[p];
+                    var planStatus = ps.has_grade
+                        ? '<span class="pill pill-green">Baho bor</span>'
+                        : '<span class="pill pill-red">Bahosi yo\\'q</span>';
+                    body += '<tr><td>' + (p + 1) + '</td><td>' + esc(ps.subject_name) + '</td><td style="text-align:center;">' + esc(ps.semester_name || ps.semester_code) + '</td><td style="text-align:center;">' + fmtCredit(ps.credit) + '</td><td style="text-align:center;">' + planStatus + '</td></tr>';
+                }
+                body += '</tbody></table>';
+            } else {
+                body += '<div class="sec-empty">Yo\\'q</div>';
+            }
+
+            // 2. Bahosi yo'q (yetmayotgan) + qayta o'qish holati
             body += '<div class="sec-title" style="color:#dc2626;">Bahosi yo\'q (yetmayotgan) fanlar — qayta o\'qish holati</div>';
             if (r.no_grade_subjects && r.no_grade_subjects.length) {
                 body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th style="text-align:center;">Semestr</th><th style="text-align:center;">Kredit</th><th style="text-align:center;">Qayta o\'qishga ariza</th></tr></thead><tbody>';
@@ -318,7 +334,7 @@
                 body += '<div class="sec-empty">Yo\'q</div>';
             }
 
-            // 2. Ortiqcha
+            // 3. Ortiqcha
             body += '<div class="sec-title" style="color:#7c3aed;">Ortiqcha fanlar (rejada yo\'q, academic records\'da bor)</div>';
             if (r.extra_subjects && r.extra_subjects.length) {
                 body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th style="text-align:center;">Semestr</th><th style="text-align:center;">Kredit</th></tr></thead><tbody>';
@@ -331,7 +347,7 @@
                 body += '<div class="sec-empty">Yo\'q</div>';
             }
 
-            // 3. Joriy semestr xavf
+            // 4. Joriy semestr xavf
             body += '<div class="sec-title" style="color:#d97706;">Joriy semestr — potensial yiqilganlar</div>';
             if (r.current_risks && r.current_risks.length) {
                 body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th>Sabablar</th></tr></thead><tbody>';

@@ -5444,6 +5444,7 @@ class ReportController extends Controller
 
             $onlyDebtors = $request->get('only_debtors', $request->get('only_not_applied', '1')) == '1';
             $semesterFilter = $request->get('semester_code');
+            $retakeStatusFilter = (string) $request->get('retake_status_filter', '');
             $perPage = max(1, (int) $request->get('per_page', 50));
 
             $studentQuery = DB::table('students as s')
@@ -5753,6 +5754,18 @@ class ReportController extends Controller
                 }
             }
 
+            if ($retakeStatusFilter !== '') {
+                $data = array_values(array_filter($data, function ($row) use ($retakeStatusFilter) {
+                    $status = (string) ($row['retake_status'] ?? '');
+
+                    return match ($retakeStatusFilter) {
+                        'no_application' => $status === 'Ariza bermagan',
+                        'group_assigned' => $status === 'Guruhga tasdiqlangan',
+                        default => true,
+                    };
+                }));
+            }
+
             $sortMap = [
                 'full_name' => 'full_name',
                 'department_name' => 'department_name',
@@ -5787,6 +5800,64 @@ class ReportController extends Controller
                 return $sortDirection === 'desc' ? -$cmp : $cmp;
             });
 
+            if ($request->get('export') === 'excel') {
+                $exportRows = $this->mapRetakeNotAppliedExportRows($data);
+
+                return \Maatwebsite\Excel\Facades\Excel::download(
+                    new class($exportRows) implements
+                        \Maatwebsite\Excel\Concerns\FromArray,
+                        \Maatwebsite\Excel\Concerns\WithHeadings,
+                        \Maatwebsite\Excel\Concerns\WithStyles,
+                        \Maatwebsite\Excel\Concerns\ShouldAutoSize
+                    {
+                        public function __construct(private array $rows) {}
+
+                        public function array(): array
+                        {
+                            return $this->rows;
+                        }
+
+                        public function headings(): array
+                        {
+                            return [
+                                'Talaba FISH',
+                                'Talaba ID',
+                                'Fakultet',
+                                "Yo'nalish",
+                                'Kurs',
+                                'Guruh',
+                                'Fan',
+                                'Yopilish shakli',
+                                'Semestr',
+                                'Soat',
+                                'Kredit',
+                                'JN',
+                                'MT',
+                                'OSKI',
+                                'TEST',
+                                "Olgan bahosi",
+                                "Qayta o'qish holati",
+                                "O'qish holati",
+                            ];
+                        }
+
+                        public function styles(\PhpOffice\PhpSpreadsheet\Worksheet\Worksheet $sheet): array
+                        {
+                            return [
+                                1 => [
+                                    'font' => ['bold' => true],
+                                    'fill' => [
+                                        'fillType' => \PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID,
+                                        'startColor' => ['rgb' => 'DBEAFE'],
+                                    ],
+                                ],
+                            ];
+                        }
+                    },
+                    'academic-records-qarzdorlar.xlsx'
+                );
+            }
+
             $total = count($data);
             if ($total === 0) {
                 return response()->json(['data' => [], 'total' => 0, 'per_page' => $perPage, 'current_page' => 1, 'last_page' => 1]);
@@ -5811,6 +5882,34 @@ class ReportController extends Controller
             \Log::error('Retake-not-applied report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    private function mapRetakeNotAppliedExportRows(array $rows): array
+    {
+        return array_map(function (array $row) {
+            $scores = collect($row['score_details'] ?? [])->keyBy('type');
+
+            return [
+                $row['full_name'] ?? '-',
+                $row['student_id_number'] ?? '-',
+                $row['department_name'] ?? '-',
+                $row['specialty_name'] ?? '-',
+                $row['level_name'] ?? '-',
+                $row['group_name'] ?? '-',
+                $row['subject_name'] ?? '-',
+                $row['closing_form'] ?? '-',
+                $row['semester_name'] ?? '-',
+                $row['total_acload'] ?? '',
+                $row['credit'] ?? '',
+                $scores->get('JN')['score'] ?? '',
+                $scores->get('MT')['score'] ?? '',
+                $scores->get('OSKI')['score'] ?? '',
+                $scores->get('TEST')['score'] ?? '',
+                $row['grade'] ?? '',
+                $row['retake_status'] ?? '',
+                $row['study_status'] ?? '',
+            ];
+        }, $rows);
     }
 
     /**

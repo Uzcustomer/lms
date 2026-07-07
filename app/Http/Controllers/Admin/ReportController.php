@@ -6027,12 +6027,12 @@ class ReportController extends Controller
             $studentId = $request->get('student_id');
 
             if (!$studentId) {
-                return response()->json(['semesters' => [], 'grade_debts' => []]);
+                return response()->json(['semesters' => [], 'grade_debts' => [], 'extra_subjects' => []]);
             }
 
             $student = DB::table('students')->where('hemis_id', $studentId)->first();
             if (!$student || !$student->curriculum_id) {
-                return response()->json(['semesters' => [], 'grade_debts' => []]);
+                return response()->json(['semesters' => [], 'grade_debts' => [], 'extra_subjects' => []]);
             }
 
             $groupName = $request->get('group_name', '');
@@ -6046,15 +6046,17 @@ class ReportController extends Controller
             // 1) academic_records'dan har semester uchun tarixiy curriculum_id va arExists
             $arRows = DB::table('academic_records')
                 ->where('student_id', $studentId)
-                ->select('subject_id', 'semester_id', 'curriculum_id')
+                ->select('subject_id', 'subject_name', 'credit', 'total_point', 'grade', 'semester_id', 'curriculum_id')
                 ->get();
             $arExists = [];
             $semCurr = []; // [sem_code => curriculum_id]
+            $arBySem = [];
             foreach ($arRows as $ar) {
                 $arExists[$ar->subject_id . '|' . $ar->semester_id] = true;
                 if (!isset($semCurr[$ar->semester_id]) && $ar->curriculum_id) {
                     $semCurr[$ar->semester_id] = $ar->curriculum_id;
                 }
+                $arBySem[(string) $ar->semester_id][] = $ar;
             }
 
             // Joriy semester uchun students.curriculum_id
@@ -6132,6 +6134,7 @@ class ReportController extends Controller
 
             // 5) Qarzlar: curriculum da bor, academic_records da yo'q.
             $debtsAll = [];
+            $expectedSubjectIdsBySem = [];
 
             foreach ($currSubjects as $sub) {
                 $subSemCode = (int) $sub->semester_code;
@@ -6146,6 +6149,7 @@ class ReportController extends Controller
                 // student_subjects orqali boshqa fanlarga map qilinmaydi.
                 $effectiveSubjectId = $sub->subject_id;
                 $effectiveSubjectName = $sub->subject_name;
+                $expectedSubjectIdsBySem[(string) $sub->semester_code][(string) $effectiveSubjectId] = true;
 
                 if (isset($arExists[$effectiveSubjectId . '|' . $sub->semester_code])) continue;
 
@@ -6159,12 +6163,38 @@ class ReportController extends Controller
                 ];
             }
 
+            $extraSubjects = [];
+            foreach ($arBySem as $semCode => $rows) {
+                $semInt = (int) $semCode;
+                if ($showCurrentSemester) {
+                    if ($studentSemesterCode && $semInt !== (int) $studentSemesterCode) continue;
+                } else {
+                    if ($studentSemesterCode && $semInt >= (int) $studentSemesterCode) continue;
+                }
+
+                foreach ($rows as $ar) {
+                    if (isset($expectedSubjectIdsBySem[$semCode][(string) $ar->subject_id])) {
+                        continue;
+                    }
+
+                    $extraSubjects[] = [
+                        'semester_code' => $semCode,
+                        'semester_name' => $semCode . '-semestr',
+                        'subject_name'  => $ar->subject_name,
+                        'credit'        => $ar->credit,
+                        'total_point'   => $ar->total_point,
+                        'grade'         => $ar->grade,
+                    ];
+                }
+            }
+
             return response()->json([
                 'semesters'   => $semesters,
                 'grade_debts' => $debtsAll,
+                'extra_subjects' => $extraSubjects,
             ]);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage(), 'semesters' => [], 'grade_debts' => []], 500);
+            return response()->json(['error' => $e->getMessage(), 'semesters' => [], 'grade_debts' => [], 'extra_subjects' => []], 500);
         }
     }
 

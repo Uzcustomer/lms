@@ -4975,10 +4975,13 @@ class ReportController extends Controller
                     $subjectsForSem = $this->filterSubjectsByGroupSuffix($subjectsForSem, $st->group_name ?? '');
 
                     foreach ($subjectsForSem as $sub) {
-                        // Bu hisobotda faqat curriculumdagi reja fanlari bilan ishlaymiz.
-                        // student_subjects orqali boshqa fan nomiga/subyektiga almashtirmaymiz.
-                        $effectiveSubjectId = $sub->subject_id;
-                        $effectiveSubjectName = $sub->subject_name;
+                        $resolvedSubject = $this->resolveAcademicDebtSubjectForStudent($st->hemis_id, $sub, $tanlovPicksMap);
+                        if ($resolvedSubject === null) {
+                            continue;
+                        }
+
+                        $effectiveSubjectId = $resolvedSubject['subject_id'];
+                        $effectiveSubjectName = $resolvedSubject['subject_name'];
 
                         $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
                         $hasAR = isset($arExistsLookup[$arKey]);
@@ -6297,14 +6300,17 @@ class ReportController extends Controller
                 ->keyBy('subject_id');
 
             // Curriculum fanlarini academic records bilan birlashtirish.
-            // Tanlov fanlar uchun student_subjects'dan olingan haqiqiy fanga qaraymiz.
+            // Tanlov fanlarda faqat talaba tanlaganlari ko'rsatiladi.
             $grades = [];
             $expectedSubjectIds = [];   // qarz hisobiga olingan fanlar
             foreach ($currSubjects as $sub) {
-                // Bu oynada faqat curriculumdagi reja fanlari ko'rsatiladi.
-                // student_subjects orqali boshqa fanlarga map qilinmaydi.
-                $effectiveSubjectId = $sub->subject_id;
-                $effectiveSubjectName = $sub->subject_name;
+                $resolvedSubject = $this->resolveAcademicDebtSubjectForStudent($studentId, $sub, $tanlovPicksMap);
+                if ($resolvedSubject === null) {
+                    continue;
+                }
+
+                $effectiveSubjectId = $resolvedSubject['subject_id'];
+                $effectiveSubjectName = $resolvedSubject['subject_name'];
 
                 $expectedSubjectIds[(string) $effectiveSubjectId] = true;
 
@@ -6352,6 +6358,28 @@ class ReportController extends Controller
         $numericGrade = round((float) $record->grade, 2);
 
         return $numericGrade === 0.0 || $numericGrade === 2.0;
+    }
+
+    private function resolveAcademicDebtSubjectForStudent($studentHemisId, $subjectRow, array $tanlovPicksMap): ?array
+    {
+        $isTanlov = (string) ($subjectRow->subject_type_code ?? '') === '12';
+        if (!$isTanlov) {
+            return [
+                'subject_id' => $subjectRow->subject_id,
+                'subject_name' => $subjectRow->subject_name,
+            ];
+        }
+
+        $pickKey = $studentHemisId . '|' . ($subjectRow->curriculum_subject_hemis_id ?? '');
+        $pick = $tanlovPicksMap[$pickKey] ?? null;
+        if (!$pick || empty($pick['subject_id'])) {
+            return null;
+        }
+
+        return [
+            'subject_id' => $pick['subject_id'],
+            'subject_name' => $pick['subject_name'] ?: $subjectRow->subject_name,
+        ];
     }
 
     /**
@@ -6558,6 +6586,10 @@ class ReportController extends Controller
                 return $expected !== null && (string) $s->curricula_hemis_id === (string) $expected;
             })->values();
 
+            $currSubjects = $currSubjects->filter(function ($sub) use ($studentId, $tanlovPicksMap) {
+                return $this->resolveAcademicDebtSubjectForStudent($studentId, $sub, $tanlovPicksMap) !== null;
+            })->values();
+
             // 3) Semestr tab'lari (toggle bilan)
             $semesters = $currSubjects->groupBy('semester_code')
                 ->when($showCurrentSemester && $studentSemesterCode, function ($collection) use ($studentSemesterCode) {
@@ -6618,10 +6650,13 @@ class ReportController extends Controller
                     if ($studentSemesterCode && $subSemCode >= (int) $studentSemesterCode) continue;
                 }
 
-                // Bu oynada faqat curriculumdagi reja fanlari ko'rsatiladi.
-                // student_subjects orqali boshqa fanlarga map qilinmaydi.
-                $effectiveSubjectId = $sub->subject_id;
-                $effectiveSubjectName = $sub->subject_name;
+                $resolvedSubject = $this->resolveAcademicDebtSubjectForStudent($studentId, $sub, $tanlovPicksMap);
+                if ($resolvedSubject === null) {
+                    continue;
+                }
+
+                $effectiveSubjectId = $resolvedSubject['subject_id'];
+                $effectiveSubjectName = $resolvedSubject['subject_name'];
                 $expectedSubjectIdsBySem[(string) $sub->semester_code][(string) $effectiveSubjectId] = true;
                 $matchedAr = $arMapBySemSubject[(string) $sub->semester_code][(string) $effectiveSubjectId] ?? null;
 

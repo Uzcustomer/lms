@@ -5172,6 +5172,8 @@ class ReportController extends Controller
      */
     public function retakeNotAppliedReportData(Request $request)
     {
+        return $this->retakeNotAppliedReportDataCurriculumBased($request);
+
         $dekanFacultyId = get_dekan_faculty_id();
         if ($dekanFacultyId && !$request->filled('faculty')) {
             $request->merge(['faculty' => $dekanFacultyId]);
@@ -5422,6 +5424,331 @@ class ReportController extends Controller
                 'per_page'     => $perPage,
                 'current_page' => $page,
                 'last_page'    => (int) ceil($total / $perPage),
+            ]);
+        } catch (\Throwable $e) {
+            \Log::error('Retake-not-applied report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
+            return response()->json(['error' => $e->getMessage()], 500);
+        }
+    }
+
+    private function retakeNotAppliedReportDataCurriculumBased(Request $request)
+    {
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyId]);
+        }
+
+        try {
+            ini_set('memory_limit', '512M');
+            set_time_limit(120);
+
+            $onlyDebtors = $request->get('only_debtors', $request->get('only_not_applied', '1')) == '1';
+            $semesterFilter = $request->get('semester_code');
+            $perPage = max(1, (int) $request->get('per_page', 50));
+
+            $studentQuery = DB::table('students as s')
+                ->whereNotNull('s.curriculum_id')
+                ->select(
+                    's.hemis_id',
+                    's.full_name',
+                    's.student_id_number',
+                    's.department_name',
+                    's.specialty_name',
+                    's.level_name',
+                    's.semester_name',
+                    's.semester_code',
+                    's.group_name',
+                    's.group_id',
+                    's.curriculum_id',
+                    's.student_type_code'
+                );
+
+            if ($request->filled('student_status')) {
+                $studentQuery->where('s.student_status_code', $request->student_status);
+            }
+            if ($request->filled('student_name')) {
+                $studentQuery->where('s.full_name', 'like', '%' . $request->student_name . '%');
+            }
+            if ($request->filled('faculty')) {
+                $faculty = Department::find($request->faculty);
+                if ($faculty) {
+                    $studentQuery->where('s.department_id', $faculty->department_hemis_id);
+                }
+            }
+            if ($request->filled('specialty')) {
+                $studentQuery->where('s.specialty_id', $request->specialty);
+            }
+            if ($request->filled('level_code')) {
+                $studentQuery->where('s.level_code', $request->level_code);
+            }
+            if ($request->filled('group')) {
+                $group = \App\Models\Group::find($request->group);
+                if ($group) {
+                    $studentQuery->where('s.group_id', $group->group_hemis_id);
+                }
+            }
+            if ($request->filled('education_type')) {
+                $studentQuery->where('s.education_type_code', $request->education_type);
+            }
+            if ($request->filled('student_type')) {
+                $studentQuery->where('s.student_type_code', $request->student_type);
+            }
+
+            if (is_active_nazoratchi()) {
+                $nazoratchiHemisIds = get_nazoratchi_group_hemis_ids();
+                if (empty($nazoratchiHemisIds)) {
+                    return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+                }
+                $studentQuery->whereIn('s.group_id', $nazoratchiHemisIds);
+            }
+
+            $students = $studentQuery->get();
+            if ($students->isEmpty()) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => $perPage, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            $studentHemisIds = $students->pluck('hemis_id')->values()->all();
+            $arRows = collect();
+            foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
+                $arRows = $arRows->merge(
+                    DB::table('academic_records')
+                        ->whereIn('student_id', $chunk)
+                        ->select(
+                            'student_id',
+                            'subject_id',
+                            'subject_name',
+                            'semester_id',
+                            'semester_name',
+                            'curriculum_id',
+                            'credit',
+                            'total_acload',
+                            'total_point',
+                            'grade',
+                            'retraining_status',
+                            'finish_credit_status'
+                        )
+                        ->get()
+                );
+            }
+
+            $studentSemCurr = [];
+            $arByStudentSemSubject = [];
+            foreach ($arRows as $ar) {
+                $semCode = (string) $ar->semester_id;
+                if (!isset($studentSemCurr[$ar->student_id][$semCode]) && $ar->curriculum_id) {
+                    $studentSemCurr[$ar->student_id][$semCode] = $ar->curriculum_id;
+                }
+                $arByStudentSemSubject[$ar->student_id][$semCode][(string) $ar->subject_id] = $ar;
+            }
+
+            $curriculumPairs = [];
+            foreach ($students as $st) {
+                $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
+                foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
+                    if ($semesterFilter !== null && $semesterFilter !== '' && (string) $semCode !== (string) $semesterFilter) {
+                        continue;
+                    }
+                    if (($semesterFilter === null || $semesterFilter === '') && $studentSemCode && (int) $semCode >= $studentSemCode) {
+                        continue;
+                    }
+                    $curriculumPairs[$currId . '|' . $semCode] = true;
+                }
+            }
+
+            if (empty($curriculumPairs)) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => $perPage, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            $allCurriculumIds = collect(array_keys($curriculumPairs))
+                ->map(fn ($k) => explode('|', $k)[0])
+                ->unique()
+                ->values()
+                ->all();
+            $allSemCodes = collect(array_keys($curriculumPairs))
+                ->map(fn ($k) => explode('|', $k)[1])
+                ->unique()
+                ->values()
+                ->all();
+
+            $currSubjectsQuery = DB::table('curriculum_subjects as cs')
+                ->whereIn('cs.curricula_hemis_id', $allCurriculumIds ?: [0])
+                ->whereIn('cs.semester_code', $allSemCodes ?: [0])
+                ->where('cs.is_active', 1)
+                ->where(function ($q) {
+                    $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
+                })
+                ->select(
+                    'cs.curricula_hemis_id',
+                    'cs.semester_code',
+                    'cs.semester_name',
+                    'cs.subject_id',
+                    'cs.subject_name',
+                    'cs.credit',
+                    'cs.total_acload',
+                    'cs.closing_form'
+                )
+                ->distinct();
+
+            foreach (config('app.excluded_rating_subject_patterns', []) as $pattern) {
+                $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
+            }
+
+            $subjectsByPair = $currSubjectsQuery->get()
+                ->groupBy(fn ($s) => $s->curricula_hemis_id . '|' . $s->semester_code);
+
+            $retakeApps = \App\Models\RetakeApplication::query()
+                ->whereIn('student_hemis_id', $studentHemisIds)
+                ->whereIn('final_status', [
+                    \App\Models\RetakeApplication::STATUS_PENDING,
+                    \App\Models\RetakeApplication::STATUS_APPROVED,
+                ])
+                ->get([
+                    'group_id',
+                    'student_hemis_id',
+                    'subject_id',
+                    'semester_id',
+                    'final_status',
+                    'dean_status',
+                    'registrar_status',
+                    'retake_group_id',
+                ]);
+
+            $retakeGroupIds = $retakeApps->pluck('group_id')->filter()->unique()->values()->all();
+            $retakeGroups = empty($retakeGroupIds)
+                ? collect()
+                : \App\Models\RetakeApplicationGroup::whereIn('id', $retakeGroupIds)
+                    ->get(['id', 'payment_uploaded_at', 'payment_verification_status'])
+                    ->keyBy('id');
+
+            $retakeMap = [];
+            $retakePriority = [
+                'Ariza bermagan' => 0,
+                "Ko'rib chiqilmoqda" => 1,
+                "To'lovini qilmagan" => 2,
+                "To'lov tekshirilmoqda" => 3,
+                "To'lov tasdiqlandi" => 4,
+                'Guruhga tasdiqlangan' => 5,
+            ];
+            foreach ($retakeApps as $app) {
+                $key = $app->student_hemis_id . '|' . $app->subject_id . '|' . $app->semester_id;
+                $label = $this->retakeApplicationStatusLabel($app, $retakeGroups->get($app->group_id));
+                if (!isset($retakeMap[$key]) || ($retakePriority[$label] ?? 0) > ($retakePriority[$retakeMap[$key]] ?? 0)) {
+                    $retakeMap[$key] = $label;
+                }
+            }
+
+            $cfLabels = [
+                'oski' => 'Faqat OSKI',
+                'test' => 'Faqat Test',
+                'oski_test' => 'OSKI + Test',
+                'normativ' => 'Normativ',
+                'sinov' => 'Sinov',
+                'none' => "Yakuniy nazorat yo'q",
+            ];
+
+            $data = [];
+            foreach ($students as $st) {
+                $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
+                foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
+                    if ($semesterFilter !== null && $semesterFilter !== '' && (string) $semCode !== (string) $semesterFilter) {
+                        continue;
+                    }
+                    if (($semesterFilter === null || $semesterFilter === '') && $studentSemCode && (int) $semCode >= $studentSemCode) {
+                        continue;
+                    }
+
+                    $subjectsForSem = $subjectsByPair->get($currId . '|' . $semCode, collect());
+                    $subjectsForSem = $this->filterSubjectsByGroupSuffix($subjectsForSem, $st->group_name ?? '');
+
+                    foreach ($subjectsForSem as $sub) {
+                        $matchedAr = $arByStudentSemSubject[$st->hemis_id][(string) $semCode][(string) $sub->subject_id] ?? null;
+                        $study = $matchedAr
+                            ? $this->academicRecordStudyStatus($matchedAr)
+                            : ['code' => 'not_graded', 'label' => "Yozuv yo'q"];
+
+                        if ($onlyDebtors && $study['code'] === 'passed') {
+                            continue;
+                        }
+
+                        $retakeKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $semCode;
+                        $data[] = [
+                            'hemis_id' => $st->hemis_id,
+                            'full_name' => $st->full_name ?? '-',
+                            'student_id_number' => $st->student_id_number ?? '-',
+                            'department_name' => $st->department_name ?? '-',
+                            'specialty_name' => $st->specialty_name ?? '-',
+                            'level_name' => $st->level_name ?? '-',
+                            'group_name' => $st->group_name ?? '-',
+                            'subject_name' => $sub->subject_name ?? '-',
+                            'closing_form' => $sub->closing_form ? ($cfLabels[$sub->closing_form] ?? $sub->closing_form) : '-',
+                            'semester_code' => $sub->semester_code,
+                            'semester_name' => $sub->semester_name ?: ($sub->semester_code ? $sub->semester_code . '-semestr' : '-'),
+                            'total_acload' => $matchedAr->total_acload ?? $sub->total_acload,
+                            'credit' => $matchedAr->credit ?? $sub->credit,
+                            'total_point' => ($matchedAr && $matchedAr->total_point !== '' ? $matchedAr->total_point : null),
+                            'grade' => ($matchedAr && $matchedAr->grade !== '' ? $matchedAr->grade : null),
+                            'retake_status' => $retakeMap[$retakeKey] ?? 'Ariza bermagan',
+                            'study_status' => $study['label'],
+                            'study_status_code' => $study['code'],
+                            'is_debt' => $study['code'] !== 'passed',
+                        ];
+                    }
+                }
+            }
+
+            $sortMap = [
+                'full_name' => 'full_name',
+                'department_name' => 'department_name',
+                'specialty_name' => 'specialty_name',
+                'level_name' => 'level_name',
+                'group_name' => 'group_name',
+                'subject_name' => 'subject_name',
+                'semester_name' => 'semester_code',
+                'total_point' => 'total_point',
+                'grade' => 'grade',
+            ];
+            $sortField = $sortMap[$request->get('sort')] ?? 'full_name';
+            $sortDirection = strtolower($request->get('direction', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+            usort($data, function ($a, $b) use ($sortField, $sortDirection) {
+                $av = $a[$sortField] ?? null;
+                $bv = $b[$sortField] ?? null;
+
+                if (in_array($sortField, ['semester_code', 'total_point', 'grade'], true)) {
+                    $av = is_numeric($av) ? (float) $av : -INF;
+                    $bv = is_numeric($bv) ? (float) $bv : -INF;
+                } else {
+                    $av = mb_strtolower((string) $av);
+                    $bv = mb_strtolower((string) $bv);
+                }
+
+                $cmp = $av <=> $bv;
+                if ($cmp === 0) {
+                    $cmp = mb_strtolower((string) ($a['full_name'] ?? '')) <=> mb_strtolower((string) ($b['full_name'] ?? ''));
+                }
+
+                return $sortDirection === 'desc' ? -$cmp : $cmp;
+            });
+
+            $total = count($data);
+            if ($total === 0) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => $perPage, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            $page = max(1, (int) $request->get('page', 1));
+            $offset = ($page - 1) * $perPage;
+            $pageRows = array_slice($data, $offset, $perPage);
+            foreach ($pageRows as $index => &$row) {
+                $row['row_num'] = $offset + $index + 1;
+            }
+            unset($row);
+
+            return response()->json([
+                'data' => $pageRows,
+                'total' => $total,
+                'per_page' => $perPage,
+                'current_page' => $page,
+                'last_page' => (int) ceil($total / $perPage),
             ]);
         } catch (\Throwable $e) {
             \Log::error('Retake-not-applied report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);

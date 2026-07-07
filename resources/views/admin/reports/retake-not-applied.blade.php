@@ -326,7 +326,7 @@
                 '<div class="mi-grid">' +
                 '<div><span class="mi-l">ID</span><span class="mi-v">' + esc(r.student_id_number) + '</span></div>' +
                 '<div><span class="mi-l">Fakultet</span><span class="mi-v">' + esc(r.department_name) + '</span></div>' +
-                '<div><span class="mi-l">Yo\\'nalish</span><span class="mi-v">' + esc(r.specialty_name) + '</span></div>' +
+                "<div><span class=\"mi-l\">Yo'nalish</span><span class=\"mi-v\">" + esc(r.specialty_name) + '</span></div>' +
                 '<div><span class="mi-l">Guruh</span><span class="mi-v">' + esc(r.group_name) + '</span></div>' +
                 '<div><span class="mi-l">Semestr</span><span class="mi-v">' + esc(r.semester_name) + '</span></div>' +
                 '<div><span class="mi-l">Fan</span><span class="mi-v">' + esc(r.subject_name) + '</span></div>' +
@@ -350,17 +350,17 @@
                 });
 
                 var body = '';
-                body += '<div class="sec-title" style="color:#2563eb;">O\\'quv rejadagi fanlar</div>';
+                body += "<div class=\"sec-title\" style=\"color:#2563eb;\">O'quv rejadagi fanlar</div>";
                 if (planned.length) {
                     body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th style="text-align:center;">Kredit</th><th style="text-align:center;">Soat</th><th style="text-align:center;">Holat</th><th style="text-align:center;">Ball</th><th style="text-align:center;">Baho</th></tr></thead><tbody>';
                     for (var i = 0; i < planned.length; i++) {
                         var p = planned[i];
-                        var pStatus = p.has_record ? '<span class="pill pill-green">Yozuv bor</span>' : '<span class="pill pill-red">Yozuv yo\\'q</span>';
+                        var pStatus = p.has_record ? '<span class="pill pill-green">Yozuv bor</span>' : "<span class=\"pill pill-red\">Yozuv yo'q</span>";
                         body += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.subject_name) + '</td><td style="text-align:center;">' + fmtCredit(p.credit) + '</td><td style="text-align:center;">' + fmtNum(p.total_acload) + '</td><td style="text-align:center;">' + pStatus + '</td><td style="text-align:center;">' + fmtNum(p.total_point) + '</td><td style="text-align:center;">' + fmtNum(p.grade) + '</td></tr>';
                     }
                     body += '</tbody></table>';
                 } else {
-                    body += '<div class="sec-empty">Bu semestr uchun o\\'quv rejadagi fan topilmadi</div>';
+                    body += "<div class=\"sec-empty\">Bu semestr uchun o'quv rejadagi fan topilmadi</div>";
                 }
 
                 body += '<div class="sec-title" style="color:#7c3aed;">Ortiqcha fanlar</div>';
@@ -372,7 +372,7 @@
                     }
                     body += '</tbody></table>';
                 } else {
-                    body += '<div class="sec-empty">Yo\\'q</div>';
+                    body += "<div class=\"sec-empty\">Yo'q</div>";
                 }
 
                 $('#modal-body').html(body);

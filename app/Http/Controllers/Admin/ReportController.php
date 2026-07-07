@@ -4813,16 +4813,16 @@ class ReportController extends Controller
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $arRecords = array_merge($arRecords, DB::table('academic_records')
                     ->whereIn('student_id', $chunk)
-                    ->select('student_id', 'subject_id', 'semester_id', 'curriculum_id')
+                    ->select('student_id', 'subject_id', 'semester_id', 'curriculum_id', 'grade', 'retraining_status')
                     ->get()
                     ->all());
             }
 
-            $arExistsLookup = [];
+            $arLookup = [];
             // [hemis_id][semester_code] => curriculum_id (talaba shu semestrda qaysi rejada o'qigan)
             $studentSemCurr = [];
             foreach ($arRecords as $ar) {
-                $arExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
+                $arLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = $ar;
                 if (!isset($studentSemCurr[$ar->student_id][$ar->semester_id]) && $ar->curriculum_id) {
                     $studentSemCurr[$ar->student_id][$ar->semester_id] = $ar->curriculum_id;
                 }
@@ -4989,7 +4989,8 @@ class ReportController extends Controller
                         }
 
                         $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
-                        $hasAR = isset($arExistsLookup[$arKey]);
+                        $arRecord = $arLookup[$arKey] ?? null;
+                        $hasPassingAR = $arRecord && !$this->isAcademicRecordDebt($arRecord);
 
                         // Biriktirilganlik tekshiruvi (JournalController mantiqiga muvofiq):
                         // Agar shu talaba+semestr uchun student_subjects da yozuvlar bo'lsa —
@@ -4998,7 +4999,7 @@ class ReportController extends Controller
                         $hasSsForSem = $studentSubjectsHasSemester[$ssKey] ?? false;
                         $isEnrolled = !$hasSsForSem || isset($studentSubjectsMap[$ssKey][$effectiveSubjectId]);
 
-                        if ($hasAR) {
+                        if ($hasPassingAR) {
                             // Baho bor → qarz emas
                             continue;
                         }
@@ -5929,7 +5930,7 @@ class ReportController extends Controller
 
         $numericGrade = round((float) $record->grade, 2);
 
-        return $numericGrade === 0.0 || $numericGrade === 2.0;
+        return $numericGrade < 60;
     }
 
     /**
@@ -6089,12 +6090,12 @@ class ReportController extends Controller
             // 1) academic_records'dan har semester uchun tarixiy curriculum_id va arExists
             $arRows = DB::table('academic_records')
                 ->where('student_id', $studentId)
-                ->select('subject_id', 'semester_id', 'curriculum_id')
+                ->select('subject_id', 'semester_id', 'curriculum_id', 'grade', 'retraining_status')
                 ->get();
-            $arExists = [];
+            $arLookup = [];
             $semCurr = []; // [sem_code => curriculum_id]
             foreach ($arRows as $ar) {
-                $arExists[$ar->subject_id . '|' . $ar->semester_id] = true;
+                $arLookup[$ar->subject_id . '|' . $ar->semester_id] = $ar;
                 if (!isset($semCurr[$ar->semester_id]) && $ar->curriculum_id) {
                     $semCurr[$ar->semester_id] = $ar->curriculum_id;
                 }
@@ -6198,7 +6199,8 @@ class ReportController extends Controller
                     }
                 }
 
-                if (isset($arExists[$effectiveSubjectId . '|' . $sub->semester_code])) continue;
+                $arRecord = $arLookup[$effectiveSubjectId . '|' . $sub->semester_code] ?? null;
+                if ($arRecord && !$this->isAcademicRecordDebt($arRecord)) continue;
 
                 $debtsAll[] = [
                     'semester_code' => $sub->semester_code,

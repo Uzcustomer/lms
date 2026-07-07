@@ -122,9 +122,21 @@
                         <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
                     </div>
                     <div id="table-area" style="display:none;">
-                        <div style="padding:10px 20px;background:#eff6ff;border-bottom:1px solid #bfdbfe;display:flex;align-items:center;gap:12px;">
-                            <span id="total-badge" class="badge" style="background:#2b5ea7;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
-                            <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
+                        <div style="padding:10px 20px;background:#eff6ff;border-bottom:1px solid #bfdbfe;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                            <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                                <span id="total-badge" class="badge" style="background:#2b5ea7;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
+                                <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+                                <select id="retake_status_filter" class="select2" style="width:220px;">
+                                    <option value="">Barchasi</option>
+                                    <option value="no_application">Ariza bermaganlar</option>
+                                    <option value="group_assigned">Guruhga biriktirilganlar</option>
+                                </select>
+                                <button type="button" onclick="exportRetakeNotAppliedExcel()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(22,163,74,0.3);white-space:nowrap;">
+                                    Excel
+                                </button>
+                            </div>
                         </div>
                         <div style="max-height:calc(100vh - 340px);overflow-y:auto;overflow-x:auto;">
                             <table class="journal-table">
@@ -209,6 +221,7 @@
                 group: $('#group').val() || '',
                 student_status: $('#student_status').val() || '',
                 student_type: $('#student_type').val() || '',
+                retake_status_filter: $('#retake_status_filter').val() || '',
                 only_debtors: document.getElementById('only-debtors-toggle').classList.contains('active') ? '1' : '0',
                 student_name: $('#student_name').val() || '',
                 per_page: $('#per_page').val() || 50,
@@ -266,6 +279,18 @@
                     console.error('Retake-not-applied report error:', xhr.status, xhr.responseText ? xhr.responseText.substring(0, 500) : '');
                 }
             });
+        }
+
+        function exportRetakeNotAppliedExcel() {
+            var params = getFilters();
+            params.export = 'excel';
+            var url = new URL('{{ route('admin.reports.retake-not-applied.data') }}', window.location.origin);
+            Object.keys(params).forEach(function(key) {
+                if (params[key] !== null && params[key] !== '') {
+                    url.searchParams.set(key, params[key]);
+                }
+            });
+            window.location.href = url.toString();
         }
 
         function esc(s) { return $('<span>').text((s === 0 || s) ? s : '-').html(); }
@@ -495,6 +520,7 @@
             $('#specialty').change(function() { rGrp(); });
             $('#level_code').change(function() { var lc=$(this).val(); rd('#semester_code'); if(lc) pd('{{ route("admin.journal.get-semesters") }}', {level_code:lc}, '#semester_code'); rGrp(); });
             $('#semester_code').change(function() { rGrp(); });
+            $('#retake_status_filter').change(function() { loadReport(1); });
 
             pdu('{{ route("admin.journal.get-specialties") }}', fp(), '#specialty');
             pd('{{ route("admin.journal.get-level-codes") }}', {}, '#level_code');

@@ -4975,18 +4975,10 @@ class ReportController extends Controller
                     $subjectsForSem = $this->filterSubjectsByGroupSuffix($subjectsForSem, $st->group_name ?? '');
 
                     foreach ($subjectsForSem as $sub) {
-                        // Tanlov fan bo'lsa, talaba tanlovini olamiz
+                        // Bu hisobotda faqat curriculumdagi reja fanlari bilan ishlaymiz.
+                        // student_subjects orqali boshqa fan nomiga/subyektiga almashtirmaymiz.
                         $effectiveSubjectId = $sub->subject_id;
                         $effectiveSubjectName = $sub->subject_name;
-                        if ((string) $sub->subject_type_code === '12') {
-                            $picked = $tanlovPicksMap[$st->hemis_id . '|' . $sub->curriculum_subject_hemis_id] ?? null;
-                            if ($picked) {
-                                $effectiveSubjectId = $picked['subject_id'];
-                                $effectiveSubjectName = $picked['subject_name'];
-                            } else {
-                                continue;
-                            }
-                        }
 
                         $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
                         $hasAR = isset($arExistsLookup[$arKey]);
@@ -5844,19 +5836,10 @@ class ReportController extends Controller
             $grades = [];
             $expectedSubjectIds = [];   // qarz hisobiga olingan fanlar
             foreach ($currSubjects as $sub) {
+                // Bu oynada faqat curriculumdagi reja fanlari ko'rsatiladi.
+                // student_subjects orqali boshqa fanlarga map qilinmaydi.
                 $effectiveSubjectId = $sub->subject_id;
                 $effectiveSubjectName = $sub->subject_name;
-
-                if ((string) $sub->subject_type_code === '12') {
-                    $picked = $tanlovPicksMap[$sub->curriculum_subject_hemis_id] ?? null;
-                    if ($picked) {
-                        $effectiveSubjectId = $picked['subject_id'];
-                        $effectiveSubjectName = $picked['subject_name'];
-                    } else {
-                        // Talaba hali tanlov qilmagan — bu slotni hisobga olmaymiz
-                        continue;
-                    }
-                }
 
                 $expectedSubjectIds[(string) $effectiveSubjectId] = true;
 
@@ -6159,18 +6142,10 @@ class ReportController extends Controller
                     if ($studentSemesterCode && $subSemCode >= (int) $studentSemesterCode) continue;
                 }
 
+                // Bu oynada faqat curriculumdagi reja fanlari ko'rsatiladi.
+                // student_subjects orqali boshqa fanlarga map qilinmaydi.
                 $effectiveSubjectId = $sub->subject_id;
                 $effectiveSubjectName = $sub->subject_name;
-                if ((string) $sub->subject_type_code === '12') {
-                    $picked = $tanlovPicksMap[$sub->curriculum_subject_hemis_id] ?? null;
-                    if ($picked) {
-                        $effectiveSubjectId = $picked['subject_id'];
-                        $effectiveSubjectName = $picked['subject_name'];
-                    } else {
-                        // Talaba hali tanlov qilmagan
-                        continue;
-                    }
-                }
 
                 if (isset($arExists[$effectiveSubjectId . '|' . $sub->semester_code])) continue;
 

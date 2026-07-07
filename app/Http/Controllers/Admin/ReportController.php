@@ -5872,32 +5872,6 @@ class ReportController extends Controller
                 ];
             }
 
-            // Orphan: academic_records da bor, lekin curriculum_subjects'da ham,
-            // student_subjects'da ham yo'q. Sariq bilan alohida ko'rsatamiz.
-            $studentSubjectIds = DB::table('student_subjects')
-                ->where('student_hemis_id', $studentId)
-                ->where('semester_id', $semesterCode)
-                ->pluck('subject_id')
-                ->map(fn ($v) => (string) $v)
-                ->all();
-            $studentSubjectIdsSet = array_flip($studentSubjectIds);
-
-            foreach ($arRecords as $ar) {
-                $sid = (string) $ar->subject_id;
-                if (isset($expectedSubjectIds[$sid])) continue;       // allaqachon ko'rsatilgan
-                if (isset($studentSubjectIdsSet[$sid])) continue;     // student_subjects'da bor — orphan emas
-
-                $grades[] = (object) [
-                    'subject_name' => $ar->subject_name,
-                    'credit'       => $ar->credit,
-                    'total_acload' => $ar->total_acload,
-                    'total_point'  => $ar->total_point ?? null,
-                    'grade'        => $ar->grade ?? null,
-                    'is_debt'      => $this->isAcademicRecordDebt($ar),
-                    'is_orphan'    => true,    // sariq fond bilan ko'rsatiladi
-                ];
-            }
-
             $semesterName = $currSubjects->first()->semester_name ?? $semesterCode . '-semestr';
 
             return response()->json([

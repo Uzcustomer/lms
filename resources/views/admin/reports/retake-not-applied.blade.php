@@ -145,6 +145,7 @@
                                         <th style="text-align:center;"><a href="#" class="sort-link" data-sort="grade">Olgan bahosi <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th title="Qayta o'qishga ariza berganlik holati">Qayta o'qish holati</th>
                                         <th title="O'qishi holati">O'qish holati</th>
+                                        <th style="text-align:center;width:90px;">Batafsil</th>
                                     </tr>
                                 </thead>
                                 <tbody id="table-body"></tbody>
@@ -154,6 +155,17 @@
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <div id="detail-modal" class="modal-overlay" style="display:none;" onclick="if(event.target===this)closeDetailModal()">
+        <div class="modal-box">
+            <div class="modal-header">
+                <h3 id="modal-title">Batafsil ma'lumot</h3>
+                <button onclick="closeDetailModal()" class="modal-close">&times;</button>
+            </div>
+            <div id="modal-student-info" class="modal-info"></div>
+            <div id="modal-body" style="max-height:65vh;overflow-y:auto;padding:0 4px 8px;"></div>
         </div>
     </div>
 
@@ -271,6 +283,12 @@
             return '<span class="pill ' + (map[code] || 'pill-gray') + '">' + esc(label) + '</span>';
         }
 
+        function fmtCredit(c) {
+            var n = parseFloat(c);
+            if (isNaN(n)) return '-';
+            return (Math.round(n * 100) / 100).toString();
+        }
+
         function renderTable(data) {
             var html = '';
             for (var i = 0; i < data.length; i++) {
@@ -293,9 +311,82 @@
                 html += '<td style="text-align:center;">' + gradeVal + '</td>';
                 html += '<td>' + retakePill(r.retake_status) + '</td>';
                 html += '<td>' + studyPill(r.study_status_code, r.study_status) + '</td>';
+                html += '<td style="text-align:center;"><button class="btn-detail" onclick="showDetail(' + i + ')">Batafsil</button></td>';
                 html += '</tr>';
             }
             $('#table-body').html(html);
+        }
+
+        function showDetail(idx) {
+            var r = reportData[idx];
+            if (!r) return;
+
+            $('#modal-title').text(r.full_name);
+            $('#modal-student-info').html(
+                '<div class="mi-grid">' +
+                '<div><span class="mi-l">ID</span><span class="mi-v">' + esc(r.student_id_number) + '</span></div>' +
+                '<div><span class="mi-l">Fakultet</span><span class="mi-v">' + esc(r.department_name) + '</span></div>' +
+                '<div><span class="mi-l">Yo\\'nalish</span><span class="mi-v">' + esc(r.specialty_name) + '</span></div>' +
+                '<div><span class="mi-l">Guruh</span><span class="mi-v">' + esc(r.group_name) + '</span></div>' +
+                '<div><span class="mi-l">Semestr</span><span class="mi-v">' + esc(r.semester_name) + '</span></div>' +
+                '<div><span class="mi-l">Fan</span><span class="mi-v">' + esc(r.subject_name) + '</span></div>' +
+                '</div>'
+            );
+
+            $('#modal-body').html('<div class="sec-empty">Yuklanmoqda...</div>');
+            $('#detail-modal').css('display', 'flex');
+
+            $.get('{{ route('admin.reports.student-all-records') }}', {
+                student_id: r.hemis_id,
+                group_name: r.group_name,
+                current_semester: 0
+            }, function(resp) {
+                var semCode = String(r.semester_code || '');
+                var planned = (resp.planned_subjects || []).filter(function(item) {
+                    return String(item.semester_code) === semCode;
+                });
+                var extra = (resp.extra_subjects || []).filter(function(item) {
+                    return String(item.semester_code) === semCode;
+                });
+
+                var body = '';
+                body += '<div class="sec-title" style="color:#2563eb;">O\\'quv rejadagi fanlar</div>';
+                if (planned.length) {
+                    body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th style="text-align:center;">Kredit</th><th style="text-align:center;">Soat</th><th style="text-align:center;">Holat</th><th style="text-align:center;">Ball</th><th style="text-align:center;">Baho</th></tr></thead><tbody>';
+                    for (var i = 0; i < planned.length; i++) {
+                        var p = planned[i];
+                        var pStatus = p.has_record ? '<span class="pill pill-green">Yozuv bor</span>' : '<span class="pill pill-red">Yozuv yo\\'q</span>';
+                        body += '<tr><td>' + (i + 1) + '</td><td>' + esc(p.subject_name) + '</td><td style="text-align:center;">' + fmtCredit(p.credit) + '</td><td style="text-align:center;">' + fmtNum(p.total_acload) + '</td><td style="text-align:center;">' + pStatus + '</td><td style="text-align:center;">' + fmtNum(p.total_point) + '</td><td style="text-align:center;">' + fmtNum(p.grade) + '</td></tr>';
+                    }
+                    body += '</tbody></table>';
+                } else {
+                    body += '<div class="sec-empty">Bu semestr uchun o\\'quv rejadagi fan topilmadi</div>';
+                }
+
+                body += '<div class="sec-title" style="color:#7c3aed;">Ortiqcha fanlar</div>';
+                if (extra.length) {
+                    body += '<table class="det-table"><thead><tr><th style="width:36px;">#</th><th>Fan</th><th style="text-align:center;">Kredit</th><th style="text-align:center;">Ball</th><th style="text-align:center;">Baho</th></tr></thead><tbody>';
+                    for (var j = 0; j < extra.length; j++) {
+                        var e = extra[j];
+                        body += '<tr><td>' + (j + 1) + '</td><td>' + esc(e.subject_name) + '</td><td style="text-align:center;">' + fmtCredit(e.credit) + '</td><td style="text-align:center;">' + fmtNum(e.total_point) + '</td><td style="text-align:center;">' + fmtNum(e.grade) + '</td></tr>';
+                    }
+                    body += '</tbody></table>';
+                } else {
+                    body += '<div class="sec-empty">Yo\\'q</div>';
+                }
+
+                $('#modal-body').html(body);
+            }).fail(function(xhr) {
+                var msg = "Batafsil ma'lumotni yuklab bo'lmadi";
+                if (xhr.responseJSON && xhr.responseJSON.error) {
+                    msg += ': ' + xhr.responseJSON.error;
+                }
+                $('#modal-body').html('<div class="sec-empty">' + esc(msg) + '</div>');
+            });
+        }
+
+        function closeDetailModal() {
+            $('#detail-modal').hide();
         }
 
         function renderPagination(res) {
@@ -367,6 +458,31 @@
 
         .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }
+
+        .btn-detail { display:inline-flex; align-items:center; justify-content:center; padding:6px 12px; border:1px solid #cbd5e1; border-radius:8px; background:#fff; color:#1e40af; font-size:12px; font-weight:700; }
+        .btn-detail:hover { background:#eff6ff; }
+        .modal-overlay { position:fixed; inset:0; background:rgba(15,23,42,.45); display:none; align-items:center; justify-content:center; padding:20px; z-index:9999; }
+        .modal-box { width:min(1100px, 100%); max-height:90vh; overflow:hidden; background:#fff; border-radius:16px; box-shadow:0 25px 60px rgba(15,23,42,.25); border:1px solid #dbe4ef; }
+        .modal-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:16px 18px; border-bottom:1px solid #e2e8f0; background:linear-gradient(135deg,#f0f6ff,#f8fbff); }
+        .modal-header h3 { margin:0; font-size:18px; font-weight:700; color:#0f172a; }
+        .modal-close { width:36px; height:36px; border:none; border-radius:10px; background:#fff; color:#475569; font-size:24px; line-height:1; cursor:pointer; box-shadow:0 1px 3px rgba(15,23,42,.12); }
+        .modal-info { padding:14px 18px 6px; border-bottom:1px solid #eef2f7; }
+        .mi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(180px,1fr)); gap:10px 14px; }
+        .mi-grid div { display:flex; flex-direction:column; gap:2px; }
+        .mi-l { font-size:11px; font-weight:700; color:#64748b; text-transform:uppercase; letter-spacing:.04em; }
+        .mi-v { font-size:13px; font-weight:600; color:#0f172a; }
+        .sec-title { margin:14px 0 8px; font-size:14px; font-weight:800; }
+        .sec-empty { padding:12px 14px; border:1px dashed #cbd5e1; border-radius:10px; color:#64748b; background:#f8fafc; }
+        .det-table { width:100%; border-collapse:separate; border-spacing:0; margin-bottom:10px; }
+        .det-table thead th { position:sticky; top:0; background:#f8fafc; color:#475569; font-size:12px; font-weight:700; padding:10px 12px; border-bottom:1px solid #e2e8f0; }
+        .det-table tbody td { padding:10px 12px; border-bottom:1px solid #eef2f7; font-size:13px; color:#0f172a; vertical-align:top; }
+        .pill { display:inline-flex; align-items:center; padding:4px 9px; border-radius:999px; font-size:11px; font-weight:700; }
+        .pill-green { background:#dcfce7; color:#166534; }
+        .pill-red { background:#fee2e2; color:#b91c1c; }
+        .pill-gray { background:#e2e8f0; color:#475569; }
+        .pill-amber { background:#fef3c7; color:#b45309; }
+        .pill-blue { background:#dbeafe; color:#1d4ed8; }
+        .pill-teal { background:#ccfbf1; color:#0f766e; }
 
         .select2-container--classic .select2-selection--single { height: 36px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; transition: all 0.2s; box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
         .select2-container--classic .select2-selection--single:hover { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.1); }

@@ -176,6 +176,7 @@
                                 <th>{{ __("Kurs") }}</th>
                                 <th>{{ __("Guruh") }}</th>
                                 <th>{{ __("Fan") }}</th>
+                                <th>{{ __("Ariza bergan fani") }}</th>
                                 <th>{{ __("Yopilish shakli") }}</th>
                                 <th>{{ __("Semestr") }}</th>
                                 <th>{{ __("Holat") }}</th>
@@ -209,6 +210,9 @@
                                     <td><span class="badge badge-violet">{{ $student?->level_name ?? '—' }}</span></td>
                                     <td><span class="badge badge-indigo">{{ $student?->group_name ?? '—' }}</span></td>
                                     <td><span class="text-cell text-subject">{{ $retakeGroup?->subject_name ?? $app->subject_name }}</span></td>
+                                    {{-- Ariza bergan fani — talaba yozgan fan (guruh fani boshqa bo'lishi mumkin,
+                                         o'quv bo'limi o'xshash fanga biriktirgan bo'lsa). --}}
+                                    <td><span class="text-cell" style="color:#475569;">{{ $app->subject_name ?? '—' }}</span></td>
                                     <td><span class="badge {{ $b['cls'] }}">{{ $b['label'] }}</span></td>
                                     {{-- Semestr — ARIZANIKI (guruh bir nechta semestrni birlashtirishi mumkin). --}}
                                     <td><span class="badge badge-teal">{{ $app->semester_name ?? $retakeGroup?->semester_name }}</span></td>

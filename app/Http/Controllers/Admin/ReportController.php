@@ -5583,10 +5583,12 @@ class ReportController extends Controller
                 })
                 ->select(
                     'cs.curricula_hemis_id',
+                    'cs.curriculum_subject_hemis_id',
                     'cs.semester_code',
                     'cs.semester_name',
                     'cs.subject_id',
                     'cs.subject_name',
+                    'cs.subject_type_code',
                     'cs.credit',
                     'cs.total_acload',
                     'cs.closing_form'
@@ -5599,6 +5601,31 @@ class ReportController extends Controller
 
             $subjectsByPair = $currSubjectsQuery->get()
                 ->groupBy(fn ($s) => $s->curricula_hemis_id . '|' . $s->semester_code);
+
+            $tanlovCsHemisIds = $subjectsByPair
+                ->flatten(1)
+                ->where('subject_type_code', '12')
+                ->pluck('curriculum_subject_hemis_id')
+                ->filter()
+                ->unique()
+                ->values()
+                ->toArray();
+
+            $tanlovPicksMap = [];
+            if (!empty($tanlovCsHemisIds)) {
+                $tanlovPicks = DB::table('student_subjects')
+                    ->whereIn('student_hemis_id', $studentHemisIds)
+                    ->whereIn('curriculum_subject_hemis_id', $tanlovCsHemisIds)
+                    ->select('student_hemis_id', 'curriculum_subject_hemis_id', 'subject_id', 'subject_name')
+                    ->get();
+
+                foreach ($tanlovPicks as $tp) {
+                    $tanlovPicksMap[$tp->student_hemis_id . '|' . $tp->curriculum_subject_hemis_id] = [
+                        'subject_id' => $tp->subject_id,
+                        'subject_name' => $tp->subject_name,
+                    ];
+                }
+            }
 
             $retakeApps = \App\Models\RetakeApplication::query()
                 ->whereIn('student_hemis_id', $studentHemisIds)
@@ -5682,7 +5709,15 @@ class ReportController extends Controller
                     $subjectsForSem = $this->filterSubjectsByGroupSuffix($subjectsForSem, $st->group_name ?? '');
 
                     foreach ($subjectsForSem as $sub) {
-                        $matchedAr = $arByStudentSemSubject[$st->hemis_id][(string) $semCode][(string) $sub->subject_id] ?? null;
+                        $resolvedSubject = $this->resolveAcademicDebtSubjectForStudent($st->hemis_id, $sub, $tanlovPicksMap);
+                        if ($resolvedSubject === null) {
+                            continue;
+                        }
+
+                        $effectiveSubjectId = $resolvedSubject['subject_id'];
+                        $effectiveSubjectName = $resolvedSubject['subject_name'];
+
+                        $matchedAr = $arByStudentSemSubject[$st->hemis_id][(string) $semCode][(string) $effectiveSubjectId] ?? null;
                         $study = $matchedAr
                             ? $this->academicRecordStudyStatus($matchedAr)
                             : ['code' => 'not_graded', 'label' => "Yozuv yo'q"];
@@ -5691,7 +5726,7 @@ class ReportController extends Controller
                             continue;
                         }
 
-                        $retakeKey = $st->hemis_id . '|' . $sub->subject_id . '|' . $semCode;
+                        $retakeKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $semCode;
                         $retakeApp = $retakeAppDataMap[$retakeKey] ?? null;
                         $mustaqil = $retakeApp ? ($mustaqilMap->get($retakeApp->id) ?? null) : null;
                         $scoreDetails = [];
@@ -5738,7 +5773,7 @@ class ReportController extends Controller
                             'specialty_name' => $st->specialty_name ?? '-',
                             'level_name' => $st->level_name ?? '-',
                             'group_name' => $st->group_name ?? '-',
-                            'subject_name' => $sub->subject_name ?? '-',
+                            'subject_name' => $effectiveSubjectName ?? '-',
                             'closing_form' => $sub->closing_form ? ($cfLabels[$sub->closing_form] ?? $sub->closing_form) : '-',
                             'semester_code' => $sub->semester_code,
                             'semester_name' => $sub->semester_name ?: ($sub->semester_code ? $sub->semester_code . '-semestr' : '-'),

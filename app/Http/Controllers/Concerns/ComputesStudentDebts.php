@@ -44,15 +44,15 @@ trait ComputesStudentDebts
         foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
             $arRecords = array_merge($arRecords, DB::table('academic_records')
                 ->whereIn('student_id', $chunk)
-                ->select('student_id', 'subject_id', 'semester_id', 'curriculum_id', 'grade', 'retraining_status')
+                ->select('student_id', 'subject_id', 'semester_id', 'curriculum_id')
                 ->get()
                 ->all());
         }
 
-        $arLookup = [];
+        $arExistsLookup = [];
         $studentSemCurr = []; // [hemis_id][semester_code] => curriculum_id
         foreach ($arRecords as $ar) {
-            $arLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = $ar;
+            $arExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
             if (!isset($studentSemCurr[$ar->student_id][$ar->semester_id]) && $ar->curriculum_id) {
                 $studentSemCurr[$ar->student_id][$ar->semester_id] = $ar->curriculum_id;
             }
@@ -182,14 +182,13 @@ trait ComputesStudentDebts
                     }
 
                     $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
-                    $arRecord = $arLookup[$arKey] ?? null;
-                    $hasPassingAR = $arRecord && !$this->academicRecordCountsAsDebt($arRecord);
+                    $hasAR = isset($arExistsLookup[$arKey]);
 
                     $ssKey = $st->hemis_id . '|' . (string) $sub->semester_code;
                     $hasSsForSem = $studentSubjectsHasSemester[$ssKey] ?? false;
                     $isEnrolled = !$hasSsForSem || isset($studentSubjectsMap[$ssKey][$effectiveSubjectId]);
 
-                    if ($hasPassingAR) {
+                    if ($hasAR) {
                         continue;
                     }
 
@@ -248,27 +247,6 @@ trait ComputesStudentDebts
         }
 
         return $finalResults;
-    }
-
-    protected function academicRecordCountsAsDebt($record): bool
-    {
-        if (!$record) {
-            return true;
-        }
-
-        if ($record->grade === null || $record->grade === '') {
-            return true;
-        }
-
-        if ((bool) ($record->retraining_status ?? false)) {
-            return true;
-        }
-
-        if (!is_numeric($record->grade)) {
-            return false;
-        }
-
-        return round((float) $record->grade, 2) < 60;
     }
 
     /**

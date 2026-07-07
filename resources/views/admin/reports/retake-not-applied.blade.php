@@ -128,11 +128,13 @@
                                 <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
                             </div>
                             <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
+                                <div style="width:250px;min-width:250px;flex:0 0 250px;">
                                 <select id="retake_status_filter" class="select2" style="width:250px;">
                                     <option value="">Barchasi</option>
                                     <option value="no_application">Ariza bermaganlar</option>
                                     <option value="group_assigned">Guruhga biriktirilganlar</option>
                                 </select>
+                                </div>
                                 <button type="button" onclick="exportRetakeNotAppliedExcel()" style="display:inline-flex;align-items:center;justify-content:center;gap:6px;padding:8px 16px;height:38px;background:linear-gradient(135deg,#16a34a,#22c55e);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(22,163,74,0.3);white-space:nowrap;flex:0 0 auto;">
                                     Excel
                                 </button>
@@ -506,6 +508,7 @@
                 $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text(), matcher: fuzzyMatcher })
                 .on('select2:open', function() { setTimeout(function() { var s = document.querySelector('.select2-container--open .select2-search__field'); if(s) s.focus(); }, 10); });
             });
+            $('#retake_status_filter').next('.select2-container').css('width', '250px');
 
             function fp() { var df=document.getElementById('dekan_faculty_id'); return { education_type: $('#education_type').val()||'', faculty_id: df ? df.value : ($('#faculty').val()||''), specialty_id: $('#specialty').val()||'', level_code: $('#level_code').val()||'', semester_code: $('#semester_code').val()||'' }; }
             function rd(el) { $(el).empty().append('<option value="">Barchasi</option>'); }

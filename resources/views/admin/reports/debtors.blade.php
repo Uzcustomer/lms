@@ -453,6 +453,7 @@
                     $('#all-records-wrap').html(gh);
 
                     var debtsAll = resp.grade_debts || [];
+                    var extraSubjects = resp.extra_subjects || [];
 
                     var dh = '<div style="border-top:2px solid #e2e8f0;">';
                     dh += '<div style="padding:8px 16px 6px;display:flex;align-items:center;gap:16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;">';
@@ -478,6 +479,31 @@
                             dh += '</td>';
                             dh += '<td>' + esc(row.credit) + '</td>';
                             dh += '<td>' + esc(row.total_acload) + '</td>';
+                            dh += '</tr>';
+                        }
+                        dh += '</tbody></table>';
+                    }
+
+                    dh += '<div style="padding:8px 16px 6px;display:flex;align-items:center;gap:16px;background:#faf5ff;border-top:1px solid #e9d5ff;border-bottom:1px solid #e9d5ff;">';
+                    dh += '<span style="font-weight:700;color:#7c3aed;font-size:13px;">Ortiqcha fanlar: ' + extraSubjects.length + ' ta fan</span>';
+                    dh += '</div>';
+
+                    if (extraSubjects.length === 0) {
+                        dh += '<div style="padding:12px 20px;color:#64748b;font-size:13px;">Ortiqcha fan topilmadi</div>';
+                    } else {
+                        dh += '<table class="detail-table">';
+                        dh += '<thead><tr><th>#</th><th>Semestr</th><th>Fan nomi</th><th>Kredit</th><th>Ball</th><th>Baho</th></tr></thead><tbody>';
+                        for (var ex = 0; ex < extraSubjects.length; ex++) {
+                            var er = extraSubjects[ex];
+                            var ep = (er.total_point !== null && er.total_point !== undefined && er.total_point !== '') ? er.total_point : '—';
+                            var eg = (er.grade !== null && er.grade !== undefined && er.grade !== '') ? er.grade : '—';
+                            dh += '<tr style="background:#faf5ff;">';
+                            dh += '<td>' + (ex + 1) + '</td>';
+                            dh += '<td><span class="badge badge-violet" style="white-space:nowrap;">' + esc(er.semester_name || (er.semester_code + '-sem')) + '</span></td>';
+                            dh += '<td style="font-weight:600;color:#581c87;min-width:200px;text-align:left;">' + esc(er.subject_name) + '</td>';
+                            dh += '<td>' + esc(er.credit) + '</td>';
+                            dh += '<td>' + esc(ep) + '</td>';
+                            dh += '<td><span class="badge badge-indigo">' + esc(eg) + '</span></td>';
                             dh += '</tr>';
                         }
                         dh += '</tbody></table>';

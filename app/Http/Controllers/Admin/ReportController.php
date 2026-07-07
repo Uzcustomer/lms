@@ -5163,7 +5163,12 @@ class ReportController extends Controller
     }
 
     /**
-     * AJAX: "Qayta o'qishga ariza topshirmaganlar" hisobot ma'lumotlari.
+     * AJAX: Qarzdorlar — talabalarning academic_records yozuvlari (har fan alohida qator).
+     *
+     * Har bir qator = bitta academic_records yozuvi. "Faqat qarzdorlar" toggle yoqilganda
+     * faqat qarz yozuvlar chiqadi. Fan o'zlashtirilgan (qarz emas) hisoblanadi, agar kredit
+     * olingan bo'lsa (finish_credit_status = 1, "O'tdi" pass/fail) YOKI o'tish bahosi bo'lsa
+     * (baho >= 3). Toggle o'chirilsa talabaning barcha academic_records fanlari ko'rsatiladi.
      */
     public function retakeNotAppliedReportData(Request $request)
     {
@@ -5176,53 +5181,48 @@ class ReportController extends Controller
             ini_set('memory_limit', '512M');
             set_time_limit(120);
 
-            // Solishtirish kaliti: FAN NOMI + KREDIT (aynan, exact).
-            //  - Apostrof ("‘" va "'") ham, harf registri ham, kredit qiymati ham
-            //    AHAMIYATGA EGA — ya'ni o'quv reja va academic_records'dagi nom yoki
-            //    kredit zarracha farq qilsa, ular HAR XIL fan deb qaraladi (talab shu).
-            //  - Faqat ortiqcha bo'shliqlar (boshi/oxiri va ketma-ket bo'shliqlar)
-            //    tozalanadi — bu ma'noga ta'sir qilmaydigan formatlash shovqini.
-            $normName = fn ($s) => preg_replace('/\s+/u', ' ', trim((string) $s));
-            $creditKey = fn ($c) => number_format((float) $c, 2, '.', '');
+            // Toggle: "only_debtors" (yangi nom). Eski "only_not_applied" ham qabul qilinadi.
+            $onlyDebtors = $request->get('only_debtors', $request->get('only_not_applied', '1')) == '1';
 
-            // 1-QADAM: Talabalarni filtrlar bo'yicha olish
-            $studentQuery = DB::table('students as s')
-                ->whereNotNull('s.curriculum_id')
-                ->select('s.hemis_id', 's.full_name', 's.student_id_number',
-                    's.department_name', 's.specialty_name', 's.level_name',
-                    's.semester_name', 's.semester_code', 's.group_name',
-                    's.group_id', 's.curriculum_id',
-                    's.student_type_code', 's.student_type_name');
+            // Asosiy so'rov: academic_records + students (har yozuv = bir qator).
+            $query = DB::table('academic_records as ar')
+                ->join('students as s', 's.hemis_id', '=', 'ar.student_id')
+                ->whereNotNull('s.curriculum_id');
 
+            // ── Talaba filtrlari ─────────────────────────────────────────
             if ($request->filled('student_status')) {
-                $studentQuery->where('s.student_status_code', $request->student_status);
+                $query->where('s.student_status_code', $request->student_status);
             }
             if ($request->filled('student_name')) {
-                $studentQuery->where('s.full_name', 'like', '%' . $request->student_name . '%');
+                $query->where('s.full_name', 'like', '%' . $request->student_name . '%');
             }
             if ($request->filled('faculty')) {
                 $faculty = Department::find($request->faculty);
                 if ($faculty) {
-                    $studentQuery->where('s.department_id', $faculty->department_hemis_id);
+                    $query->where('s.department_id', $faculty->department_hemis_id);
                 }
             }
             if ($request->filled('specialty')) {
-                $studentQuery->where('s.specialty_id', $request->specialty);
+                $query->where('s.specialty_id', $request->specialty);
             }
             if ($request->filled('level_code')) {
-                $studentQuery->where('s.level_code', $request->level_code);
+                $query->where('s.level_code', $request->level_code);
             }
             if ($request->filled('group')) {
                 $group = \App\Models\Group::find($request->group);
                 if ($group) {
-                    $studentQuery->where('s.group_id', $group->group_hemis_id);
+                    $query->where('s.group_id', $group->group_hemis_id);
                 }
             }
             if ($request->filled('education_type')) {
-                $studentQuery->where('s.education_type_code', $request->education_type);
+                $query->where('s.education_type_code', $request->education_type);
             }
             if ($request->filled('student_type')) {
-                $studentQuery->where('s.student_type_code', $request->student_type);
+                $query->where('s.student_type_code', $request->student_type);
+            }
+            // Semestr filtri — bu yerda YOZUV semestriga (academic_records.semester_id) qo'llanadi.
+            if ($request->filled('semester_code')) {
+                $query->where('ar.semester_id', $request->semester_code);
             }
 
             if (is_active_nazoratchi()) {
@@ -5230,310 +5230,257 @@ class ReportController extends Controller
                 if (empty($nazoratchiHemisIds)) {
                     return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
                 }
-                $studentQuery->whereIn('s.group_id', $nazoratchiHemisIds);
+                $query->whereIn('s.group_id', $nazoratchiHemisIds);
             }
 
-            $students = $studentQuery->get();
-            if ($students->isEmpty()) {
-                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
-            }
-
-            $studentHemisIds = $students->pluck('hemis_id')->toArray();
-
-            // 2-QADAM: academic_records.
-            //  - Har semestrdagi tarixiy curriculum_id (transfer talabalari uchun).
-            //  - Baholangan fanlar to'plami (nomi+kredit+semestr bo'yicha).
-            //  - Barcha academic_records yozuvlari (ortiqcha aniqlash uchun).
-            $arRecords = [];
-            foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
-                $arRecords = array_merge($arRecords, DB::table('academic_records')
-                    ->whereIn('student_id', $chunk)
-                    ->select('student_id', 'subject_id', 'subject_name', 'credit',
-                        'semester_id', 'curriculum_id', 'grade')
-                    ->get()
-                    ->all());
-            }
-
-            // [hemis_id][semester_code] => curriculum_id
-            $studentSemCurr = [];
-            // [hemis_id] => [ 'normname|credit|sem' => true ] — baholangan fanlar
-            $gradedKeySet = [];
-            // [hemis_id][sem] => [ 'normname|credit' => [...] ] — barcha AR (ortiqcha uchun)
-            $arAllByStudentSem = [];
-            foreach ($arRecords as $ar) {
-                if (!isset($studentSemCurr[$ar->student_id][$ar->semester_id]) && $ar->curriculum_id) {
-                    $studentSemCurr[$ar->student_id][$ar->semester_id] = $ar->curriculum_id;
-                }
-                $nkNoSem = $normName($ar->subject_name) . '|' . $creditKey($ar->credit);
-                $hasGrade = $ar->grade !== null && trim((string) $ar->grade) !== '';
-                if ($hasGrade) {
-                    $gradedKeySet[$ar->student_id][$nkNoSem . '|' . (string) $ar->semester_id] = true;
-                }
-                // Bir xil nom+kredit bir semestrda bir necha yozuv bo'lishi mumkin — baholangani ustun
-                $existing = $arAllByStudentSem[$ar->student_id][(string) $ar->semester_id][$nkNoSem] ?? null;
-                if ($existing === null || (!($existing['has_grade'] ?? false) && $hasGrade)) {
-                    $arAllByStudentSem[$ar->student_id][(string) $ar->semester_id][$nkNoSem] = [
-                        'subject_name' => $ar->subject_name,
-                        'credit'       => $ar->credit,
-                        'has_grade'    => $hasGrade,
-                    ];
-                }
-            }
-            unset($arRecords);
-
-            // 3-QADAM: Tugagan (joriydan oldingi) semestrlar uchun (curriculum_id, sem) juftliklari
-            $curriculumPairs = [];
-            foreach ($students as $st) {
-                $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
-                foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
-                    if (!$studentSemCode || (int) $semCode < $studentSemCode) {
-                        $curriculumPairs[$currId . '|' . $semCode] = true;
-                    }
-                }
-            }
-
-            $allCurriculumIds = collect($curriculumPairs)->keys()
-                ->map(fn ($k) => explode('|', $k)[0])->unique()->values()->all();
-            $allSemCodes = collect($curriculumPairs)->keys()
-                ->map(fn ($k) => explode('|', $k)[1])->unique()->values()->all();
-
-            $subjectsByPair = collect();
-            if (!empty($allCurriculumIds) && !empty($allSemCodes)) {
-                $currSubjectsQuery = DB::table('curriculum_subjects as cs')
-                    ->whereIn('cs.curricula_hemis_id', $allCurriculumIds)
-                    ->whereIn('cs.semester_code', $allSemCodes)
-                    ->where('cs.is_active', 1)
+            // ── Qarzdorlik filtri ────────────────────────────────────────
+            //  Fan O'ZLASHTIRILGAN (qarz EMAS) hisoblanadi, agar QUYIDAGILARDAN biri bo'lsa:
+            //    (a) finish_credit_status = 1  — kredit olingan "O'tdi" pass/fail fan
+            //        (baho 0.00 bo'lsa ham, masalan "Odam anatomiyasi"), YOKI
+            //    (b) o'tish bahosi bor — baho numerik va >= 3 (masalan 3.00, 4.00),
+            //        yoki matnli o'tish bahosi (numerik bo'lmagan).
+            //  Qarzdor = ikkalasi ham yo'q: kredit olinmagan VA (baho bo'sh yoki numerik < 3).
+            if ($onlyDebtors) {
+                $query
                     ->where(function ($q) {
-                        $q->whereNull('cs.in_group')->orWhere('cs.in_group', '');
+                        $q->where('ar.finish_credit_status', '!=', 1)
+                            ->orWhereNull('ar.finish_credit_status');
                     })
-                    ->select(
-                        'cs.curricula_hemis_id', 'cs.curriculum_subject_hemis_id',
-                        'cs.semester_code', 'cs.semester_name',
-                        'cs.subject_id', 'cs.subject_name', 'cs.subject_type_code',
-                        'cs.credit', 'cs.total_acload'
-                    )
-                    ->distinct();
-
-                $excludedPatterns = config('app.excluded_rating_subject_patterns', []);
-                foreach ($excludedPatterns as $pattern) {
-                    $currSubjectsQuery->where('cs.subject_name', 'NOT LIKE', "%{$pattern}%");
-                }
-
-                $currSubjects = $currSubjectsQuery->get();
-                $subjectsByPair = $currSubjects->groupBy(fn ($s) => $s->curricula_hemis_id . '|' . $s->semester_code);
-
-                // Tanlov fanlar (subject_type_code=12) — talaba haqiqiy tanlovi
-                $tanlovCsHemisIds = $currSubjects
-                    ->where('subject_type_code', '12')
-                    ->pluck('curriculum_subject_hemis_id')
-                    ->filter()->unique()->values()->toArray();
-                $tanlovPicksMap = [];
-                if (!empty($tanlovCsHemisIds)) {
-                    $tanlovPicks = DB::table('student_subjects')
-                        ->whereIn('student_hemis_id', $studentHemisIds)
-                        ->whereIn('curriculum_subject_hemis_id', $tanlovCsHemisIds)
-                        ->select('student_hemis_id', 'curriculum_subject_hemis_id', 'subject_id', 'subject_name')
-                        ->get();
-                    foreach ($tanlovPicks as $tp) {
-                        $tanlovPicksMap[$tp->student_hemis_id . '|' . $tp->curriculum_subject_hemis_id] = [
-                            'subject_id'   => $tp->subject_id,
-                            'subject_name' => $tp->subject_name,
-                        ];
-                    }
-                }
-            } else {
-                $tanlovPicksMap = [];
+                    ->where(function ($q) {
+                        $q->whereNull('ar.grade')
+                            ->orWhere('ar.grade', '=', '')
+                            ->orWhereRaw("(ar.grade REGEXP '^[0-9]+([.][0-9]+)?\$' AND CAST(ar.grade AS DECIMAL(10,2)) < 3)");
+                    });
             }
 
-            // 4-QADAM: Qayta o'qish arizalari (faol: pending/approved) — nomi+kredit+semestr
-            $retakeKeySet = [];   // [hemis_id]['normname|credit|sem'] => holat matni
-            $retakeApps = \App\Models\RetakeApplication::query()
-                ->whereIn('student_hemis_id', $studentHemisIds)
-                ->whereIn('final_status', [
-                    \App\Models\RetakeApplication::STATUS_PENDING,
-                    \App\Models\RetakeApplication::STATUS_APPROVED,
-                ])
-                ->get(['student_hemis_id', 'subject_name', 'credit', 'semester_id', 'final_status']);
-            foreach ($retakeApps as $ra) {
-                $nk = $normName($ra->subject_name) . '|' . $creditKey($ra->credit) . '|' . (string) $ra->semester_id;
-                $label = $ra->final_status === \App\Models\RetakeApplication::STATUS_APPROVED
-                    ? 'Tasdiqlangan' : 'Ko\'rib chiqilmoqda';
-                // approved holati pending'dan ustun
-                if (!isset($retakeKeySet[$ra->student_hemis_id][$nk])
-                    || $ra->final_status === \App\Models\RetakeApplication::STATUS_APPROVED) {
-                    $retakeKeySet[$ra->student_hemis_id][$nk] = $label;
+            $total = (clone $query)->count();
+            $perPage = (int) $request->get('per_page', 50);
+            if ($perPage < 1) {
+                $perPage = 50;
+            }
+
+            if ($total === 0) {
+                return response()->json(['data' => [], 'total' => 0, 'per_page' => $perPage, 'current_page' => 1, 'last_page' => 1]);
+            }
+
+            // ── Saralash ─────────────────────────────────────────────────
+            $sortMap = [
+                'full_name'       => 's.full_name',
+                'department_name' => 's.department_name',
+                'specialty_name'  => 's.specialty_name',
+                'level_name'      => 's.level_name',
+                'group_name'      => 's.group_name',
+                'subject_name'    => 'ar.subject_name',
+                'semester_name'   => 'ar.semester_id',
+                'total_point'     => 'ar.total_point',
+                'grade'           => 'ar.grade',
+            ];
+            $sortColumn = $sortMap[$request->get('sort')] ?? 's.full_name';
+            $sortDirection = strtolower($request->get('direction', 'asc')) === 'desc' ? 'desc' : 'asc';
+
+            $page = max(1, (int) $request->get('page', 1));
+            $offset = ($page - 1) * $perPage;
+
+            $rows = (clone $query)
+                ->select(
+                    'ar.id as ar_id', 'ar.student_id', 'ar.subject_id', 'ar.subject_name',
+                    'ar.semester_id', 'ar.semester_name as ar_semester_name', 'ar.credit',
+                    'ar.total_acload', 'ar.total_point', 'ar.grade', 'ar.retraining_status',
+                    'ar.finish_credit_status', 'ar.curriculum_id as ar_curriculum_id',
+                    's.full_name', 's.student_id_number', 's.department_name', 's.specialty_name',
+                    's.level_name', 's.group_name'
+                )
+                ->orderBy($sortColumn, $sortDirection)
+                ->orderBy('s.full_name', 'asc')
+                ->orderBy('ar.semester_id', 'asc')
+                ->orderBy('ar.id', 'asc')
+                ->offset($offset)->limit($perPage)
+                ->get();
+
+            // ── Boyitish (faqat joriy sahifa qatorlari uchun) ────────────
+            $curriculumIds = $rows->pluck('ar_curriculum_id')->filter()->unique()->values()->all();
+            $subjectIds    = $rows->pluck('subject_id')->filter()->unique()->values()->all();
+            $semIds        = $rows->pluck('semester_id')->filter()->unique()->values()->all();
+            $studentIds    = $rows->pluck('student_id')->filter()->unique()->values()->all();
+
+            // 1) Yopilish shakli — curriculum_subjects.closing_form
+            $closingFormMap = [];
+            if (!empty($curriculumIds) && !empty($subjectIds)) {
+                $cf = DB::table('curriculum_subjects')
+                    ->whereIn('curricula_hemis_id', $curriculumIds)
+                    ->whereIn('subject_id', $subjectIds)
+                    ->whereIn('semester_code', $semIds)
+                    ->select('curricula_hemis_id', 'subject_id', 'semester_code', 'closing_form')
+                    ->get();
+                foreach ($cf as $c) {
+                    $k = $c->curricula_hemis_id . '|' . $c->subject_id . '|' . $c->semester_code;
+                    if (!isset($closingFormMap[$k]) && $c->closing_form) {
+                        $closingFormMap[$k] = $c->closing_form;
+                    }
                 }
             }
 
-            // 5-QADAM: Joriy semestr xavflari (4≥ mantig'i)
-            $studentSemCodeMap = $students->pluck('semester_code', 'hemis_id')->filter()->toArray();
-            $currentRisksMap = $this->getCurrentSemesterRisksForReport($studentHemisIds, $studentSemCodeMap);
+            // 2) Qayta o'qishga ariza holati — retake_applications (+ to'lov holati)
+            $retakeMap = [];
+            if (!empty($studentIds) && !empty($subjectIds)) {
+                $apps = \App\Models\RetakeApplication::query()
+                    ->whereIn('student_hemis_id', $studentIds)
+                    ->whereIn('subject_id', $subjectIds)
+                    ->whereIn('final_status', [
+                        \App\Models\RetakeApplication::STATUS_PENDING,
+                        \App\Models\RetakeApplication::STATUS_APPROVED,
+                    ])
+                    ->get(['group_id', 'student_hemis_id', 'subject_id', 'semester_id',
+                        'final_status', 'dean_status', 'registrar_status', 'retake_group_id']);
 
-            // 6-QADAM: Har bir talaba uchun hisoblash
-            $onlyNotApplied = $request->get('only_not_applied', '1') == '1';
-            $finalResults = [];
-
-            foreach ($students as $st) {
-                if (!$st->curriculum_id) continue;
-                $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
-
-                // Tugagan semestrlar (joriydan oldingi) — academic_records'dagi tarixiy reja
-                $studentPairs = []; // [sem_code => curriculum_id]
-                foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
-                    if (!$studentSemCode || (int) $semCode < $studentSemCode) {
-                        $studentPairs[(int) $semCode] = $currId;
-                    }
+                $groupIds = $apps->pluck('group_id')->filter()->unique()->values()->all();
+                $groups = collect();
+                if (!empty($groupIds)) {
+                    $groups = \App\Models\RetakeApplicationGroup::whereIn('id', $groupIds)
+                        ->get(['id', 'payment_uploaded_at', 'payment_verification_status'])
+                        ->keyBy('id');
                 }
 
-                $noGrade = [];        // yetmayotgan (bahosi yo'q) + ariza holati
-                $plannedSubjects = []; // o'quv rejadagi fanlar
-                $expectedKeysBySem = []; // [sem] => ['normname|credit' => true]
-
-                foreach ($studentPairs as $semCode => $currId) {
-                    $subjectsForSem = $subjectsByPair->get($currId . '|' . $semCode, collect());
-                    $subjectsForSem = $this->filterSubjectsByGroupSuffix($subjectsForSem, $st->group_name ?? '');
-
-                    foreach ($subjectsForSem as $sub) {
-                        $effName = $sub->subject_name;
-                        $effCredit = $sub->credit;
-                        if ((string) $sub->subject_type_code === '12') {
-                            $picked = $tanlovPicksMap[$st->hemis_id . '|' . $sub->curriculum_subject_hemis_id] ?? null;
-                            if ($picked) {
-                                $effName = $picked['subject_name'];
-                            } else {
-                                continue; // tanlov qilmagan — e'tiborga olinmaydi
-                            }
-                        }
-
-                        $semKey = (string) $sub->semester_code;
-                        $nkNoSem = $normName($effName) . '|' . $creditKey($effCredit);
-                        $expectedKeysBySem[$semKey][$nkNoSem] = true;
-
-                        $nk = $nkNoSem . '|' . $semKey;
-                        $hasGrade = isset($gradedKeySet[$st->hemis_id][$nk]);
-                        $appLabel = $retakeKeySet[$st->hemis_id][$nk] ?? null;
-
-                        $plannedSubjects[] = [
-                            'subject_name'       => $effName,
-                            'semester_code'      => $sub->semester_code,
-                            'semester_name'      => $sub->semester_name,
-                            'credit'             => $sub->credit,
-                            'has_grade'          => $hasGrade,
-                            'has_application'    => $appLabel !== null,
-                            'application_status' => $appLabel,
-                        ];
-
-                        if (isset($gradedKeySet[$st->hemis_id][$nk])) {
-                            continue; // baho bor → qarz emas
-                        }
-
-                        // Bahosi yo'q → yetmayotgan. Qayta o'qish arizasi bormi?
-                        $noGrade[] = [
-                            'subject_name'       => $effName,
-                            'semester_code'      => $sub->semester_code,
-                            'semester_name'      => $sub->semester_name,
-                            'credit'             => $sub->credit,
-                            'has_application'    => $appLabel !== null,
-                            'application_status' => $appLabel,
-                        ];
+                // Holatlar ustunligi (kuchliroq holat kuchsizini almashtiradi).
+                $priority = [
+                    'Ariza bermagan'      => 0,
+                    "Ko'rib chiqilmoqda"  => 1,
+                    "To'lovini qilmagan"  => 2,
+                    "To'lov tekshirilmoqda" => 3,
+                    "To'lov tasdiqlandi"  => 4,
+                    'Guruhga tasdiqlangan' => 5,
+                ];
+                foreach ($apps as $app) {
+                    $k = $app->student_hemis_id . '|' . $app->subject_id . '|' . $app->semester_id;
+                    $label = $this->retakeApplicationStatusLabel($app, $groups->get($app->group_id));
+                    if (!isset($retakeMap[$k]) || ($priority[$label] ?? 0) > ($priority[$retakeMap[$k]] ?? 0)) {
+                        $retakeMap[$k] = $label;
                     }
                 }
+            }
 
-                // Ortiqcha: academic_records'da bor, lekin rejada yo'q (tugagan semestrlar)
-                $extra = [];
-                foreach ($arAllByStudentSem[$st->hemis_id] ?? [] as $semKey => $arSubs) {
-                    if ($studentSemCode && (int) $semKey >= $studentSemCode) continue;
-                    if (!isset($expectedKeysBySem[$semKey])) continue; // bu semestr rejasi yuklanmagan — taqqoslamaymiz
-                    foreach ($arSubs as $nkNoSem => $info) {
-                        if (!isset($expectedKeysBySem[$semKey][$nkNoSem])) {
-                            $extra[] = [
-                                'subject_name'  => $info['subject_name'],
-                                'semester_code' => $semKey,
-                                'credit'        => $info['credit'],
-                            ];
-                        }
-                    }
-                }
+            $cfLabels = [
+                'oski'      => 'Faqat OSKI',
+                'test'      => 'Faqat Test',
+                'oski_test' => 'OSKI + Test',
+                'normativ'  => 'Normativ',
+                'sinov'     => 'Sinov',
+                'none'      => "Yakuniy nazorat yo'q",
+            ];
 
-                usort($plannedSubjects, function ($a, $b) {
-                    $semCmp = ((int) ($a['semester_code'] ?? 0)) <=> ((int) ($b['semester_code'] ?? 0));
-                    if ($semCmp !== 0) {
-                        return $semCmp;
-                    }
+            $data = [];
+            $rowNum = $offset;
+            foreach ($rows as $r) {
+                $rowNum++;
 
-                    return strcasecmp((string) ($a['subject_name'] ?? ''), (string) ($b['subject_name'] ?? ''));
-                });
-                usort($noGrade, fn ($a, $b) => $a['semester_code'] <=> $b['semester_code']);
-                usort($extra, fn ($a, $b) => $a['semester_code'] <=> $b['semester_code']);
+                $cfKey  = $r->ar_curriculum_id . '|' . $r->subject_id . '|' . $r->semester_id;
+                $cfCode = $closingFormMap[$cfKey] ?? null;
 
-                $notAppliedCount = count(array_filter($noGrade, fn ($d) => !$d['has_application']));
-                $appliedCount = count($noGrade) - $notAppliedCount;
-                $currentRisks = $currentRisksMap[$st->hemis_id] ?? [];
+                $rk = $r->student_id . '|' . $r->subject_id . '|' . $r->semester_id;
+                $retakeStatus = $retakeMap[$rk] ?? 'Ariza bermagan';
 
-                // Filtr: standart holatda faqat ariza bermagan fani borlar ko'rsatiladi
-                if ($onlyNotApplied) {
-                    if ($notAppliedCount < 1) continue;
-                } else {
-                    if (count($noGrade) < 1 && empty($currentRisks)) continue;
-                }
+                $study = $this->academicRecordStudyStatus($r);
 
-                $finalResults[] = [
-                    'hemis_id'           => $st->hemis_id,
-                    'full_name'          => $st->full_name ?? 'Noma\'lum',
-                    'student_id_number'  => $st->student_id_number ?? '-',
-                    'department_name'    => $st->department_name ?? '-',
-                    'specialty_name'     => $st->specialty_name ?? '-',
-                    'level_name'         => $st->level_name ?? '-',
-                    'semester_name'      => $st->semester_name ?? '-',
-                    'group_name'         => $st->group_name ?? '-',
-                    'group_id'           => $st->group_id ?? '',
-                    'student_type_name'  => $st->student_type_name ?? null,
-                    'planned_subjects'   => $plannedSubjects,
-                    'no_grade_subjects'  => $noGrade,
-                    'no_grade_count'     => count($noGrade),
-                    'not_applied_count'  => $notAppliedCount,
-                    'applied_count'      => $appliedCount,
-                    'extra_subjects'     => $extra,
-                    'extra_count'        => count($extra),
-                    'current_risks'      => $currentRisks,
-                    'current_risk_count' => count($currentRisks),
+                $data[] = [
+                    'row_num'           => $rowNum,
+                    'full_name'         => $r->full_name ?? '-',
+                    'student_id_number' => $r->student_id_number ?? '-',
+                    'department_name'   => $r->department_name ?? '-',
+                    'specialty_name'    => $r->specialty_name ?? '-',
+                    'level_name'        => $r->level_name ?? '-',
+                    'group_name'        => $r->group_name ?? '-',
+                    'subject_name'      => $r->subject_name ?? '-',
+                    'closing_form'      => $cfCode ? ($cfLabels[$cfCode] ?? $cfCode) : '-',
+                    'semester_name'     => $r->ar_semester_name ?: ($r->semester_id ? $r->semester_id . '-semestr' : '-'),
+                    'total_acload'      => $r->total_acload,
+                    'credit'            => $r->credit,
+                    'total_point'       => ($r->total_point === null || $r->total_point === '') ? null : $r->total_point,
+                    'grade'             => ($r->grade === null || $r->grade === '') ? null : $r->grade,
+                    'retake_status'     => $retakeStatus,
+                    'study_status'      => $study['label'],
+                    'study_status_code' => $study['code'],
+                    'is_debt'           => $study['code'] !== 'passed',
                 ];
             }
 
-            if (empty($finalResults)) {
-                return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
-            }
-
-            $sortColumn = $request->get('sort', 'not_applied_count');
-            $sortDirection = $request->get('direction', 'desc');
-            usort($finalResults, function ($a, $b) use ($sortColumn, $sortDirection) {
-                $valA = $a[$sortColumn] ?? '';
-                $valB = $b[$sortColumn] ?? '';
-                $cmp = is_numeric($valA) ? ($valA <=> $valB) : strcasecmp((string) $valA, (string) $valB);
-                return $sortDirection === 'desc' ? -$cmp : $cmp;
-            });
-
-            $page = (int) $request->get('page', 1);
-            $perPage = (int) $request->get('per_page', 50);
-            $total = count($finalResults);
-            $offset = ($page - 1) * $perPage;
-            $pageData = array_slice($finalResults, $offset, $perPage);
-            foreach ($pageData as $i => &$item) {
-                $item['row_num'] = $offset + $i + 1;
-            }
-            unset($item);
-
             return response()->json([
-                'data' => $pageData,
-                'total' => $total,
-                'per_page' => $perPage,
+                'data'         => $data,
+                'total'        => $total,
+                'per_page'     => $perPage,
                 'current_page' => $page,
-                'last_page' => (int) ceil($total / $perPage),
+                'last_page'    => (int) ceil($total / $perPage),
             ]);
         } catch (\Throwable $e) {
             \Log::error('Retake-not-applied report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Academic record yozuvining "o'qish holati" (talaba nuqtai nazaridan).
+     * Qarzdorlik filtri bilan bir xil mantiq — 'passed' bo'lmaganlari qarzdor.
+     *   - passed       : muvaffaqiyatli o'tgan — kredit olingan (finish_credit_status = 1,
+     *                    "O'tdi" pass/fail fanlar) YOKI o'tish bahosi bor (baho >= 3 / matnli)
+     *   - not_graded   : o'qituvchi bahosini qo'ymagan (baho ham, ball ham yo'q)
+     *   - not_examined : ball to'plangan, ammo yakuniy baho yo'q (imtihonga kirmagan)
+     *   - failed       : yiqilgan (kredit olinmagan, baho numerik va < 3)
+     */
+    private function academicRecordStudyStatus($ar): array
+    {
+        $grade = $ar->grade;
+        $gradeEmpty = ($grade === null || trim((string) $grade) === '');
+
+        // O'tish bahosi: numerik va >= 3, yoki matnli (numerik bo'lmagan) baho.
+        $gradePass = !$gradeEmpty && (!is_numeric($grade) || round((float) $grade, 2) >= 3.0);
+
+        // Kredit olingan (O'zlashtirgan = Ha) yoki o'tish bahosi bor → o'tgan.
+        if ((bool) ($ar->finish_credit_status ?? false) || $gradePass) {
+            return ['code' => 'passed', 'label' => "Muvaffaqiyatli o'tgan"];
+        }
+
+        if ($gradeEmpty) {
+            $point = $ar->total_point ?? null;
+            $pointVal = ($point === null || trim((string) $point) === '' || !is_numeric($point))
+                ? null : (float) $point;
+            if ($pointVal !== null && $pointVal > 0) {
+                return ['code' => 'not_examined', 'label' => 'Imtihonga kirmagan'];
+            }
+            return ['code' => 'not_graded', 'label' => "O'qituvchi bahosini qo'ymagan"];
+        }
+
+        // Baho bor (numerik < 3), kredit olinmagan → yiqilgan.
+        return ['code' => 'failed', 'label' => 'Yiqilgan'];
+    }
+
+    /**
+     * Qayta o'qishga ariza holati matni (bitta ariza + uning to'lov guruhi bo'yicha).
+     */
+    private function retakeApplicationStatusLabel($app, $group): string
+    {
+        // Guruhga biriktirilgan / yakuniy tasdiqlangan.
+        if ($app->retake_group_id
+            || $app->final_status === \App\Models\RetakeApplication::STATUS_APPROVED) {
+            return 'Guruhga tasdiqlangan';
+        }
+
+        $dualApproved = $app->dean_status === \App\Models\RetakeApplication::STATUS_APPROVED
+            && $app->registrar_status === \App\Models\RetakeApplication::STATUS_APPROVED;
+
+        if ($dualApproved) {
+            // Dekan+registrator tasdiqlagan — endi to'lov bosqichi.
+            if ($group) {
+                if ($group->payment_verification_status === \App\Models\RetakeApplicationGroup::PAYMENT_VERIFICATION_APPROVED) {
+                    return "To'lov tasdiqlandi";
+                }
+                if ($group->payment_uploaded_at !== null
+                    && $group->payment_verification_status === \App\Models\RetakeApplicationGroup::PAYMENT_VERIFICATION_PENDING) {
+                    return "To'lov tekshirilmoqda";
+                }
+            }
+            return "To'lovini qilmagan";
+        }
+
+        return "Ko'rib chiqilmoqda";
     }
 
     /**
@@ -9639,6 +9586,87 @@ class ReportController extends Controller
             ->toArray();
         $jnGroupCache = [];
 
+        // Sinov fanlari uchun "Sinov (test)" bahosi student_grades'dagi xom
+        // urinish yozuvidan emas, sinov_test_grades'dagi qulflangan/override
+        // qiymatdan olinadi — bu jurnalda ko'rsatilgan yakuniy natija.
+        $sinovGradeMap = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('sinov_test_grades')) {
+            foreach (array_chunk($studentHemisIds, 500) as $chunk) {
+                $sinovRows = DB::table('sinov_test_grades')
+                    ->whereIn('student_hemis_id', $chunk)
+                    ->get(['student_hemis_id', 'subject_id', 'semester_code', 'default_grade', 'override_grade']);
+                foreach ($sinovRows as $sr) {
+                    $val = $sr->override_grade !== null ? (float) $sr->override_grade : ((float) $sr->default_grade);
+                    $sinovGradeMap[$sr->student_hemis_id . '|' . $sr->subject_id . '|' . $sr->semester_code] = $val;
+                }
+            }
+        }
+
+        // test/oski yopilishli fanda talaba imtihonga UMUMAN kelmagan bo'lsa
+        // (student_grades da 101/102 yozuvi yo'q), lekin guruhga imtihon
+        // belgilangan va sanasi o'tgan bo'lsa — bu no-show (avtomatik yiqilgan).
+        // exam_schedules dan sana va na (talab qilinadi/qilinmaydi) belgilarini olamiz.
+        $examSchedGroup = [];   // subject|sem|group_hemis_id => row
+        $examSchedInd   = [];   // student|subject|sem => row (individual, ustunlik beradi)
+        // Jadval imtihon yozuvi bor fanlar bilan cheklanmasin — biriktirilgan (lekin
+        // baho yozuvi umuman yo'q) fanlar ham no-show uchun tekshirilishi kerak.
+        $schedSubjectIds = $subjectIdsForAtt;
+        foreach ($enrolledCur as $subs) {
+            $schedSubjectIds = array_merge($schedSubjectIds, array_keys($subs));
+        }
+        $schedSubjectIds = array_values(array_unique($schedSubjectIds));
+        $schedSubjectName = [];
+        if (\Illuminate\Support\Facades\Schema::hasTable('exam_schedules') && !empty($schedSubjectIds)) {
+            $esRows = DB::table('exam_schedules')
+                ->whereIn('subject_id', $schedSubjectIds)
+                ->whereIn('semester_code', $currentSemesterCodes)
+                ->get([
+                    'student_hemis_id', 'group_hemis_id', 'subject_id', 'subject_name', 'semester_code',
+                    'test_na', 'test_date', 'test_resit_date', 'test_resit2_date',
+                    'oski_na', 'oski_date', 'oski_resit_date', 'oski_resit2_date',
+                ]);
+            foreach ($esRows as $es) {
+                if ($es->student_hemis_id !== null) {
+                    $examSchedInd[$es->student_hemis_id . '|' . $es->subject_id . '|' . $es->semester_code] = $es;
+                } else {
+                    $examSchedGroup[$es->subject_id . '|' . $es->semester_code . '|' . $es->group_hemis_id] = $es;
+                }
+                if ($es->subject_name && !isset($schedSubjectName[$es->subject_id])) {
+                    $schedSubjectName[$es->subject_id] = $es->subject_name;
+                }
+            }
+        }
+        $todayStr = now()->format('Y-m-d');
+
+        // Imtihonga kelmagan (no-show) aniqlash — jurnal mantig'i: test/oski talab
+        // qilingan (na=0) va sanasi o'tgan bo'lsa, lekin talabada imtihon bahosi
+        // bo'lmasa — u avtomatik yiqilgan. Individual jadval faqat override qilingan
+        // sanani saqlaydi, shuning uchun har bir sana individual→guruh tartibida
+        // birlashtiriladi; na bayrog'i esa fan/guruh darajasidan olinadi.
+        $computeNoShow = function ($hid, $sid, $sem) use ($examSchedInd, $examSchedGroup, $stuGroup, $todayStr) {
+            $gid = $stuGroup[$hid] ?? null;
+            $indSched = $examSchedInd[$hid . '|' . $sid . '|' . $sem] ?? null;
+            $grpSched = $gid !== null ? ($examSchedGroup[$sid . '|' . $sem . '|' . $gid] ?? null) : null;
+            if (!$indSched && !$grpSched) return null;
+            $pick = fn($f) => ($indSched && $indSched->$f !== null) ? $indSched->$f : ($grpSched->$f ?? null);
+            $naTest = $grpSched ? (int) ($grpSched->test_na ?? 1) : (int) ($indSched->test_na ?? 1);
+            $naOski = $grpSched ? (int) ($grpSched->oski_na ?? 1) : (int) ($indSched->oski_na ?? 1);
+            $d = fn($v) => $v ? substr((string) $v, 0, 10) : null;
+            if ($naTest === 0) {
+                $td = $d($pick('test_date')); $tr1 = $d($pick('test_resit_date')); $tr2 = $d($pick('test_resit2_date'));
+                if ($tr2 !== null && $tr2 <= $todayStr) return 'Akademik qarzdor (imtihonga kelmagan, 3-urinish)';
+                if ($tr1 !== null && $tr1 <= $todayStr) return 'Imtihonga kelmagan (2-urinish)';
+                if ($td !== null && $td <= $todayStr) return 'Imtihonga kelmagan (1-urinish)';
+            }
+            if ($naOski === 0) {
+                $od = $d($pick('oski_date')); $or1 = $d($pick('oski_resit_date')); $or2 = $d($pick('oski_resit2_date'));
+                if ($or2 !== null && $or2 <= $todayStr) return 'Akademik qarzdor (imtihonga kelmagan, 3-urinish)';
+                if ($or1 !== null && $or1 <= $todayStr) return 'Imtihonga kelmagan (2-urinish)';
+                if ($od !== null && $od <= $todayStr) return 'Imtihonga kelmagan (1-urinish)';
+            }
+            return null;
+        };
+
         $auditMap = [];
         $auditAnyMap = [];
         $closingFormMap = [];
@@ -9698,25 +9726,39 @@ class ReportController extends Controller
                 $closingForm = $closingFormAnyMap[$subjectId . '|' . $semCode] ?? '';
             }
 
-            // Imtihon urinishlari (OSKI/Test) — faqat ENG OXIRGI urinish natijasiga qaraladi
-            $examRows = $rows->whereIn('training_type_code', [101, 102]);
-            if ($examRows->isNotEmpty()) {
-                $byAttempt = $examRows->groupBy('attempt');
-                $maxAttempt = (int) $examRows->max('attempt');
-                // Eng yuqori attempt baho olish
-                $lastAttRows = $byAttempt->get((string)$maxAttempt) ?? $byAttempt->get($maxAttempt);
-                $lastBaho = null;
-                if ($lastAttRows) {
-                    foreach ($lastAttRows as $r) {
-                        $val = $r->retake_grade !== null ? (float)$r->retake_grade : ($r->grade !== null ? (float)$r->grade : null);
-                        if ($val !== null && ($lastBaho === null || $val > $lastBaho)) $lastBaho = $val;
-                    }
+            // Sinov fanlari uchun jurnaldagi "Sinov (test)" ustuni sinov_test_grades'dan
+            // (qulflangan/override qiymat, odatda JN o'rtachasi) keladi — bu joriy
+            // haqiqiy natija. student_grades'dagi xom urinish yozuvlari sinov
+            // mexanizmidan oldingi eskirgan ma'lumot bo'lishi mumkin.
+            $sinovKey = $hemisId . '|' . $subjectId . '|' . $semCode;
+            if (isset($sinovGradeMap[$sinovKey])) {
+                if ($sinovGradeMap[$sinovKey] < 60) {
+                    $reasons[] = '1-urinish: V<60';
                 }
-                // Faqat oxirgi urinish muvaffaqiyatsiz bo'lsa — xavf bor
-                if ($lastBaho !== null && $lastBaho < 60) {
-                    if ($maxAttempt === 1) $reasons[] = '1-urinish: V<60';
-                    elseif ($maxAttempt === 2) $reasons[] = '2-urinish: V<60';
-                    elseif ($maxAttempt >= 3) $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
+            } else {
+                // Imtihon urinishlari (OSKI/Test) — faqat ENG OXIRGI (sana bo'yicha) yozuvga qaraladi.
+                // "attempt" raqami qayta sinxronlashda barqaror bo'lmasligi mumkun (masalan,
+                // tuzatilgan yakuniy baho eski attempt raqami bilan qayta yozilishi mumkin),
+                // shuning uchun lesson_date bo'yicha eng so'nggi yozuv joriy holat deb olinadi.
+                $examRows = $rows->whereIn('training_type_code', [101, 102]);
+                if ($examRows->isNotEmpty()) {
+                    $latestRow = $examRows->sortByDesc(fn($r) => (string) ($r->lesson_date ?? ''))->first();
+                    $lastBaho = null;
+                    $lastAttempt = 1;
+                    if ($latestRow) {
+                        $lastBaho = $latestRow->retake_grade !== null ? (float)$latestRow->retake_grade : ($latestRow->grade !== null ? (float)$latestRow->grade : null);
+                        $lastAttempt = (int) $latestRow->attempt;
+                    }
+                    // Faqat oxirgi urinish muvaffaqiyatsiz bo'lsa — xavf bor
+                    if ($lastBaho !== null && $lastBaho < 60) {
+                        if ($lastAttempt <= 1) $reasons[] = '1-urinish: V<60';
+                        elseif ($lastAttempt === 2) $reasons[] = '2-urinish: V<60';
+                        else $reasons[] = 'Akademik qarzdor (3 urinish tugadi)';
+                    }
+                } else {
+                    // Imtihon yozuvi UMUMAN yo'q — talaba imtihonga kelmaganmi tekshiramiz.
+                    $noShowLabel = $computeNoShow($hemisId, $subjectId, $semCode);
+                    if ($noShowLabel !== null) $reasons[] = $noShowLabel;
                 }
             }
 
@@ -9776,6 +9818,32 @@ class ReportController extends Controller
 
             if (!empty($reasons)) {
                 $risks[$hemisId][] = ['subject_name' => $subjectName, 'reasons' => $reasons];
+            }
+        }
+
+        // Ikkinchi o'tish: biriktirilgan-u student_grades da UMUMAN yozuvi yo'q fanlar.
+        // Birinchi sikl faqat baho yozuvi bor (grouped) fanlarni ko'radi. Talaba
+        // biror fanga qatnashmagan (JN/MT ham yo'q) bo'lsa, u $grouped da yo'q —
+        // lekin imtihon jadvali o'tgan bo'lsa, u ham no-show (avtomatik yiqilgan).
+        foreach ($studentHemisIds as $hid) {
+            $sem = (string) ($studentSemCodeMap[$hid] ?? '');
+            if ($sem === '') continue;
+            foreach (array_keys($enrolledCur[$hid] ?? []) as $sid) {
+                $key = $hid . '|' . $sid . '|' . $sem;
+                if (isset($grouped[$key])) continue;         // birinchi siklda ko'rilgan
+                // Sinov fani — sinov_test_grades orqali (jurnaldagi yakuniy natija)
+                if (isset($sinovGradeMap[$key])) {
+                    if ($sinovGradeMap[$key] < 60) {
+                        $nm = $schedSubjectName[$sid] ?? 'Fan';
+                        $risks[$hid][] = ['subject_name' => $nm, 'reasons' => ['1-urinish: V<60']];
+                    }
+                    continue;
+                }
+                $noShowLabel = $computeNoShow($hid, $sid, $sem);
+                if ($noShowLabel !== null) {
+                    $nm = $schedSubjectName[$sid] ?? 'Fan';
+                    $risks[$hid][] = ['subject_name' => $nm, 'reasons' => [$noShowLabel]];
+                }
             }
         }
 

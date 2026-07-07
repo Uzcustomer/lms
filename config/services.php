@@ -56,6 +56,8 @@ return [
         'attendance_group_id' => env('TELEGRAM_ATTENDANCE_GROUP_ID'),
         'five_candidate_group_id' => env('TELEGRAM_FIVE_CANDIDATE_GROUP_ID'),
         'registrar_group_id' => env('TELEGRAM_REGISTRAR_GROUP_ID'),
+        // Test bahosi apelyatsiyasi xabarlari uchun (belgilanmasa — umumiy chat_id).
+        'appeal_chat_id' => env('TELEGRAM_APPEAL_CHAT_ID'),
     ],
 
     'moodle' => [

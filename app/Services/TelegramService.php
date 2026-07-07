@@ -9,8 +9,17 @@ class TelegramService
 {
     public function notify(string $message): void
     {
+        $this->notifyChat(config('services.telegram.chat_id'), $message);
+    }
+
+    /**
+     * Ko'rsatilgan chatga xabar yuborish (chat berilmasa umumiy chat_id ga).
+     * Xato bo'lsa jim log qiladi — asosiy amal (baho tuzatish) buzilmaydi.
+     */
+    public function notifyChat(?string $chatId, string $message): void
+    {
         $botToken = config('services.telegram.bot_token');
-        $chatId = config('services.telegram.chat_id');
+        $chatId = $chatId ?: config('services.telegram.chat_id');
 
         if (!$botToken || !$chatId) {
             Log::warning('Telegram credentials not configured');

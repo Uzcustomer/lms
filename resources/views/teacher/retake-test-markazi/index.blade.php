@@ -195,6 +195,9 @@
                                     $at = $retakeGroup?->assessment_type;
                                     $needsOske = in_array($at, ['oske', 'oske_test'], true);
                                     $needsTest = in_array($at, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
+                                    $isSinov = in_array($at, ['sinov', 'sinov_fan'], true);
+                                    // Sinov fanlarda Sinov(test) bahosi = JN (avtomatik).
+                                    $effTest = $isSinov ? $app->joriy_score : $app->test_score;
                                     $b = $atype($at);
                                 @endphp
                                 <tr @if($rgId) onclick="window.location='{{ route('admin.retake-test-markazi.show', $rgId) }}'" @endif>
@@ -207,7 +210,8 @@
                                     <td><span class="badge badge-indigo">{{ $student?->group_name ?? '—' }}</span></td>
                                     <td><span class="text-cell text-subject">{{ $retakeGroup?->subject_name ?? $app->subject_name }}</span></td>
                                     <td><span class="badge {{ $b['cls'] }}">{{ $b['label'] }}</span></td>
-                                    <td><span class="badge badge-teal">{{ $retakeGroup?->semester_name ?? $app->semester_name }}</span></td>
+                                    {{-- Semestr — ARIZANIKI (guruh bir nechta semestrni birlashtirishi mumkin). --}}
+                                    <td><span class="badge badge-teal">{{ $app->semester_name ?? $retakeGroup?->semester_name }}</span></td>
                                     <td>
                                         @if($app->sent_to_test_markazi_at)
                                             <span class="badge badge-green">{{ __("Yuborilgan") }}</span>
@@ -218,7 +222,7 @@
                                     <td style="text-align:center;">{!! $scoreCell(true, $app->joriy_score, 'badge-blue') !!}</td>
                                     <td style="text-align:center;">{!! $scoreCell(true, $mustaqil?->grade, 'badge-green') !!}</td>
                                     <td style="text-align:center;">{!! $scoreCell($needsOske, $app->oske_score, 'badge-blue') !!}</td>
-                                    <td style="text-align:center;">{!! $scoreCell($needsTest, $app->test_score, 'badge-blue') !!}</td>
+                                    <td style="text-align:center;">{!! $scoreCell($needsTest, $effTest, 'badge-blue') !!}</td>
                                 </tr>
                             @endforeach
                             </tbody>

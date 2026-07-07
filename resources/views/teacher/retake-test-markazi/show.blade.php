@@ -38,11 +38,13 @@
 
         @php
             $needsOske = in_array($group->assessment_type, ['oske', 'oske_test'], true);
-            $needsTest = in_array($group->assessment_type, ['test', 'oske_test'], true);
+            $needsTest = in_array($group->assessment_type, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
             $atypeLabels = [
                 'oske' => 'OSKE',
                 'test' => 'TEST',
                 'oske_test' => 'OSKE + TEST',
+                'sinov' => 'Sinov (test)',
+                'sinov_fan' => 'Sinov (test)',
             ];
         @endphp
 
@@ -214,6 +216,9 @@
                                 $jnVal = $app->joriy_score !== null ? (float) $app->joriy_score : null;
                                 $mtVal = $mustaqil?->grade !== null ? (float) $mustaqil->grade : null;
                                 $allowed = $jnVal !== null && $mtVal !== null && $jnVal >= 60 && $mtVal >= 60;
+                                // Sinov fanlarda Sinov(test) bahosi = JN (avtomatik).
+                                $isSinovGroup = in_array($group->assessment_type, ['sinov', 'sinov_fan'], true);
+                                $effTest = $isSinovGroup ? $app->joriy_score : $app->test_score;
                             @endphp
                         <tr class="rtm-row"
                             data-faculty="{{ $student?->department_name }}"
@@ -243,7 +248,7 @@
                                 <td style="text-align:center;" data-oske-cell="{{ $app->id }}">{!! $cellVal($app->oske_score, 'badge-blue') !!}</td>
                             @endif
                             @if($needsTest)
-                                <td style="text-align:center;" data-test-cell="{{ $app->id }}">{!! $cellVal($app->test_score, 'badge-blue') !!}</td>
+                                <td style="text-align:center;" data-test-cell="{{ $app->id }}">{!! $cellVal($effTest, 'badge-blue') !!}</td>
                             @endif
                         </tr>
                     @endforeach

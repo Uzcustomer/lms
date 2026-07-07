@@ -157,9 +157,19 @@ class YnGradeCalculator {
     required int mt,
     required double davPercent,
   }) {
-    if (jn == 0 && mt == 0) return null;
-    if (davPercent >= 25) return -3;
-    return jn;
+    return compute(
+      jn: jn,
+      mt: mt,
+      on: 0,
+      oski: 0,
+      test: jn,
+      davPercent: davPercent,
+      weightJn: 50,
+      weightMt: 20,
+      weightOn: 0,
+      weightOski: 0,
+      weightTest: 30,
+    );
   }
 
   static bool _isExplicitFalse(dynamic raw) {

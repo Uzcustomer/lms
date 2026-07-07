@@ -96,8 +96,10 @@ class QuizResultController extends Controller
     public function saqlanganHisobotPage(Request $request)
     {
         $routePrefix = $this->routePrefix();
+        // Faqat o'quv prorektori / superadmin apelyatsiya (baho tuzatish) qila oladi.
+        $canAppeal = \App\Http\Controllers\Admin\QuizGradeAppealController::canAppeal();
 
-        return view('admin.saqlangan-hisobot.index', compact('routePrefix'));
+        return view('admin.saqlangan-hisobot.index', compact('routePrefix', 'canAppeal'));
     }
 
     /**
@@ -1609,7 +1611,7 @@ class QuizResultController extends Controller
         $apps = \App\Models\RetakeApplication::query()
             ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
             ->whereIn('student_hemis_id', $hemisIds)
-            ->with(['group.window.session'])
+            ->with(['group.window.session', 'retakeGroup'])
             ->get();
 
         if ($apps->isEmpty()) {
@@ -1652,7 +1654,7 @@ class QuizResultController extends Controller
      * cheklaymiz (fasl guard). Token bo'lmasa — joriy (ochiq) sessiya
      * arizalari bilan cheklaymiz (yopilgan eski sessiyaga yozilmasin).
      */
-    private function matchRetakeApp($apps, string $hemis, ?string $fanId, ?string $fanName, ?string $code, ?string $attemptDate = null): ?\App\Models\RetakeApplication
+    private function matchRetakeApp($apps, string $hemis, ?string $fanId, ?string $fanName, ?string $code, ?string $attemptDate = null, ?string $quizSemester = null): ?\App\Models\RetakeApplication
     {
         if (!$apps || $apps->isEmpty()) {
             return null;
@@ -1662,6 +1664,24 @@ class QuizResultController extends Controller
         if ($cands->isEmpty()) {
             return null;
         }
+
+        // Bitta talabada bir xil fandan bir nechta semestr arizasi bo'lishi mumkin
+        // (mas. 3-sem va 4-sem). Quiz semestri bo'yicha to'g'ri arizani ajratamiz.
+        $quizSemNum = ($quizSemester !== null && preg_match('/(\d+)/', $quizSemester, $qm)) ? (int) $qm[1] : null;
+        $narrowBySem = function ($matched) use ($quizSemNum) {
+            // Quiz semestri noma'lum — semestr bo'yicha ajratib bo'lmaydi.
+            if ($quizSemNum === null) {
+                return $matched;
+            }
+            // FAQAT quiz semestriga mos arizalar (YAGONA ariza bo'lsa ham). Ariza
+            // semestri quizga to'g'ri kelmasa — boshqa semestr arizasiga YOZMAYMIZ
+            // (mas. 6-sem natija 5-sem arizasiga tushmasligi kerak). Ariza semestri
+            // o'qib bo'lmasa (noma'lum) — ehtiyot uchun rad etmaymiz.
+            return $matched->filter(function ($a) use ($quizSemNum) {
+                $an = preg_match('/(\d+)/', (string) $a->semester_name, $am) ? (int) $am[1] : null;
+                return $an === null || $an === $quizSemNum;
+            });
+        };
 
         if ($code !== null) {
             // Token bor — fasl/sessiya kodi sessiya nomidan olinadi.
@@ -1690,28 +1710,43 @@ class QuizResultController extends Controller
             }
         }
 
-        // 1) fan_id
+        // Ariza subject_id/nomi HEMIS quizidagi qiymatdan farq qilishi mumkin
+        // (uch xil id-makon, imlo/uzunlik farqi). Shuning uchun ARIZA hamda GURUH
+        // (retakeGroup) subject_id/nomlarini ham hisobga olamiz — guruh nomi
+        // odatda quiz nomi bilan bir xil.
+        $appSubjectIds = fn ($a) => array_filter([(string) $a->subject_id, (string) ($a->retakeGroup?->subject_id ?? '')], fn ($v) => $v !== '');
+        $appNames = fn ($a) => array_values(array_filter([
+            $this->normName($a->subject_name),
+            $this->normName($a->retakeGroup?->subject_name),
+        ], fn ($v) => $v !== ''));
+
+        // 1) fan_id (ariza yoki guruh subject_id)
         if (!empty($fanId)) {
-            $m = $cands->filter(fn ($a) => (string) $a->subject_id === (string) $fanId);
+            $m = $cands->filter(fn ($a) => in_array((string) $fanId, $appSubjectIds($a), true));
             if ($m->isNotEmpty()) {
-                return $m->sortByDesc('id')->first();
+                return $narrowBySem($m)->sortByDesc('id')->first();
             }
         }
 
-        // 2) nom (aniq) va 3) nom (taxminiy)
+        // 2) nom (aniq) va 3) nom (taxminiy) — ariza yoki guruh nomi bo'yicha
         $nk = $this->normName($fanName);
         if ($nk !== '') {
-            $m = $cands->filter(fn ($a) => $this->normName($a->subject_name) === $nk);
+            $m = $cands->filter(fn ($a) => in_array($nk, $appNames($a), true));
             if ($m->isNotEmpty()) {
-                return $m->sortByDesc('id')->first();
+                return $narrowBySem($m)->sortByDesc('id')->first();
             }
+            // Taxminiy (fuzzy) moslashdan OLDIN semestr bo'yicha cheklaymiz — aks
+            // holda boshqa semestr arizasi nomi yuqori foiz berib, natija noto'g'ri
+            // semestrga yozilishi mumkin (Codex P1).
             $best = null;
             $bestPct = 0.0;
-            foreach ($cands as $a) {
-                similar_text($nk, $this->normName($a->subject_name), $pct);
-                if ($pct > $bestPct) {
-                    $bestPct = $pct;
-                    $best = $a;
+            foreach ($narrowBySem($cands) as $a) {
+                foreach ($appNames($a) as $an) {
+                    similar_text($nk, $an, $pct);
+                    if ($pct > $bestPct) {
+                        $bestPct = $pct;
+                        $best = $a;
+                    }
                 }
             }
             if ($best !== null && $bestPct >= 85) {
@@ -1740,7 +1775,7 @@ class QuizResultController extends Controller
         }
 
         $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($result->attempt_name, $result->shakl);
-        $app = $this->matchRetakeApp($retakeApps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code, (string) $result->date_finish);
+        $app = $this->matchRetakeApp($retakeApps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code, (string) $result->date_finish, (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($result->semester, $result->attempt_name) ?? ''));
 
         if (!$app) {
             return ['code' => 'no_retake_app', 'text' => 'Qayta o\'qish arizasi topilmadi'] + $none;
@@ -1819,7 +1854,7 @@ class QuizResultController extends Controller
         $apps = \App\Models\RetakeApplication::query()
             ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
             ->where('student_hemis_id', $student->hemis_id)
-            ->with(['group.window.session'])
+            ->with(['group.window.session', 'retakeGroup'])
             ->get();
 
         $app = $this->matchRetakeApp(
@@ -1827,7 +1862,9 @@ class QuizResultController extends Controller
             (string) $student->hemis_id,
             $fanIdOverride ?: $result->fan_id,
             $fanNameOverride ?: $result->fan_name,
-            $code
+            $code,
+            (string) $result->date_finish,
+            (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($result->semester, $result->attempt_name) ?? '')
         );
 
         if (!$app) {
@@ -2170,7 +2207,7 @@ class QuizResultController extends Controller
             }
 
             $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($q->attempt_name, $q->shakl);
-            $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $q->fan_id, $q->fan_name, $code, (string) $q->date_finish);
+            $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $q->fan_id, $q->fan_name, $code, (string) $q->date_finish, (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($q->semester, $q->attempt_name) ?? ''));
             if (!$app) {
                 continue;
             }
@@ -4061,6 +4098,12 @@ class QuizResultController extends Controller
 
         $mavzuStates = $this->buildMavzuStates($results, $studentLookup, $students);
 
+        // Qayta o'qish (retake) natijalari asosiy jurnalga (student_grades) EMAS,
+        // qayta o'qish jurnaliga (retake_applications.oske_score/test_score) yoziladi.
+        // Diagnostika ularni "Qayta o'qish jurnalida bor" deb ko'rsatadi; monitoring
+        // ham shu holatni "farq" emas, balki "ogohlantirish" deb hisoblashi kerak.
+        $retakeApps = $this->buildRetakeApps($results);
+
         // Dublikat aniqlash: shu (talaba+fan+quiz_type+shakl) bo'yicha BOSHQA
         // urinish allaqachon jurnalga yuklangan bo'lsa, ushbu nusxa "farq" emas.
         // (Masalan talaba bir mavzuni 2 marta ishlagan; bittasi yuklangan, ikkinchisi
@@ -4086,26 +4129,47 @@ class QuizResultController extends Controller
             $type = 'gap';
             $reason = null;
 
+            // Qayta o'qish natijasi qayta o'qish jurnaliga allaqachon yozilgan
+            // bo'lsa — asosiy jurnalda baho yo'qligi FARQ emas (diagnostika bilan
+            // bir xil mantiq: "Qayta o'qish jurnalida bor").
+            if (\App\Services\Retake\RetakeSessionCode::isRetakeQuiz($r->attempt_name ?? null, $r->shakl)) {
+                $verdict = $this->retakeUploadedVerdict($r, $studentLookup, $retakeApps);
+                if ($verdict !== null) {
+                    $out[(int) $r->attempt_id] = $verdict;
+                    continue;
+                }
+            }
+
             $sibKey = $r->student_id . '|' . $r->fan_id . '|' . $r->quiz_type . '|' . $r->shakl;
             if (isset($uploadedSiblingKeys[$sibKey])) {
-                // Aynan shu natija (quiz_type+shakl) boshqa urinish orqali yuklangan.
+                // Aynan shu natija (quiz_type+shakl) boshqa urinish orqali allaqachon
+                // asosiy jurnalga yuklangan — to'liq hal qilingan, farq ham,
+                // ogohlantirish ham emas.
                 $out[(int) $r->attempt_id] = [
-                    'type' => 'warning',
+                    'type' => 'ok',
                     'reason' => 'Dublikat: shu natija (' . $r->shakl . ') boshqa urinish orqali allaqachon jurnalga yuklangan',
                 ];
                 continue;
             }
 
+            $student = $studentLookup[$r->student_id] ?? null;
+            if (!$student) {
+                // Talabalar jadvalida topilmadi — test/admin akkaunt (mas., "admin2")
+                // haqiqiy talaba emas, shuning uchun FARQ emas, OGOHLANTIRISHga chiqadi.
+                $out[(int) $r->attempt_id] = [
+                    'type' => 'warning',
+                    'reason' => "Talaba topilmadi (HEMIS ID: {$r->student_id}) — test/admin akkaunt bo'lishi mumkin",
+                ];
+                continue;
+            }
+
             if ($r->shakl && preg_match('/^(\d+)-mavzu$/i', $r->shakl, $m)) {
-                $student = $studentLookup[$r->student_id] ?? null;
-                if ($student) {
-                    $mavzuN = (int) $m[1];
-                    $key = $student->hemis_id . '|' . $r->fan_id . '|' . $mavzuN;
-                    $state = $mavzuStates[$key] ?? null;
-                    if ($state) {
-                        $testGrade = $r->grade !== null ? (float) $r->grade : null;
-                        [$type, $reason] = $this->mavzuMarkVerdict($state, $testGrade, $r->shakl);
-                    }
+                $mavzuN = (int) $m[1];
+                $key = $student->hemis_id . '|' . $r->fan_id . '|' . $mavzuN;
+                $state = $mavzuStates[$key] ?? null;
+                if ($state) {
+                    $testGrade = $r->grade !== null ? (float) $r->grade : null;
+                    [$type, $reason] = $this->mavzuMarkVerdict($state, $testGrade, $r->shakl);
                 }
             }
 
@@ -4113,6 +4177,66 @@ class QuizResultController extends Controller
         }
 
         return $out;
+    }
+
+    /**
+     * Qayta o'qish natijasi qayta o'qish jurnaliga (retake_applications) allaqachon
+     * yozilganmi tekshiradi. Yozilgan bo'lsa 'ok' verdikti (to'liq hal qilingan —
+     * na farq, na ogohlantirish), aks holda null — u holda odatdagi mantiq
+     * davom etib, natija haqiqiy FARQ deb qoladi.
+     *
+     * @return array{type:string, reason:string}|null
+     */
+    private function retakeUploadedVerdict($r, array $studentLookup, $retakeApps): ?array
+    {
+        if ($retakeApps === null || $retakeApps->isEmpty()) {
+            return null;
+        }
+
+        $student = $studentLookup[$r->student_id] ?? null;
+        if (!$student) {
+            return null;
+        }
+
+        // uploadRetakeResult()/appendRetakeUploadedRows() bilan bir xil aniqlash
+        // mantig'i: aniq ro'yxat YOKI quiz_type ichida "OSKI"/"test" so'zi bo'lsa.
+        $quizType = (string) ($r->quiz_type ?? '');
+        $isOske = in_array($quizType, ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'], true)
+            || stripos($quizType, 'OSKI') !== false;
+        $isTest = !$isOske && (
+            in_array($quizType, ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'], true)
+            || stripos($quizType, 'test') !== false
+        );
+
+        if (!$isOske && !$isTest) {
+            return null;
+        }
+        $ynTuri = $isOske ? 'OSKI' : 'Test';
+
+        $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($r->attempt_name ?? null, $r->shakl);
+        $app = $this->matchRetakeApp(
+            $retakeApps,
+            (string) $student->hemis_id,
+            $r->fan_id,
+            $r->fan_name ?? null,
+            $code,
+            (string) ($r->date_finish ?? ''),
+            (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($r->semester ?? null, $r->attempt_name ?? null) ?? '')
+        );
+        if (!$app) {
+            return null;
+        }
+
+        // Natija qayta o'qish jurnaliga allaqachon yozilgan — to'liq hal qilingan,
+        // farq ham, ogohlantirish ham emas ("Markda" hisobiga qo'shiladi).
+        if ($ynTuri === 'OSKI' && $app->oske_score !== null) {
+            return ['type' => 'ok', 'reason' => "Qayta o'qish jurnalida bor (" . round((float) $app->oske_score) . ")"];
+        }
+        if ($ynTuri === 'Test' && $app->test_score !== null) {
+            return ['type' => 'ok', 'reason' => "Qayta o'qish jurnalida bor (" . round((float) $app->test_score) . ")"];
+        }
+
+        return null;
     }
 
     /**
@@ -4295,7 +4419,7 @@ class QuizResultController extends Controller
             $markClass = [];
             if (!empty($allMarkGapIds)) {
                 $mgRows = HemisQuizResult::whereIn('attempt_id', array_values(array_unique($allMarkGapIds)))
-                    ->get(['attempt_id', 'student_id', 'fan_id', 'shakl', 'grade']);
+                    ->get(['attempt_id', 'student_id', 'fan_id', 'fan_name', 'shakl', 'quiz_type', 'attempt_name', 'date_finish', 'grade']);
                 $markClass = $this->classifyMarkGap($mgRows);
             }
 
@@ -4305,8 +4429,12 @@ class QuizResultController extends Controller
             foreach ($result as $date => $row) {
                 $gap = 0;
                 $warn = 0;
+                $resolved = 0;
                 foreach (($markGapByDay[$date] ?? []) as $aid) {
-                    if (($markClass[$aid]['type'] ?? 'gap') === 'warning') {
+                    $t = $markClass[$aid]['type'] ?? 'gap';
+                    if ($t === 'ok') {
+                        $resolved++;
+                    } elseif ($t === 'warning') {
                         $warn++;
                     } else {
                         $gap++;
@@ -4322,6 +4450,7 @@ class QuizResultController extends Controller
                     $status = 'warning';
                 }
 
+                $row['graded_count'] += $resolved;
                 $row['mark_gap'] = $gap;
                 $row['warning_count'] = $warn;
                 $row['status'] = $status;
@@ -4329,6 +4458,7 @@ class QuizResultController extends Controller
 
                 $totMarkGap += $gap;
                 $totWarning += $warn;
+                $totGraded += $resolved;
             }
 
             return response()->json([
@@ -4473,6 +4603,13 @@ class QuizResultController extends Controller
                         $markedDayCount++;
                     } else {
                         $verdict = $markClass[(int) $row->attempt_id] ?? ['type' => 'gap', 'reason' => null];
+                        $vtype = $verdict['type'] ?? 'gap';
+                        if ($vtype === 'ok') {
+                            // Boshqa joyda (asosiy yoki qayta o'qish jurnalida) allaqachon
+                            // yuklangan — to'liq hal qilingan, "markda" hisobiga qo'shiladi.
+                            $markedDayCount++;
+                            continue;
+                        }
                         $entry = [
                             'attempt_id'   => (int) $row->attempt_id,
                             'student_id'   => $row->student_id,
@@ -4483,7 +4620,7 @@ class QuizResultController extends Controller
                             'date_finish'  => $row->date_finish,
                             'grade'        => $row->grade,
                         ];
-                        if (($verdict['type'] ?? 'gap') === 'warning') {
+                        if ($vtype === 'warning') {
                             $entry['reason'] = $verdict['reason'];
                             $dayWarnings[] = $entry;
                         } else {
@@ -4623,6 +4760,11 @@ class QuizResultController extends Controller
             $warnings = [];
             foreach ($markGapRows as $row) {
                 $verdict = $markClass[(int) $row->attempt_id] ?? ['type' => 'gap', 'reason' => null];
+                if (($verdict['type'] ?? 'gap') === 'ok') {
+                    // Boshqa joyda (asosiy yoki qayta o'qish jurnalida) allaqachon
+                    // yuklangan — to'liq hal qilingan, ro'yxatlarda ko'rinmaydi.
+                    continue;
+                }
                 $info = $details[(string) $row->student_id] ?? ['faculty' => null, 'direction' => null, 'kurs' => null, 'group' => null];
                 $entry = [
                     'attempt_id'   => (int) $row->attempt_id,

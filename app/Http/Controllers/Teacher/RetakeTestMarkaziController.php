@@ -422,7 +422,7 @@ class RetakeTestMarkaziController extends Controller
             $row->addCell(500)->addText((string) ($idx + 1), $bodyFont, $cellCenter);
             $row->addCell(3600)->addText($student?->full_name ?? '—', $bodyFont, $cellLeft);
             $row->addCell(1800)->addText($retakeGroup?->subject_name ?? $app->subject_name ?? '—', $bodyFont, $cellLeft);
-            $row->addCell(1400)->addText($retakeGroup?->semester_name ?? $app->semester_name ?? '—', $bodyFont, $cellCenter);
+            $row->addCell(1400)->addText($app->semester_name ?? $retakeGroup?->semester_name ?? '—', $bodyFont, $cellCenter);
             $row->addCell(900)->addText($app->joriy_score !== null ? rtrim(rtrim(number_format($app->joriy_score, 2, '.', ''), '0'), '.') : '—', $bodyFont, $cellCenter);
             $row->addCell(900)->addText($mustaqil?->grade !== null ? rtrim(rtrim(number_format($mustaqil->grade, 2, '.', ''), '0'), '.') : '—', $bodyFont, $cellCenter);
             $row->addCell(1700)->addText('Ruxsat', ['size' => 9, 'bold' => true, 'color' => '0F9D58'], $cellCenter);
@@ -498,7 +498,8 @@ class RetakeTestMarkaziController extends Controller
             ->sortBy(function ($app) {
                 $studentName = $app->group?->student?->full_name ?? '';
                 $subjectName = $app->retakeGroup?->subject_name ?? $app->subject_name ?? '';
-                $semesterName = $app->retakeGroup?->semester_name ?? $app->semester_name ?? '';
+                // Semestr — ARIZANIKI (guruh bir nechta semestrni birlashtiradi).
+                $semesterName = $app->semester_name ?? $app->retakeGroup?->semester_name ?? '';
 
                 return mb_strtolower($studentName . '|' . $subjectName . '|' . $semesterName);
             })
@@ -564,7 +565,8 @@ class RetakeTestMarkaziController extends Controller
             $student = $app->group?->student;
             $retakeGroup = $app->retakeGroup;
             $mustaqil = $mustaqilMap[$app->id] ?? null;
-            $assessmentLabel = match ($retakeGroup?->assessment_type) {
+            $at = $retakeGroup?->assessment_type;
+            $assessmentLabel = match ($at) {
                 'oske' => 'OSKE',
                 'test' => 'TEST',
                 'oske_test' => 'OSKE + TEST',
@@ -575,19 +577,29 @@ class RetakeTestMarkaziController extends Controller
                 ? $retakeGroup->test_date->format('d.m.Y')
                 : '-';
 
+            $needsOske = in_array($at, ['oske', 'oske_test'], true);
+            $needsTest = in_array($at, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
+            $isSinov = in_array($at, ['sinov', 'sinov_fan'], true);
+            // Sinov fanlarda Sinov(test) bahosi = JN (avtomatik).
+            $effTest = $isSinov ? $app->joriy_score : $app->test_score;
+
+            // Katak qiymati: yopilish shaklida bu nazorat KO'ZDA TUTILMAGAN bo'lsa
+            // 'X'; baho qo'yilishi kerak-u, hali yo'q bo'lsa '-'; bor bo'lsa qiymat.
+            $ctrlCell = fn (bool $needs, $value) => !$needs ? 'X' : ($value !== null ? (float) $value : '-');
+
             $sheet->setCellValue("A{$row}", $index + 1);
             $sheet->setCellValue("B{$row}", $student?->full_name ?? '—');
             $sheet->setCellValue("C{$row}", $student?->department_name ?? '—');
             $sheet->setCellValue("D{$row}", $student?->level_name ?? '—');
             $sheet->setCellValue("E{$row}", $student?->semester_name ?? '—');
             $sheet->setCellValue("F{$row}", $retakeGroup?->subject_name ?? $app->subject_name ?? '—');
-            $sheet->setCellValue("G{$row}", $retakeGroup?->semester_name ?? $app->semester_name ?? '—');
+            $sheet->setCellValue("G{$row}", $app->semester_name ?? $retakeGroup?->semester_name ?? '—');
             $sheet->setCellValue("H{$row}", $assessmentLabel);
             $sheet->setCellValue("I{$row}", $testDate);
             $sheet->setCellValue("J{$row}", $app->joriy_score !== null ? (float) $app->joriy_score : '-');
             $sheet->setCellValue("K{$row}", $mustaqil?->grade !== null ? (float) $mustaqil->grade : '-');
-            $sheet->setCellValue("L{$row}", $app->oske_score !== null ? (float) $app->oske_score : '-');
-            $sheet->setCellValue("M{$row}", $app->test_score !== null ? (float) $app->test_score : '-');
+            $sheet->setCellValue("L{$row}", $ctrlCell($needsOske, $app->oske_score));
+            $sheet->setCellValue("M{$row}", $ctrlCell($needsTest, $effTest));
             $sheet->setCellValue("N{$row}", $app->sent_to_test_markazi_at ? 'Yuborilgan' : 'Yuborilmagan');
 
             $sheet->setCellValueExplicit("A{$row}", (string) ($index + 1), DataType::TYPE_NUMERIC);

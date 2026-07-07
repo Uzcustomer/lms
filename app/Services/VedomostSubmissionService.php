@@ -469,10 +469,12 @@ class VedomostSubmissionService
         $today = Carbon::today()->toDateString();
         $out = [];
         foreach ($units as $unitKey => $unit) {
-            $f = $failures[$unitKey] ?? ['failed1' => 0, 'failed2' => 0, 'graded' => 0];
+            $f = $failures[$unitKey] ?? ['failed1' => 0, 'failed2' => 0, 'graded' => 0, 'has2' => false, 'has3' => false];
             $d = $dates[$unitKey] ?? ['attempt1' => null, 'resit' => null, 'resit2' => null];
-            $open12a = $f['failed1'] > 0 && $d['attempt1'] !== null && $d['attempt1'] < $today;
-            $open12b = $f['failed2'] > 0 && $d['resit'] !== null && $d['resit'] < $today;
+            $open12a = !empty($f['has2'])
+                || ($f['failed1'] > 0 && $d['attempt1'] !== null && $d['attempt1'] < $today);
+            $open12b = !empty($f['has3'])
+                || ($f['failed2'] > 0 && $d['resit'] !== null && $d['resit'] < $today);
 
             $out[] = (object) [
                 'specialty' => $unit['specialty_name'],
@@ -490,9 +492,13 @@ class VedomostSubmissionService
                 'resit2_date' => $d['resit2'],
                 'today' => $today,
                 'open12a' => $open12a,
-                'reason12a' => $this->resitReason($f['failed1'], $d['attempt1'], $today),
+                'reason12a' => !empty($f['has2'])
+                    ? '2-urinish imtihoni topshirilgan (attempt=2 baho bor)'
+                    : $this->resitReason($f['failed1'], $d['attempt1'], $today),
                 'open12b' => $open12b,
-                'reason12b' => $this->resitReason($f['failed2'], $d['resit'], $today),
+                'reason12b' => !empty($f['has3'])
+                    ? '3-urinish imtihoni topshirilgan (attempt=3 baho bor)'
+                    : $this->resitReason($f['failed2'], $d['resit'], $today),
             ];
         }
 
@@ -559,15 +565,19 @@ class VedomostSubmissionService
             $f = $failures[$unitKey] ?? ['failed1' => 0, 'failed2' => 0];
             $d = $dates[$unitKey] ?? ['attempt1' => null, 'resit' => null, 'resit2' => null];
 
-            // 12a — 1-urinish tugagan (sana o'tgan) va 1-urinishda yiqilganlar bor.
-            $open12a = $f['failed1'] > 0 && $d['attempt1'] !== null && $d['attempt1'] < $today;
+            // 12a — 1-urinishda yiqilganlar bor (sana o'tgan) YOKI 2-urinish imtihoni
+            // topshirilgan (attempt=2 bahosi bor — talaba resitda qatnashgan).
+            $open12a = !empty($f['has2'])
+                || ($f['failed1'] > 0 && $d['attempt1'] !== null && $d['attempt1'] < $today);
             $id12a = $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12A, $open12a, $d['resit']);
             if ($id12a) {
                 $keptIds[] = $id12a;
             }
 
-            // 12b — 2-urinish (resit) tugagan va 2-urinishda yiqilganlar bor.
-            $open12b = $f['failed2'] > 0 && $d['resit'] !== null && $d['resit'] < $today;
+            // 12b — 2-urinishda yiqilganlar bor (resit sanasi o'tgan) YOKI 3-urinish
+            // imtihoni topshirilgan (attempt=3 bahosi bor).
+            $open12b = !empty($f['has3'])
+                || ($f['failed2'] > 0 && $d['resit'] !== null && $d['resit'] < $today);
             $id12b = $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12B, $open12b, $d['resit2']);
             if ($id12b) {
                 $keptIds[] = $id12b;
@@ -850,6 +860,9 @@ class VedomostSubmissionService
 
         // unitKey => [student_hemis_id => ['f1' => bool, 'f2' => bool]]
         $perUnit = [];
+        // unitKey => ['h2' => bool, 'h3' => bool] — attempt=2/3 bahosi MAVJUDMI
+        // (talaba resitni TOPSHIRGAN — o'tdimi-yiqildimi ahamiyatsiz, varaqda bo'ladi).
+        $unitHas = [];
 
         $cursor = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
@@ -885,8 +898,13 @@ class VedomostSubmissionService
             $att = (int) ($r->attempt ?? 1);
             if ($att <= 1 && (float) $val < self::PASS_GRADE) {
                 $perUnit[$unitKey][$sid]['f1'] = true;
-            } elseif ($att === 2 && (float) $val < self::PASS_GRADE) {
-                $perUnit[$unitKey][$sid]['f2'] = true;
+            } elseif ($att === 2) {
+                $unitHas[$unitKey]['h2'] = true;
+                if ((float) $val < self::PASS_GRADE) {
+                    $perUnit[$unitKey][$sid]['f2'] = true;
+                }
+            } elseif ($att === 3) {
+                $unitHas[$unitKey]['h3'] = true;
             }
         }
 
@@ -903,7 +921,13 @@ class VedomostSubmissionService
             }
             // graded — shu birlik bo'yicha kamida bitta bahosi topilgan talabalar
             // soni. graded=0 bo'lsa: baho import qilinmagan yoki subject_id mos emas.
-            $result[$unitKey] = ['failed1' => $f1, 'failed2' => $f2, 'graded' => count($students)];
+            $result[$unitKey] = [
+                'failed1' => $f1,
+                'failed2' => $f2,
+                'graded' => count($students),
+                'has2' => !empty($unitHas[$unitKey]['h2']),
+                'has3' => !empty($unitHas[$unitKey]['h3']),
+            ];
         }
 
         return $result;

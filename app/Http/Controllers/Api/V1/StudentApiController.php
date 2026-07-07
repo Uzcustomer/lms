@@ -1029,7 +1029,14 @@ class StudentApiController extends Controller
                 'subject_name' => $cs->subject_name,
                 'credit' => $cs->credit,
                 'subject_id' => $subjectId,
-                'closing_form' => $cs->closing_form,
+                'closing_form' => ((function () use ($cs) {
+                    $apiClosingForm = $cs->closing_form;
+                    $normalizedClosingForm = strtolower(str_replace('-', '_', trim((string) ($cs->closing_form ?? ''))));
+                    if ($normalizedClosingForm === 'sinov') {
+                        return 'sinov_test';
+                    }
+                    return $apiClosingForm;
+                })()),
                 'yn_can_calculate' => $ynCanCalculate,
                 'employee_name' => null,
                 'grades' => [

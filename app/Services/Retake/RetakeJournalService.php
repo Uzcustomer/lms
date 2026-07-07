@@ -572,7 +572,7 @@ class RetakeJournalService
         RetakeApplication $app,
         ?float $oskeScore,
         ?float $testScore,
-        Teacher $actor,
+        ?Teacher $actor = null,
     ): RetakeApplication {
         if ($oskeScore !== null && ($oskeScore < 0 || $oskeScore > 100)) {
             throw ValidationException::withMessages(['oske_score' => 'OSKE 0..100']);
@@ -679,7 +679,10 @@ class RetakeJournalService
                 return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 0,  'test' => 60];
             case 'oske_test':
                 return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 30, 'test' => 30];
+            case 'sinov':
             case 'sinov_fan':
+                // Sinov (test) — jurnal/test-markazi standart taqsimoti bilan bir xil.
+                return ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0,  'test' => 30];
             default:
                 return ['jn' => 70, 'mt' => 30, 'on' => 0, 'oski' => 0,  'test' => 0];
         }
@@ -887,7 +890,11 @@ class RetakeJournalService
 
             // OSKI / TEST
             $oskiVal = $app->oske_score !== null ? (int) round((float) $app->oske_score) : 0;
-            $testVal = $app->test_score !== null ? (int) round((float) $app->test_score) : 0;
+            // Sinov fanlarda Test komponenti = JN (jadval/eksport bilan bir xil).
+            $testSource = in_array($group->assessment_type, ['sinov', 'sinov_fan'], true)
+                ? $app->joriy_score
+                : $app->test_score;
+            $testVal = $testSource !== null ? (int) round((float) $testSource) : 0;
             $onVal = 0;
 
             $sheet->setCellValue('B' . $row, $student?->full_name ?? '—');
@@ -987,6 +994,12 @@ class RetakeJournalService
 
         $hemisIds = $applications->pluck('student_hemis_id')->filter()->unique()->values();
 
+        // DIQQAT: bu metod (eski "Natijalarni tortish" yo'li) FASL/sessiya
+        // filtri va sana chegarasi (test_date) ixtiyoriy bo'lgani uchun sinov
+        // guruhlarda xavfli — test_date bo'sh bo'lsa, shu talaba+fandagi
+        // BARCHA (istalgan semestr/sessiya) 102-baholari o'rtachalanib yoziladi.
+        // Sinov uchun sessiya-xavfsiz yo'l — fetchRetakeResultsFromQuiz
+        // ("Diagnostika orqali yuklash", test markazi sahifasi).
         $needsOske = in_array($group->assessment_type, ['oske', 'oske_test'], true);
         $needsTest = in_array($group->assessment_type, ['test', 'oske_test'], true);
 
@@ -1102,7 +1115,7 @@ class RetakeJournalService
         $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
 
         $needsOske = in_array($group->assessment_type, ['oske', 'oske_test'], true);
-        $needsTest = in_array($group->assessment_type, ['test', 'oske_test'], true);
+        $needsTest = in_array($group->assessment_type, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
 
         $relevantTypes = array_merge(
             $needsOske ? $oskiTypes : [],
@@ -1146,7 +1159,7 @@ class RetakeJournalService
             ->where('is_active', 1)
             ->whereIn('student_id', $quizStudentIds)
             ->whereIn('quiz_type', $relevantTypes)
-            ->get(['student_id', 'quiz_type', 'attempt_name', 'shakl', 'grade', 'date_finish', 'fan_id', 'fan_name']);
+            ->get(['student_id', 'quiz_type', 'attempt_name', 'shakl', 'grade', 'date_finish', 'fan_id', 'fan_name', 'semester']);
 
         // Tokensiz qayta o'qish quizlari (nomida yil-fasl yo'q, faqat "Qayta-o'qish")
         // uchun — matchRetakeApp dagi kabi — guruh sessiyasi OCHIQ bo'lsa qabul qilamiz.
@@ -1154,7 +1167,9 @@ class RetakeJournalService
         $sessionOpen = $session !== null && !$session->is_closed;
         $cutoff = config('retake.tokenless_open_cutoff');
 
-        // [hemis_id]['oske'|'test'] => eng yuqori baho (faqat shu sessiya).
+        // [hemis_id][semNum]['oske'|'test'] => eng yuqori baho (faqat shu sessiya).
+        // Semestr kaliti: bitta talabada bir xil fandan bir nechta semestr arizasi
+        // bo'lsa (3-sem/4-sem), natija to'g'ri semestrga tushishi uchun.
         $best = [];
         $rejected = 0;
         foreach ($rows as $row) {
@@ -1199,10 +1214,37 @@ class RetakeJournalService
             if ($hid === null) {
                 continue;
             }
-            if (!isset($best[$hid][$kind]) || $grade > $best[$hid][$kind]) {
-                $best[$hid][$kind] = $grade;
+            // Semestr: `semester` maydoni ko'pincha NULL — nomidan ("N-sem") olamiz.
+            $semKey = RetakeSessionCode::semesterNumber($row->semester, $row->attempt_name) ?? 0; // 0 = noma'lum
+            if (!isset($best[$hid][$semKey][$kind]) || $grade > $best[$hid][$semKey][$kind]) {
+                $best[$hid][$semKey][$kind] = $grade;
             }
         }
+
+        // Talaba+semestr bo'yicha kerakli bahoni tanlaydi: aniq semestr mosligi;
+        // agar aniq mos yo'q, lekin shu talabada faqat bitta semestr guruhi bo'lsa —
+        // o'shani oladi (bir xil talabaning shu guruhdagi yagona arizasi holati).
+        $pickBest = function (string $hid, ?int $appSem, string $kind) use ($best) {
+            $byHid = $best[$hid] ?? [];
+            // 1) Aniq semestr mosligi.
+            if ($appSem !== null && isset($byHid[$appSem][$kind])) {
+                return $byHid[$appSem][$kind];
+            }
+            // 2) Semestri belgilanmagan (0) quiz natijasi — istalgan arizaga tegishli.
+            if (isset($byHid[0][$kind])) {
+                return $byHid[0][$kind];
+            }
+            // 3) Ariza semestri NOMA'LUM bo'lsa-yu, faqat bitta semestr guruhi bo'lsa —
+            //    o'shani ol. Ariza semestri ma'lum bo'lsa, boshqa semestr natijasiga
+            //    TUSHMAYMIZ (cross-semester contamination oldini olish).
+            if ($appSem === null) {
+                $withKind = array_filter($byHid, fn ($b) => isset($b[$kind]));
+                if (count($withKind) === 1) {
+                    return reset($withKind)[$kind];
+                }
+            }
+            return null;
+        };
 
         $fetchedOske = 0;
         $fetchedTest = 0;
@@ -1210,8 +1252,9 @@ class RetakeJournalService
 
         foreach ($applications as $app) {
             $hid = (string) $app->student_hemis_id;
-            $oske = $needsOske ? ($best[$hid]['oske'] ?? null) : null;
-            $test = $needsTest ? ($best[$hid]['test'] ?? null) : null;
+            $appSem = preg_match('/(\d+)/', (string) $app->semester_name, $am) ? (int) $am[1] : null;
+            $oske = $needsOske ? $pickBest($hid, $appSem, 'oske') : null;
+            $test = $needsTest ? $pickBest($hid, $appSem, 'test') : null;
 
             $hasUpdate = false;
             if ($needsOske) {

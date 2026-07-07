@@ -128,7 +128,7 @@
                                 <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
                             </div>
                             <div style="display:flex;align-items:center;gap:10px;flex-wrap:nowrap;">
-                                <select id="retake_status_filter" class="select2" style="width:260px;">
+                                <select id="retake_status_filter" class="select2" style="width:250px;">
                                     <option value="">Barchasi</option>
                                     <option value="no_application">Ariza bermaganlar</option>
                                     <option value="group_assigned">Guruhga biriktirilganlar</option>

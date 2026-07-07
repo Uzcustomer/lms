@@ -5187,7 +5187,18 @@ class ReportController extends Controller
             // Asosiy so'rov: academic_records + students (har yozuv = bir qator).
             $query = DB::table('academic_records as ar')
                 ->join('students as s', 's.hemis_id', '=', 'ar.student_id')
-                ->whereNotNull('s.curriculum_id');
+                ->whereNotNull('s.curriculum_id')
+                ->whereExists(function ($q) {
+                    $q->select(DB::raw(1))
+                        ->from('curriculum_subjects as cs')
+                        ->whereColumn('cs.curricula_hemis_id', 'ar.curriculum_id')
+                        ->whereColumn('cs.semester_code', 'ar.semester_id')
+                        ->whereColumn('cs.subject_id', 'ar.subject_id')
+                        ->where('cs.is_active', 1)
+                        ->where(function ($w) {
+                            $w->whereNull('cs.in_group')->orWhere('cs.in_group', '');
+                        });
+                });
 
             // ── Talaba filtrlari ─────────────────────────────────────────
             if ($request->filled('student_status')) {
@@ -5383,6 +5394,7 @@ class ReportController extends Controller
 
                 $data[] = [
                     'row_num'           => $rowNum,
+                    'hemis_id'          => $r->student_id,
                     'full_name'         => $r->full_name ?? '-',
                     'student_id_number' => $r->student_id_number ?? '-',
                     'department_name'   => $r->department_name ?? '-',
@@ -5391,6 +5403,7 @@ class ReportController extends Controller
                     'group_name'        => $r->group_name ?? '-',
                     'subject_name'      => $r->subject_name ?? '-',
                     'closing_form'      => $cfCode ? ($cfLabels[$cfCode] ?? $cfCode) : '-',
+                    'semester_code'     => $r->semester_id,
                     'semester_name'     => $r->ar_semester_name ?: ($r->semester_id ? $r->semester_id . '-semestr' : '-'),
                     'total_acload'      => $r->total_acload,
                     'credit'            => $r->credit,
@@ -5996,12 +6009,12 @@ class ReportController extends Controller
             $studentId = $request->get('student_id');
 
             if (!$studentId) {
-                return response()->json(['semesters' => [], 'grade_debts' => [], 'extra_subjects' => []]);
+                return response()->json(['semesters' => [], 'planned_subjects' => [], 'grade_debts' => [], 'extra_subjects' => []]);
             }
 
             $student = DB::table('students')->where('hemis_id', $studentId)->first();
             if (!$student || !$student->curriculum_id) {
-                return response()->json(['semesters' => [], 'grade_debts' => [], 'extra_subjects' => []]);
+                return response()->json(['semesters' => [], 'planned_subjects' => [], 'grade_debts' => [], 'extra_subjects' => []]);
             }
 
             $groupName = $request->get('group_name', '');
@@ -6103,7 +6116,15 @@ class ReportController extends Controller
 
             // 5) Qarzlar: curriculum da bor, academic_records da yo'q.
             $debtsAll = [];
+            $plannedSubjects = [];
             $expectedSubjectIdsBySem = [];
+            $arMapBySemSubject = [];
+
+            foreach ($arBySem as $semCode => $rows) {
+                foreach ($rows as $ar) {
+                    $arMapBySemSubject[(string) $semCode][(string) $ar->subject_id] = $ar;
+                }
+            }
 
             foreach ($currSubjects as $sub) {
                 $subSemCode = (int) $sub->semester_code;
@@ -6119,6 +6140,18 @@ class ReportController extends Controller
                 $effectiveSubjectId = $sub->subject_id;
                 $effectiveSubjectName = $sub->subject_name;
                 $expectedSubjectIdsBySem[(string) $sub->semester_code][(string) $effectiveSubjectId] = true;
+                $matchedAr = $arMapBySemSubject[(string) $sub->semester_code][(string) $effectiveSubjectId] ?? null;
+
+                $plannedSubjects[] = [
+                    'semester_code' => $sub->semester_code,
+                    'semester_name' => $sub->semester_name,
+                    'subject_name'  => $effectiveSubjectName,
+                    'credit'        => $sub->credit,
+                    'total_acload'  => $sub->total_acload,
+                    'has_record'    => $matchedAr !== null,
+                    'total_point'   => $matchedAr->total_point ?? null,
+                    'grade'         => $matchedAr->grade ?? null,
+                ];
 
                 if (isset($arExists[$effectiveSubjectId . '|' . $sub->semester_code])) continue;
 
@@ -6159,11 +6192,12 @@ class ReportController extends Controller
 
             return response()->json([
                 'semesters'   => $semesters,
+                'planned_subjects' => $plannedSubjects,
                 'grade_debts' => $debtsAll,
                 'extra_subjects' => $extraSubjects,
             ]);
         } catch (\Exception $e) {
-            return response()->json(['error' => $e->getMessage(), 'semesters' => [], 'grade_debts' => [], 'extra_subjects' => []], 500);
+            return response()->json(['error' => $e->getMessage(), 'semesters' => [], 'planned_subjects' => [], 'grade_debts' => [], 'extra_subjects' => []], 500);
         }
     }
 

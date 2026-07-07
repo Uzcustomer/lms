@@ -304,7 +304,7 @@
             for (var i = 0; i < data.length; i++) {
                 var r = data[i];
                 var scoreBtn = r.has_score_details
-                    ? '<button class="btn-detail" onclick="showScoreDetail(' + i + ')">Ko\\'rish</button>'
+                    ? '<button class="btn-detail" onclick="showScoreDetail(' + i + ')">Ko\'rish</button>'
                     : '<span style="color:#94a3b8;">-</span>';
                 html += '<tr class="journal-row">';
                 html += '<td class="td-num">' + r.row_num + '</td>';
@@ -354,7 +354,7 @@
             html += '</div>';
 
             html += '<table class="det-table">';
-            html += '<thead><tr><th style="width:120px;">Baho turi</th><th style="text-align:center;width:120px;">Qiymat</th><th>O\\'qituvchi</th><th style="width:170px;">Sana</th></tr></thead><tbody>';
+            html += '<thead><tr><th style="width:120px;">Baho turi</th><th style="text-align:center;width:120px;">Qiymat</th><th>O\'qituvchi</th><th style="width:170px;">Sana</th></tr></thead><tbody>';
             for (var i = 0; i < rows.length; i++) {
                 var s = rows[i];
                 html += '<tr>';

@@ -6586,10 +6586,6 @@ class ReportController extends Controller
                 return $expected !== null && (string) $s->curricula_hemis_id === (string) $expected;
             })->values();
 
-            $currSubjects = $currSubjects->filter(function ($sub) use ($studentId, $tanlovPicksMap) {
-                return $this->resolveAcademicDebtSubjectForStudent($studentId, $sub, $tanlovPicksMap) !== null;
-            })->values();
-
             // 3) Semestr tab'lari (toggle bilan)
             $semesters = $currSubjects->groupBy('semester_code')
                 ->when($showCurrentSemester && $studentSemesterCode, function ($collection) use ($studentSemesterCode) {
@@ -6628,6 +6624,10 @@ class ReportController extends Controller
                     ];
                 }
             }
+
+            $currSubjects = $currSubjects->filter(function ($sub) use ($studentId, $tanlovPicksMap) {
+                return $this->resolveAcademicDebtSubjectForStudent($studentId, $sub, $tanlovPicksMap) !== null;
+            })->values();
 
             // 5) Qarzlar: curriculum da bor, academic_records da yo'q.
             $debtsAll = [];

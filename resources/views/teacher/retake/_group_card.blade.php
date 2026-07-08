@@ -271,8 +271,8 @@
         @endforeach
     </div>
 
-    {{-- To'lov cheki tasdiqlash bloki (faqat registrator) --}}
-    @if($role === 'registrar' && $group->payment_uploaded_at)
+    {{-- To'lov cheki holati (registrator boshqaradi, dekan ham ko'radi) --}}
+    @if(in_array($role, ['registrar', 'dean'], true) && $group->payment_uploaded_at)
         <div class="border-t-2 px-4 py-3
                     {{ $group->payment_verification_status === 'pending' ? 'bg-amber-50 border-amber-200' : '' }}
                     {{ $group->payment_verification_status === 'approved' ? 'bg-green-50 border-green-200' : '' }}
@@ -300,7 +300,7 @@
                     @endif
                 </div>
 
-                @if($group->payment_verification_status === 'pending')
+                @if($role === 'registrar' && $group->payment_verification_status === 'pending')
                     <div class="flex gap-2">
                         <form method="POST" action="{{ route('admin.retake.verify-payment', $group->id) }}" class="inline">
                             @csrf

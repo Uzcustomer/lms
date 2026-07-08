@@ -134,6 +134,20 @@ class RetakeAccess
     }
 
     /**
+     * Qayta o'qish arizalari sahifasini ko'rish.
+     * O'quv bo'limi boshqaradi, dekan esa read-only ko'radi.
+     */
+    public static function canViewAcademicApplications(?Model $actor): bool
+    {
+        if (!self::isStaff($actor)) {
+            return false;
+        }
+
+        return self::canManageAcademicDept($actor)
+            || $actor->hasRole(ProjectRole::DEAN->value);
+    }
+
+    /**
      * O'qituvchi-fan-talabalar statistikasi.
      * Faqat o'quv bo'limi (akademik dept) + super-admin. Registrator/dekan yo'q.
      */

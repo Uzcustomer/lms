@@ -1105,7 +1105,7 @@
         @endif
 
         {{-- O'quv bo'limi: qolgan QO' bo'limlari --}}
-        @if($hasActiveRole(['superadmin', 'admin', 'oquv_bolimi', 'oquv_bolimi_boshligi']))
+        @if($hasActiveRole(['superadmin', 'admin', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'dekan']))
         <a href="{{ route('admin.retake-applications.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.retake-applications.*') ? 'sidebar-active' : '' }}" style="position: relative;">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

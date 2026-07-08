@@ -63,12 +63,16 @@
             $fmt = fn ($v) => $v !== null ? rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.') : null;
             // Katak: nazorat faol bo'lmasa ✕, faol-u baho yo'q bo'lsa kutilmoqda (…),
             // baho bor bo'lsa rangli badge.
-            $scoreCell = function ($active, $value, $cls = 'badge-blue') use ($fmt) {
+            $scoreCell = function ($active, $value, $cls = 'badge-blue', $date = null) use ($fmt) {
                 if (!$active) return '<span class="rtm-na" title="Bu fanda bu nazorat qo\'yilmaydi">✕</span>';
                 $f = $fmt($value);
-                return $f === null
-                    ? '<span class="rtm-await" title="Natija hali yo\'q">…</span>'
-                    : '<span class="badge ' . $cls . '">' . $f . '</span>';
+                if ($f === null) {
+                    return '<span class="rtm-await" title="Natija hali yo\'q">…</span>';
+                }
+                $title = $date
+                    ? ' title="Baho qo\'yilgan sana: ' . e($date->format('d.m.Y H:i')) . '" style="cursor:help;"'
+                    : '';
+                return '<span class="badge ' . $cls . '"' . $title . '>' . $f . '</span>';
             };
             // Yakuniy natija — vedomost tekshirish logikasi bo'yicha hisoblangan holat.
             // $removed — appelyatsiyada o'chirilgan baholar soni. Urinishlar jami =
@@ -219,6 +223,7 @@
                                     $isSinov = in_array($at, ['sinov', 'sinov_fan'], true);
                                     // Sinov fanlarda Sinov(test) bahosi = JN (avtomatik).
                                     $effTest = $isSinov ? $app->joriy_score : $app->test_score;
+                                    $effTestDate = $isSinov ? $app->joriy_graded_at : $app->test_graded_at;
                                     $b = $atype($at);
                                 @endphp
                                 <tr @if($rgId) onclick="window.location='{{ route('admin.retake-test-markazi.show', $rgId) }}'" @endif>
@@ -243,10 +248,10 @@
                                             <span class="badge badge-gray">{{ __("Yuborilmagan") }}</span>
                                         @endif
                                     </td>
-                                    <td style="text-align:center;">{!! $scoreCell(true, $app->joriy_score, 'badge-blue') !!}</td>
-                                    <td style="text-align:center;">{!! $scoreCell(true, $mustaqil?->grade, 'badge-green') !!}</td>
-                                    <td style="text-align:center;">{!! $scoreCell($needsOske, $app->oske_score, 'badge-blue') !!}</td>
-                                    <td style="text-align:center;">{!! $scoreCell($needsTest, $effTest, 'badge-blue') !!}</td>
+                                    <td style="text-align:center;">{!! $scoreCell(true, $app->joriy_score, 'badge-blue', $app->joriy_graded_at) !!}</td>
+                                    <td style="text-align:center;">{!! $scoreCell(true, $mustaqil?->grade, 'badge-green', $mustaqil?->graded_at) !!}</td>
+                                    <td style="text-align:center;">{!! $scoreCell($needsOske, $app->oske_score, 'badge-blue', $app->oske_graded_at) !!}</td>
+                                    <td style="text-align:center;">{!! $scoreCell($needsTest, $effTest, 'badge-blue', $effTestDate) !!}</td>
                                     <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null, $removedCountMap[$app->id] ?? 0) !!}</td>
                                 </tr>
                             @endforeach

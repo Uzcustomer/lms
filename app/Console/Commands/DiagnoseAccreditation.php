@@ -61,7 +61,7 @@ class DiagnoseAccreditation extends Command
         $items = [];
         $source = null;
         if ($studentIdNumber) {
-            $resp = $this->call("{$baseUrl}/v1/data/student-academic-data", $token, ['student_id_number' => $studentIdNumber]);
+            $resp = $this->apiGet("{$baseUrl}/v1/data/student-academic-data", $token, ['student_id_number' => $studentIdNumber]);
             if ($resp !== null && is_array($resp['data']['items'] ?? null)) {
                 $items = $resp['data']['items'];
                 $source = 'student-academic-data (student_id_number=' . $studentIdNumber . ')';
@@ -73,7 +73,7 @@ class DiagnoseAccreditation extends Command
             $filter = $hemisId ? ['_student' => $hemisId] : ['student_id_number' => $studentIdNumber];
             $page = 1;
             do {
-                $resp = $this->call("{$baseUrl}/v1/data/academic-record-list", $token, $filter + ['page' => $page, 'limit' => 200]);
+                $resp = $this->apiGet("{$baseUrl}/v1/data/academic-record-list", $token, $filter + ['page' => $page, 'limit' => 200]);
                 if ($resp === null) {
                     return 1;
                 }
@@ -178,7 +178,7 @@ class DiagnoseAccreditation extends Command
     /**
      * HEMIS API'ga GET so'rovi. Xatolikda ekranga yozadi va null qaytaradi.
      */
-    private function call(string $url, string $token, array $query): ?array
+    private function apiGet(string $url, string $token, array $query): ?array
     {
         try {
             $response = Http::connectTimeout(30)->timeout(60)->withoutVerifying()

@@ -9,19 +9,28 @@ use Illuminate\Support\Facades\Http;
 /**
  * Akkreditatsiya "O'zlashtirgan" ustunidagi nomutanosiblikni diagnostika qilish.
  *
- * HEMIS academic-record-list API xom javobini bitta talaba uchun tortib,
- * har bir fan bo'yicha `finish_credit_status` (O'zlashtirgan), `grade` (Baho)
- * va `total_point` (Ball) qiymatlarini ko'rsatadi. Web sahifa "Yo'q", Excel esa
- * "Ha" ko'rsatgan holatda API'ning haqiqatda nima qaytarayotganini aniqlaydi.
+ * Manba endpointlar (HEMIS OpenAPI, https://student.ttatf.uz/rest/docs.json):
+ *   - GET /v1/data/academic-record-list  → "Akkreditatsiya baxolari ro'yxati"
+ *     (aynan akkreditatsiya sahifasi va uning Exceli shu endpointdan oziqlanadi)
+ *   - GET /v1/data/student-academic-data → bitta talabaning BARCHA akademik
+ *     yozuvlari (count + items[AcademicRecord]), student_id_number/passport_pin bo'yicha.
+ *
+ * AcademicRecord sxemasidagi maydonlar:
+ *   total_point (Ball), grade (Baho), finish_credit_status (O'zlashtirgan, bool),
+ *   retraining_status (qayta o'qish, bool).
+ *
+ * Buyruq har bir fan bo'yicha shu xom qiymatlarni ko'rsatadi, bitta fanda
+ * bir nechta yozuv (dublikat) bo'lsa belgilaydi va finish_credit_status baho
+ * bilan zid bo'lgan yozuvlarni ajratadi.
  */
 class DiagnoseAccreditation extends Command
 {
     protected $signature = 'hemis:diagnose-accreditation
-        {student : Talabaning hemis_id yoki student_id_number}
+        {student : Talabaning student_id_number (afzal) yoki hemis_id}
         {--subject= : Fan nomi bo\'yicha filter (qism matn, masalan "Tibbiyot kasbiga kirish")}
         {--raw : Mos yozuvlarning xom JSON javobini chiqarish}';
 
-    protected $description = 'Talaba akkreditatsiyasidagi O\'zlashtirgan (finish_credit_status) nomutanosibligini API orqali tekshirish';
+    protected $description = 'Akkreditatsiyadagi O\'zlashtirgan (finish_credit_status) nomutanosibligini HEMIS API orqali tekshirish';
 
     public function handle(): int
     {
@@ -36,65 +45,54 @@ class DiagnoseAccreditation extends Command
         $ident = (string) $this->argument('student');
         $subjectFilter = $this->option('subject');
 
-        // Talabani hemis_id yoki student_id_number bo'yicha topamiz.
-        $student = Student::where('hemis_id', $ident)
-            ->orWhere('student_id_number', $ident)
-            ->first();
+        // Talabani hemis_id yoki student_id_number bo'yicha bazadan topamiz (nomini ko'rsatish uchun).
+        $student = Student::where('hemis_id', $ident)->orWhere('student_id_number', $ident)->first();
+        $hemisId = $student->hemis_id ?? (ctype_digit($ident) ? $ident : null);
+        $studentIdNumber = $student->student_id_number ?? (ctype_digit($ident) ? null : $ident);
 
         if ($student) {
-            $hemisId = $student->hemis_id;
-            $this->info("Talaba: {$student->full_name} — hemis_id={$hemisId}, ID raqam={$student->student_id_number}");
+            $this->info("Talaba: {$student->full_name} — hemis_id={$student->hemis_id}, ID raqam={$student->student_id_number}");
         } else {
-            // Bazada topilmasa, kiritilgan qiymatni to'g'ridan-to'g'ri hemis_id deb olamiz.
-            $hemisId = $ident;
-            $this->warn("Bazada talaba topilmadi — '{$ident}' hemis_id sifatida ishlatiladi.");
+            $this->warn("Bazada talaba topilmadi — '{$ident}' to'g'ridan-to'g'ri API'ga uzatiladi.");
         }
         $this->newLine();
 
-        // API'dan academic-record-list ni _student bo'yicha tortamiz.
+        // 1-usul: student-academic-data (bitta talaba, barcha yozuvlar) — student_id_number bo'yicha.
         $items = [];
-        $page = 1;
-        do {
-            try {
-                $response = Http::connectTimeout(30)
-                    ->timeout(60)
-                    ->withoutVerifying()
-                    ->withToken($token)
-                    ->get("{$baseUrl}/v1/data/academic-record-list", [
-                        '_student' => $hemisId,
-                        'page' => $page,
-                        'limit' => 200,
-                    ]);
-            } catch (\Throwable $e) {
-                $this->error('API so\'rovda xatolik: ' . $e->getMessage());
-                return 1;
+        $source = null;
+        if ($studentIdNumber) {
+            $resp = $this->call("{$baseUrl}/v1/data/student-academic-data", $token, ['student_id_number' => $studentIdNumber]);
+            if ($resp !== null && is_array($resp['data']['items'] ?? null)) {
+                $items = $resp['data']['items'];
+                $source = 'student-academic-data (student_id_number=' . $studentIdNumber . ')';
             }
+        }
 
-            if (!$response->successful()) {
-                $this->error("API xato — HTTP {$response->status()}");
-                $this->line(substr($response->body(), 0, 500));
-                return 1;
-            }
-
-            $json = $response->json();
-            $data = $json['data'] ?? [];
-            $pageItems = $data['items'] ?? [];
-            // Ehtiyot chorasi: server _student filtrini e'tiborsiz qoldirsa,
-            // mijoz tomonida ham filterlaymiz.
-            foreach ($pageItems as $it) {
-                if ((string) ($it['_student'] ?? '') === (string) $hemisId) {
+        // 2-usul (fallback): academic-record-list ni _student yoki student_id_number bo'yicha sahifalab tortamiz.
+        if (empty($items)) {
+            $filter = $hemisId ? ['_student' => $hemisId] : ['student_id_number' => $studentIdNumber];
+            $page = 1;
+            do {
+                $resp = $this->call("{$baseUrl}/v1/data/academic-record-list", $token, $filter + ['page' => $page, 'limit' => 200]);
+                if ($resp === null) {
+                    return 1;
+                }
+                $data = $resp['data'] ?? [];
+                foreach (($data['items'] ?? []) as $it) {
                     $items[] = $it;
                 }
-            }
-            $pagination = $data['pagination'] ?? [];
-            $pageCount = (int) ($pagination['pageCount'] ?? 1);
-            $page++;
-        } while ($page <= $pageCount);
+                $pageCount = (int) ($data['pagination']['pageCount'] ?? 1);
+                $page++;
+            } while ($page <= $pageCount);
+            $source = 'academic-record-list (' . http_build_query($filter) . ')';
+        }
 
         if (empty($items)) {
-            $this->warn('Bu talaba uchun academic-record-list bo\'sh qaytdi.');
+            $this->warn('Bu talaba uchun akademik yozuv qaytmadi.');
             return 0;
         }
+        $this->line("Manba: {$source} — jami {$this->countLabel(count($items))} yozuv.");
+        $this->newLine();
 
         if ($subjectFilter) {
             $items = array_values(array_filter($items, fn($it) => mb_stripos((string) ($it['subject_name'] ?? ''), $subjectFilter) !== false));
@@ -104,9 +102,16 @@ class DiagnoseAccreditation extends Command
             }
         }
 
-        // Jadval: har bir fan bo'yicha xom qiymatlar.
+        // Bir fan (subject+semester) uchun nechta yozuv borligini sanaymiz — dublikatlarni topish uchun.
+        $dupKeys = [];
+        foreach ($items as $it) {
+            $k = ($it['_subject'] ?? $it['subject_name'] ?? '') . '|' . ($it['_semester'] ?? '');
+            $dupKeys[$k] = ($dupKeys[$k] ?? 0) + 1;
+        }
+
         $rows = [];
         $conflicts = 0;
+        $dupSubjects = 0;
         foreach ($items as $it) {
             $grade = $it['grade'] ?? null;
             $fcs = (bool) ($it['finish_credit_status'] ?? false);
@@ -118,30 +123,47 @@ class DiagnoseAccreditation extends Command
                 $conflicts++;
             }
 
+            $k = ($it['_subject'] ?? $it['subject_name'] ?? '') . '|' . ($it['_semester'] ?? '');
+            $isDup = ($dupKeys[$k] ?? 0) > 1;
+
+            $notes = [];
+            if ($isDup) {
+                $notes[] = 'DUBLIKAT×' . $dupKeys[$k];
+            }
+            if ($isConflict) {
+                $notes[] = '⚠ZIDDIYAT';
+            }
+
             $rows[] = [
-                mb_strimwidth((string) ($it['subject_name'] ?? ''), 0, 34, '…'),
-                (string) ($it['semester_name'] ?? ''),
+                mb_strimwidth((string) ($it['subject_name'] ?? ''), 0, 32, '…'),
+                (string) ($it['semester_name'] ?? ($it['_semester'] ?? '')),
                 (string) ($it['credit'] ?? ''),
                 (string) ($it['total_point'] ?? ''),      // Ball
                 $grade === null ? '—' : (string) $grade,   // Baho
                 $fcs ? 'Ha' : "Yo'q",                       // O'zlashtirgan
-                ($it['retraining_status'] ?? false) ? 'Ha' : "Yo'q",
-                $isConflict ? '⚠ ZIDDIYAT' : '',
+                ($it['retraining_status'] ?? false) ? 'Ha' : '·',
+                implode(' ', $notes),
             ];
         }
+        $dupSubjects = count(array_filter($dupKeys, fn($n) => $n > 1));
 
         $this->table(
-            ['Fan', 'Semestr', 'Kredit', 'Ball', 'Baho', "O'zlashtirgan\n(finish_credit)", 'Qayta o\'qish', 'Izoh'],
+            ['Fan', 'Semestr', 'Kredit', 'Ball', 'Baho', "O'zlash.\n(finish_credit)", 'Qayta', 'Izoh'],
             $rows
         );
 
         $this->newLine();
         if ($conflicts > 0) {
-            $this->error("⚠ {$conflicts} ta ziddiyatli yozuv: finish_credit_status=true (O'zlashtirgan=Ha), lekin baho < 3 (yiqilgan).");
-            $this->line('  → Excel bu yozuvni "Ha" ko\'rsatadi (finish_credit_status ni to\'g\'ridan-to\'g\'ri oladi),');
-            $this->line('  → web sahifa esa bahoni qayta hisoblab "Yo\'q" ko\'rsatadi. Manba maydonlarining o\'zi zid.');
-        } else {
-            $this->info('Ziddiyatli yozuv topilmadi (finish_credit_status baho bilan mos).');
+            $this->error("⚠ {$conflicts} ta ziddiyatli yozuv: finish_credit_status=true, lekin baho < 3 (yiqilgan).");
+            $this->line('  → Excel finish_credit_status=true ni "Ha" deb chiqaradi; web bahoga qarab "Yo\'q" deydi.');
+        }
+        if ($dupSubjects > 0) {
+            $this->warn("⚠ {$dupSubjects} ta fanda bir nechta yozuv (dublikat) bor.");
+            $this->line('  → web va Excel har xil yozuvni tanlab qolgan bo\'lishi mumkin (masalan biri finish_credit=Ha,');
+            $this->line('    ikkinchisi Yo\'q). Bu web "Yo\'q/baho 0" vs Excel "Ha/baho 2" farqini tushuntiradi.');
+        }
+        if ($conflicts === 0 && $dupSubjects === 0) {
+            $this->info('Ziddiyat ham, dublikat ham topilmadi — API izchil qaytaryapti.');
         }
 
         if ($this->option('raw')) {
@@ -151,5 +173,32 @@ class DiagnoseAccreditation extends Command
         }
 
         return 0;
+    }
+
+    /**
+     * HEMIS API'ga GET so'rovi. Xatolikda ekranga yozadi va null qaytaradi.
+     */
+    private function call(string $url, string $token, array $query): ?array
+    {
+        try {
+            $response = Http::connectTimeout(30)->timeout(60)->withoutVerifying()
+                ->withToken($token)->get($url, $query);
+        } catch (\Throwable $e) {
+            $this->error('API so\'rovda xatolik: ' . $e->getMessage());
+            return null;
+        }
+
+        if (!$response->successful()) {
+            $this->error("API xato — HTTP {$response->status()} ({$url})");
+            $this->line(substr($response->body(), 0, 400));
+            return null;
+        }
+
+        return $response->json();
+    }
+
+    private function countLabel(int $n): string
+    {
+        return (string) $n;
     }
 }

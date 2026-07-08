@@ -4813,7 +4813,7 @@ class ReportController extends Controller
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $arRecords = array_merge($arRecords, DB::table('academic_records')
                     ->whereIn('student_id', $chunk)
-                    ->select('student_id', 'subject_id', 'semester_id', 'curriculum_id')
+                    ->select('student_id', 'subject_id', 'subject_name', 'credit', 'total_acload', 'total_point', 'grade', 'retraining_status', 'semester_id', 'curriculum_id')
                     ->get()
                     ->all());
             }
@@ -4853,6 +4853,19 @@ class ReportController extends Controller
                     }
                 }
             }
+
+            $studentArBySemSubject = [];
+            foreach ($arRecords as $ar) {
+                $semesterCode = (string) $ar->semester_id;
+                $pickedCurriculumId = $studentSemCurr[$ar->student_id][$semesterCode] ?? null;
+
+                if ($ar->curriculum_id && $pickedCurriculumId !== null && (string) $ar->curriculum_id !== (string) $pickedCurriculumId) {
+                    continue;
+                }
+
+                $studentArBySemSubject[$ar->student_id][$semesterCode][(string) $ar->subject_id] = $ar;
+            }
+
             unset($arRecords);
 
             // 3-QADAM: Talabalarning kerakli (curriculum_id, semester_code) juftliklarini yig'amiz.
@@ -5000,54 +5013,27 @@ class ReportController extends Controller
                     $subjectsForSem = $subjectsByPair->get($currId . '|' . $semCode, collect());
                     $subjectsForSem = $this->filterSubjectsByGroupSuffix($subjectsForSem, $st->group_name ?? '');
 
-                    foreach ($subjectsForSem as $sub) {
-                        $resolvedSubject = $this->resolveAcademicDebtSubjectForStudent($st->hemis_id, $sub, $tanlovPicksMap);
-                        if ($resolvedSubject === null) {
+                    $semesterGrades = $this->buildSemesterAcademicGradeRows(
+                        $st->hemis_id,
+                        (string) $semCode,
+                        $subjectsForSem->values(),
+                        collect($studentArBySemSubject[$st->hemis_id][(string) $semCode] ?? []),
+                        $tanlovPicksMap
+                    );
+
+                    foreach ($semesterGrades as $gradeRow) {
+                        if (!$gradeRow->is_debt) {
                             continue;
                         }
 
-                        $effectiveSubjectId = $resolvedSubject['subject_id'];
-                        $effectiveSubjectName = $resolvedSubject['subject_name'];
-
-                        $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code . '|' . $currId;
-                        $legacyArKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
-                        $hasAR = isset($arExistsLookup[$arKey]) || isset($arLegacyExistsLookup[$legacyArKey]);
-
-                        // Biriktirilganlik tekshiruvi (JournalController mantiqiga muvofiq):
-                        // Agar shu talaba+semestr uchun student_subjects da yozuvlar bo'lsa —
-                        // faqat o'sha fanlarga biriktirilgan deb hisoblanadi.
-                        $ssKey = $st->hemis_id . '|' . (string)$sub->semester_code;
-                        $hasSsForSem = $studentSubjectsHasSemester[$ssKey] ?? false;
-                        $isEnrolled = !$hasSsForSem || isset($studentSubjectsMap[$ssKey][$effectiveSubjectId]);
-
-                        if ($hasAR) {
-                            // Baho bor → qarz emas
-                            continue;
-                        }
-
-                        if (!$isEnrolled) {
-                            // Fan biriktirilmagan VA academic records ham yo'q →
-                            // "noaniq" qarz (talabaga na fan biriktirilgan, na baho qo'yilgan)
-                            $debts[] = [
-                                'subject_id'    => $effectiveSubjectId,
-                                'subject_name'  => $effectiveSubjectName,
-                                'semester_code' => $sub->semester_code,
-                                'semester_name' => $sub->semester_name,
-                                'credit'        => $sub->credit,
-                                'total_acload'  => $sub->total_acload,
-                                'status'        => 'noaniq', // fan biriktirilmagan + baho yo'q
-                            ];
-                            continue;
-                        }
-
-                        // Fan biriktirilgan, baho yo'q → oddiy qarz
                         $debts[] = [
-                            'subject_id'    => $effectiveSubjectId,
-                            'subject_name'  => $effectiveSubjectName,
-                            'semester_code' => $sub->semester_code,
-                            'semester_name' => $sub->semester_name,
-                            'credit'        => $sub->credit,
-                            'total_acload'  => $sub->total_acload,
+                            'subject_id'    => $gradeRow->subject_id,
+                            'subject_name'  => $gradeRow->subject_name,
+                            'semester_code' => $gradeRow->semester_code,
+                            'semester_name' => $gradeRow->semester_name,
+                            'credit'        => $gradeRow->credit,
+                            'total_acload'  => $gradeRow->total_acload,
+                            'status'        => 'Qarzdor',
                         ];
                     }
                 }
@@ -6388,7 +6374,7 @@ class ReportController extends Controller
                     ->select('curriculum_subject_hemis_id', 'subject_id', 'subject_name')
                     ->get();
                 foreach ($picks as $p) {
-                    $tanlovPicksMap[$p->curriculum_subject_hemis_id] = [
+                    $tanlovPicksMap[$studentId . '|' . $p->curriculum_subject_hemis_id] = [
                         'subject_id'   => $p->subject_id,
                         'subject_name' => $p->subject_name,
                     ];
@@ -6405,34 +6391,15 @@ class ReportController extends Controller
                 })
                 ->select('subject_id', 'subject_name', 'credit', 'total_acload', 'total_point', 'grade', 'retraining_status')
                 ->get()
-                ->keyBy('subject_id');
+                ->keyBy(fn ($row) => (string) $row->subject_id);
 
-            // Curriculum fanlarini academic records bilan birlashtirish.
-            // Tanlov fanlarda faqat talaba tanlaganlari ko'rsatiladi.
-            $grades = [];
-            $expectedSubjectIds = [];   // qarz hisobiga olingan fanlar
-            foreach ($currSubjects as $sub) {
-                $resolvedSubject = $this->resolveAcademicDebtSubjectForStudent($studentId, $sub, $tanlovPicksMap);
-                if ($resolvedSubject === null) {
-                    continue;
-                }
-
-                $effectiveSubjectId = $resolvedSubject['subject_id'];
-                $effectiveSubjectName = $resolvedSubject['subject_name'];
-
-                $expectedSubjectIds[(string) $effectiveSubjectId] = true;
-
-                $ar = $arRecords->get($effectiveSubjectId);
-                $grades[] = (object) [
-                    'subject_name' => $effectiveSubjectName,
-                    'credit'       => $sub->credit,
-                    'total_acload' => $sub->total_acload,
-                    'total_point'  => $ar->total_point ?? null,
-                    'grade'        => $ar->grade ?? null,
-                    'is_debt'      => $this->isAcademicRecordDebt($ar),
-                    'is_orphan'    => false,
-                ];
-            }
+            $grades = $this->buildSemesterAcademicGradeRows(
+                $studentId,
+                (string) $semesterCode,
+                $currSubjects,
+                $arRecords,
+                $tanlovPicksMap
+            );
 
             $semesterName = $currSubjects->first()->semester_name ?? $semesterCode . '-semestr';
 
@@ -6488,6 +6455,37 @@ class ReportController extends Controller
             'subject_id' => $pick['subject_id'],
             'subject_name' => $pick['subject_name'] ?: $subjectRow->subject_name,
         ];
+    }
+
+    private function buildSemesterAcademicGradeRows($studentHemisId, $semesterCode, $currSubjects, $arRecordsBySubject, array $tanlovPicksMap): array
+    {
+        $grades = [];
+
+        foreach ($currSubjects as $sub) {
+            $resolvedSubject = $this->resolveAcademicDebtSubjectForStudent($studentHemisId, $sub, $tanlovPicksMap);
+            if ($resolvedSubject === null) {
+                continue;
+            }
+
+            $effectiveSubjectId = (string) $resolvedSubject['subject_id'];
+            $ar = $arRecordsBySubject->get($effectiveSubjectId);
+
+            $grades[] = (object) [
+                'subject_id'    => $effectiveSubjectId,
+                'semester_code' => (string) $semesterCode,
+                'semester_name' => $sub->semester_name,
+                'subject_name'  => $resolvedSubject['subject_name'],
+                'credit'        => $sub->credit,
+                'total_acload'  => $sub->total_acload,
+                'has_record'    => $ar !== null,
+                'total_point'   => $ar->total_point ?? null,
+                'grade'         => $ar->grade ?? null,
+                'is_debt'       => $this->isAcademicRecordDebt($ar),
+                'is_orphan'     => false,
+            ];
+        }
+
+        return $grades;
     }
 
     /**
@@ -6758,7 +6756,7 @@ class ReportController extends Controller
                     ->select('curriculum_subject_hemis_id', 'subject_id', 'subject_name')
                     ->get();
                 foreach ($picks as $p) {
-                    $tanlovPicksMap[$p->curriculum_subject_hemis_id] = [
+                    $tanlovPicksMap[$studentId . '|' . $p->curriculum_subject_hemis_id] = [
                         'subject_id'   => $p->subject_id,
                         'subject_name' => $p->subject_name,
                     ];
@@ -6769,58 +6767,64 @@ class ReportController extends Controller
                 return $this->resolveAcademicDebtSubjectForStudent($studentId, $sub, $tanlovPicksMap) !== null;
             })->values();
 
-            // 5) Qarzlar: curriculum da bor, academic_records da yo'q.
+            // 5) Qarzlar: semester card ichidagi is_debt natijasiga qarab olinadi.
             $debtsAll = [];
             $plannedSubjects = [];
             $expectedSubjectIdsBySem = [];
-            $arMapBySemSubject = [];
+            $currSubjectsBySem = $currSubjects->groupBy('semester_code');
 
-            foreach ($arBySem as $semCode => $rows) {
-                foreach ($rows as $ar) {
-                    $arMapBySemSubject[(string) $semCode][(string) $ar->subject_id] = $ar;
-                }
-            }
-
-            foreach ($currSubjects as $sub) {
-                $subSemCode = (int) $sub->semester_code;
+            foreach ($currSubjectsBySem as $semCode => $subjectsForSem) {
+                $semInt = (int) $semCode;
 
                 if ($showCurrentSemester) {
-                    if ($studentSemesterCode && $subSemCode !== (int) $studentSemesterCode) continue;
+                    if ($studentSemesterCode && $semInt !== (int) $studentSemesterCode) {
+                        continue;
+                    }
                 } else {
-                    if ($studentSemesterCode && $subSemCode >= (int) $studentSemesterCode) continue;
+                    if ($studentSemesterCode && $semInt >= (int) $studentSemesterCode) {
+                        continue;
+                    }
                 }
 
-                $resolvedSubject = $this->resolveAcademicDebtSubjectForStudent($studentId, $sub, $tanlovPicksMap);
-                if ($resolvedSubject === null) {
-                    continue;
+                $arRecordsBySubject = collect($arBySem[(string) $semCode] ?? [])
+                    ->keyBy(fn ($row) => (string) $row->subject_id);
+
+                $semesterGrades = $this->buildSemesterAcademicGradeRows(
+                    $studentId,
+                    (string) $semCode,
+                    $subjectsForSem->values(),
+                    $arRecordsBySubject,
+                    $tanlovPicksMap
+                );
+
+                foreach ($semesterGrades as $gradeRow) {
+                    $expectedSubjectIdsBySem[(string) $gradeRow->semester_code][(string) $gradeRow->subject_id] = true;
+
+                    $plannedSubjects[] = [
+                        'semester_code' => $gradeRow->semester_code,
+                        'semester_name' => $gradeRow->semester_name,
+                        'subject_name'  => $gradeRow->subject_name,
+                        'credit'        => $gradeRow->credit,
+                        'total_acload'  => $gradeRow->total_acload,
+                        'has_record'    => $gradeRow->has_record,
+                        'total_point'   => $gradeRow->total_point,
+                        'grade'         => $gradeRow->grade,
+                        'is_debt'       => $gradeRow->is_debt,
+                    ];
+
+                    if (!$gradeRow->is_debt) {
+                        continue;
+                    }
+
+                    $debtsAll[] = [
+                        'semester_code' => $gradeRow->semester_code,
+                        'semester_name' => $gradeRow->semester_name,
+                        'subject_name'  => $gradeRow->subject_name,
+                        'credit'        => $gradeRow->credit,
+                        'total_acload'  => $gradeRow->total_acload,
+                        'status'        => 'Qarzdor',
+                    ];
                 }
-
-                $effectiveSubjectId = $resolvedSubject['subject_id'];
-                $effectiveSubjectName = $resolvedSubject['subject_name'];
-                $expectedSubjectIdsBySem[(string) $sub->semester_code][(string) $effectiveSubjectId] = true;
-                $matchedAr = $arMapBySemSubject[(string) $sub->semester_code][(string) $effectiveSubjectId] ?? null;
-
-                $plannedSubjects[] = [
-                    'semester_code' => $sub->semester_code,
-                    'semester_name' => $sub->semester_name,
-                    'subject_name'  => $effectiveSubjectName,
-                    'credit'        => $sub->credit,
-                    'total_acload'  => $sub->total_acload,
-                    'has_record'    => $matchedAr !== null,
-                    'total_point'   => $matchedAr->total_point ?? null,
-                    'grade'         => $matchedAr->grade ?? null,
-                ];
-
-                if (isset($arExists[$effectiveSubjectId . '|' . $sub->semester_code]) || isset($arLegacyExists[$effectiveSubjectId . '|' . $sub->semester_code])) continue;
-
-                $debtsAll[] = [
-                    'semester_code' => $sub->semester_code,
-                    'semester_name' => $sub->semester_name,
-                    'subject_name'  => $effectiveSubjectName,
-                    'credit'        => $sub->credit,
-                    'total_acload'  => $sub->total_acload,
-                    'status'        => 'Qarzdor',
-                ];
             }
 
             $extraSubjects = [];

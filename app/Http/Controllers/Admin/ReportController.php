@@ -5751,7 +5751,10 @@ class ReportController extends Controller
                             ? $this->academicRecordStudyStatus($matchedAr)
                             : ['code' => 'not_graded', 'label' => "Yozuv yo'q"];
 
-                        if ($onlyDebtors && $matchedAr) {
+                        // Qarz = yozuv yo'q YOKI yozuv qarzdor (kredit olinmagan / baho 0-2).
+                        // Docblokdagi ta'rif: kredit olingan yoki baho >= 3 bo'lsa qarz emas.
+                        $isDebt = $this->isAcademicRecordDebt($matchedAr);
+                        if ($onlyDebtors && !$isDebt) {
                             continue;
                         }
 
@@ -5813,7 +5816,7 @@ class ReportController extends Controller
                             'retake_status' => $retakeMap[$retakeKey] ?? 'Ariza bermagan',
                             'study_status' => $study['label'],
                             'study_status_code' => $study['code'],
-                            'is_debt' => $matchedAr === null,
+                            'is_debt' => $isDebt,
                             'score_details' => $scoreDetails,
                             'has_score_details' => !empty($scoreDetails),
                         ];

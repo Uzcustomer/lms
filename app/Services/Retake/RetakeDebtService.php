@@ -31,6 +31,7 @@ class RetakeDebtService
 
         $academicRecords = DB::table('academic_records')
             ->where('student_id', $student->hemis_id)
+            ->when($student->curriculum_id !== null, fn($q) => $q->where('curriculum_id', $student->curriculum_id))
             ->select([
                 'id',
                 'subject_id',
@@ -148,8 +149,13 @@ class RetakeDebtService
      */
     public function isStillDebtor(int $studentHemisId, string $subjectId, string $semesterId): bool
     {
+        $student = Student::query()
+            ->where('hemis_id', $studentHemisId)
+            ->first(['curriculum_id', 'group_name']);
+
         $record = DB::table('academic_records')
             ->where('student_id', $studentHemisId)
+            ->when($student?->curriculum_id !== null, fn($q) => $q->where('curriculum_id', $student->curriculum_id))
             ->where('subject_id', $subjectId)
             ->where('semester_id', $semesterId)
             ->first(['grade', 'retraining_status']);
@@ -167,10 +173,6 @@ class RetakeDebtService
         if ($inStudentSubjects) {
             return true;
         }
-
-        $student = Student::query()
-            ->where('hemis_id', $studentHemisId)
-            ->first(['curriculum_id', 'group_name']);
 
         if (!$student?->curriculum_id) {
             return false;

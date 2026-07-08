@@ -3,6 +3,7 @@
 namespace App\Services\Retake;
 
 use App\Models\HemisQuizResult;
+use App\Models\QuizGradeAppeal;
 use App\Models\RetakeApplication;
 use App\Models\RetakeGrade;
 use App\Models\RetakeGroup;
@@ -13,6 +14,7 @@ use App\Services\VedomostGradeCalculator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 
@@ -582,10 +584,27 @@ class RetakeJournalService
             throw ValidationException::withMessages(['test_score' => 'TEST 0..100']);
         }
 
-        $app->update([
+        // "Baho qo'yilgan sana" — faqat qiymat o'zgarganda yangilanadi (o'zgarmasa
+        // eski sana saqlanadi, null bo'lsa/o'chirilsa sana ham tozalanadi).
+        $oldOske = $app->oske_score !== null ? (float) $app->oske_score : null;
+        $oldTest = $app->test_score !== null ? (float) $app->test_score : null;
+
+        $update = [
             'oske_score' => $oskeScore,
             'test_score' => $testScore,
-        ]);
+        ];
+        if ($oskeScore === null) {
+            $update['oske_graded_at'] = null;
+        } elseif ($oldOske === null || abs($oldOske - $oskeScore) > 0.001) {
+            $update['oske_graded_at'] = now();
+        }
+        if ($testScore === null) {
+            $update['test_graded_at'] = null;
+        } elseif ($oldTest === null || abs($oldTest - $testScore) > 0.001) {
+            $update['test_graded_at'] = now();
+        }
+
+        $app->update($update);
 
         // Yakuniy bahoni qayta hisoblaymiz
         $group = $app->retakeGroup;
@@ -769,6 +788,53 @@ class RetakeJournalService
             'value' => is_numeric($value) ? (int) $value : null,
             'baho' => $computed['baho'] ?? '',
         ];
+    }
+
+    /**
+     * Berilgan arizalar to'plami uchun appelyatsiyada O'CHIRILGAN (action=delete)
+     * test baholari sonini [application_id => removed_count] ko'rinishida qaytaradi.
+     *
+     * Manba — quiz_grade_appeals (o'quv prorektori o'chirgan baholar tarixi).
+     * O'chirilgan baholar shu talaba + shu fan (subject_id) bo'yicha sanaladi;
+     * qayta o'qish ham, oddiy jurnal test bahosi ham hisobga olinadi. Urinishlar
+     * jami soni = removed_count + 1 (joriy urinish).
+     *
+     * @param  Collection<RetakeApplication>  $applications
+     * @return array<int, int>  application_id => o'chirilgan baholar soni
+     */
+    public function removedAppealCounts(Collection $applications): array
+    {
+        $map = [];
+        foreach ($applications as $app) {
+            $map[$app->id] = 0;
+        }
+
+        if ($applications->isEmpty() || !Schema::hasTable('quiz_grade_appeals')) {
+            return $map;
+        }
+
+        $hemisIds = $applications->pluck('student_hemis_id')->filter()->unique()->values();
+        $subjectIds = $applications->pluck('subject_id')->filter()->unique()->values();
+
+        if ($hemisIds->isEmpty() || $subjectIds->isEmpty()) {
+            return $map;
+        }
+
+        $counts = QuizGradeAppeal::query()
+            ->where('action', QuizGradeAppeal::ACTION_DELETE)
+            ->whereIn('student_hemis_id', $hemisIds)
+            ->whereIn('subject_id', $subjectIds)
+            ->selectRaw('student_hemis_id, subject_id, COUNT(*) as cnt')
+            ->groupBy('student_hemis_id', 'subject_id')
+            ->get()
+            ->keyBy(fn ($row) => $row->student_hemis_id . '|' . $row->subject_id);
+
+        foreach ($applications as $app) {
+            $key = $app->student_hemis_id . '|' . $app->subject_id;
+            $map[$app->id] = (int) ($counts[$key]->cnt ?? 0);
+        }
+
+        return $map;
     }
 
     /**
@@ -1129,6 +1195,10 @@ class RetakeJournalService
                 $score = $oskeMap->get($app->student_hemis_id);
                 if ($score !== null) {
                     $update['oske_score'] = $score;
+                    $oldOske = $app->oske_score !== null ? (float) $app->oske_score : null;
+                    if ($oldOske === null || abs($oldOske - (float) $score) > 0.001) {
+                        $update['oske_graded_at'] = now();
+                    }
                     $fetchedOske++;
                 } elseif ($app->oske_score === null) {
                     $missing++;
@@ -1138,6 +1208,10 @@ class RetakeJournalService
                 $score = $testMap->get($app->student_hemis_id);
                 if ($score !== null) {
                     $update['test_score'] = $score;
+                    $oldTest = $app->test_score !== null ? (float) $app->test_score : null;
+                    if ($oldTest === null || abs($oldTest - (float) $score) > 0.001) {
+                        $update['test_graded_at'] = now();
+                    }
                     $fetchedTest++;
                 } elseif ($app->test_score === null) {
                     $missing++;

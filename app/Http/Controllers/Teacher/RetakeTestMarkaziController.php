@@ -121,6 +121,9 @@ class RetakeTestMarkaziController extends Controller
             ->get()
             ->keyBy('application_id');
 
+        // Appelyatsiyada o'chirilgan test baholari soni (urinishlar sonini ko'rsatish uchun).
+        $removedCountMap = $this->service->removedAppealCounts($sentApplications->getCollection());
+
         // Yakuniy natija — vedomost tekshirish logikasi (JN=50, MT=20, OSKI/Test=15+15 yoki 30).
         $finalResultMap = [];
         foreach ($sentApplications->getCollection() as $app) {
@@ -144,6 +147,7 @@ class RetakeTestMarkaziController extends Controller
             'sentApplications' => $sentApplications,
             'mustaqilMap' => $mustaqilMap,
             'finalResultMap' => $finalResultMap,
+            'removedCountMap' => $removedCountMap,
             'activeTab' => $activeTab,
             'studentSearch' => $studentSearch,
             'sentStatus' => $sentStatus,
@@ -162,6 +166,8 @@ class RetakeTestMarkaziController extends Controller
         $applications = $this->service->applications($group);
         $gradesMap = $this->service->gradesMap($group);
         $mustaqilMap = $this->service->mustaqilMap($group);
+
+        $removedCountMap = $this->service->removedAppealCounts($applications);
 
         $isSinov = in_array($group->assessment_type, ['sinov', 'sinov_fan'], true);
         $finalResultMap = [];
@@ -183,6 +189,7 @@ class RetakeTestMarkaziController extends Controller
             'gradesMap' => $gradesMap,
             'mustaqilMap' => $mustaqilMap,
             'finalResultMap' => $finalResultMap,
+            'removedCountMap' => $removedCountMap,
         ]);
     }
 
@@ -547,6 +554,8 @@ class RetakeTestMarkaziController extends Controller
             ->get()
             ->keyBy('application_id');
 
+        $removedCountMap = $this->service->removedAppealCounts($applications);
+
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
         $sheet->setTitle('Testga yuborilganlar');
@@ -653,6 +662,10 @@ class RetakeTestMarkaziController extends Controller
                 'passed' => (string) $final['value'],
                 default => '-',
             };
+            $removed = $removedCountMap[$app->id] ?? 0;
+            if ($finalText !== '-' && $removed >= 1) {
+                $finalText .= ' (' . ($removed + 1) . ')';
+            }
             $sheet->setCellValue("O{$row}", $finalText);
             $sheet->setCellValue("P{$row}", $app->sent_to_test_markazi_at ? 'Yuborilgan' : 'Yuborilmagan');
 

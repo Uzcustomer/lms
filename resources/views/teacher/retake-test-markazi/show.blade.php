@@ -22,23 +22,29 @@
     </style>
     @php
         $awaitHtml = '<span class="rtm-await" title="Natija hali yo\'q">…</span>';
-        $cellVal = function ($v, $cls) use ($awaitHtml) {
+        $cellVal = function ($v, $cls, $date = null) use ($awaitHtml) {
             if ($v === null) return $awaitHtml;
             $f = rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
-            return '<span class="badge ' . $cls . '">' . $f . '</span>';
+            $title = $date
+                ? ' title="Baho qo\'yilgan sana: ' . e($date->format('d.m.Y H:i')) . '" style="cursor:help;"'
+                : '';
+            return '<span class="badge ' . $cls . '"' . $title . '>' . $f . '</span>';
         };
         // Yakuniy natija — vedomost tekshirish logikasi bo'yicha holat.
-        $finalCell = function ($res) use ($awaitHtml) {
+        // $removed — appelyatsiyada o'chirilgan baholar soni; urinishlar jami =
+        // $removed + 1; faqat qayta topshirgan (>=2) talabada "(N)" ko'rsatiladi.
+        $finalCell = function ($res, $removed = 0) use ($awaitHtml) {
+            $suffix = $removed >= 1 ? ' (' . ($removed + 1) . ')' : '';
             if (!$res) return $awaitHtml;
             switch ($res['status']) {
                 case 'no_teacher_grade':
-                    return '<span class="badge badge-amber" title="JN yoki MT bahosi qo\'yilmagan">' . __("O'qituvchi bahosini qo'ymagan") . '</span>';
+                    return '<span class="badge badge-amber" title="JN yoki MT bahosi qo\'yilmagan">' . __("O'qituvchi bahosini qo'ymagan") . $suffix . '</span>';
                 case 'absent':
-                    return '<span class="badge badge-gray" title="OSKE/TEST natijasi yo\'q">' . __("Imtihonga kelmagan") . '</span>';
+                    return '<span class="badge badge-gray" title="OSKE/TEST natijasi yo\'q">' . __("Imtihonga kelmagan") . $suffix . '</span>';
                 case 'failed':
-                    return '<span class="badge badge-red" title="Bosqichlardan biri 60 dan past">' . __("Yiqildi") . '</span>';
+                    return '<span class="badge badge-red" title="Bosqichlardan biri 60 dan past">' . __("Yiqildi") . $suffix . '</span>';
                 case 'passed':
-                    return '<span class="badge badge-green" style="font-weight:700;">' . $res['value'] . '</span>';
+                    return '<span class="badge badge-green" style="font-weight:700;">' . $res['value'] . $suffix . '</span>';
                 default:
                     return $awaitHtml;
             }
@@ -236,6 +242,7 @@
                                 // Sinov fanlarda Sinov(test) bahosi = JN (avtomatik).
                                 $isSinovGroup = in_array($group->assessment_type, ['sinov', 'sinov_fan'], true);
                                 $effTest = $isSinovGroup ? $app->joriy_score : $app->test_score;
+                                $effTestDate = $isSinovGroup ? $app->joriy_graded_at : $app->test_graded_at;
                             @endphp
                         <tr class="rtm-row"
                             data-faculty="{{ $student?->department_name }}"
@@ -259,15 +266,15 @@
                                     <span class="badge badge-red" title="JN va MT 60 dan past — testga ruxsat yo'q">{{ __("Ruxsat yo'q") }}</span>
                                 @endif
                             </td>
-                            <td style="text-align:center;">{!! $cellVal($amaliyotAvg, 'badge-blue') !!}</td>
-                            <td style="text-align:center;">{!! $cellVal($mustaqil?->grade, 'badge-teal') !!}</td>
+                            <td style="text-align:center;">{!! $cellVal($amaliyotAvg, 'badge-blue', $app->joriy_graded_at) !!}</td>
+                            <td style="text-align:center;">{!! $cellVal($mustaqil?->grade, 'badge-teal', $mustaqil?->graded_at) !!}</td>
                             @if($needsOske)
-                                <td style="text-align:center;" data-oske-cell="{{ $app->id }}">{!! $cellVal($app->oske_score, 'badge-blue') !!}</td>
+                                <td style="text-align:center;" data-oske-cell="{{ $app->id }}">{!! $cellVal($app->oske_score, 'badge-blue', $app->oske_graded_at) !!}</td>
                             @endif
                             @if($needsTest)
-                                <td style="text-align:center;" data-test-cell="{{ $app->id }}">{!! $cellVal($effTest, 'badge-blue') !!}</td>
+                                <td style="text-align:center;" data-test-cell="{{ $app->id }}">{!! $cellVal($effTest, 'badge-blue', $effTestDate) !!}</td>
                             @endif
-                            <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null) !!}</td>
+                            <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null, $removedCountMap[$app->id] ?? 0) !!}</td>
                         </tr>
                     @endforeach
                     <tr id="rtm-empty" style="display:none;">

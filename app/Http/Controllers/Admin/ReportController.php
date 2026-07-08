@@ -4836,18 +4836,7 @@ class ReportController extends Controller
             foreach ($studentSemCurrCounts as $studentId => $semesterRows) {
                 $studentCurriculumId = $studentMap[$studentId]->curriculum_id ?? null;
                 foreach ($semesterRows as $semesterCode => $curriculumCounts) {
-                    $pickedCurriculumId = null;
-                    $pickedCount = -1;
-                    foreach ($curriculumCounts as $curriculumId => $count) {
-                        $shouldReplace = $count > $pickedCount;
-                        if (!$shouldReplace && $count === $pickedCount && $studentCurriculumId !== null) {
-                            $shouldReplace = (string) $curriculumId === (string) $studentCurriculumId;
-                        }
-                        if ($shouldReplace) {
-                            $pickedCurriculumId = $curriculumId;
-                            $pickedCount = $count;
-                        }
-                    }
+                    $pickedCurriculumId = $this->pickSemesterCurriculumId($curriculumCounts, $studentCurriculumId);
                     if ($pickedCurriculumId) {
                         $studentSemCurr[$studentId][$semesterCode] = $pickedCurriculumId;
                     }
@@ -6326,15 +6315,18 @@ class ReportController extends Controller
             // Shu semestr uchun tarixiy curriculum_id'ni academic_records'dan olamiz.
             // Agar talaba transfer qilingan bo'lsa, o'tgan semestrlarda eski curriculum
             // saqlangan. Joriy/kelgusi semester uchun students.curriculum_id'ga qaytamiz.
-            $historicalCurriculumId = DB::table('academic_records')
+            $historicalCurriculumRows = DB::table('academic_records')
                 ->where('student_id', $studentId)
                 ->where('semester_id', $semesterCode)
                 ->whereNotNull('curriculum_id')
                 ->select('curriculum_id', DB::raw('COUNT(*) as records_count'))
                 ->groupBy('curriculum_id')
-                ->orderByRaw('CASE WHEN curriculum_id = ? THEN 1 ELSE 0 END DESC', [$student->curriculum_id])
-                ->orderByDesc('records_count')
-                ->value('curriculum_id');
+                ->get();
+            $historicalCurriculumCounts = [];
+            foreach ($historicalCurriculumRows as $row) {
+                $historicalCurriculumCounts[(string) $row->curriculum_id] = (int) $row->records_count;
+            }
+            $historicalCurriculumId = $this->pickSemesterCurriculumId($historicalCurriculumCounts, $student->curriculum_id);
             $effectiveCurriculumId = $historicalCurriculumId ?: $student->curriculum_id;
 
             // Curriculum subjects — shu semestrga tegishli barcha fanlar.
@@ -6486,6 +6478,29 @@ class ReportController extends Controller
         }
 
         return $grades;
+    }
+
+    private function pickSemesterCurriculumId(array $curriculumCounts, $currentCurriculumId): ?string
+    {
+        if ($currentCurriculumId !== null) {
+            foreach ($curriculumCounts as $curriculumId => $count) {
+                if ((string) $curriculumId === (string) $currentCurriculumId) {
+                    return (string) $curriculumId;
+                }
+            }
+        }
+
+        $pickedCurriculumId = null;
+        $pickedCount = -1;
+
+        foreach ($curriculumCounts as $curriculumId => $count) {
+            if ($count > $pickedCount) {
+                $pickedCurriculumId = (string) $curriculumId;
+                $pickedCount = $count;
+            }
+        }
+
+        return $pickedCurriculumId;
     }
 
     /**
@@ -6661,18 +6676,7 @@ class ReportController extends Controller
                 }
             }
             foreach ($semCurrCounts as $semesterCode => $curriculumCounts) {
-                $pickedCurriculumId = null;
-                $pickedCount = -1;
-                foreach ($curriculumCounts as $curriculumId => $count) {
-                    $shouldReplace = $count > $pickedCount;
-                    if (!$shouldReplace && $count === $pickedCount) {
-                        $shouldReplace = (string) $curriculumId === (string) $student->curriculum_id;
-                    }
-                    if ($shouldReplace) {
-                        $pickedCurriculumId = $curriculumId;
-                        $pickedCount = $count;
-                    }
-                }
+                $pickedCurriculumId = $this->pickSemesterCurriculumId($curriculumCounts, $student->curriculum_id);
                 if ($pickedCurriculumId) {
                     $semCurr[$semesterCode] = $pickedCurriculumId;
                 }

@@ -902,6 +902,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/retake-app-subjects', [QuizResultController::class, 'retakeAppSubjects'])->name('retake-app-subjects');
             Route::post('/reassign-retake-subject', [QuizResultController::class, 'reassignRetakeSubject'])->name('reassign-retake-subject');
             Route::post('/update-shakl', [QuizResultController::class, 'updateShakl'])->name('update-shakl');
+            Route::post('/mark-not-actual', [QuizResultController::class, 'markNotActual'])->name('mark-not-actual');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 
@@ -1603,6 +1604,7 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/retake-app-subjects', [QuizResultController::class, 'retakeAppSubjects'])->name('retake-app-subjects');
             Route::post('/reassign-retake-subject', [QuizResultController::class, 'reassignRetakeSubject'])->name('reassign-retake-subject');
             Route::post('/update-shakl', [QuizResultController::class, 'updateShakl'])->name('update-shakl');
+            Route::post('/mark-not-actual', [QuizResultController::class, 'markNotActual'])->name('mark-not-actual');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 

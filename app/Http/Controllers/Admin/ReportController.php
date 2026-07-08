@@ -5562,12 +5562,48 @@ class ReportController extends Controller
                 );
             }
 
+            $studentMap = $students->keyBy('hemis_id');
             $studentSemCurr = [];
+            $studentSemCurrCounts = [];
             $arByStudentSemSubject = [];
+            $arLegacyByStudentSemSubject = [];
+
             foreach ($arRows as $ar) {
                 $semCode = (string) $ar->semester_id;
-                if (!isset($studentSemCurr[$ar->student_id][$semCode]) && $ar->curriculum_id) {
-                    $studentSemCurr[$ar->student_id][$semCode] = $ar->curriculum_id;
+                if ($ar->curriculum_id) {
+                    $studentSemCurrCounts[$ar->student_id][$semCode][$ar->curriculum_id]
+                        = ($studentSemCurrCounts[$ar->student_id][$semCode][$ar->curriculum_id] ?? 0) + 1;
+                } else {
+                    $arLegacyByStudentSemSubject[$ar->student_id][$semCode][(string) $ar->subject_id] = $ar;
+                }
+            }
+
+            foreach ($studentSemCurrCounts as $studentId => $semesterRows) {
+                $studentCurriculumId = $studentMap[$studentId]->curriculum_id ?? null;
+                foreach ($semesterRows as $semCode => $curriculumCounts) {
+                    $pickedCurriculumId = null;
+                    $pickedCount = -1;
+                    foreach ($curriculumCounts as $curriculumId => $count) {
+                        $shouldReplace = $count > $pickedCount;
+                        if (!$shouldReplace && $count === $pickedCount && $studentCurriculumId !== null) {
+                            $shouldReplace = (string) $curriculumId === (string) $studentCurriculumId;
+                        }
+                        if ($shouldReplace) {
+                            $pickedCurriculumId = $curriculumId;
+                            $pickedCount = $count;
+                        }
+                    }
+                    if ($pickedCurriculumId) {
+                        $studentSemCurr[$studentId][$semCode] = $pickedCurriculumId;
+                    }
+                }
+            }
+
+            foreach ($arRows as $ar) {
+                $semCode = (string) $ar->semester_id;
+                $pickedCurriculumId = $studentSemCurr[$ar->student_id][$semCode] ?? null;
+                if ($ar->curriculum_id && $pickedCurriculumId !== null && (string) $ar->curriculum_id !== (string) $pickedCurriculumId) {
+                    continue;
                 }
                 $arByStudentSemSubject[$ar->student_id][$semCode][(string) $ar->subject_id] = $ar;
             }
@@ -5744,7 +5780,9 @@ class ReportController extends Controller
                         $effectiveSubjectId = $resolvedSubject['subject_id'];
                         $effectiveSubjectName = $resolvedSubject['subject_name'];
 
-                        $matchedAr = $arByStudentSemSubject[$st->hemis_id][(string) $semCode][(string) $effectiveSubjectId] ?? null;
+                        $matchedAr = $arByStudentSemSubject[$st->hemis_id][(string) $semCode][(string) $effectiveSubjectId]
+                            ?? $arLegacyByStudentSemSubject[$st->hemis_id][(string) $semCode][(string) $effectiveSubjectId]
+                            ?? null;
                         $study = $matchedAr
                             ? $this->academicRecordStudyStatus($matchedAr)
                             : ['code' => 'not_graded', 'label' => "Yozuv yo'q"];

@@ -5751,9 +5751,18 @@ class ReportController extends Controller
                             ? $this->academicRecordStudyStatus($matchedAr)
                             : ['code' => 'not_graded', 'label' => "Yozuv yo'q"];
 
-                        // Qarz = yozuv yo'q YOKI yozuv qarzdor (kredit olinmagan / baho 0-2).
-                        // Docblokdagi ta'rif: kredit olingan yoki baho >= 3 bo'lsa qarz emas.
-                        $isDebt = $this->isAcademicRecordDebt($matchedAr);
+                        // Qarz aniqlash (academicRecordStudyStatus bilan izchil):
+                        //  - Yozuv bor: "passed" bo'lmasa qarz (baho < 3 — jumladan 1 —, yiqilgan,
+                        //    baholanmagan). Kredit olingan (finish_credit_status) yoki baho >= 3 /
+                        //    matnli baho bo'lsa "passed" — qarz emas.
+                        //  - Yozuv yo'q: faqat talabaning JORIY curriculumi uchun qarz. Tiklangan
+                        //    talabalarda eski/boshqa curriculum semestri tanlangan bo'lsa, undagi
+                        //    "yozuv yo'q" fanlar false qarz bo'lib chiqmasligi uchun qarz sanalmaydi
+                        //    (eski curriculumda faqat haqiqiy yiqilgan yozuv qarz bo'ladi).
+                        $isCurrentCurriculum = (string) $currId === (string) ($st->curriculum_id ?? '');
+                        $isDebt = $matchedAr
+                            ? ($study['code'] ?? '') !== 'passed'
+                            : $isCurrentCurriculum;
                         if ($onlyDebtors && !$isDebt) {
                             continue;
                         }

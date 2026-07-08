@@ -6381,7 +6381,7 @@ class ReportController extends Controller
                     $q->where('curriculum_id', $effectiveCurriculumId)
                         ->orWhereNull('curriculum_id');
                 })
-                ->select('subject_id', 'subject_name', 'credit', 'total_acload', 'total_point', 'grade', 'retraining_status')
+                ->select('subject_id', 'subject_name', 'credit', 'total_acload', 'total_point', 'grade', 'finish_credit_status', 'retraining_status')
                 ->get()
                 ->keyBy(fn ($row) => (string) $row->subject_id);
 
@@ -6408,6 +6408,10 @@ class ReportController extends Controller
     {
         if (!$record) {
             return true;
+        }
+
+        if ((bool) ($record->finish_credit_status ?? false)) {
+            return false;
         }
 
         if ($record->grade === null || $record->grade === '') {
@@ -6472,6 +6476,7 @@ class ReportController extends Controller
                 'has_record'    => $ar !== null,
                 'total_point'   => $ar->total_point ?? null,
                 'grade'         => $ar->grade ?? null,
+                'finish_credit_status' => (bool) ($ar->finish_credit_status ?? false),
                 'is_debt'       => $this->isAcademicRecordDebt($ar),
                 'is_orphan'     => false,
             ];
@@ -6660,7 +6665,7 @@ class ReportController extends Controller
             // 1) academic_records'dan har semester uchun tarixiy curriculum_id va arExists
             $arRows = DB::table('academic_records')
                 ->where('student_id', $studentId)
-                ->select('subject_id', 'subject_name', 'credit', 'total_point', 'grade', 'semester_id', 'curriculum_id')
+                ->select('subject_id', 'subject_name', 'credit', 'total_point', 'grade', 'finish_credit_status', 'retraining_status', 'semester_id', 'curriculum_id')
                 ->get();
             $arExists = [];
             $arLegacyExists = [];

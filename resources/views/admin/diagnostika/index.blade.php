@@ -282,6 +282,11 @@
                             Xulosali Excel
                         </button>
 
+                        <button type="button" id="btn-excel-view" class="btn-excel-xulosa" style="background:linear-gradient(135deg,#0284c7,#0ea5e9);box-shadow:0 2px 6px rgba(2,132,199,0.3);" onclick="downloadTableExcel()" disabled>
+                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            Jadvalni yuklash
+                        </button>
+
                         <button type="button" id="btn-upload" class="btn-upload" disabled>
                             <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
                             Sistemaga yuklash
@@ -480,6 +485,8 @@
         var xulosaCodes = {
             'ok': 'Yuklasa bo\'ladi',
             'uploaded': 'Jurnalga yuklangan',
+            'no_retake_app': 'Qayta o\'qish arizasi topilmadi',
+            'mavzu': 'Mavzu retake',
             'mavzu_uploaded': 'Jurnalga yuklangan (mavzu)',
             'has_other_grade': 'Bahosi bor',
             'mavzu_nb': 'NB bor',
@@ -572,7 +579,7 @@
                         allData = []; filteredData = [];
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
                         $('#table-area').hide();
-                        $('#btn-excel, #btn-excel-xulosa').prop('disabled', true);
+                        $('#btn-excel, #btn-excel-xulosa, #btn-excel-view').prop('disabled', true);
                         $('#total-info').hide();
                         return;
                     }
@@ -580,7 +587,7 @@
                     msPopulate();
                     applyColumnFilters();
                     $('#table-area').show();
-                    $('#btn-excel, #btn-excel-xulosa').prop('disabled', false);
+                    $('#btn-excel, #btn-excel-xulosa, #btn-excel-view').prop('disabled', false);
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
@@ -1032,6 +1039,38 @@
 
             XLSX.utils.book_append_sheet(wb, ws, 'Xulosali');
             XLSX.writeFile(wb, 'diagnostika_xulosali_' + new Date().toISOString().slice(0, 10) + '.xlsx');
+        }
+
+        // ========== EXCEL (Jadval ko'rinishi — ekrandagi ustunlar shu holicha) ==========
+        function downloadTableExcel() {
+            if (!filteredData || filteredData.length === 0) return;
+
+            // Ekrandagi jadval ustunlari bilan bir xil tartibda (Jurnal tugmasidan tashqari).
+            var headers = ['#', 'Student ID', 'FISH', 'Fakultet', 'Yo\'nalish', 'Kurs', 'Semestr', 'Guruh', 'Fan', 'Fan ID', 'YN turi', 'Shakl', 'Baho', 'Sana', 'Xulosa'];
+            var rows = [headers];
+            filteredData.forEach(function(r, i) {
+                rows.push([
+                    i + 1, r.student_id, r.full_name, r.faculty, r.direction,
+                    r.kurs, r.semester, r.group, r.fan_name, r.fan_id || '',
+                    r.yn_turi, r.shakl, r.grade, r.date, r.xulosa
+                ]);
+            });
+
+            var wb = XLSX.utils.book_new();
+            var ws = XLSX.utils.aoa_to_sheet(rows);
+
+            var colWidths = headers.map(function(h, ci) {
+                var max = h.length;
+                rows.forEach(function(row) {
+                    var len = String(row[ci] || '').length;
+                    if (len > max) max = len;
+                });
+                return { wch: Math.min(max + 2, 40) };
+            });
+            ws['!cols'] = colWidths;
+
+            XLSX.utils.book_append_sheet(wb, ws, 'Jadval');
+            XLSX.writeFile(wb, 'diagnostika_jadval_' + new Date().toISOString().slice(0, 10) + '.xlsx');
         }
 
         // ========== FAYL IMPORT ==========

@@ -33,7 +33,7 @@ class RetakeAcademicApplicationController extends Controller
 
     public function index(Request $request)
     {
-        $this->authorizeAccess();
+        $this->authorizeViewAccess();
 
         $departmentId = $request->input('department');
         $specialtyId = $request->input('specialty');
@@ -137,6 +137,7 @@ class RetakeAcademicApplicationController extends Controller
             'stage' => $stage,
             'counters' => $counters,
             'perPage' => $perPage,
+            'canManageApplications' => RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff()),
         ]);
     }
 
@@ -145,7 +146,7 @@ class RetakeAcademicApplicationController extends Controller
      */
     public function export(Request $request)
     {
-        $this->authorizeAccess();
+        $this->authorizeViewAccess();
 
         $filters = [
             'stage' => $request->input('stage'),
@@ -293,6 +294,13 @@ class RetakeAcademicApplicationController extends Controller
     {
         if (!RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff())) {
             abort(403, "Sizda qayta o'qish arizalarini boshqarish ruxsati yo'q");
+        }
+    }
+
+    private function authorizeViewAccess(): void
+    {
+        if (!RetakeAccess::canViewAcademicApplications(RetakeAccess::currentStaff())) {
+            abort(403, "Sizda qayta o'qish arizalarini ko'rish ruxsati yo'q");
         }
     }
 

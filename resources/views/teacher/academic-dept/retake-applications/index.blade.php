@@ -37,6 +37,12 @@
             </div>
         @endif
 
+        @unless($canManageApplications ?? false)
+            <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-4 text-sm text-amber-800">
+                {{ __("Siz bu sahifani ko'rishingiz mumkin, lekin arizalarni tasdiqlash yoki rad etish huquqingiz yo'q.") }}
+            </div>
+        @endunless
+
         <p class="text-sm text-gray-500 mb-4">
             {{ __("Dekan va registrator tasdiqlagan arizalar — guruhga ajratishdan oldin O'quv bo'limi tasdig'i kerak") }}
         </p>
@@ -97,6 +103,7 @@
         </div>
 
         {{-- Bulk actions panel (har qachon ko'rinadi — tanlangan arizalar bo'lsa) --}}
+        @if($canManageApplications ?? false)
         <div x-show="selected.length > 0" x-cloak
              class="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-4 flex items-center justify-between flex-wrap gap-2">
             <div class="text-sm text-blue-800">
@@ -132,6 +139,7 @@
                 </button>
             </div>
         </div>
+        @endif
 
         {{-- Arizalar jadvali --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
@@ -154,12 +162,14 @@
                         <thead class="bg-gray-50">
                         <tr>
                             <th class="px-3 py-2 text-center" style="width:40px;">
-                                <input type="checkbox"
-                                       @change="toggleAll(@js($actionableIds))"
-                                       :checked="@js($actionableIds).length > 0 && @js($actionableIds).every(id => selected.includes(id))"
-                                       :disabled="@js($actionableIds).length === 0"
-                                       title="{{ __('Tasdiq kutayotganlarni tanlash') }}"
-                                       class="rounded">
+                                @if($canManageApplications ?? false)
+                                    <input type="checkbox"
+                                           @change="toggleAll(@js($actionableIds))"
+                                           :checked="@js($actionableIds).length > 0 && @js($actionableIds).every(id => selected.includes(id))"
+                                           :disabled="@js($actionableIds).length === 0"
+                                           title="{{ __('Tasdiq kutayotganlarni tanlash') }}"
+                                           class="rounded">
+                                @endif
                             </th>
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:48px;">{{ __("T/R") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Talaba") }}</th>
@@ -183,7 +193,7 @@
                             @endphp
                             <tr>
                                 <td class="px-3 py-2.5 text-center">
-                                    @if($isActionable)
+                                    @if(($canManageApplications ?? false) && $isActionable)
                                         <input type="checkbox" :value="{{ $app->id }}" x-model="selected" class="rounded">
                                     @else
                                         <span class="inline-block w-4 h-4 rounded border border-gray-200 bg-gray-50"
@@ -246,7 +256,7 @@
                                 </td>
 
                                 <td class="px-3 py-2.5 text-right whitespace-nowrap">
-                                    @if($isActionable)
+                                    @if(($canManageApplications ?? false) && $isActionable)
                                         <form method="POST" action="{{ route('admin.retake-applications.approve', $app->id) }}" class="inline">
                                             @csrf
                                             <button type="submit" title="{{ __('Tasdiqlash') }}"
@@ -283,6 +293,7 @@
         </div>
 
         {{-- Yakka rad etish modal --}}
+        @if($canManageApplications ?? false)
         <div x-show="rejectFor !== null" x-cloak
              class="fixed inset-0 z-50 overflow-y-auto"
              @keydown.escape.window="rejectFor = null">
@@ -310,8 +321,10 @@
                 </div>
             </div>
         </div>
+        @endif
 
         {{-- Bulk rad etish modal --}}
+        @if($canManageApplications ?? false)
         <div x-show="bulkRejectOpen" x-cloak
              class="fixed inset-0 z-50 overflow-y-auto"
              @keydown.escape.window="bulkRejectOpen = false">
@@ -344,5 +357,6 @@
                 </div>
             </div>
         </div>
+        @endif
     </div>
 </x-teacher-app-layout>

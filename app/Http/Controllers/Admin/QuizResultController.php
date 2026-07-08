@@ -1656,7 +1656,7 @@ class QuizResultController extends Controller
      * cheklaymiz (fasl guard). Token bo'lmasa — joriy (ochiq) sessiya
      * arizalari bilan cheklaymiz (yopilgan eski sessiyaga yozilmasin).
      */
-    private function matchRetakeApp($apps, string $hemis, ?string $fanId, ?string $fanName, ?string $code, ?string $attemptDate = null, ?string $quizSemester = null): ?\App\Models\RetakeApplication
+    private function matchRetakeApp($apps, string $hemis, ?string $fanId, ?string $fanName, ?string $code, ?string $attemptDate = null, ?string $quizSemester = null, $forcedAppId = null): ?\App\Models\RetakeApplication
     {
         if (!$apps || $apps->isEmpty()) {
             return null;
@@ -1665,6 +1665,18 @@ class QuizResultController extends Controller
         $cands = $apps->filter(fn ($a) => (string) $a->student_hemis_id === $hemis);
         if ($cands->isEmpty()) {
             return null;
+        }
+
+        // Operator quiz natijasining fanini aniq bir arizaga qo'lda almashtirgan
+        // (reassigned_retake_app_id). Bu ATAYIN qilingan tanlov — semestr yoki
+        // sessiya guardidan qat'i nazar aynan shu arizani qaytaramiz. Shu tufayli
+        // natija semestri arizasiznikidan farq qilsa ham almashtirish "tushadi".
+        if ($forcedAppId !== null && (string) $forcedAppId !== '') {
+            $forced = $cands->first(fn ($a) => (string) $a->id === (string) $forcedAppId);
+            if ($forced !== null) {
+                return $forced;
+            }
+            // Ariza topilmasa (bekor qilingan/rad etilgan) — odatiy mantiqqa qaytamiz.
         }
 
         // Bitta talabada bir xil fandan bir nechta semestr arizasi bo'lishi mumkin
@@ -1777,7 +1789,7 @@ class QuizResultController extends Controller
         }
 
         $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($result->attempt_name, $result->shakl);
-        $app = $this->matchRetakeApp($retakeApps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code, (string) $result->date_finish, (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($result->semester, $result->attempt_name) ?? ''));
+        $app = $this->matchRetakeApp($retakeApps, (string) $student->hemis_id, $result->fan_id, $result->fan_name, $code, (string) $result->date_finish, (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($result->semester, $result->attempt_name) ?? ''), $result->reassigned_retake_app_id ?? null);
 
         if (!$app) {
             return ['code' => 'no_retake_app', 'text' => 'Qayta o\'qish arizasi topilmadi'] + $none;
@@ -1866,7 +1878,8 @@ class QuizResultController extends Controller
             $fanNameOverride ?: $result->fan_name,
             $code,
             (string) $result->date_finish,
-            (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($result->semester, $result->attempt_name) ?? '')
+            (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($result->semester, $result->attempt_name) ?? ''),
+            $result->reassigned_retake_app_id ?? null
         );
 
         if (!$app) {
@@ -2209,7 +2222,7 @@ class QuizResultController extends Controller
             }
 
             $code = \App\Services\Retake\RetakeSessionCode::fromQuizName($q->attempt_name, $q->shakl);
-            $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $q->fan_id, $q->fan_name, $code, (string) $q->date_finish, (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($q->semester, $q->attempt_name) ?? ''));
+            $app = $this->matchRetakeApp($apps, (string) $student->hemis_id, $q->fan_id, $q->fan_name, $code, (string) $q->date_finish, (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($q->semester, $q->attempt_name) ?? ''), $q->reassigned_retake_app_id ?? null);
             if (!$app) {
                 continue;
             }
@@ -3555,6 +3568,10 @@ class QuizResultController extends Controller
             'fan_id' => $app->subject_id,
             'fan_name' => $app->subject_name,
             'fan_reassigned_at' => now(),
+            // Aynan tanlangan ariza — matchRetakeApp() uni to'g'ridan-to'g'ri
+            // qabul qiladi (semestr guardisiz), Moodle qayta sync qilsa ham
+            // almashtirish izi shu id orqali tiklanadi.
+            'reassigned_retake_app_id' => $app->id,
             'updated_at' => now(),
         ];
         // Asl (HEMIS) fanni faqat birinchi almashtirishda saqlaymiz — keyingi
@@ -4303,7 +4320,8 @@ class QuizResultController extends Controller
             $r->fan_name ?? null,
             $code,
             (string) ($r->date_finish ?? ''),
-            (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($r->semester ?? null, $r->attempt_name ?? null) ?? '')
+            (string) (\App\Services\Retake\RetakeSessionCode::semesterNumber($r->semester ?? null, $r->attempt_name ?? null) ?? ''),
+            $r->reassigned_retake_app_id ?? null
         );
         if (!$app) {
             return null;

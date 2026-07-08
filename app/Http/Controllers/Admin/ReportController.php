@@ -5168,6 +5168,52 @@ class ReportController extends Controller
     }
 
     /**
+     * Academic records (HEMIS) importi holati — "Qarzdorlar" sahifasidagi
+     * qo'lda yangilash tugmasi va progress paneli uchun. Import jarayoni
+     * ImportAcademicRecordsJob orqali fon rejimida ketadi; bu yerdan faqat
+     * kesh o'qiladi (behuda qayta yangilamaslik uchun oxirgi yangilangan vaqt ham).
+     */
+    public function academicRecordsSyncProgress(): \Illuminate\Http\JsonResponse
+    {
+        $progress = \Illuminate\Support\Facades\Cache::get('academic_import_progress') ?: ['status' => 'idle'];
+        $progress['last_synced_at'] = \Illuminate\Support\Facades\Cache::get('academic_records_last_synced_at');
+
+        return response()->json($progress);
+    }
+
+    /**
+     * Academic records (HEMIS) importini qo'lda ishga tushirish (fon rejimida).
+     */
+    public function startAcademicRecordsSync(): \Illuminate\Http\JsonResponse
+    {
+        if (\Illuminate\Support\Facades\Cache::get('academic_import_lock')) {
+            return response()->json([
+                'status' => 'locked',
+                'message' => 'Import allaqachon ketayapti. Tugashini kuting.',
+            ], 409);
+        }
+
+        \Illuminate\Support\Facades\Cache::put('academic_import_progress', [
+            'status' => 'queued',
+            'percent' => 0,
+            'started_at' => now()->toDateTimeString(),
+        ], 3600);
+
+        try {
+            $userName = optional(auth()->user())->name ?? 'Foydalanuvchi';
+            \App\Services\ActivityLogService::log('import', 'academic_record', 'Qarzdorlar sahifasidan academic_records sinxronizatsiyasi boshlandi');
+            app(\App\Services\TelegramService::class)->notify("👤 {$userName} tomonidan Qarzdorlar sahifasidan academic_records sinxronizatsiyasi boshlandi");
+        } catch (\Throwable $e) {
+            // Log/telegram xatosi importni to'xtatmasin.
+            \Log::warning('startAcademicRecordsSync notify failed: ' . $e->getMessage());
+        }
+
+        \App\Jobs\ImportAcademicRecordsJob::dispatch();
+
+        return response()->json(['status' => 'queued']);
+    }
+
+    /**
      * AJAX: Qarzdorlar — talabalarning academic_records yozuvlari (har fan alohida qator).
      *
      * Har bir qator = bitta academic_records yozuvi. "Faqat qarzdorlar" toggle yoqilganda
@@ -5461,6 +5507,7 @@ class ReportController extends Controller
                     's.department_name',
                     's.specialty_name',
                     's.level_name',
+                    's.level_code',
                     's.semester_name',
                     's.semester_code',
                     's.group_name',
@@ -5686,6 +5733,26 @@ class ReportController extends Controller
                     ->get(['id', 'payment_uploaded_at', 'payment_verification_status'])
                     ->keyBy('id');
 
+            // Test markazi guruhlari (RetakeGroup) — yopilish shakli (assessment_type)
+            // va yakuniy natija (xulosa) hisoblash uchun retake_group_id bo'yicha.
+            $retakeGroupModelIds = $retakeApps->pluck('retake_group_id')->filter()->unique()->values()->all();
+            $retakeGroupsById = empty($retakeGroupModelIds)
+                ? collect()
+                : \App\Models\RetakeGroup::whereIn('id', $retakeGroupModelIds)
+                    ->get(['id', 'assessment_type'])
+                    ->keyBy('id');
+
+            $retakeJournalService = app(\App\Services\Retake\RetakeJournalService::class);
+
+            // Test markazi yopilish shakli (assessment_type) → yorliq.
+            $assessmentTypeLabels = [
+                'oske' => 'OSKE',
+                'test' => 'Test',
+                'oske_test' => 'OSKE + Test',
+                'sinov' => 'Sinov',
+                'sinov_fan' => 'Sinov',
+            ];
+
             $mustaqilMap = empty($retakeApps->pluck('id')->all())
                 ? collect()
                 : \App\Models\RetakeMustaqilSubmission::query()
@@ -5806,6 +5873,40 @@ class ReportController extends Controller
                             }
                         }
 
+                        $retakeStatus = $retakeMap[$retakeKey] ?? 'Ariza bermagan';
+                        $retakeGroupModel = ($retakeApp && $retakeApp->retake_group_id)
+                            ? $retakeGroupsById->get($retakeApp->retake_group_id)
+                            : null;
+
+                        // Yopilish shakli: qayta o'qishga "Guruhga tasdiqlangan" bo'lsa,
+                        // o'quv reja fanidagi shakl o'rniga test markazi guruhining
+                        // yopilish shakli (assessment_type) ko'rsatiladi.
+                        $closingForm = $sub->closing_form ? ($cfLabels[$sub->closing_form] ?? $sub->closing_form) : '-';
+                        if ($retakeStatus === 'Guruhga tasdiqlangan' && $retakeGroupModel && $retakeGroupModel->assessment_type) {
+                            $closingForm = $assessmentTypeLabels[$retakeGroupModel->assessment_type]
+                                ?? $retakeGroupModel->assessment_type;
+                        }
+
+                        // O'qish holati: test markazi guruhi mavjud bo'lsa, jurnal yakuniy
+                        // natijasining xulosasi (yiqildi / imtihonga kelmagan / o'qituvchi
+                        // bahosini qo'ymagan / o'zlashtirdi) ko'rsatiladi. Aks holda academic
+                        // records asosidagi holat qoladi.
+                        $displayStudy = $study;
+                        if ($retakeGroupModel && $retakeGroupModel->assessment_type) {
+                            $at = $retakeGroupModel->assessment_type;
+                            $isSinov = in_array($at, ['sinov', 'sinov_fan'], true);
+                            $effTest = $isSinov ? $retakeApp->joriy_score : $retakeApp->test_score;
+                            $final = $retakeJournalService->testMarkaziFinalResult(
+                                $retakeApp->joriy_score,
+                                $mustaqil?->grade,
+                                $retakeApp->oske_score,
+                                $effTest,
+                                $at,
+                                $st->level_code ?? null,
+                            );
+                            $displayStudy = $this->testMarkaziStudyStatus($final, $study);
+                        }
+
                         $data[] = [
                             'hemis_id' => $st->hemis_id,
                             'full_name' => $st->full_name ?? '-',
@@ -5815,16 +5916,17 @@ class ReportController extends Controller
                             'level_name' => $st->level_name ?? '-',
                             'group_name' => $st->group_name ?? '-',
                             'subject_name' => $effectiveSubjectName ?? '-',
-                            'closing_form' => $sub->closing_form ? ($cfLabels[$sub->closing_form] ?? $sub->closing_form) : '-',
+                            'closing_form' => $closingForm,
                             'semester_code' => $sub->semester_code,
                             'semester_name' => $sub->semester_name ?: ($sub->semester_code ? $sub->semester_code . '-semestr' : '-'),
                             'total_acload' => $matchedAr->total_acload ?? $sub->total_acload,
                             'credit' => $matchedAr->credit ?? $sub->credit,
                             'total_point' => ($matchedAr && $matchedAr->total_point !== '' ? $matchedAr->total_point : null),
                             'grade' => ($matchedAr && $matchedAr->grade !== '' ? $matchedAr->grade : null),
-                            'retake_status' => $retakeMap[$retakeKey] ?? 'Ariza bermagan',
-                            'study_status' => $study['label'],
-                            'study_status_code' => $study['code'],
+                            'mastered' => $matchedAr ? (bool) ($matchedAr->finish_credit_status ?? false) : null,
+                            'retake_status' => $retakeStatus,
+                            'study_status' => $displayStudy['label'],
+                            'study_status_code' => $displayStudy['code'],
                             'is_debt' => $isDebt,
                             'score_details' => $scoreDetails,
                             'has_score_details' => !empty($scoreDetails),
@@ -5915,6 +6017,7 @@ class ReportController extends Controller
                                 'OSKI',
                                 'TEST',
                                 "Olgan bahosi",
+                                "O'zlashtirdi",
                                 "Qayta o'qish holati",
                                 "O'qish holati",
                             ];
@@ -5985,6 +6088,9 @@ class ReportController extends Controller
                 $scores->get('OSKI')['score'] ?? '',
                 $scores->get('TEST')['score'] ?? '',
                 $row['grade'] ?? '',
+                array_key_exists('mastered', $row) && $row['mastered'] !== null
+                    ? ($row['mastered'] ? 'Ha' : "Yo'q")
+                    : '-',
                 $row['retake_status'] ?? '',
                 $row['study_status'] ?? '',
             ];
@@ -6025,6 +6131,29 @@ class ReportController extends Controller
 
         // Baho bor (numerik < 3), kredit olinmagan → yiqilgan.
         return ['code' => 'failed', 'label' => 'Yiqilgan'];
+    }
+
+    /**
+     * Test markazi jurnalining yakuniy natijasini ("o'qish holati" ustuni uchun)
+     * pill kodi + yorlig'iga aylantiradi. Natija yo'q holatlarda academic records
+     * asosidagi holatga ($fallback) qaytadi.
+     *
+     * @param  array{status:string, value:?int, baho:string}  $final
+     * @param  array{code:string, label:string}  $fallback
+     * @return array{code:string, label:string}
+     */
+    private function testMarkaziStudyStatus(array $final, array $fallback): array
+    {
+        return match ($final['status'] ?? '') {
+            'passed' => [
+                'code' => 'passed',
+                'label' => "O'zlashtirdi" . (isset($final['value']) && $final['value'] !== null ? " ({$final['value']})" : ''),
+            ],
+            'failed' => ['code' => 'failed', 'label' => 'Yiqildi'],
+            'absent' => ['code' => 'not_examined', 'label' => 'Imtihonga kelmagan'],
+            'no_teacher_grade' => ['code' => 'not_graded', 'label' => "O'qituvchi bahosini qo'ymagan"],
+            default => $fallback,
+        };
     }
 
     /**

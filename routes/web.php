@@ -736,6 +736,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi'])->group(function () {
             Route::get('/reports/retake-not-applied', [ReportController::class, 'retakeNotAppliedReport'])->name('reports.retake-not-applied');
             Route::get('/reports/retake-not-applied/data', [ReportController::class, 'retakeNotAppliedReportData'])->name('reports.retake-not-applied.data');
+            Route::get('/reports/retake-not-applied/sync-progress', [ReportController::class, 'academicRecordsSyncProgress'])->name('reports.retake-not-applied.sync-progress');
+            Route::post('/reports/retake-not-applied/sync', [ReportController::class, 'startAcademicRecordsSync'])->name('reports.retake-not-applied.sync');
         });
 
         Route::get('/reports/student-semester-grades', [ReportController::class, 'studentSemesterGrades'])->name('reports.student-semester-grades');

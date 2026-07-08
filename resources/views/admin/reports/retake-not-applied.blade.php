@@ -109,6 +109,27 @@
                     </div>
                 </div>
 
+                <!-- HEMIS sinxronizatsiya paneli -->
+                <div class="sync-bar">
+                    <div class="sync-info">
+                        <svg style="width:16px;height:16px;color:#2b5ea7;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span>Ma'lumotlar HEMIS API'dan olinadi (har kuni <strong>23:00</strong> da avtomatik yangilanadi).</span>
+                        <span class="sync-last">Oxirgi yangilangan: <strong id="last-synced">—</strong></span>
+                    </div>
+                    <button type="button" id="btn-refresh-academic" class="btn-refresh" onclick="startAcademicSync()">
+                        <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span id="btn-refresh-label">HEMIS'dan yangilash</span>
+                    </button>
+                </div>
+                <div id="sync-progress-wrap" style="display:none;">
+                    <div class="sync-progress-head">
+                        <span id="sync-progress-title">Yangilanmoqda...</span>
+                        <span id="sync-progress-pct">0%</span>
+                    </div>
+                    <div class="sync-progress-track"><div id="sync-progress-bar"></div></div>
+                    <div id="sync-progress-detail"></div>
+                </div>
+
                 <!-- Result Area -->
                 <div id="result-area">
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
@@ -157,6 +178,7 @@
                                         <th style="text-align:center;">Kredit</th>
                                         <th style="text-align:center;"><a href="#" class="sort-link" data-sort="total_point">Olgan bali <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;"><a href="#" class="sort-link" data-sort="grade">Olgan bahosi <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="Semestrni o'zlashtirdimi (HEMIS: kredit yakunlangan holati)">O'zlashtirdi</th>
                                         <th title="Qayta o'qishga ariza berganlik holati">Qayta o'qish holati</th>
                                         <th title="O'qishi holati">O'qish holati</th>
                                         <th style="text-align:center;width:90px;">Batafsil</th>
@@ -320,6 +342,13 @@
             return '<span class="pill ' + (map[code] || 'pill-gray') + '">' + esc(label) + '</span>';
         }
 
+        function masteredPill(m) {
+            if (m === null || typeof m === 'undefined') return '<span style="color:#94a3b8;">-</span>';
+            return m
+                ? '<span class="pill pill-green">Ha</span>'
+                : '<span class="pill pill-red">Yo\'q</span>';
+        }
+
         function fmtCredit(c) {
             var n = parseFloat(c);
             if (isNaN(n)) return '-';
@@ -349,6 +378,7 @@
                 var gradeStyle = r.is_debt ? 'color:#dc2626;font-weight:800;' : 'color:#15803d;font-weight:800;';
                 var gradeVal = (r.grade === null || typeof r.grade === 'undefined') ? '<span style="color:#94a3b8;">-</span>' : '<span style="' + gradeStyle + '">' + esc(r.grade) + '</span>';
                 html += '<td style="text-align:center;">' + gradeVal + '</td>';
+                html += '<td style="text-align:center;">' + masteredPill(r.mastered) + '</td>';
                 html += '<td>' + retakePill(r.retake_status) + '</td>';
                 html += '<td>' + studyPill(r.study_status_code, r.study_status) + '</td>';
                 html += '<td style="text-align:center;"><button class="btn-detail" onclick="showDetail(' + i + ')">Batafsil</button></td>';
@@ -489,7 +519,126 @@
             $('#pagination-area').html(html);
         }
 
+        // ── HEMIS academic records sinxronizatsiyasi ─────────────────────
+        var academicSyncTimer = null;
+
+        function fmtSyncDate(s) {
+            if (!s) return '—';
+            var m = String(s).replace('T', ' ').split(/[-: ]/);
+            if (m.length < 5) return s;
+            return m[2] + '.' + m[1] + '.' + m[0] + ' ' + m[3] + ':' + m[4];
+        }
+
+        function stopAcademicPolling() {
+            if (academicSyncTimer) { clearInterval(academicSyncTimer); academicSyncTimer = null; }
+        }
+
+        function startAcademicPolling() {
+            if (academicSyncTimer) return;
+            academicSyncTimer = setInterval(pollAcademicSync, 2000);
+        }
+
+        function renderSyncProgress(d) {
+            d = d || {};
+            var wrap = document.getElementById('sync-progress-wrap');
+            var bar = document.getElementById('sync-progress-bar');
+            var pct = document.getElementById('sync-progress-pct');
+            var title = document.getElementById('sync-progress-title');
+            var detail = document.getElementById('sync-progress-detail');
+            var btn = document.getElementById('btn-refresh-academic');
+            var btnLabel = document.getElementById('btn-refresh-label');
+
+            document.getElementById('last-synced').textContent = fmtSyncDate(d.last_synced_at);
+
+            function resetBtn() {
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+                btnLabel.textContent = "HEMIS'dan yangilash";
+            }
+
+            if (!d.status || d.status === 'idle') {
+                wrap.style.display = 'none';
+                resetBtn();
+                stopAcademicPolling();
+                return;
+            }
+
+            if (d.status === 'done') {
+                wrap.style.display = 'block';
+                bar.style.width = '100%';
+                bar.style.background = '#16a34a';
+                pct.textContent = '100%';
+                pct.style.color = '#16a34a';
+                title.textContent = 'Yangilash tugadi';
+                detail.textContent = "✅ Yangi/o'zgargan: " + (d.imported || 0) + " ta. Vaqt: " + (d.duration || '?') + " daqiqa";
+                resetBtn();
+                stopAcademicPolling();
+                setTimeout(function () { wrap.style.display = 'none'; }, 8000);
+                return;
+            }
+
+            // running / queued
+            wrap.style.display = 'block';
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+            btnLabel.textContent = 'Yangilanmoqda...';
+            var p = d.percent || 0;
+            bar.style.width = p + '%';
+            bar.style.background = '#2b5ea7';
+            pct.textContent = p + '%';
+            pct.style.color = '#2b5ea7';
+            if (d.status === 'queued' || !d.pages) {
+                title.textContent = 'Navbatda';
+                detail.textContent = 'Import navbatda kutilmoqda...';
+            } else {
+                title.textContent = 'Yangilanmoqda';
+                detail.textContent = "Sahifa: " + d.page + "/" + d.pages + "  |  Yangi/o'zgargan: " + (d.imported || 0) + " ta";
+            }
+            startAcademicPolling();
+        }
+
+        function pollAcademicSync() {
+            $.get('{{ route('admin.reports.retake-not-applied.sync-progress') }}', function (d) {
+                renderSyncProgress(d);
+            }).fail(function () { stopAcademicPolling(); });
+        }
+
+        function startAcademicSync() {
+            var btn = document.getElementById('btn-refresh-academic');
+            if (btn.disabled) return;
+            if (!confirm("HEMIS'dan talaba baholari (academic records) yangilansinmi?\n359k+ yozuv — bir necha daqiqa olishi mumkin.")) return;
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+            document.getElementById('btn-refresh-label').textContent = 'Boshlanmoqda...';
+            $.ajax({
+                url: '{{ route('admin.reports.retake-not-applied.sync') }}',
+                type: 'POST',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                success: function () {
+                    document.getElementById('sync-progress-wrap').style.display = 'block';
+                    startAcademicPolling();
+                    pollAcademicSync();
+                },
+                error: function (xhr) {
+                    var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : "Yangilashni boshlab bo'lmadi.";
+                    alert(msg);
+                    if (xhr.status === 409) {
+                        // Boshqa foydalanuvchi import boshlagan — jarayonni kuzatamiz.
+                        document.getElementById('sync-progress-wrap').style.display = 'block';
+                        startAcademicPolling();
+                        pollAcademicSync();
+                    } else {
+                        btn.disabled = false;
+                        btn.classList.remove('is-loading');
+                        document.getElementById('btn-refresh-label').textContent = "HEMIS'dan yangilash";
+                    }
+                }
+            });
+        }
+
         $(document).ready(function() {
+            pollAcademicSync();
+
             $(document).on('click', '.sort-link', function(e) {
                 e.preventDefault();
                 var col = $(this).data('sort');
@@ -541,6 +690,22 @@
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
+
+        .sync-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+        .sync-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: #475569; }
+        .sync-info strong { color: #1e293b; font-weight: 700; }
+        .sync-last { padding-left: 10px; margin-left: 4px; border-left: 1px solid #cbd5e1; }
+        .btn-refresh { display: inline-flex; align-items: center; gap: 7px; padding: 7px 16px; background: #fff; color: #2b5ea7; border: 1px solid #2b5ea7; border-radius: 8px; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+        .btn-refresh:hover:not(:disabled) { background: #2b5ea7; color: #fff; }
+        .btn-refresh:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-refresh.is-loading svg { animation: spin 0.9s linear infinite; }
+        #sync-progress-wrap { padding: 12px 20px; background: #eff6ff; border-bottom: 1px solid #bfdbfe; }
+        .sync-progress-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        #sync-progress-title { font-size: 13px; font-weight: 700; color: #2b5ea7; }
+        #sync-progress-pct { font-size: 13px; font-weight: 800; color: #2b5ea7; }
+        .sync-progress-track { background: #dbeafe; border-radius: 6px; height: 10px; overflow: hidden; }
+        #sync-progress-bar { height: 10px; background: #2b5ea7; border-radius: 6px; width: 0%; transition: width 0.4s; }
+        #sync-progress-detail { font-size: 12px; color: #64748b; margin-top: 6px; }
 
         .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }

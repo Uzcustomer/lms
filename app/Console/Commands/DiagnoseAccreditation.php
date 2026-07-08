@@ -114,12 +114,23 @@ class DiagnoseAccreditation extends Command
         $dupSubjects = 0;
         foreach ($items as $it) {
             $grade = $it['grade'] ?? null;
+            $point = $it['total_point'] ?? null;
             $fcs = (bool) ($it['finish_credit_status'] ?? false);
-            $gradeNumeric = is_numeric($grade) ? (float) $grade : null;
+            $gradeNum = is_numeric($grade) ? round((float) $grade, 2) : null;
+            $pointNum = is_numeric($point) ? (float) $point : null;
 
-            // Ziddiyat: kredit olingan (Ha) deb belgilangan, lekin baho yiqilgan (< 3).
-            $isConflict = $fcs && $gradeNumeric !== null && $gradeNumeric < 3.0;
-            if ($isConflict) {
+            // Aniq yiqilgan: baho 0 yoki 2 (isAcademicRecordDebt bilan mos; pass/fail fanda 1=o'tdi).
+            $clearlyFailed = $gradeNum !== null && ($gradeNum === 0.0 || $gradeNum === 2.0);
+            // Aniq o'tgan: baho >= 3 yoki ball >= 56.
+            $clearlyPassed = ($gradeNum !== null && $gradeNum >= 3.0) || ($pointNum !== null && $pointNum >= 56.0);
+
+            // Ziddiyat = finish_credit_status baho/ball bilan mos kelmasligi.
+            $conflictNote = '';
+            if ($fcs && $clearlyFailed) {
+                $conflictNote = '⚠ Ha, lekin yiqilgan';
+                $conflicts++;
+            } elseif (!$fcs && $clearlyPassed) {
+                $conflictNote = "⚠ Yo'q, lekin o'tgan";
                 $conflicts++;
             }
 
@@ -130,8 +141,8 @@ class DiagnoseAccreditation extends Command
             if ($isDup) {
                 $notes[] = 'DUBLIKAT×' . $dupKeys[$k];
             }
-            if ($isConflict) {
-                $notes[] = '⚠ZIDDIYAT';
+            if ($conflictNote) {
+                $notes[] = $conflictNote;
             }
 
             $rows[] = [
@@ -154,8 +165,8 @@ class DiagnoseAccreditation extends Command
 
         $this->newLine();
         if ($conflicts > 0) {
-            $this->error("⚠ {$conflicts} ta ziddiyatli yozuv: finish_credit_status=true, lekin baho < 3 (yiqilgan).");
-            $this->line('  → Excel finish_credit_status=true ni "Ha" deb chiqaradi; web bahoga qarab "Yo\'q" deydi.');
+            $this->error("⚠ {$conflicts} ta yozuvda finish_credit_status baho/ball bilan mos emas ('Ha, lekin yiqilgan' yoki 'Yo\\'q, lekin o\\'tgan').");
+            $this->line('  → Web va Excel bu maydonlarni har xil talqin qilib, farqli ko\'rsatishi mumkin.');
         }
         if ($dupSubjects > 0) {
             $this->warn("⚠ {$dupSubjects} ta fanda bir nechta yozuv (dublikat) bor.");

@@ -3446,19 +3446,13 @@ class QuizResultController extends Controller
      */
     public function updateGrade(Request $request)
     {
-        $request->validate([
-            'id' => 'required|integer|exists:hemis_quiz_results,id',
-            'grade' => 'required|numeric|min:0|max:100',
-        ]);
-
-        DB::table('hemis_quiz_results')
-            ->where('id', $request->id)
-            ->update([
-                'grade' => $request->grade,
-                'updated_at' => now(),
-            ]);
-
-        return response()->json(['success' => true]);
+        // Baho Moodle quizdan keladi va diagnostika sahifasida qo'lda
+        // o'zgartirilishi mumkin emas. Bu endpoint (frontend inline-edit olib
+        // tashlangan bo'lsa-da) qasddan yuborilgan so'rovlarni ham rad etadi.
+        return response()->json([
+            'success' => false,
+            'message' => 'Moodle quiz bahosini o\'zgartirib bo\'lmaydi.',
+        ], 403);
     }
 
     /**

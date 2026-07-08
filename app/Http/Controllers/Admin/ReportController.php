@@ -5556,18 +5556,7 @@ class ReportController extends Controller
             foreach ($studentSemCurrCounts as $studentId => $semesterRows) {
                 $studentCurriculumId = $studentMap[$studentId]->curriculum_id ?? null;
                 foreach ($semesterRows as $semCode => $curriculumCounts) {
-                    $pickedCurriculumId = null;
-                    $pickedCount = -1;
-                    foreach ($curriculumCounts as $curriculumId => $count) {
-                        $shouldReplace = $count > $pickedCount;
-                        if (!$shouldReplace && $count === $pickedCount && $studentCurriculumId !== null) {
-                            $shouldReplace = (string) $curriculumId === (string) $studentCurriculumId;
-                        }
-                        if ($shouldReplace) {
-                            $pickedCurriculumId = $curriculumId;
-                            $pickedCount = $count;
-                        }
-                    }
+                    $pickedCurriculumId = $this->pickSemesterCurriculumId($curriculumCounts, $studentCurriculumId);
                     if ($pickedCurriculumId) {
                         $studentSemCurr[$studentId][$semCode] = $pickedCurriculumId;
                     }
@@ -5758,11 +5747,15 @@ class ReportController extends Controller
                         $matchedAr = $arByStudentSemSubject[$st->hemis_id][(string) $semCode][(string) $effectiveSubjectId]
                             ?? $arLegacyByStudentSemSubject[$st->hemis_id][(string) $semCode][(string) $effectiveSubjectId]
                             ?? null;
+                        $isDebt = $this->isAcademicRecordDebt($matchedAr);
                         $study = $matchedAr
                             ? $this->academicRecordStudyStatus($matchedAr)
                             : ['code' => 'not_graded', 'label' => "Yozuv yo'q"];
+                        if ($isDebt && ($study['code'] ?? '') === 'passed') {
+                            $study = ['code' => 'failed', 'label' => 'Qarzdor'];
+                        }
 
-                        if ($onlyDebtors && $study['code'] === 'passed') {
+                        if ($onlyDebtors && !$isDebt) {
                             continue;
                         }
 
@@ -5824,7 +5817,7 @@ class ReportController extends Controller
                             'retake_status' => $retakeMap[$retakeKey] ?? 'Ariza bermagan',
                             'study_status' => $study['label'],
                             'study_status_code' => $study['code'],
-                            'is_debt' => $study['code'] !== 'passed',
+                            'is_debt' => $isDebt,
                             'score_details' => $scoreDetails,
                             'has_score_details' => !empty($scoreDetails),
                         ];

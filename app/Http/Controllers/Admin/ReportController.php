@@ -4819,12 +4819,38 @@ class ReportController extends Controller
             }
 
             $arExistsLookup = [];
+            $arLegacyExistsLookup = [];
+            $studentSemCurrCounts = [];
             // [hemis_id][semester_code] => curriculum_id (talaba shu semestrda qaysi rejada o'qigan)
             $studentSemCurr = [];
             foreach ($arRecords as $ar) {
-                $arExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
-                if (!isset($studentSemCurr[$ar->student_id][$ar->semester_id]) && $ar->curriculum_id) {
-                    $studentSemCurr[$ar->student_id][$ar->semester_id] = $ar->curriculum_id;
+                if ($ar->curriculum_id) {
+                    $arExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id . '|' . $ar->curriculum_id] = true;
+                    $studentSemCurrCounts[$ar->student_id][$ar->semester_id][$ar->curriculum_id]
+                        = ($studentSemCurrCounts[$ar->student_id][$ar->semester_id][$ar->curriculum_id] ?? 0) + 1;
+                } else {
+                    // Legacy yozuvlar uchun fallback — eski ma'lumotlarda curriculum_id bo'lmasligi mumkin.
+                    $arLegacyExistsLookup[$ar->student_id . '|' . $ar->subject_id . '|' . $ar->semester_id] = true;
+                }
+            }
+            foreach ($studentSemCurrCounts as $studentId => $semesterRows) {
+                $studentCurriculumId = $studentMap[$studentId]->curriculum_id ?? null;
+                foreach ($semesterRows as $semesterCode => $curriculumCounts) {
+                    $pickedCurriculumId = null;
+                    $pickedCount = -1;
+                    foreach ($curriculumCounts as $curriculumId => $count) {
+                        $shouldReplace = $count > $pickedCount;
+                        if (!$shouldReplace && $count === $pickedCount && $studentCurriculumId !== null) {
+                            $shouldReplace = (string) $curriculumId === (string) $studentCurriculumId;
+                        }
+                        if ($shouldReplace) {
+                            $pickedCurriculumId = $curriculumId;
+                            $pickedCount = $count;
+                        }
+                    }
+                    if ($pickedCurriculumId) {
+                        $studentSemCurr[$studentId][$semesterCode] = $pickedCurriculumId;
+                    }
                 }
             }
             unset($arRecords);
@@ -4983,8 +5009,9 @@ class ReportController extends Controller
                         $effectiveSubjectId = $resolvedSubject['subject_id'];
                         $effectiveSubjectName = $resolvedSubject['subject_name'];
 
-                        $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
-                        $hasAR = isset($arExistsLookup[$arKey]);
+                        $arKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code . '|' . $currId;
+                        $legacyArKey = $st->hemis_id . '|' . $effectiveSubjectId . '|' . $sub->semester_code;
+                        $hasAR = isset($arExistsLookup[$arKey]) || isset($arLegacyExistsLookup[$legacyArKey]);
 
                         // Biriktirilganlik tekshiruvi (JournalController mantiqiga muvofiq):
                         // Agar shu talaba+semestr uchun student_subjects da yozuvlar bo'lsa —
@@ -6279,6 +6306,10 @@ class ReportController extends Controller
                 ->where('student_id', $studentId)
                 ->where('semester_id', $semesterCode)
                 ->whereNotNull('curriculum_id')
+                ->select('curriculum_id', DB::raw('COUNT(*) as records_count'))
+                ->groupBy('curriculum_id')
+                ->orderByRaw('CASE WHEN curriculum_id = ? THEN 1 ELSE 0 END DESC', [$student->curriculum_id])
+                ->orderByDesc('records_count')
                 ->value('curriculum_id');
             $effectiveCurriculumId = $historicalCurriculumId ?: $student->curriculum_id;
 
@@ -6330,6 +6361,10 @@ class ReportController extends Controller
             $arRecords = DB::table('academic_records')
                 ->where('student_id', $studentId)
                 ->where('semester_id', $semesterCode)
+                ->where(function ($q) use ($effectiveCurriculumId) {
+                    $q->where('curriculum_id', $effectiveCurriculumId)
+                        ->orWhereNull('curriculum_id');
+                })
                 ->select('subject_id', 'subject_name', 'credit', 'total_acload', 'total_point', 'grade', 'retraining_status')
                 ->get()
                 ->keyBy('subject_id');
@@ -6577,14 +6612,46 @@ class ReportController extends Controller
                 ->select('subject_id', 'subject_name', 'credit', 'total_point', 'grade', 'semester_id', 'curriculum_id')
                 ->get();
             $arExists = [];
+            $arLegacyExists = [];
+            $semCurrCounts = [];
             $semCurr = []; // [sem_code => curriculum_id]
             $arBySem = [];
             foreach ($arRows as $ar) {
-                $arExists[$ar->subject_id . '|' . $ar->semester_id] = true;
-                if (!isset($semCurr[$ar->semester_id]) && $ar->curriculum_id) {
-                    $semCurr[$ar->semester_id] = $ar->curriculum_id;
+                if ($ar->curriculum_id) {
+                    $semCurrCounts[(string) $ar->semester_id][(string) $ar->curriculum_id]
+                        = ($semCurrCounts[(string) $ar->semester_id][(string) $ar->curriculum_id] ?? 0) + 1;
+                } else {
+                    $arLegacyExists[$ar->subject_id . '|' . $ar->semester_id] = true;
                 }
-                $arBySem[(string) $ar->semester_id][] = $ar;
+            }
+            foreach ($semCurrCounts as $semesterCode => $curriculumCounts) {
+                $pickedCurriculumId = null;
+                $pickedCount = -1;
+                foreach ($curriculumCounts as $curriculumId => $count) {
+                    $shouldReplace = $count > $pickedCount;
+                    if (!$shouldReplace && $count === $pickedCount) {
+                        $shouldReplace = (string) $curriculumId === (string) $student->curriculum_id;
+                    }
+                    if ($shouldReplace) {
+                        $pickedCurriculumId = $curriculumId;
+                        $pickedCount = $count;
+                    }
+                }
+                if ($pickedCurriculumId) {
+                    $semCurr[$semesterCode] = $pickedCurriculumId;
+                }
+            }
+
+            foreach ($arRows as $ar) {
+                $semesterCode = (string) $ar->semester_id;
+                $pickedCurriculumId = $semCurr[$semesterCode] ?? null;
+
+                if ($ar->curriculum_id && $pickedCurriculumId !== null && (string) $ar->curriculum_id !== (string) $pickedCurriculumId) {
+                    continue;
+                }
+
+                $arExists[$ar->subject_id . '|' . $ar->semester_id] = true;
+                $arBySem[$semesterCode][] = $ar;
             }
 
             // Joriy semester uchun students.curriculum_id
@@ -6706,7 +6773,7 @@ class ReportController extends Controller
                     'grade'         => $matchedAr->grade ?? null,
                 ];
 
-                if (isset($arExists[$effectiveSubjectId . '|' . $sub->semester_code])) continue;
+                if (isset($arExists[$effectiveSubjectId . '|' . $sub->semester_code]) || isset($arLegacyExists[$effectiveSubjectId . '|' . $sub->semester_code])) continue;
 
                 $debtsAll[] = [
                     'semester_code' => $sub->semester_code,

@@ -5176,7 +5176,17 @@ class ReportController extends Controller
     public function academicRecordsSyncProgress(): \Illuminate\Http\JsonResponse
     {
         $progress = \Illuminate\Support\Facades\Cache::get('academic_import_progress') ?: ['status' => 'idle'];
-        $progress['last_synced_at'] = \Illuminate\Support\Facades\Cache::get('academic_records_last_synced_at');
+
+        // Oxirgi yangilangan vaqt: aniq qiymat — import tugaganda yozilgan kesh.
+        // Hali bironta import tugamagan bo'lsa (kesh bo'sh), academic_records
+        // jadvalidagi eng so'nggi yozuv vaqtiga (MAX(updated_at)) qaytamiz.
+        $lastSynced = \Illuminate\Support\Facades\Cache::get('academic_records_last_synced_at')
+            ?? \Illuminate\Support\Facades\Cache::remember(
+                'academic_records_last_synced_fallback',
+                120,
+                fn () => DB::table('academic_records')->max('updated_at')
+            );
+        $progress['last_synced_at'] = $lastSynced;
 
         return response()->json($progress);
     }
@@ -5744,6 +5754,11 @@ class ReportController extends Controller
 
             $retakeJournalService = app(\App\Services\Retake\RetakeJournalService::class);
 
+            // Appelyatsiyada o'chirilgan test baholari soni — "o'qish holati"da
+            // urinishlar sonini "(N)" ko'rinishida ko'rsatish uchun (test markazi
+            // jurnali bilan bir xil: urinishlar jami = o'chirilgan + 1).
+            $removedCountMap = $retakeJournalService->removedAppealCounts($retakeApps);
+
             // Test markazi yopilish shakli (assessment_type) → yorliq.
             $assessmentTypeLabels = [
                 'oske' => 'OSKE',
@@ -5904,7 +5919,7 @@ class ReportController extends Controller
                                 $at,
                                 $st->level_code ?? null,
                             );
-                            $displayStudy = $this->testMarkaziStudyStatus($final, $study);
+                            $displayStudy = $this->testMarkaziStudyStatus($final, $study, $removedCountMap[$retakeApp->id] ?? 0);
                         }
 
                         $data[] = [
@@ -6138,20 +6153,28 @@ class ReportController extends Controller
      * pill kodi + yorlig'iga aylantiradi. Natija yo'q holatlarda academic records
      * asosidagi holatga ($fallback) qaytadi.
      *
+     * $removed — appelyatsiyada o'chirilgan (oldingi) test baholari soni; urinishlar
+     * jami = $removed + 1. Faqat qayta topshirganda (>= 2) "(N)" suffiks qo'shiladi
+     * (test markazi jurnalidagi logika bilan bir xil).
+     *
      * @param  array{status:string, value:?int, baho:string}  $final
      * @param  array{code:string, label:string}  $fallback
      * @return array{code:string, label:string}
      */
-    private function testMarkaziStudyStatus(array $final, array $fallback): array
+    private function testMarkaziStudyStatus(array $final, array $fallback, int $removed = 0): array
     {
+        $suffix = $removed >= 1 ? ' (' . ($removed + 1) . ')' : '';
+
         return match ($final['status'] ?? '') {
             'passed' => [
                 'code' => 'passed',
-                'label' => "O'zlashtirdi" . (isset($final['value']) && $final['value'] !== null ? " ({$final['value']})" : ''),
+                'label' => "O'zlashtirdi"
+                    . (isset($final['value']) && $final['value'] !== null ? ": {$final['value']}" : '')
+                    . $suffix,
             ],
-            'failed' => ['code' => 'failed', 'label' => 'Yiqildi'],
-            'absent' => ['code' => 'not_examined', 'label' => 'Imtihonga kelmagan'],
-            'no_teacher_grade' => ['code' => 'not_graded', 'label' => "O'qituvchi bahosini qo'ymagan"],
+            'failed' => ['code' => 'failed', 'label' => 'Yiqildi' . $suffix],
+            'absent' => ['code' => 'not_examined', 'label' => 'Imtihonga kelmagan' . $suffix],
+            'no_teacher_grade' => ['code' => 'not_graded', 'label' => "O'qituvchi bahosini qo'ymagan" . $suffix],
             default => $fallback,
         };
     }

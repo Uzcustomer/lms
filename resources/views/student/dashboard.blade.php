@@ -14,10 +14,6 @@
                         <span class="px-3 py-1 text-sm font-semibold text-white bg-green-500 rounded-full">{{ __('Aktiv') }}</span>
                     </div>
 
-                    <div class="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900">
-                        Assalom aleykum Toshkent davlat tibbiyot universiteti Termiz filialining LMS tizimi foydalanuvchilari
-                    </div>
-
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
                         <div class="bg-blue-100 p-4 rounded-lg text-center">
                             <h4 class="text-lg font-semibold mb-2">{{ __('Talaba GPA si') }}</h4>

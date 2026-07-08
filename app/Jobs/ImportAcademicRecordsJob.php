@@ -74,6 +74,10 @@ class ImportAcademicRecordsJob implements ShouldQueue
 
         $duration = round((microtime(true) - $startTime) / 60, 1);
 
+        // Oxirgi muvaffaqiyatli sinxronizatsiya vaqti — progress keshidan
+        // uzoqroq saqlanadi (behuda qayta yangilamaslik uchun sahifada ko'rsatiladi).
+        Cache::forever('academic_records_last_synced_at', now()->toDateTimeString());
+
         Cache::put('academic_import_progress', [
             'status'      => 'done',
             'imported'    => $totalImported,

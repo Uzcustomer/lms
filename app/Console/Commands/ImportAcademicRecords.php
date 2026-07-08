@@ -73,6 +73,9 @@ class ImportAcademicRecords extends Command
         $this->newLine();
         $this->info("Import tugadi! Yangi/o'zgargan: {$totalImported} ta, O'tkazib: {$skippedCount} ta, Vaqt: {$duration} daqiqa");
 
+        // Oxirgi muvaffaqiyatli sinxronizatsiya vaqti (progress keshidan uzoqroq saqlanadi).
+        Cache::forever('academic_records_last_synced_at', now()->toDateTimeString());
+
         Cache::put('academic_import_progress', [
             'status'      => 'done',
             'imported'    => $totalImported,

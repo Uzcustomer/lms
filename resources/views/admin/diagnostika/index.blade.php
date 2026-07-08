@@ -284,7 +284,7 @@
 
                         <button type="button" id="btn-excel-view" class="btn-excel-xulosa" style="background:linear-gradient(135deg,#0284c7,#0ea5e9);box-shadow:0 2px 6px rgba(2,132,199,0.3);" onclick="downloadTableExcel()" disabled>
                             <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                            Jadvalni yuklash
+                            Jadvalni Excelga
                         </button>
 
                         <button type="button" id="btn-upload" class="btn-upload" disabled>

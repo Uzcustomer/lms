@@ -70,6 +70,22 @@
                     ? '<span class="rtm-await" title="Natija hali yo\'q">…</span>'
                     : '<span class="badge ' . $cls . '">' . $f . '</span>';
             };
+            // Yakuniy natija — vedomost tekshirish logikasi bo'yicha hisoblangan holat.
+            $finalCell = function ($res) {
+                if (!$res) return '<span class="rtm-await" title="Natija hali yo\'q">…</span>';
+                switch ($res['status']) {
+                    case 'no_teacher_grade':
+                        return '<span class="badge badge-amber" title="JN yoki MT bahosi qo\'yilmagan">' . __("O'qituvchi bahosini qo'ymagan") . '</span>';
+                    case 'absent':
+                        return '<span class="badge badge-gray" title="OSKE/TEST natijasi yo\'q">' . __("Imtihonga kelmagan") . '</span>';
+                    case 'failed':
+                        return '<span class="badge badge-red" title="Bosqichlardan biri 60 dan past">' . __("Yiqildi") . '</span>';
+                    case 'passed':
+                        return '<span class="badge badge-green" style="font-weight:700;">' . $res['value'] . '</span>';
+                    default:
+                        return '<span class="rtm-await">…</span>';
+                }
+            };
         @endphp
 
         @if($activeTab === 'groups')
@@ -184,6 +200,7 @@
                                 <th style="text-align:center;">MT</th>
                                 <th style="text-align:center;">OSKE</th>
                                 <th style="text-align:center;">TEST</th>
+                                <th style="text-align:center;">{{ __("Yakuniy natija") }}</th>
                             </tr>
                             </thead>
                             <tbody>
@@ -227,6 +244,7 @@
                                     <td style="text-align:center;">{!! $scoreCell(true, $mustaqil?->grade, 'badge-green') !!}</td>
                                     <td style="text-align:center;">{!! $scoreCell($needsOske, $app->oske_score, 'badge-blue') !!}</td>
                                     <td style="text-align:center;">{!! $scoreCell($needsTest, $effTest, 'badge-blue') !!}</td>
+                                    <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null) !!}</td>
                                 </tr>
                             @endforeach
                             </tbody>

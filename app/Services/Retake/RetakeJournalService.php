@@ -746,14 +746,17 @@ class RetakeJournalService
             return ['status' => 'failed', 'value' => 0, 'baho' => ''];
         }
 
-        // 3) Yopilish shakliga ko'ra kerakli imtihon (OSKE/TEST) natijasi yo'q.
-        if (($needsOske && $oskeVal === null) || ($needsTest && $testVal === null)) {
-            return ['status' => 'absent', 'value' => null, 'baho' => ''];
+        // 3) Qo'yilgan imtihon bahosi (OSKE yoki TEST) 60 dan past — yiqildi.
+        //    Ikkinchi komponent hali qo'yilmagan bo'lsa ham: bittasida <60
+        //    bo'lishi yiqilish uchun yetarli ("imtihonga kelmagan" emas).
+        if (($needsOske && $oskeVal !== null && $oskeVal < 60)
+            || ($needsTest && $testVal !== null && $testVal < 60)) {
+            return ['status' => 'failed', 'value' => 0, 'baho' => ''];
         }
 
-        // 4) Imtihon (OSKE/TEST) bosqichi 60 dan past — yiqildi.
-        if (($needsOske && $oskeVal < 60) || ($needsTest && $testVal < 60)) {
-            return ['status' => 'failed', 'value' => 0, 'baho' => ''];
+        // 4) Yopilish shakliga ko'ra kerakli imtihon (OSKE/TEST) natijasi hali yo'q.
+        if (($needsOske && $oskeVal === null) || ($needsTest && $testVal === null)) {
+            return ['status' => 'absent', 'value' => null, 'baho' => ''];
         }
 
         // 5) Yakuniy natija — vedomost tekshirish vaznlari bilan.

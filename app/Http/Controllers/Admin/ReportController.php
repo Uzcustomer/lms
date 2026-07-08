@@ -5747,15 +5747,11 @@ class ReportController extends Controller
                         $matchedAr = $arByStudentSemSubject[$st->hemis_id][(string) $semCode][(string) $effectiveSubjectId]
                             ?? $arLegacyByStudentSemSubject[$st->hemis_id][(string) $semCode][(string) $effectiveSubjectId]
                             ?? null;
-                        $isDebt = $this->isAcademicRecordDebt($matchedAr);
                         $study = $matchedAr
                             ? $this->academicRecordStudyStatus($matchedAr)
                             : ['code' => 'not_graded', 'label' => "Yozuv yo'q"];
-                        if ($isDebt && ($study['code'] ?? '') === 'passed') {
-                            $study = ['code' => 'failed', 'label' => 'Qarzdor'];
-                        }
 
-                        if ($onlyDebtors && !$isDebt) {
+                        if ($onlyDebtors && $matchedAr) {
                             continue;
                         }
 
@@ -5817,7 +5813,7 @@ class ReportController extends Controller
                             'retake_status' => $retakeMap[$retakeKey] ?? 'Ariza bermagan',
                             'study_status' => $study['label'],
                             'study_status_code' => $study['code'],
-                            'is_debt' => $isDebt,
+                            'is_debt' => $matchedAr === null,
                             'score_details' => $scoreDetails,
                             'has_score_details' => !empty($scoreDetails),
                         ];

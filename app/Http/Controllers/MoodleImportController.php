@@ -106,9 +106,33 @@ class MoodleImportController extends Controller
         if ($mode === 'full_new') {
             $rows = [];
 
+            // Operator diagnostikada fanni qayta o'qish arizasidagi fanga qo'lda
+            // almashtirgan qatorlar (reassigned_retake_app_id to'lgan). Ularning
+            // fan_id/fan_name ustunlarini Moodle qayta yuborgan ASL qiymati bilan
+            // qayta yozib yubormaslik uchun — mavjud (almashtirilgan) qiymatni
+            // saqlab, upsertga o'sha qiymatni beramiz. Shunda almashtirish izi
+            // sync'dan keyin ham yo'qolmaydi.
+            $incomingAttemptIds = array_values(array_filter(array_map(
+                fn ($r) => (int) ($r['attempt_id'] ?? 0),
+                $records
+            ), fn ($v) => $v > 0));
+            $reassignedByAttempt = [];
+            if (!empty($incomingAttemptIds)) {
+                $reassignedByAttempt = DB::table('hemis_quiz_results')
+                    ->whereIn('attempt_id', $incomingAttemptIds)
+                    ->whereNotNull('reassigned_retake_app_id')
+                    ->get(['attempt_id', 'fan_id', 'fan_name'])
+                    ->keyBy('attempt_id');
+            }
+
             foreach ($records as $r) {
                 $aid = (int)($r['attempt_id'] ?? 0);
                 if ($aid <= 0) continue;
+
+                // Qo'lda almashtirilgan bo'lsa — saqlangan fanni asrab qolamiz.
+                $keepFan = $reassignedByAttempt[$aid] ?? null;
+                $fanId = $keepFan ? $keepFan->fan_id : ($r['fan_id'] ?? null);
+                $fanName = $keepFan ? $keepFan->fan_name : ($r['fan_name'] ?? null);
 
                 $rows[] = [
                     'attempt_id'      => $aid,
@@ -122,8 +146,8 @@ class MoodleImportController extends Controller
                     'semester'        => $r['semester'] ?? null,
                     'student_id'      => $r['student_id'] ?? null,
                     'student_name'    => $r['student_name'] ?? null,
-                    'fan_id'          => $r['fan_id'] ?? null,
-                    'fan_name'        => $r['fan_name'] ?? null,
+                    'fan_id'          => $fanId,
+                    'fan_name'        => $fanName,
                     'quiz_type'       => $r['quiz_type'] ?? null,
                     'attempt_name'    => $r['attempt_name'] ?? null,
                     'shakl'           => $r['shakl'] ?? null,

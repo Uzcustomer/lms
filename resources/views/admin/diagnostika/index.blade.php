@@ -307,6 +307,11 @@
                             Bahoni o'chirish
                         </button>
 
+                        <button type="button" id="btn-not-actual" class="btn-compare" style="background:linear-gradient(135deg,#64748b,#94a3b8);box-shadow:0 2px 6px rgba(100,116,139,0.3);" title="Tanlangan natijalarni noaktual (xato semestr — ortiqcha) deb belgilash" disabled>
+                            <svg style="width:14px;height:14px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636"/></svg>
+                            Noaktual
+                        </button>
+
                         <div class="import-group">
                             <input type="file" id="file-upload" accept=".xlsx,.xls,.csv" style="display:none;">
                             <button type="button" class="btn-file" onclick="document.getElementById('file-upload').click()">
@@ -478,6 +483,10 @@
         var triggerCronUrl = '{{ route($routePrefix . ".quiz-results.trigger-cron") }}';
         var retakeAppSubjectsUrl = '{{ route($routePrefix . ".quiz-results.retake-app-subjects") }}';
         var reassignRetakeSubjectUrl = '{{ route($routePrefix . ".quiz-results.reassign-retake-subject") }}';
+        var markNotActualUrl = '{{ route($routePrefix . ".quiz-results.mark-not-actual") }}';
+        // Fan/semestrni almashtirish (fan ID tahriri va qayta o'qish arizasiga
+        // moslash) — faqat admin/superadmin rolida ko'rinadi.
+        var canEditFan = {{ !empty($canEditFan) ? 'true' : 'false' }};
         var destroyUrlBase = '{{ url("/" . $routePrefix . "/quiz-results") }}';
 
         var allData = [];
@@ -502,7 +511,9 @@
             'no_student': 'Talaba topilmadi',
             'unknown_type': 'Quiz turi noma\'lum',
             'bad_grade': 'Baho noto\'g\'ri',
-            'not_first': '1-urinish emas'
+            'not_first': '1-urinish emas',
+            'appeal_deleted': 'Appelyatsiyadan o\'chirildi',
+            'not_actual': 'Noaktual'
         };
 
         function esc(s) { return $('<span>').text(s || '-').html(); }
@@ -525,7 +536,9 @@
                 'no_student':       'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
                 'unknown_type':     'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
                 'bad_grade':        'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
-                'not_first':        'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;'
+                'not_first':        'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;',
+                'appeal_deleted':   'background:#faf5ff;color:#6b21a8;border:1px solid #e9d5ff;',
+                'not_actual':       'background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;'
             };
             var style = styles[code] || 'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;';
             var badge = '<span class="badge" style="' + style + 'font-size:10px;white-space:nowrap;">' + esc(text) + '</span>';
@@ -533,8 +546,12 @@
                 badge = '<span class="xulosa-dup-wrap" style="position:relative;display:inline-block;">' + badge +
                     '<button onclick="deleteDuplicateGrade(' + resultId + ')" class="xulosa-dup-del" title="Dublikat bahoni o\'chirish">&#10005;</button></span>';
             }
-            if (code === 'no_retake_app' && resultId) {
+            if (code === 'no_retake_app' && resultId && canEditFan) {
                 badge += ' <button onclick="reassignRetakeSubjectPrompt(' + resultId + ', this)" title="Fanni talabaning qayta o\'qish arizasidagi fanga almashtirish" style="margin-left:4px;padding:2px 6px;font-size:10px;font-weight:700;border:1px solid #f59e0b;background:#fffbeb;color:#b45309;border-radius:5px;cursor:pointer;white-space:nowrap;">&#128260; Fan</button>';
+            }
+            // Noaktual qatorni qayta "aktual" qilish tugmasi (har qanday operator).
+            if (code === 'not_actual' && resultId) {
+                badge += ' <button onclick="setNotActual([' + resultId + '], false)" title="Qayta aktual qilish" style="margin-left:4px;padding:2px 6px;font-size:10px;font-weight:700;border:1px solid #0ea5e9;background:#f0f9ff;color:#075985;border-radius:5px;cursor:pointer;white-space:nowrap;">&#8634; Aktual</button>';
             }
             return badge;
         }
@@ -593,6 +610,27 @@
                     alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
                     cell.innerHTML = original;
                 }
+            });
+        };
+
+        // Natijalarni noaktual / qayta aktual qilish (xato semestr — ortiqcha natija).
+        window.setNotActual = function(ids, notActual, reason) {
+            if (!ids || ids.length === 0) return;
+            if (notActual) {
+                var msg = ids.length === 1
+                    ? "Ushbu natija noaktual (xato semestr — ortiqcha) deb belgilansinmi?"
+                    : (ids.length + " ta natija noaktual deb belgilansinmi?");
+                if (!confirm(msg)) return;
+            }
+            $.ajax({
+                url: markNotActualUrl, type: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken },
+                data: { ids: ids, not_actual: notActual ? 1 : 0, reason: reason || '' },
+                success: function(d) {
+                    if (!d.success) { alert(d.message || 'Xatolik'); return; }
+                    loadTartibgaSol();
+                },
+                error: function(xhr) { alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi')); }
             });
         };
 
@@ -947,6 +985,8 @@
             return code === 'uploaded'
                 || code === 'mavzu_uploaded'
                 || code === 'retake_uploaded'
+                || code === 'not_actual'
+                || code === 'appeal_deleted'
                 || text.indexOf("qayta o'qish jurnalida") !== -1
                 || text.indexOf("qayta o‘qish jurnalida") !== -1;
         }
@@ -1003,7 +1043,11 @@
                 }
                 html += '<td><span class="badge" style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;">' + esc(r.group) + '</span></td>';
                 html += '<td>' + fanCell + '</td>';
-                html += '<td><span class="badge editable-fan-id" data-id="' + r.id + '" onclick="editFanId(this,' + r.id + ')" title="Fan ID ni tahrirlash uchun bosing" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;cursor:pointer;">' + esc(r.fan_id || '-') + '</span></td>';
+                if (canEditFan) {
+                    html += '<td><span class="badge editable-fan-id" data-id="' + r.id + '" onclick="editFanId(this,' + r.id + ')" title="Fan ID ni tahrirlash uchun bosing" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;cursor:pointer;">' + esc(r.fan_id || '-') + '</span></td>';
+                } else {
+                    html += '<td><span class="badge" style="background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;font-size:11px;">' + esc(r.fan_id || '-') + '</span></td>';
+                }
                 html += '<td style="text-align:center;">' + ynBadge + '</td>';
                 var dupKey = r.student_id + '|' + r.fan_id + '|' + r.yn_turi + '|' + r.shakl;
                 var dupBadge = (dupCount[dupKey] > 1)
@@ -1045,6 +1089,7 @@
             });
             $('#btn-delete-grades').prop('disabled', !hasUploaded);
             $('#btn-compare').prop('disabled', count === 0);
+            $('#btn-not-actual').prop('disabled', count === 0);
         }
 
         // ========== EXCEL (Quiz natijalar) ==========
@@ -1670,6 +1715,13 @@
             window.closeReuploadModal = function() {
                 $('#reupload-modal-overlay').remove();
             };
+
+            // ========== NOAKTUAL QILISH ==========
+            $('#btn-not-actual').on('click', function() {
+                var ids = getSelectedIds();
+                if (ids.length === 0) return;
+                setNotActual(ids, true);
+            });
 
             // ========== BAHONI O'CHIRISH ==========
             $('#btn-delete-grades').on('click', function() {

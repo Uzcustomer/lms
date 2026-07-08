@@ -90,6 +90,7 @@ class StudentController extends Controller
             // Academic records lookup
             $arRecords = DB::table('academic_records')
                 ->where('student_id', $student->hemis_id)
+                ->when($student->curriculum_id !== null, fn($q) => $q->where('curriculum_id', $student->curriculum_id))
                 ->select('subject_id', 'semester_id', 'total_point', 'grade', 'retraining_status')
                 ->get();
 

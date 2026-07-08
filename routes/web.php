@@ -899,6 +899,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::post('/update-grade', [QuizResultController::class, 'updateGrade'])->name('update-grade');
             Route::post('/update-fan-id', [QuizResultController::class, 'updateFanId'])->name('update-fan-id');
+            Route::post('/retake-app-subjects', [QuizResultController::class, 'retakeAppSubjects'])->name('retake-app-subjects');
+            Route::post('/reassign-retake-subject', [QuizResultController::class, 'reassignRetakeSubject'])->name('reassign-retake-subject');
             Route::post('/update-shakl', [QuizResultController::class, 'updateShakl'])->name('update-shakl');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
@@ -1598,6 +1600,8 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::post('/update-grade', [QuizResultController::class, 'updateGrade'])->name('update-grade');
             Route::post('/update-fan-id', [QuizResultController::class, 'updateFanId'])->name('update-fan-id');
+            Route::post('/retake-app-subjects', [QuizResultController::class, 'retakeAppSubjects'])->name('retake-app-subjects');
+            Route::post('/reassign-retake-subject', [QuizResultController::class, 'reassignRetakeSubject'])->name('reassign-retake-subject');
             Route::post('/update-shakl', [QuizResultController::class, 'updateShakl'])->name('update-shakl');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });

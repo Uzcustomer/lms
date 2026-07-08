@@ -3489,6 +3489,82 @@ class QuizResultController extends Controller
     }
 
     /**
+     * "Qayta o'qish arizasi topilmadi" qatori uchun — shu talaba qayta
+     * o'qishga ariza bergan (approved) fanlar ro'yxati. Operator quiz
+     * natijasining fanini aynan shular doirasida almashtirishi mumkin.
+     */
+    public function retakeAppSubjects(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer|exists:hemis_quiz_results,id',
+        ]);
+
+        $quiz = DB::table('hemis_quiz_results')->where('id', $request->id)->first();
+        $student = Student::where('student_id_number', $quiz->student_id)
+            ->orWhere('hemis_id', $quiz->student_id)
+            ->first(['hemis_id']);
+        if (!$student) {
+            return response()->json(['success' => false, 'message' => 'Talaba topilmadi'], 404);
+        }
+
+        $items = \App\Models\RetakeApplication::query()
+            ->where('final_status', \App\Models\RetakeApplication::STATUS_APPROVED)
+            ->where('student_hemis_id', (string) $student->hemis_id)
+            ->with('retakeGroup')
+            ->get()
+            ->map(fn ($a) => [
+                'app_id' => $a->id,
+                'subject_id' => $a->subject_id,
+                'subject_name' => $a->subject_name,
+                'semester_name' => $a->semester_name,
+                'group_subject' => $a->retakeGroup?->subject_name,
+            ])
+            ->values();
+
+        return response()->json(['success' => true, 'items' => $items]);
+    }
+
+    /**
+     * Quiz natijasining fanini tanlangan qayta o'qish arizasi faniga
+     * moslaydi — shunda matchRetakeApp uni topadi va yuklash mumkin bo'ladi.
+     * Faqat aynan shu talabaga tegishli approved ariza bo'yicha ruxsat.
+     */
+    public function reassignRetakeSubject(Request $request)
+    {
+        $request->validate([
+            'id' => 'required|integer|exists:hemis_quiz_results,id',
+            'app_id' => 'required|integer|exists:retake_applications,id',
+        ]);
+
+        $quiz = DB::table('hemis_quiz_results')->where('id', $request->id)->first();
+        $app = \App\Models\RetakeApplication::find($request->app_id);
+
+        $student = Student::where('student_id_number', $quiz->student_id)
+            ->orWhere('hemis_id', $quiz->student_id)
+            ->first(['hemis_id']);
+        if (!$student || (string) $student->hemis_id !== (string) $app->student_hemis_id) {
+            return response()->json(['success' => false, 'message' => 'Ariza bu talabaga tegishli emas'], 422);
+        }
+        if ($app->final_status !== \App\Models\RetakeApplication::STATUS_APPROVED) {
+            return response()->json(['success' => false, 'message' => 'Ariza tasdiqlanmagan'], 422);
+        }
+
+        DB::table('hemis_quiz_results')
+            ->where('id', $request->id)
+            ->update([
+                'fan_id' => $app->subject_id,
+                'fan_name' => $app->subject_name,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json([
+            'success' => true,
+            'fan_id' => $app->subject_id,
+            'fan_name' => $app->subject_name,
+        ]);
+    }
+
+    /**
      * Quiz natijasining shakl matnini yangilash (inline edit).
      */
     public function updateShakl(Request $request)

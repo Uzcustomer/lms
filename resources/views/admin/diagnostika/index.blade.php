@@ -476,6 +476,8 @@
         var deleteStudentGradeUrl = '{{ route($routePrefix . ".quiz-results.delete-student-grade") }}';
         var importUrl = '{{ route($routePrefix . ".quiz-results.import") }}';
         var triggerCronUrl = '{{ route($routePrefix . ".quiz-results.trigger-cron") }}';
+        var retakeAppSubjectsUrl = '{{ route($routePrefix . ".quiz-results.retake-app-subjects") }}';
+        var reassignRetakeSubjectUrl = '{{ route($routePrefix . ".quiz-results.reassign-retake-subject") }}';
         var destroyUrlBase = '{{ url("/" . $routePrefix . "/quiz-results") }}';
 
         var allData = [];
@@ -531,8 +533,68 @@
                 badge = '<span class="xulosa-dup-wrap" style="position:relative;display:inline-block;">' + badge +
                     '<button onclick="deleteDuplicateGrade(' + resultId + ')" class="xulosa-dup-del" title="Dublikat bahoni o\'chirish">&#10005;</button></span>';
             }
+            if (code === 'no_retake_app' && resultId) {
+                badge += ' <button onclick="reassignRetakeSubjectPrompt(' + resultId + ', this)" title="Fanni talabaning qayta o\'qish arizasidagi fanga almashtirish" style="margin-left:4px;padding:2px 6px;font-size:10px;font-weight:700;border:1px solid #f59e0b;background:#fffbeb;color:#b45309;border-radius:5px;cursor:pointer;white-space:nowrap;">&#128260; Fan</button>';
+            }
             return badge;
         }
+
+        // "Qayta o'qish arizasi topilmadi" qatorida fanni talabaning ariza
+        // bergan (approved) fanlaridan biriga almashtirish — inline dropdown.
+        window.reassignRetakeSubjectPrompt = function(resultId, btn) {
+            var cell = btn.closest('td');
+            var original = cell.innerHTML;
+            btn.disabled = true;
+            btn.textContent = '...';
+            $.ajax({
+                url: retakeAppSubjectsUrl, type: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrfToken },
+                data: { id: resultId },
+                success: function(res) {
+                    if (!res.success || !res.items || res.items.length === 0) {
+                        alert('Bu talabada tasdiqlangan qayta o\'qish arizasi topilmadi.');
+                        cell.innerHTML = original;
+                        return;
+                    }
+                    var opts = '<option value="">— fanni tanlang —</option>';
+                    res.items.forEach(function(a) {
+                        var label = (a.subject_name || '—') + (a.semester_name ? ' (' + a.semester_name + ')' : '');
+                        opts += '<option value="' + a.app_id + '">' + esc(label) + '</option>';
+                    });
+                    cell.innerHTML = '<div style="display:flex;gap:4px;align-items:center;">' +
+                        '<select class="reassign-sel" style="max-width:210px;padding:4px;font-size:11px;border:2px solid #f59e0b;border-radius:6px;">' + opts + '</select>' +
+                        '<button class="reassign-cancel" title="Bekor qilish" style="border:none;background:#e2e8f0;border-radius:5px;padding:3px 7px;cursor:pointer;font-size:11px;">&#10005;</button></div>';
+                    var $sel = $(cell).find('.reassign-sel');
+                    $sel.focus();
+                    $sel.on('change', function() {
+                        var appId = $(this).val();
+                        if (!appId) return;
+                        var chosen = res.items.find(function(x) { return String(x.app_id) === String(appId); });
+                        if (!confirm('Quiz natijasining fani "' + (chosen ? chosen.subject_name : '') + '" faniga almashtirilsinmi?')) {
+                            return;
+                        }
+                        $sel.prop('disabled', true);
+                        $.ajax({
+                            url: reassignRetakeSubjectUrl, type: 'POST',
+                            headers: { 'X-CSRF-TOKEN': csrfToken },
+                            data: { id: resultId, app_id: appId },
+                            success: function(d) {
+                                if (!d.success) { alert(d.message || 'Xatolik'); cell.innerHTML = original; return; }
+                                var row = allData.find(function(r) { return r.id === resultId; });
+                                if (row) { row.fan_id = d.fan_id; row.fan_name = d.fan_name; }
+                                loadTartibgaSol();
+                            },
+                            error: function(xhr) { alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi')); cell.innerHTML = original; }
+                        });
+                    });
+                    $(cell).find('.reassign-cancel').on('click', function() { cell.innerHTML = original; });
+                },
+                error: function(xhr) {
+                    alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi'));
+                    cell.innerHTML = original;
+                }
+            });
+        };
 
         // ========== TARTIBGA SOLISH ==========
         function searchByName() {

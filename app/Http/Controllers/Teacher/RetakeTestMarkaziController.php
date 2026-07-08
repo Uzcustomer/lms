@@ -121,10 +121,29 @@ class RetakeTestMarkaziController extends Controller
             ->get()
             ->keyBy('application_id');
 
+        // Yakuniy natija — vedomost tekshirish logikasi (JN=50, MT=20, OSKI/Test=15+15 yoki 30).
+        $finalResultMap = [];
+        foreach ($sentApplications->getCollection() as $app) {
+            $at = $app->retakeGroup?->assessment_type;
+            $isSinov = in_array($at, ['sinov', 'sinov_fan'], true);
+            $mt = ($mustaqilMap[$app->id] ?? null)?->grade;
+            // Sinov fanlarda Sinov(test) bahosi = JN (avtomatik).
+            $effTest = $isSinov ? $app->joriy_score : $app->test_score;
+            $finalResultMap[$app->id] = $this->service->testMarkaziFinalResult(
+                $app->joriy_score,
+                $mt,
+                $app->oske_score,
+                $effTest,
+                $at,
+                $app->group?->student?->level_code,
+            );
+        }
+
         return view('teacher.retake-test-markazi.index', [
             'groups' => $groups,
             'sentApplications' => $sentApplications,
             'mustaqilMap' => $mustaqilMap,
+            'finalResultMap' => $finalResultMap,
             'activeTab' => $activeTab,
             'studentSearch' => $studentSearch,
             'sentStatus' => $sentStatus,
@@ -144,11 +163,26 @@ class RetakeTestMarkaziController extends Controller
         $gradesMap = $this->service->gradesMap($group);
         $mustaqilMap = $this->service->mustaqilMap($group);
 
+        $isSinov = in_array($group->assessment_type, ['sinov', 'sinov_fan'], true);
+        $finalResultMap = [];
+        foreach ($applications as $app) {
+            $effTest = $isSinov ? $app->joriy_score : $app->test_score;
+            $finalResultMap[$app->id] = $this->service->testMarkaziFinalResult(
+                $app->joriy_score,
+                ($mustaqilMap[$app->id] ?? null)?->grade,
+                $app->oske_score,
+                $effTest,
+                $group->assessment_type,
+                $app->group?->student?->level_code,
+            );
+        }
+
         return view('teacher.retake-test-markazi.show', [
             'group' => $group,
             'applications' => $applications,
             'gradesMap' => $gradesMap,
             'mustaqilMap' => $mustaqilMap,
+            'finalResultMap' => $finalResultMap,
         ]);
     }
 
@@ -532,14 +566,15 @@ class RetakeTestMarkaziController extends Controller
             'L1' => 'MT',
             'M1' => 'OSKE',
             'N1' => 'TEST',
-            'O1' => 'Holat',
+            'O1' => 'Yakuniy natija',
+            'P1' => 'Holat',
         ];
 
         foreach ($headers as $cell => $value) {
             $sheet->setCellValue($cell, $value);
         }
 
-        $sheet->getStyle('A1:O1')->applyFromArray([
+        $sheet->getStyle('A1:P1')->applyFromArray([
             'font' => [
                 'bold' => true,
                 'color' => ['rgb' => 'FFFFFF'],
@@ -602,7 +637,24 @@ class RetakeTestMarkaziController extends Controller
             $sheet->setCellValue("L{$row}", $mustaqil?->grade !== null ? (float) $mustaqil->grade : '-');
             $sheet->setCellValue("M{$row}", $ctrlCell($needsOske, $app->oske_score));
             $sheet->setCellValue("N{$row}", $ctrlCell($needsTest, $effTest));
-            $sheet->setCellValue("O{$row}", $app->sent_to_test_markazi_at ? 'Yuborilgan' : 'Yuborilmagan');
+
+            $final = $this->service->testMarkaziFinalResult(
+                $app->joriy_score,
+                $mustaqil?->grade,
+                $app->oske_score,
+                $effTest,
+                $at,
+                $student?->level_code,
+            );
+            $finalText = match ($final['status']) {
+                'no_teacher_grade' => "O'qituvchi bahosini qo'ymagan",
+                'absent' => 'Imtihonga kelmagan',
+                'failed' => 'Yiqildi',
+                'passed' => (string) $final['value'],
+                default => '-',
+            };
+            $sheet->setCellValue("O{$row}", $finalText);
+            $sheet->setCellValue("P{$row}", $app->sent_to_test_markazi_at ? 'Yuborilgan' : 'Yuborilmagan');
 
             $sheet->setCellValueExplicit("A{$row}", (string) ($index + 1), DataType::TYPE_NUMERIC);
             $row++;
@@ -610,7 +662,7 @@ class RetakeTestMarkaziController extends Controller
 
         $lastRow = $row - 1;
         if ($lastRow >= 2) {
-            $sheet->getStyle("A2:O{$lastRow}")->applyFromArray([
+            $sheet->getStyle("A2:P{$lastRow}")->applyFromArray([
                 'borders' => [
                     'allBorders' => [
                         'borderStyle' => Border::BORDER_THIN,
@@ -623,10 +675,10 @@ class RetakeTestMarkaziController extends Controller
             ]);
 
             $sheet->getStyle("A2:A{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
-            $sheet->getStyle("I2:O{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
+            $sheet->getStyle("I2:P{$lastRow}")->getAlignment()->setHorizontal(Alignment::HORIZONTAL_CENTER);
         }
 
-        foreach (range('A', 'O') as $column) {
+        foreach (range('A', 'P') as $column) {
             $sheet->getColumnDimension($column)->setAutoSize(true);
         }
 

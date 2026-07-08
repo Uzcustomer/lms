@@ -27,6 +27,22 @@
             $f = rtrim(rtrim(number_format((float) $v, 2, '.', ''), '0'), '.');
             return '<span class="badge ' . $cls . '">' . $f . '</span>';
         };
+        // Yakuniy natija — vedomost tekshirish logikasi bo'yicha holat.
+        $finalCell = function ($res) use ($awaitHtml) {
+            if (!$res) return $awaitHtml;
+            switch ($res['status']) {
+                case 'no_teacher_grade':
+                    return '<span class="badge badge-amber" title="JN yoki MT bahosi qo\'yilmagan">' . __("O'qituvchi bahosini qo'ymagan") . '</span>';
+                case 'absent':
+                    return '<span class="badge badge-gray" title="OSKE/TEST natijasi yo\'q">' . __("Imtihonga kelmagan") . '</span>';
+                case 'failed':
+                    return '<span class="badge badge-red" title="Bosqichlardan biri 60 dan past">' . __("Yiqildi") . '</span>';
+                case 'passed':
+                    return '<span class="badge badge-green" style="font-weight:700;">' . $res['value'] . '</span>';
+                default:
+                    return $awaitHtml;
+            }
+        };
     @endphp
 
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full"
@@ -204,6 +220,7 @@
                         @if($needsTest)
                             <th style="text-align:center;">TEST</th>
                         @endif
+                        <th style="text-align:center;">{{ __("Yakuniy natija") }}</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -250,10 +267,11 @@
                             @if($needsTest)
                                 <td style="text-align:center;" data-test-cell="{{ $app->id }}">{!! $cellVal($effTest, 'badge-blue') !!}</td>
                             @endif
+                            <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null) !!}</td>
                         </tr>
                     @endforeach
                     <tr id="rtm-empty" style="display:none;">
-                        <td colspan="11" class="p-6 text-center text-sm text-gray-500">{{ __("Filtr bo'yicha talaba topilmadi") }}</td>
+                        <td colspan="12" class="p-6 text-center text-sm text-gray-500">{{ __("Filtr bo'yicha talaba topilmadi") }}</td>
                     </tr>
                     </tbody>
                 </table>

@@ -9,6 +9,7 @@ use App\Models\RetakeGroup;
 use App\Models\RetakeMustaqilSubmission;
 use App\Models\Student;
 use App\Models\Teacher;
+use App\Services\VedomostGradeCalculator;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
@@ -686,6 +687,88 @@ class RetakeJournalService
             default:
                 return ['jn' => 70, 'mt' => 30, 'on' => 0, 'oski' => 0,  'test' => 0];
         }
+    }
+
+    /**
+     * Test markazi jurnali uchun bitta talabaning YAKUNIY natijasini hisoblaydi —
+     * vedomost tekshirish (VedomostGradeCalculator) bilan AYNAN bir xil vazn va
+     * yaxlitlash logikasi.
+     *
+     * Vaznlar:
+     *  - JN = 50, MT = 20 (doim).
+     *  - OSKE va TEST ikkalasi ham bo'lsa: OSKI = 15, Test = 15.
+     *  - Faqat bittasi (OSKE yoki TEST/Sinov) bo'lsa: o'sha nazorat = 30.
+     *
+     * Holatlar:
+     *  - JN yoki MT qo'yilmagan            → 'no_teacher_grade' (o'qituvchi bahosini qo'ymagan)
+     *  - Yopilish shakliga ko'ra OSKE/TEST qo'yilmagan → 'absent' (imtihonga kelmagan)
+     *  - Istalgan bosqich < 60             → 'failed' (yiqildi)
+     *  - Aks holda                         → 'passed', value = yaxlitlangan ozlashtirish
+     *
+     * @return array{status:string, value:?int, baho:string}
+     */
+    public function testMarkaziFinalResult($jn, $mt, $oske, $test, ?string $assessmentType, ?string $levelCode = null): array
+    {
+        $needsOske = in_array($assessmentType, ['oske', 'oske_test'], true);
+        $needsTest = in_array($assessmentType, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
+
+        $jnVal   = ($jn   !== null && $jn   !== '') ? (float) $jn   : null;
+        $mtVal   = ($mt   !== null && $mt   !== '') ? (float) $mt   : null;
+        $oskeVal = ($oske !== null && $oske !== '') ? (float) $oske : null;
+        $testVal = ($test !== null && $test !== '') ? (float) $test : null;
+
+        // 1) O'qituvchi JN yoki MT bahosini qo'ymagan.
+        if ($jnVal === null || $mtVal === null) {
+            return ['status' => 'no_teacher_grade', 'value' => null, 'baho' => ''];
+        }
+
+        // 2) JN yoki MT 60 dan past — talaba testga umuman o'tmaydi → yiqildi.
+        if ($jnVal < 60 || $mtVal < 60) {
+            return ['status' => 'failed', 'value' => 0, 'baho' => ''];
+        }
+
+        // 3) Yopilish shakliga ko'ra kerakli imtihon (OSKE/TEST) natijasi yo'q.
+        if (($needsOske && $oskeVal === null) || ($needsTest && $testVal === null)) {
+            return ['status' => 'absent', 'value' => null, 'baho' => ''];
+        }
+
+        // 4) Imtihon (OSKE/TEST) bosqichi 60 dan past — yiqildi.
+        if (($needsOske && $oskeVal < 60) || ($needsTest && $testVal < 60)) {
+            return ['status' => 'failed', 'value' => 0, 'baho' => ''];
+        }
+
+        // 5) Yakuniy natija — vedomost tekshirish vaznlari bilan.
+        $weights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 0];
+        if ($needsOske && $needsTest) {
+            $weights['oski'] = 15;
+            $weights['test'] = 15;
+        } elseif ($needsOske) {
+            $weights['oski'] = 30;
+        } elseif ($needsTest) {
+            $weights['test'] = 30;
+        } else {
+            // OSKE/TEST ko'zda tutilmagan (nazariy holat) — 30 ni JN/MT taqsimoti qoplaydi.
+            $weights['jn'] = 70;
+            $weights['mt'] = 30;
+        }
+
+        $computed = (new VedomostGradeCalculator())->compute(
+            $jnVal,
+            $mtVal,
+            null,
+            $needsOske ? $oskeVal : null,
+            $needsTest ? $testVal : null,
+            $levelCode,
+            $weights,
+        );
+
+        $value = $computed['ozlashtirish'];
+
+        return [
+            'status' => 'passed',
+            'value' => is_numeric($value) ? (int) $value : null,
+            'baho' => $computed['baho'] ?? '',
+        ];
     }
 
     /**

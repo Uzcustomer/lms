@@ -635,6 +635,7 @@ class QuizResultController extends Controller
                     'group' => $student ? $student->group_name : '-',
                     'fan_name' => $result->fan_name,
                     'fan_id' => $result->fan_id,
+                    'orig_fan_name' => $result->orig_fan_name,
                     'yn_turi' => $ynTuri,
                     'shakl' => $result->shakl,
                     'grade' => $result->grade,
@@ -1343,6 +1344,7 @@ class QuizResultController extends Controller
                     'group' => $student ? $student->group_name : '-',
                     'fan_name' => $result->fan_name,
                     'fan_id' => $result->fan_id,
+                    'orig_fan_name' => $result->orig_fan_name,
                     'yn_turi' => $ynTuri,
                     'shakl' => $result->shakl,
                     'grade' => $result->grade,
@@ -3549,18 +3551,28 @@ class QuizResultController extends Controller
             return response()->json(['success' => false, 'message' => 'Ariza tasdiqlanmagan'], 422);
         }
 
+        $update = [
+            'fan_id' => $app->subject_id,
+            'fan_name' => $app->subject_name,
+            'fan_reassigned_at' => now(),
+            'updated_at' => now(),
+        ];
+        // Asl (HEMIS) fanni faqat birinchi almashtirishda saqlaymiz — keyingi
+        // almashtirishlarda asl qiymat o'zgarmasdan qoladi.
+        if (($quiz->orig_fan_id ?? null) === null && ($quiz->orig_fan_name ?? null) === null) {
+            $update['orig_fan_id'] = $quiz->fan_id;
+            $update['orig_fan_name'] = $quiz->fan_name;
+        }
+
         DB::table('hemis_quiz_results')
             ->where('id', $request->id)
-            ->update([
-                'fan_id' => $app->subject_id,
-                'fan_name' => $app->subject_name,
-                'updated_at' => now(),
-            ]);
+            ->update($update);
 
         return response()->json([
             'success' => true,
             'fan_id' => $app->subject_id,
             'fan_name' => $app->subject_name,
+            'orig_fan_name' => $update['orig_fan_name'] ?? ($quiz->orig_fan_name ?? null),
         ]);
     }
 

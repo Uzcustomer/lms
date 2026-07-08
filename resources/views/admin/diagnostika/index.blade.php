@@ -581,7 +581,7 @@
                             success: function(d) {
                                 if (!d.success) { alert(d.message || 'Xatolik'); cell.innerHTML = original; return; }
                                 var row = allData.find(function(r) { return r.id === resultId; });
-                                if (row) { row.fan_id = d.fan_id; row.fan_name = d.fan_name; }
+                                if (row) { row.fan_id = d.fan_id; row.fan_name = d.fan_name; row.orig_fan_name = d.orig_fan_name; }
                                 loadTartibgaSol();
                             },
                             error: function(xhr) { alert('Xato: ' + (xhr.responseJSON?.message || 'Server xatosi')); cell.innerHTML = original; }
@@ -980,6 +980,10 @@
 
                 var nameCell = '<span class="text-cell" style="font-weight:700;color:#0f172a;">' + esc(r.full_name) + '</span>';
                 var fanCell = '<span class="text-cell" style="font-weight:600;">' + esc(r.fan_name) + '</span>';
+                // Fan qayta o'qish arizasidagi fanga qo'lda almashtirilgan bo'lsa — izini ko'rsatamiz.
+                if (r.orig_fan_name && r.orig_fan_name !== r.fan_name) {
+                    fanCell += '<div style="margin-top:3px;font-size:10px;color:#b45309;background:#fffbeb;border:1px solid #fde68a;border-radius:5px;padding:2px 6px;display:inline-block;white-space:normal;" title="Fan qayta o\'qish arizasidagi fanga almashtirilgan">&#128260; Almashtirilgan &mdash; asli: <b>' + esc(r.orig_fan_name) + '</b></div>';
+                }
 
                 // Quiz semestri talabaning LMS semestriga mos kelmasa — qator qizil belgilanadi.
                 var semMismatch = !!r.semester_mismatch;

@@ -4813,7 +4813,7 @@ class ReportController extends Controller
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
                 $arRecords = array_merge($arRecords, DB::table('academic_records')
                     ->whereIn('student_id', $chunk)
-                    ->select('student_id', 'subject_id', 'subject_name', 'credit', 'total_acload', 'total_point', 'grade', 'retraining_status', 'semester_id', 'curriculum_id')
+                    ->select('student_id', 'subject_id', 'subject_name', 'credit', 'total_acload', 'total_point', 'grade', 'finish_credit_status', 'retraining_status', 'semester_id', 'curriculum_id')
                     ->get()
                     ->all());
             }

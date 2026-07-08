@@ -36,6 +36,10 @@
     @endif
     <div class="py-12">
         <div class="mx-auto max-w-7xl sm:px-6 lg:px-8">
+            <div class="mb-6 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-blue-900">
+                Assalom aleykum Toshkent davlat tibbiyot universiteti Termiz filialining LMS tizimi foydalanuvchilari
+            </div>
+
             <div class="overflow-hidden bg-white shadow-sm dark:bg-gray-800 sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
                     {{ __("Tizimga kirish muvafaqiyatli amalga oshirildi!") }}

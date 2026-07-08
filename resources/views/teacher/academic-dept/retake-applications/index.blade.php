@@ -175,6 +175,7 @@
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Talaba") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fan") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Semestr") }}</th>
+                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:180px;">{{ __("To'lov") }}</th>
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("Dekan") }}</th>
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("Registrator") }}</th>
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("O'quv bo'limi") }}</th>
@@ -186,8 +187,10 @@
                         @foreach($applications as $i => $app)
                             @php
                                 $student = $app->group?->student;
+                                $paymentApproved = ($app->group?->payment_verification_status === 'approved');
                                 $isActionable = $app->dean_status === 'approved'
                                     && $app->registrar_status === 'approved'
+                                    && $paymentApproved
                                     && $app->academic_dept_status === 'pending'
                                     && $app->final_status === 'pending';
                             @endphp
@@ -211,6 +214,33 @@
                                 </td>
                                 <td class="px-3 py-2.5 text-sm text-gray-700">{{ $app->subject_name }}</td>
                                 <td class="px-3 py-2.5 text-xs text-gray-600">{{ $app->semester_name }}</td>
+
+                                <td class="px-3 py-2.5 text-center">
+                                    @php
+                                        $paymentStatus = $app->group?->payment_verification_status;
+                                        $paymentReason = $app->group?->payment_rejection_reason;
+                                        $paymentBadgeClass = match($paymentStatus) {
+                                            'approved' => 'bg-green-100 text-green-800',
+                                            'rejected' => 'bg-red-100 text-red-800',
+                                            'pending' => 'bg-amber-100 text-amber-800',
+                                            default => 'bg-gray-100 text-gray-700',
+                                        };
+                                        $paymentLabel = match($paymentStatus) {
+                                            'approved' => __("Tasdiqlangan"),
+                                            'rejected' => __("Rad etilgan"),
+                                            'pending' => __("Kutilmoqda"),
+                                            default => __("Noma'lum"),
+                                        };
+                                    @endphp
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium {{ $paymentBadgeClass }}">
+                                        {{ $paymentLabel }}
+                                    </span>
+                                    @if($paymentStatus === 'rejected' && $paymentReason)
+                                        <div class="mt-1 text-[11px] text-red-600 max-w-[180px] mx-auto break-words">
+                                            {{ $paymentReason }}
+                                        </div>
+                                    @endif
+                                </td>
 
                                 {{-- Dekan ustun --}}
                                 <td class="px-3 py-2.5 text-center">

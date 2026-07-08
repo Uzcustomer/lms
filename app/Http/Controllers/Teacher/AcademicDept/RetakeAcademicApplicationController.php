@@ -79,9 +79,8 @@ class RetakeAcademicApplicationController extends Controller
         $appsQuery = RetakeApplication::query()
             ->with(['group.student', 'deanUser', 'registrarUser', 'academicDeptUser'])
             ->whereHas('group', function ($q) {
-                // Faqat to'lov tasdiqlangan arizalar
                 $q->whereNotNull('payment_uploaded_at')
-                  ->where('payment_verification_status', 'approved');
+                  ->whereIn('payment_verification_status', ['approved', 'rejected']);
             });
 
         if ($studentHemisIds !== null) {
@@ -92,18 +91,23 @@ class RetakeAcademicApplicationController extends Controller
         match ($stage) {
             // Dekan + Registrator tasdiqlagan, lekin o'quv bo'limi hali ko'rib chiqmagan
             'pending' => $appsQuery
+                ->whereHas('group', fn ($q) => $q->where('payment_verification_status', 'approved'))
                 ->where('dean_status', 'approved')
                 ->where('registrar_status', 'approved')
                 ->where('academic_dept_status', 'pending')
                 ->where('final_status', 'pending'),
             // O'quv bo'limi tasdiqlagan, lekin guruhga biriktirilmagan
             'preapproved' => $appsQuery
+                ->whereHas('group', fn ($q) => $q->where('payment_verification_status', 'approved'))
                 ->where('academic_dept_status', 'approved')
                 ->where('final_status', 'pending')
                 ->whereNull('retake_group_id'),
-            // O'quv bo'limi tomonidan rad etilgan
+            // O'quv bo'limi yoki payment tomonidan rad etilgan
             'rejected' => $appsQuery
-                ->where('academic_dept_status', 'rejected'),
+                ->where(function ($q) {
+                    $q->where('academic_dept_status', 'rejected')
+                      ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', 'rejected'));
+                }),
             // Hammasi (statistika uchun)
             default => null,
         };
@@ -116,18 +120,23 @@ class RetakeAcademicApplicationController extends Controller
 
         // Sanoq qatorlari (tab badge)
         $counters = [
-            'pending' => (clone $this->countersBaseQuery())->where('dean_status', 'approved')
+            'pending' => (clone $this->countersBaseQuery())->whereHas('group', fn ($q) => $q->where('payment_verification_status', 'approved'))
+                ->where('dean_status', 'approved')
                 ->where('registrar_status', 'approved')
                 ->where('academic_dept_status', 'pending')
                 ->where('final_status', 'pending')
                 ->count(),
             'preapproved' => (clone $this->countersBaseQuery())
+                ->whereHas('group', fn ($q) => $q->where('payment_verification_status', 'approved'))
                 ->where('academic_dept_status', 'approved')
                 ->where('final_status', 'pending')
                 ->whereNull('retake_group_id')
                 ->count(),
             'rejected' => (clone $this->countersBaseQuery())
-                ->where('academic_dept_status', 'rejected')
+                ->where(function ($q) {
+                    $q->where('academic_dept_status', 'rejected')
+                      ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', 'rejected'));
+                })
                 ->count(),
         ];
 
@@ -175,7 +184,7 @@ class RetakeAcademicApplicationController extends Controller
     {
         return RetakeApplication::query()->whereHas('group', function ($q) {
             $q->whereNotNull('payment_uploaded_at')
-              ->where('payment_verification_status', 'approved');
+              ->whereIn('payment_verification_status', ['approved', 'rejected']);
         });
     }
 

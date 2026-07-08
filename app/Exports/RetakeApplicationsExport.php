@@ -60,17 +60,22 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
         if (!empty($f['stage'])) {
             $q->whereHas('group', function ($g) {
                 $g->whereNotNull('payment_uploaded_at')
-                  ->where('payment_verification_status', 'approved');
+                  ->whereIn('payment_verification_status', ['approved', 'rejected']);
             });
             match ($f['stage']) {
-                'pending' => $q->where('dean_status', 'approved')
+                'pending' => $q->whereHas('group', fn ($g) => $g->where('payment_verification_status', 'approved'))
+                    ->where('dean_status', 'approved')
                     ->where('registrar_status', 'approved')
                     ->where('academic_dept_status', 'pending')
                     ->where('final_status', 'pending'),
-                'preapproved' => $q->where('academic_dept_status', 'approved')
+                'preapproved' => $q->whereHas('group', fn ($g) => $g->where('payment_verification_status', 'approved'))
+                    ->where('academic_dept_status', 'approved')
                     ->where('final_status', 'pending')
                     ->whereNull('retake_group_id'),
-                'rejected' => $q->where('academic_dept_status', 'rejected'),
+                'rejected' => $q->where(function ($inner) {
+                    $inner->where('academic_dept_status', 'rejected')
+                        ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', 'rejected'));
+                }),
                 default => null,
             };
         }

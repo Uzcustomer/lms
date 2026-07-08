@@ -28,17 +28,20 @@
             return '<span class="badge ' . $cls . '">' . $f . '</span>';
         };
         // Yakuniy natija — vedomost tekshirish logikasi bo'yicha holat.
-        $finalCell = function ($res) use ($awaitHtml) {
+        // $removed — appelyatsiyada o'chirilgan baholar soni; urinishlar jami =
+        // $removed + 1; faqat qayta topshirgan (>=2) talabada "(N)" ko'rsatiladi.
+        $finalCell = function ($res, $removed = 0) use ($awaitHtml) {
+            $suffix = $removed >= 1 ? ' (' . ($removed + 1) . ')' : '';
             if (!$res) return $awaitHtml;
             switch ($res['status']) {
                 case 'no_teacher_grade':
-                    return '<span class="badge badge-amber" title="JN yoki MT bahosi qo\'yilmagan">' . __("O'qituvchi bahosini qo'ymagan") . '</span>';
+                    return '<span class="badge badge-amber" title="JN yoki MT bahosi qo\'yilmagan">' . __("O'qituvchi bahosini qo'ymagan") . $suffix . '</span>';
                 case 'absent':
-                    return '<span class="badge badge-gray" title="OSKE/TEST natijasi yo\'q">' . __("Imtihonga kelmagan") . '</span>';
+                    return '<span class="badge badge-gray" title="OSKE/TEST natijasi yo\'q">' . __("Imtihonga kelmagan") . $suffix . '</span>';
                 case 'failed':
-                    return '<span class="badge badge-red" title="Bosqichlardan biri 60 dan past">' . __("Yiqildi") . '</span>';
+                    return '<span class="badge badge-red" title="Bosqichlardan biri 60 dan past">' . __("Yiqildi") . $suffix . '</span>';
                 case 'passed':
-                    return '<span class="badge badge-green" style="font-weight:700;">' . $res['value'] . '</span>';
+                    return '<span class="badge badge-green" style="font-weight:700;">' . $res['value'] . $suffix . '</span>';
                 default:
                     return $awaitHtml;
             }
@@ -267,7 +270,7 @@
                             @if($needsTest)
                                 <td style="text-align:center;" data-test-cell="{{ $app->id }}">{!! $cellVal($effTest, 'badge-blue') !!}</td>
                             @endif
-                            <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null) !!}</td>
+                            <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null, $removedCountMap[$app->id] ?? 0) !!}</td>
                         </tr>
                     @endforeach
                     <tr id="rtm-empty" style="display:none;">

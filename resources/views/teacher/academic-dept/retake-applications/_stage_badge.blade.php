@@ -7,9 +7,11 @@
         $decisionAt — qaror sanasi (Carbon, ixtiyoriy)
         $reason — rad etish sababi (ixtiyoriy)
         $extraNote — qo'shimcha izoh (ixtiyoriy, kichik harf bilan badge ostida)
+        $pendingLabel — "kutilmoqda" holati uchun aniq matn (ixtiyoriy)
 --}}
 @php
     $extraNote = $extraNote ?? null;
+    $pendingLabel = $pendingLabel ?? __('Kutyapti');
     $config = match($status ?? 'pending') {
         'approved' => [
             'icon' => '<svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>',
@@ -23,7 +25,7 @@
         ],
         default => [
             'icon' => '<svg class="w-3.5 h-3.5 animate-pulse" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path stroke-linecap="round" stroke-linejoin="round" d="M12 7v5l3 3"/></svg>',
-            'label' => __('Kutyapti'),
+            'label' => $pendingLabel,
             'classes' => 'bg-amber-50 text-amber-800 border-amber-200',
         ],
     };

@@ -56,13 +56,18 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
             $q->where('semester_id', $semester);
         }
 
-        // Stage (akademik dept) — pending / preapproved / rejected
+        // Stage (akademik dept) — awaiting / pending / preapproved / rejected
         if (!empty($f['stage'])) {
-            $q->whereHas('group', function ($g) {
-                $g->whereNotNull('payment_uploaded_at')
-                  ->whereIn('payment_verification_status', ['approved', 'rejected']);
-            });
             match ($f['stage']) {
+                'awaiting' => $q
+                    ->where('final_status', 'pending')
+                    ->where('academic_dept_status', 'pending')
+                    ->whereHas('group', fn ($g) => $g->where('payment_verification_status', '!=', 'rejected'))
+                    ->where(function ($inner) {
+                        $inner->where('dean_status', '!=', 'approved')
+                            ->orWhere('registrar_status', '!=', 'approved')
+                            ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', '!=', 'approved'));
+                    }),
                 'pending' => $q->whereHas('group', fn ($g) => $g->where('payment_verification_status', 'approved'))
                     ->where('dean_status', 'approved')
                     ->where('registrar_status', 'approved')
@@ -73,7 +78,7 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
                     ->where('final_status', 'pending')
                     ->whereNull('retake_group_id'),
                 'rejected' => $q->where(function ($inner) {
-                    $inner->where('academic_dept_status', 'rejected')
+                    $inner->where('final_status', 'rejected')
                         ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', 'rejected'));
                 }),
                 default => null,

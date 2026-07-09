@@ -44,16 +44,17 @@
         @endunless
 
         <p class="text-sm text-gray-500 mb-4">
-            {{ __("Dekan va registrator tasdiqlagan arizalar — guruhga ajratishdan oldin O'quv bo'limi tasdig'i kerak") }}
+            {{ __("Talabalarning barcha qayta o'qish arizalari — har birining joriy holati \"Holat\" ustunida ko'rsatilgan. Guruhga ajratishdan oldin dekan, registrator, to'lov va O'quv bo'limi tasdig'i kerak.") }}
         </p>
 
         {{-- Bosqich tablari (Hammasi default; har biriga sanoq) --}}
         <div class="bg-white rounded-xl shadow-sm border border-gray-100 mb-4 overflow-hidden">
             <div class="flex border-b border-gray-100">
                 @php
-                    $totalCount = ($counters['pending'] ?? 0) + ($counters['preapproved'] ?? 0) + ($counters['rejected'] ?? 0);
+                    $totalCount = $counters['all'] ?? (($counters['pending'] ?? 0) + ($counters['preapproved'] ?? 0) + ($counters['rejected'] ?? 0));
                     $tabs = [
                         'all' => ['label' => "Hammasi", 'color' => 'gray', 'icon' => '📋', 'count' => $totalCount],
+                        'awaiting' => ['label' => "Jarayonda", 'color' => 'orange', 'icon' => '🕓', 'count' => $counters['awaiting'] ?? 0],
                         'pending' => ['label' => "Tasdiq kutmoqda", 'color' => 'amber', 'icon' => '⏳', 'count' => $counters['pending'] ?? 0],
                         'preapproved' => ['label' => "Tasdiqlangan (guruhsiz)", 'color' => 'blue', 'icon' => '✓', 'count' => $counters['preapproved'] ?? 0],
                         'rejected' => ['label' => "Rad etilgan", 'color' => 'red', 'icon' => '✕', 'count' => $counters['rejected'] ?? 0],
@@ -64,6 +65,7 @@
                         $active = ($stage ?? 'all') === $key;
                         $activeBg = match($tab['color']) {
                             'gray' => 'bg-gray-100 border-b-2 border-gray-500 text-gray-900',
+                            'orange' => 'bg-orange-50 border-b-2 border-orange-500 text-orange-800',
                             'amber' => 'bg-amber-50 border-b-2 border-amber-500 text-amber-800',
                             'blue' => 'bg-blue-50 border-b-2 border-blue-500 text-blue-800',
                             'red' => 'bg-red-50 border-b-2 border-red-500 text-red-800',
@@ -149,10 +151,12 @@
                 </div>
             @else
                 @php
-                    // Faqat dean+registrator tasdiqlagan, academic_dept hali pending bo'lganlarni tanlash mumkin
+                    // Faqat dean+registrator tasdiqlagan, to'lovi tasdiqlangan va
+                    // academic_dept hali pending bo'lganlarni tanlash mumkin
                     $actionableIds = $applications->filter(function ($a) {
                         return $a->dean_status === 'approved'
                             && $a->registrar_status === 'approved'
+                            && ($a->group?->payment_verification_status === 'approved')
                             && $a->academic_dept_status === 'pending'
                             && $a->final_status === 'pending';
                     })->pluck('id')->toArray();
@@ -175,6 +179,7 @@
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Talaba") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fan") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Semestr") }}</th>
+                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:200px;">{{ __("Holat") }}</th>
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:180px;">{{ __("To'lov") }}</th>
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("Dekan") }}</th>
                             <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("Registrator") }}</th>
@@ -215,6 +220,14 @@
                                 <td class="px-3 py-2.5 text-sm text-gray-700">{{ $app->subject_name }}</td>
                                 <td class="px-3 py-2.5 text-xs text-gray-600">{{ $app->semester_name }}</td>
 
+                                {{-- Umumiy holat --}}
+                                <td class="px-3 py-2.5 text-center">
+                                    @php $stageBadge = $app->academicStageBadge(); @endphp
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border {{ $stageBadge['class'] }}">
+                                        {{ $stageBadge['label'] }}
+                                    </span>
+                                </td>
+
                                 <td class="px-3 py-2.5 text-center">
                                     @php
                                         $paymentStatus = $app->group?->payment_verification_status;
@@ -228,7 +241,9 @@
                                         $paymentLabel = match($paymentStatus) {
                                             'approved' => __("Tasdiqlangan"),
                                             'rejected' => __("Rad etilgan"),
-                                            'pending' => __("Kutilmoqda"),
+                                            'pending' => $app->group?->payment_uploaded_at
+                                                ? __("To'lov cheki tasdiqlanishi kutilmoqda")
+                                                : __("To'lov yuklanishi kutilmoqda"),
                                             default => __("Noma'lum"),
                                         };
                                     @endphp
@@ -249,6 +264,7 @@
                                         'userName' => $app->deanUser?->full_name ?? $app->dean_user_name,
                                         'decisionAt' => $app->dean_decision_at,
                                         'reason' => $app->dean_reason,
+                                        'pendingLabel' => __("Dekanat tasdig'i kutilmoqda"),
                                     ])
                                 </td>
 
@@ -259,6 +275,7 @@
                                         'userName' => $app->registrarUser?->full_name ?? $app->registrar_user_name,
                                         'decisionAt' => $app->registrar_decision_at,
                                         'reason' => $app->registrar_reason,
+                                        'pendingLabel' => __("Registrator ofisi tasdig'i kutilmoqda"),
                                     ])
                                 </td>
 
@@ -278,6 +295,7 @@
                                         'decisionAt' => $app->academic_dept_decision_at,
                                         'reason' => $app->academic_dept_reason,
                                         'extraNote' => $extraNote,
+                                        'pendingLabel' => __("O'quv bo'limi tasdig'i kutilmoqda"),
                                     ])
                                 </td>
 

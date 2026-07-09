@@ -111,9 +111,15 @@ class RetakeTestMarkaziController extends Controller
             $sentApplicationsQuery->whereNull('sent_to_test_markazi_at');
         }
 
+        // "Testga yuborilgan talabalar" jadvalidagi ustun filtrlari (client-side)
+        // BUTUN ma'lumot bo'yicha ishlashi uchun bu tabda barcha (yuqoridagi
+        // panel filtrlaridan keyingi) qatorlarni bitta sahifada yuklaymiz.
+        // Guruhlar tabida esa oddiy sahifalash saqlanadi.
+        $studentsPerPage = $activeTab === 'students' ? 100000 : $perPage;
+
         $sentApplications = $sentApplicationsQuery
             ->orderByDesc('id')
-            ->paginate($perPage, ['*'], 'students_page')
+            ->paginate($studentsPerPage, ['*'], 'students_page')
             ->withQueryString();
 
         $mustaqilMap = RetakeMustaqilSubmission::query()

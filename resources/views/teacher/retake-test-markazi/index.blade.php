@@ -225,7 +225,8 @@
                                 <th style="text-align:center;">TEST</th>
                                 <th style="text-align:center;">{{ __("Yakuniy natija") }}</th>
                             </tr>
-                            {{-- Har bir ustun bo'yicha filtr (joriy sahifadagi qatorlarni client-side filtrlaydi) --}}
+                            {{-- Har bir ustun bo'yicha filtr — talabalar tabida barcha qatorlar bitta
+                                 sahifada yuklanadi, shuning uchun filtr BUTUN ma'lumot bo'yicha ishlaydi. --}}
                             <tr class="rtm-filter-row">
                                 <th class="rtm-fcell" style="text-align:center;">
                                     <button type="button" id="rtm-filter-clear" class="rtm-fclear" title="{{ __('Filtrlarni tozalash') }}">✕</button>

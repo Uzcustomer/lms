@@ -212,7 +212,7 @@ class RetakeApplication extends Model
             return ['label' => 'To\'lov yuklanishi kutilmoqda', 'class' => 'bg-orange-50 text-orange-700 border-orange-200'];
         }
         if ($paymentStatus === RetakeApplicationGroup::PAYMENT_VERIFICATION_PENDING) {
-            return ['label' => 'To\'lov tasdiqlanishi kutilmoqda', 'class' => 'bg-purple-50 text-purple-700 border-purple-200'];
+            return ['label' => 'To\'lov cheki tasdiqlanishi kutilmoqda', 'class' => 'bg-purple-50 text-purple-700 border-purple-200'];
         }
         if ($paymentStatus === RetakeApplicationGroup::PAYMENT_VERIFICATION_REJECTED) {
             return ['label' => 'To\'lov rad etilgan · qayta yuklash kerak', 'class' => 'bg-red-50 text-red-700 border-red-200'];

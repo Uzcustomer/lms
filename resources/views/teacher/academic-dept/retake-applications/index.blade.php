@@ -242,7 +242,7 @@
                                             'approved' => __("Tasdiqlangan"),
                                             'rejected' => __("Rad etilgan"),
                                             'pending' => $app->group?->payment_uploaded_at
-                                                ? __("Tasdiqlanishi kutilmoqda")
+                                                ? __("To'lov cheki tasdiqlanishi kutilmoqda")
                                                 : __("To'lov yuklanishi kutilmoqda"),
                                             default => __("Noma'lum"),
                                         };

@@ -156,6 +156,78 @@ class RetakeApplication extends Model
     }
 
     /**
+     * O'quv bo'limi "Arizalar" sahifasi uchun umumiy holat yorlig'i.
+     *
+     * studentDisplayStatus() dan farqli o'laroq bu to'lov bosqichlarini ham
+     * qamrab oladi, shuning uchun ariza qaysi bosqichda ("holat") ekanligini
+     * bir qarashda ko'rsatadi. ['label' => ..., 'class' => tailwind badge klaslari].
+     *
+     * @return array{label: string, class: string}
+     */
+    public function academicStageBadge(): array
+    {
+        // ── Rad etilgan ──────────────────────────────────
+        if ($this->final_status === self::STATUS_REJECTED) {
+            $who = match ($this->rejected_by) {
+                self::REJECTED_BY_DEAN => 'Dekan',
+                self::REJECTED_BY_REGISTRAR => 'Registrator',
+                self::REJECTED_BY_ACADEMIC_DEPT => "O'quv bo'limi",
+                self::REJECTED_BY_SYSTEM_HEMIS => 'Tizim (HEMIS)',
+                self::REJECTED_BY_WINDOW_CLOSED => "Muddat o'tdi",
+                default => 'Tizim',
+            };
+
+            return ['label' => "Rad etilgan · {$who}", 'class' => 'bg-red-100 text-red-800 border-red-200'];
+        }
+
+        // ── Yakuniy tasdiqlangan ─────────────────────────
+        if ($this->final_status === self::STATUS_APPROVED) {
+            if (!empty($this->retake_group_id)) {
+                return ['label' => 'Guruhga biriktirilgan', 'class' => 'bg-emerald-100 text-emerald-800 border-emerald-200'];
+            }
+
+            return ['label' => 'Tasdiqlangan', 'class' => 'bg-green-100 text-green-800 border-green-200'];
+        }
+
+        // ── Kutilmoqda (pending) — aniq bosqichni topamiz ──
+
+        // 1) Dekan / registrator hali tasdiqlamagan
+        if ($this->dean_status !== self::STATUS_APPROVED || $this->registrar_status !== self::STATUS_APPROVED) {
+            if ($this->dean_status === self::STATUS_APPROVED && $this->registrar_status === self::STATUS_PENDING) {
+                $label = 'Registrator ko\'rib chiqmoqda';
+            } elseif ($this->dean_status === self::STATUS_PENDING && $this->registrar_status === self::STATUS_APPROVED) {
+                $label = 'Dekan ko\'rib chiqmoqda';
+            } else {
+                $label = 'Dekan va registrator ko\'rib chiqmoqda';
+            }
+
+            return ['label' => $label, 'class' => 'bg-amber-50 text-amber-800 border-amber-200'];
+        }
+
+        // 2) Dekan + registrator tasdiqlagan → to'lov bosqichi
+        $paymentStatus = $this->group?->payment_verification_status;
+        $paymentUploaded = $this->group && $this->group->payment_uploaded_at !== null;
+
+        if (!$paymentUploaded) {
+            return ['label' => 'To\'lov kutilmoqda', 'class' => 'bg-orange-50 text-orange-700 border-orange-200'];
+        }
+        if ($paymentStatus === RetakeApplicationGroup::PAYMENT_VERIFICATION_PENDING) {
+            return ['label' => 'To\'lov tekshirilmoqda', 'class' => 'bg-purple-50 text-purple-700 border-purple-200'];
+        }
+        if ($paymentStatus === RetakeApplicationGroup::PAYMENT_VERIFICATION_REJECTED) {
+            return ['label' => 'To\'lov rad etilgan · qayta yuklash kerak', 'class' => 'bg-red-50 text-red-700 border-red-200'];
+        }
+
+        // 3) To'lov tasdiqlangan → o'quv bo'limi bosqichi
+        if ($this->academic_dept_status === self::STATUS_APPROVED) {
+            return ['label' => 'O\'quv bo\'limi tasdiqladi · guruhga kutilmoqda', 'class' => 'bg-blue-100 text-blue-800 border-blue-200'];
+        }
+
+        // O'quv bo'limi tasdig'ini kutmoqda (bu sahifada amal qilinadigan holat)
+        return ['label' => 'O\'quv bo\'limi tasdig\'ini kutmoqda', 'class' => 'bg-indigo-50 text-indigo-700 border-indigo-200'];
+    }
+
+    /**
      * Sabab matnini olish (rad etilgan bo'lsa).
      */
     public function rejectionReason(): ?string

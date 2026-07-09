@@ -1648,10 +1648,14 @@ class QuizResultController extends Controller
             return [$directIds, $retakeKeys];
         }
 
+        // Tiklangan (reversed) apelyatsiyalar endi "o'chirilgan" deb hisoblanmaydi.
+        $hasReversed = \Illuminate\Support\Facades\Schema::hasColumn('quiz_grade_appeals', 'reversed_at');
+
         if (!empty($resultIds)) {
             \App\Models\QuizGradeAppeal::where('action', \App\Models\QuizGradeAppeal::ACTION_DELETE)
                 ->whereNotNull('quiz_result_id')
                 ->whereIn('quiz_result_id', $resultIds)
+                ->when($hasReversed, fn ($q) => $q->whereNull('reversed_at'))
                 ->pluck('quiz_result_id')
                 ->each(function ($id) use (&$directIds) {
                     $directIds[(int) $id] = true;
@@ -1660,6 +1664,7 @@ class QuizResultController extends Controller
 
         \App\Models\QuizGradeAppeal::where('action', \App\Models\QuizGradeAppeal::ACTION_DELETE)
             ->whereNotNull('retake_application_id')
+            ->when($hasReversed, fn ($q) => $q->whereNull('reversed_at'))
             ->get(['retake_application_id', 'retake_component', 'old_grade'])
             ->each(function ($a) use (&$retakeKeys) {
                 if (!$a->retake_component) {

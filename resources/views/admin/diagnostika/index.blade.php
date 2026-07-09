@@ -233,11 +233,15 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="filter-item" style="max-width:200px;">
+                        <div class="filter-item" style="max-width:220px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Dublikatlar</label>
                             <label style="display:inline-flex;align-items:center;gap:8px;height:34px;cursor:pointer;user-select:none;" title="Yoqilganda bir xil natijaning barcha urinishlari ko'rinadi (dedup o'chadi)">
                                 <input type="checkbox" id="show_duplicates" checked onchange="loadTartibgaSol()" style="width:16px;height:16px;cursor:pointer;">
                                 <span style="font-size:12px;font-weight:600;color:#1e293b;white-space:nowrap;">Dublikatlarni ko'rsatish</span>
+                            </label>
+                            <label style="display:inline-flex;align-items:center;gap:8px;height:28px;cursor:pointer;user-select:none;margin-top:2px;" title="Faqat takrorlangan (DUBLIKAT) natijalarni ko'rsatadi">
+                                <input type="checkbox" id="only_duplicates" onchange="onlyDupToggle()" style="width:16px;height:16px;cursor:pointer;">
+                                <span style="font-size:12px;font-weight:700;color:#991b1b;white-space:nowrap;">Faqat dublikatlar</span>
                             </label>
                         </div>
                         <div class="filter-item" style="margin-left:auto;max-width:280px;">
@@ -819,6 +823,31 @@
             }
         });
 
+        // Dublikat kaliti — renderTable dagi bilan bir xil (talaba+fan+yn_turi+shakl).
+        function dupKeyOf(r) {
+            return r.student_id + '|' + r.fan_id + '|' + r.yn_turi + '|' + r.shakl;
+        }
+        // allData bo'yicha kalit -> takrorlanish soni.
+        function computeDupCounts() {
+            var dc = {};
+            (allData || []).forEach(function(d) {
+                var k = dupKeyOf(d);
+                dc[k] = (dc[k] || 0) + 1;
+            });
+            return dc;
+        }
+
+        // "Faqat dublikatlar" tugmasi. Dublikatlar hozir ko'rsatilmayotgan bo'lsa
+        // (dedup yoqilgan) — avval ularni yuklab, so'ng filtrlaymiz.
+        function onlyDupToggle() {
+            if ($('#only_duplicates').is(':checked') && !$('#show_duplicates').is(':checked')) {
+                $('#show_duplicates').prop('checked', true);
+                loadTartibgaSol(); // qayta yuklanadi, so'ng applyColumnFilters ishlaydi
+                return;
+            }
+            applyColumnFilters();
+        }
+
         function applyColumnFilters() {
             var filters = {};
             $('input.col-filter-input').each(function() {
@@ -826,7 +855,12 @@
                 if (val) filters[$(this).data('col')] = val;
             });
 
+            var onlyDup = $('#only_duplicates').is(':checked');
+            var dupCounts = onlyDup ? computeDupCounts() : null;
+
             filteredData = allData.filter(function(r) {
+                // Faqat dublikatlar — takrorlanish soni 1 dan katta bo'lganlar.
+                if (onlyDup && !(dupCounts[dupKeyOf(r)] > 1)) return false;
                 for (var col in filters) {
                     var fv = filters[col];
                     var rv = (r[col] || '').toString();

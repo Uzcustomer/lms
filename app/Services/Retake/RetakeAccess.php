@@ -135,7 +135,7 @@ class RetakeAccess
 
     /**
      * Qayta o'qish arizalari sahifasini ko'rish.
-     * O'quv bo'limi boshqaradi, dekan esa read-only ko'radi.
+     * O'quv bo'limi boshqaradi, dekan va registrator ofisi esa read-only ko'radi.
      */
     public static function canViewAcademicApplications(?Model $actor): bool
     {
@@ -144,6 +144,7 @@ class RetakeAccess
         }
 
         return self::canManageAcademicDept($actor)
+            || $actor->hasRole(ProjectRole::REGISTRAR_OFFICE->value)
             || $actor->hasRole(ProjectRole::DEAN->value);
     }
 

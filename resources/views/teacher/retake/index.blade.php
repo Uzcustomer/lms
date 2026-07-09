@@ -217,7 +217,7 @@
                                 </form>
                             @endif
 
-                            @if(auth()->user()?->hasAnyRole(['superadmin']))
+                            @if(auth()->user()?->hasAnyRole(['superadmin', 'registrator_ofisi']))
                                 <form method="POST"
                                       action="{{ route('admin.retake.bulk-force-delete') }}"
                                       onsubmit="return confirm('{{ __("Tanlangan arizalarni butunlay o'chirishni tasdiqlaysizmi? Tarixda qolmaydi.") }}')"

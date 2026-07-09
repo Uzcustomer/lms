@@ -841,6 +841,111 @@ class RetakeJournalService
     }
 
     /**
+     * Har bir ariza uchun talaba shu fandan NECHA MARTA qayta o'qish test/OSKE
+     * topshirganini (hemis_quiz_results dagi urinishlar soni) qaytaradi.
+     *
+     * Urinish = alohida Moodle quiz urinishi (distinct attempt_id). OSKE+TEST
+     * fanda urinishlar soni = komponentlar ichidagi eng ko'p urinish soni
+     * (ikkitasini qo'shib qo'ymaslik uchun). Sinov fanlarda test bahosi = JN
+     * bo'lgani uchun quizdan urinish sanalmaydi.
+     *
+     * @param  Collection<RetakeApplication>  $applications  (retakeGroup bilan)
+     * @return array<int, int>  application_id => urinishlar soni
+     */
+    public function attemptCounts(Collection $applications): array
+    {
+        $map = [];
+        foreach ($applications as $app) {
+            $map[$app->id] = 0;
+        }
+        if ($applications->isEmpty()) {
+            return $map;
+        }
+
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+        $hemisIds = $applications->pluck('student_hemis_id')
+            ->filter()->map(fn ($v) => (string) $v)->unique()->values()->all();
+        if (empty($hemisIds)) {
+            return $map;
+        }
+
+        // hemis_quiz_results.student_id = students.student_id_number (Moodle id),
+        // ariza esa student_hemis_id (LMS hemis_id) bilan ishlaydi.
+        $sidToHemis = [];
+        foreach (Student::whereIn('hemis_id', $hemisIds)->get(['hemis_id', 'student_id_number']) as $st) {
+            $sid = (string) $st->student_id_number;
+            if ($sid !== '') {
+                $sidToHemis[$sid] = (string) $st->hemis_id;
+            }
+        }
+        if (empty($sidToHemis)) {
+            return $map;
+        }
+
+        $rows = HemisQuizResult::query()
+            ->where('is_active', 1)
+            ->whereIn('student_id', array_keys($sidToHemis))
+            ->whereIn('quiz_type', array_merge($testTypes, $oskiTypes))
+            ->get(['id', 'student_id', 'quiz_type', 'attempt_name', 'shakl', 'attempt_id', 'fan_id', 'fan_name']);
+
+        // [hemis_id][fan kaliti][kind] => distinct attempt kalitlari to'plami.
+        // Fan id har xil id-makonda bo'lishi mumkin, shuning uchun ham NOM
+        // ('n:'), ham ID ('i:') bo'yicha indekslaymiz (moslikda max olamiz).
+        $sets = [];
+        foreach ($rows as $row) {
+            if (!RetakeSessionCode::isRetakeQuiz($row->attempt_name, $row->shakl)) {
+                continue;
+            }
+            $hid = $sidToHemis[(string) $row->student_id] ?? null;
+            if ($hid === null) {
+                continue;
+            }
+            $kind = in_array($row->quiz_type, $oskiTypes, true) ? 'oske' : 'test';
+            $attKey = $row->attempt_id !== null ? 'a' . $row->attempt_id : 'r' . $row->id;
+
+            $subjNorm = $this->normSubjectName($row->fan_name);
+            if ($subjNorm !== '') {
+                $sets[$hid]['n:' . $subjNorm][$kind][$attKey] = true;
+            }
+            if ($row->fan_id !== null && $row->fan_id !== '') {
+                $sets[$hid]['i:' . $row->fan_id][$kind][$attKey] = true;
+            }
+        }
+
+        foreach ($applications as $app) {
+            $hid = (string) $app->student_hemis_id;
+            $group = $app->retakeGroup;
+            $at = $group?->assessment_type;
+            $isSinov = in_array($at, ['sinov', 'sinov_fan'], true);
+            $needsOske = in_array($at, ['oske', 'oske_test'], true);
+            // Sinov test bahosi = JN — Moodle quizidan urinish sanalmaydi.
+            $needsTest = !$isSinov && in_array($at, ['test', 'oske_test'], true);
+
+            $nameKey = 'n:' . $this->normSubjectName($group?->subject_name ?? $app->subject_name);
+            $idKey = 'i:' . $app->subject_id;
+
+            $countKind = function (string $kind) use ($sets, $hid, $nameKey, $idKey) {
+                $byName = isset($sets[$hid][$nameKey][$kind]) ? count($sets[$hid][$nameKey][$kind]) : 0;
+                $byId = isset($sets[$hid][$idKey][$kind]) ? count($sets[$hid][$idKey][$kind]) : 0;
+                return max($byName, $byId);
+            };
+
+            $attempts = 0;
+            if ($needsOske) {
+                $attempts = max($attempts, $countKind('oske'));
+            }
+            if ($needsTest) {
+                $attempts = max($attempts, $countKind('test'));
+            }
+            $map[$app->id] = $attempts;
+        }
+
+        return $map;
+    }
+
+    /**
      * @param  array{jn:int,mt:int,on:int,oski:int,test:int}|null  $weights
      */
     /**

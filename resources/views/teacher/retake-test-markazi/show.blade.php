@@ -31,10 +31,10 @@
             return '<span class="badge ' . $cls . '"' . $title . '>' . $f . '</span>';
         };
         // Yakuniy natija — vedomost tekshirish logikasi bo'yicha holat.
-        // $removed — appelyatsiyada o'chirilgan baholar soni; urinishlar jami =
-        // $removed + 1; faqat qayta topshirgan (>=2) talabada "(N)" ko'rsatiladi.
-        $finalCell = function ($res, $removed = 0) use ($awaitHtml) {
-            $suffix = $removed >= 1 ? ' (' . ($removed + 1) . ')' : '';
+        // $attempts — talaba shu fandan necha marta test topshirgani; faqat
+        // qayta topshirgan (>=2) talabada "(N)" ko'rsatiladi.
+        $finalCell = function ($res, $attempts = 1) use ($awaitHtml) {
+            $suffix = $attempts >= 2 ? ' (' . $attempts . ')' : '';
             if (!$res) return $awaitHtml;
             switch ($res['status']) {
                 case 'no_teacher_grade':
@@ -274,7 +274,7 @@
                             @if($needsTest)
                                 <td style="text-align:center;" data-test-cell="{{ $app->id }}">{!! $cellVal($effTest, 'badge-blue', $effTestDate) !!}</td>
                             @endif
-                            <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null, $removedCountMap[$app->id] ?? 0) !!}</td>
+                            <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null, $attemptsMap[$app->id] ?? 1) !!}</td>
                         </tr>
                     @endforeach
                     <tr id="rtm-empty" style="display:none;">

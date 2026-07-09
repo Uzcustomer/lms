@@ -20,6 +20,22 @@
             min-width:26px; height:22px; border-radius:6px;
             background:transparent; color:#cbd5e1; font-size:13px; line-height:1;
         }
+        /* Ustunlar bo'yicha filtr qatori */
+        .rtm-filter-row th.rtm-fcell {
+            padding:4px 6px !important; background:#f1f5f9; border-bottom:1px solid #e2e8f0;
+        }
+        .rtm-finput {
+            width:100%; min-width:64px; box-sizing:border-box;
+            font-size:11px; font-weight:500; padding:4px 6px;
+            border:1px solid #cbd5e1; border-radius:6px; background:#fff; color:#0f172a; outline:none;
+        }
+        .rtm-finput:focus { border-color:#2563eb; box-shadow:0 0 0 2px rgba(37,99,235,.15); }
+        .rtm-fnum { min-width:52px; text-align:center; }
+        .rtm-fclear {
+            width:22px; height:22px; border:1px solid #cbd5e1; border-radius:6px;
+            background:#fff; color:#94a3b8; font-size:11px; cursor:pointer; line-height:1;
+        }
+        .rtm-fclear:hover { background:#fee2e2; color:#dc2626; border-color:#fecaca; }
     </style>
 
     <div class="py-6 px-4 sm:px-6 lg:px-8 w-full">
@@ -75,10 +91,10 @@
                 return '<span class="badge ' . $cls . '"' . $title . '>' . $f . '</span>';
             };
             // Yakuniy natija — vedomost tekshirish logikasi bo'yicha hisoblangan holat.
-            // $removed — appelyatsiyada o'chirilgan baholar soni. Urinishlar jami =
-            // $removed + 1; faqat qayta topshirgan (>=2) talabada "(N)" ko'rsatiladi.
-            $finalCell = function ($res, $removed = 0) {
-                $suffix = $removed >= 1 ? ' (' . ($removed + 1) . ')' : '';
+            // $attempts — talaba shu fandan necha marta test topshirgani; faqat
+            // qayta topshirgan (>=2) talabada "(N)" ko'rsatiladi.
+            $finalCell = function ($res, $attempts = 1) {
+                $suffix = $attempts >= 2 ? ' (' . $attempts . ')' : '';
                 if (!$res) return '<span class="rtm-await" title="Natija hali yo\'q">…</span>';
                 switch ($res['status']) {
                     case 'no_teacher_grade':
@@ -191,7 +207,7 @@
                     <div class="p-10 text-center text-sm text-gray-500">{{ __("Talaba topilmadi") }}</div>
                 @else
                     <div class="overflow-x-auto">
-                        <table class="journal-table">
+                        <table class="journal-table" id="rtm-students-table">
                             <thead>
                             <tr>
                                 <th class="th-num">#</th>
@@ -208,6 +224,25 @@
                                 <th style="text-align:center;">OSKE</th>
                                 <th style="text-align:center;">TEST</th>
                                 <th style="text-align:center;">{{ __("Yakuniy natija") }}</th>
+                            </tr>
+                            {{-- Har bir ustun bo'yicha filtr (joriy sahifadagi qatorlarni client-side filtrlaydi) --}}
+                            <tr class="rtm-filter-row">
+                                <th class="rtm-fcell" style="text-align:center;">
+                                    <button type="button" id="rtm-filter-clear" class="rtm-fclear" title="{{ __('Filtrlarni tozalash') }}">✕</button>
+                                </th>
+                                <th class="rtm-fcell"><input type="text" class="rtm-finput" data-filter-col="1" placeholder="{{ __('F.I.Sh...') }}"></th>
+                                <th class="rtm-fcell"><select class="rtm-finput" data-filter-col="2"><option value="">{{ __('Barchasi') }}</option></select></th>
+                                <th class="rtm-fcell"><select class="rtm-finput" data-filter-col="3"><option value="">{{ __('Barchasi') }}</option></select></th>
+                                <th class="rtm-fcell"><input type="text" class="rtm-finput" data-filter-col="4" placeholder="{{ __('Fan...') }}"></th>
+                                <th class="rtm-fcell"><input type="text" class="rtm-finput" data-filter-col="5" placeholder="{{ __('Fan...') }}"></th>
+                                <th class="rtm-fcell"><select class="rtm-finput" data-filter-col="6"><option value="">{{ __('Barchasi') }}</option></select></th>
+                                <th class="rtm-fcell"><select class="rtm-finput" data-filter-col="7"><option value="">{{ __('Barchasi') }}</option></select></th>
+                                <th class="rtm-fcell"><select class="rtm-finput" data-filter-col="8"><option value="">{{ __('Barchasi') }}</option></select></th>
+                                <th class="rtm-fcell"><input type="text" class="rtm-finput rtm-fnum" data-filter-col="9" placeholder="JN"></th>
+                                <th class="rtm-fcell"><input type="text" class="rtm-finput rtm-fnum" data-filter-col="10" placeholder="MT"></th>
+                                <th class="rtm-fcell"><input type="text" class="rtm-finput rtm-fnum" data-filter-col="11" placeholder="OSKE"></th>
+                                <th class="rtm-fcell"><input type="text" class="rtm-finput rtm-fnum" data-filter-col="12" placeholder="TEST"></th>
+                                <th class="rtm-fcell"><input type="text" class="rtm-finput" data-filter-col="13" placeholder="{{ __('Natija...') }}"></th>
                             </tr>
                             </thead>
                             <tbody>
@@ -226,8 +261,8 @@
                                     $effTestDate = $isSinov ? $app->joriy_graded_at : $app->test_graded_at;
                                     $b = $atype($at);
                                 @endphp
-                                <tr @if($rgId) onclick="window.location='{{ route('admin.retake-test-markazi.show', $rgId) }}'" @endif>
-                                    <td class="td-num">{{ ($sentApplications->currentPage() - 1) * $sentApplications->perPage() + $loop->iteration }}</td>
+                                <tr class="rtm-srow" @if($rgId) onclick="window.location='{{ route('admin.retake-test-markazi.show', $rgId) }}'" @endif>
+                                    <td class="td-num"><span class="rtm-srow-num">{{ ($sentApplications->currentPage() - 1) * $sentApplications->perPage() + $loop->iteration }}</span></td>
                                     <td>
                                         <span class="text-cell text-subject">{{ $student?->full_name ?? '—' }}</span>
                                         <span class="text-cell" style="color:#64748b;font-size:11px;">{{ $app->student_hemis_id }}</span>
@@ -252,9 +287,12 @@
                                     <td style="text-align:center;">{!! $scoreCell(true, $mustaqil?->grade, 'badge-green', $mustaqil?->graded_at) !!}</td>
                                     <td style="text-align:center;">{!! $scoreCell($needsOske, $app->oske_score, 'badge-blue', $app->oske_graded_at) !!}</td>
                                     <td style="text-align:center;">{!! $scoreCell($needsTest, $effTest, 'badge-blue', $effTestDate) !!}</td>
-                                    <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null, $removedCountMap[$app->id] ?? 0) !!}</td>
+                                    <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null, $attemptsMap[$app->id] ?? 1) !!}</td>
                                 </tr>
                             @endforeach
+                            <tr id="rtm-srow-empty" style="display:none;">
+                                <td colspan="14" class="p-6 text-center text-sm text-gray-500">{{ __("Filtr bo'yicha talaba topilmadi") }}</td>
+                            </tr>
                             </tbody>
                         </table>
                     </div>
@@ -271,6 +309,85 @@
                 const items = Array.from(document.querySelectorAll('.retake-yn-group-checkbox'));
                 if (selectAll && items.length) {
                     selectAll.addEventListener('change', () => items.forEach(cb => cb.checked = selectAll.checked));
+                }
+            });
+        </script>
+    @endpush
+
+    @push('scripts')
+        {{-- Ustunlar bo'yicha client-side filtr (joriy sahifadagi qatorlar) --}}
+        <script>
+            document.addEventListener('DOMContentLoaded', function () {
+                const table = document.getElementById('rtm-students-table');
+                if (!table || !table.tBodies.length) return;
+
+                const tbody = table.tBodies[0];
+                const rows = Array.from(tbody.querySelectorAll('tr.rtm-srow'));
+                const emptyRow = document.getElementById('rtm-srow-empty');
+                const controls = Array.from(table.querySelectorAll('[data-filter-col]'));
+                if (!controls.length || !rows.length) return;
+
+                const norm = (s) => (s || '').toLowerCase().replace(/\s+/g, ' ').trim();
+                const cellText = (row, idx) => norm(row.children[idx] ? row.children[idx].textContent : '');
+
+                // Dropdownlarni joriy sahifadagi mavjud qiymatlar bilan to'ldirish.
+                controls.forEach(function (ctrl) {
+                    if (ctrl.tagName !== 'SELECT') return;
+                    const idx = parseInt(ctrl.dataset.filterCol, 10);
+                    const seen = {};
+                    const values = [];
+                    rows.forEach(function (r) {
+                        const raw = (r.children[idx] ? r.children[idx].textContent : '').replace(/\s+/g, ' ').trim();
+                        if (raw && !seen[raw]) { seen[raw] = true; values.push(raw); }
+                    });
+                    values.sort(function (a, b) { return a.localeCompare(b, 'uz', { numeric: true }); });
+                    values.forEach(function (v) {
+                        const o = document.createElement('option');
+                        o.value = v;
+                        o.textContent = v;
+                        ctrl.appendChild(o);
+                    });
+                });
+
+                function applyFilters() {
+                    let visible = 0;
+                    rows.forEach(function (row) {
+                        let ok = true;
+                        for (let i = 0; i < controls.length; i++) {
+                            const ctrl = controls[i];
+                            const val = ctrl.value;
+                            if (!val) continue;
+                            const idx = parseInt(ctrl.dataset.filterCol, 10);
+                            const cell = cellText(row, idx);
+                            if (ctrl.tagName === 'SELECT') {
+                                if (cell !== norm(val)) { ok = false; break; }
+                            } else {
+                                if (cell.indexOf(norm(val)) === -1) { ok = false; break; }
+                            }
+                        }
+                        row.style.display = ok ? '' : 'none';
+                        if (ok) {
+                            visible++;
+                            const num = row.querySelector('.rtm-srow-num');
+                            if (num) num.textContent = visible;
+                        }
+                    });
+                    if (emptyRow) emptyRow.style.display = visible === 0 ? '' : 'none';
+                }
+
+                controls.forEach(function (ctrl) {
+                    ctrl.addEventListener('input', applyFilters);
+                    ctrl.addEventListener('change', applyFilters);
+                    // Filtr kataklariga bosilganda qatorga o'tib ketmasin.
+                    ctrl.addEventListener('click', function (e) { e.stopPropagation(); });
+                });
+
+                const clearBtn = document.getElementById('rtm-filter-clear');
+                if (clearBtn) {
+                    clearBtn.addEventListener('click', function () {
+                        controls.forEach(function (ctrl) { ctrl.value = ''; });
+                        applyFilters();
+                    });
                 }
             });
         </script>

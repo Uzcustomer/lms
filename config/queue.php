@@ -39,7 +39,11 @@ return [
             'connection' => env('DB_QUEUE_CONNECTION'),
             'table' => env('DB_QUEUE_TABLE', 'jobs'),
             'queue' => env('DB_QUEUE', 'default'),
-            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 90),
+            // Uzoq ishlaydigan hisobot joblari bor (masalan ComputeRetakeNotAppliedReportJob,
+            // timeout=1800s). retry_after HAR DOIM eng uzun job vaqtidan katta bo'lishi shart —
+            // aks holda queue hali ishlayotgan jobni qayta band qilib "attempted too many times"
+            // xatosini beradi. Shu sabab default 90 emas, 2100 (>1800).
+            'retry_after' => (int) env('DB_QUEUE_RETRY_AFTER', 2100),
             'after_commit' => false,
         ],
 

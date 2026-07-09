@@ -190,8 +190,8 @@
                                 <button type="button"
                                         @click="if (bulkApps.length > 0) bulkRejectOpen = true"
                                         :disabled="bulkApps.length === 0"
-                                        :class="bulkApps.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-600 text-white hover:bg-red-700'"
-                                        class="px-4 py-2 text-sm font-medium rounded-lg">
+                                        :class="bulkApps.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700'"
+                                        class="px-4 py-2 text-sm font-medium rounded-lg bg-red-600 text-white">
                                     ✗ {{ __("Tanlanganlarni rad etish") }}
                                     <span x-show="bulkApps.length > 0">(<span x-text="bulkApps.length"></span>)</span>
                                 </button>
@@ -208,8 +208,8 @@
                                     </template>
                                     <button type="submit"
                                             :disabled="selected.length === 0"
-                                            :class="selected.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-red-700 text-white hover:bg-red-800'"
-                                            class="px-4 py-2 text-sm font-medium rounded-lg">
+                                            :class="selected.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-800'"
+                                            class="px-4 py-2 text-sm font-medium rounded-lg bg-red-700 text-white">
                                         {{ __("Guruhlarni o'chirish") }}
                                         <span x-show="selected.length > 0">(<span x-text="selected.length"></span>)</span>
                                     </button>

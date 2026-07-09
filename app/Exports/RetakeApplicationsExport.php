@@ -189,7 +189,7 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
             'O\'quv bo\'limi',
             'O\'quv bo\'limi sanasi',
             'O\'quv bo\'limi sababi',
-            'Yakuniy holat',
+            'Holat',
             'Rad etgan tomon',
             'Qayta o\'qish guruhi',
             'O\'qituvchi',
@@ -242,7 +242,7 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
             optional($app->academic_dept_decision_at)->format('Y-m-d H:i'),
             $app->academic_dept_reason,
 
-            $this->finalLabel($app->final_status),
+            $app->academicStageBadge()['label'],
             $this->rejectedByLabel($app->rejected_by),
 
             $rg?->name ?? '',
@@ -253,16 +253,6 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
     }
 
     private function statusLabel(?string $status): string
-    {
-        return match ($status) {
-            'approved' => 'Tasdiqlandi',
-            'rejected' => 'Rad etildi',
-            'pending' => 'Kutilmoqda',
-            default => '—',
-        };
-    }
-
-    private function finalLabel(?string $status): string
     {
         return match ($status) {
             'approved' => 'Tasdiqlandi',

@@ -227,8 +227,8 @@
                                     </template>
                                     <button type="submit"
                                             :disabled="selected.length === 0"
-                                            :class="selected.length === 0 ? 'bg-gray-200 text-gray-400 cursor-not-allowed' : 'bg-rose-700 text-white hover:bg-rose-800 ring-2 ring-rose-200'"
-                                            class="px-4 py-2 text-sm font-bold rounded-lg">
+                                            :class="selected.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-rose-800 ring-2 ring-rose-200'"
+                                            class="px-4 py-2 text-sm font-bold rounded-lg bg-rose-700 text-white">
                                         💀 {{ __("Butunlay o'chirish") }}
                                         <span x-show="selected.length > 0">(<span x-text="selected.length"></span>)</span>
                                     </button>

@@ -5619,27 +5619,31 @@ class ReportController extends Controller
             $tick(8, 'Academic records yuklanmoqda...');
 
             $studentHemisIds = $students->pluck('hemis_id')->values()->all();
-            $arRows = collect();
+            // Oddiy massiv — Collection::merge har chunkda butun massivni nusxalab
+            // katta to'plamda (butun universitet) xotira sakrashiga olib keladi.
+            $arRows = [];
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
-                $arRows = $arRows->merge(
-                    DB::table('academic_records')
-                        ->whereIn('student_id', $chunk)
-                        ->select(
-                            'student_id',
-                            'subject_id',
-                            'subject_name',
-                            'semester_id',
-                            'semester_name',
-                            'curriculum_id',
-                            'credit',
-                            'total_acload',
-                            'total_point',
-                            'grade',
-                            'retraining_status',
-                            'finish_credit_status'
-                        )
-                        ->get()
-                );
+                $chunkRows = DB::table('academic_records')
+                    ->whereIn('student_id', $chunk)
+                    ->select(
+                        'student_id',
+                        'subject_id',
+                        'subject_name',
+                        'semester_id',
+                        'semester_name',
+                        'curriculum_id',
+                        'credit',
+                        'total_acload',
+                        'total_point',
+                        'grade',
+                        'retraining_status',
+                        'finish_credit_status'
+                    )
+                    ->get();
+                foreach ($chunkRows as $arRow) {
+                    $arRows[] = $arRow;
+                }
+                unset($chunkRows);
             }
 
             $studentMap = $students->keyBy('hemis_id');
@@ -5691,32 +5695,18 @@ class ReportController extends Controller
                 }
             }
 
-            // Joriy semestr juftliklari — xavf qatorlarini (4≥qarzdorlar mantig'i)
-            // fan ma'lumotlari (kredit/soat/yopilish shakli) bilan boyitish uchun
-            // curriculum_subjects so'roviga qo'shiladi (qator generatsiyasiga emas).
-            $fetchPairs = $curriculumPairs;
-            foreach ($students as $st) {
-                if (!$st->curriculum_id || !$st->semester_code) {
-                    continue;
-                }
-                if ($semesterFilter !== null && $semesterFilter !== '' && (string) $semesterFilter !== (string) $st->semester_code) {
-                    continue;
-                }
-                $fetchPairs[$st->curriculum_id . '|' . $st->semester_code] = true;
-            }
-
-            if (empty($fetchPairs)) {
+            if (empty($curriculumPairs)) {
                 return [];
             }
 
             $tick(30, "O'quv reja fanlari yuklanmoqda...");
 
-            $allCurriculumIds = collect(array_keys($fetchPairs))
+            $allCurriculumIds = collect(array_keys($curriculumPairs))
                 ->map(fn ($k) => explode('|', $k)[0])
                 ->unique()
                 ->values()
                 ->all();
-            $allSemCodes = collect(array_keys($fetchPairs))
+            $allSemCodes = collect(array_keys($curriculumPairs))
                 ->map(fn ($k) => explode('|', $k)[1])
                 ->unique()
                 ->values()
@@ -5869,27 +5859,10 @@ class ReportController extends Controller
                 'none' => "Yakuniy nazorat yo'q",
             ];
 
-            // ── Joriy semestr xavflari — 4≥qarzdorlar hisobotidagi AYNAN bir xil
-            // mantiq (student_grades jurnali: JN/MT/OSKI/Test < 60, sababsiz
-            // davomat ≥ 25%, grafik o'tib ketgan 2/3-urinishlar). Semestr filtri
-            // berilgan bo'lsa faqat joriy semestri filtrga teng talabalar uchun.
-            $tick(55, 'Joriy semestr xavflari hisoblanmoqda...');
-            $riskSemCodeMap = [];
-            foreach ($students as $st) {
-                $sc = $st->semester_code ? (string) $st->semester_code : '';
-                if ($sc === '') {
-                    continue;
-                }
-                if ($semesterFilter !== null && $semesterFilter !== '' && (string) $semesterFilter !== $sc) {
-                    continue;
-                }
-                $riskSemCodeMap[$st->hemis_id] = $sc;
-            }
-            $currentRisksMap = empty($riskSemCodeMap)
-                ? []
-                : $this->getCurrentSemesterRisksForReport(array_keys($riskSemCodeMap), $riskSemCodeMap);
-
-            $tick(70, 'Qatorlar shakllantirilmoqda...');
+            // Faqat OLDINGI (tugagan) semestrlar qarzi hisoblanadi — joriy semestr
+            // xavflari (student_grades jurnali) OLIB TASHLANDI: og'ir bo'lib timeout
+            // berardi. Bu hisobot academic_records asosidagi qarzlar bilan cheklanadi.
+            $tick(60, 'Qatorlar shakllantirilmoqda...');
 
             $data = [];
             $processedStudents = 0;
@@ -5897,7 +5870,7 @@ class ReportController extends Controller
             foreach ($students as $st) {
                 $processedStudents++;
                 if ($processedStudents % 500 === 0) {
-                    $tick(70 + 27 * $processedStudents / $totalStudents, "Qatorlar shakllantirilmoqda: {$processedStudents}/{$totalStudents} talaba...");
+                    $tick(60 + 37 * $processedStudents / $totalStudents, "Qatorlar shakllantirilmoqda: {$processedStudents}/{$totalStudents} talaba...");
                 }
 
                 // Akademik mobillik: boshqa OTMdan kelgan talaba — bizda YOZUVI
@@ -5905,7 +5878,6 @@ class ReportController extends Controller
                 // o'z OTMiga borib yopadi. Bizda mavjud yozuv (masalan yiqilgan)
                 // esa qarzligicha qoladi.
                 $isMobility = str_contains(mb_strtolower((string) ($st->student_type_name ?? '')), 'mobil');
-                $emittedKeys = [];
 
                 $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
                 foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
@@ -6048,49 +6020,7 @@ class ReportController extends Controller
                             'score_details' => $scoreDetails,
                             'has_score_details' => !empty($scoreDetails),
                         ];
-                        $emittedKeys[(string) $effectiveSubjectId . '|' . (string) $semCode] = true;
                     }
-                }
-
-                // ── Joriy semestr xavf qatorlari (4≥qarzdorlar mantig'i) ─────
-                foreach ($currentRisksMap[$st->hemis_id] ?? [] as $risk) {
-                    $riskSem = (string) ($risk['semester_code'] ?? $st->semester_code ?? '');
-                    $riskSubjectId = (string) ($risk['subject_id'] ?? '');
-                    if ($riskSubjectId !== '' && isset($emittedKeys[$riskSubjectId . '|' . $riskSem])) {
-                        continue; // bu fan uchun qator allaqachon chiqarilgan
-                    }
-
-                    // Fan ma'lumotlari (kredit/soat/yopilish shakli) — joriy curriculum'dan.
-                    $csRow = null;
-                    if ($st->curriculum_id && $riskSem !== '') {
-                        $csRow = $subjectsByPair->get($st->curriculum_id . '|' . $riskSem, collect())
-                            ->first(fn ($s) => (string) $s->subject_id === $riskSubjectId);
-                    }
-
-                    $data[] = [
-                        'hemis_id' => $st->hemis_id,
-                        'full_name' => $st->full_name ?? '-',
-                        'student_id_number' => $st->student_id_number ?? '-',
-                        'department_name' => $st->department_name ?? '-',
-                        'specialty_name' => $st->specialty_name ?? '-',
-                        'level_name' => $st->level_name ?? '-',
-                        'group_name' => $st->group_name ?? '-',
-                        'subject_name' => $risk['subject_name'] ?? '-',
-                        'closing_form' => ($csRow && $csRow->closing_form) ? ($cfLabels[$csRow->closing_form] ?? $csRow->closing_form) : '-',
-                        'semester_code' => $riskSem !== '' ? $riskSem : null,
-                        'semester_name' => $csRow->semester_name ?? ($riskSem !== '' ? $riskSem . '-semestr' : '-'),
-                        'total_acload' => $csRow->total_acload ?? null,
-                        'credit' => $csRow->credit ?? null,
-                        'total_point' => null,
-                        'grade' => null,
-                        'mastered' => null,
-                        'retake_status' => 'Joriy semestr',
-                        'study_status' => 'Xavf: ' . implode(', ', $risk['reasons'] ?? []),
-                        'study_status_code' => 'current_risk',
-                        'is_debt' => true,
-                        'score_details' => [],
-                        'has_score_details' => false,
-                    ];
                 }
             }
 
@@ -6290,6 +6220,11 @@ class ReportController extends Controller
             return response()->json(['calc_key' => $calcKey] + $existing);
         }
 
+        // Bir xil filtrlar bilan avvalgi run natijasini o'chiramiz — aks holda
+        // status endpointi yangi hisob tugamasidan "tayyor" (eski natija) deb
+        // ko'rsatib qo'yishi mumkin.
+        \App\Jobs\ComputeRetakeNotAppliedReportJob::clearResult($calcKey);
+
         \Illuminate\Support\Facades\Cache::put($calcKey, [
             'status' => 'queued',
             'percent' => 0,
@@ -6307,6 +6242,12 @@ class ReportController extends Controller
         $calcKey = (string) $request->get('calc_key', '');
         if (!str_starts_with($calcKey, 'retake_na_calc_' . $this->retakeNotAppliedCalcUserToken() . '_')) {
             return response()->json(['status' => 'error', 'message' => 'Hisob kaliti mos emas'], 403);
+        }
+
+        // Natija fayli diskda bo'lsa — job tugagan (kesh 'failed'/yo'q bo'lsa ham,
+        // masalan retry_after tufayli dublikat urinish). Haqiqiy natijaga ishonamiz.
+        if (\App\Jobs\ComputeRetakeNotAppliedReportJob::hasResult($calcKey)) {
+            return response()->json(['status' => 'done', 'percent' => 100]);
         }
 
         $state = \Illuminate\Support\Facades\Cache::get($calcKey);

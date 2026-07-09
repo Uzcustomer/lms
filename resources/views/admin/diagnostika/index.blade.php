@@ -136,7 +136,7 @@
         .ms-col-btn:hover { border-color: #2b5ea7; }
         .ms-col-btn.ms-active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; font-weight: 700; }
         .ms-btn-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .ms-popup { display: none; position: absolute; top: 30px; left: 0; z-index: 200; width: 230px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.16); padding: 8px; }
+        .ms-popup { display: none; position: fixed; z-index: 3000; width: 230px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.16); padding: 8px; }
         .ms-search { width: 100%; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; outline: none; margin-bottom: 6px; box-sizing: border-box; }
         .ms-search:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
         .ms-opts { max-height: 220px; overflow-y: auto; }
@@ -739,14 +739,24 @@
             document.querySelectorAll('.ms-popup').forEach(function(p) { p.style.display = 'none'; });
             document.querySelectorAll('.adv-filter-popup').forEach(function(p) { p.style.display = 'none'; });
             if (!visible) {
-                popup.style.left = '0';
-                popup.style.right = 'auto';
+                // Popup `position: fixed` — jadval scroll konteyneri (overflow)
+                // uni kesib qo'ymasligi uchun. O'rnini tugmadan hisoblaymiz.
+                var btn = popup.parentElement.querySelector('.ms-col-btn');
+                var brect = btn.getBoundingClientRect();
+                var popW = 230;
+                var left = brect.left;
+                // O'ng chetidan chiqib ketsa — tugmaning o'ng chetiga tekislaymiz
+                if (left + popW > window.innerWidth - 8) {
+                    left = Math.max(8, brect.right - popW);
+                }
+                popup.style.left = left + 'px';
+                popup.style.top = (brect.bottom + 4) + 'px';
                 popup.style.display = 'block';
-                // Ekran o'ng chetidan chiqib ketsa — chapga ochiladi
-                var rect = popup.getBoundingClientRect();
-                if (rect.right > window.innerWidth - 8) {
-                    popup.style.left = 'auto';
-                    popup.style.right = '0';
+                // Pastdan chiqib ketsa — tugmaning tepasiga ochamiz
+                var prect = popup.getBoundingClientRect();
+                if (prect.bottom > window.innerHeight - 8) {
+                    var newTop = brect.top - prect.height - 4;
+                    popup.style.top = Math.max(8, newTop) + 'px';
                 }
             }
         }

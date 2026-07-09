@@ -121,8 +121,8 @@ class RetakeTestMarkaziController extends Controller
             ->get()
             ->keyBy('application_id');
 
-        // Appelyatsiyada o'chirilgan test baholari soni (urinishlar sonini ko'rsatish uchun).
-        $removedCountMap = $this->service->removedAppealCounts($sentApplications->getCollection());
+        // Urinishlar soni — talaba shu fandan necha marta test topshirgan.
+        $attemptsMap = $this->buildAttemptsMap($sentApplications->getCollection());
 
         // Yakuniy natija — vedomost tekshirish logikasi (JN=50, MT=20, OSKI/Test=15+15 yoki 30).
         $finalResultMap = [];
@@ -147,7 +147,7 @@ class RetakeTestMarkaziController extends Controller
             'sentApplications' => $sentApplications,
             'mustaqilMap' => $mustaqilMap,
             'finalResultMap' => $finalResultMap,
-            'removedCountMap' => $removedCountMap,
+            'attemptsMap' => $attemptsMap,
             'activeTab' => $activeTab,
             'studentSearch' => $studentSearch,
             'sentStatus' => $sentStatus,
@@ -167,7 +167,10 @@ class RetakeTestMarkaziController extends Controller
         $gradesMap = $this->service->gradesMap($group);
         $mustaqilMap = $this->service->mustaqilMap($group);
 
-        $removedCountMap = $this->service->removedAppealCounts($applications);
+        // Urinishlar soni — barcha ariza shu guruhga tegishli, retakeGroup ni
+        // shu guruhga bog'lab qo'yamiz (qo'shimcha so'rovsiz).
+        $applications->each(fn ($a) => $a->setRelation('retakeGroup', $group));
+        $attemptsMap = $this->buildAttemptsMap($applications);
 
         $isSinov = in_array($group->assessment_type, ['sinov', 'sinov_fan'], true);
         $finalResultMap = [];
@@ -189,8 +192,30 @@ class RetakeTestMarkaziController extends Controller
             'gradesMap' => $gradesMap,
             'mustaqilMap' => $mustaqilMap,
             'finalResultMap' => $finalResultMap,
-            'removedCountMap' => $removedCountMap,
+            'attemptsMap' => $attemptsMap,
         ]);
+    }
+
+    /**
+     * Talaba shu fandan necha marta test topshirganini (urinishlar soni)
+     * hisoblaydi: hemis_quiz_results dagi haqiqiy urinishlar, va appelyatsiyada
+     * o'chirilgan baholar (removed + 1) — ikkalasidan kattasi. Faqat >=2 bo'lsa
+     * jurnalda "(N)" ko'rsatiladi.
+     *
+     * @param  \Illuminate\Support\Collection  $applications
+     * @return array<int, int>
+     */
+    private function buildAttemptsMap($applications): array
+    {
+        $removed = $this->service->removedAppealCounts($applications);
+        $quiz = $this->service->attemptCounts($applications);
+
+        $map = [];
+        foreach ($applications as $app) {
+            $map[$app->id] = max($quiz[$app->id] ?? 0, ($removed[$app->id] ?? 0) + 1);
+        }
+
+        return $map;
     }
 
     /**
@@ -554,7 +579,7 @@ class RetakeTestMarkaziController extends Controller
             ->get()
             ->keyBy('application_id');
 
-        $removedCountMap = $this->service->removedAppealCounts($applications);
+        $attemptsMap = $this->buildAttemptsMap($applications);
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -662,9 +687,9 @@ class RetakeTestMarkaziController extends Controller
                 'passed' => (string) $final['value'],
                 default => '-',
             };
-            $removed = $removedCountMap[$app->id] ?? 0;
-            if ($finalText !== '-' && $removed >= 1) {
-                $finalText .= ' (' . ($removed + 1) . ')';
+            $attempts = $attemptsMap[$app->id] ?? 1;
+            if ($finalText !== '-' && $attempts >= 2) {
+                $finalText .= ' (' . $attempts . ')';
             }
             $sheet->setCellValue("O{$row}", $finalText);
             $sheet->setCellValue("P{$row}", $app->sent_to_test_markazi_at ? 'Yuborilgan' : 'Yuborilmagan');

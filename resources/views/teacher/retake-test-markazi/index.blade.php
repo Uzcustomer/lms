@@ -75,10 +75,10 @@
                 return '<span class="badge ' . $cls . '"' . $title . '>' . $f . '</span>';
             };
             // Yakuniy natija — vedomost tekshirish logikasi bo'yicha hisoblangan holat.
-            // $removed — appelyatsiyada o'chirilgan baholar soni. Urinishlar jami =
-            // $removed + 1; faqat qayta topshirgan (>=2) talabada "(N)" ko'rsatiladi.
-            $finalCell = function ($res, $removed = 0) {
-                $suffix = $removed >= 1 ? ' (' . ($removed + 1) . ')' : '';
+            // $attempts — talaba shu fandan necha marta test topshirgani; faqat
+            // qayta topshirgan (>=2) talabada "(N)" ko'rsatiladi.
+            $finalCell = function ($res, $attempts = 1) {
+                $suffix = $attempts >= 2 ? ' (' . $attempts . ')' : '';
                 if (!$res) return '<span class="rtm-await" title="Natija hali yo\'q">…</span>';
                 switch ($res['status']) {
                     case 'no_teacher_grade':
@@ -252,7 +252,7 @@
                                     <td style="text-align:center;">{!! $scoreCell(true, $mustaqil?->grade, 'badge-green', $mustaqil?->graded_at) !!}</td>
                                     <td style="text-align:center;">{!! $scoreCell($needsOske, $app->oske_score, 'badge-blue', $app->oske_graded_at) !!}</td>
                                     <td style="text-align:center;">{!! $scoreCell($needsTest, $effTest, 'badge-blue', $effTestDate) !!}</td>
-                                    <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null, $removedCountMap[$app->id] ?? 0) !!}</td>
+                                    <td style="text-align:center;">{!! $finalCell($finalResultMap[$app->id] ?? null, $attemptsMap[$app->id] ?? 1) !!}</td>
                                 </tr>
                             @endforeach
                             </tbody>

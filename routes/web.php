@@ -738,6 +738,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/reports/retake-not-applied/data', [ReportController::class, 'retakeNotAppliedReportData'])->name('reports.retake-not-applied.data');
             Route::get('/reports/retake-not-applied/sync-progress', [ReportController::class, 'academicRecordsSyncProgress'])->name('reports.retake-not-applied.sync-progress');
             Route::post('/reports/retake-not-applied/sync', [ReportController::class, 'startAcademicRecordsSync'])->name('reports.retake-not-applied.sync');
+            Route::post('/reports/retake-not-applied/calc/start', [ReportController::class, 'startRetakeNotAppliedCalc'])->name('reports.retake-not-applied.calc-start');
+            Route::get('/reports/retake-not-applied/calc/status', [ReportController::class, 'retakeNotAppliedCalcStatus'])->name('reports.retake-not-applied.calc-status');
         });
 
         Route::get('/reports/student-semester-grades', [ReportController::class, 'studentSemesterGrades'])->name('reports.student-semester-grades');

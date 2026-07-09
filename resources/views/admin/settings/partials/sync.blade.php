@@ -197,12 +197,26 @@
                 return;
             }
 
+            if (d.status === 'failed') {
+                bar.style.width = '100%';
+                bar.style.background = '#dc2626';
+                pct.textContent = '—';
+                pct.style.color = '#dc2626';
+                detail.textContent = "❌ " + (d.message || "Import xato bilan to'xtadi. Qayta urinib ko'ring.");
+                stop();
+                return;
+            }
+
             var p = d.percent || 0;
             bar.style.width = p + '%';
-            pct.textContent = p + '%';
-            if (d.page && d.pages) {
+            if (d.stage === 'prepare') {
+                pct.textContent = '…';
+                detail.textContent = "Tayyorlanmoqda: mavjud yozuvlar o'qilmoqda (" + (d.loaded || 0) + " ta)...";
+            } else if (d.page && d.pages) {
+                pct.textContent = p + '%';
                 detail.textContent = "Sahifa: " + d.page + "/" + d.pages + "  |  Yangi/o'zgargan: " + (d.imported || 0) + " ta";
             } else {
+                pct.textContent = p + '%';
                 detail.textContent = "Navbatda kutilmoqda...";
             }
         }).catch(function(){});

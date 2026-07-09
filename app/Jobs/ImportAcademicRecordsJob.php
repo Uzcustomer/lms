@@ -35,8 +35,10 @@ class ImportAcademicRecordsJob implements ShouldQueue
 
         Cache::put('academic_import_progress', [
             'status'     => 'running',
+            'stage'      => 'prepare',
+            'loaded'     => 0,
             'page'       => 0,
-            'pages'      => 1,
+            'pages'      => 0,
             'imported'   => 0,
             'percent'    => 0,
             'started_at' => now()->toDateTimeString(),
@@ -53,6 +55,7 @@ class ImportAcademicRecordsJob implements ShouldQueue
 
                     Cache::put('academic_import_progress', [
                         'status'     => 'running',
+                        'stage'      => 'import',
                         'page'       => $page,
                         'pages'      => $totalPages,
                         'imported'   => $imported,
@@ -66,8 +69,33 @@ class ImportAcademicRecordsJob implements ShouldQueue
                         $telegram->notify("📊 Akademik qaydlar import: {$milestone}% ({$page}/{$totalPages} sahifa, yangi: {$imported} ta)");
                         $lastTelegramPct = $milestone;
                     }
+                },
+                // Tayyorlanish bosqichi — mavjud yozuvlar xaritasi o'qilmoqda
+                // (~359k yozuv). UI bu bosqichda "Tayyorlanmoqda: N ta" ko'rsatadi.
+                function ($loaded) {
+                    Cache::put('academic_import_progress', [
+                        'status'     => 'running',
+                        'stage'      => 'prepare',
+                        'loaded'     => $loaded,
+                        'page'       => 0,
+                        'pages'      => 0,
+                        'imported'   => 0,
+                        'percent'    => 0,
+                        'started_at' => now()->toDateTimeString(),
+                    ], 3600);
                 }
             );
+        } catch (\Throwable $e) {
+            // Xatoni UI polling ko'ra olishi uchun "failed" holatini yozamiz —
+            // aks holda progress abadiy "running" da qotib qoladi.
+            Cache::put('academic_import_progress', [
+                'status'      => 'failed',
+                'message'     => mb_substr($e->getMessage(), 0, 200),
+                'percent'     => 0,
+                'finished_at' => now()->toDateTimeString(),
+            ], 3600);
+            $telegram->notify("❌ Akademik qaydlar importi xato bilan to'xtadi: " . mb_substr($e->getMessage(), 0, 200));
+            throw $e;
         } finally {
             Cache::forget('academic_import_lock');
         }

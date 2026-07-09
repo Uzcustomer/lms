@@ -56,8 +56,13 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
             $q->where('semester_id', $semester);
         }
 
+        // Aniq "Holat" filtri — bosqich (stage) filtridan ustun turadi
+        if (!empty($f['status'])) {
+            $q->academicStatus($f['status']);
+        }
+
         // Stage (akademik dept) — awaiting / pending / preapproved / rejected
-        if (!empty($f['stage'])) {
+        if (empty($f['status']) && !empty($f['stage'])) {
             match ($f['stage']) {
                 'awaiting' => $q
                     ->where('final_status', 'pending')

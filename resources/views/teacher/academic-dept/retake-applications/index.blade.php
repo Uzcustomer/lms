@@ -72,7 +72,7 @@
                             default => 'bg-gray-50 border-b-2 border-gray-500 text-gray-800',
                         };
                     @endphp
-                    <a href="{{ request()->fullUrlWithQuery(['stage' => $key]) }}"
+                    <a href="{{ request()->fullUrlWithQuery(['stage' => $key, 'status' => null]) }}"
                        class="flex-1 px-4 py-3 text-center text-sm font-medium {{ $active ? $activeBg : 'text-gray-600 hover:bg-gray-50' }}">
                         <span class="text-base mr-1">{{ $tab['icon'] }}</span>
                         {{ __($tab['label']) }}
@@ -84,13 +84,27 @@
             </div>
         </div>
 
-        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh + F.I.Sh) --}}
+        {{-- "Holat" bo'yicha filtr — cascading filtr formasi ichiga qo'shiladi --}}
+        @php
+            $statusFilterHtml = '<div class="rf-item" style="flex:1; min-width:280px;">'
+                . '<label class="rf-label"><span class="rf-dot" style="background:#6366f1;"></span> Holat</label>'
+                . '<select name="status" class="rf-select2" style="width:100%;">'
+                . '<option value="">' . e(__('Barchasi')) . '</option>';
+            foreach (($statusOptions ?? []) as $stKey => $stLabel) {
+                $sel = ((string) ($currentStatus ?? '')) === (string) $stKey ? ' selected' : '';
+                $statusFilterHtml .= '<option value="' . e($stKey) . '"' . $sel . '>' . e($stLabel) . '</option>';
+            }
+            $statusFilterHtml .= '</select></div>';
+        @endphp
+
+        {{-- Cascading filtrlar (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh + F.I.Sh + Holat) --}}
         @include('partials._retake_filters', [
             'formAction' => route('admin.retake-applications.index'),
             'educationTypes' => $educationTypes ?? collect(),
             'extraQueryFields' => array_filter([
                 'stage' => ($stage ?? 'all') !== 'all' ? $stage : null,
             ]),
+            'extraRow' => $statusFilterHtml,
         ])
 
         {{-- Excel eksport tugmasi (joriy filtrlar bo'yicha) --}}
@@ -179,12 +193,8 @@
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Talaba") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Fan") }}</th>
                             <th class="px-3 py-2 text-left text-[11px] font-medium text-gray-500 uppercase">{{ __("Semestr") }}</th>
-                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:200px;">{{ __("Holat") }}</th>
-                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:180px;">{{ __("To'lov") }}</th>
-                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("Dekan") }}</th>
-                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("Registrator") }}</th>
-                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:140px;">{{ __("O'quv bo'limi") }}</th>
-                            <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase">{{ __("Yuborilgan") }}</th>
+                            <th class="px-3 py-2 text-center text-[11px] font-medium text-gray-500 uppercase" style="width:260px;">{{ __("Holat") }}</th>
+                            <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase" style="width:150px;">{{ __("Yuborilgan") }}</th>
                             <th class="px-3 py-2 text-right text-[11px] font-medium text-gray-500 uppercase" style="width:160px;"></th>
                         </tr>
                         </thead>
@@ -220,87 +230,43 @@
                                 <td class="px-3 py-2.5 text-sm text-gray-700">{{ $app->subject_name }}</td>
                                 <td class="px-3 py-2.5 text-xs text-gray-600">{{ $app->semester_name }}</td>
 
-                                {{-- Umumiy holat --}}
-                                <td class="px-3 py-2.5 text-center">
-                                    @php $stageBadge = $app->academicStageBadge(); @endphp
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border {{ $stageBadge['class'] }}">
-                                        {{ $stageBadge['label'] }}
-                                    </span>
-                                </td>
-
+                                {{-- Yagona "Holat" ustuni — jarayonning joriy bosqichi.
+                                     Jarayon ketma-ket: dekanat → registrator → to'lov yuklash →
+                                     to'lov tasdiqlash → o'quv bo'limi. Faqat joriy bosqich ko'rsatiladi,
+                                     keyingi bosqichlar "kutilmoqda" deb ko'rsatilmaydi. --}}
                                 <td class="px-3 py-2.5 text-center">
                                     @php
-                                        $paymentStatus = $app->group?->payment_verification_status;
-                                        $paymentReason = $app->group?->payment_rejection_reason;
-                                        $paymentBadgeClass = match($paymentStatus) {
-                                            'approved' => 'bg-green-100 text-green-800',
-                                            'rejected' => 'bg-red-100 text-red-800',
-                                            'pending' => 'bg-amber-100 text-amber-800',
-                                            default => 'bg-gray-100 text-gray-700',
-                                        };
-                                        $paymentLabel = match($paymentStatus) {
-                                            'approved' => __("Tasdiqlangan"),
-                                            'rejected' => __("Rad etilgan"),
-                                            'pending' => $app->group?->payment_uploaded_at
-                                                ? __("To'lov cheki tasdiqlanishi kutilmoqda")
-                                                : __("To'lov yuklanishi kutilmoqda"),
-                                            default => __("Noma'lum"),
-                                        };
+                                        $stageBadge = $app->academicStageBadge();
+                                        // Joriy bosqichga tegishli izoh (rad etish sababi)
+                                        $stageReason = null;
+                                        if ($app->final_status === 'rejected') {
+                                            $stageReason = $app->rejectionReason();
+                                        } elseif ($app->group?->payment_verification_status === 'rejected') {
+                                            $stageReason = $app->group?->payment_rejection_reason;
+                                        }
+                                        // Joriy bosqichni kim/qachon hal qilgani (tooltip uchun)
+                                        $stageActor = null;
+                                        if ($app->academic_dept_status !== 'pending' && $app->academic_dept_decision_at) {
+                                            $stageActor = trim(($app->academicDeptUser?->full_name ?? $app->academic_dept_user_name ?? '') . ' · ' . $app->academic_dept_decision_at->format('d.m.Y H:i'));
+                                        } elseif ($app->registrar_status !== 'pending' && $app->registrar_decision_at) {
+                                            $stageActor = trim(($app->registrarUser?->full_name ?? $app->registrar_user_name ?? '') . ' · ' . $app->registrar_decision_at->format('d.m.Y H:i'));
+                                        } elseif ($app->dean_status !== 'pending' && $app->dean_decision_at) {
+                                            $stageActor = trim(($app->deanUser?->full_name ?? $app->dean_user_name ?? '') . ' · ' . $app->dean_decision_at->format('d.m.Y H:i'));
+                                        }
                                     @endphp
-                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-medium {{ $paymentBadgeClass }}">
-                                        {{ $paymentLabel }}
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold border {{ $stageBadge['class'] }}"
+                                          @if($stageActor) title="{{ $stageActor }}" @endif>
+                                        {{ $stageBadge['label'] }}
                                     </span>
-                                    @if($paymentStatus === 'rejected' && $paymentReason)
-                                        <div class="mt-1 text-[11px] text-red-600 max-w-[180px] mx-auto break-words">
-                                            {{ $paymentReason }}
+                                    @if($stageReason)
+                                        <div class="mt-1 text-[11px] text-red-600 max-w-[240px] mx-auto break-words">
+                                            {{ $stageReason }}
                                         </div>
                                     @endif
                                 </td>
 
-                                {{-- Dekan ustun --}}
-                                <td class="px-3 py-2.5 text-center">
-                                    @include('teacher.academic-dept.retake-applications._stage_badge', [
-                                        'status' => $app->dean_status,
-                                        'userName' => $app->deanUser?->full_name ?? $app->dean_user_name,
-                                        'decisionAt' => $app->dean_decision_at,
-                                        'reason' => $app->dean_reason,
-                                        'pendingLabel' => __("Dekanat tasdig'i kutilmoqda"),
-                                    ])
-                                </td>
-
-                                {{-- Registrator ustun --}}
-                                <td class="px-3 py-2.5 text-center">
-                                    @include('teacher.academic-dept.retake-applications._stage_badge', [
-                                        'status' => $app->registrar_status,
-                                        'userName' => $app->registrarUser?->full_name ?? $app->registrar_user_name,
-                                        'decisionAt' => $app->registrar_decision_at,
-                                        'reason' => $app->registrar_reason,
-                                        'pendingLabel' => __("Registrator ofisi tasdig'i kutilmoqda"),
-                                    ])
-                                </td>
-
-                                {{-- O'quv bo'limi ustun --}}
-                                <td class="px-3 py-2.5 text-center">
-                                    @php
-                                        // Pre-approved (group hali yo'q) — alohida yorliq
-                                        $effectiveStatus = $app->academic_dept_status;
-                                        $extraNote = null;
-                                        if ($effectiveStatus === 'approved' && empty($app->retake_group_id)) {
-                                            $extraNote = __("guruhga kutmoqda");
-                                        }
-                                    @endphp
-                                    @include('teacher.academic-dept.retake-applications._stage_badge', [
-                                        'status' => $effectiveStatus,
-                                        'userName' => $app->academicDeptUser?->full_name ?? $app->academic_dept_user_name,
-                                        'decisionAt' => $app->academic_dept_decision_at,
-                                        'reason' => $app->academic_dept_reason,
-                                        'extraNote' => $extraNote,
-                                        'pendingLabel' => __("O'quv bo'limi tasdig'i kutilmoqda"),
-                                    ])
-                                </td>
-
-                                <td class="px-3 py-2.5 text-xs text-gray-500 text-right whitespace-nowrap" title="{{ $app->created_at->format('Y-m-d H:i:s') }}">
-                                    {{ $app->created_at->diffForHumans() }}
+                                <td class="px-3 py-2.5 text-xs text-gray-600 text-right whitespace-nowrap">
+                                    {{ $app->created_at->format('d.m.Y H:i') }}
                                 </td>
 
                                 <td class="px-3 py-2.5 text-right whitespace-nowrap">

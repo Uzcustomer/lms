@@ -42,6 +42,7 @@ class RetakeAcademicApplicationController extends Controller
         $groupId = $request->input('group');
         $search = trim((string) $request->input('search', ''));
         $stage = $request->input('stage', 'all'); // all|awaiting|pending|preapproved|rejected
+        $status = $request->input('status'); // aniq holat filtri (academicStatusOptions)
 
         $perPage = (int) $request->input('per_page', 50);
         if (!in_array($perPage, [10, 25, 50, 100], true)) {
@@ -88,6 +89,10 @@ class RetakeAcademicApplicationController extends Controller
             $appsQuery->whereIn('student_hemis_id', $studentHemisIds);
         }
 
+        // Aniq "Holat" filtri tanlangan bo'lsa — u bosqich (tab) filtridan ustun turadi
+        if (!empty($status)) {
+            $appsQuery->academicStatus($status);
+        } else {
         // Bosqich filtri
         match ($stage) {
             // Hali o'quv bo'limi bosqichiga yetib kelmagan arizalar
@@ -124,6 +129,7 @@ class RetakeAcademicApplicationController extends Controller
             // Hammasi (statistika uchun)
             default => null,
         };
+        }
 
         $appsQuery->orderByDesc('created_at');
         $applications = $appsQuery->paginate($perPage)->withQueryString();
@@ -170,6 +176,8 @@ class RetakeAcademicApplicationController extends Controller
             'stage' => $stage,
             'counters' => $counters,
             'perPage' => $perPage,
+            'statusOptions' => RetakeApplication::academicStatusOptions(),
+            'currentStatus' => $status,
             'canManageApplications' => RetakeAccess::canManageAcademicDept(RetakeAccess::currentStaff()),
         ]);
     }
@@ -183,6 +191,7 @@ class RetakeAcademicApplicationController extends Controller
 
         $filters = [
             'stage' => $request->input('stage'),
+            'status' => $request->input('status'),
             'department' => $request->input('department'),
             'specialty' => $request->input('specialty'),
             'level_code' => $request->input('level_code'),

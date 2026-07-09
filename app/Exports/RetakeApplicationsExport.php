@@ -78,7 +78,7 @@ class RetakeApplicationsExport implements FromQuery, WithHeadings, WithMapping, 
                     ->where('final_status', 'pending')
                     ->whereNull('retake_group_id'),
                 'rejected' => $q->where(function ($inner) {
-                    $inner->where('academic_dept_status', 'rejected')
+                    $inner->where('final_status', 'rejected')
                         ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', 'rejected'));
                 }),
                 default => null,

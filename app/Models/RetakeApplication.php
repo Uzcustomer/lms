@@ -194,11 +194,11 @@ class RetakeApplication extends Model
         // 1) Dekan / registrator hali tasdiqlamagan
         if ($this->dean_status !== self::STATUS_APPROVED || $this->registrar_status !== self::STATUS_APPROVED) {
             if ($this->dean_status === self::STATUS_APPROVED && $this->registrar_status === self::STATUS_PENDING) {
-                $label = 'Registrator ko\'rib chiqmoqda';
+                $label = 'Registrator ofisi tasdig\'i kutilmoqda';
             } elseif ($this->dean_status === self::STATUS_PENDING && $this->registrar_status === self::STATUS_APPROVED) {
-                $label = 'Dekan ko\'rib chiqmoqda';
+                $label = 'Dekanat tasdig\'i kutilmoqda';
             } else {
-                $label = 'Dekan va registrator ko\'rib chiqmoqda';
+                $label = 'Dekanat va registrator tasdig\'i kutilmoqda';
             }
 
             return ['label' => $label, 'class' => 'bg-amber-50 text-amber-800 border-amber-200'];
@@ -209,10 +209,10 @@ class RetakeApplication extends Model
         $paymentUploaded = $this->group && $this->group->payment_uploaded_at !== null;
 
         if (!$paymentUploaded) {
-            return ['label' => 'To\'lov kutilmoqda', 'class' => 'bg-orange-50 text-orange-700 border-orange-200'];
+            return ['label' => 'To\'lov yuklanishi kutilmoqda', 'class' => 'bg-orange-50 text-orange-700 border-orange-200'];
         }
         if ($paymentStatus === RetakeApplicationGroup::PAYMENT_VERIFICATION_PENDING) {
-            return ['label' => 'To\'lov tekshirilmoqda', 'class' => 'bg-purple-50 text-purple-700 border-purple-200'];
+            return ['label' => 'To\'lov tasdiqlanishi kutilmoqda', 'class' => 'bg-purple-50 text-purple-700 border-purple-200'];
         }
         if ($paymentStatus === RetakeApplicationGroup::PAYMENT_VERIFICATION_REJECTED) {
             return ['label' => 'To\'lov rad etilgan · qayta yuklash kerak', 'class' => 'bg-red-50 text-red-700 border-red-200'];
@@ -224,7 +224,7 @@ class RetakeApplication extends Model
         }
 
         // O'quv bo'limi tasdig'ini kutmoqda (bu sahifada amal qilinadigan holat)
-        return ['label' => 'O\'quv bo\'limi tasdig\'ini kutmoqda', 'class' => 'bg-indigo-50 text-indigo-700 border-indigo-200'];
+        return ['label' => 'O\'quv bo\'limi tasdig\'i kutilmoqda', 'class' => 'bg-indigo-50 text-indigo-700 border-indigo-200'];
     }
 
     /**

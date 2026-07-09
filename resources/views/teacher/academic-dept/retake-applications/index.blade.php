@@ -241,7 +241,9 @@
                                         $paymentLabel = match($paymentStatus) {
                                             'approved' => __("Tasdiqlangan"),
                                             'rejected' => __("Rad etilgan"),
-                                            'pending' => __("Kutilmoqda"),
+                                            'pending' => $app->group?->payment_uploaded_at
+                                                ? __("Tasdiqlanishi kutilmoqda")
+                                                : __("To'lov yuklanishi kutilmoqda"),
                                             default => __("Noma'lum"),
                                         };
                                     @endphp
@@ -262,6 +264,7 @@
                                         'userName' => $app->deanUser?->full_name ?? $app->dean_user_name,
                                         'decisionAt' => $app->dean_decision_at,
                                         'reason' => $app->dean_reason,
+                                        'pendingLabel' => __("Dekanat tasdig'i kutilmoqda"),
                                     ])
                                 </td>
 
@@ -272,6 +275,7 @@
                                         'userName' => $app->registrarUser?->full_name ?? $app->registrar_user_name,
                                         'decisionAt' => $app->registrar_decision_at,
                                         'reason' => $app->registrar_reason,
+                                        'pendingLabel' => __("Registrator ofisi tasdig'i kutilmoqda"),
                                     ])
                                 </td>
 
@@ -291,6 +295,7 @@
                                         'decisionAt' => $app->academic_dept_decision_at,
                                         'reason' => $app->academic_dept_reason,
                                         'extraNote' => $extraNote,
+                                        'pendingLabel' => __("O'quv bo'limi tasdig'i kutilmoqda"),
                                     ])
                                 </td>
 

@@ -114,10 +114,11 @@ class RetakeAcademicApplicationController extends Controller
                 ->where('academic_dept_status', 'approved')
                 ->where('final_status', 'pending')
                 ->whereNull('retake_group_id'),
-            // O'quv bo'limi yoki payment tomonidan rad etilgan
+            // Har qanday bosqichda rad etilgan (dekan/registrator/o'quv bo'limi/tizim)
+            // yoki to'lovi rad etilgan arizalar
             'rejected' => $appsQuery
                 ->where(function ($q) {
-                    $q->where('academic_dept_status', 'rejected')
+                    $q->where('final_status', 'rejected')
                       ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', 'rejected'));
                 }),
             // Hammasi (statistika uchun)
@@ -157,7 +158,7 @@ class RetakeAcademicApplicationController extends Controller
                 ->count(),
             'rejected' => (clone $this->countersBaseQuery())
                 ->where(function ($q) {
-                    $q->where('academic_dept_status', 'rejected')
+                    $q->where('final_status', 'rejected')
                       ->orWhereHas('group', fn ($g) => $g->where('payment_verification_status', 'rejected'));
                 })
                 ->count(),

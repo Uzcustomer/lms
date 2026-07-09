@@ -45,6 +45,25 @@ class ComputeRetakeNotAppliedReportJob implements ShouldQueue
     }
 
     /**
+     * Natija fayli mavjudmi (job muvaffaqiyatli tugab, diskka yozganmi).
+     * retry_after tufayli dublikat urinish keshni 'failed' qilib qo'ysa ham,
+     * haqiqiy natija diskda bo'lsa "tugagan" deb hisoblanadi.
+     */
+    public static function hasResult(string $calcKey): bool
+    {
+        return is_file(self::pathFor($calcKey));
+    }
+
+    /**
+     * Eski natija faylini o'chirish (yangi hisob boshlashdan oldin — bir xil
+     * filtrlar bilan avvalgi run natijasi yangi hisobni "tayyor" ko'rsatmasin).
+     */
+    public static function clearResult(string $calcKey): void
+    {
+        @unlink(self::pathFor($calcKey));
+    }
+
+    /**
      * Tayyor natija qatorlarini o'qish. Fayl yo'q/buzilgan bo'lsa null —
      * chaqiruvchi qayta hisoblashni boshlashi kerak (HTTP 410).
      */

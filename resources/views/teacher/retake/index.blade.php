@@ -208,8 +208,9 @@
                                     </template>
                                     <button type="submit"
                                             :disabled="selected.length === 0"
-                                            :class="selected.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-800'"
-                                            class="px-4 py-2 text-sm font-medium rounded-lg bg-red-700 text-white">
+                                            :class="selected.length === 0 ? 'opacity-50 cursor-not-allowed' : ''"
+                                            class="px-4 py-2 text-sm font-medium rounded-lg"
+                                            style="background:#2563eb;color:#fff;">
                                         {{ __("Guruhlarni o'chirish") }}
                                         <span x-show="selected.length > 0">(<span x-text="selected.length"></span>)</span>
                                     </button>
@@ -227,8 +228,9 @@
                                     </template>
                                     <button type="submit"
                                             :disabled="selected.length === 0"
-                                            :class="selected.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-rose-800 ring-2 ring-rose-200'"
-                                            class="px-4 py-2 text-sm font-bold rounded-lg bg-rose-700 text-white">
+                                            :class="selected.length === 0 ? 'opacity-50 cursor-not-allowed' : ''"
+                                            class="px-4 py-2 text-sm font-bold rounded-lg"
+                                            style="background:#be123c;color:#fff;border:2px solid #fecdd3;">
                                         💀 {{ __("Butunlay o'chirish") }}
                                         <span x-show="selected.length > 0">(<span x-text="selected.length"></span>)</span>
                                     </button>

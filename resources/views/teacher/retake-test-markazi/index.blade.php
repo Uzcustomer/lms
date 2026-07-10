@@ -42,6 +42,9 @@
         @if(session('success'))
             <div class="bg-green-50 border border-green-200 rounded-lg p-3 mb-4 text-sm text-green-800">{{ session('success') }}</div>
         @endif
+        @if(session('error'))
+            <div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4 text-sm text-red-800">{{ session('error') }}</div>
+        @endif
 
         {{-- Yuqori filtrlar — JN hisoboti uslubida (Ta'lim turi → Fakultet → Yo'nalish → Kurs → Semestr → Guruh + Fan) --}}
         @include('partials._retake_filters', [

@@ -755,18 +755,19 @@ class RetakeTestMarkaziController extends Controller
 
         $applications = $this->filteredSentApplications($request);
         if ($applications->isEmpty()) {
-            abort(404, "Tanlangan filtrlarga mos qayta o'qish talabalari topilmadi");
+            return back()->with('error', "Tanlangan filtrlarga mos qayta o'qish talabalari topilmadi.");
         }
 
         $groupIds = $applications->pluck('retake_group_id')->filter()->unique()->values();
         $groups = RetakeGroup::whereIn('id', $groupIds)->orderBy('name')->get();
         if ($groups->isEmpty()) {
-            abort(404, 'Vedomost uchun guruh topilmadi');
+            return back()->with('error', 'Vedomost uchun guruh topilmadi.');
         }
 
-        // Xavfsizlik: juda ko'p guruh bo'lsa (filtr toraytirilmagan) — to'xtatamiz.
+        // Xavfsizlik: juda ko'p guruh bo'lsa (filtr toraytirilmagan) — chiroyli
+        // xabar bilan qaytaramiz, foydalanuvchini filtrlashga yo'naltiramiz.
         if ($groups->count() > 50) {
-            abort(422, "Juda ko'p guruh ({$groups->count()} ta). Iltimos filtrlarni toraytiring (fakultet / yo'nalish / kurs / semestr / guruh / fan).");
+            return back()->with('error', "Juda ko'p guruh topildi ({$groups->count()} ta). Iltimos avval yuqoridagi filtrlardan (fakultet / yo'nalish / kurs / semestr / guruh / fan) birortasini tanlab, so'ng vedomost yarating.");
         }
 
         // Har guruh (va aralash semestrli bo'lsa har semestr) uchun vedomost.
@@ -790,7 +791,7 @@ class RetakeTestMarkaziController extends Controller
         }
 
         if (empty($files)) {
-            abort(404, "Vedomost yaratib bo'lmadi (mos ma'lumot yo'q)");
+            return back()->with('error', "Vedomost yaratib bo'lmadi (mos ma'lumot yo'q).");
         }
 
         // Bitta fayl — to'g'ridan-to'g'ri, aks holda ZIP.

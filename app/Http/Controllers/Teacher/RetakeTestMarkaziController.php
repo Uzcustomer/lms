@@ -192,6 +192,25 @@ class RetakeTestMarkaziController extends Controller
             ->pluck('rgs.subject_name', 'rgs.subject_id')
             ->toArray();
 
+        // Yopilish shakli (assessment_type) ro'yxati — faqat joriy filtrlarga
+        // (jumladan tanlangan fan) mos arizalarda haqiqatan mavjud turlar.
+        // "Vedomost yaratish" tugmasidagi tanlov shu bilan cheklanadi.
+        $atypeQuery = RetakeApplication::query()
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
+            ->join('retake_groups as rga', 'rga.id', '=', 'retake_applications.retake_group_id')
+            ->whereNotNull('rga.assessment_type');
+        if ($hasStudentFilter) {
+            $atypeQuery->whereIn('retake_applications.student_hemis_id', $studentSub);
+        }
+        if (filled($subjectFilter)) {
+            $atypeQuery->where('rga.subject_id', $subjectFilter);
+        }
+        if ($selSemNum) {
+            $atypeQuery->where('retake_applications.semester_name', 'like', $selSemNum . '-%');
+        }
+        $assessmentTypes = $atypeQuery->distinct()->pluck('rga.assessment_type')->filter()->values()->toArray();
+
         return view('teacher.retake-test-markazi.index', [
             'groups' => $groups,
             'sentApplications' => $sentApplications,
@@ -203,6 +222,7 @@ class RetakeTestMarkaziController extends Controller
             'sentStatus' => $sentStatus,
             'educationTypes' => \App\Services\Retake\RetakeFilterCache::educationTypes(),
             'subjects' => $subjects,
+            'assessmentTypes' => $assessmentTypes,
         ]);
     }
 

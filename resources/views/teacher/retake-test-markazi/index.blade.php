@@ -205,13 +205,23 @@
                             @endforeach
                             <input type="hidden" name="student_search" value="{{ $studentSearch }}">
                             <input type="hidden" name="sent_status" value="{{ $sentStatus ?? '' }}">
+                            @php
+                                // Faqat joriy filtrlarga mos arizalarda mavjud yopilish
+                                // shakllarini ko'rsatamiz (sinov va sinov_fan -> "Sinov").
+                                $atLabels = ['oske' => 'OSKE', 'test' => 'Test', 'oske_test' => 'OSKE + Test', 'sinov' => 'Sinov', 'sinov_fan' => 'Sinov'];
+                                $atOptions = [];
+                                foreach (($assessmentTypes ?? []) as $at) {
+                                    if (!isset($atLabels[$at])) continue;
+                                    $val = in_array($at, ['sinov', 'sinov_fan'], true) ? 'sinov' : $at;
+                                    $atOptions[$val] = $atLabels[$at];
+                                }
+                            @endphp
                             <select name="assessment_type" required
                                     style="height:38px;border-radius:8px;border:1px solid #cbd5e1;font-size:13px;padding:0 8px;background:#fff;color:#1e293b;">
                                 <option value="">{{ __('Yopilish shakli...') }}</option>
-                                <option value="oske">OSKE</option>
-                                <option value="test">Test</option>
-                                <option value="oske_test">OSKE + Test</option>
-                                <option value="sinov">Sinov</option>
+                                @foreach($atOptions as $val => $label)
+                                    <option value="{{ $val }}" {{ count($atOptions) === 1 ? 'selected' : '' }}>{{ $label }}</option>
+                                @endforeach
                             </select>
                             <button type="submit"
                                     style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;background:#7c3aed;color:#fff;font-size:14px;font-weight:600;border:none;cursor:pointer;">

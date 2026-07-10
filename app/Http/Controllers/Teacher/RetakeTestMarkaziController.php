@@ -742,6 +742,149 @@ class RetakeTestMarkaziController extends Controller
         return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
     }
 
+    /**
+     * Joriy filtrlar (fakultet, yo'nalish, kurs, semestr, guruh, fan) bo'yicha
+     * qayta o'qish VEDOMOST(lar)ini yaratadi — vedomost-tekshirish uslubidagi
+     * filtr → generatsiya oqimi. Mos kelgan har bir qayta o'qish guruhi uchun
+     * rasmiy "Qayta o'qish vedomosti" (yn_qaydnoma shabloni) hosil qilinadi;
+     * bir nechta guruh bo'lsa — ZIP qilib beriladi.
+     */
+    public function generateVedomost(Request $request)
+    {
+        $this->authorize();
+
+        $applications = $this->filteredSentApplications($request);
+        if ($applications->isEmpty()) {
+            abort(404, "Tanlangan filtrlarga mos qayta o'qish talabalari topilmadi");
+        }
+
+        $groupIds = $applications->pluck('retake_group_id')->filter()->unique()->values();
+        $groups = RetakeGroup::whereIn('id', $groupIds)->orderBy('name')->get();
+        if ($groups->isEmpty()) {
+            abort(404, 'Vedomost uchun guruh topilmadi');
+        }
+
+        // Xavfsizlik: juda ko'p guruh bo'lsa (filtr toraytirilmagan) — to'xtatamiz.
+        if ($groups->count() > 50) {
+            abort(422, "Juda ko'p guruh ({$groups->count()} ta). Iltimos filtrlarni toraytiring (fakultet / yo'nalish / kurs / semestr / guruh / fan).");
+        }
+
+        // Har guruh (va aralash semestrli bo'lsa har semestr) uchun vedomost.
+        $files = [];
+        foreach ($groups as $group) {
+            try {
+                $semesters = $this->service->vedomostSemesterNumbers($group);
+                if (count($semesters) > 1) {
+                    foreach ($semesters as $sn) {
+                        $built = $this->service->buildVedomostExcel($group, null, $sn);
+                        $files[] = [$built['path'], $built['filename']];
+                    }
+                } else {
+                    $built = $this->service->buildVedomostExcel($group, null, null);
+                    $files[] = [$built['path'], $built['filename']];
+                }
+            } catch (ValidationException $e) {
+                // Bu guruh uchun vedomost yasab bo'lmadi (talaba yo'q va h.k.) — o'tkazamiz.
+                continue;
+            }
+        }
+
+        if (empty($files)) {
+            abort(404, "Vedomost yaratib bo'lmadi (mos ma'lumot yo'q)");
+        }
+
+        // Bitta fayl — to'g'ridan-to'g'ri, aks holda ZIP.
+        if (count($files) === 1) {
+            return response()->download($files[0][0], $files[0][1]);
+        }
+
+        $zipName = 'qayta_oqish_vedomostlari_' . now()->format('Ymd_His') . '.zip';
+        $zipDir = storage_path('app/public/retake/vedomosts');
+        if (!is_dir($zipDir)) {
+            @mkdir($zipDir, 0755, true);
+        }
+        $zipPath = $zipDir . '/' . $zipName;
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            abort(500, "ZIP faylini yaratib bo'lmadi");
+        }
+        $used = [];
+        foreach ($files as [$abs, $name]) {
+            if (!is_file($abs)) continue;
+            $entry = $name;
+            $i = 1;
+            while (isset($used[$entry])) {
+                $entry = pathinfo($name, PATHINFO_FILENAME) . "_{$i}." . pathinfo($name, PATHINFO_EXTENSION);
+                $i++;
+            }
+            $used[$entry] = true;
+            $zip->addFile($abs, $entry);
+        }
+        $zip->close();
+
+        return response()->download($zipPath, $zipName)->deleteFileAfterSend(true);
+    }
+
+    /**
+     * exportSentStudentsExcel bilan bir xil filtrlar bo'yicha tasdiqlangan
+     * qayta o'qish arizalari (fakultet/yo'nalish/kurs/semestr/guruh/fan +
+     * ism qidiruv + yuborilganlik holati).
+     */
+    private function filteredSentApplications(Request $request)
+    {
+        $studentSearch = trim((string) $request->input('student_search', ''));
+        $sentStatus = (string) $request->input('sent_status', '');
+        $studentFilters = [
+            'education_type' => $request->input('education_type'),
+            'department' => $request->input('department'),
+            'specialty' => $request->input('specialty'),
+            'level_code' => $request->input('level_code'),
+            'semester_code' => $request->input('semester_code'),
+            'group' => $request->input('group'),
+        ];
+        $subjectFilter = $request->input('subject');
+        $hasStudentFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty();
+
+        $studentSub = function ($sub) use ($studentFilters) {
+            $sub->select('hemis_id')->from('students');
+            if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+            if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+            if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+            if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+            if (!empty($studentFilters['semester_code'])) $sub->where('semester_code', $studentFilters['semester_code']);
+            if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+        };
+
+        $query = RetakeApplication::query()
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
+            ->with(['group.student', 'retakeGroup']);
+
+        if ($sentStatus === 'sent') {
+            $query->whereNotNull('sent_to_test_markazi_at');
+        } elseif ($sentStatus === 'not_sent') {
+            $query->whereNull('sent_to_test_markazi_at');
+        }
+        if ($studentSearch !== '') {
+            $query->where(function ($q) use ($studentSearch) {
+                $q->where('student_hemis_id', 'like', "%{$studentSearch}%")
+                    ->orWhereHas('group.student', function ($sq) use ($studentSearch) {
+                        $sq->where('full_name', 'like', "%{$studentSearch}%")
+                            ->orWhere('student_id_number', 'like', "%{$studentSearch}%");
+                    });
+            });
+        }
+        if ($subjectFilter) {
+            $query->whereHas('retakeGroup', fn ($q) => $q->where('subject_id', $subjectFilter));
+        }
+        if ($hasStudentFilter) {
+            $query->whereIn('student_hemis_id', $studentSub);
+        }
+
+        return $query->get();
+    }
+
     private function authorize(): void
     {
         $actor = RetakeAccess::currentStaff();

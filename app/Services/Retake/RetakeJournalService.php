@@ -576,6 +576,8 @@ class RetakeJournalService
         ?float $oskeScore,
         ?float $testScore,
         ?Teacher $actor = null,
+        $oskeGradedAt = null,
+        $testGradedAt = null,
     ): RetakeApplication {
         if ($oskeScore !== null && ($oskeScore < 0 || $oskeScore > 100)) {
             throw ValidationException::withMessages(['oske_score' => 'OSKE 0..100']);
@@ -586,6 +588,8 @@ class RetakeJournalService
 
         // "Baho qo'yilgan sana" — faqat qiymat o'zgarganda yangilanadi (o'zgarmasa
         // eski sana saqlanadi, null bo'lsa/o'chirilsa sana ham tozalanadi).
+        // Manba (diagnostika/quiz) sanasi berilsa — o'shani ishlatamiz (imtihon
+        // topshirilgan sana), aks holda hozirgi vaqt.
         $oldOske = $app->oske_score !== null ? (float) $app->oske_score : null;
         $oldTest = $app->test_score !== null ? (float) $app->test_score : null;
 
@@ -595,11 +599,17 @@ class RetakeJournalService
         ];
         if ($oskeScore === null) {
             $update['oske_graded_at'] = null;
+        } elseif ($oskeGradedAt) {
+            // Manba (imtihon) sanasi berilgan — baho o'zgarmagan bo'lsa ham shu
+            // sanaga tenglaymiz (mavjud yozuvlar ham qayta tortishda to'g'rilanadi).
+            $update['oske_graded_at'] = $oskeGradedAt;
         } elseif ($oldOske === null || abs($oldOske - $oskeScore) > 0.001) {
             $update['oske_graded_at'] = now();
         }
         if ($testScore === null) {
             $update['test_graded_at'] = null;
+        } elseif ($testGradedAt) {
+            $update['test_graded_at'] = $testGradedAt;
         } elseif ($oldTest === null || abs($oldTest - $testScore) > 0.001) {
             $update['test_graded_at'] = now();
         }
@@ -1283,9 +1293,12 @@ class RetakeJournalService
                 $oskeQuery->where('lesson_date', '>=', $group->oske_date->format('Y-m-d'));
             }
             $oskeMap = $oskeQuery
-                ->select('student_hemis_id', \Illuminate\Support\Facades\DB::raw('ROUND(AVG(grade)) as avg_grade'))
+                ->select('student_hemis_id',
+                    \Illuminate\Support\Facades\DB::raw('ROUND(AVG(grade)) as avg_grade'),
+                    \Illuminate\Support\Facades\DB::raw('MAX(lesson_date) as graded_date'))
                 ->groupBy('student_hemis_id')
-                ->pluck('avg_grade', 'student_hemis_id');
+                ->get()
+                ->keyBy('student_hemis_id');
         }
 
         if ($needsTest) {
@@ -1298,9 +1311,12 @@ class RetakeJournalService
                 $testQuery->where('lesson_date', '>=', $group->test_date->format('Y-m-d'));
             }
             $testMap = $testQuery
-                ->select('student_hemis_id', \Illuminate\Support\Facades\DB::raw('ROUND(AVG(grade)) as avg_grade'))
+                ->select('student_hemis_id',
+                    \Illuminate\Support\Facades\DB::raw('ROUND(AVG(grade)) as avg_grade'),
+                    \Illuminate\Support\Facades\DB::raw('MAX(lesson_date) as graded_date'))
                 ->groupBy('student_hemis_id')
-                ->pluck('avg_grade', 'student_hemis_id');
+                ->get()
+                ->keyBy('student_hemis_id');
         }
 
         $fetchedOske = 0;
@@ -1310,11 +1326,16 @@ class RetakeJournalService
         foreach ($applications as $app) {
             $update = [];
             if ($needsOske) {
-                $score = $oskeMap->get($app->student_hemis_id);
+                $row = $oskeMap->get($app->student_hemis_id);
+                $score = $row?->avg_grade;
                 if ($score !== null) {
                     $update['oske_score'] = $score;
                     $oldOske = $app->oske_score !== null ? (float) $app->oske_score : null;
-                    if ($oldOske === null || abs($oldOske - (float) $score) > 0.001) {
+                    // "Baho qo'yilgan sana" — manba baholarning oxirgi dars (imtihon)
+                    // sanasi, tortilgan vaqt emas. Sana bo'lsa doim shunga tenglaymiz.
+                    if ($row->graded_date) {
+                        $update['oske_graded_at'] = $row->graded_date;
+                    } elseif ($oldOske === null || abs($oldOske - (float) $score) > 0.001) {
                         $update['oske_graded_at'] = now();
                     }
                     $fetchedOske++;
@@ -1323,11 +1344,14 @@ class RetakeJournalService
                 }
             }
             if ($needsTest) {
-                $score = $testMap->get($app->student_hemis_id);
+                $row = $testMap->get($app->student_hemis_id);
+                $score = $row?->avg_grade;
                 if ($score !== null) {
                     $update['test_score'] = $score;
                     $oldTest = $app->test_score !== null ? (float) $app->test_score : null;
-                    if ($oldTest === null || abs($oldTest - (float) $score) > 0.001) {
+                    if ($row->graded_date) {
+                        $update['test_graded_at'] = $row->graded_date;
+                    } elseif ($oldTest === null || abs($oldTest - (float) $score) > 0.001) {
                         $update['test_graded_at'] = now();
                     }
                     $fetchedTest++;
@@ -1491,8 +1515,10 @@ class RetakeJournalService
             }
             // Semestr: `semester` maydoni ko'pincha NULL — nomidan ("N-sem") olamiz.
             $semKey = RetakeSessionCode::semesterNumber($row->semester, $row->attempt_name) ?? 0; // 0 = noma'lum
-            if (!isset($best[$hid][$semKey][$kind]) || $grade > $best[$hid][$semKey][$kind]) {
-                $best[$hid][$semKey][$kind] = $grade;
+            if (!isset($best[$hid][$semKey][$kind]) || $grade > $best[$hid][$semKey][$kind]['grade']) {
+                // Bahoni va shu urinishning topshirilgan sanasini (date_finish)
+                // birga saqlaymiz — "Baho qo'yilgan sana" imtihon sanasiga teng bo'lsin.
+                $best[$hid][$semKey][$kind] = ['grade' => $grade, 'date' => $row->date_finish];
             }
         }
 
@@ -1528,8 +1554,10 @@ class RetakeJournalService
         foreach ($applications as $app) {
             $hid = (string) $app->student_hemis_id;
             $appSem = preg_match('/(\d+)/', (string) $app->semester_name, $am) ? (int) $am[1] : null;
-            $oske = $needsOske ? $pickBest($hid, $appSem, 'oske') : null;
-            $test = $needsTest ? $pickBest($hid, $appSem, 'test') : null;
+            $oskeBest = $needsOske ? $pickBest($hid, $appSem, 'oske') : null;
+            $testBest = $needsTest ? $pickBest($hid, $appSem, 'test') : null;
+            $oske = $oskeBest['grade'] ?? null;
+            $test = $testBest['grade'] ?? null;
 
             $hasUpdate = false;
             if ($needsOske) {
@@ -1558,6 +1586,8 @@ class RetakeJournalService
                     $oske !== null ? round($oske) : ($app->oske_score !== null ? (float) $app->oske_score : null),
                     $test !== null ? round($test) : ($app->test_score !== null ? (float) $app->test_score : null),
                     $actor,
+                    $oskeBest['date'] ?? null,
+                    $testBest['date'] ?? null,
                 );
             }
         }

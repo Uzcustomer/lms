@@ -615,51 +615,42 @@ class VedomostSubmissionService
     }
 
     /**
-     * Qo'shimcha shakllarini — 12q (har guruh alohida), 12aq/12bq (umumiy)
-     * ochadi/yopadi.
+     * Qo'shimcha (farmoyish) shakllarini — 12q (har guruh alohida), 12aq/12bq
+     * (umumiy) — ochadi/yopadi.
      *
-     * Trigger manbalari:
-     *  - is_qoshimcha=1: farmoyish / qo'shimcha imtihon yozuvi
-     *  - retake_was_sababli=1: sababli ariza asosida boshqa muddatda topshirilgan
-     *    OSKI/Test yozuvi
-     *
-     * Shuning uchun 12q/12aq/12bq ochilishida har bir attempt uchun ikkala holat
-     * ham hisobga olinadi:
-     *   attempt=1 → 12-qo'shimcha
-     *   attempt=2 → 12a-qo'shimcha
-     *   attempt=3 → 12b-qo'shimcha
+     * MUHIM: qo'shimcha varaq farmoyish IMTIHONI o'tkazilgani uchun ochiladi
+     * (talaba o'tdimi-yiqildimi ahamiyatsiz — varaq topshirilishi kerak). Shuning
+     * uchun trigger = is_qoshimcha (101/102) imtihon bahosi MAVJUDLIGI, urinish
+     * (attempt) darajasi bo'yicha:
+     *   attempt=1 → 12-qo'shimcha, attempt=2 → 12a-qo'shimcha, attempt=3 → 12b-qo'shimcha.
+     * (YnStageService "qoshimcha_passed" bosqichi — bu o'tganlik; varaq ochish
+     * uchun ishlatilmaydi, chunki yiqilgan farmoyishchi ham varaqda bo'lishi kerak.)
      *
      * @param  array<int,string>  $activeGroupHemisIds  joriy faol guruhlar
      * @return array<int>  ochilgan (saqlanadigan) qator id lari
      */
     private function syncQoshimchaForms(array $units, array $activeGroupHemisIds, Collection $semByGroup): array
     {
-        if (
-            (!$this->studentGradeQoshimchaColumn() && !$this->studentGradeSababliColumn())
-            || empty($activeGroupHemisIds)
-        ) {
+        if (!$this->studentGradeQoshimchaColumn() || empty($activeGroupHemisIds)) {
             return [];
         }
 
         $hasAttempt = $this->studentGradeAttemptColumn();
-        $hasQoshimcha = $this->studentGradeQoshimchaColumn();
-        $hasSababli = $this->studentGradeSababliColumn();
 
-        // Qo'shimcha triggerlar beradigan OSKI/Test yozuvlari —
-        // (guruh, fan, sem, urinish, is_qoshimcha, retake_was_sababli).
+        // is_qoshimcha (farmoyish) OSKI/Test imtihon baholari — (guruh, fan, sem, urinish).
         $rows = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereIn('st.group_id', $activeGroupHemisIds)
+            ->where('sg.is_qoshimcha', 1)
             ->whereIn('sg.training_type_code', [101, 102])
             ->whereNull('sg.deleted_at')
             ->select(
                 'st.group_id as group_hemis_id',
                 'sg.subject_id',
                 'sg.semester_code',
-                $hasAttempt ? 'sg.attempt' : DB::raw('1 as attempt'),
-                $hasQoshimcha ? 'sg.is_qoshimcha' : DB::raw('0 as is_qoshimcha'),
-                $hasSababli ? 'sg.retake_was_sababli' : DB::raw('0 as retake_was_sababli')
+                $hasAttempt ? 'sg.attempt' : DB::raw('1 as attempt')
             )
+            ->distinct()
             ->get();
 
         // "group|subject|sem" => [urinish => true]  (faqat joriy semestr).
@@ -675,12 +666,6 @@ class VedomostSubmissionService
             if ($att < 1) {
                 $att = 1;
             }
-            $isQoshimcha = !empty($r->is_qoshimcha);
-            $isSababli = !empty($r->retake_was_sababli);
-            if (!$isQoshimcha && !$isSababli) {
-                continue;
-            }
-
             $attemptsByKey[$gid . '|' . $r->subject_id . '|' . $sem][$att] = true;
         }
 

@@ -25,14 +25,12 @@ class VedomostSubmission extends Model
     public const FORM_12Q  = '12q';   // 12-qo'shimcha — asosiy urinishning qo'shimchasi (har guruh alohida)
     public const FORM_12AQ = '12aq';  // 12a-qo'shimcha (barcha guruhlar bitta varaqda)
     public const FORM_12BQ = '12bq';  // 12b-qo'shimcha (barcha guruhlar bitta varaqda)
-    public const FORM_12AG = '12ag';  // 12a-qo'shimcha (sababli guruh uchun alohida)
-    public const FORM_12BG = '12bg';  // 12b-qo'shimcha (sababli guruh uchun alohida)
 
     /** 12a/12b va ularning qo'shimchalari — umumiy (guruhsiz, hamma guruh bitta varaqda). */
     public const COMBINED_FORMS = [self::FORM_12A, self::FORM_12B, self::FORM_12AQ, self::FORM_12BQ];
 
     /** Qo'shimcha (sababli) shakllar. */
-    public const QOSHIMCHA_FORMS = [self::FORM_12Q, self::FORM_12AQ, self::FORM_12BQ, self::FORM_12AG, self::FORM_12BG];
+    public const QOSHIMCHA_FORMS = [self::FORM_12Q, self::FORM_12AQ, self::FORM_12BQ];
 
     /** YN service shakl nomi -> vedomost form_type. */
     public const YN_FORM_MAP = [
@@ -40,10 +38,8 @@ class VedomostSubmission extends Model
         "12-qo'shimcha" => self::FORM_12Q,
         '12a-shakl'     => self::FORM_12A,
         "12a-qo'shimcha" => self::FORM_12AQ,
-        "12a-qo'shimcha (guruh)" => self::FORM_12AG,
         '12b-shakl'     => self::FORM_12B,
         "12b-qo'shimcha" => self::FORM_12BQ,
-        "12b-qo'shimcha (guruh)" => self::FORM_12BG,
     ];
 
     protected $fillable = [
@@ -154,10 +150,8 @@ class VedomostSubmission extends Model
             self::FORM_12Q => '12-qo\'shimcha',
             self::FORM_12A => '12a-shakl',
             self::FORM_12AQ => '12a-qo\'shimcha',
-            self::FORM_12AG => '12a-qo\'shimcha (guruh)',
             self::FORM_12B => '12b-shakl',
             self::FORM_12BQ => '12b-qo\'shimcha',
-            self::FORM_12BG => '12b-qo\'shimcha (guruh)',
         ];
     }
 

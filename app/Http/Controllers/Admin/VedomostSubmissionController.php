@@ -9,14 +9,12 @@ use App\Models\Department;
 use App\Models\Setting;
 use App\Models\VedomostSubmission;
 use App\Models\VedomostSubmissionLog;
-use App\Jobs\SyncVedomostSubmissionsJob;
 use App\Services\VedomostMergeService;
 use App\Services\VedomostSubmissionNotifier;
 use App\Services\VedomostSubmissionService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -265,7 +263,6 @@ class VedomostSubmissionController extends Controller
 
         $notifyEnabled = VedomostSubmissionNotifier::enabled();
         $canToggleNotify = in_array(session('active_role', ''), self::NOTIFY_TOGGLE_ROLES, true);
-        $syncProgress = Cache::get('vedomost_submission_sync_progress', ['status' => 'idle']);
 
         return view('admin.vedomost-submission.index', compact(
             'submissions',
@@ -277,8 +274,7 @@ class VedomostSubmissionController extends Controller
             'formLabels',
             'stats',
             'notifyEnabled',
-            'canToggleNotify',
-            'syncProgress'
+            'canToggleNotify'
         ));
     }
 
@@ -402,8 +398,8 @@ class VedomostSubmissionController extends Controller
         $forms = VedomostSubmission::formLabels();
         $formTint = [
             '12' => '#eef2ff', '12q' => '#e0e7ff',
-            '12a' => '#ecfeff', '12aq' => '#fef3c7', '12ag' => '#fde68a',
-            '12b' => '#fef2f2', '12bq' => '#fae8ff', '12bg' => '#fed7aa',
+            '12a' => '#ecfeff', '12aq' => '#fef3c7',
+            '12b' => '#fef2f2', '12bq' => '#fae8ff',
         ];
 
         $sections = [];
@@ -667,30 +663,11 @@ class VedomostSubmissionController extends Controller
     {
         $this->checkAccess();
 
-        if (Cache::get('vedomost_submission_sync_lock')) {
-            return redirect()
-                ->route('admin.vedomost-submission.index', $request->query())
-                ->with('error', 'Yangilash allaqachon fon rejimida ketmoqda. Tugashini kuting.');
-        }
-
-        Cache::put('vedomost_submission_sync_progress', [
-            'status' => 'queued',
-            'message' => 'Yangilash navbatga qo\'yildi.',
-            'started_at' => now()->toDateTimeString(),
-            'finished_at' => null,
-            'count' => 0,
-        ], 3600);
-
-        SyncVedomostSubmissionsJob::dispatch();
+        $count = $this->service->sync();
 
         return redirect()
             ->route('admin.vedomost-submission.index', $request->query())
-            ->with('success', 'Joriy semestr bo\'yicha yangilash fon rejimida boshlandi.');
-    }
-
-    public function syncProgress(): \Illuminate\Http\JsonResponse
-    {
-        return response()->json(Cache::get('vedomost_submission_sync_progress', ['status' => 'idle']));
+            ->with('success', "Joriy semestr bo'yicha {$count} ta vedomost yozuvi yangilandi.");
     }
 
     /**

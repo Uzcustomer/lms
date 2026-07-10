@@ -704,11 +704,10 @@ class VedomostSubmissionService
 
         // Sababli attempt=2/3 bo'lsa, o'sha talabaning guruhi uchun alohida
         // 12a/12b qo'shimcha satri ham ochiladi.
-        $groupDateMap = $this->examDatesForGroupSubjectBatch(array_keys($sababliAttemptsByKey));
-
         foreach ($sababliAttemptsByKey as $key => $atts) {
             [$gid, $subjectId, $sem] = explode('|', $key);
-            $baseDates = $groupDateMap[$key] ?? ['resit' => null, 'resit2' => null];
+
+            $baseDates = $this->examDatesForGroupSubject($gid, $subjectId, $sem);
 
             $id12ag = $this->upsertGroupSababliResitRow(
                 $gid,
@@ -904,42 +903,22 @@ class VedomostSubmissionService
     }
 
     /**
-     * Bir nechta guruh|fan|semestr kalitlari uchun resit sanalarini batch qaytaradi.
+     * Bitta guruh + fan + semestr uchun attempt sanalarini qaytaradi.
      *
-     * @param  array<int,string>  $keys
-     * @return array<string,array{resit:?string,resit2:?string}>
+     * @return array{resit:?string,resit2:?string}
      */
-    private function examDatesForGroupSubjectBatch(array $keys): array
+    private function examDatesForGroupSubject(string $groupHemisId, string $subjectId, string $semesterCode): array
     {
-        $result = [];
-        if (empty($keys)) {
-            return $result;
-        }
+        $row = ExamSchedule::whereNull('student_hemis_id')
+            ->where('group_hemis_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->first();
 
-        $groupIds = [];
-        $subjectIds = [];
-        $semCodes = [];
+        $resit = null;
+        $resit2 = null;
 
-        foreach ($keys as $key) {
-            [$gid, $subjectId, $sem] = explode('|', $key);
-            $groupIds[(string) $gid] = true;
-            $subjectIds[(string) $subjectId] = true;
-            $semCodes[(string) $sem] = true;
-            $result[$key] = ['resit' => null, 'resit2' => null];
-        }
-
-        $scheduleRows = ExamSchedule::whereNull('student_hemis_id')
-            ->whereIn('group_hemis_id', array_keys($groupIds))
-            ->whereIn('subject_id', array_keys($subjectIds))
-            ->whereIn('semester_code', array_keys($semCodes))
-            ->cursor();
-
-        foreach ($scheduleRows as $row) {
-            $key = $row->group_hemis_id . '|' . $row->subject_id . '|' . $row->semester_code;
-            if (!isset($result[$key])) {
-                continue;
-            }
-
+        if ($row) {
             $resitDates = [];
             $resit2Dates = [];
 
@@ -956,45 +935,39 @@ class VedomostSubmissionService
                 $resit2Dates[] = $row->test_resit2_date->toDateString();
             }
 
-            if (!empty($resitDates)) {
-                $result[$key]['resit'] = max($resitDates);
-            }
-            if (!empty($resit2Dates)) {
-                $result[$key]['resit2'] = max($resit2Dates);
-            }
+            $resit = !empty($resitDates) ? max($resitDates) : null;
+            $resit2 = !empty($resit2Dates) ? max($resit2Dates) : null;
         }
 
-        if ($this->studentGradeAttemptColumn()) {
+        if (($resit === null || $resit2 === null) && $this->studentGradeAttemptColumn()) {
             $gradeDates = DB::table('student_grades as sg')
                 ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
-                ->whereIn('st.group_id', array_keys($groupIds))
-                ->whereIn('sg.subject_id', array_keys($subjectIds))
-                ->whereIn('sg.semester_code', array_keys($semCodes))
+                ->where('st.group_id', $groupHemisId)
+                ->where('sg.subject_id', $subjectId)
+                ->where('sg.semester_code', $semesterCode)
                 ->whereIn('sg.training_type_code', [101, 102])
                 ->whereIn('sg.attempt', [2, 3])
                 ->whereNotNull('sg.lesson_date')
                 ->whereNull('sg.deleted_at')
-                ->selectRaw('st.group_id, sg.subject_id, sg.semester_code, sg.attempt, MAX(sg.lesson_date) as max_date')
-                ->groupBy('st.group_id', 'sg.subject_id', 'sg.semester_code', 'sg.attempt')
+                ->selectRaw('sg.attempt, MAX(sg.lesson_date) as max_date')
+                ->groupBy('sg.attempt')
                 ->get();
 
             foreach ($gradeDates as $gradeDate) {
-                $key = $gradeDate->group_id . '|' . $gradeDate->subject_id . '|' . $gradeDate->semester_code;
-                if (!isset($result[$key]) || empty($gradeDate->max_date)) {
+                $date = !empty($gradeDate->max_date) ? substr((string) $gradeDate->max_date, 0, 10) : null;
+                if (!$date) {
                     continue;
                 }
-
-                $date = substr((string) $gradeDate->max_date, 0, 10);
-                if ((int) $gradeDate->attempt === 2 && $result[$key]['resit'] === null) {
-                    $result[$key]['resit'] = $date;
+                if ((int) $gradeDate->attempt === 2 && $resit === null) {
+                    $resit = $date;
                 }
-                if ((int) $gradeDate->attempt === 3 && $result[$key]['resit2'] === null) {
-                    $result[$key]['resit2'] = $date;
+                if ((int) $gradeDate->attempt === 3 && $resit2 === null) {
+                    $resit2 = $date;
                 }
             }
         }
 
-        return $result;
+        return ['resit' => $resit, 'resit2' => $resit2];
     }
 
     /**

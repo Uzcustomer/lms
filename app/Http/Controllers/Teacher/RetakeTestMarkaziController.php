@@ -817,17 +817,25 @@ class RetakeTestMarkaziController extends Controller
     {
         $this->authorize();
 
-        // Yopilish shakli MAJBURIY — vaznlar shunga bog'liq (OSKE/Test/Sinov = 30,
-        // OSKE+Test = 15+15). Tanlanmasa vedomost yaratilmaydi.
+        // Yopilish shakli tanlovi. MUHIM: vedomost vaznlari HAR DOIM har
+        // guruhning O'Z assessment_type iga qarab hisoblanadi (defaultWeights).
+        // Bu tanlov faqat qaysi guruhlar KIRISHINI filtrlaydi:
+        //   'all'  → barcha mos guruhlar, har biri o'z shakli bilan (aralashmaydi,
+        //            OSKE+Test guruh OSKE+Test, Test guruh Test bo'lib chiqadi);
+        //   aniq shakl (oske/test/oske_test/sinov) → faqat o'sha shakldagilari.
         $assessmentType = $request->input('assessment_type');
         if (!$assessmentType) {
-            return back()->with('error', "Vedomost yaratish uchun avval «Yopilish shakli»ni tanlang (OSKE / Test / OSKE+Test / Sinov).");
+            return back()->with('error', "Vedomost yaratish uchun «Yopilish shakli»ni tanlang.");
         }
-        $atypes = $assessmentType === 'sinov' ? ['sinov', 'sinov_fan'] : [$assessmentType];
 
-        $applications = $this->filteredSentApplications($request)
-            ->filter(fn ($a) => in_array($a->retakeGroup?->assessment_type, $atypes, true))
-            ->values();
+        $applications = $this->filteredSentApplications($request);
+        if ($assessmentType !== 'all') {
+            $atypes = $assessmentType === 'sinov' ? ['sinov', 'sinov_fan'] : [$assessmentType];
+            $applications = $applications->filter(
+                fn ($a) => in_array($a->retakeGroup?->assessment_type, $atypes, true)
+            );
+        }
+        $applications = $applications->values();
         if ($applications->isEmpty()) {
             return back()->with('error', "Tanlangan yopilish shakli / filtrlar bo'yicha qayta o'qish talabalari topilmadi.");
         }

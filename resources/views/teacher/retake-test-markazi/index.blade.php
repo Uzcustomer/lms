@@ -52,6 +52,7 @@
             'educationTypes' => $educationTypes ?? collect(),
             'subjects' => $subjects ?? collect(),
             'hiddenFilters' => ['full_name'],
+            'autoSubmit' => true,
             'extraQueryFields' => [
                 'tab' => $activeTab,
                 'student_search' => $studentSearch,

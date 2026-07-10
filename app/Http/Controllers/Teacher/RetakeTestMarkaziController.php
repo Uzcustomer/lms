@@ -788,10 +788,10 @@ class RetakeTestMarkaziController extends Controller
 
     /**
      * Joriy filtrlar (fakultet, yo'nalish, kurs, semestr, guruh, fan) bo'yicha
-     * qayta o'qish VEDOMOST(lar)ini yaratadi — vedomost-tekshirish uslubidagi
-     * filtr → generatsiya oqimi. Mos kelgan har bir qayta o'qish guruhi uchun
-     * rasmiy "Qayta o'qish vedomosti" (yn_qaydnoma shabloni) hosil qilinadi;
-     * bir nechta guruh bo'lsa — ZIP qilib beriladi.
+     * qayta o'qish VEDOMOST(lar)ini yaratadi. Har bir vedomost — bitta
+     * (qayta o'qish guruhi × FAKULTET × YO'NALISH × semestr) kesimi uchun
+     * alohida fayl (bir guruh turli fakultet/yo'nalish talabalarini
+     * birlashtirishi mumkin, ular ajratiladi). Bir nechta fayl bo'lsa — ZIP.
      */
     public function generateVedomost(Request $request)
     {
@@ -802,36 +802,49 @@ class RetakeTestMarkaziController extends Controller
             return back()->with('error', "Tanlangan filtrlarga mos qayta o'qish talabalari topilmadi.");
         }
 
-        $groupIds = $applications->pluck('retake_group_id')->filter()->unique()->values();
-        $groups = RetakeGroup::whereIn('id', $groupIds)->orderBy('name')->get();
-        if ($groups->isEmpty()) {
-            return back()->with('error', 'Vedomost uchun guruh topilmadi.');
+        $groupsById = RetakeGroup::whereIn('id', $applications->pluck('retake_group_id')->filter()->unique())
+            ->get()->keyBy('id');
+
+        // (guruh × fakultet × yo'nalish × semestr) bo'yicha ajratamiz.
+        $buckets = $applications->groupBy(function ($app) {
+            $st = $app->group?->student;
+            $dep = $st?->department_name ?: '—';
+            $spec = $st?->specialty_name ?: '—';
+            $sem = $app->semester_name ?: ($app->retakeGroup?->semester_name ?? '');
+            return $app->retake_group_id . '||' . $dep . '||' . $spec . '||' . $sem;
+        });
+
+        if ($buckets->count() > 80) {
+            return back()->with('error', "Juda ko'p bo'lim topildi ({$buckets->count()} ta). Iltimos avval yuqoridagi filtrlardan (fakultet / yo'nalish / kurs / semestr / guruh / fan) birortasini tanlab, so'ng vedomost yarating.");
         }
 
-        // Xavfsizlik: juda ko'p guruh bo'lsa (filtr toraytirilmagan) — chiroyli
-        // xabar bilan qaytaramiz, foydalanuvchini filtrlashga yo'naltiramiz.
-        if ($groups->count() > 50) {
-            return back()->with('error', "Juda ko'p guruh topildi ({$groups->count()} ta). Iltimos avval yuqoridagi filtrlardan (fakultet / yo'nalish / kurs / semestr / guruh / fan) birortasini tanlab, so'ng vedomost yarating.");
+        $tmpDir = storage_path('app/public/retake/vedomosts');
+        if (!is_dir($tmpDir)) {
+            @mkdir($tmpDir, 0755, true);
         }
 
-        // Har guruh (va aralash semestrli bo'lsa har semestr) uchun vedomost.
-        $files = [];
-        foreach ($groups as $group) {
-            try {
-                $semesters = $this->service->vedomostSemesterNumbers($group);
-                if (count($semesters) > 1) {
-                    foreach ($semesters as $sn) {
-                        $built = $this->service->buildVedomostExcel($group, null, $sn);
-                        $files[] = [$built['path'], $built['filename']];
-                    }
-                } else {
-                    $built = $this->service->buildVedomostExcel($group, null, null);
-                    $files[] = [$built['path'], $built['filename']];
-                }
-            } catch (ValidationException $e) {
-                // Bu guruh uchun vedomost yasab bo'lmadi (talaba yo'q va h.k.) — o'tkazamiz.
+        $files = []; // [unikal absPath, yuklab olish nomi]
+        foreach ($buckets as $key => $apps) {
+            [$rgId, $dep, $spec, $sem] = array_pad(explode('||', $key), 4, '');
+            $group = $groupsById[$rgId] ?? null;
+            if (!$group) {
                 continue;
             }
+
+            try {
+                $built = $this->service->buildVedomostExcel($group, null, null, $apps->values());
+            } catch (ValidationException $e) {
+                continue;
+            }
+
+            // buildVedomostExcel bir guruh uchun bir xil yo'lga yozadi — keyingi
+            // bo'lim uni qayta yozib yubormasligi uchun darhol unikal nusxaga ko'chiramiz.
+            $uniq = $tmpDir . '/' . uniqid('ved_', true) . '.xlsx';
+            if (!@copy($built['path'], $uniq)) {
+                continue;
+            }
+
+            $files[] = [$uniq, $this->vedomostFileName($dep, $spec, $group->subject_name ?? 'fan', $sem)];
         }
 
         if (empty($files)) {
@@ -840,19 +853,15 @@ class RetakeTestMarkaziController extends Controller
 
         // Bitta fayl — to'g'ridan-to'g'ri, aks holda ZIP.
         if (count($files) === 1) {
-            return response()->download($files[0][0], $files[0][1]);
+            return response()->download($files[0][0], $files[0][1])->deleteFileAfterSend(true);
         }
 
         $zipName = 'qayta_oqish_vedomostlari_' . now()->format('Ymd_His') . '.zip';
-        $zipDir = storage_path('app/public/retake/vedomosts');
-        if (!is_dir($zipDir)) {
-            @mkdir($zipDir, 0755, true);
-        }
-        $zipPath = $zipDir . '/' . $zipName;
+        $zipPath = $tmpDir . '/' . $zipName;
 
         $zip = new \ZipArchive();
         if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
-            abort(500, "ZIP faylini yaratib bo'lmadi");
+            return back()->with('error', "ZIP faylini yaratib bo'lmadi.");
         }
         $used = [];
         foreach ($files as [$abs, $name]) {
@@ -868,7 +877,34 @@ class RetakeTestMarkaziController extends Controller
         }
         $zip->close();
 
+        // Unikal nusxalar endi ZIP ichida — vaqtinchalik fayllarni tozalaymiz.
+        foreach ($files as [$abs, $name]) {
+            @unlink($abs);
+        }
+
         return response()->download($zipPath, $zipName)->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Vedomost fayl nomi — "Fakultet - Yo'nalish - Fan - Semestr.xlsx".
+     * Fayl tizimi uchun xavfli belgilar tozalanadi, bo'shliqlar saqlanadi.
+     */
+    private function vedomostFileName(string $faculty, string $specialty, string $subject, string $semester = ''): string
+    {
+        $clean = function (string $s): string {
+            $s = preg_replace('/[\/\\\\:*?"<>|]+/u', ' ', $s);
+            $s = preg_replace('/\s+/u', ' ', $s);
+            return trim($s);
+        };
+        $parts = array_filter(
+            [$clean($faculty), $clean($specialty), $clean($subject), $clean($semester)],
+            fn ($p) => $p !== '' && $p !== '—'
+        );
+        $base = implode(' - ', $parts);
+        if ($base === '') {
+            $base = 'vedomost';
+        }
+        return mb_substr($base, 0, 120) . '.xlsx';
     }
 
     /**

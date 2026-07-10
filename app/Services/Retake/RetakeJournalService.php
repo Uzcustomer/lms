@@ -965,7 +965,7 @@ class RetakeJournalService
             ->all();
     }
 
-    public function buildVedomostExcel(RetakeGroup $group, ?array $weights = null, ?int $semesterNumber = null): array
+    public function buildVedomostExcel(RetakeGroup $group, ?array $weights = null, ?int $semesterNumber = null, ?Collection $applicationsOverride = null): array
     {
         $templatePath = public_path('templates/yn_qaydnoma (1).xlsx');
         if (!file_exists($templatePath)) {
@@ -974,10 +974,16 @@ class RetakeJournalService
             ]);
         }
 
-        $applications = $this->applications($group);
+        // Chaqiruvchi tayyor (masalan fakultet+yo'nalish bo'yicha ajratilgan)
+        // arizalar to'plamini bersa — o'shani ishlatamiz; aks holda guruhning
+        // barcha tasdiqlangan arizalari.
+        $applications = $applicationsOverride !== null
+            ? $applicationsOverride->values()
+            : $this->applications($group);
 
         // Semestr bo'yicha alohida vedomost — faqat shu semestrdagi arizalar.
-        if ($semesterNumber !== null) {
+        // (applicationsOverride berilganda chaqiruvchi allaqachon filtrlagan.)
+        if ($applicationsOverride === null && $semesterNumber !== null) {
             $applications = $applications->filter(function ($a) use ($semesterNumber) {
                 $num = preg_match('/(\d+)/', (string) $a->semester_name, $m) ? (int) $m[1] : null;
                 return $num === $semesterNumber;

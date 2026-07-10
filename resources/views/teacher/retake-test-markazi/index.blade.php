@@ -193,6 +193,12 @@
                     </form>
 
                     <div class="flex items-center gap-2 flex-wrap">
+                        <a href="{{ route('admin.retake-test-markazi.generate-vedomost', array_merge(request()->except(['page','groups_page','students_page']), ['student_search' => $studentSearch, 'sent_status' => ($sentStatus ?? '')])) }}"
+                           title="{{ __('Joriy filtr (fakultet/yo‘nalish/kurs/semestr/guruh/fan) bo‘yicha qayta o‘qish vedomostini yaratadi') }}"
+                           style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;background:#7c3aed;color:#fff;font-size:14px;font-weight:600;text-decoration:none;">
+                            <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                            {{ __("Vedomost yaratish") }}
+                        </a>
                         <a href="{{ route('admin.retake-test-markazi.students-excel', array_merge(request()->except(['page','groups_page','students_page']), ['student_search' => $studentSearch, 'sent_status' => ($sentStatus ?? '')])) }}"
                            style="display:inline-flex;align-items:center;padding:8px 16px;border-radius:10px;background:#2563eb;color:#fff;font-size:14px;font-weight:600;text-decoration:none;">
                             {{ __("Excel chiqarish") }}

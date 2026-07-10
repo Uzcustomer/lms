@@ -3610,17 +3610,33 @@ class QuizResultController extends Controller
     /**
      * Moodle quiz results cron ni qo'lda ishga tushirish.
      */
-    public function triggerCron()
+    public function triggerCron(\App\Services\MoodleQuizPullService $pull)
     {
+        // Eski push mexanizmi ham ishlayversin (zaxira sifatida).
         Setting::set('moodle_sync_requested', now()->toIso8601String());
 
-        Log::info('quiz:trigger-cron — sync so\'raldi', [
+        // ASOSIY: Moodle webservice'idan TO'G'RIDAN-TO'G'RI tortamiz — Moodle
+        // serveridagi push-skriptning kursor muammosidan xoli, bugungi
+        // natijalar darhol keladi.
+        @set_time_limit(180);
+        $res = $pull->pull();
+
+        Log::info('quiz:trigger-cron — direct pull', $res + [
             'user' => auth()->user()->name ?? 'unknown',
         ]);
 
+        if (!($res['ok'] ?? false)) {
+            return response()->json([
+                'success' => true,
+                'message' => "To'g'ridan-to'g'ri tortishda muammo: " . ($res['error'] ?? 'nomaʼlum')
+                    . ". Zaxira sync so'rovi yuborildi — Moodle bir necha daqiqada yuboradi.",
+            ]);
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Sync so\'rov yuborildi. Moodle 5 daqiqa ichida ma\'lumotlarni yuboradi.',
+            'message' => "Moodle'dan {$res['imported']} ta natija tortildi. Jadval yangilanmoqda…",
+            'imported' => $res['imported'],
         ]);
     }
 

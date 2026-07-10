@@ -692,19 +692,23 @@ class RetakeJournalService
      */
     public function defaultWeights(RetakeGroup $group): array
     {
+        // Vaznlar test-markazi "Yakuniy natija" (testMarkaziFinalResult) bilan
+        // AYNAN bir xil bo'lishi shart:
+        //   JN = 50, MT = 20 (doim);
+        //   OSKE yoki Test yoki Sinov (bittasi) → o'sha nazorat 30;
+        //   OSKE + Test (ikkalasi) → OSKE 15, Test 15.
         switch ($group->assessment_type) {
             case 'oske':
-                return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 60, 'test' => 0];
+                return ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 30, 'test' => 0];
             case 'test':
-                return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 0,  'test' => 60];
+                return ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0,  'test' => 30];
             case 'oske_test':
-                return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 30, 'test' => 30];
+                return ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15];
             case 'sinov':
             case 'sinov_fan':
-                // Sinov (test) — jurnal/test-markazi standart taqsimoti bilan bir xil.
                 return ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0,  'test' => 30];
             default:
-                return ['jn' => 70, 'mt' => 30, 'on' => 0, 'oski' => 0,  'test' => 0];
+                return ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0,  'test' => 30];
         }
     }
 

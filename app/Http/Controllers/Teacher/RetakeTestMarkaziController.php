@@ -797,9 +797,19 @@ class RetakeTestMarkaziController extends Controller
     {
         $this->authorize();
 
-        $applications = $this->filteredSentApplications($request);
+        // Yopilish shakli MAJBURIY — vaznlar shunga bog'liq (OSKE/Test/Sinov = 30,
+        // OSKE+Test = 15+15). Tanlanmasa vedomost yaratilmaydi.
+        $assessmentType = $request->input('assessment_type');
+        if (!$assessmentType) {
+            return back()->with('error', "Vedomost yaratish uchun avval «Yopilish shakli»ni tanlang (OSKE / Test / OSKE+Test / Sinov).");
+        }
+        $atypes = $assessmentType === 'sinov' ? ['sinov', 'sinov_fan'] : [$assessmentType];
+
+        $applications = $this->filteredSentApplications($request)
+            ->filter(fn ($a) => in_array($a->retakeGroup?->assessment_type, $atypes, true))
+            ->values();
         if ($applications->isEmpty()) {
-            return back()->with('error', "Tanlangan filtrlarga mos qayta o'qish talabalari topilmadi.");
+            return back()->with('error', "Tanlangan yopilish shakli / filtrlar bo'yicha qayta o'qish talabalari topilmadi.");
         }
 
         $groupsById = RetakeGroup::whereIn('id', $applications->pluck('retake_group_id')->filter()->unique())

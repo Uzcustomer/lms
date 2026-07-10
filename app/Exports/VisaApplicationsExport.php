@@ -24,7 +24,7 @@ class VisaApplicationsExport implements FromQuery, WithHeadings, ShouldAutoSize,
     public function query()
     {
         $query = VisaApplication::query()
-            ->with(['student:id,full_name'])
+            ->with(['student:id,full_name', 'student.visaInfo'])
             ->latest();
 
         if (!empty($this->ids)) {
@@ -53,6 +53,7 @@ class VisaApplicationsExport implements FromQuery, WithHeadings, ShouldAutoSize,
                 $app->first_name,
                 $app->middle_name,
             ]))),
+            $app->student?->visaInfo?->firm_display ?: '-',
             $app->last_name,
             $app->first_name,
             $app->middle_name,
@@ -74,6 +75,7 @@ class VisaApplicationsExport implements FromQuery, WithHeadings, ShouldAutoSize,
         return [
             'Ariza raqami',
             'LMS full name',
+            'Firma',
             'Familiya',
             'Ism',
             'Otasining ismi',

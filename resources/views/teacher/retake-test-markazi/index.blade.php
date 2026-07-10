@@ -217,10 +217,11 @@
                                 }
                             @endphp
                             <select name="assessment_type" required
+                                    title="{{ __('Vaznlar har doim har guruhning o‘z shakliga qarab hisoblanadi; bu tanlov faqat qaysi guruhlar kirishini filtrlaydi') }}"
                                     style="height:38px;border-radius:8px;border:1px solid #cbd5e1;font-size:13px;padding:0 8px;background:#fff;color:#1e293b;">
-                                <option value="">{{ __('Yopilish shakli...') }}</option>
+                                <option value="all" selected>{{ __("Barchasi (har biri o‘z shakli bilan)") }}</option>
                                 @foreach($atOptions as $val => $label)
-                                    <option value="{{ $val }}" {{ count($atOptions) === 1 ? 'selected' : '' }}>{{ $label }}</option>
+                                    <option value="{{ $val }}">{{ $label }}</option>
                                 @endforeach
                             </select>
                             <button type="submit"

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RetakeApplication;
 use App\Models\RetakeGroup;
 use App\Models\RetakeMustaqilSubmission;
+use App\Models\Student;
 use App\Services\Retake\RetakeAccess;
 use App\Services\Retake\RetakeJournalService;
 use Illuminate\Http\JsonResponse;
@@ -148,6 +149,49 @@ class RetakeTestMarkaziController extends Controller
             );
         }
 
+        // Fan ro'yxati — barcha o'quv reja fanlari emas, faqat joriy filtrlarga
+        // mos qayta o'qish arizalarida uchraydigan fanlar. Semestr esa ARIZA
+        // semestriga (retake_applications.semester_name) qarab qo'llanadi —
+        // talabaning joriy semestriga emas (qayta o'quvchilar odatda yuqori
+        // semestrga o'tib ketgan bo'ladi, aks holda ro'yxat bo'sh chiqardi).
+        // Qolgan filtrlar (fakultet/yo'nalish/kurs/guruh) talaba atributi bo'yicha.
+        $selSemNum = null;
+        if (filled($studentFilters['semester_code'])) {
+            $semName = Student::where('semester_code', $studentFilters['semester_code'])->value('semester_name');
+            if ($semName && preg_match('/(\d+)/', $semName, $m)) {
+                $selSemNum = (int) $m[1];
+            }
+        }
+        $subjStudentSub = function ($sub) use ($studentFilters) {
+            $sub->select('hemis_id')->from('students');
+            if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+            if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+            if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+            if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+            if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+        };
+        $hasSubjStudentFilter = collect($studentFilters)
+            ->except('semester_code')
+            ->filter(fn ($v) => filled($v))
+            ->isNotEmpty();
+
+        $subjectQuery = RetakeApplication::query()
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
+            ->join('retake_groups as rgs', 'rgs.id', '=', 'retake_applications.retake_group_id')
+            ->whereNotNull('rgs.subject_id');
+        if ($hasSubjStudentFilter) {
+            $subjectQuery->whereIn('retake_applications.student_hemis_id', $subjStudentSub);
+        }
+        if ($selSemNum) {
+            $subjectQuery->where('retake_applications.semester_name', 'like', $selSemNum . '-%');
+        }
+        $subjects = $subjectQuery
+            ->distinct()
+            ->orderBy('rgs.subject_name')
+            ->pluck('rgs.subject_name', 'rgs.subject_id')
+            ->toArray();
+
         return view('teacher.retake-test-markazi.index', [
             'groups' => $groups,
             'sentApplications' => $sentApplications,
@@ -158,7 +202,7 @@ class RetakeTestMarkaziController extends Controller
             'studentSearch' => $studentSearch,
             'sentStatus' => $sentStatus,
             'educationTypes' => \App\Services\Retake\RetakeFilterCache::educationTypes(),
-            'subjects' => \App\Services\Retake\RetakeFilterCache::subjects(),
+            'subjects' => $subjects,
         ]);
     }
 

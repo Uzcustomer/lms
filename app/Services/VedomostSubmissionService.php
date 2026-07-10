@@ -615,46 +615,58 @@ class VedomostSubmissionService
     }
 
     /**
-     * Qo'shimcha (farmoyish) shakllarini — 12q (har guruh alohida), 12aq/12bq
-     * (umumiy) — ochadi/yopadi.
+     * Qo'shimcha shakllarini — 12q (har guruh alohida), 12aq/12bq (umumiy)
+     * ochadi/yopadi.
      *
-     * MUHIM: qo'shimcha varaq farmoyish IMTIHONI o'tkazilgani uchun ochiladi
-     * (talaba o'tdimi-yiqildimi ahamiyatsiz — varaq topshirilishi kerak). Shuning
-     * uchun trigger = is_qoshimcha (101/102) imtihon bahosi MAVJUDLIGI, urinish
-     * (attempt) darajasi bo'yicha:
-     *   attempt=1 → 12-qo'shimcha, attempt=2 → 12a-qo'shimcha, attempt=3 → 12b-qo'shimcha.
-     * (YnStageService "qoshimcha_passed" bosqichi — bu o'tganlik; varaq ochish
-     * uchun ishlatilmaydi, chunki yiqilgan farmoyishchi ham varaqda bo'lishi kerak.)
+     * Trigger manbalari:
+     *  - is_qoshimcha=1: farmoyish / qo'shimcha imtihon yozuvi
+     *  - retake_was_sababli=1: sababli ariza asosida boshqa muddatda topshirilgan
+     *    OSKI/Test yozuvi
+     *
+     * Shuning uchun 12q/12aq/12bq ochilishida har bir attempt uchun ikkala holat
+     * ham hisobga olinadi:
+     *   attempt=1 → 12-qo'shimcha
+     *   attempt=2 → 12a-qo'shimcha
+     *   attempt=3 → 12b-qo'shimcha
      *
      * @param  array<int,string>  $activeGroupHemisIds  joriy faol guruhlar
      * @return array<int>  ochilgan (saqlanadigan) qator id lari
      */
     private function syncQoshimchaForms(array $units, array $activeGroupHemisIds, Collection $semByGroup): array
     {
-        if (!$this->studentGradeQoshimchaColumn() || empty($activeGroupHemisIds)) {
+        if (
+            (!$this->studentGradeQoshimchaColumn() && !$this->studentGradeSababliColumn())
+            || empty($activeGroupHemisIds)
+        ) {
             return [];
         }
 
         $hasAttempt = $this->studentGradeAttemptColumn();
+        $hasQoshimcha = $this->studentGradeQoshimchaColumn();
+        $hasSababli = $this->studentGradeSababliColumn();
 
-        // is_qoshimcha (farmoyish) OSKI/Test imtihon baholari — (guruh, fan, sem, urinish).
+        // Qo'shimcha triggerlar beradigan OSKI/Test yozuvlari —
+        // (guruh, fan, sem, urinish, is_qoshimcha, retake_was_sababli).
         $rows = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
             ->whereIn('st.group_id', $activeGroupHemisIds)
-            ->where('sg.is_qoshimcha', 1)
             ->whereIn('sg.training_type_code', [101, 102])
             ->whereNull('sg.deleted_at')
             ->select(
                 'st.group_id as group_hemis_id',
                 'sg.subject_id',
                 'sg.semester_code',
-                $hasAttempt ? 'sg.attempt' : DB::raw('1 as attempt')
+                $hasAttempt ? 'sg.attempt' : DB::raw('1 as attempt'),
+                $hasQoshimcha ? 'sg.is_qoshimcha' : DB::raw('0 as is_qoshimcha'),
+                $hasSababli ? 'sg.retake_was_sababli' : DB::raw('0 as retake_was_sababli')
             )
-            ->distinct()
             ->get();
 
         // "group|subject|sem" => [urinish => true]  (faqat joriy semestr).
         $attemptsByKey = [];
+        // Faqat sababli ariza triggerlari uchun alohida xarita —
+        // 12a/12b qo'shimchaning guruh bo'yicha satrlarini ochish uchun.
+        $sababliAttemptsByKey = [];
         foreach ($rows as $r) {
             $gid = (string) $r->group_hemis_id;
             $sem = (string) $r->semester_code;
@@ -666,7 +678,17 @@ class VedomostSubmissionService
             if ($att < 1) {
                 $att = 1;
             }
-            $attemptsByKey[$gid . '|' . $r->subject_id . '|' . $sem][$att] = true;
+            $isQoshimcha = !empty($r->is_qoshimcha);
+            $isSababli = !empty($r->retake_was_sababli);
+            if (!$isQoshimcha && !$isSababli) {
+                continue;
+            }
+
+            $key = $gid . '|' . $r->subject_id . '|' . $sem;
+            $attemptsByKey[$key][$att] = true;
+            if ($isSababli) {
+                $sababliAttemptsByKey[$key][$att] = true;
+            }
         }
 
         $keptIds = [];
@@ -677,6 +699,38 @@ class VedomostSubmissionService
             $id = $this->upsertQoshimcha12Row($gid, $subjectId, $sem, !empty($atts[1]));
             if ($id) {
                 $keptIds[] = $id;
+            }
+        }
+
+        // Sababli attempt=2/3 bo'lsa, o'sha talabaning guruhi uchun alohida
+        // 12a/12b qo'shimcha satri ham ochiladi.
+        foreach ($sababliAttemptsByKey as $key => $atts) {
+            [$gid, $subjectId, $sem] = explode('|', $key);
+
+            $baseDates = $this->examDatesForGroupSubject($gid, $subjectId, $sem);
+
+            $id12ag = $this->upsertGroupSababliResitRow(
+                $gid,
+                $subjectId,
+                $sem,
+                VedomostSubmission::FORM_12AG,
+                !empty($atts[2]),
+                $baseDates['resit']
+            );
+            if ($id12ag) {
+                $keptIds[] = $id12ag;
+            }
+
+            $id12bg = $this->upsertGroupSababliResitRow(
+                $gid,
+                $subjectId,
+                $sem,
+                VedomostSubmission::FORM_12BG,
+                !empty($atts[3]),
+                $baseDates['resit2']
+            );
+            if ($id12bg) {
+                $keptIds[] = $id12bg;
             }
         }
 
@@ -714,6 +768,75 @@ class VedomostSubmissionService
         }
 
         return $keptIds;
+    }
+
+    /**
+     * Sababli 12a/12b qo'shimcha uchun guruh bo'yicha alohida qator yaratadi.
+     *
+     * @return int|null
+     */
+    private function upsertGroupSababliResitRow(
+        string $groupHemisId,
+        string $subjectId,
+        string $semesterCode,
+        string $formType,
+        bool $shouldOpen,
+        ?string $baseDate
+    ): ?int {
+        $keys = [
+            'group_hemis_id' => $groupHemisId,
+            'subject_id' => $subjectId,
+            'semester_code' => $semesterCode,
+            'form_type' => $formType,
+        ];
+
+        if (!$shouldOpen) {
+            VedomostSubmission::where($keys)
+                ->where('status', VedomostSubmission::STATUS_PENDING)
+                ->whereNull('pdf_path')
+                ->delete();
+            return null;
+        }
+
+        $base = VedomostSubmission::where([
+            'group_hemis_id' => $groupHemisId,
+            'subject_id' => $subjectId,
+            'semester_code' => $semesterCode,
+            'form_type' => VedomostSubmission::FORM_12,
+        ])->first();
+        if (!$base) {
+            return null;
+        }
+
+        $deadline = $baseDate
+            ? WorkdayCalculator::addWorkdays(Carbon::parse($baseDate), self::DEADLINE_WORKDAYS)->toDateString()
+            : null;
+
+        $row = VedomostSubmission::updateOrCreate($keys, [
+            'education_year' => $base->education_year,
+            'group_name' => $base->group_name,
+            'curriculum_hemis_id' => $base->curriculum_hemis_id,
+            'curriculum_subject_id' => $base->curriculum_subject_id,
+            'subject_name' => $base->subject_name,
+            'department_hemis_id' => $base->department_hemis_id,
+            'department_name' => $base->department_name,
+            'specialty_name' => $base->specialty_name,
+            'closing_form' => $base->closing_form,
+            'teacher_hemis_id' => $base->teacher_hemis_id,
+            'teacher_name' => $base->teacher_name,
+            'teacher_phone' => $base->teacher_phone,
+            'fan_masuli_hemis_id' => $base->fan_masuli_hemis_id,
+            'fan_masuli_name' => $base->fan_masuli_name,
+            'fan_masuli_phone' => $base->fan_masuli_phone,
+            'kafedra_mudiri_hemis_id' => $base->kafedra_mudiri_hemis_id,
+            'kafedra_mudiri_name' => $base->kafedra_mudiri_name,
+            'kafedra_mudiri_phone' => $base->kafedra_mudiri_phone,
+            'base_type' => 'exam',
+            'base_date' => $baseDate,
+            'deadline' => $deadline,
+        ]);
+
+        return $row->id;
     }
 
     /**
@@ -777,6 +900,74 @@ class VedomostSubmissionService
         ]);
 
         return $row->id;
+    }
+
+    /**
+     * Bitta guruh + fan + semestr uchun attempt sanalarini qaytaradi.
+     *
+     * @return array{resit:?string,resit2:?string}
+     */
+    private function examDatesForGroupSubject(string $groupHemisId, string $subjectId, string $semesterCode): array
+    {
+        $row = ExamSchedule::whereNull('student_hemis_id')
+            ->where('group_hemis_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->first();
+
+        $resit = null;
+        $resit2 = null;
+
+        if ($row) {
+            $resitDates = [];
+            $resit2Dates = [];
+
+            if ($row->oski_resit_date) {
+                $resitDates[] = $row->oski_resit_date->toDateString();
+            }
+            if ($row->test_resit_date) {
+                $resitDates[] = $row->test_resit_date->toDateString();
+            }
+            if ($row->oski_resit2_date) {
+                $resit2Dates[] = $row->oski_resit2_date->toDateString();
+            }
+            if ($row->test_resit2_date) {
+                $resit2Dates[] = $row->test_resit2_date->toDateString();
+            }
+
+            $resit = !empty($resitDates) ? max($resitDates) : null;
+            $resit2 = !empty($resit2Dates) ? max($resit2Dates) : null;
+        }
+
+        if (($resit === null || $resit2 === null) && $this->studentGradeAttemptColumn()) {
+            $gradeDates = DB::table('student_grades as sg')
+                ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
+                ->where('st.group_id', $groupHemisId)
+                ->where('sg.subject_id', $subjectId)
+                ->where('sg.semester_code', $semesterCode)
+                ->whereIn('sg.training_type_code', [101, 102])
+                ->whereIn('sg.attempt', [2, 3])
+                ->whereNotNull('sg.lesson_date')
+                ->whereNull('sg.deleted_at')
+                ->selectRaw('sg.attempt, MAX(sg.lesson_date) as max_date')
+                ->groupBy('sg.attempt')
+                ->get();
+
+            foreach ($gradeDates as $gradeDate) {
+                $date = !empty($gradeDate->max_date) ? substr((string) $gradeDate->max_date, 0, 10) : null;
+                if (!$date) {
+                    continue;
+                }
+                if ((int) $gradeDate->attempt === 2 && $resit === null) {
+                    $resit = $date;
+                }
+                if ((int) $gradeDate->attempt === 3 && $resit2 === null) {
+                    $resit2 = $date;
+                }
+            }
+        }
+
+        return ['resit' => $resit, 'resit2' => $resit2];
     }
 
     /**

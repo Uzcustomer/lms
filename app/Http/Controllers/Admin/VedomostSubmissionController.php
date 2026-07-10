@@ -398,8 +398,8 @@ class VedomostSubmissionController extends Controller
         $forms = VedomostSubmission::formLabels();
         $formTint = [
             '12' => '#eef2ff', '12q' => '#e0e7ff',
-            '12a' => '#ecfeff', '12aq' => '#fef3c7',
-            '12b' => '#fef2f2', '12bq' => '#fae8ff',
+            '12a' => '#ecfeff', '12aq' => '#fef3c7', '12ag' => '#fde68a',
+            '12b' => '#fef2f2', '12bq' => '#fae8ff', '12bg' => '#fed7aa',
         ];
 
         $sections = [];

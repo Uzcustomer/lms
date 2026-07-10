@@ -690,6 +690,11 @@ class HemisService
      */
     public function importAcademicRecords(?callable $onProgress = null, ?callable $onPrepare = null): int
     {
+        // 400k+ yozuvning hemis_updated_at xaritasini xotiraga yuklaymiz — PHP'ning
+        // standart 128M limiti buni ko'tarmaydi (HemisService.php:712 da OOM bilan
+        // o'lardi). Konteynerda 23GB bor, shuning uchun limitni oshiramiz.
+        @ini_set('memory_limit', '2048M');
+
         $page = 1;
         $hasMore = true;
         $totalImported = 0;

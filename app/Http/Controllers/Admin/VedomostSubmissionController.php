@@ -12,9 +12,11 @@ use App\Models\VedomostSubmissionLog;
 use App\Services\VedomostMergeService;
 use App\Services\VedomostSubmissionNotifier;
 use App\Services\VedomostSubmissionService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -263,6 +265,7 @@ class VedomostSubmissionController extends Controller
 
         $notifyEnabled = VedomostSubmissionNotifier::enabled();
         $canToggleNotify = in_array(session('active_role', ''), self::NOTIFY_TOGGLE_ROLES, true);
+        $syncProgress = Cache::get('vedomost_submission_sync_progress', ['status' => 'idle']);
 
         return view('admin.vedomost-submission.index', compact(
             'submissions',
@@ -274,7 +277,8 @@ class VedomostSubmissionController extends Controller
             'formLabels',
             'stats',
             'notifyEnabled',
-            'canToggleNotify'
+            'canToggleNotify',
+            'syncProgress'
         ));
     }
 
@@ -398,8 +402,8 @@ class VedomostSubmissionController extends Controller
         $forms = VedomostSubmission::formLabels();
         $formTint = [
             '12' => '#eef2ff', '12q' => '#e0e7ff',
-            '12a' => '#ecfeff', '12aq' => '#fef3c7',
-            '12b' => '#fef2f2', '12bq' => '#fae8ff',
+            '12a' => '#ecfeff', '12aq' => '#fef3c7', '12ag' => '#fde68a',
+            '12b' => '#fef2f2', '12bq' => '#fae8ff', '12bg' => '#fed7aa',
         ];
 
         $sections = [];
@@ -663,11 +667,32 @@ class VedomostSubmissionController extends Controller
     {
         $this->checkAccess();
 
-        $count = $this->service->sync();
+        if (Cache::has('vedomost_submission_sync_lock')) {
+            return redirect()
+                ->route('admin.vedomost-submission.index', $request->query())
+                ->with('error', "Joriy semester bo'yicha yangilash allaqachon ishlamoqda.");
+        }
+
+        Cache::put('vedomost_submission_sync_progress', [
+            'status' => 'queued',
+            'message' => "Joriy semester bo'yicha yangilash navbatga qo'yildi.",
+            'updated_at' => now()->toDateTimeString(),
+        ], now()->addHours(2));
+
+        \App\Jobs\SyncVedomostSubmissionsJob::dispatch();
 
         return redirect()
             ->route('admin.vedomost-submission.index', $request->query())
-            ->with('success', "Joriy semestr bo'yicha {$count} ta vedomost yozuvi yangilandi.");
+            ->with('success', "Joriy semester bo'yicha yangilash fon rejimida boshlandi.");
+    }
+
+    public function syncProgress(): JsonResponse
+    {
+        $this->checkViewAccess();
+
+        return response()->json(
+            Cache::get('vedomost_submission_sync_progress', ['status' => 'idle'])
+        );
     }
 
     /**

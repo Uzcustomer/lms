@@ -23,8 +23,10 @@
             '12q'  => ['#3730a3', '#eef2ff'],
             '12a'  => ['#9a3412', '#ffedd5'],
             '12aq' => ['#b45309', '#fef3c7'],
+            '12ag' => ['#92400e', '#fde68a'],
             '12b'  => ['#9d174d', '#fce7f3'],
             '12bq' => ['#a21caf', '#fae8ff'],
+            '12bg' => ['#7c2d12', '#fed7aa'],
         ];
 
         $curSort = request('sort');
@@ -51,6 +53,7 @@
                     {{ session('error') }}
                 </div>
             @endif
+            <div id="vedomost-sync-box" style="display:none;background:#e0f2fe;color:#075985;padding:10px 16px;border-radius:8px;margin-bottom:12px;border:1px solid #bae6fd;"></div>
 
             {{-- Statistika --}}
             <div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px;">
@@ -204,7 +207,7 @@
                         <form method="POST" action="{{ route('admin.vedomost-submission.sync', request()->query()) }}"
                               onsubmit="return confirm('Joriy semestr bo\'yicha vedomost yozuvlari yangilansinmi?');">
                             @csrf
-                            <button type="submit" style="background:#1a3268;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;">
+                            <button id="vedomost-sync-btn" type="submit" style="background:#1a3268;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;">
                                 ↻ Joriy semestr bo'yicha yangilash
                             </button>
                         </form>
@@ -294,6 +297,91 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         $(document).ready(function () {
+            const progressUrl = @json(route('admin.vedomost-submission.sync.progress'));
+            const initialProgress = @json($syncProgress ?? ['status' => 'idle']);
+            const syncBox = document.getElementById('vedomost-sync-box');
+            const syncBtn = document.getElementById('vedomost-sync-btn');
+            let syncPollTimer = null;
+            let lastStatus = initialProgress && initialProgress.status ? initialProgress.status : 'idle';
+
+            function renderSyncState(state, isInitial) {
+                const status = state && state.status ? state.status : 'idle';
+                const message = state && state.message ? state.message : '';
+
+                if (status === 'queued' || status === 'running') {
+                    syncBox.style.display = 'block';
+                    syncBox.style.background = '#e0f2fe';
+                    syncBox.style.color = '#075985';
+                    syncBox.style.borderColor = '#bae6fd';
+                    syncBox.textContent = message || "Joriy semester bo'yicha yangilash ishlamoqda...";
+                    if (syncBtn) {
+                        syncBtn.disabled = true;
+                        syncBtn.style.opacity = '0.7';
+                        syncBtn.style.cursor = 'not-allowed';
+                    }
+                } else if (status === 'done') {
+                    syncBox.style.display = 'block';
+                    syncBox.style.background = '#dcfce7';
+                    syncBox.style.color = '#166534';
+                    syncBox.style.borderColor = '#bbf7d0';
+                    syncBox.textContent = message || "Yangilash tugadi.";
+                    if (syncBtn) {
+                        syncBtn.disabled = false;
+                        syncBtn.style.opacity = '1';
+                        syncBtn.style.cursor = 'pointer';
+                    }
+                    if (!isInitial && (lastStatus === 'queued' || lastStatus === 'running')) {
+                        window.setTimeout(function () { window.location.reload(); }, 1200);
+                    }
+                } else if (status === 'error') {
+                    syncBox.style.display = 'block';
+                    syncBox.style.background = '#fee2e2';
+                    syncBox.style.color = '#b91c1c';
+                    syncBox.style.borderColor = '#fecaca';
+                    syncBox.textContent = message || "Yangilashda xatolik yuz berdi.";
+                    if (syncBtn) {
+                        syncBtn.disabled = false;
+                        syncBtn.style.opacity = '1';
+                        syncBtn.style.cursor = 'pointer';
+                    }
+                } else {
+                    syncBox.style.display = 'none';
+                    syncBox.textContent = '';
+                    if (syncBtn) {
+                        syncBtn.disabled = false;
+                        syncBtn.style.opacity = '1';
+                        syncBtn.style.cursor = 'pointer';
+                    }
+                }
+
+                const shouldPoll = status === 'queued' || status === 'running';
+                lastStatus = status;
+                return shouldPoll;
+            }
+
+            function pollSync() {
+                if (syncPollTimer) {
+                    window.clearTimeout(syncPollTimer);
+                }
+
+                $.ajax({
+                    url: progressUrl,
+                    type: 'GET',
+                    success: function (data) {
+                        if (renderSyncState(data, false)) {
+                            syncPollTimer = window.setTimeout(pollSync, 3000);
+                        }
+                    },
+                    error: function () {
+                        syncPollTimer = window.setTimeout(pollSync, 5000);
+                    }
+                });
+            }
+
+            if (renderSyncState(initialProgress, true)) {
+                pollSync();
+            }
+
             $('.select2').each(function () {
                 $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text() });
             });

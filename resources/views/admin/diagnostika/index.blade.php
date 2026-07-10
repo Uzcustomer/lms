@@ -517,7 +517,8 @@
             'bad_grade': 'Baho noto\'g\'ri',
             'not_first': '1-urinish emas',
             'appeal_deleted': 'Appelyatsiyadan o\'chirildi',
-            'not_actual': 'Noaktual'
+            'not_actual': 'Noaktual',
+            'form_mismatch': 'Yopilish shakli mos emas'
         };
 
         function esc(s) { return $('<span>').text(s || '-').html(); }
@@ -542,7 +543,8 @@
                 'bad_grade':        'background:#fef2f2;color:#991b1b;border:1px solid #fecaca;',
                 'not_first':        'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;',
                 'appeal_deleted':   'background:#faf5ff;color:#6b21a8;border:1px solid #e9d5ff;',
-                'not_actual':       'background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;'
+                'not_actual':       'background:#f1f5f9;color:#475569;border:1px solid #cbd5e1;',
+                'form_mismatch':    'background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;'
             };
             var style = styles[code] || 'background:#f1f5f9;color:#64748b;border:1px solid #cbd5e1;';
             var badge = '<span class="badge" style="' + style + 'font-size:10px;white-space:nowrap;">' + esc(text) + '</span>';

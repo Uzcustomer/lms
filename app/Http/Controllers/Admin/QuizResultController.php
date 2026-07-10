@@ -1928,6 +1928,25 @@ class QuizResultController extends Controller
         // (test markazi guruhiga) yo'naltirishi uchun.
         $avg = ['jn_avg' => $jn, 'mt_avg' => $mt, 'oski_avg' => $oske, 'retake_group_id' => $app->retake_group_id];
 
+        // Ariza (qayta o'qish guruhi) yopilish shakli — jurnal aynan shunga qarab
+        // OSKE yoki Test ustunini ko'rsatadi. Natija turi shakiga mos kelmasa
+        // (mas. natija Test, lekin ariza faqat OSKE), bu natija jurnalda ko'rinmaydi
+        // — shuning uchun "jurnalda bor" DEMAYMIZ (aks holda noto'g'ri bo'lardi).
+        $at = $app->retakeGroup?->assessment_type;
+        $appNeedsOske = in_array($at, ['oske', 'oske_test'], true);
+        $appNeedsTest = in_array($at, ['test', 'oske_test', 'sinov', 'sinov_fan'], true);
+        if (($ynTuri === 'OSKI' && !$appNeedsOske) || ($ynTuri === 'Test' && !$appNeedsTest)) {
+            $formLabel = match ($at) {
+                'oske' => 'OSKE',
+                'test' => 'Test',
+                'oske_test' => 'OSKE+Test',
+                'sinov', 'sinov_fan' => 'Sinov',
+                default => (string) ($at ?: '—'),
+            };
+            return ['code' => 'form_mismatch',
+                'text' => "Yopilish shakli mos emas (natija: {$ynTuri}, ariza: {$formLabel})"] + $avg;
+        }
+
         // Allaqachon qayta o'qish jurnaliga yuklanganmi?
         if ($ynTuri === 'OSKI' && $oske !== null) {
             return ['code' => 'uploaded', 'text' => "Qayta o'qish jurnalida bor ({$oske})"] + $avg;

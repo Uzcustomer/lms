@@ -206,11 +206,17 @@
                         <form method="POST" action="{{ route('admin.vedomost-submission.sync', request()->query()) }}"
                               onsubmit="return confirm('Joriy semestr bo\'yicha vedomost yozuvlari yangilansinmi?');">
                             @csrf
-                            <button type="submit" style="background:#1a3268;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;">
+                            <button id="vedomost-sync-btn" type="submit" style="background:#1a3268;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;">
                                 ↻ Joriy semestr bo'yicha yangilash
                             </button>
                         </form>
                     </div>
+                </div>
+
+                <div id="vedomost-sync-box"
+                     style="display:none;margin:0 16px 12px;padding:12px 14px;border-radius:10px;border:1px solid #bfdbfe;background:#eff6ff;color:#1e3a8a;">
+                    <div id="vedomost-sync-title" style="font-weight:700;font-size:13px;">Fon rejimida yangilanmoqda...</div>
+                    <div id="vedomost-sync-message" style="font-size:12px;margin-top:4px;color:#475569;"></div>
                 </div>
 
                 <div style="overflow-x:auto;">
@@ -296,6 +302,89 @@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         $(document).ready(function () {
+            const progressUrl = @json(route('admin.vedomost-submission.sync.progress'));
+            const initialProgress = @json($syncProgress ?? ['status' => 'idle']);
+            const syncBtn = document.getElementById('vedomost-sync-btn');
+            const syncBox = document.getElementById('vedomost-sync-box');
+            const syncTitle = document.getElementById('vedomost-sync-title');
+            const syncMessage = document.getElementById('vedomost-sync-message');
+            let syncDoneReloaded = false;
+
+            function renderSyncState(state) {
+                const status = state?.status || 'idle';
+                if (status === 'queued' || status === 'running') {
+                    syncBox.style.display = 'block';
+                    syncTitle.textContent = status === 'queued'
+                        ? 'Yangilash navbatga qo\'yildi'
+                        : 'Fon rejimida yangilanmoqda...';
+                    syncMessage.textContent = state?.message || '';
+                    if (syncBtn) {
+                        syncBtn.disabled = true;
+                        syncBtn.style.opacity = '0.7';
+                        syncBtn.style.cursor = 'not-allowed';
+                    }
+                    return true;
+                }
+
+                if (status === 'done') {
+                    syncBox.style.display = 'block';
+                    syncTitle.textContent = 'Yangilash tugadi';
+                    syncMessage.textContent = state?.message || 'Yangilash yakunlandi.';
+                    if (syncBtn) {
+                        syncBtn.disabled = false;
+                        syncBtn.style.opacity = '1';
+                        syncBtn.style.cursor = 'pointer';
+                    }
+                    if (!syncDoneReloaded) {
+                        syncDoneReloaded = true;
+                        setTimeout(function () { window.location.reload(); }, 1500);
+                    }
+                    return false;
+                }
+
+                if (status === 'error') {
+                    syncBox.style.display = 'block';
+                    syncBox.style.borderColor = '#fecaca';
+                    syncBox.style.background = '#fef2f2';
+                    syncBox.style.color = '#991b1b';
+                    syncTitle.textContent = 'Yangilashda xatolik';
+                    syncMessage.textContent = state?.message || 'Noma\'lum xatolik.';
+                    if (syncBtn) {
+                        syncBtn.disabled = false;
+                        syncBtn.style.opacity = '1';
+                        syncBtn.style.cursor = 'pointer';
+                    }
+                    return false;
+                }
+
+                syncBox.style.display = 'none';
+                if (syncBtn) {
+                    syncBtn.disabled = false;
+                    syncBtn.style.opacity = '1';
+                    syncBtn.style.cursor = 'pointer';
+                }
+                return false;
+            }
+
+            function pollSync() {
+                $.ajax({
+                    url: progressUrl,
+                    type: 'GET',
+                    success: function (state) {
+                        if (renderSyncState(state)) {
+                            setTimeout(pollSync, 3000);
+                        }
+                    },
+                    error: function () {
+                        setTimeout(pollSync, 5000);
+                    }
+                });
+            }
+
+            if (renderSyncState(initialProgress)) {
+                pollSync();
+            }
+
             $('.select2').each(function () {
                 $(this).select2({ theme: 'classic', width: '100%', allowClear: true, placeholder: $(this).find('option:first').text() });
             });

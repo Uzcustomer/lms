@@ -1274,6 +1274,11 @@
                 success: function(data) {
                     var cls = data.success ? 'diag-success' : 'diag-error';
                     $('#upload-result').html('<div class="diag-msg ' + cls + '">' + esc(data.message) + '</div>').show();
+                    // To'g'ridan-to'g'ri tortish natija keltirgan bo'lsa —
+                    // jadvalni avtomatik yangilaymiz (ikkinchi marta bosish shart emas).
+                    if (data.success && typeof data.imported !== 'undefined') {
+                        loadTartibgaSol();
+                    }
                 },
                 error: function(xhr) {
                     var msg = xhr.responseJSON?.message || 'Server xatosi';

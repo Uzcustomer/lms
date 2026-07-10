@@ -1911,10 +1911,12 @@ class QuizResultController extends Controller
         // Zaxira kalit (old_grade noma'lum bo'lgan eski yozuvlar uchun).
         $deletedByComponent = !empty($appealDeletedRetakeKeys[$app->id . '|' . $retakeComponent]);
         if ($deletedByGrade || $deletedByComponent) {
-            $componentNowNull = $ynTuri === 'OSKI' ? ($app->oske_score === null) : ($app->test_score === null);
-            if ($componentNowNull) {
-                return ['code' => 'appeal_deleted', 'text' => "Appelyatsiyadan o'chirildi"] + $none;
-            }
+            // Aynan apelyatsiyada o'chirilgan urinish — komponent (OSKE/Test)
+            // keyin boshqa urinish bahosi bilan qayta to'lган bo'lsa ham
+            // (mas. 48 o'chirilib, 73 kelgan), shu o'chirilgan urinish qatorida
+            // "Appelyatsiyadan o'chirildi" ko'rsatiladi. (Ilgari komponent NULL
+            // bo'lishi shart edi — endi shart olib tashlandi.)
+            return ['code' => 'appeal_deleted', 'text' => "Appelyatsiyadan o'chirildi"] + $none;
         }
 
         $jn = $app->joriy_score !== null ? round((float) $app->joriy_score) : null;

@@ -123,7 +123,6 @@
                                             $jnOk = $val !== null && (float) $val >= 60;
                                             $mtOk = $mustaqil?->grade !== null && (float) $mustaqil->grade >= 60;
                                             $canSendToTestMarkazi = $jnOk && $mtOk;
-                                            $attempt = $attemptsMap[$app->id] ?? 1;
                                             $cellStyle = '';
                                             if ($val !== null) {
                                                 $f = (float) $val;
@@ -141,10 +140,8 @@
                                                     @if(!empty($student?->group_name))
                                                         <span class="text-[10px] text-blue-600 whitespace-nowrap">{{ $student->group_name }}</span>
                                                     @endif
-                                                    @if($attempt === 1)
-                                                        <span class="rj-badge rj-badge-1">1-URINISH ✓</span>
-                                                    @else
-                                                        <span class="rj-badge rj-badge-{{ min($attempt, 3) }}">{{ $attempt }}-URINISH</span>
+                                                    @if($app->semester_name)
+                                                        <span class="rj-badge rj-badge-sem">{{ $app->semester_name }}</span>
                                                     @endif
                                                 </div>
                                                 <span class="block text-[10px] text-gray-500">{{ $app->student_hemis_id }}</span>
@@ -673,9 +670,7 @@
             font-weight: 700;
             white-space: nowrap;
         }
-        .rj-badge-1 { background: #dcfce7; color: #15803d; }
-        .rj-badge-2 { background: #fef3c7; color: #92400e; }
-        .rj-badge-3 { background: #fee2e2; color: #b91c1c; }
+        .rj-badge-sem { background: #e0f2fe; color: #0369a1; }
 
         .rj-field {
             background: #f9fafb;

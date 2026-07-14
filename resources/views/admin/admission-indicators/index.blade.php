@@ -1,0 +1,207 @@
+<x-app-layout>
+    <x-slot name="header">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
+            <div>
+                <h2 class="text-xl font-semibold leading-tight text-gray-800">Qabul ko'rsatkichlari</h2>
+                <p class="text-sm text-gray-500 mt-1">Oldingi yillardagi qabul statistikasi — hisobotlar uchun</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <a href="{{ route('admin.admission-indicators.create') }}"
+                   class="inline-flex items-center gap-1 px-3 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
+                    Yangi qo'shish
+                </a>
+                <button type="button" onclick="document.getElementById('importModal').classList.remove('hidden')"
+                        class="inline-flex items-center gap-1 px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                    Excel import
+                </button>
+                <a href="{{ route('admin.admission-indicators.template') }}"
+                   class="inline-flex items-center gap-1 px-3 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Namuna shablon
+                </a>
+                <a href="{{ route('admin.admission-indicators.export', request()->query()) }}"
+                   class="inline-flex items-center gap-1 px-3 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                    Eksport
+                </a>
+            </div>
+        </div>
+    </x-slot>
+
+    <div class="max-w-screen-xl mx-auto">
+        @if(session('success'))
+            <div class="bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded mb-4">{{ session('success') }}</div>
+        @endif
+        @if(session('warning'))
+            <div class="bg-amber-100 border border-amber-400 text-amber-800 px-4 py-3 rounded mb-4">{{ session('warning') }}</div>
+        @endif
+        @if(session('error'))
+            <div class="bg-red-100 border border-red-400 text-red-800 px-4 py-3 rounded mb-4">{{ session('error') }}</div>
+        @endif
+
+        {{-- Yig'ma ko'rsatkichlar --}}
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
+            <div class="rounded-xl border border-slate-200 bg-white p-4">
+                <div class="text-xs uppercase font-semibold text-slate-500">Qatorlar (filtr bo'yicha)</div>
+                <div class="mt-1 text-2xl font-bold text-slate-800">{{ number_format($summary['qatorlar']) }}</div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-4">
+                <div class="text-xs uppercase font-semibold text-slate-500">Jami reja</div>
+                <div class="mt-1 text-2xl font-bold text-slate-800">{{ number_format((int) $summary['jami_reja']) }}</div>
+            </div>
+            <div class="rounded-xl border border-slate-200 bg-white p-4">
+                <div class="text-xs uppercase font-semibold text-slate-500">Jami qabul</div>
+                <div class="mt-1 text-2xl font-bold text-emerald-700">{{ number_format((int) $summary['jami_qabul']) }}</div>
+            </div>
+        </div>
+
+        {{-- Filtr --}}
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm mb-4">
+            <form method="GET" action="{{ route('admin.admission-indicators.index') }}" class="p-4 grid grid-cols-1 md:grid-cols-6 gap-3">
+                <div class="md:col-span-2">
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qidiruv</label>
+                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Mutaxassislik, kod, izoh..."
+                           class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qabul yili</label>
+                    <select name="qabul_yili" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                        <option value="">Barchasi</option>
+                        @foreach($years as $year)
+                            <option value="{{ $year }}" @selected((string) request('qabul_yili') === (string) $year)>{{ $year }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Ta'lim turi</label>
+                    <select name="talim_turi" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                        <option value="">Barchasi</option>
+                        @foreach($talimTurlari as $t)
+                            <option value="{{ $t }}" @selected(request('talim_turi') === $t)>{{ $t }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Ta'lim shakli</label>
+                    <select name="talim_shakli" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                        <option value="">Barchasi</option>
+                        @foreach($talimShakllari as $t)
+                            <option value="{{ $t }}" @selected(request('talim_shakli') === $t)>{{ $t }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">To'lov shakli</label>
+                    <select name="tolov_shakli" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                        <option value="">Barchasi</option>
+                        @foreach($tolovShakllari as $t)
+                            <option value="{{ $t }}" @selected(request('tolov_shakli') === $t)>{{ $t }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div class="md:col-span-6 flex items-center gap-2">
+                    <button type="submit" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg">Filtrlash</button>
+                    <a href="{{ route('admin.admission-indicators.index') }}" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg">Tozalash</a>
+                </div>
+            </form>
+        </div>
+
+        {{-- Jadval --}}
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="min-w-full text-sm">
+                    <thead class="bg-slate-50 text-slate-600">
+                        <tr>
+                            <th class="px-3 py-2 text-left font-semibold">Yil</th>
+                            <th class="px-3 py-2 text-left font-semibold">Ta'lim turi</th>
+                            <th class="px-3 py-2 text-left font-semibold">Ta'lim shakli</th>
+                            <th class="px-3 py-2 text-left font-semibold">Mutaxassislik</th>
+                            <th class="px-3 py-2 text-left font-semibold">Kod</th>
+                            <th class="px-3 py-2 text-left font-semibold">To'lov shakli</th>
+                            <th class="px-3 py-2 text-right font-semibold">Reja</th>
+                            <th class="px-3 py-2 text-right font-semibold">Qabul</th>
+                            <th class="px-3 py-2 text-right font-semibold">Eng past ball</th>
+                            <th class="px-3 py-2 text-left font-semibold">Izoh</th>
+                            <th class="px-3 py-2 text-center font-semibold">Amallar</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-slate-100">
+                        @forelse($indicators as $item)
+                            <tr class="hover:bg-slate-50">
+                                <td class="px-3 py-2 font-semibold text-slate-800">{{ $item->qabul_yili }}</td>
+                                <td class="px-3 py-2">{{ $item->talim_turi }}</td>
+                                <td class="px-3 py-2">{{ $item->talim_shakli }}</td>
+                                <td class="px-3 py-2">{{ $item->mutaxassislik }}</td>
+                                <td class="px-3 py-2 text-slate-500">{{ $item->mutaxassislik_kodi }}</td>
+                                <td class="px-3 py-2">{{ $item->tolov_shakli }}</td>
+                                <td class="px-3 py-2 text-right">{{ $item->reja !== null ? number_format($item->reja) : '—' }}</td>
+                                <td class="px-3 py-2 text-right font-medium text-emerald-700">{{ $item->qabul_soni !== null ? number_format($item->qabul_soni) : '—' }}</td>
+                                <td class="px-3 py-2 text-right">{{ $item->min_ball !== null ? rtrim(rtrim(number_format($item->min_ball, 1), '0'), '.') : '—' }}</td>
+                                <td class="px-3 py-2 text-slate-500 max-w-xs truncate" title="{{ $item->izoh }}">{{ $item->izoh }}</td>
+                                <td class="px-3 py-2">
+                                    <div class="flex items-center justify-center gap-1">
+                                        <a href="{{ route('admin.admission-indicators.edit', $item) }}"
+                                           class="p-1.5 text-sky-600 hover:bg-sky-50 rounded" title="Tahrirlash">
+                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
+                                        </a>
+                                        <form method="POST" action="{{ route('admin.admission-indicators.destroy', $item) }}"
+                                              onsubmit="return confirm('Ushbu qatorni o‘chirishni tasdiqlaysizmi?')">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded" title="O'chirish">
+                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr>
+                                <td colspan="11" class="px-3 py-10 text-center text-slate-400">
+                                    Ma'lumot topilmadi. "Yangi qo'shish" yoki "Excel import" orqali qo'shing.
+                                </td>
+                            </tr>
+                        @endforelse
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="mt-4">
+            {{ $indicators->links() }}
+        </div>
+    </div>
+
+    {{-- Import modal --}}
+    <div id="importModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-slate-800">Excel'dan import</h3>
+                <button type="button" onclick="document.getElementById('importModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                </button>
+            </div>
+            <form method="POST" action="{{ route('admin.admission-indicators.import') }}" enctype="multipart/form-data">
+                @csrf
+                <p class="text-sm text-slate-500 mb-3">
+                    Namuna shablonni yuklab oling, ustun sarlavhalarini o'zgartirmang va to'ldirilgan faylni yuklang.
+                </p>
+                <a href="{{ route('admin.admission-indicators.template') }}" class="inline-block text-sm text-sky-600 hover:underline mb-4">Namuna shablonni yuklab olish</a>
+                <input type="file" name="file" accept=".xlsx,.xls" required
+                       class="w-full text-sm border border-slate-300 rounded-lg p-2 mb-4">
+                @error('file')<p class="text-sm text-rose-600 mb-3">{{ $message }}</p>@enderror
+                <div class="flex justify-end gap-2">
+                    <button type="button" onclick="document.getElementById('importModal').classList.add('hidden')"
+                            class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg">Bekor qilish</button>
+                    <button type="submit" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg">Yuklash</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    @if($errors->has('file'))
+        <script>document.getElementById('importModal').classList.remove('hidden');</script>
+    @endif
+</x-app-layout>

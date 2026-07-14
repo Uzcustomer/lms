@@ -1198,8 +1198,19 @@ class RetakeJournalService
                    || ($weightTest > 0 && $testVal < 60)) {
                 $v = 0;
             } else {
-                $v = round($eBall + $hBall + $kBall + $qBall + $tBall, 1);
-                if ($v > 0) $v = (int) floor($v + 0.5);
+                // Har GURUH alohida butun songacha (half-up) yaxlitlanadi:
+                // round(JB+MT+ON) + round(OSKI+Test).
+                $jbMtOnSum = (int) floor($eBall + $hBall + $kBall + 0.5);
+                if ($weightOski > 0 && $weightTest > 0) {
+                    $examSum = (int) floor($qBall + $tBall + 0.5);
+                } elseif ($weightOski > 0) {
+                    $examSum = (int) floor($qBall + 0.5);
+                } elseif ($weightTest > 0) {
+                    $examSum = (int) floor($tBall + 0.5);
+                } else {
+                    $examSum = 0;
+                }
+                $v = $jbMtOnSum + $examSum;
             }
 
             $w = '';

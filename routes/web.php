@@ -182,6 +182,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/students/{student}/admission-files', [AdminStudentController::class, 'uploadAdmissionFile'])->name('students.admission-files.upload');
         Route::delete('/students/{student}/admission-files/{file}', [AdminStudentController::class, 'deleteAdmissionFile'])->name('students.admission-files.delete');
         Route::delete('/students/{student}/admission-data/clear', [AdminStudentController::class, 'clearAdmissionData'])->name('students.admission-data.clear');
+        Route::post('/students/{student}/academic-orders', [AdminStudentController::class, 'saveAcademicOrders'])->name('students.academic-orders.save');
+        Route::get('/students/{student}/academic-orders/{type}/view', [AdminStudentController::class, 'viewAcademicOrderFile'])->name('students.academic-orders.view');
+        Route::delete('/students/{student}/academic-orders/{type}/file', [AdminStudentController::class, 'deleteAcademicOrderFile'])->name('students.academic-orders.delete-file');
 
         Route::prefix('qaytnoma')->name('qaytnoma.')->group(function () {
             Route::get('', [QaytnomaController::class, 'index'])->name('index');

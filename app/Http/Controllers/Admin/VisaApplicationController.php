@@ -145,72 +145,7 @@ class VisaApplicationController extends Controller
         $submittedApplications = $submittedStudents->count();
         $notSubmittedApplications = $notSubmittedStudents->count();
 
-        $rows = $rows->filter(function (object $row) use (
-            $status,
-            $applicationPresence,
-            $studentIdFilter,
-            $fullNameFilter,
-            $countryFilter,
-            $courseFilter,
-            $departmentFilter,
-            $specialtyFilter,
-            $groupFilter,
-            $firmFilter,
-            $hemisStatusFilter
-        ) {
-            $profile = $row->student_profile ?? [];
-            $student = $row->student;
-
-            if ($studentIdFilter !== '' && stripos((string) ($profile['student_id_number'] ?? ''), $studentIdFilter) === false) {
-                return false;
-            }
-
-            if ($fullNameFilter !== '' && stripos((string) ($student->full_name ?? ''), $fullNameFilter) === false) {
-                return false;
-            }
-
-            if ($countryFilter && ($profile['country_name'] ?? null) !== $countryFilter) {
-                return false;
-            }
-
-            if ($courseFilter && ($profile['course_name'] ?? null) !== $courseFilter) {
-                return false;
-            }
-
-            if ($departmentFilter && ($profile['department_name'] ?? null) !== $departmentFilter) {
-                return false;
-            }
-
-            if ($specialtyFilter && ($profile['specialty_name'] ?? null) !== $specialtyFilter) {
-                return false;
-            }
-
-            if ($groupFilter && ($profile['group_name'] ?? null) !== $groupFilter) {
-                return false;
-            }
-
-            if ($firmFilter && ($profile['firm_display'] ?? null) !== $firmFilter) {
-                return false;
-            }
-
-            if ($hemisStatusFilter && ($row->hemis_status ?? null) !== $hemisStatusFilter) {
-                return false;
-            }
-
-            if ($applicationPresence === 'submitted' && !$row->submitted) {
-                return false;
-            }
-
-            if ($applicationPresence === 'not_submitted' && $row->submitted) {
-                return false;
-            }
-
-            if ($status && $row->application_status !== $status) {
-                return false;
-            }
-
-            return true;
-        })->values();
+        $rows = $this->buildFilteredRows($request);
 
         $perPage = 50;
         $currentPage = LengthAwarePaginator::resolveCurrentPage();
@@ -800,7 +735,8 @@ class VisaApplicationController extends Controller
             ->orderBy('full_name')
             ->get();
 
-        return $internationalStudents
+        return $this->sortRowsByLatestApplicationActivity(
+            $internationalStudents
             ->map(function (Student $student) use ($latestApplications) {
                 $application = $latestApplications->get((string) $student->hemis_id);
                 $visaInfo = $student?->visaInfo;
@@ -889,6 +825,31 @@ class VisaApplicationController extends Controller
 
                 return true;
             })
+        );
+    }
+
+    private function sortRowsByLatestApplicationActivity(Collection $rows): Collection
+    {
+        return $rows
+            ->sortByDesc(function (object $row) {
+                $application = $row->application;
+                if (!$application) {
+                    return -1;
+                }
+
+                $activityAt = $this->latestApplicationActivityAt($application);
+
+                return $activityAt?->getTimestamp() ?? 0;
+            })
             ->values();
+    }
+
+    private function latestApplicationActivityAt(VisaApplication $application)
+    {
+        if (in_array($application->status, ['approved', 'rejected'], true) && $application->reviewed_at) {
+            return $application->reviewed_at;
+        }
+
+        return $application->created_at ?? $application->updated_at;
     }
 }

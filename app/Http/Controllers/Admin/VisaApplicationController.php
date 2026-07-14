@@ -837,19 +837,29 @@ class VisaApplicationController extends Controller
                     return -1;
                 }
 
-                $activityAt = $this->latestApplicationActivityAt($application);
-
-                return $activityAt?->getTimestamp() ?? 0;
+                return $this->latestApplicationActivityTimestamp($application);
             })
             ->values();
     }
 
-    private function latestApplicationActivityAt(VisaApplication $application)
+    private function latestApplicationActivityTimestamp(VisaApplication $application): int
     {
+        $activityAt = null;
+
         if (in_array($application->status, ['approved', 'rejected'], true) && $application->reviewed_at) {
-            return $application->reviewed_at;
+            $activityAt = $application->reviewed_at;
+        } elseif ($application->created_at) {
+            $activityAt = $application->created_at;
+        } elseif ($application->updated_at) {
+            $activityAt = $application->updated_at;
         }
 
-        return $application->created_at ?? $application->updated_at;
+        if ($activityAt instanceof \DateTimeInterface) {
+            return $activityAt->getTimestamp();
+        }
+
+        $timestamp = strtotime((string) $activityAt);
+
+        return $timestamp !== false ? $timestamp : 0;
     }
 }

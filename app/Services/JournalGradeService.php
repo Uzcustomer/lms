@@ -684,21 +684,66 @@ class JournalGradeService
         // Sinov fanlarida jurnal katagi SinovTestGrade.override_grade'dan chiziladi.
         // Jurnal badge, vedomost va eksport ham aynan shu qiymatga teng bo'lishi
         // uchun test bahosida override_grade (yoki default_grade) ustun turadi.
-        $sinovGrades = SinovTestGrade::query()
-            ->where('subject_id', $subjectId)
-            ->where('semester_code', $semesterCode)
-            ->where('group_hemis_id', $groupHemisId)
-            ->whereIn('student_hemis_id', $studentHids)
-            ->get(['student_hemis_id', 'override_grade', 'default_grade']);
+        //
+        // MUHIM: bu override FAQAT closing_form === 'sinov' fanlariga tegishli —
+        // jurnal sahifasi (JournalController::show) ham aynan shu shartni tekshiradi.
+        // Aks holda (masalan yopilish shakli 'test' bo'lgan fanda) fandan qolgan
+        // eski SinovTestGrade yozuvlari (default_grade = JN o'rtachasi) haqiqiy
+        // test bahosini bosib, vedomostda JN qiymati test o'rniga tortilib qolardi.
+        if (self::isSinovSubject($groupHemisId, $subjectId, $semesterCode)) {
+            $sinovGrades = SinovTestGrade::query()
+                ->where('subject_id', $subjectId)
+                ->where('semester_code', $semesterCode)
+                ->where('group_hemis_id', $groupHemisId)
+                ->whereIn('student_hemis_id', $studentHids)
+                ->get(['student_hemis_id', 'override_grade', 'default_grade']);
 
-        foreach ($sinovGrades as $sinovRow) {
-            $value = $sinovRow->override_grade ?? $sinovRow->default_grade;
-            if ($value === null) {
-                continue;
+            foreach ($sinovGrades as $sinovRow) {
+                $value = $sinovRow->override_grade ?? $sinovRow->default_grade;
+                if ($value === null) {
+                    continue;
+                }
+                $out['test'][(string) $sinovRow->student_hemis_id] = (int) round((float) $value, 0, PHP_ROUND_HALF_UP);
             }
-            $out['test'][(string) $sinovRow->student_hemis_id] = (int) round((float) $value, 0, PHP_ROUND_HALF_UP);
         }
 
         return $out;
+    }
+
+    /**
+     * Fan yopilish shakli 'sinov' ekanligini aniqlaydi.
+     *
+     * Guruh → curriculum → curriculum_subjects yo'li bilan closing_form ni oladi.
+     * HEMIS sync ba'zan bir xil (subject, curriculum, semester) uchun faol va
+     * nofaol dublikat qatorlar yaratadi — shuning uchun jurnaldagi
+     * (JournalController::resolveCurriculumSubject) AYNAN bir xil tartib bilan
+     * FAOL va closing_form to'ldirilgan qatorni afzal ko'ramiz.
+     */
+    private static function isSinovSubject(string $groupHemisId, string $subjectId, string $semesterCode): bool
+    {
+        try {
+            $curriculaHemisId = DB::table('groups')
+                ->where('group_hemis_id', $groupHemisId)
+                ->value('curriculum_hemis_id');
+            if (!$curriculaHemisId) {
+                return false;
+            }
+            $closingForm = DB::table('curriculum_subjects')
+                ->where('subject_id', $subjectId)
+                ->where('curricula_hemis_id', $curriculaHemisId)
+                ->where('semester_code', $semesterCode)
+                ->orderByDesc('is_active')
+                ->orderByRaw('closing_form IS NULL')
+                ->value('closing_form');
+
+            return $closingForm === 'sinov';
+        } catch (\Throwable $e) {
+            Log::warning('JournalGradeService isSinovSubject failed: ' . $e->getMessage(), [
+                'group' => $groupHemisId,
+                'subject' => $subjectId,
+                'semester' => $semesterCode,
+            ]);
+            return false;
+        }
     }
 }

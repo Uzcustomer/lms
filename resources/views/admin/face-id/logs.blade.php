@@ -178,6 +178,13 @@
                     </select>
                 </div>
                 <div>
+                    <label class="block text-xs text-gray-500 mb-1">Audit filter</label>
+                    <select name="suspicious_success" class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+                        <option value="">Barchasi</option>
+                        <option value="1" {{ request('suspicious_success') === '1' ? 'selected' : '' }}>70-80% success</option>
+                    </select>
+                </div>
+                <div>
                     <label class="block text-xs text-gray-500 mb-1">Talaba ID</label>
                     <input type="text" name="student_id_number" value="{{ request('student_id_number') }}"
                            placeholder="ID raqam" class="border border-gray-300 rounded px-2 py-1.5 text-sm w-44">
@@ -231,6 +238,9 @@
                                 ];
                                 $targetStudent = $log->targetStudent ?? $log->student;
                                 $targetIdNumber = $log->target_student_id_number ?: $log->student_id_number;
+                                $isProfileMismatch =
+                                    (($log->student_id && $log->target_student_id) && ((string) $log->student_id !== (string) $log->target_student_id))
+                                    || (($log->student_id_number && $targetIdNumber) && ((string) $log->student_id_number !== (string) $targetIdNumber));
                             @endphp
                             <tr class="hover:bg-gray-50">
                                 <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{{ optional($log->created_at)->format('d.m.Y H:i:s') }}</td>
@@ -248,6 +258,11 @@
                                         <div class="font-medium text-gray-800 text-xs">{{ $targetStudent->full_name }}</div>
                                     @endif
                                     <div class="text-gray-400 text-xs font-mono">{{ $targetIdNumber ?: '—' }}</div>
+                                    @if($isProfileMismatch)
+                                        <div class="mt-1 inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-red-100 text-red-700">
+                                            Boshqa profilga kirilgan
+                                        </div>
+                                    @endif
                                 </td>
                                 <td class="px-4 py-3">
                                     <span class="px-2 py-0.5 rounded-full text-xs font-medium {{ $colors[$log->result] ?? 'bg-gray-100 text-gray-600' }}">

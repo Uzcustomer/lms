@@ -106,6 +106,12 @@ class FaceIdAdminController extends Controller
         if ($request->attempt_type) {
             $query->where('attempt_type', $request->attempt_type);
         }
+        if ($request->suspicious_success === '1') {
+            $query->where('result', 'success')
+                ->whereNotNull('confidence')
+                ->where('confidence', '>=', 0.7)
+                ->where('confidence', '<', 0.8);
+        }
         if ($request->student_id_number) {
             $query->where(function ($sub) use ($request) {
                 $sub->where('student_id_number', 'like', '%' . $request->student_id_number . '%')

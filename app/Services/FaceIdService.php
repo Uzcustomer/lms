@@ -82,7 +82,7 @@ class FaceIdService
         $settings = self::getSettings();
 
         $snapshot = null;
-        if ($settings['save_snapshots'] && !empty($data['snapshot'])) {
+        if ($settings['save_snapshots'] && !empty($data['snapshot']) && self::shouldStoreSnapshot($data)) {
             // Strip data URI prefix if present
             $raw = preg_replace('/^data:image\/\w+;base64,/', '', $data['snapshot']);
             // Size check (base64 length ≈ 4/3 × bytes)
@@ -106,6 +106,28 @@ class FaceIdService
             'ip_address'        => $data['ip_address']        ?? null,
             'user_agent'        => $data['user_agent']        ?? null,
         ]);
+    }
+
+    private static function shouldStoreSnapshot(array $data): bool
+    {
+        if (($data['result'] ?? null) !== 'success') {
+            return false;
+        }
+
+        $confidence = isset($data['confidence']) ? (float) $data['confidence'] : null;
+        if ($confidence === null || $confidence < 0.7 || $confidence >= 0.8) {
+            return false;
+        }
+
+        $studentId = $data['student_id'] ?? null;
+        $targetStudentId = $data['target_student_id'] ?? null;
+        $studentIdNumber = $data['student_id_number'] ?? null;
+        $targetStudentIdNumber = $data['target_student_id_number'] ?? null;
+
+        $idMismatch = $studentId !== null && $targetStudentId !== null && (string) $studentId !== (string) $targetStudentId;
+        $numberMismatch = $studentIdNumber !== null && $targetStudentIdNumber !== null && (string) $studentIdNumber !== (string) $targetStudentIdNumber;
+
+        return $idMismatch || $numberMismatch;
     }
 
     // ───────────────────────── Descriptor cache ─────────────────────────

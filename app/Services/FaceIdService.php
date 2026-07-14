@@ -94,7 +94,10 @@ class FaceIdService
 
         return FaceIdLog::create([
             'student_id'        => $data['student_id']        ?? null,
+            'target_student_id' => $data['target_student_id'] ?? null,
             'student_id_number' => $data['student_id_number'] ?? null,
+            'target_student_id_number' => $data['target_student_id_number'] ?? null,
+            'attempt_type'      => $data['attempt_type']      ?? null,
             'result'            => $data['result']            ?? 'failed',
             'confidence'        => $data['confidence']        ?? null,
             'distance'          => $data['distance']          ?? null,

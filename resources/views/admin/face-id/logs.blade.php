@@ -169,6 +169,15 @@
                     </select>
                 </div>
                 <div>
+                    <label class="block text-xs text-gray-500 mb-1">Oqim</label>
+                    <select name="attempt_type" class="border border-gray-300 rounded px-2 py-1.5 text-sm">
+                        <option value="">Barchasi</option>
+                        <option value="verify" {{ request('attempt_type') === 'verify' ? 'selected' : '' }}>Student verify</option>
+                        <option value="identify" {{ request('attempt_type') === 'identify' ? 'selected' : '' }}>Student identify</option>
+                        <option value="kiosk" {{ request('attempt_type') === 'kiosk' ? 'selected' : '' }}>Test kiosk</option>
+                    </select>
+                </div>
+                <div>
                     <label class="block text-xs text-gray-500 mb-1">Talaba ID</label>
                     <input type="text" name="student_id_number" value="{{ request('student_id_number') }}"
                            placeholder="ID raqam" class="border border-gray-300 rounded px-2 py-1.5 text-sm w-44">
@@ -189,6 +198,8 @@
                             <tr>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Vaqt</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Talaba</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Oqim</th>
+                                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kirgan profil</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Natija</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Yaqinlik</th>
                                 <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Sabab</th>
@@ -213,6 +224,13 @@
                                     'not_found'       => 'Topilmadi',
                                     'disabled'        => 'O\'chirilgan',
                                 ];
+                                $attemptLabels = [
+                                    'verify' => 'Student verify',
+                                    'identify' => 'Student identify',
+                                    'kiosk' => 'Test kiosk',
+                                ];
+                                $targetStudent = $log->targetStudent ?? $log->student;
+                                $targetIdNumber = $log->target_student_id_number ?: $log->student_id_number;
                             @endphp
                             <tr class="hover:bg-gray-50">
                                 <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">{{ optional($log->created_at)->format('d.m.Y H:i:s') }}</td>
@@ -222,6 +240,15 @@
                                     @endif
                                     <div class="text-gray-400 text-xs font-mono">{{ $log->student_id_number }}</div>
                                 </td>
+                                <td class="px-4 py-3 text-xs text-gray-500 whitespace-nowrap">
+                                    {{ $attemptLabels[$log->attempt_type] ?? ($log->attempt_type ?: '—') }}
+                                </td>
+                                <td class="px-4 py-3">
+                                    @if($targetStudent)
+                                        <div class="font-medium text-gray-800 text-xs">{{ $targetStudent->full_name }}</div>
+                                    @endif
+                                    <div class="text-gray-400 text-xs font-mono">{{ $targetIdNumber ?: '—' }}</div>
+                                </td>
                                 <td class="px-4 py-3">
                                     <span class="px-2 py-0.5 rounded-full text-xs font-medium {{ $colors[$log->result] ?? 'bg-gray-100 text-gray-600' }}">
                                         {{ $labels[$log->result] ?? $log->result }}
@@ -229,9 +256,12 @@
                                 </td>
                                 <td class="px-4 py-3 text-xs">
                                     @if($log->confidence !== null)
-                                        <span class="{{ $log->confidence >= 0.6 ? 'text-green-600' : 'text-red-600' }} font-mono">{{ round($log->confidence * 100, 1) }}%</span>
+                                        <span class="{{ $log->confidence >= 0.8 ? 'text-green-600' : ($log->confidence >= 0.7 ? 'text-amber-600' : 'text-red-600') }} font-mono">{{ round($log->confidence * 100, 1) }}%</span>
                                         @if($log->distance !== null)
                                         <div class="text-gray-400 text-xs">d={{ round($log->distance, 3) }}</div>
+                                        @endif
+                                        @if($log->confidence >= 0.7 && $log->confidence < 0.8)
+                                        <div class="text-amber-600 text-xs font-medium">Audit uchun yaqin zona</div>
                                         @endif
                                     @else
                                         <span class="text-gray-300">—</span>
@@ -241,7 +271,7 @@
                                 <td class="px-4 py-3 text-xs text-gray-400 font-mono">{{ $log->ip_address }}</td>
                                 <td class="px-4 py-3">
                                     @php
-                                        $sp = $studentPhotos[$log->student_id_number] ?? null;
+                                        $sp = $studentPhotos[$targetIdNumber ?: $log->student_id_number] ?? null;
                                     @endphp
                                     @php
                                         $snapshotUrl = $log->snapshot ? route('admin.face-id.logs.snapshot', $log->id) : '';
@@ -278,7 +308,7 @@
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="7" class="px-4 py-8 text-center text-gray-400 text-sm">Loglar topilmadi</td>
+                                <td colspan="9" class="px-4 py-8 text-center text-gray-400 text-sm">Loglar topilmadi</td>
                             </tr>
                             @endforelse
                         </tbody>

@@ -119,5 +119,12 @@ class ImportAcademicRecordsJob implements ShouldQueue
 
         // student_subjects ham yangilash
         \Illuminate\Support\Facades\Artisan::call('import:student-subjects');
+
+        // Qarzdorlar hisobotining keshlangan natijalarini tozalash — ma'lumot
+        // yangilangach hisobot eski (24 soatlik) keshni ko'rsatib qolmasligi uchun.
+        // Keyingi ochilishda avtomatik qayta hisoblanadi.
+        foreach (glob(ComputeRetakeNotAppliedReportJob::dirPath() . '/*.json') ?: [] as $cached) {
+            @unlink($cached);
+        }
     }
 }

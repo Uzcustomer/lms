@@ -475,6 +475,21 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{student}/file/{field}', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'showFile'])->name('file');
         });
 
+        // Qabul ko'rsatkichlari (oldingi yillardagi qabul statistikasi)
+        Route::prefix('admission-indicators')->name('admission-indicators.')
+            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'index'])->name('index');
+                Route::get('/create', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'create'])->name('create');
+                Route::post('/', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'store'])->name('store');
+                Route::get('/export', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'export'])->name('export');
+                Route::get('/template', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'template'])->name('template');
+                Route::post('/import', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'import'])->name('import');
+                Route::get('/{admission_indicator}/edit', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'edit'])->name('edit');
+                Route::put('/{admission_indicator}', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'update'])->name('update');
+                Route::delete('/{admission_indicator}', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'destroy'])->name('destroy');
+            });
+
         // Bitiruvchi shartnomalar (registrator ofisi)
         Route::prefix('student-contracts')->name('student-contracts.')->group(function () {
             Route::get('/', [AdminStudentContractController::class, 'index'])->name('index');

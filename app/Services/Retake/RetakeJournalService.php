@@ -1039,7 +1039,7 @@ class RetakeJournalService
         };
 
         // Ko'pchilik faculty / specialty / kurs / semestr
-        $studentInfo = $applications->map(fn ($a) => $a->group->student ?? null)->filter();
+        $studentInfo = $applications->map(fn ($a) => $a->group?->student)->filter();
         $pickMostCommon = function (Collection $values, string $field): string {
             $names = $values->pluck($field)->filter()->countBy();
             return (string) ($names->sortDesc()->keys()->first() ?? '');
@@ -1155,7 +1155,7 @@ class RetakeJournalService
             $row = $startRow + $idx;
             if ($row > $maxRow) break;
 
-            $student = $app->group->student ?? null;
+            $student = $app->group?->student;
             $hemisId = $app->student_hemis_id;
 
             // Joriy = bitta saqlangan JN bahosi (yagona, kunlik jadval emas)

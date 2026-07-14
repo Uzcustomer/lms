@@ -452,7 +452,7 @@ class RetakeTestMarkaziController extends Controller
             $row->addCell(1800, $headerBg)->addText('Testga ruxsat', $headerFont, $cellCenter);
 
             foreach ($applications as $idx => $app) {
-                $student = $app->group->student ?? null;
+                $student = $app->group?->student;
                 $jn = $app->joriy_score !== null ? round((float) $app->joriy_score, 2) : null;
                 $mt = ($mustaqilMap[$app->id] ?? null)?->grade;
                 $mt = $mt !== null ? round((float) $mt, 2) : null;

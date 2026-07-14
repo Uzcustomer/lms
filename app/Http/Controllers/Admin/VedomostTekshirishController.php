@@ -531,9 +531,15 @@ class VedomostTekshirishController extends Controller
             $curriculum = Curriculum::where('curricula_hemis_id', $group->curriculum_hemis_id)->first();
             $educationYearCode = $curriculum?->education_year_code;
 
+            // FAOL va closing_form to'ldirilgan qatorni afzal ko'ramiz — HEMIS sync
+            // ba'zan bir xil (subject, curriculum, semester) uchun nofaol/bo'sh
+            // (closing_form=NULL) dublikat yaratadi. Tartiblashsiz ->first() o'shani
+            // olib, sinov/test farqini noto'g'ri aniqlashi mumkin (jurnal bilan bir xil).
             $subject = CurriculumSubject::where('curricula_hemis_id', $group->curriculum_hemis_id)
                 ->where('subject_id', $subjectId)
                 ->where('semester_code', $semesterCode)
+                ->orderByDesc('is_active')
+                ->orderByRaw('closing_form IS NULL')
                 ->first();
 
             if (!$subject) continue;
@@ -731,16 +737,21 @@ class VedomostTekshirishController extends Controller
             // student_grades da test yo'q talabalar uchun uni SinovTestGrade
             // (override ?? default) yoki JN o'rtachasidan to'ldiramiz.
             //
-            // ESLATMA: closing_form export POST'ida kelmaydi (faqat group/subject/
-            // semester), shuningdek nofaol dublikat qator NULL berishi mumkin —
-            // shuning uchun sinov ekanini SinovTestGrade yozuvlari mavjudligi
-            // bilan aniqlaymiz (ular faqat sinov fanlari uchun yaratiladi).
-            $sinovGrades = \App\Models\SinovTestGrade::where('subject_id', (string) $subjectId)
-                ->where('semester_code', (string) $semesterCode)
-                ->where('group_hemis_id', (string) $groupHemisId)
-                ->get()
-                ->keyBy('student_hemis_id');
-            if ($sinovGrades->isNotEmpty()) {
+            // MUHIM: bu backfill FAQAT closing_form === 'sinov' fanlarida ishlaydi.
+            // Yopilish shakli 'test' bo'lgan fanda haqiqiy test bahosi student_grades
+            // (training_type_code=102) da bo'ladi; agar bu yerda ham SinovTestGrade/JN
+            // bilan to'ldirsak, imtihonga kirmagan talabaga JN o'rtachasi test o'rniga
+            // tortilib qolardi. Jurnal (JournalController::show) ham aynan shu shartni
+            // ('closing_form' === 'sinov') tekshiradi.
+            $isSinovSubject = ($subject->closing_form ?? null) === 'sinov';
+            $sinovGrades = $isSinovSubject
+                ? \App\Models\SinovTestGrade::where('subject_id', (string) $subjectId)
+                    ->where('semester_code', (string) $semesterCode)
+                    ->where('group_hemis_id', (string) $groupHemisId)
+                    ->get()
+                    ->keyBy('student_hemis_id')
+                : collect();
+            if ($isSinovSubject && $sinovGrades->isNotEmpty()) {
                 foreach ($studentHemisIds as $hid) {
                     // student_grades da haqiqiy/sinov_yn_test bahosi bo'lsa — tegmaymiz.
                     if (isset($gradesByType[102][$hid]) && $gradesByType[102][$hid] !== null) {

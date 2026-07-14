@@ -902,7 +902,12 @@ class StudentController extends Controller
             $admissionData = \App\Models\StudentAdmissionData::where('student_id', $student->id)->first();
         }
 
-        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'visaInfo', 'canUploadFiles', 'studentFiles', 'admissionData'));
+        $academicOrder = null;
+        if ($canUploadFiles && \Illuminate\Support\Facades\Schema::hasTable('student_academic_orders')) {
+            $academicOrder = \App\Models\StudentAcademicOrder::where('student_id', $student->id)->first();
+        }
+
+        return view('admin.students.show', compact('student', 'canToggleFive', 'frontOffice', 'backOffice', 'currentTutor', 'tutorHistory', 'visaInfo', 'canUploadFiles', 'studentFiles', 'admissionData', 'academicOrder'));
     }
 
     public function resetLocalPassword(Request $request, Student $student)
@@ -1431,6 +1436,166 @@ class StudentController extends Controller
         \App\Models\StudentAdmissionData::where('student_id', $student->id)->delete();
 
         return back()->with('success', "Barcha qabul ma'lumotlari va fayllar tozalandi.")->with('active_tab', 'qabul');
+    }
+
+    /**
+     * Akademik hujjatlar (farmoyish + qabul buyrug'i) ma'lumotlarini saqlaydi.
+     * Har biri uchun raqam, sana va PDF fayl.
+     */
+    public function saveAcademicOrders(Request $request, Student $student)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda bu ma'lumotlarni saqlash huquqi yo'q.")->with('active_tab', 'akademik');
+        }
+
+        if (!\Illuminate\Support\Facades\Schema::hasTable('student_academic_orders')) {
+            return back()->with('error', "student_academic_orders jadvali topilmadi. Iltimos, migratsiyani ishga tushiring: php artisan migrate")->with('active_tab', 'akademik');
+        }
+
+        $validator = \Illuminate\Support\Facades\Validator::make($request->all(), [
+            'farmoyish_number' => 'nullable|string|max:255',
+            'farmoyish_date'   => 'nullable|date',
+            'farmoyish_file'   => 'nullable|file|max:20480|mimes:pdf',
+            'qabul_number'     => 'nullable|string|max:255',
+            'qabul_date'       => 'nullable|date',
+            'qabul_file'       => 'nullable|file|max:20480|mimes:pdf',
+        ], [], [
+            'farmoyish_number' => 'Farmoyish raqami',
+            'farmoyish_date'   => 'Farmoyish sanasi',
+            'farmoyish_file'   => 'Farmoyish fayli',
+            'qabul_number'     => 'Qabul buyrug\'i raqami',
+            'qabul_date'       => 'Qabul buyrug\'i sanasi',
+            'qabul_file'       => 'Qabul buyrug\'i fayli',
+        ]);
+
+        if ($validator->fails()) {
+            return back()->withErrors($validator)->withInput()->with('active_tab', 'akademik');
+        }
+
+        try {
+            $disk = \Illuminate\Support\Facades\Storage::disk('public');
+            $order = \App\Models\StudentAcademicOrder::firstOrNew(['student_id' => $student->id]);
+
+            $order->farmoyish_number = $request->input('farmoyish_number') ?: null;
+            $order->farmoyish_date = $request->input('farmoyish_date') ?: null;
+            $order->qabul_number = $request->input('qabul_number') ?: null;
+            $order->qabul_date = $request->input('qabul_date') ?: null;
+
+            if ($request->hasFile('farmoyish_file')) {
+                if ($order->farmoyish_file_path) {
+                    $disk->delete($order->farmoyish_file_path);
+                }
+                $file = $request->file('farmoyish_file');
+                $order->farmoyish_file_path = $file->store('student-academic-orders/' . $student->id, 'public');
+                $order->farmoyish_file_original_name = $file->getClientOriginalName();
+            }
+
+            if ($request->hasFile('qabul_file')) {
+                if ($order->qabul_file_path) {
+                    $disk->delete($order->qabul_file_path);
+                }
+                $file = $request->file('qabul_file');
+                $order->qabul_file_path = $file->store('student-academic-orders/' . $student->id, 'public');
+                $order->qabul_file_original_name = $file->getClientOriginalName();
+            }
+
+            $order->updated_by = $user?->id;
+            $order->save();
+
+            return back()->with('success', "Akademik hujjatlar saqlandi.")->with('active_tab', 'akademik');
+        } catch (\Exception $e) {
+            Log::error('Akademik hujjatlarni saqlashda xatolik: ' . $e->getMessage());
+            return back()->with('error', "Saqlashda xatolik: " . $e->getMessage())->with('active_tab', 'akademik');
+        }
+    }
+
+    /**
+     * Akademik hujjat PDF faylini brauzerda ochib ko'rsatadi (farmoyish yoki qabul).
+     */
+    public function viewAcademicOrderFile(Student $student, string $type)
+    {
+        if (!in_array($type, ['farmoyish', 'qabul'])) {
+            abort(404);
+        }
+
+        $order = \App\Models\StudentAcademicOrder::where('student_id', $student->id)->first();
+        if (!$order) {
+            abort(404, 'Hujjat topilmadi.');
+        }
+
+        $path = $type === 'farmoyish' ? $order->farmoyish_file_path : $order->qabul_file_path;
+        $original = $type === 'farmoyish' ? $order->farmoyish_file_original_name : $order->qabul_file_original_name;
+
+        if (!$path) {
+            abort(404, 'Fayl topilmadi.');
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+        if (!$disk->exists($path)) {
+            abort(404, 'Fayl serverda mavjud emas.');
+        }
+
+        return response()->file(
+            $disk->path($path),
+            [
+                'Content-Type' => 'application/pdf',
+                'Content-Disposition' => 'inline; filename="' . addslashes($original ?: 'hujjat.pdf') . '"',
+            ]
+        );
+    }
+
+    /**
+     * Akademik hujjat PDF faylini o'chiradi (raqam/sana saqlanib qoladi).
+     */
+    public function deleteAcademicOrderFile(Student $student, string $type)
+    {
+        $user = Auth::user();
+        $roles = $user?->getRoleNames()->toArray() ?? [];
+        $activeRole = session('active_role', $roles[0] ?? '');
+        if (!in_array($activeRole, $roles) && count($roles) > 0) {
+            $activeRole = $roles[0];
+        }
+
+        if (!in_array($activeRole, ['registrator_ofisi', 'superadmin', 'admin', 'kichik_admin'])) {
+            return back()->with('error', "Sizda fayl o'chirish huquqi yo'q.")->with('active_tab', 'akademik');
+        }
+
+        if (!in_array($type, ['farmoyish', 'qabul'])) {
+            abort(404);
+        }
+
+        $order = \App\Models\StudentAcademicOrder::where('student_id', $student->id)->first();
+        if (!$order) {
+            return back()->with('error', "Hujjat topilmadi.")->with('active_tab', 'akademik');
+        }
+
+        $disk = \Illuminate\Support\Facades\Storage::disk('public');
+
+        if ($type === 'farmoyish') {
+            if ($order->farmoyish_file_path) {
+                $disk->delete($order->farmoyish_file_path);
+            }
+            $order->farmoyish_file_path = null;
+            $order->farmoyish_file_original_name = null;
+        } else {
+            if ($order->qabul_file_path) {
+                $disk->delete($order->qabul_file_path);
+            }
+            $order->qabul_file_path = null;
+            $order->qabul_file_original_name = null;
+        }
+
+        $order->updated_by = $user?->id;
+        $order->save();
+
+        return back()->with('success', "Fayl o'chirildi.")->with('active_tab', 'akademik');
     }
 
     public function getCurricula(Request $request)

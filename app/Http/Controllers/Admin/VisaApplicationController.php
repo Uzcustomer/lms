@@ -9,6 +9,7 @@ use App\Models\VisaApplication;
 use App\Services\TelegramService;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
@@ -241,6 +242,7 @@ class VisaApplicationController extends Controller
             'showAll'      => false,
             'applicationPresence' => $applicationPresence,
             'filterOptions' => $filterOptions,
+            'selectableApplicationsCount' => $rows->filter(fn (object $row) => $row->application !== null)->count(),
             'statsQuery'   => $hemisStatusFilter ? ['hemis_status' => $hemisStatusFilter] : [],
             'visaStats'    => [
                 'total_foreign_citizens' => $totalForeignCitizens,
@@ -403,13 +405,20 @@ class VisaApplicationController extends Controller
     public function bulkUpdate(Request $request)
     {
         $data = $request->validate([
-            'ids'    => 'required|array|min:1',
+            'ids'    => 'nullable|array',
             'ids.*'  => 'integer|exists:visa_applications,id',
             'action' => 'required|in:pending,reviewing,approved,rejected',
             'admin_note' => 'nullable|string|max:500',
+            'selection_scope' => 'nullable|in:page,all_filtered',
         ]);
 
-        $apps = VisaApplication::whereIn('id', $data['ids'])->get();
+        $selectedIds = $this->resolveSelectedApplicationIds($request);
+        if (empty($selectedIds)) {
+            return redirect()->route('admin.visa-applications.index', $this->preservedIndexQuery($request))
+                ->with('error', 'Tanlangan arizalar topilmadi.');
+        }
+
+        $apps = VisaApplication::whereIn('id', $selectedIds)->get();
         $updated = 0;
         foreach ($apps as $app) {
             $app->update([
@@ -465,7 +474,7 @@ class VisaApplicationController extends Controller
     public function export(Request $request)
     {
         $status = $request->input('status');
-        $ids    = array_filter(array_map('intval', (array) $request->input('ids', [])));
+        $ids    = $this->resolveSelectedApplicationIds($request);
 
         $name = 'visa-arizalar';
         if (!empty($ids)) {
@@ -481,15 +490,21 @@ class VisaApplicationController extends Controller
     public function downloadDocuments(Request $request)
     {
         $data = $request->validate([
-            'ids'   => 'required|array|min:1',
+            'ids'   => 'nullable|array',
             'ids.*' => 'integer|exists:visa_applications,id',
+            'selection_scope' => 'nullable|in:page,all_filtered',
         ]);
+
+        $selectedIds = $this->resolveSelectedApplicationIds($request);
+        if (empty($selectedIds)) {
+            return back()->with('error', 'Tanlangan arizalar topilmadi.');
+        }
 
         if (!class_exists(ZipArchive::class)) {
             abort(500, 'ZipArchive extension is not available on the server.');
         }
 
-        $apps = VisaApplication::whereIn('id', $data['ids'])
+        $apps = VisaApplication::whereIn('id', $selectedIds)
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get();
@@ -564,11 +579,17 @@ class VisaApplicationController extends Controller
     public function telex(Request $request)
     {
         $data = $request->validate([
-            'ids'   => 'required|array|min:1',
+            'ids'   => 'nullable|array',
             'ids.*' => 'integer|exists:visa_applications,id',
+            'selection_scope' => 'nullable|in:page,all_filtered',
         ]);
 
-        $apps = VisaApplication::whereIn('id', $data['ids'])
+        $selectedIds = $this->resolveSelectedApplicationIds($request);
+        if (empty($selectedIds)) {
+            return back()->with('error', 'Tanlangan arizalar topilmadi.');
+        }
+
+        $apps = VisaApplication::whereIn('id', $selectedIds)
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get();
@@ -709,8 +730,165 @@ class VisaApplicationController extends Controller
     private function preservedIndexQuery(Request $request): array
     {
         return array_filter(
-            $request->except(['_token', '_method', 'admin_note', 'ids', 'ids.*', 'action', 'redirect_status']),
+            $request->except(['_token', '_method', 'admin_note', 'ids', 'ids.*', 'action', 'redirect_status', 'selection_scope']),
             fn ($value) => $value !== null && $value !== ''
         );
+    }
+
+    private function resolveSelectedApplicationIds(Request $request): array
+    {
+        if ($request->input('selection_scope') === 'all_filtered') {
+            return $this->filteredApplicationIds($request);
+        }
+
+        return array_values(array_filter(array_map('intval', (array) $request->input('ids', []))));
+    }
+
+    private function filteredApplicationIds(Request $request): array
+    {
+        return $this->buildFilteredRows($request)
+            ->pluck('application.id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    private function buildFilteredRows(Request $request): Collection
+    {
+        $status = $request->input('status');
+        $applicationPresence = $request->input('application_presence');
+        $studentIdFilter = trim((string) $request->input('student_id_number'));
+        $fullNameFilter = trim((string) $request->input('full_name'));
+        $countryFilter = $request->input('country_name');
+        $courseFilter = $request->input('course_name');
+        $departmentFilter = $request->input('department_name');
+        $specialtyFilter = $request->input('specialty_name');
+        $groupFilter = $request->input('group_name');
+        $firmFilter = $request->input('firm_display');
+        $hemisStatusFilter = $request->input('hemis_status');
+
+        $latestIds = VisaApplication::query()
+            ->selectRaw('MAX(id) as id')
+            ->groupBy('student_hemis_id')
+            ->pluck('id');
+
+        $latestApplications = VisaApplication::query()
+            ->whereIn('id', $latestIds)
+            ->whereNotNull('student_hemis_id')
+            ->latest()
+            ->get()
+            ->keyBy(fn (VisaApplication $app) => (string) $app->student_hemis_id);
+
+        $internationalStudents = (clone $this->internationalStudentsQuery())
+            ->whereNotNull('hemis_id')
+            ->with('visaInfo')
+            ->select(
+                'id',
+                'hemis_id',
+                'full_name',
+                'group_name',
+                'student_id_number',
+                'country_name',
+                'citizenship_name',
+                'department_name',
+                'specialty_name',
+                'level_code',
+                'level_name',
+                'student_status_code'
+            )
+            ->orderBy('full_name')
+            ->get();
+
+        return $internationalStudents
+            ->map(function (Student $student) use ($latestApplications) {
+                $application = $latestApplications->get((string) $student->hemis_id);
+                $visaInfo = $student?->visaInfo;
+
+                return (object) [
+                    'student' => $student,
+                    'application' => $application,
+                    'submitted' => $application !== null,
+                    'application_status' => $application?->status,
+                    'hemis_status' => (string) $student?->student_status_code === '60' ? 'inactive' : 'active',
+                    'student_profile' => [
+                        'student_id_number' => $student->student_id_number,
+                        'country_name'      => $student?->country_name ?: ($student?->citizenship_name ?: null),
+                        'citizenship_name'  => $student?->citizenship_name,
+                        'department_name'   => $student?->department_name,
+                        'specialty_name'    => $student?->specialty_name,
+                        'course_name'       => $student?->level_name ?: ($student?->level_code ? $student->level_code . '-kurs' : null),
+                        'group_name'        => $student?->group_name,
+                        'firm_display'      => $visaInfo?->firm_display ?: '—',
+                    ],
+                ];
+            })
+            ->filter(function (object $row) use (
+                $status,
+                $applicationPresence,
+                $studentIdFilter,
+                $fullNameFilter,
+                $countryFilter,
+                $courseFilter,
+                $departmentFilter,
+                $specialtyFilter,
+                $groupFilter,
+                $firmFilter,
+                $hemisStatusFilter
+            ) {
+                $profile = $row->student_profile ?? [];
+                $student = $row->student;
+
+                if ($studentIdFilter !== '' && stripos((string) ($profile['student_id_number'] ?? ''), $studentIdFilter) === false) {
+                    return false;
+                }
+
+                if ($fullNameFilter !== '' && stripos((string) ($student->full_name ?? ''), $fullNameFilter) === false) {
+                    return false;
+                }
+
+                if ($countryFilter && ($profile['country_name'] ?? null) !== $countryFilter) {
+                    return false;
+                }
+
+                if ($courseFilter && ($profile['course_name'] ?? null) !== $courseFilter) {
+                    return false;
+                }
+
+                if ($departmentFilter && ($profile['department_name'] ?? null) !== $departmentFilter) {
+                    return false;
+                }
+
+                if ($specialtyFilter && ($profile['specialty_name'] ?? null) !== $specialtyFilter) {
+                    return false;
+                }
+
+                if ($groupFilter && ($profile['group_name'] ?? null) !== $groupFilter) {
+                    return false;
+                }
+
+                if ($firmFilter && ($profile['firm_display'] ?? null) !== $firmFilter) {
+                    return false;
+                }
+
+                if ($hemisStatusFilter && ($row->hemis_status ?? null) !== $hemisStatusFilter) {
+                    return false;
+                }
+
+                if ($applicationPresence === 'submitted' && !$row->submitted) {
+                    return false;
+                }
+
+                if ($applicationPresence === 'not_submitted' && $row->submitted) {
+                    return false;
+                }
+
+                if ($status && $row->application_status !== $status) {
+                    return false;
+                }
+
+                return true;
+            })
+            ->values();
     }
 }

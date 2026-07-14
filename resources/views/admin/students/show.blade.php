@@ -181,7 +181,7 @@
                                             </div>
                                             <div style="margin-bottom:10px;">
                                                 <label class="ao-label">Farmoyish sanasi</label>
-                                                <input type="date" name="farmoyish_date" value="{{ old('farmoyish_date', isset($academicOrder->farmoyish_date) && $academicOrder->farmoyish_date ? $academicOrder->farmoyish_date->format('Y-m-d') : '') }}" class="ao-input">
+                                                <input type="text" name="farmoyish_date" value="{{ old('farmoyish_date', isset($academicOrder->farmoyish_date) && $academicOrder->farmoyish_date ? $academicOrder->farmoyish_date->format('Y-m-d') : '') }}" class="ao-input ao-date" placeholder="kun.oy.yil" autocomplete="off">
                                             </div>
                                             <div>
                                                 <label class="ao-label">Farmoyish fayli (PDF)</label>
@@ -207,7 +207,7 @@
                                             </div>
                                             <div style="margin-bottom:10px;">
                                                 <label class="ao-label">Qabul buyrug'i sanasi</label>
-                                                <input type="date" name="qabul_date" value="{{ old('qabul_date', isset($academicOrder->qabul_date) && $academicOrder->qabul_date ? $academicOrder->qabul_date->format('Y-m-d') : '') }}" class="ao-input">
+                                                <input type="text" name="qabul_date" value="{{ old('qabul_date', isset($academicOrder->qabul_date) && $academicOrder->qabul_date ? $academicOrder->qabul_date->format('Y-m-d') : '') }}" class="ao-input ao-date" placeholder="kun.oy.yil" autocomplete="off">
                                             </div>
                                             <div>
                                                 <label class="ao-label">Qabul buyrug'i fayli (PDF)</label>
@@ -545,6 +545,33 @@
     </style>
 
     <script>
+    // Akademik hujjatlar sana maydonlari — flatpickr (o'zbekcha, kun.oy.yil ko'rinishida).
+    // Haqiqiy input Y-m-d formatida yuboriladi (backend uchun), foydalanuvchi d.m.Y ko'radi.
+    function initAcademicOrderDates() {
+        if (typeof flatpickr === 'undefined') return false;
+        document.querySelectorAll('.ao-date').forEach(function(el) {
+            if (el._flatpickr) return;
+            flatpickr(el, {
+                dateFormat: 'Y-m-d',
+                altInput: true,
+                altFormat: 'd.m.Y',
+                altInputClass: 'ao-input',
+                allowInput: true,
+                disableMobile: true
+            });
+        });
+        return true;
+    }
+    window.addEventListener('load', function() {
+        if (!initAcademicOrderDates()) {
+            // flatpickr hali yuklanmagan bo'lsa, qisqa kutib qayta urinamiz
+            var tries = 0;
+            var iv = setInterval(function() {
+                if (initAcademicOrderDates() || ++tries > 20) clearInterval(iv);
+            }, 150);
+        }
+    });
+
     function switchProfileTab(tab) {
         document.querySelectorAll('.sp-content').forEach(function(el) { el.style.display = 'none'; });
         document.querySelectorAll('.sp-tab').forEach(function(el) { el.classList.remove('sp-tab-active'); });

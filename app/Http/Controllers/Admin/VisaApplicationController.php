@@ -145,7 +145,9 @@ class VisaApplicationController extends Controller
         $submittedApplications = $submittedStudents->count();
         $notSubmittedApplications = $notSubmittedStudents->count();
 
-        $rows = $this->buildFilteredRows($request);
+        $rows = $this->sortRowsByLatestApplicationActivity(
+            $this->filterRowsCollection($rows, $request)
+        );
 
         $perPage = 50;
         $currentPage = LengthAwarePaginator::resolveCurrentPage();
@@ -691,18 +693,6 @@ class VisaApplicationController extends Controller
 
     private function buildFilteredRows(Request $request): Collection
     {
-        $status = $request->input('status');
-        $applicationPresence = $request->input('application_presence');
-        $studentIdFilter = trim((string) $request->input('student_id_number'));
-        $fullNameFilter = trim((string) $request->input('full_name'));
-        $countryFilter = $request->input('country_name');
-        $courseFilter = $request->input('course_name');
-        $departmentFilter = $request->input('department_name');
-        $specialtyFilter = $request->input('specialty_name');
-        $groupFilter = $request->input('group_name');
-        $firmFilter = $request->input('firm_display');
-        $hemisStatusFilter = $request->input('hemis_status');
-
         $latestIds = VisaApplication::query()
             ->selectRaw('MAX(id) as id')
             ->groupBy('student_hemis_id')
@@ -736,7 +726,8 @@ class VisaApplicationController extends Controller
             ->get();
 
         return $this->sortRowsByLatestApplicationActivity(
-            $internationalStudents
+            $this->filterRowsCollection(
+                $internationalStudents
             ->map(function (Student $student) use ($latestApplications) {
                 $application = $latestApplications->get((string) $student->hemis_id);
                 $visaInfo = $student?->visaInfo;
@@ -758,7 +749,27 @@ class VisaApplicationController extends Controller
                         'firm_display'      => $visaInfo?->firm_display ?: '—',
                     ],
                 ];
-            })
+            }),
+                $request
+            )
+        );
+    }
+
+    private function filterRowsCollection(Collection $rows, Request $request): Collection
+    {
+        $status = $request->input('status');
+        $applicationPresence = $request->input('application_presence');
+        $studentIdFilter = trim((string) $request->input('student_id_number'));
+        $fullNameFilter = trim((string) $request->input('full_name'));
+        $countryFilter = $request->input('country_name');
+        $courseFilter = $request->input('course_name');
+        $departmentFilter = $request->input('department_name');
+        $specialtyFilter = $request->input('specialty_name');
+        $groupFilter = $request->input('group_name');
+        $firmFilter = $request->input('firm_display');
+        $hemisStatusFilter = $request->input('hemis_status');
+
+        return $rows
             ->filter(function (object $row) use (
                 $status,
                 $applicationPresence,
@@ -825,7 +836,7 @@ class VisaApplicationController extends Controller
 
                 return true;
             })
-        );
+            ->values();
     }
 
     private function sortRowsByLatestApplicationActivity(Collection $rows): Collection

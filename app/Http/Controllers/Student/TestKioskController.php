@@ -89,6 +89,7 @@ class TestKioskController extends Controller
         RateLimiter::hit($key, 60);
 
         $commonLog = [
+            'attempt_type' => 'kiosk',
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
             'student_id_number' => $idNumber,
@@ -106,6 +107,8 @@ class TestKioskController extends Controller
         }
 
         $commonLog['student_id'] = $student->id;
+        $commonLog['target_student_id'] = $student->id;
+        $commonLog['target_student_id_number'] = $student->student_id_number;
 
         if (!FaceIdService::isGloballyEnabled() || !FaceIdService::isArcFaceEnabled()) {
             return response()->json(['error' => 'Face ID hozircha o‘chiq emas.'], 403);

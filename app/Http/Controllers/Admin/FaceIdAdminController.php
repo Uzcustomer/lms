@@ -98,13 +98,19 @@ class FaceIdAdminController extends Controller
      */
     public function logs(Request $request)
     {
-        $query = FaceIdLog::with('student')->orderByDesc('created_at');
+        $query = FaceIdLog::with(['student', 'targetStudent'])->orderByDesc('created_at');
 
         if ($request->result) {
             $query->where('result', $request->result);
         }
+        if ($request->attempt_type) {
+            $query->where('attempt_type', $request->attempt_type);
+        }
         if ($request->student_id_number) {
-            $query->where('student_id_number', 'like', '%' . $request->student_id_number . '%');
+            $query->where(function ($sub) use ($request) {
+                $sub->where('student_id_number', 'like', '%' . $request->student_id_number . '%')
+                    ->orWhere('target_student_id_number', 'like', '%' . $request->student_id_number . '%');
+            });
         }
         if ($request->date) {
             $query->whereDate('created_at', $request->date);
@@ -113,7 +119,13 @@ class FaceIdAdminController extends Controller
         $logs      = $query->paginate(50)->appends($request->query());
 
         // Talaba rasmlari (student_photos jadvalidan, eng so'nggi approved/pending)
-        $studentNumbers = $logs->pluck('student_id_number')->filter()->unique()->values()->all();
+        $studentNumbers = $logs
+            ->pluck('student_id_number')
+            ->merge($logs->pluck('target_student_id_number'))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
         $studentPhotos = [];
         if (!empty($studentNumbers)) {
             $studentPhotos = \App\Models\StudentPhoto::whereIn('student_id_number', $studentNumbers)

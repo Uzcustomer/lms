@@ -11,10 +11,10 @@
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/></svg>
                     Yangi qo'shish
                 </a>
-                <button type="button" onclick="document.getElementById('importModal').classList.remove('hidden')"
+                <button type="button" onclick="openAdmissionImportModal()"
                         class="inline-flex items-center gap-1 px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
-                    Excel import
+                    Excel yuklash
                 </button>
                 <a href="{{ route('admin.admission-indicators.template') }}"
                    class="inline-flex items-center gap-1 px-3 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg">
@@ -41,7 +41,6 @@
             <div class="bg-red-100 border border-red-400 text-red-800 px-4 py-3 rounded mb-4">{{ session('error') }}</div>
         @endif
 
-        {{-- Yig'ma ko'rsatkichlar --}}
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
             <div class="rounded-xl border border-slate-200 bg-white p-4">
                 <div class="text-xs uppercase font-semibold text-slate-500">Qatorlar (filtr bo'yicha)</div>
@@ -57,12 +56,11 @@
             </div>
         </div>
 
-        {{-- Filtr --}}
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm mb-4">
             <form method="GET" action="{{ route('admin.admission-indicators.index') }}" class="p-4 grid grid-cols-1 md:grid-cols-6 gap-3">
                 <div class="md:col-span-2">
                     <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qidiruv</label>
-                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Mutaxassislik, kod, izoh..."
+                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Talaba ID, JSHSHIR, F.I.SH, mutaxassislik..."
                            class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
                 </div>
                 <div>
@@ -108,7 +106,6 @@
             </form>
         </div>
 
-        {{-- Jadval --}}
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
@@ -160,7 +157,7 @@
                         @empty
                             <tr>
                                 <td colspan="11" class="px-3 py-10 text-center text-slate-400">
-                                    Ma'lumot topilmadi. "Yangi qo'shish" yoki "Excel import" orqali qo'shing.
+                                    Ma'lumot topilmadi. "Yangi qo'shish" yoki "Excel yuklash" orqali qo'shing.
                                 </td>
                             </tr>
                         @endforelse
@@ -174,34 +171,187 @@
         </div>
     </div>
 
-    {{-- Import modal --}}
     <div id="importModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md p-6">
+        <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
             <div class="flex items-center justify-between mb-4">
-                <h3 class="text-lg font-semibold text-slate-800">Excel'dan import</h3>
-                <button type="button" onclick="document.getElementById('importModal').classList.add('hidden')" class="text-slate-400 hover:text-slate-600">
+                <div>
+                    <h3 class="text-lg font-semibold text-slate-800">Excel yuklash</h3>
+                    <p class="text-sm text-slate-500 mt-1">Avval faylni yuklang, keyin ma'lumotlarni bosqichma-bosqich jadvalga ko'chiring.</p>
+                </div>
+                <button type="button" onclick="closeAdmissionImportModal()" class="text-slate-400 hover:text-slate-600">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
                 </button>
             </div>
-            <form method="POST" action="{{ route('admin.admission-indicators.import') }}" enctype="multipart/form-data">
-                @csrf
-                <p class="text-sm text-slate-500 mb-3">
-                    Namuna shablonni yuklab oling, ustun sarlavhalarini o'zgartirmang va to'ldirilgan faylni yuklang.
-                </p>
-                <a href="{{ route('admin.admission-indicators.template') }}" class="inline-block text-sm text-sky-600 hover:underline mb-4">Namuna shablonni yuklab olish</a>
-                <input type="file" name="file" accept=".xlsx,.xls" required
-                       class="w-full text-sm border border-slate-300 rounded-lg p-2 mb-4">
-                @error('file')<p class="text-sm text-rose-600 mb-3">{{ $message }}</p>@enderror
-                <div class="flex justify-end gap-2">
-                    <button type="button" onclick="document.getElementById('importModal').classList.add('hidden')"
-                            class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg">Bekor qilish</button>
-                    <button type="submit" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg">Yuklash</button>
+
+            <div id="importNotice" class="hidden rounded-lg px-4 py-3 text-sm mb-4"></div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-slate-700 mb-2">Excel fayl</label>
+                    <input id="admissionImportFile" type="file" accept=".xlsx,.xls"
+                           class="w-full text-sm border border-slate-300 rounded-lg p-2">
                 </div>
-            </form>
+
+                <div id="importReadyBox" class="hidden rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                    <div id="importReadyText"></div>
+                </div>
+
+                <div id="importProgressWrap" class="hidden">
+                    <div class="flex items-center justify-between text-sm text-slate-600 mb-2">
+                        <span>Ko'chirish jarayoni</span>
+                        <span id="importPercentText">0%</span>
+                    </div>
+                    <div class="w-full h-3 bg-slate-200 rounded-full overflow-hidden">
+                        <div id="importProgressBar" class="h-full bg-sky-600 transition-all duration-300" style="width: 0%;"></div>
+                    </div>
+                    <div id="importProgressMeta" class="text-xs text-slate-500 mt-2">0 / 0 qator</div>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 mt-6">
+                <button type="button" onclick="closeAdmissionImportModal()"
+                        class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg">Bekor qilish</button>
+                <button type="button" id="uploadExcelButton"
+                        class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg">Yuklash</button>
+                <button type="button" id="startTransferButton"
+                        class="hidden px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg">Ma'lumotlarni ko'chirish</button>
+            </div>
         </div>
     </div>
 
-    @if($errors->has('file'))
-        <script>document.getElementById('importModal').classList.remove('hidden');</script>
-    @endif
+    <script>
+        const importRoute = @json(route('admin.admission-indicators.import'));
+        const csrfToken = @json(csrf_token());
+        const importModal = document.getElementById('importModal');
+        const importNotice = document.getElementById('importNotice');
+        const importFileInput = document.getElementById('admissionImportFile');
+        const uploadExcelButton = document.getElementById('uploadExcelButton');
+        const startTransferButton = document.getElementById('startTransferButton');
+        const importReadyBox = document.getElementById('importReadyBox');
+        const importReadyText = document.getElementById('importReadyText');
+        const importProgressWrap = document.getElementById('importProgressWrap');
+        const importProgressBar = document.getElementById('importProgressBar');
+        const importPercentText = document.getElementById('importPercentText');
+        const importProgressMeta = document.getElementById('importProgressMeta');
+
+        function openAdmissionImportModal() {
+            resetAdmissionImportUi();
+            importModal.classList.remove('hidden');
+        }
+
+        function closeAdmissionImportModal() {
+            importModal.classList.add('hidden');
+        }
+
+        function resetAdmissionImportUi() {
+            importNotice.className = 'hidden rounded-lg px-4 py-3 text-sm mb-4';
+            importNotice.textContent = '';
+            importReadyBox.classList.add('hidden');
+            startTransferButton.classList.add('hidden');
+            startTransferButton.disabled = false;
+            uploadExcelButton.disabled = false;
+            importProgressWrap.classList.add('hidden');
+            importProgressBar.style.width = '0%';
+            importPercentText.textContent = '0%';
+            importProgressMeta.textContent = '0 / 0 qator';
+        }
+
+        function showImportNotice(type, message) {
+            const base = 'rounded-lg px-4 py-3 text-sm mb-4';
+            const classes = {
+                success: 'bg-emerald-100 border border-emerald-300 text-emerald-800',
+                error: 'bg-rose-100 border border-rose-300 text-rose-800',
+                warning: 'bg-amber-100 border border-amber-300 text-amber-800',
+                info: 'bg-sky-100 border border-sky-300 text-sky-800',
+            };
+
+            importNotice.className = `${base} ${classes[type] || classes.info}`;
+            importNotice.textContent = message;
+            importNotice.classList.remove('hidden');
+        }
+
+        async function postImportAction(formData) {
+            const response = await fetch(importRoute, {
+                method: 'POST',
+                headers: {
+                    'X-CSRF-TOKEN': csrfToken,
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: formData,
+            });
+
+            const payload = await response.json();
+            if (!response.ok || payload.success === false) {
+                throw new Error(payload.message || 'Amalni bajarib bo\'lmadi.');
+            }
+
+            return payload;
+        }
+
+        uploadExcelButton.addEventListener('click', async () => {
+            if (!importFileInput.files.length) {
+                showImportNotice('error', 'Avval Excel faylni tanlang.');
+                return;
+            }
+
+            uploadExcelButton.disabled = true;
+            startTransferButton.classList.add('hidden');
+            importReadyBox.classList.add('hidden');
+            showImportNotice('info', 'Fayl yuklanmoqda...');
+
+            try {
+                const formData = new FormData();
+                formData.append('action', 'upload');
+                formData.append('file', importFileInput.files[0]);
+                const payload = await postImportAction(formData);
+
+                importReadyText.textContent = `${payload.file_name} yuklandi. ${payload.total_rows} ta qator ko'chirishga tayyor.`;
+                importReadyBox.classList.remove('hidden');
+                startTransferButton.classList.remove('hidden');
+                showImportNotice('success', payload.message);
+            } catch (error) {
+                showImportNotice('error', error.message);
+            } finally {
+                uploadExcelButton.disabled = false;
+            }
+        });
+
+        startTransferButton.addEventListener('click', async () => {
+            startTransferButton.disabled = true;
+            uploadExcelButton.disabled = true;
+            importProgressWrap.classList.remove('hidden');
+            showImportNotice('info', 'Ma\'lumotlar ko\'chirilmoqda...');
+            await processAdmissionImportChunk();
+        });
+
+        async function processAdmissionImportChunk() {
+            try {
+                const formData = new FormData();
+                formData.append('action', 'process');
+                const payload = await postImportAction(formData);
+
+                importProgressBar.style.width = `${payload.percent}%`;
+                importPercentText.textContent = `${payload.percent}%`;
+                importProgressMeta.textContent = `${payload.processed_rows} / ${payload.total_rows} qator`;
+
+                if (payload.finished) {
+                    const message = payload.errors_count > 0
+                        ? `Import tugadi. ${payload.imported_rows} ta qator yozildi, ${payload.errors_count} ta qatorda xatolik bor.`
+                        : `Import tugadi. ${payload.imported_rows} ta qator admission_indicators jadvaliga yozildi.`;
+
+                    showImportNotice(payload.errors_count > 0 ? 'warning' : 'success', message);
+                    setTimeout(() => window.location.reload(), 1200);
+                    return;
+                }
+
+                showImportNotice('info', payload.message);
+                setTimeout(processAdmissionImportChunk, 150);
+            } catch (error) {
+                startTransferButton.disabled = false;
+                uploadExcelButton.disabled = false;
+                showImportNotice('error', error.message);
+            }
+        }
+    </script>
 </x-app-layout>

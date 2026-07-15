@@ -174,7 +174,7 @@
 
     <div id="importModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4"
          style="background:rgba(107,114,128,0.45);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);">
-        <div class="bg-white rounded-2xl shadow-xl p-6" style="width:65%;max-width:65%;min-width:320px;">
+        <div class="bg-white rounded-2xl shadow-xl p-6" style="width:min(65vw,960px);max-width:65vw;min-width:320px;">
             <div class="flex items-center justify-between mb-4">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-800">Excel yuklash</h3>
@@ -274,6 +274,26 @@
             importNotice.classList.remove('hidden');
         }
 
+        function resolveImportErrorMessage(payload, rawText) {
+            if (payload?.message) {
+                return payload.message;
+            }
+
+            const validationErrors = payload?.errors ? Object.values(payload.errors).flat() : [];
+            if (validationErrors.length) {
+                return validationErrors.join(' ');
+            }
+
+            if (typeof rawText === 'string' && rawText.trim()) {
+                const cleaned = rawText.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+                if (cleaned) {
+                    return cleaned.slice(0, 300);
+                }
+            }
+
+            return 'Amalni bajarib bo\'lmadi.';
+        }
+
         async function postImportAction(formData) {
             const response = await fetch(importRoute, {
                 method: 'POST',
@@ -291,11 +311,11 @@
             try {
                 payload = rawText ? JSON.parse(rawText) : null;
             } catch (error) {
-                throw new Error(rawText || 'Server bo\'sh javob qaytardi. Backend xatoni tekshirish kerak.');
+                throw new Error(resolveImportErrorMessage(null, rawText));
             }
 
             if (!response.ok || !payload || payload.success === false) {
-                throw new Error(payload?.message || 'Amalni bajarib bo\'lmadi.');
+                throw new Error(resolveImportErrorMessage(payload, rawText));
             }
 
             return payload;

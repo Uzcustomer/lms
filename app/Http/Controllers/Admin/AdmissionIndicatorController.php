@@ -268,111 +268,127 @@ class AdmissionIndicatorController extends Controller
 
     private function uploadImportFile(Request $request): JsonResponse
     {
-        $request->validate([
-            'file' => 'required|file|mimes:xlsx,xls',
-        ], [
-            'file.required' => 'Excel fayl tanlanmadi.',
-            'file.mimes' => 'Faqat .xlsx yoki .xls fayl yuklash mumkin.',
-        ]);
+        try {
+            $request->validate([
+                'file' => 'required|file|mimes:xlsx,xls',
+            ], [
+                'file.required' => 'Excel fayl tanlanmadi.',
+                'file.mimes' => 'Faqat .xlsx yoki .xls fayl yuklash mumkin.',
+            ]);
 
-        $this->clearImportState();
+            $this->clearImportState();
 
-        $path = $request->file('file')->store('admission-indicators-imports');
-        $rows = $this->extractExcelDataRows(Storage::disk('local')->path($path));
+            $path = $request->file('file')->store('admission-indicators-imports');
+            $rows = $this->extractExcelDataRows(Storage::disk('local')->path($path));
 
-        if (count($rows) === 0) {
-            Storage::disk('local')->delete($path);
+            if (count($rows) === 0) {
+                Storage::disk('local')->delete($path);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Excel faylda import qilinadigan ma\'lumot topilmadi.',
+                ], 422);
+            }
+
+            $headers = $this->readExcelHeader(Storage::disk('local')->path($path));
+            if (count($headers) < count(self::IMPORT_COLUMN_MAP)) {
+                Storage::disk('local')->delete($path);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Excel ustunlari yetarli emas. Kutilgan ustunlar soni: ' . count(self::IMPORT_COLUMN_MAP),
+                ], 422);
+            }
+
+            session([
+                self::IMPORT_SESSION_KEY => [
+                    'path' => $path,
+                    'original_name' => $request->file('file')->getClientOriginalName(),
+                    'processed_rows' => 0,
+                    'total_rows' => count($rows),
+                    'imported_rows' => 0,
+                    'errors' => [],
+                ],
+            ]);
+
             return response()->json([
-                'success' => false,
-                'message' => 'Excel faylda import qilinadigan ma\'lumot topilmadi.',
-            ], 422);
-        }
-
-        $headers = $this->readExcelHeader(Storage::disk('local')->path($path));
-        if (count($headers) < count(self::IMPORT_COLUMN_MAP)) {
-            Storage::disk('local')->delete($path);
-            return response()->json([
-                'success' => false,
-                'message' => 'Excel ustunlari yetarli emas. Kutilgan ustunlar soni: ' . count(self::IMPORT_COLUMN_MAP),
-            ], 422);
-        }
-
-        session([
-            self::IMPORT_SESSION_KEY => [
-                'path' => $path,
-                'original_name' => $request->file('file')->getClientOriginalName(),
-                'processed_rows' => 0,
+                'success' => true,
+                'message' => 'Fayl yuklandi. Endi ma\'lumotlarni ko\'chirishni boshlashingiz mumkin.',
                 'total_rows' => count($rows),
-                'imported_rows' => 0,
-                'errors' => [],
-            ],
-        ]);
+                'file_name' => $request->file('file')->getClientOriginalName(),
+            ]);
+        } catch (\Throwable $e) {
+            $this->clearImportState();
 
-        return response()->json([
-            'success' => true,
-            'message' => 'Fayl yuklandi. Endi ma\'lumotlarni ko\'chirishni boshlashingiz mumkin.',
-            'total_rows' => count($rows),
-            'file_name' => $request->file('file')->getClientOriginalName(),
-        ]);
+            return response()->json([
+                'success' => false,
+                'message' => 'Excel yuklashda xatolik: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 
     private function processImportChunk(Request $request): JsonResponse
     {
-        $state = session(self::IMPORT_SESSION_KEY);
+        try {
+            $state = session(self::IMPORT_SESSION_KEY);
 
-        if (!$state || empty($state['path']) || !Storage::disk('local')->exists($state['path'])) {
+            if (!$state || empty($state['path']) || !Storage::disk('local')->exists($state['path'])) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Avval Excel faylni yuklang.',
+                ], 422);
+            }
+
+            $rows = $this->extractExcelDataRows(Storage::disk('local')->path($state['path']));
+            $chunk = array_slice($rows, $state['processed_rows'], self::IMPORT_CHUNK_SIZE);
+
+            foreach ($chunk as $rowMeta) {
+                try {
+                    $payload = $this->mapExcelRowToPayload($rowMeta['row']);
+                    $payload['created_by'] = auth()->id();
+                    $payload['updated_by'] = auth()->id();
+                    AdmissionIndicator::create($payload);
+                    $state['imported_rows']++;
+                } catch (\Throwable $e) {
+                    $state['errors'][] = [
+                        'row' => $rowMeta['row_number'],
+                        'error' => $e->getMessage(),
+                    ];
+                }
+            }
+
+            $state['processed_rows'] += count($chunk);
+            $state['total_rows'] = count($rows);
+            session([self::IMPORT_SESSION_KEY => $state]);
+
+            $percent = $state['total_rows'] > 0
+                ? (int) floor(($state['processed_rows'] / $state['total_rows']) * 100)
+                : 100;
+            $finished = $state['processed_rows'] >= $state['total_rows'];
+
+            $response = [
+                'success' => true,
+                'finished' => $finished,
+                'processed_rows' => $state['processed_rows'],
+                'total_rows' => $state['total_rows'],
+                'imported_rows' => $state['imported_rows'],
+                'errors_count' => count($state['errors']),
+                'errors_preview' => array_slice($state['errors'], -5),
+                'percent' => min(100, $percent),
+                'message' => $finished
+                    ? 'Import yakunlandi.'
+                    : 'Ma\'lumotlar admission_indicators jadvaliga ko\'chirilmoqda.',
+            ];
+
+            if ($finished) {
+                $this->clearImportState();
+            }
+
+            return response()->json($response);
+        } catch (\Throwable $e) {
             return response()->json([
                 'success' => false,
-                'message' => 'Avval Excel faylni yuklang.',
-            ], 422);
+                'message' => 'Import jarayonida xatolik: ' . $e->getMessage(),
+            ], 500);
         }
-
-        $rows = $this->extractExcelDataRows(Storage::disk('local')->path($state['path']));
-        $chunk = array_slice($rows, $state['processed_rows'], self::IMPORT_CHUNK_SIZE);
-
-        foreach ($chunk as $rowMeta) {
-            try {
-                $payload = $this->mapExcelRowToPayload($rowMeta['row']);
-                $payload['created_by'] = auth()->id();
-                $payload['updated_by'] = auth()->id();
-                AdmissionIndicator::create($payload);
-                $state['imported_rows']++;
-            } catch (\Throwable $e) {
-                $state['errors'][] = [
-                    'row' => $rowMeta['row_number'],
-                    'error' => $e->getMessage(),
-                ];
-            }
-        }
-
-        $state['processed_rows'] += count($chunk);
-        $state['total_rows'] = count($rows);
-        session([self::IMPORT_SESSION_KEY => $state]);
-
-        $percent = $state['total_rows'] > 0
-            ? (int) floor(($state['processed_rows'] / $state['total_rows']) * 100)
-            : 100;
-        $finished = $state['processed_rows'] >= $state['total_rows'];
-
-        $response = [
-            'success' => true,
-            'finished' => $finished,
-            'processed_rows' => $state['processed_rows'],
-            'total_rows' => $state['total_rows'],
-            'imported_rows' => $state['imported_rows'],
-            'errors_count' => count($state['errors']),
-            'errors_preview' => array_slice($state['errors'], -5),
-            'percent' => min(100, $percent),
-            'message' => $finished
-                ? 'Import yakunlandi.'
-                : 'Ma\'lumotlar admission_indicators jadvaliga ko\'chirilmoqda.',
-        ];
-
-        if ($finished) {
-            $this->clearImportState();
-        }
-
-        return response()->json($response);
     }
 
     private function readExcelHeader(string $absolutePath): array

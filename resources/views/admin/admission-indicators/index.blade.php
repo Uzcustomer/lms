@@ -100,6 +100,24 @@
                         @endforeach
                     </select>
                 </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Fakultet</label>
+                    <select name="fakultet" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                        <option value="">Barchasi</option>
+                        @foreach($fakultetlar as $fakultet)
+                            <option value="{{ $fakultet }}" @selected(request('fakultet') === $fakultet)>{{ $fakultet }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Talaba toifasi</label>
+                    <select name="talaba_toifasi" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                        <option value="">Barchasi</option>
+                        @foreach($talabaToifalari as $toifa)
+                            <option value="{{ $toifa }}" @selected(request('talaba_toifasi') === $toifa)>{{ $toifa }}</option>
+                        @endforeach
+                    </select>
+                </div>
                 <div class="md:col-span-6 flex items-center gap-2">
                     <button type="submit" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg">Filtrlash</button>
                     <a href="{{ route('admin.admission-indicators.index') }}" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg">Tozalash</a>

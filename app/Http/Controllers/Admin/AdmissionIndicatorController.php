@@ -9,6 +9,7 @@ use App\Imports\AdmissionIndicatorImport;
 use App\Models\AdmissionIndicator;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
@@ -374,6 +375,13 @@ class AdmissionIndicatorController extends Controller
                         'row' => $rowMeta['row_number'],
                         'error' => $e->getMessage(),
                     ];
+
+                    Log::warning('Admission indicator import row failed', [
+                        'row' => $rowMeta['row_number'],
+                        'error' => $e->getMessage(),
+                        'student_id' => $rowMeta['row'][2] ?? null,
+                        'full_name' => $rowMeta['row'][3] ?? null,
+                    ]);
                 }
             }
 
@@ -385,6 +393,18 @@ class AdmissionIndicatorController extends Controller
                 ? (int) floor(($state['processed_rows'] / $state['total_rows']) * 100)
                 : 100;
             $finished = $state['next_row'] > $state['last_row'];
+
+            if ($finished && $state['imported_rows'] === 0 && count($state['errors']) > 0) {
+                $message = 'Hech bir qator yozilmadi. Birinchi xato: ' . $state['errors'][0]['error'];
+                $this->clearImportState();
+
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'errors_count' => count($state['errors']),
+                    'errors_preview' => array_slice($state['errors'], 0, 5),
+                ], 422);
+            }
 
             $response = [
                 'success' => true,
@@ -401,11 +421,21 @@ class AdmissionIndicatorController extends Controller
             ];
 
             if ($finished) {
+                Log::info('Admission indicator import completed', [
+                    'imported_rows' => $state['imported_rows'],
+                    'errors_count' => count($state['errors']),
+                    'errors_preview' => array_slice($state['errors'], 0, 5),
+                ]);
+
                 $this->clearImportState();
             }
 
             return response()->json($response);
         } catch (\Throwable $e) {
+            Log::error('Admission indicator import failed', [
+                'error' => $e->getMessage(),
+            ]);
+
             return response()->json([
                 'success' => false,
                 'message' => 'Import jarayonida xatolik: ' . $e->getMessage(),

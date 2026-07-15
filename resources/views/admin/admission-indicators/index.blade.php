@@ -58,69 +58,82 @@
         </div>
 
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm mb-4">
-            <form method="GET" action="{{ route('admin.admission-indicators.index') }}" class="p-4 grid grid-cols-1 md:grid-cols-6 gap-3">
-                <div class="md:col-span-2">
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qidiruv</label>
-                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Talaba ID, JSHSHIR, F.I.SH, mutaxassislik..."
-                           class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qabul yili</label>
-                    <select name="qabul_yili" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
-                        <option value="">Barchasi</option>
-                        @foreach($years as $year)
-                            <option value="{{ $year }}" @selected((string) request('qabul_yili') === (string) $year)>{{ $year }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Ta'lim turi</label>
-                    <select name="talim_turi" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
-                        <option value="">Barchasi</option>
-                        @foreach($talimTurlari as $t)
-                            <option value="{{ $t }}" @selected(request('talim_turi') === $t)>{{ $t }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Ta'lim shakli</label>
-                    <select name="talim_shakli" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
-                        <option value="">Barchasi</option>
-                        @foreach($talimShakllari as $t)
-                            <option value="{{ $t }}" @selected(request('talim_shakli') === $t)>{{ $t }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">To'lov shakli</label>
-                    <select name="tolov_shakli" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
-                        <option value="">Barchasi</option>
-                        @foreach($tolovShakllari as $t)
-                            <option value="{{ $t }}" @selected(request('tolov_shakli') === $t)>{{ $t }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Fakultet</label>
-                    <select name="fakultet" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
-                        <option value="">Barchasi</option>
-                        @foreach($fakultetlar as $fakultet)
-                            <option value="{{ $fakultet }}" @selected(request('fakultet') === $fakultet)>{{ $fakultet }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Talaba toifasi</label>
-                    <select name="talaba_toifasi" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
-                        <option value="">Barchasi</option>
-                        @foreach($talabaToifalari as $toifa)
-                            <option value="{{ $toifa }}" @selected(request('talaba_toifasi') === $toifa)>{{ $toifa }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="md:col-span-6 flex items-center gap-2">
-                    <button type="submit" class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg">Filtrlash</button>
-                    <a href="{{ route('admin.admission-indicators.index') }}" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg">Tozalash</a>
+            <form method="GET" action="{{ route('admin.admission-indicators.index') }}" class="p-4">
+                <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+                    <div style="flex:1 1 100%;min-width:280px;">
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qidiruv</label>
+                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Talaba ID, JSHSHIR, F.I.SH, mutaxassislik..."
+                               class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                    </div>
+
+                    <div style="flex:1 1 calc(50% - 6px);min-width:220px;">
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qabul yili</label>
+                        <select name="qabul_yili" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                            <option value="">Barchasi</option>
+                            @foreach($years as $year)
+                                <option value="{{ $year }}" @selected((string) request('qabul_yili') === (string) $year)>{{ $year }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div style="flex:1 1 calc(50% - 6px);min-width:220px;">
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Ta'lim turi</label>
+                        <select name="talim_turi" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                            <option value="">Barchasi</option>
+                            @foreach($talimTurlari as $t)
+                                <option value="{{ $t }}" @selected(request('talim_turi') === $t)>{{ $t }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div style="flex:1 1 calc(50% - 6px);min-width:220px;">
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Ta'lim shakli</label>
+                        <select name="talim_shakli" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                            <option value="">Barchasi</option>
+                            @foreach($talimShakllari as $t)
+                                <option value="{{ $t }}" @selected(request('talim_shakli') === $t)>{{ $t }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div style="flex:1 1 calc(50% - 6px);min-width:220px;">
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">To'lov shakli</label>
+                        <select name="tolov_shakli" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                            <option value="">Barchasi</option>
+                            @foreach($tolovShakllari as $t)
+                                <option value="{{ $t }}" @selected(request('tolov_shakli') === $t)>{{ $t }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div style="flex:1 1 calc(50% - 6px);min-width:220px;">
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Fakultet</label>
+                        <select name="fakultet" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                            <option value="">Barchasi</option>
+                            @foreach($fakultetlar as $fakultet)
+                                <option value="{{ $fakultet }}" @selected(request('fakultet') === $fakultet)>{{ $fakultet }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div style="flex:1 1 calc(50% - 6px);min-width:220px;">
+                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Talaba toifasi</label>
+                        <select name="talaba_toifasi" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                            <option value="">Barchasi</option>
+                            @foreach($talabaToifalari as $toifa)
+                                <option value="{{ $toifa }}" @selected(request('talaba_toifasi') === $toifa)>{{ $toifa }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div style="display:flex;align-items:center;gap:10px;flex:1 1 100%;padding-top:4px;">
+                        <button type="submit"
+                                class="px-4 py-2 text-white text-sm font-medium rounded-lg"
+                                style="background-color:#2563eb;border:1px solid #2563eb;box-shadow:0 1px 2px rgba(37,99,235,0.25);">Filtrlash</button>
+                        <a href="{{ route('admin.admission-indicators.index') }}"
+                           class="px-4 py-2 text-sm font-medium rounded-lg"
+                           style="background-color:#f1f5f9;border:1px solid #cbd5e1;color:#334155;">Tozalash</a>
+                    </div>
                 </div>
             </form>
         </div>

@@ -30,7 +30,7 @@
         </div>
     </x-slot>
 
-    <div class="max-w-screen-xl mx-auto">
+    <div class="w-full">
         @if(session('success'))
             <div class="bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded mb-4">{{ session('success') }}</div>
         @endif

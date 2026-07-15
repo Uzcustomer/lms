@@ -496,7 +496,8 @@ class AdmissionIndicatorController extends Controller
 
     private function dateOrNull(mixed $value): ?string
     {
-        if ($value === null || trim((string) $value) === '') {
+        $stringValue = trim((string) $value);
+        if ($value === null || $stringValue === '') {
             return null;
         }
 
@@ -504,11 +505,9 @@ class AdmissionIndicatorController extends Controller
             return ExcelDate::excelToDateTimeObject((float) $value)->format('Y-m-d');
         }
 
-        try {
-            return date('Y-m-d', strtotime((string) $value));
-        } catch (\Throwable) {
-            return null;
-        }
+        $timestamp = strtotime($stringValue);
+
+        return $timestamp ? date('Y-m-d', $timestamp) : null;
     }
 
     private function clearImportState(): void

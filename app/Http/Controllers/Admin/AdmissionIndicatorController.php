@@ -278,20 +278,25 @@ class AdmissionIndicatorController extends Controller
 
             $this->clearImportState();
 
-            $path = $request->file('file')->store('admission-indicators-imports');
-            $rows = $this->extractExcelDataRows(Storage::disk('local')->path($path));
+            $absolutePath = $request->file('file')->getRealPath();
+            if (!$absolutePath) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Yuklangan faylni o\'qib bo\'lmadi.',
+                ], 422);
+            }
+
+            $rows = $this->extractExcelDataRows($absolutePath);
 
             if (count($rows) === 0) {
-                Storage::disk('local')->delete($path);
                 return response()->json([
                     'success' => false,
                     'message' => 'Excel faylda import qilinadigan ma\'lumot topilmadi.',
                 ], 422);
             }
 
-            $headers = $this->readExcelHeader(Storage::disk('local')->path($path));
+            $headers = $this->readExcelHeader($absolutePath);
             if (count($headers) < count(self::IMPORT_COLUMN_MAP)) {
-                Storage::disk('local')->delete($path);
                 return response()->json([
                     'success' => false,
                     'message' => 'Excel ustunlari yetarli emas. Kutilgan ustunlar soni: ' . count(self::IMPORT_COLUMN_MAP),
@@ -300,7 +305,7 @@ class AdmissionIndicatorController extends Controller
 
             session([
                 self::IMPORT_SESSION_KEY => [
-                    'path' => $path,
+                    'rows' => $rows,
                     'original_name' => $request->file('file')->getClientOriginalName(),
                     'processed_rows' => 0,
                     'total_rows' => count($rows),
@@ -330,14 +335,14 @@ class AdmissionIndicatorController extends Controller
         try {
             $state = session(self::IMPORT_SESSION_KEY);
 
-            if (!$state || empty($state['path']) || !Storage::disk('local')->exists($state['path'])) {
+            if (!$state || empty($state['rows']) || !is_array($state['rows'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Avval Excel faylni yuklang.',
                 ], 422);
             }
 
-            $rows = $this->extractExcelDataRows(Storage::disk('local')->path($state['path']));
+            $rows = $state['rows'];
             $chunk = array_slice($rows, $state['processed_rows'], self::IMPORT_CHUNK_SIZE);
 
             foreach ($chunk as $rowMeta) {

@@ -824,7 +824,7 @@ class VedomostSubmissionService
 
         // "group|subject|sem" => [urinish => true]  (faqat joriy semestr).
         $attemptsByKey = [];
-        $sababliAttemptsByKey = [];
+        $groupSpecificAttemptsByKey = [];
         foreach ($rows as $r) {
             $gid = (string) $r->group_hemis_id;
             $sem = (string) $r->semester_code;
@@ -844,8 +844,11 @@ class VedomostSubmissionService
 
             $key = $gid . '|' . $r->subject_id . '|' . $sem;
             $attemptsByKey[$key][$att] = true;
-            if ($isSababli) {
-                $sababliAttemptsByKey[$key][$att] = true;
+            // Ayrim oqimlarda sababli topshirish faqat is_qoshimcha=1 bo'lib saqlanadi,
+            // retake_was_sababli flag'i to'ldirilmay qoladi. 2/3-urinishdagi shunday
+            // yozuvlar uchun ham guruh bo'yicha alohida 12a/12b qo'shimcha satri ochilsin.
+            if ($att >= 2 && ($isSababli || $isQoshimcha)) {
+                $groupSpecificAttemptsByKey[$key][$att] = true;
             }
         }
 
@@ -861,8 +864,8 @@ class VedomostSubmissionService
         }
 
         // 12aq/12bq — umumiy (birlik bo'yicha): birlikning bironta guruhida attempt=2/3 farmoyish bo'lsa.
-        $groupDateMap = $this->examDatesForGroupSubjectBatch(array_keys($sababliAttemptsByKey));
-        foreach ($sababliAttemptsByKey as $key => $atts) {
+        $groupDateMap = $this->examDatesForGroupSubjectBatch(array_keys($groupSpecificAttemptsByKey));
+        foreach ($groupSpecificAttemptsByKey as $key => $atts) {
             [$gid, $subjectId, $sem] = explode('|', $key);
             $baseDates = $groupDateMap[$key] ?? ['resit' => null, 'resit2' => null];
 

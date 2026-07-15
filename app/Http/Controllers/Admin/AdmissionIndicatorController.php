@@ -95,6 +95,12 @@ class AdmissionIndicatorController extends Controller
         if ($request->filled('tolov_shakli')) {
             $query->where('tolov_shakli', $request->tolov_shakli);
         }
+        if ($request->filled('fakultet')) {
+            $query->where('fakultet', $request->fakultet);
+        }
+        if ($request->filled('talaba_toifasi')) {
+            $query->where('talaba_toifasi', $request->talaba_toifasi);
+        }
         if ($request->filled('search')) {
             $s = trim($request->search);
             $query->where(function ($q) use ($s) {
@@ -132,6 +138,22 @@ class AdmissionIndicatorController extends Controller
             ->orderByDesc('qabul_yili')
             ->pluck('qabul_yili');
 
+        $fakultetlar = AdmissionIndicator::query()
+            ->whereNotNull('fakultet')
+            ->where('fakultet', '<>', '')
+            ->select('fakultet')
+            ->distinct()
+            ->orderBy('fakultet')
+            ->pluck('fakultet');
+
+        $talabaToifalari = AdmissionIndicator::query()
+            ->whereNotNull('talaba_toifasi')
+            ->where('talaba_toifasi', '<>', '')
+            ->select('talaba_toifasi')
+            ->distinct()
+            ->orderBy('talaba_toifasi')
+            ->pluck('talaba_toifasi');
+
         $summary = [
             'jami_reja' => $this->filteredQuery($request)->sum('reja'),
             'jami_qabul' => $this->filteredQuery($request)->sum('qabul_soni'),
@@ -145,6 +167,8 @@ class AdmissionIndicatorController extends Controller
             'talimTurlari' => AdmissionIndicator::TALIM_TURLARI,
             'talimShakllari' => AdmissionIndicator::TALIM_SHAKLLARI,
             'tolovShakllari' => AdmissionIndicator::TOLOV_SHAKLLARI,
+            'fakultetlar' => $fakultetlar,
+            'talabaToifalari' => $talabaToifalari,
         ]);
     }
 

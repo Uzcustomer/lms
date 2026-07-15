@@ -234,7 +234,7 @@
                            style="display:inline-flex;align-items:center;padding:8px 16px;border-radius:10px;background:#2563eb;color:#fff;font-size:14px;font-weight:600;text-decoration:none;">
                             {{ __("Excel chiqarish") }}
                         </a>
-                        <a href="{{ route('admin.retake-test-markazi.daily-allowed-students-word', ['student_search' => $studentSearch]) }}"
+                        <a href="{{ route('admin.retake-test-markazi.daily-allowed-students-word', array_merge(request()->except(['page','groups_page','students_page']), ['student_search' => $studentSearch, 'sent_status' => ($sentStatus ?? '')])) }}"
                            class="inline-flex items-center px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-semibold hover:bg-emerald-700">
                             {{ __("Word chiqarish") }}
                         </a>

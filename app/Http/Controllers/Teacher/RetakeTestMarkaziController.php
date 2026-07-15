@@ -486,12 +486,39 @@ class RetakeTestMarkaziController extends Controller
         $this->authorize();
 
         $studentSearch = trim((string) $request->input('student_search', ''));
+        $sentStatus = (string) $request->input('sent_status', 'sent');
+        $studentFilters = [
+            'education_type' => $request->input('education_type'),
+            'department' => $request->input('department'),
+            'specialty' => $request->input('specialty'),
+            'level_code' => $request->input('level_code'),
+            'semester_code' => $request->input('semester_code'),
+            'group' => $request->input('group'),
+        ];
+        $subjectFilter = $request->input('subject');
+        $hasStudentFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty();
+
+        $studentSub = function ($sub) use ($studentFilters) {
+            $sub->select('hemis_id')->from('students');
+            if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+            if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+            if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+            if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+            if (!empty($studentFilters['semester_code'])) $sub->where('semester_code', $studentFilters['semester_code']);
+            if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+        };
 
         $query = RetakeApplication::query()
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
             ->whereNotNull('retake_group_id')
             ->with(['group.student', 'retakeGroup'])
-            ->orderBy('id');
+            ->orderByDesc('sent_to_test_markazi_at');
+
+        if ($sentStatus === 'not_sent') {
+            $query->whereNull('sent_to_test_markazi_at');
+        } elseif ($sentStatus !== '') {
+            $query->whereNotNull('sent_to_test_markazi_at');
+        }
 
         if ($studentSearch !== '') {
             $query->where(function ($q) use ($studentSearch) {
@@ -503,7 +530,23 @@ class RetakeTestMarkaziController extends Controller
             });
         }
 
-        $applications = $query->get();
+        if ($subjectFilter) {
+            $query->whereHas('retakeGroup', fn ($q) => $q->where('subject_id', $subjectFilter));
+        }
+
+        if ($hasStudentFilter) {
+            $query->whereIn('student_hemis_id', $studentSub);
+        }
+
+        $applications = $query->get()
+            ->sortBy(function ($app) {
+                $studentName = $app->group?->student?->full_name ?? '';
+                $subjectName = $app->retakeGroup?->subject_name ?? $app->subject_name ?? '';
+                $semesterName = $app->semester_name ?? $app->retakeGroup?->semester_name ?? '';
+
+                return mb_strtolower($studentName . '|' . $subjectName . '|' . $semesterName);
+            })
+            ->values();
         if ($applications->isEmpty()) {
             abort(404, 'Word uchun ruxsat etilgan talabalar topilmadi');
         }

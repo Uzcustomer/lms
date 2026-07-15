@@ -87,19 +87,19 @@ class AdmissionIndicatorController extends Controller
             $query->where('qabul_yili', (int) $request->qabul_yili);
         }
         if ($request->filled('talim_turi')) {
-            $query->where('talim_turi', $request->talim_turi);
+            $this->applyNormalizedExactFilter($query, 'talim_turi', $request->talim_turi);
         }
         if ($request->filled('talim_shakli')) {
-            $query->where('talim_shakli', $request->talim_shakli);
+            $this->applyNormalizedExactFilter($query, 'talim_shakli', $request->talim_shakli);
         }
         if ($request->filled('tolov_shakli')) {
-            $query->where('tolov_shakli', $request->tolov_shakli);
+            $this->applyNormalizedExactFilter($query, 'tolov_shakli', $request->tolov_shakli);
         }
         if ($request->filled('fakultet')) {
-            $query->where('fakultet', $request->fakultet);
+            $this->applyNormalizedExactFilter($query, 'fakultet', $request->fakultet);
         }
         if ($request->filled('talaba_toifasi')) {
-            $query->where('talaba_toifasi', $request->talaba_toifasi);
+            $this->applyNormalizedExactFilter($query, 'talaba_toifasi', $request->talaba_toifasi);
         }
         if ($request->filled('search')) {
             $s = trim($request->search);
@@ -304,6 +304,52 @@ class AdmissionIndicatorController extends Controller
             'qabul_yili.required' => 'Qabul yili kiritilishi shart.',
             'qabul_yili.integer' => "Qabul yili butun son bo'lishi kerak.",
         ]);
+    }
+
+    private function applyNormalizedExactFilter($query, string $column, ?string $value): void
+    {
+        $normalizedValue = $this->normalizeFilterValue($value);
+
+        if ($normalizedValue === null) {
+            return;
+        }
+
+        $query->whereRaw($this->normalizedColumnSql($column) . ' = ?', [$normalizedValue]);
+    }
+
+    private function normalizeFilterValue(?string $value): ?string
+    {
+        if ($value === null) {
+            return null;
+        }
+
+        $value = mb_strtolower(trim($value), 'UTF-8');
+        if ($value === '') {
+            return null;
+        }
+
+        $value = str_replace(["'", '`', '’', '‘', 'ʼ', 'ʻ', '"'], '', $value);
+        $value = str_replace(['-', '–', '—', '−'], '', $value);
+        $value = preg_replace('/\s+/u', '', $value) ?? '';
+
+        return $value !== '' ? $value : null;
+    }
+
+    private function normalizedColumnSql(string $column): string
+    {
+        $allowedColumns = [
+            'talim_turi',
+            'talim_shakli',
+            'tolov_shakli',
+            'fakultet',
+            'talaba_toifasi',
+        ];
+
+        if (!in_array($column, $allowedColumns, true)) {
+            throw new \InvalidArgumentException("Unsupported filter column: {$column}");
+        }
+
+        return "LOWER(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(TRIM(COALESCE({$column}, '')), ' ', ''), '-', ''), '–', ''), '—', ''), '−', ''), '''', ''), '’', ''), '‘', ''), 'ʼ', ''), 'ʻ', ''))";
     }
 
     private function uploadImportFile(Request $request): JsonResponse

@@ -12,7 +12,8 @@
                     Yangi qo'shish
                 </a>
                 <button type="button" onclick="openAdmissionImportModal()"
-                        class="inline-flex items-center gap-1 px-3 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg">
+                        class="inline-flex items-center gap-1 px-3 py-2 text-white text-sm font-medium rounded-lg"
+                        style="background-color:#2563eb;border:1px solid #2563eb;">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                     Excel yuklash
                 </button>
@@ -171,8 +172,9 @@
         </div>
     </div>
 
-    <div id="importModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center bg-black/40 p-4">
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
+    <div id="importModal" class="hidden fixed inset-0 z-[100] flex items-center justify-center p-4"
+         style="background:rgba(107,114,128,0.45);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);">
+        <div class="bg-white rounded-2xl shadow-xl p-6" style="width:65%;max-width:65%;min-width:320px;">
             <div class="flex items-center justify-between mb-4">
                 <div>
                     <h3 class="text-lg font-semibold text-slate-800">Excel yuklash</h3>

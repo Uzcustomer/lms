@@ -13,7 +13,7 @@
                 </a>
                 <button type="button" onclick="openAdmissionImportModal()"
                         class="inline-flex items-center gap-1 px-3 py-2 text-white text-sm font-medium rounded-lg"
-                        style="background-color:#2563eb;border:1px solid #2563eb;">
+                        style="background-color:#2563eb;border:1px solid #2563eb;box-shadow:0 1px 2px rgba(37,99,235,0.25);">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                     Excel yuklash
                 </button>
@@ -214,9 +214,11 @@
                 <button type="button" onclick="closeAdmissionImportModal()"
                         class="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-lg">Bekor qilish</button>
                 <button type="button" id="uploadExcelButton"
-                        class="px-4 py-2 bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium rounded-lg">Yuklash</button>
+                        class="px-4 py-2 text-white text-sm font-medium rounded-lg"
+                        style="background-color:#2563eb;border:1px solid #2563eb;box-shadow:0 1px 2px rgba(37,99,235,0.25);">Yuklash</button>
                 <button type="button" id="startTransferButton"
-                        class="hidden px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg">Ma'lumotlarni ko'chirish</button>
+                        class="hidden px-4 py-2 text-white text-sm font-medium rounded-lg"
+                        style="background-color:#059669;border:1px solid #059669;box-shadow:0 1px 2px rgba(5,150,105,0.25);">Ma'lumotlarni ko'chirish</button>
             </div>
         </div>
     </div>
@@ -283,9 +285,17 @@
                 body: formData,
             });
 
-            const payload = await response.json();
-            if (!response.ok || payload.success === false) {
-                throw new Error(payload.message || 'Amalni bajarib bo\'lmadi.');
+            const rawText = await response.text();
+            let payload = null;
+
+            try {
+                payload = rawText ? JSON.parse(rawText) : null;
+            } catch (error) {
+                throw new Error(rawText || 'Server bo\'sh javob qaytardi. Backend xatoni tekshirish kerak.');
+            }
+
+            if (!response.ok || !payload || payload.success === false) {
+                throw new Error(payload?.message || 'Amalni bajarib bo\'lmadi.');
             }
 
             return payload;

@@ -141,45 +141,53 @@
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
                 <table class="min-w-full text-sm">
-                    <thead class="bg-slate-50 text-slate-600">
+                    <thead class="bg-slate-100 text-slate-700">
                         <tr>
-                            <th class="px-3 py-2 text-left font-semibold">Yil</th>
-                            <th class="px-3 py-2 text-left font-semibold">Ta'lim turi</th>
-                            <th class="px-3 py-2 text-left font-semibold">Ta'lim shakli</th>
-                            <th class="px-3 py-2 text-left font-semibold">Mutaxassislik</th>
-                            <th class="px-3 py-2 text-left font-semibold">Kod</th>
-                            <th class="px-3 py-2 text-left font-semibold">To'lov shakli</th>
-                            <th class="px-3 py-2 text-right font-semibold">Reja</th>
-                            <th class="px-3 py-2 text-right font-semibold">Qabul</th>
-                            <th class="px-3 py-2 text-right font-semibold">Eng past ball</th>
-                            <th class="px-3 py-2 text-left font-semibold">Izoh</th>
-                            <th class="px-3 py-2 text-center font-semibold">Amallar</th>
+                            <th class="px-3 py-3 text-left font-semibold">T/r</th>
+                            <th class="px-3 py-3 text-left font-semibold">Talaba ID</th>
+                            <th class="px-3 py-3 text-left font-semibold">To'liq ismi</th>
+                            <th class="px-3 py-3 text-left font-semibold">Yil</th>
+                            <th class="px-3 py-3 text-left font-semibold">Ta'lim turi</th>
+                            <th class="px-3 py-3 text-left font-semibold">To'lov shakli</th>
+                            <th class="px-3 py-3 text-right font-semibold">Kvota</th>
+                            <th class="px-3 py-3 text-right font-semibold">Reja</th>
+                            <th class="px-3 py-3 text-right font-semibold">Qabul</th>
+                            <th class="px-3 py-3 text-right font-semibold">To'plagan bali</th>
+                            <th class="px-3 py-3 text-right font-semibold">Eng past ball</th>
+                            <th class="px-3 py-3 text-right font-semibold">Eng baland ball</th>
+                            <th class="px-3 py-3 text-left font-semibold">Izoh</th>
+                            <th class="px-3 py-3 text-center font-semibold">Amallar</th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-100">
+                    <tbody class="divide-y divide-slate-200">
                         @forelse($indicators as $item)
-                            <tr class="hover:bg-slate-50">
-                                <td class="px-3 py-2 font-semibold text-slate-800">{{ $item->qabul_yili }}</td>
-                                <td class="px-3 py-2">{{ $item->talim_turi }}</td>
-                                <td class="px-3 py-2">{{ $item->talim_shakli }}</td>
-                                <td class="px-3 py-2">{{ $item->mutaxassislik }}</td>
-                                <td class="px-3 py-2 text-slate-500">{{ $item->mutaxassislik_kodi }}</td>
-                                <td class="px-3 py-2">{{ $item->tolov_shakli }}</td>
-                                <td class="px-3 py-2 text-right">{{ $item->reja !== null ? number_format($item->reja) : '—' }}</td>
-                                <td class="px-3 py-2 text-right font-medium text-emerald-700">{{ $item->qabul_soni !== null ? number_format($item->qabul_soni) : '—' }}</td>
-                                <td class="px-3 py-2 text-right">{{ $item->min_ball !== null ? rtrim(rtrim(number_format($item->min_ball, 1), '0'), '.') : '—' }}</td>
-                                <td class="px-3 py-2 text-slate-500 max-w-xs truncate" title="{{ $item->izoh }}">{{ $item->izoh }}</td>
-                                <td class="px-3 py-2">
+                            <tr class="{{ $loop->odd ? 'bg-slate-50' : 'bg-white' }} hover:bg-sky-50 transition-colors duration-150">
+                                <td class="px-3 py-3 font-semibold text-slate-700">{{ $indicators->firstItem() ? $indicators->firstItem() + $loop->index : $loop->iteration }}</td>
+                                <td class="px-3 py-3 font-medium text-slate-800">{{ $item->student_id ?? '—' }}</td>
+                                <td class="px-3 py-3 min-w-[220px]">
+                                    <div class="font-medium text-slate-800">{{ $item->full_name ?: '—' }}</div>
+                                </td>
+                                <td class="px-3 py-3 font-semibold text-slate-800">{{ $item->qabul_yili }}</td>
+                                <td class="px-3 py-3">{{ $item->talim_turi ?: '—' }}</td>
+                                <td class="px-3 py-3">{{ $item->tolov_shakli ?: '—' }}</td>
+                                <td class="px-3 py-3 text-right">{{ $item->kvota !== null ? number_format($item->kvota) : '—' }}</td>
+                                <td class="px-3 py-3 text-right">{{ $item->reja !== null ? number_format($item->reja) : '—' }}</td>
+                                <td class="px-3 py-3 text-right font-medium text-emerald-700">{{ $item->qabul_soni !== null ? number_format($item->qabul_soni) : '—' }}</td>
+                                <td class="px-3 py-3 text-right font-medium text-sky-700">{{ $item->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $item->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}</td>
+                                <td class="px-3 py-3 text-right">{{ $item->min_ball !== null ? rtrim(rtrim(number_format((float) $item->min_ball, 1, '.', ''), '0'), '.') : '—' }}</td>
+                                <td class="px-3 py-3 text-right font-medium text-violet-700">{{ $item->max_toplagan_bali !== null ? rtrim(rtrim(number_format((float) $item->max_toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}</td>
+                                <td class="px-3 py-3 text-slate-500 max-w-xs truncate" title="{{ $item->izoh }}">{{ $item->izoh ?: '—' }}</td>
+                                <td class="px-3 py-3">
                                     <div class="flex items-center justify-center gap-1">
                                         <a href="{{ route('admin.admission-indicators.edit', $item) }}"
-                                           class="p-1.5 text-sky-600 hover:bg-sky-50 rounded" title="Tahrirlash">
+                                           class="p-1.5 text-sky-600 hover:bg-sky-100 rounded" title="Tahrirlash">
                                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
                                         </a>
                                         <form method="POST" action="{{ route('admin.admission-indicators.destroy', $item) }}"
                                               onsubmit="return confirm('Ushbu qatorni o‘chirishni tasdiqlaysizmi?')">
                                             @csrf
                                             @method('DELETE')
-                                            <button type="submit" class="p-1.5 text-rose-600 hover:bg-rose-50 rounded" title="O'chirish">
+                                            <button type="submit" class="p-1.5 text-rose-600 hover:bg-rose-100 rounded" title="O'chirish">
                                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
                                             </button>
                                         </form>
@@ -188,7 +196,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="11" class="px-3 py-10 text-center text-slate-400">
+                                <td colspan="14" class="px-3 py-10 text-center text-slate-400">
                                     Ma'lumot topilmadi. "Yangi qo'shish" yoki "Excel yuklash" orqali qo'shing.
                                 </td>
                             </tr>

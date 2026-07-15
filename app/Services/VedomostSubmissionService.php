@@ -1077,6 +1077,8 @@ class VedomostSubmissionService
                 'sg.semester_code',
                 'sg.grade',
                 'sg.retake_grade',
+                'sg.status',
+                'sg.reason',
                 $hasAttempt ? 'sg.attempt' : DB::raw('1 as attempt')
             )
             ->cursor();
@@ -1086,20 +1088,23 @@ class VedomostSubmissionService
             if ($unitKey === null) {
                 continue;
             }
-            $val = $r->retake_grade ?? $r->grade;
-            if ($val === null) {
-                continue;
-            }
             $sid = $r->student_hemis_id;
             if (!isset($perUnit[$unitKey][$sid])) {
                 $perUnit[$unitKey][$sid] = ['f1' => false, 'f2' => false];
             }
             $att = (int) ($r->attempt ?? 1);
+            $val = $r->retake_grade ?? $r->grade;
+            $isAbsent = (($r->reason ?? null) === 'absent') && $val === null;
+
             if ($att <= 1 && (float) $val < self::PASS_GRADE) {
+                $perUnit[$unitKey][$sid]['f1'] = true;
+            } elseif ($att <= 1 && $isAbsent) {
                 $perUnit[$unitKey][$sid]['f1'] = true;
             } elseif ($att === 2) {
                 $unitHas[$unitKey]['h2'] = true;
                 if ((float) $val < self::PASS_GRADE) {
+                    $perUnit[$unitKey][$sid]['f2'] = true;
+                } elseif ($isAbsent) {
                     $perUnit[$unitKey][$sid]['f2'] = true;
                 }
             } elseif ($att === 3) {

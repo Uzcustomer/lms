@@ -13,7 +13,22 @@ use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Reader\IReadFilter;
 use PhpOffice\PhpSpreadsheet\Shared\Date as ExcelDate;
+
+class AdmissionIndicatorChunkReadFilter implements IReadFilter
+{
+    public function __construct(
+        private readonly int $startRow,
+        private readonly int $endRow
+    ) {
+    }
+
+    public function readCell($columnAddress, $row, $worksheetName = ''): bool
+    {
+        return $row === 1 || ($row >= $this->startRow && $row <= $this->endRow);
+    }
+}
 
 /**
  * Qabul ko'rsatkichlari — oldingi yillardagi qabul statistikasini
@@ -278,37 +293,37 @@ class AdmissionIndicatorController extends Controller
 
             $this->clearImportState();
 
-            $absolutePath = $request->file('file')->getRealPath();
-            if (!$absolutePath) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Yuklangan faylni o\'qib bo\'lmadi.',
-                ], 422);
-            }
-
-            $rows = $this->extractExcelDataRows($absolutePath);
-
-            if (count($rows) === 0) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'Excel faylda import qilinadigan ma\'lumot topilmadi.',
-                ], 422);
-            }
-
+            $path = $request->file('file')->store('admission-indicators-imports');
+            $absolutePath = Storage::disk('local')->path($path);
             $headers = $this->readExcelHeader($absolutePath);
+
             if (count($headers) < count(self::IMPORT_COLUMN_MAP)) {
+                Storage::disk('local')->delete($path);
                 return response()->json([
                     'success' => false,
                     'message' => 'Excel ustunlari yetarli emas. Kutilgan ustunlar soni: ' . count(self::IMPORT_COLUMN_MAP),
                 ], 422);
             }
 
+            $lastRow = $this->getExcelLastRow($absolutePath);
+            $totalRows = max(0, $lastRow - 1);
+
+            if ($totalRows === 0) {
+                Storage::disk('local')->delete($path);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Excel faylda import qilinadigan ma\'lumot topilmadi.',
+                ], 422);
+            }
+
             session([
                 self::IMPORT_SESSION_KEY => [
-                    'rows' => $rows,
+                    'path' => $path,
                     'original_name' => $request->file('file')->getClientOriginalName(),
+                    'next_row' => 2,
+                    'last_row' => $lastRow,
                     'processed_rows' => 0,
-                    'total_rows' => count($rows),
+                    'total_rows' => $totalRows,
                     'imported_rows' => 0,
                     'errors' => [],
                 ],
@@ -317,7 +332,7 @@ class AdmissionIndicatorController extends Controller
             return response()->json([
                 'success' => true,
                 'message' => 'Fayl yuklandi. Endi ma\'lumotlarni ko\'chirishni boshlashingiz mumkin.',
-                'total_rows' => count($rows),
+                'total_rows' => $totalRows,
                 'file_name' => $request->file('file')->getClientOriginalName(),
             ]);
         } catch (\Throwable $e) {
@@ -335,15 +350,17 @@ class AdmissionIndicatorController extends Controller
         try {
             $state = session(self::IMPORT_SESSION_KEY);
 
-            if (!$state || empty($state['rows']) || !is_array($state['rows'])) {
+            if (!$state || empty($state['path']) || !Storage::disk('local')->exists($state['path'])) {
                 return response()->json([
                     'success' => false,
                     'message' => 'Avval Excel faylni yuklang.',
                 ], 422);
             }
 
-            $rows = $state['rows'];
-            $chunk = array_slice($rows, $state['processed_rows'], self::IMPORT_CHUNK_SIZE);
+            $absolutePath = Storage::disk('local')->path($state['path']);
+            $startRow = (int) $state['next_row'];
+            $endRow = min((int) $state['last_row'], $startRow + self::IMPORT_CHUNK_SIZE - 1);
+            $chunk = $this->extractExcelChunkRows($absolutePath, $startRow, $endRow);
 
             foreach ($chunk as $rowMeta) {
                 try {
@@ -360,14 +377,14 @@ class AdmissionIndicatorController extends Controller
                 }
             }
 
-            $state['processed_rows'] += count($chunk);
-            $state['total_rows'] = count($rows);
+            $state['next_row'] = $endRow + 1;
+            $state['processed_rows'] = min($state['total_rows'], max(0, $endRow - 1));
             session([self::IMPORT_SESSION_KEY => $state]);
 
             $percent = $state['total_rows'] > 0
                 ? (int) floor(($state['processed_rows'] / $state['total_rows']) * 100)
                 : 100;
-            $finished = $state['processed_rows'] >= $state['total_rows'];
+            $finished = $state['next_row'] > $state['last_row'];
 
             $response = [
                 'success' => true,
@@ -398,7 +415,7 @@ class AdmissionIndicatorController extends Controller
 
     private function readExcelHeader(string $absolutePath): array
     {
-        $spreadsheet = IOFactory::load($absolutePath);
+        $spreadsheet = $this->loadSpreadsheetSlice($absolutePath, 1, 1);
         $sheet = $spreadsheet->getActiveSheet();
 
         return array_values($sheet->rangeToArray(
@@ -410,25 +427,50 @@ class AdmissionIndicatorController extends Controller
         )[0] ?? []);
     }
 
-    private function extractExcelDataRows(string $absolutePath): array
+    private function getExcelLastRow(string $absolutePath): int
     {
-        $spreadsheet = IOFactory::load($absolutePath);
+        $reader = IOFactory::createReaderForFile($absolutePath);
+        $worksheetInfo = $reader->listWorksheetInfo($absolutePath);
+
+        return (int) ($worksheetInfo[0]['totalRows'] ?? 0);
+    }
+
+    private function extractExcelChunkRows(string $absolutePath, int $startRow, int $endRow): array
+    {
+        $spreadsheet = $this->loadSpreadsheetSlice($absolutePath, $startRow, $endRow);
         $sheet = $spreadsheet->getActiveSheet();
-        $rawRows = $sheet->toArray(null, true, true, false);
+        $highestColumn = $sheet->getHighestColumn();
         $data = [];
 
-        foreach (array_slice($rawRows, 1, null, true) as $index => $row) {
+        for ($rowNumber = $startRow; $rowNumber <= $endRow; $rowNumber++) {
+            $row = array_values($sheet->rangeToArray(
+                'A' . $rowNumber . ':' . $highestColumn . $rowNumber,
+                null,
+                true,
+                true,
+                false
+            )[0] ?? []);
+
             if ($this->isExcelRowEmpty($row)) {
                 continue;
             }
 
             $data[] = [
-                'row_number' => $index + 1,
-                'row' => array_values($row),
+                'row_number' => $rowNumber,
+                'row' => $row,
             ];
         }
 
         return $data;
+    }
+
+    private function loadSpreadsheetSlice(string $absolutePath, int $startRow, int $endRow)
+    {
+        $reader = IOFactory::createReaderForFile($absolutePath);
+        $reader->setReadDataOnly(true);
+        $reader->setReadFilter(new AdmissionIndicatorChunkReadFilter($startRow, $endRow));
+
+        return $reader->load($absolutePath);
     }
 
     private function mapExcelRowToPayload(array $row): array

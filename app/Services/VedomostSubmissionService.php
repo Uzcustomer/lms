@@ -574,10 +574,17 @@ class VedomostSubmissionService
                 $keptIds[] = $id12a;
             }
 
-            // 12b — 2-urinishda yiqilganlar bor (resit sanasi o'tgan) YOKI 3-urinish
-            // imtihoni topshirilgan (attempt=3 bahosi bor).
+            // 12b — 3-urinish imtihoni topshirilgan (attempt=3 bahosi bor) YOKI
+            // 2-urinish (resit) sanasi o'tgan va oldingi bosqichdan qarzdor talabalar
+            // qolgan bo'lsa ochiladi. Bu yerda "2-urinishga kelmagan" holati ham
+            // qamrab olinadi: attempt=2 yozuvi bo'lmasa ham, failed1 > 0 va resit
+            // sanasi o'tgan bo'lsa 12b ochiladi.
             $open12b = !empty($f['has3'])
-                || ($f['failed2'] > 0 && $d['resit'] !== null && $d['resit'] < $today);
+                || (
+                    $d['resit'] !== null
+                    && $d['resit'] < $today
+                    && (($f['failed2'] ?? 0) > 0 || ($f['failed1'] ?? 0) > 0)
+                );
             $id12b = $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12B, $open12b, $d['resit2']);
             if ($id12b) {
                 $keptIds[] = $id12b;

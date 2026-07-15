@@ -529,6 +529,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/export/curricula', function () {
             return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\CurriculaExport, 'curricula.xlsx');
         })->name('export.curricula');
+        Route::get('/export/groups', function () {
+            return \Maatwebsite\Excel\Facades\Excel::download(new \App\Exports\GroupsExport, 'groups.xlsx');
+        })->name('export.groups');
 
         // Tyutorlar ro'yxati + har bir tyutor guruhlarini Excelga eksport qilish
         Route::get('/tutors', function () {

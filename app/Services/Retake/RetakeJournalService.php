@@ -967,6 +967,11 @@ class RetakeJournalService
         $absPath = $tempDir . '/' . $fileName;
 
         $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, 'Xlsx');
+        // Template ichidagi ayrim formulalar serverda save paytida barcha sheetlarni
+        // qayta hisoblashga urinadi; ayrim prod shablonlarda bu "worksheet not found"
+        // xatosini berib, aynan ba'zi fanlarda 500 chiqaradi. Excel ochilganda o'zi
+        // qayta hisoblaydi, shu sabab server-side pre-calc'ni o'chiramiz.
+        $writer->setPreCalculateFormulas(false);
         $writer->save($absPath);
         $spreadsheet->disconnectWorksheets();
 

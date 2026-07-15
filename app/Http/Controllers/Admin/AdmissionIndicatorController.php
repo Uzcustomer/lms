@@ -117,6 +117,23 @@ class AdmissionIndicatorController extends Controller
         return $query;
     }
 
+    private function filteredQueryWithScoreStats(Request $request)
+    {
+        return $this->filteredQuery($request)
+            ->select('admission_indicators.*')
+            ->selectSub(function ($query) {
+                $query->from('admission_indicators as ai2')
+                    ->selectRaw('MAX(ai2.toplagan_bali)')
+                    ->whereRaw('ai2.qabul_yili <=> admission_indicators.qabul_yili')
+                    ->whereRaw('ai2.talim_turi <=> admission_indicators.talim_turi')
+                    ->whereRaw('ai2.talim_shakli <=> admission_indicators.talim_shakli')
+                    ->whereRaw('ai2.mutaxassislik <=> admission_indicators.mutaxassislik')
+                    ->whereRaw('ai2.mutaxassislik_kodi <=> admission_indicators.mutaxassislik_kodi')
+                    ->whereRaw('ai2.tolov_shakli <=> admission_indicators.tolov_shakli')
+                    ->whereRaw('ai2.fakultet <=> admission_indicators.fakultet');
+            }, 'max_toplagan_bali');
+    }
+
     public function index(Request $request)
     {
         if (!Schema::hasTable('admission_indicators')) {
@@ -124,7 +141,7 @@ class AdmissionIndicatorController extends Controller
                 ->with('error', 'Iltimos, avval migratsiyani bajaring: php artisan migrate');
         }
 
-        $indicators = $this->filteredQuery($request)
+        $indicators = $this->filteredQueryWithScoreStats($request)
             ->orderByDesc('qabul_yili')
             ->orderBy('talim_turi')
             ->orderBy('talim_shakli')

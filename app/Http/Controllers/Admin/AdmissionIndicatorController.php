@@ -41,7 +41,7 @@ class AdmissionIndicatorController extends Controller
     private const IMPORT_CHUNK_SIZE = 100;
 
     /**
-     * Excel ustunlari tartibi bo'yicha admission_indicators field mapping.
+     * Default index-based mapping kept as fallback.
      */
     private const IMPORT_COLUMN_MAP = [
         0 => 't_r',
@@ -297,12 +297,13 @@ class AdmissionIndicatorController extends Controller
             $path = $request->file('file')->store('admission-indicators-imports');
             $absolutePath = Storage::disk('local')->path($path);
             $headers = $this->readExcelHeader($absolutePath);
+            $columnMap = $this->resolveImportColumnMap($headers);
 
-            if (count($headers) < count(self::IMPORT_COLUMN_MAP)) {
+            if (!$this->hasMappedField($columnMap, 'oquv_yili')) {
                 Storage::disk('local')->delete($path);
                 return response()->json([
                     'success' => false,
-                    'message' => 'Excel ustunlari yetarli emas. Kutilgan ustunlar soni: ' . count(self::IMPORT_COLUMN_MAP),
+                    'message' => 'Excel sarlavhalaridan "O\'quv yili" ustuni topilmadi.',
                 ], 422);
             }
 
@@ -320,6 +321,7 @@ class AdmissionIndicatorController extends Controller
             session([
                 self::IMPORT_SESSION_KEY => [
                     'path' => $path,
+                    'column_map' => $columnMap,
                     'original_name' => $request->file('file')->getClientOriginalName(),
                     'next_row' => 2,
                     'last_row' => $lastRow,
@@ -362,10 +364,11 @@ class AdmissionIndicatorController extends Controller
             $startRow = (int) $state['next_row'];
             $endRow = min((int) $state['last_row'], $startRow + self::IMPORT_CHUNK_SIZE - 1);
             $chunk = $this->extractExcelChunkRows($absolutePath, $startRow, $endRow);
+            $columnMap = is_array($state['column_map'] ?? null) ? $state['column_map'] : self::IMPORT_COLUMN_MAP;
 
             foreach ($chunk as $rowMeta) {
                 try {
-                    $payload = $this->mapExcelRowToPayload($rowMeta['row']);
+                    $payload = $this->mapExcelRowToPayload($rowMeta['row'], $columnMap);
                     $payload['created_by'] = auth()->id();
                     $payload['updated_by'] = auth()->id();
                     AdmissionIndicator::create($payload);
@@ -503,24 +506,92 @@ class AdmissionIndicatorController extends Controller
         return $reader->load($absolutePath);
     }
 
-    private function mapExcelRowToPayload(array $row): array
+    private function mapExcelRowToPayload(array $row, array $columnMap = self::IMPORT_COLUMN_MAP): array
     {
         $payload = [];
 
-        foreach (self::IMPORT_COLUMN_MAP as $index => $field) {
+        foreach ($columnMap as $index => $field) {
             $payload[$field] = $this->normalizeValueByField($field, $row[$index] ?? null);
         }
 
-        $payload['qabul_yili'] = $this->parseAdmissionYear($payload['oquv_yili']);
+        $payload['qabul_yili'] = $this->parseAdmissionYear($payload['oquv_yili'] ?? null);
         if ($payload['qabul_yili'] === null) {
             throw new \RuntimeException('O\'quv yilidan qabul yilini aniqlab bo\'lmadi.');
         }
 
-        $payload['reja'] = $payload['kvota'];
+        $payload['reja'] = $payload['kvota'] ?? null;
         $payload['qabul_soni'] = 1;
-        $payload['min_ball'] = $payload['otish_bali'];
+        $payload['min_ball'] = $payload['otish_bali'] ?? null;
 
         return $payload;
+    }
+
+    private function resolveImportColumnMap(array $headers): array
+    {
+        $resolved = [];
+        $jshshirCount = 0;
+
+        foreach ($headers as $index => $header) {
+            $normalized = $this->normalizeImportHeader((string) $header);
+            if ($normalized === '') {
+                continue;
+            }
+
+            $field = match (true) {
+                $normalized === 'tr',
+                $normalized === 't r' => 't_r',
+                str_contains($normalized, 'jshshir') || str_contains($normalized, 'pinfl') => ++$jshshirCount === 1 ? 'jshshir_kod' : 'jshshir_kod_2',
+                str_contains($normalized, 'talaba id') || str_contains($normalized, 'student id') => 'student_id',
+                str_contains($normalized, 'toliq ismi') || str_contains($normalized, 'fish') || str_contains($normalized, 'f i sh') => 'full_name',
+                str_contains($normalized, 'farmoyish') => 'farmoyish',
+                str_contains($normalized, 'buyruq') => 'buyruq',
+                str_contains($normalized, 'fuqarolik') => 'fuqarolik',
+                str_contains($normalized, 'davlat') => 'davlat',
+                str_contains($normalized, 'millat') => 'millat',
+                str_contains($normalized, 'viloyat') => 'viloyat',
+                str_contains($normalized, 'tuman') => 'tuman',
+                str_contains($normalized, 'jins') => 'jinsi',
+                str_contains($normalized, 'tugilgan sana') => 'tugilgan_sana',
+                str_contains($normalized, 'pasport raqami') || str_contains($normalized, 'passport raqami') => 'passport_raqami',
+                str_contains($normalized, 'kurs') => 'kurs',
+                str_contains($normalized, 'fakultet') => 'fakultet',
+                str_contains($normalized, 'talim tili') => 'talim_tili',
+                str_contains($normalized, 'oquv yili') || str_contains($normalized, 'oqish yili') => 'oquv_yili',
+                str_contains($normalized, 'mutaxassislik kodi') => 'mutaxassislik_kodi',
+                str_contains($normalized, 'mutaxassislik') => 'mutaxassislik',
+                str_contains($normalized, 'talim turi') => 'talim_turi',
+                str_contains($normalized, 'talim shakli') => 'talim_shakli',
+                str_contains($normalized, 'tolov shakli') => 'tolov_shakli',
+                str_contains($normalized, 'talaba toifasi') => 'talaba_toifasi',
+                str_contains($normalized, 'imtiyoz toifasi') => 'imtiyoz_toifasi',
+                str_contains($normalized, 'toplagan bali') => 'toplagan_bali',
+                str_contains($normalized, 'otish bali') => 'otish_bali',
+                str_contains($normalized, 'barobari') || str_contains($normalized, 'bazaviy') => 'tolov_kontrakt_barobari_bazaviy',
+                str_contains($normalized, 'shartnoma summasi') || str_contains($normalized, 'shatrtnoma summasi') => 'tolov_kontrakt_shartnoma_summasi',
+                str_contains($normalized, 'kvota') => 'kvota',
+                default => null,
+            };
+
+            if ($field !== null) {
+                $resolved[$index] = $field;
+            }
+        }
+
+        return $resolved ?: self::IMPORT_COLUMN_MAP;
+    }
+
+    private function normalizeImportHeader(string $header): string
+    {
+        $header = mb_strtolower(trim($header), 'UTF-8');
+        $header = str_replace(["'", '`', '’', '‘', 'ʼ', 'ʻ', '"'], '', $header);
+        $header = preg_replace('/[^\pL\pN]+/u', ' ', $header) ?? '';
+
+        return trim(preg_replace('/\s+/u', ' ', $header) ?? '');
+    }
+
+    private function hasMappedField(array $columnMap, string $field): bool
+    {
+        return in_array($field, $columnMap, true);
     }
 
     private function normalizeValueByField(string $field, mixed $value): mixed

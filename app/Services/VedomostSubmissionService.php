@@ -151,6 +151,9 @@ class VedomostSubmissionService
         if (!$exists && empty($row->status)) {
             $row->status = VedomostSubmission::STATUS_PENDING;
         }
+        if (empty($row->manual_opened_at)) {
+            $row->manual_opened_at = now();
+        }
         $row->save();
 
         return $row;
@@ -435,7 +438,8 @@ class VedomostSubmissionService
     {
         return VedomostSubmission::whereNotIn('id', $keptIds)
             ->where('status', VedomostSubmission::STATUS_PENDING)
-            ->whereNull('pdf_path');
+            ->whereNull('pdf_path')
+            ->whereNull('manual_opened_at');
     }
 
     /**
@@ -726,6 +730,7 @@ class VedomostSubmissionService
             VedomostSubmission::where($keys)
                 ->where('status', VedomostSubmission::STATUS_PENDING)
                 ->whereNull('pdf_path')
+                ->whereNull('manual_opened_at')
                 ->delete();
             return null;
         }
@@ -1052,6 +1057,7 @@ class VedomostSubmissionService
             VedomostSubmission::where($keys)
                 ->where('status', VedomostSubmission::STATUS_PENDING)
                 ->whereNull('pdf_path')
+                ->whereNull('manual_opened_at')
                 ->delete();
             return null;
         }
@@ -1121,6 +1127,7 @@ class VedomostSubmissionService
             VedomostSubmission::where($keys)
                 ->where('status', VedomostSubmission::STATUS_PENDING)
                 ->whereNull('pdf_path')
+                ->whereNull('manual_opened_at')
                 ->delete();
             return null;
         }

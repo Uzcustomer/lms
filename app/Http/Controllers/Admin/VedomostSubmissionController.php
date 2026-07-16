@@ -205,70 +205,6 @@ class VedomostSubmissionController extends Controller
         return [$query, $educationTypes, $selectedEducationType];
     }
 
-    /**
-     * Qo'lda shakl ochish uchun guruh va fan variantlarini tayyorlaydi.
-     */
-    private function manualOpenOptions(?string $selectedEducationType, ?string $facultyId): array
-    {
-        $rows = DB::table('vedomost_submissions as vs')
-            ->join('groups as g', function ($join) {
-                $join->on('g.group_hemis_id', '=', 'vs.group_hemis_id')
-                    ->where('g.active', true);
-            })
-            ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'vs.curriculum_hemis_id')
-            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
-            ->where('vs.form_type', VedomostSubmission::FORM_12)
-            ->when($selectedEducationType, fn ($q) => $q->where('c.education_type_code', $selectedEducationType))
-            ->when($facultyId, fn ($q) => $q->where('f.id', $facultyId))
-            ->orderBy('vs.group_name')
-            ->orderBy('vs.subject_name')
-            ->get([
-                'vs.id',
-                'vs.group_hemis_id',
-                'vs.group_name',
-                'vs.subject_id',
-                'vs.subject_name',
-                'vs.closing_form',
-                'vs.semester_code',
-            ]);
-
-        $groups = [];
-        $subjectsByGroup = [];
-
-        foreach ($rows as $row) {
-            $groupId = (string) $row->group_hemis_id;
-
-            if (!isset($groups[$groupId])) {
-                $groups[$groupId] = [
-                    'id' => $groupId,
-                    'name' => $row->group_name,
-                ];
-            }
-
-            $formOptions = [];
-            foreach (VedomostSubmission::manualOpenableForms($row->closing_form) as $formKey => $formLabel) {
-                $formOptions[] = [
-                    'id' => $formKey,
-                    'name' => $formLabel,
-                ];
-            }
-
-            $subjectsByGroup[$groupId][] = [
-                'source_id' => (int) $row->id,
-                'subject_id' => (string) $row->subject_id,
-                'name' => $row->subject_name,
-                'closing_form' => (string) $row->closing_form,
-                'semester_code' => (string) $row->semester_code,
-                'form_options' => $formOptions,
-            ];
-        }
-
-        return [
-            'groups' => array_values($groups),
-            'subjects_by_group' => $subjectsByGroup,
-        ];
-    }
-
     public function index(Request $request)
     {
         $this->checkViewAccess();
@@ -329,10 +265,6 @@ class VedomostSubmissionController extends Controller
 
         $notifyEnabled = VedomostSubmissionNotifier::enabled();
         $canToggleNotify = in_array(session('active_role', ''), self::NOTIFY_TOGGLE_ROLES, true);
-        $canManage = in_array(session('active_role', ''), self::ALLOWED_ROLES, true);
-        $manualOpenOptions = $canManage
-            ? $this->manualOpenOptions($selectedEducationType, $request->get('faculty'))
-            : ['groups' => [], 'subjects_by_group' => []];
         $syncProgress = Cache::get('vedomost_submission_sync_progress', ['status' => 'idle']);
 
         return view('admin.vedomost-submission.index', compact(
@@ -346,8 +278,6 @@ class VedomostSubmissionController extends Controller
             'stats',
             'notifyEnabled',
             'canToggleNotify',
-            'canManage',
-            'manualOpenOptions',
             'syncProgress'
         ));
     }
@@ -754,37 +684,6 @@ class VedomostSubmissionController extends Controller
         return redirect()
             ->route('admin.vedomost-submission.index', $request->query())
             ->with('success', "Joriy semester bo'yicha yangilash fon rejimida boshlandi.");
-    }
-
-    /**
-     * Admin qo'lda kerakli vedomost shaklini ochadi.
-     */
-    public function manualOpen(Request $request, $id)
-    {
-        $this->checkAccess();
-
-        $request->validate([
-            'form_type' => 'required|string',
-        ], [
-            'form_type.required' => 'Qaysi shaklni ochish kerakligini tanlang.',
-        ]);
-
-        $source = VedomostSubmission::findOrFail($id);
-        $targetForm = (string) $request->form_type;
-        $opened = $this->service->manualOpen($source, $targetForm);
-
-        $this->log(
-            $opened,
-            'manual_open',
-            $opened->status,
-            $opened->status,
-            "Qo'lda ochildi: " . VedomostSubmission::formLabel($targetForm)
-        );
-
-        return back()->with(
-            'success',
-            VedomostSubmission::formLabel($targetForm) . " qo'lda ochildi."
-        );
     }
 
     public function syncProgress(): JsonResponse

@@ -167,22 +167,6 @@ class VedomostSubmission extends Model
     }
 
     /**
-     * Qo'lda ochish uchun ruxsat beriladigan shakllar.
-     */
-    public static function manualOpenableForms(?string $closingForm): array
-    {
-        $labels = self::formLabels();
-
-        if (in_array($closingForm, ['oski', 'test', 'oski_test'], true)) {
-            return $labels;
-        }
-
-        return [
-            self::FORM_12 => $labels[self::FORM_12],
-        ];
-    }
-
-    /**
      * 12a/12b — umumiy (guruhsiz, hamma guruh bitta varaqda) shaklmi?
      */
     public function isCombinedForm(): bool

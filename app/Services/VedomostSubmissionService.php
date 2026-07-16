@@ -579,12 +579,8 @@ class VedomostSubmissionService
             // qolgan bo'lsa ochiladi. Bu yerda "2-urinishga kelmagan" holati ham
             // qamrab olinadi: attempt=2 yozuvi bo'lmasa ham, failed1 > 0 va resit
             // sanasi o'tgan bo'lsa 12b ochiladi.
-            $open12b = !empty($f['has3'])
-                || (
-                    $d['resit'] !== null
-                    && $d['resit'] < $today
-                    && (($f['failed2'] ?? 0) > 0 || ($f['failed1'] ?? 0) > 0)
-                );
+            // 12b — faqat 3-urinish haqiqatan topshirilganda ochiladi.
+            $open12b = !empty($f['has3']);
             $id12b = $this->upsertOrCleanResitRow($unit, $groupIds, VedomostSubmission::FORM_12B, $open12b, $d['resit2']);
             if ($id12b) {
                 $keptIds[] = $id12b;

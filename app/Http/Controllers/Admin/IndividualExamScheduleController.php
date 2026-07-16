@@ -829,30 +829,30 @@ class IndividualExamScheduleController extends Controller
 
             $reasons = [
                 1 => $allow1
-                    ? '1-urinish ochiq.'
+                    ? "1-urinish ochiq."
                     : ($failed1ByDate
-                        ? '1-urinish sanasi o'tgan, lekin baho kelmagan.'
+                        ? "1-urinish sanasi o'tgan, lekin baho kelmagan."
                         : ($failed1ByGrade
-                            ? '1-urinish bahosi 60 dan past.'
-                            : '1-urinish uchun baho allaqachon mavjud.')),
+                            ? "1-urinish bahosi 60 dan past."
+                            : "1-urinish uchun baho allaqachon mavjud.")),
                 2 => $allow2
                     ? ($failed1ByDate
-                        ? '1-urinish sanasi o'tib, baho kelmagani uchun 2-urinish ochildi.'
+                        ? "1-urinish sanasi o'tib, baho kelmagani uchun 2-urinish ochildi."
                         : "1-urinish bahosi 60 dan past bo'lgani uchun 2-urinish ochildi.")
                     : ($has2
-                        ? '2-urinish uchun baho allaqachon mavjud.'
+                        ? "2-urinish uchun baho allaqachon mavjud."
                         : ($failed1
-                            ? '2-urinish hali yopilmagan.'
-                            : '1-urinish hali keyingi bosqichga o'tmagan.')),
+                            ? "2-urinish hali yopilmagan."
+                            : "1-urinish hali keyingi bosqichga o'tmagan.")),
                 3 => $allow3
                     ? ($failed2ByDate
-                        ? '2-urinish sanasi o'tib, baho kelmagani uchun 3-urinish ochildi.'
+                        ? "2-urinish sanasi o'tib, baho kelmagani uchun 3-urinish ochildi."
                         : "2-urinish bahosi 60 dan past bo'lgani uchun 3-urinish ochildi.")
                     : ($has3
-                        ? '3-urinish uchun baho allaqachon mavjud.'
+                        ? "3-urinish uchun baho allaqachon mavjud."
                         : ($failed2
-                            ? '3-urinish hali yopilmagan.'
-                            : '2-urinish hali keyingi bosqichga o'tmagan.')),
+                            ? "3-urinish hali yopilmagan."
+                            : "2-urinish hali keyingi bosqichga o'tmagan.")),
             ];
 
             $result[$key] = [

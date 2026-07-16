@@ -808,17 +808,17 @@ class IndividualExamScheduleController extends Controller
             //  2-urinish: 1-urinishda yiqilgan bo'lsa yoki hali 1 baholari kelmagan bo'lsa, lekin admin ruxsat berishi mumkin
             //  3-urinish: 2-urinishda yiqilgan bo'lsa
             $allow1 = true;
-            $allow2 = $failed1; // standart
+            $allow2 = $failed1;
             $allow3 = $failed2;
 
             $reasons = [];
             if (!$failed1 && $has1) {
-                $reasons[2] = '1-urinishni topshirgan (V≥60) — 2-urinishga ehtiyoj yo\'q';
+                $reasons[2] = '1-urinishni topshirgan (V>=60), 2-urinishga ehtiyoj yoq';
             } elseif (!$has1) {
                 $reasons[2] = '1-urinish baholari hali kelmagan';
             }
             if (!$failed2 && $has2) {
-                $reasons[3] = '2-urinishni topshirgan (V≥60) — 3-urinishga ehtiyoj yo\'q';
+                $reasons[3] = '2-urinishni topshirgan (V>=60), 3-urinishga ehtiyoj yoq';
             } elseif (!$has2) {
                 $reasons[3] = '2-urinish baholari hali kelmagan';
             }

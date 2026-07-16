@@ -755,8 +755,8 @@ class IndividualExamScheduleController extends Controller
 
     /**
      * Talabaning har fan uchun eligibility (1/2/3 urinishga huquqi).
-     * 1-urinishda baho yo'q yoki 60 dan past bo'lsa 2-urinish ochiladi.
-     * 2-urinishda baho yo'q yoki 60 dan past bo'lsa 3-urinish ochiladi.
+     * 1-urinishda baho 60 dan past bo'lsa yoki sana o'tib baho kelmagan bo'lsa,
+     * keyingi urinish avtomatik ochiladi. Xuddi shu qoida 2→3 uchun ham qo'llanadi.
      */
     private function computeEligibilityForStudent(string $hemisId, $groupId, $subjects): array
     {
@@ -784,9 +784,13 @@ class IndividualExamScheduleController extends Controller
             ->get()
             ->groupBy(fn ($r) => $r->subject_id . '|' . $r->semester_code);
 
+        $scheduleMap = $this->buildScheduleMap($hemisId, $groupId, $subjectIds, $semCodes);
+
         foreach ($subjects as $subject) {
             $key = $subject->subject_id . '|' . $subject->semester_code;
             $subjGrades = $grades->get($key) ?? collect();
+            $schedule = $scheduleMap[$key] ?? null;
+            $closingForm = $subject->closing_form ?? null;
 
             $has1 = false;
             $has2 = false;
@@ -813,33 +817,42 @@ class IndividualExamScheduleController extends Controller
                 }
             }
 
-            $failed1 = !$has1 || $failed1ByGrade;
-            $failed2 = !$has2 || $failed2ByGrade;
+            $failed1ByDate = !$has1 && $this->hasAttemptDatePassed($schedule, $closingForm, 1);
+            $failed2ByDate = !$has2 && $this->hasAttemptDatePassed($schedule, $closingForm, 2);
 
-            $allow1 = false;
-            $allow2 = $failed1 && !$has2;
+            $failed1 = $failed1ByGrade || $failed1ByDate;
+            $failed2 = $failed2ByGrade || $failed2ByDate;
+
+            $allow1 = !$has1 && !$failed1;
+            $allow2 = $failed1 && !$has2 && !$failed2;
             $allow3 = $failed2 && !$has3;
 
             $reasons = [
-                1 => !$has1
-                    ? "1-urinish bahosi yo'q."
-                    : ($failed1ByGrade
-                        ? "1-urinish bahosi 60 dan past."
-                        : "1-urinish bahosi 60 yoki yuqori."),
+                1 => $allow1
+                    ? '1-urinish ochiq.'
+                    : ($failed1ByDate
+                        ? '1-urinish sanasi o'tgan, lekin baho kelmagan.'
+                        : ($failed1ByGrade
+                            ? '1-urinish bahosi 60 dan past.'
+                            : '1-urinish uchun baho allaqachon mavjud.')),
                 2 => $allow2
-                    ? (!$has1
-                        ? "1-urinish bahosi yo'q bo'lgani uchun 2-urinish ochildi."
+                    ? ($failed1ByDate
+                        ? '1-urinish sanasi o'tib, baho kelmagani uchun 2-urinish ochildi.'
                         : "1-urinish bahosi 60 dan past bo'lgani uchun 2-urinish ochildi.")
                     : ($has2
                         ? '2-urinish uchun baho allaqachon mavjud.'
-                        : '1-urinish hali keyingi bosqichga o\'tmagan.'),
+                        : ($failed1
+                            ? '2-urinish hali yopilmagan.'
+                            : '1-urinish hali keyingi bosqichga o'tmagan.')),
                 3 => $allow3
-                    ? (!$has2
-                        ? "2-urinish bahosi yo'q bo'lgani uchun 3-urinish ochildi."
+                    ? ($failed2ByDate
+                        ? '2-urinish sanasi o'tib, baho kelmagani uchun 3-urinish ochildi.'
                         : "2-urinish bahosi 60 dan past bo'lgani uchun 3-urinish ochildi.")
                     : ($has3
                         ? '3-urinish uchun baho allaqachon mavjud.'
-                        : '2-urinish hali keyingi bosqichga o\'tmagan.'),
+                        : ($failed2
+                            ? '3-urinish hali yopilmagan.'
+                            : '2-urinish hali keyingi bosqichga o'tmagan.')),
             ];
 
             $result[$key] = [
@@ -856,6 +869,74 @@ class IndividualExamScheduleController extends Controller
         }
 
         return $result;
+    }
+
+    private function buildScheduleMap(string $hemisId, $groupId, array $subjectIds, array $semCodes): array
+    {
+        $rows = ExamSchedule::query()
+            ->whereIn('subject_id', $subjectIds)
+            ->whereIn('semester_code', $semCodes)
+            ->where(function ($q) use ($groupId, $hemisId) {
+                $q->where(function ($w) use ($groupId) {
+                    $w->where('group_hemis_id', $groupId)
+                      ->whereNull('student_hemis_id');
+                })->orWhere('student_hemis_id', $hemisId);
+            })
+            ->get()
+            ->groupBy(fn ($row) => $row->subject_id . '|' . $row->semester_code);
+
+        $result = [];
+        foreach ($rows as $key => $groupedRows) {
+            $result[$key] = $groupedRows->first(fn ($row) => (string) ($row->student_hemis_id ?? '') === $hemisId)
+                ?: $groupedRows->first();
+        }
+
+        return $result;
+    }
+
+    private function hasAttemptDatePassed($schedule, ?string $closingForm, int $attempt): bool
+    {
+        if (!$schedule) {
+            return false;
+        }
+
+        $cols = match ($attempt) {
+            1 => ['oski' => 'oski_date', 'test' => 'test_date'],
+            2 => ['oski' => 'oski_resit_date', 'test' => 'test_resit_date'],
+            3 => ['oski' => 'oski_resit2_date', 'test' => 'test_resit2_date'],
+            default => null,
+        };
+
+        if (!$cols) {
+            return false;
+        }
+
+        $oskiDate = $schedule->{$cols['oski']} ?? null;
+        $testDate = $schedule->{$cols['test']} ?? null;
+
+        $dates = match ($closingForm) {
+            'oski' => $oskiDate ? [$oskiDate] : [],
+            'test', 'sinov', 'normativ' => $testDate ? [$testDate] : [],
+            'oski_test' => ($oskiDate && $testDate) ? [$oskiDate, $testDate] : [],
+            default => array_values(array_filter([$oskiDate, $testDate])),
+        };
+
+        if (empty($dates)) {
+            return false;
+        }
+
+        $today = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
+        foreach ($dates as $date) {
+            $parsed = $date instanceof \Carbon\CarbonInterface
+                ? $date->copy()->endOfDay()
+                : \Carbon\Carbon::parse($date, 'Asia/Tashkent')->endOfDay();
+
+            if ($parsed->gt($today)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function isAttemptAllowed(?array $elig, int $attempt): bool

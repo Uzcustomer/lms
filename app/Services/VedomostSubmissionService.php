@@ -43,6 +43,120 @@ class VedomostSubmissionService
     }
 
     /**
+     * Admin tanlagan guruh+fan uchun 12a/12b ni qo'lda ochadi.
+     */
+    public function manualOpenForGroup(
+        string $groupHemisId,
+        string $subjectId,
+        string $semesterCode,
+        string $formType,
+        bool $onlyPaid = false
+    ): VedomostSubmission {
+        if (!in_array($formType, [VedomostSubmission::FORM_12A, VedomostSubmission::FORM_12B], true)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'form_type' => 'Faqat 12a yoki 12b shaklni qo\'lda ochish mumkin.',
+            ]);
+        }
+
+        $base = VedomostSubmission::query()
+            ->where('group_hemis_id', $groupHemisId)
+            ->where('subject_id', $subjectId)
+            ->where('semester_code', $semesterCode)
+            ->where('form_type', VedomostSubmission::FORM_12)
+            ->first();
+
+        if (!$base) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'group_hemis_id' => 'Tanlangan guruh va fan uchun asosiy 12-shakl topilmadi.',
+            ]);
+        }
+
+        if ($onlyPaid && !$this->groupHasPaidStudents($groupHemisId)) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'only_paid' => 'Bu guruhda pullik talaba topilmadi.',
+            ]);
+        }
+
+        $keys = [
+            'group_hemis_id' => $base->group_hemis_id,
+            'subject_id' => $base->subject_id,
+            'semester_code' => $base->semester_code,
+            'form_type' => $formType,
+        ];
+
+        $data = [
+            'education_year' => $base->education_year,
+            'group_name' => $onlyPaid ? ($base->group_name . ' (pullik uchun)') : $base->group_name,
+            'curriculum_hemis_id' => $base->curriculum_hemis_id,
+            'curriculum_subject_id' => $base->curriculum_subject_id,
+            'subject_name' => $base->subject_name,
+            'department_hemis_id' => $base->department_hemis_id,
+            'department_name' => $base->department_name,
+            'specialty_name' => $base->specialty_name,
+            'closing_form' => $base->closing_form,
+            'teacher_hemis_id' => $base->teacher_hemis_id,
+            'teacher_name' => $base->teacher_name,
+            'teacher_phone' => $base->teacher_phone,
+            'fan_masuli_hemis_id' => $base->fan_masuli_hemis_id,
+            'fan_masuli_name' => $base->fan_masuli_name,
+            'fan_masuli_phone' => $base->fan_masuli_phone,
+            'kafedra_mudiri_hemis_id' => $base->kafedra_mudiri_hemis_id,
+            'kafedra_mudiri_name' => $base->kafedra_mudiri_name,
+            'kafedra_mudiri_phone' => $base->kafedra_mudiri_phone,
+            'base_type' => 'exam',
+            'base_date' => $base->base_date,
+            'deadline' => $base->deadline ?: $this->manualDeadlineFromBaseDate($base->base_date),
+        ];
+
+        return $this->saveManualRow($keys, $data);
+    }
+
+    /**
+     * Guruhda kamida bitta pullik faol talaba bormi.
+     */
+    private function groupHasPaidStudents(string $groupHemisId): bool
+    {
+        return DB::table('students')
+            ->where('group_id', $groupHemisId)
+            ->where('student_status_code', 11)
+            ->where(function ($query) {
+                $query->where('payment_form_name', 'like', "%to'lov%")
+                    ->orWhere('payment_form_name', 'like', '%shartnoma%')
+                    ->orWhere('payment_form_name', 'like', '%kontrakt%');
+            })
+            ->exists();
+    }
+
+    /**
+     * Base sana bo'lsa ish kuniga ko'ra deadline hisoblaydi.
+     */
+    private function manualDeadlineFromBaseDate($baseDate): ?string
+    {
+        if (empty($baseDate)) {
+            return null;
+        }
+
+        return WorkdayCalculator::addWorkdays(Carbon::parse($baseDate), self::DEADLINE_WORKDAYS)->toDateString();
+    }
+
+    /**
+     * Mavjud holat/fayllarga tegmasdan satrni saqlaydi.
+     */
+    private function saveManualRow(array $keys, array $data): VedomostSubmission
+    {
+        $row = VedomostSubmission::firstOrNew($keys);
+        $exists = $row->exists;
+
+        $row->fill($data);
+        if (!$exists && empty($row->status)) {
+            $row->status = VedomostSubmission::STATUS_PENDING;
+        }
+        $row->save();
+
+        return $row;
+    }
+
+    /**
      * student_grades.retake_was_sababli ustuni mavjudmi (keshlanadi).
      */
     private function studentGradeSababliColumn(): bool

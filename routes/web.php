@@ -671,6 +671,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/export', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'export'])->name('export');
             Route::get('/report', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'report'])->name('report');
             Route::post('/sync', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'sync'])->name('sync');
+            Route::post('/manual-open', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'manualOpen'])->name('manual-open');
             Route::get('/sync/progress', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'syncProgress'])->name('sync.progress');
             Route::post('/toggle-notify', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'toggleNotify'])->name('toggle-notify');
             Route::get('/{id}', [\App\Http\Controllers\Admin\VedomostSubmissionController::class, 'show'])->whereNumber('id')->name('show');

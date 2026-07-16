@@ -194,6 +194,13 @@
                 <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 16px;flex-wrap:wrap;gap:8px;">
                     <span style="font-size:13px;color:#64748b;">Jami: {{ $submissions->total() }} ta</span>
                     <div style="display:flex;gap:8px;">
+                        @if(!empty($canManage))
+                            <button type="button"
+                                    id="manual-open-trigger"
+                                    style="background:#2563eb;color:#fff;border:none;padding:8px 16px;border-radius:8px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;">
+                                + Pullik uchun shakl ochish
+                            </button>
+                        @endif
                         <a href="{{ route('admin.vedomost-submission.report', request()->query()) }}"
                            style="background:#1a3268;color:#fff;padding:8px 16px;border-radius:8px;text-decoration:none;display:inline-flex;align-items:center;gap:6px;">
                             <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-6h13M9 17H4V5a2 2 0 012-2h7l5 5v9h-5M9 17v4h10v-4"/></svg>
@@ -213,6 +220,68 @@
                         </form>
                     </div>
                 </div>
+
+                @if(!empty($canManage))
+                    <div id="manual-open-modal"
+                         style="display:none;position:fixed;inset:0;background:rgba(15,23,42,0.45);backdrop-filter:blur(6px);z-index:9999;padding:24px;align-items:center;justify-content:center;">
+                        <div style="width:min(720px, 100%);background:#f1f5f9;border-radius:16px;box-shadow:0 20px 50px rgba(15,23,42,0.25);overflow:hidden;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #cbd5e1;">
+                                <div>
+                                    <div style="font-size:20px;font-weight:700;color:#0f172a;">Pullik uchun shakl ochish</div>
+                                    <div style="font-size:13px;color:#475569;margin-top:4px;">Guruh, fan va shaklni tanlab qo'lda oching.</div>
+                                </div>
+                                <button type="button" id="manual-open-close"
+                                        style="border:none;background:transparent;color:#334155;font-size:28px;cursor:pointer;line-height:1;">×</button>
+                            </div>
+                            <form method="POST" action="{{ route('admin.vedomost-submission.manual-open', request()->query()) }}" style="padding:20px;">
+                                @csrf
+                                <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:14px;">
+                                    <div>
+                                        <label style="display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;">Guruh</label>
+                                        <select id="manual-open-group" name="group_hemis_id" required
+                                                style="width:100%;height:42px;border:1px solid #cbd5e1;border-radius:10px;padding:0 12px;background:#fff;color:#0f172a;">
+                                            <option value="">Guruhni tanlang</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style="display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;">Fan</label>
+                                        <select id="manual-open-subject" name="subject_id" required
+                                                style="width:100%;height:42px;border:1px solid #cbd5e1;border-radius:10px;padding:0 12px;background:#fff;color:#0f172a;">
+                                            <option value="">Avval guruhni tanlang</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style="display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;">Shakl</label>
+                                        <select name="form_type" required
+                                                style="width:100%;height:42px;border:1px solid #cbd5e1;border-radius:10px;padding:0 12px;background:#fff;color:#0f172a;">
+                                            <option value="{{ \App\Models\VedomostSubmission::FORM_12A }}">12a-shakl</option>
+                                            <option value="{{ \App\Models\VedomostSubmission::FORM_12B }}">12b-shakl</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label style="display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;">Cheklov</label>
+                                        <label style="display:flex;align-items:center;gap:8px;height:42px;padding:0 12px;border:1px solid #cbd5e1;border-radius:10px;background:#fff;color:#0f172a;">
+                                            <input type="checkbox" name="only_paid" value="1" checked>
+                                            Faqat pullik talabalar uchun
+                                        </label>
+                                    </div>
+                                </div>
+                                <input type="hidden" id="manual-open-semester" name="semester_code" value="">
+                                <div id="manual-open-meta" style="margin-top:14px;font-size:12px;color:#64748b;"></div>
+                                <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px;">
+                                    <button type="button" id="manual-open-cancel"
+                                            style="background:#e2e8f0;color:#334155;border:none;padding:10px 16px;border-radius:10px;cursor:pointer;">
+                                        Bekor qilish
+                                    </button>
+                                    <button type="submit"
+                                            style="background:#2563eb;color:#fff;border:none;padding:10px 18px;border-radius:10px;cursor:pointer;font-weight:600;">
+                                        Shaklni ochish
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                @endif
 
                 <div style="overflow-x:auto;">
                     <table class="vd-table">
@@ -299,8 +368,17 @@
         $(document).ready(function () {
             const progressUrl = @json(route('admin.vedomost-submission.sync.progress'));
             const initialProgress = @json($syncProgress ?? ['status' => 'idle']);
+            const manualOpenGroups = @json($manualOpenGroups ?? []);
             const syncBox = document.getElementById('vedomost-sync-box');
             const syncBtn = document.getElementById('vedomost-sync-btn');
+            const manualOpenModal = document.getElementById('manual-open-modal');
+            const manualOpenTrigger = document.getElementById('manual-open-trigger');
+            const manualOpenClose = document.getElementById('manual-open-close');
+            const manualOpenCancel = document.getElementById('manual-open-cancel');
+            const manualOpenGroup = document.getElementById('manual-open-group');
+            const manualOpenSubject = document.getElementById('manual-open-subject');
+            const manualOpenSemester = document.getElementById('manual-open-semester');
+            const manualOpenMeta = document.getElementById('manual-open-meta');
             let syncPollTimer = null;
             let lastStatus = initialProgress && initialProgress.status ? initialProgress.status : 'idle';
 
@@ -413,6 +491,107 @@
             loadLevels(selLevel);
             loadSemesters(selSem);
             $('#level_code').on('change', function () { loadSemesters(); });
+
+            function fillManualGroups() {
+                if (!manualOpenGroup) {
+                    return;
+                }
+
+                manualOpenGroup.innerHTML = '<option value="">Guruhni tanlang</option>';
+                manualOpenGroups.forEach(function (group) {
+                    const option = document.createElement('option');
+                    option.value = group.group_hemis_id;
+                    option.textContent = group.group_name + (group.specialty_name ? ' — ' + group.specialty_name : '');
+                    manualOpenGroup.appendChild(option);
+                });
+            }
+
+            function fillManualSubjects(groupId) {
+                if (!manualOpenSubject) {
+                    return;
+                }
+
+                manualOpenSubject.innerHTML = '<option value="">' + (groupId ? 'Fanni tanlang' : 'Avval guruhni tanlang') + '</option>';
+                manualOpenSemester.value = '';
+                manualOpenMeta.textContent = '';
+
+                const selectedGroup = manualOpenGroups.find(function (group) {
+                    return group.group_hemis_id === groupId;
+                });
+
+                if (!selectedGroup) {
+                    return;
+                }
+
+                selectedGroup.subjects.forEach(function (subject) {
+                    const option = document.createElement('option');
+                    option.value = subject.subject_id;
+                    option.textContent = subject.subject_name + ' (semestr ' + subject.semester_code + ')';
+                    option.dataset.semesterCode = subject.semester_code;
+                    option.dataset.closingForm = subject.closing_form;
+                    manualOpenSubject.appendChild(option);
+                });
+            }
+
+            function syncManualMeta() {
+                if (!manualOpenSubject) {
+                    return;
+                }
+
+                const selected = manualOpenSubject.options[manualOpenSubject.selectedIndex];
+                const semesterCode = selected ? (selected.dataset.semesterCode || '') : '';
+                const closingForm = selected ? (selected.dataset.closingForm || '') : '';
+
+                manualOpenSemester.value = semesterCode;
+                manualOpenMeta.textContent = semesterCode
+                    ? 'Semestr: ' + semesterCode + (closingForm ? ' | Yopilish shakli: ' + closingForm : '')
+                    : '';
+            }
+
+            function openManualModal() {
+                if (!manualOpenModal) {
+                    return;
+                }
+
+                manualOpenModal.style.display = 'flex';
+                document.body.style.overflow = 'hidden';
+            }
+
+            function closeManualModal() {
+                if (!manualOpenModal) {
+                    return;
+                }
+
+                manualOpenModal.style.display = 'none';
+                document.body.style.overflow = '';
+            }
+
+            fillManualGroups();
+
+            if (manualOpenTrigger) {
+                manualOpenTrigger.addEventListener('click', openManualModal);
+            }
+            if (manualOpenClose) {
+                manualOpenClose.addEventListener('click', closeManualModal);
+            }
+            if (manualOpenCancel) {
+                manualOpenCancel.addEventListener('click', closeManualModal);
+            }
+            if (manualOpenModal) {
+                manualOpenModal.addEventListener('click', function (event) {
+                    if (event.target === manualOpenModal) {
+                        closeManualModal();
+                    }
+                });
+            }
+            if (manualOpenGroup) {
+                manualOpenGroup.addEventListener('change', function () {
+                    fillManualSubjects(this.value);
+                });
+            }
+            if (manualOpenSubject) {
+                manualOpenSubject.addEventListener('change', syncManualMeta);
+            }
         });
     </script>
 

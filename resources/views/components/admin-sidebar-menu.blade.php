@@ -268,6 +268,16 @@
         </a>
         @endif
 
+        @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin', 'registrator_ofisi']))
+        <a href="{{ route('admin.admission-indicators.index') }}"
+           class="sidebar-link {{ request()->routeIs('admin.admission-indicators.*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path>
+            </svg>
+            Qabul ko'rsatkichlari
+        </a>
+        @endif
+
         @if($hasActiveRole(['superadmin', 'admin', 'kichik_admin']))
         <a href="{{ route('admin.users.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.users.*') ? 'sidebar-active' : '' }}">
@@ -915,6 +925,14 @@
         </a>
         @endif
 
+        <a href="{{ route('admin.reports.oqim') }}"
+           class="sidebar-link {{ request()->routeIs('admin.reports.oqim*') ? 'sidebar-active' : '' }}">
+            <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a4 4 0 00-3-3.87M9 20H4v-2a4 4 0 013-3.87m6-1.13a4 4 0 10-4-4 4 4 0 004 4zm6 0a3 3 0 10-2.83-4M7 12a3 3 0 10-2.83-4"></path>
+            </svg>
+            Oqim
+        </a>
+
         <a href="{{ route('admin.reports.debtors') }}"
            class="sidebar-link {{ request()->routeIs('admin.reports.debtors') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1105,7 +1123,7 @@
         @endif
 
         {{-- O'quv bo'limi: qolgan QO' bo'limlari --}}
-        @if($hasActiveRole(['superadmin', 'admin', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'dekan']))
+        @if($hasActiveRole(['superadmin', 'admin', 'oquv_bolimi', 'oquv_bolimi_boshligi', 'dekan', 'registrator_ofisi']))
         <a href="{{ route('admin.retake-applications.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.retake-applications.*') ? 'sidebar-active' : '' }}" style="position: relative;">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1213,7 +1231,7 @@
         @endif
 
         {{-- ============ DB MA'LUMOTLAR ============ --}}
-        @if($hasActiveRole(['superadmin', 'admin']))
+        @if($hasActiveRole(['superadmin', 'admin', 'registrator_ofisi']))
         <a href="{{ route('admin.db-export.index') }}"
            class="sidebar-link {{ request()->routeIs('admin.db-export.*') ? 'sidebar-active' : '' }}">
             <svg class="w-5 h-5 mr-3 sidebar-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24">

@@ -1648,10 +1648,14 @@ class QuizResultController extends Controller
             return [$directIds, $retakeKeys];
         }
 
+        // Tiklangan (reversed) apelyatsiyalar endi "o'chirilgan" deb hisoblanmaydi.
+        $hasReversed = \Illuminate\Support\Facades\Schema::hasColumn('quiz_grade_appeals', 'reversed_at');
+
         if (!empty($resultIds)) {
             \App\Models\QuizGradeAppeal::where('action', \App\Models\QuizGradeAppeal::ACTION_DELETE)
                 ->whereNotNull('quiz_result_id')
                 ->whereIn('quiz_result_id', $resultIds)
+                ->when($hasReversed, fn ($q) => $q->whereNull('reversed_at'))
                 ->pluck('quiz_result_id')
                 ->each(function ($id) use (&$directIds) {
                     $directIds[(int) $id] = true;
@@ -1660,9 +1664,21 @@ class QuizResultController extends Controller
 
         \App\Models\QuizGradeAppeal::where('action', \App\Models\QuizGradeAppeal::ACTION_DELETE)
             ->whereNotNull('retake_application_id')
-            ->get(['retake_application_id', 'retake_component'])
+            ->when($hasReversed, fn ($q) => $q->whereNull('reversed_at'))
+            ->get(['retake_application_id', 'retake_component', 'old_grade'])
             ->each(function ($a) use (&$retakeKeys) {
-                if ($a->retake_component) {
+                if (!$a->retake_component) {
+                    return;
+                }
+                // Bitta arizaga (fan+semestr) talabaning bir nechta urinishi mos
+                // kelishi mumkin (mas. 49 va 65 ball). Apelyatsiya faqat BITTA
+                // bahoni o'chiradi — shuning uchun kalitga aynan o'chirilgan
+                // bahoni (old_grade) ham qo'shamiz. Shunda faqat o'sha urinish
+                // "o'chirilgan" bo'lib belgilanadi, boshqa urinish tegilmaydi.
+                if ($a->old_grade !== null) {
+                    $retakeKeys[$a->retake_application_id . '|' . $a->retake_component . '|' . (int) round((float) $a->old_grade)] = true;
+                } else {
+                    // old_grade noma'lum (eski yozuv) — zaxira: butun komponent.
                     $retakeKeys[$a->retake_application_id . '|' . $a->retake_component] = true;
                 }
             });
@@ -1886,12 +1902,21 @@ class QuizResultController extends Controller
         // Qayta o'qish bahosi (OSKE/Test komponenti) prorektor apelyatsiyasi bilan
         // o'chirilgan — komponent qiymati null'ga qaytgani uchun bu yerga "yuklasa
         // bo'ladi" bo'lib kelardi. Uni "Appelyatsiyadan o'chirildi" deb ko'rsatamiz.
+        // MUHIM: faqat aynan o'chirilgan baholi urinishni belgilaymiz — bir arizaga
+        // bir nechta urinish (mas. 49 va 65) mos kelsa, boshqasi tegilmasligi kerak.
         $retakeComponent = $ynTuri === 'OSKI' ? 'oske' : 'test';
-        if (!empty($appealDeletedRetakeKeys[$app->id . '|' . $retakeComponent])) {
-            $componentNowNull = $ynTuri === 'OSKI' ? ($app->oske_score === null) : ($app->test_score === null);
-            if ($componentNowNull) {
-                return ['code' => 'appeal_deleted', 'text' => "Appelyatsiyadan o'chirildi"] + $none;
-            }
+        $gradeInt = $result->grade !== null ? (int) round((float) $result->grade) : null;
+        $deletedByGrade = $gradeInt !== null
+            && !empty($appealDeletedRetakeKeys[$app->id . '|' . $retakeComponent . '|' . $gradeInt]);
+        // Zaxira kalit (old_grade noma'lum bo'lgan eski yozuvlar uchun).
+        $deletedByComponent = !empty($appealDeletedRetakeKeys[$app->id . '|' . $retakeComponent]);
+        if ($deletedByGrade || $deletedByComponent) {
+            // Aynan apelyatsiyada o'chirilgan urinish — komponent (OSKE/Test)
+            // keyin boshqa urinish bahosi bilan qayta to'lган bo'lsa ham
+            // (mas. 48 o'chirilib, 73 kelgan), shu o'chirilgan urinish qatorida
+            // "Appelyatsiyadan o'chirildi" ko'rsatiladi. (Ilgari komponent NULL
+            // bo'lishi shart edi — endi shart olib tashlandi.)
+            return ['code' => 'appeal_deleted', 'text' => "Appelyatsiyadan o'chirildi"] + $none;
         }
 
         $jn = $app->joriy_score !== null ? round((float) $app->joriy_score) : null;
@@ -3596,18 +3621,31 @@ class QuizResultController extends Controller
             ], 404);
         }
 
+        $quiz = DB::table('hemis_quiz_results')->where('id', $request->id)->first();
+
+        $update = [
+            'fan_id' => $request->fan_id,
+            'fan_name' => $subject->subject_name,
+            'fan_reassigned_at' => now(),
+            'updated_at' => now(),
+        ];
+        // Asl (HEMIS) fanni faqat birinchi almashtirishda saqlaymiz — shunda
+        // jadvalda "qaysi fandan almashtirilgani" (izi) ko'rinib turadi va
+        // keyingi tahrirlarda asl qiymat o'zgarmasdan qoladi.
+        if (($quiz->orig_fan_id ?? null) === null && ($quiz->orig_fan_name ?? null) === null) {
+            $update['orig_fan_id'] = $quiz->fan_id;
+            $update['orig_fan_name'] = $quiz->fan_name;
+        }
+
         DB::table('hemis_quiz_results')
             ->where('id', $request->id)
-            ->update([
-                'fan_id' => $request->fan_id,
-                'fan_name' => $subject->subject_name,
-                'updated_at' => now(),
-            ]);
+            ->update($update);
 
         return response()->json([
             'success' => true,
             'fan_id' => $request->fan_id,
             'fan_name' => $subject->subject_name,
+            'orig_fan_name' => $update['orig_fan_name'] ?? ($quiz->orig_fan_name ?? null),
         ]);
     }
 
@@ -3785,17 +3823,33 @@ class QuizResultController extends Controller
     /**
      * Moodle quiz results cron ni qo'lda ishga tushirish.
      */
-    public function triggerCron()
+    public function triggerCron(\App\Services\MoodleQuizPullService $pull)
     {
+        // Eski push mexanizmi ham ishlayversin (zaxira sifatida).
         Setting::set('moodle_sync_requested', now()->toIso8601String());
 
-        Log::info('quiz:trigger-cron — sync so\'raldi', [
+        // ASOSIY: Moodle webservice'idan TO'G'RIDAN-TO'G'RI tortamiz — Moodle
+        // serveridagi push-skriptning kursor muammosidan xoli, bugungi
+        // natijalar darhol keladi.
+        @set_time_limit(180);
+        $res = $pull->pull();
+
+        Log::info('quiz:trigger-cron — direct pull', $res + [
             'user' => auth()->user()->name ?? 'unknown',
         ]);
 
+        if (!($res['ok'] ?? false)) {
+            return response()->json([
+                'success' => true,
+                'message' => "To'g'ridan-to'g'ri tortishda muammo: " . ($res['error'] ?? 'nomaʼlum')
+                    . ". Zaxira sync so'rovi yuborildi — Moodle bir necha daqiqada yuboradi.",
+            ]);
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Sync so\'rov yuborildi. Moodle 5 daqiqa ichida ma\'lumotlarni yuboradi.',
+            'message' => "Moodle'dan {$res['imported']} ta natija tortildi. Jadval yangilanmoqda…",
+            'imported' => $res['imported'],
         ]);
     }
 

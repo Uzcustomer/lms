@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Models\RetakeApplication;
 use App\Models\RetakeGroup;
 use App\Models\RetakeMustaqilSubmission;
+use App\Models\Student;
 use App\Services\Retake\RetakeAccess;
 use App\Services\Retake\RetakeJournalService;
 use Illuminate\Http\JsonResponse;
@@ -111,9 +112,15 @@ class RetakeTestMarkaziController extends Controller
             $sentApplicationsQuery->whereNull('sent_to_test_markazi_at');
         }
 
+        // "Testga yuborilgan talabalar" jadvalidagi ustun filtrlari (client-side)
+        // BUTUN ma'lumot bo'yicha ishlashi uchun bu tabda barcha (yuqoridagi
+        // panel filtrlaridan keyingi) qatorlarni bitta sahifada yuklaymiz.
+        // Guruhlar tabida esa oddiy sahifalash saqlanadi.
+        $studentsPerPage = $activeTab === 'students' ? 100000 : $perPage;
+
         $sentApplications = $sentApplicationsQuery
             ->orderByDesc('id')
-            ->paginate($perPage, ['*'], 'students_page')
+            ->paginate($studentsPerPage, ['*'], 'students_page')
             ->withQueryString();
 
         $mustaqilMap = RetakeMustaqilSubmission::query()
@@ -121,8 +128,8 @@ class RetakeTestMarkaziController extends Controller
             ->get()
             ->keyBy('application_id');
 
-        // Appelyatsiyada o'chirilgan test baholari soni (urinishlar sonini ko'rsatish uchun).
-        $removedCountMap = $this->service->removedAppealCounts($sentApplications->getCollection());
+        // Urinishlar soni — talaba shu fandan necha marta test topshirgan.
+        $attemptsMap = $this->buildAttemptsMap($sentApplications->getCollection());
 
         // Yakuniy natija — vedomost tekshirish logikasi (JN=50, MT=20, OSKI/Test=15+15 yoki 30).
         $finalResultMap = [];
@@ -142,17 +149,80 @@ class RetakeTestMarkaziController extends Controller
             );
         }
 
+        // Fan ro'yxati — barcha o'quv reja fanlari emas, faqat joriy filtrlarga
+        // mos qayta o'qish arizalarida uchraydigan fanlar. Semestr esa ARIZA
+        // semestriga (retake_applications.semester_name) qarab qo'llanadi —
+        // talabaning joriy semestriga emas (qayta o'quvchilar odatda yuqori
+        // semestrga o'tib ketgan bo'ladi, aks holda ro'yxat bo'sh chiqardi).
+        // Qolgan filtrlar (fakultet/yo'nalish/kurs/guruh) talaba atributi bo'yicha.
+        $selSemNum = null;
+        if (filled($studentFilters['semester_code'])) {
+            $semName = Student::where('semester_code', $studentFilters['semester_code'])->value('semester_name');
+            if ($semName && preg_match('/(\d+)/', $semName, $m)) {
+                $selSemNum = (int) $m[1];
+            }
+        }
+        $subjStudentSub = function ($sub) use ($studentFilters) {
+            $sub->select('hemis_id')->from('students');
+            if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+            if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+            if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+            if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+            if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+        };
+        $hasSubjStudentFilter = collect($studentFilters)
+            ->except('semester_code')
+            ->filter(fn ($v) => filled($v))
+            ->isNotEmpty();
+
+        $subjectQuery = RetakeApplication::query()
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
+            ->join('retake_groups as rgs', 'rgs.id', '=', 'retake_applications.retake_group_id')
+            ->whereNotNull('rgs.subject_id');
+        if ($hasSubjStudentFilter) {
+            $subjectQuery->whereIn('retake_applications.student_hemis_id', $subjStudentSub);
+        }
+        if ($selSemNum) {
+            $subjectQuery->where('retake_applications.semester_name', 'like', $selSemNum . '-%');
+        }
+        $subjects = $subjectQuery
+            ->distinct()
+            ->orderBy('rgs.subject_name')
+            ->pluck('rgs.subject_name', 'rgs.subject_id')
+            ->toArray();
+
+        // Yopilish shakli (assessment_type) ro'yxati — faqat joriy filtrlarga
+        // (jumladan tanlangan fan) mos arizalarda haqiqatan mavjud turlar.
+        // "Vedomost yaratish" tugmasidagi tanlov shu bilan cheklanadi.
+        $atypeQuery = RetakeApplication::query()
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
+            ->join('retake_groups as rga', 'rga.id', '=', 'retake_applications.retake_group_id')
+            ->whereNotNull('rga.assessment_type');
+        if ($hasStudentFilter) {
+            $atypeQuery->whereIn('retake_applications.student_hemis_id', $studentSub);
+        }
+        if (filled($subjectFilter)) {
+            $atypeQuery->where('rga.subject_id', $subjectFilter);
+        }
+        if ($selSemNum) {
+            $atypeQuery->where('retake_applications.semester_name', 'like', $selSemNum . '-%');
+        }
+        $assessmentTypes = $atypeQuery->distinct()->pluck('rga.assessment_type')->filter()->values()->toArray();
+
         return view('teacher.retake-test-markazi.index', [
             'groups' => $groups,
             'sentApplications' => $sentApplications,
             'mustaqilMap' => $mustaqilMap,
             'finalResultMap' => $finalResultMap,
-            'removedCountMap' => $removedCountMap,
+            'attemptsMap' => $attemptsMap,
             'activeTab' => $activeTab,
             'studentSearch' => $studentSearch,
             'sentStatus' => $sentStatus,
             'educationTypes' => \App\Services\Retake\RetakeFilterCache::educationTypes(),
-            'subjects' => \App\Services\Retake\RetakeFilterCache::subjects(),
+            'subjects' => $subjects,
+            'assessmentTypes' => $assessmentTypes,
         ]);
     }
 
@@ -167,7 +237,10 @@ class RetakeTestMarkaziController extends Controller
         $gradesMap = $this->service->gradesMap($group);
         $mustaqilMap = $this->service->mustaqilMap($group);
 
-        $removedCountMap = $this->service->removedAppealCounts($applications);
+        // Urinishlar soni — barcha ariza shu guruhga tegishli, retakeGroup ni
+        // shu guruhga bog'lab qo'yamiz (qo'shimcha so'rovsiz).
+        $applications->each(fn ($a) => $a->setRelation('retakeGroup', $group));
+        $attemptsMap = $this->buildAttemptsMap($applications);
 
         $isSinov = in_array($group->assessment_type, ['sinov', 'sinov_fan'], true);
         $finalResultMap = [];
@@ -189,8 +262,30 @@ class RetakeTestMarkaziController extends Controller
             'gradesMap' => $gradesMap,
             'mustaqilMap' => $mustaqilMap,
             'finalResultMap' => $finalResultMap,
-            'removedCountMap' => $removedCountMap,
+            'attemptsMap' => $attemptsMap,
         ]);
+    }
+
+    /**
+     * Talaba shu fandan necha marta test topshirganini (urinishlar soni)
+     * hisoblaydi: hemis_quiz_results dagi haqiqiy urinishlar, va appelyatsiyada
+     * o'chirilgan baholar (removed + 1) — ikkalasidan kattasi. Faqat >=2 bo'lsa
+     * jurnalda "(N)" ko'rsatiladi.
+     *
+     * @param  \Illuminate\Support\Collection  $applications
+     * @return array<int, int>
+     */
+    private function buildAttemptsMap($applications): array
+    {
+        $removed = $this->service->removedAppealCounts($applications);
+        $quiz = $this->service->attemptCounts($applications);
+
+        $map = [];
+        foreach ($applications as $app) {
+            $map[$app->id] = max($quiz[$app->id] ?? 0, ($removed[$app->id] ?? 0) + 1);
+        }
+
+        return $map;
     }
 
     /**
@@ -357,7 +452,7 @@ class RetakeTestMarkaziController extends Controller
             $row->addCell(1800, $headerBg)->addText('Testga ruxsat', $headerFont, $cellCenter);
 
             foreach ($applications as $idx => $app) {
-                $student = $app->group->student ?? null;
+                $student = $app->group?->student;
                 $jn = $app->joriy_score !== null ? round((float) $app->joriy_score, 2) : null;
                 $mt = ($mustaqilMap[$app->id] ?? null)?->grade;
                 $mt = $mt !== null ? round((float) $mt, 2) : null;
@@ -391,12 +486,39 @@ class RetakeTestMarkaziController extends Controller
         $this->authorize();
 
         $studentSearch = trim((string) $request->input('student_search', ''));
+        $sentStatus = (string) $request->input('sent_status', 'sent');
+        $studentFilters = [
+            'education_type' => $request->input('education_type'),
+            'department' => $request->input('department'),
+            'specialty' => $request->input('specialty'),
+            'level_code' => $request->input('level_code'),
+            'semester_code' => $request->input('semester_code'),
+            'group' => $request->input('group'),
+        ];
+        $subjectFilter = $request->input('subject');
+        $hasStudentFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty();
+
+        $studentSub = function ($sub) use ($studentFilters) {
+            $sub->select('hemis_id')->from('students');
+            if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+            if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+            if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+            if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+            if (!empty($studentFilters['semester_code'])) $sub->where('semester_code', $studentFilters['semester_code']);
+            if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+        };
 
         $query = RetakeApplication::query()
             ->where('final_status', RetakeApplication::STATUS_APPROVED)
             ->whereNotNull('retake_group_id')
             ->with(['group.student', 'retakeGroup'])
-            ->orderBy('id');
+            ->orderByDesc('sent_to_test_markazi_at');
+
+        if ($sentStatus === 'not_sent') {
+            $query->whereNull('sent_to_test_markazi_at');
+        } elseif ($sentStatus !== '') {
+            $query->whereNotNull('sent_to_test_markazi_at');
+        }
 
         if ($studentSearch !== '') {
             $query->where(function ($q) use ($studentSearch) {
@@ -408,7 +530,23 @@ class RetakeTestMarkaziController extends Controller
             });
         }
 
-        $applications = $query->get();
+        if ($subjectFilter) {
+            $query->whereHas('retakeGroup', fn ($q) => $q->where('subject_id', $subjectFilter));
+        }
+
+        if ($hasStudentFilter) {
+            $query->whereIn('student_hemis_id', $studentSub);
+        }
+
+        $applications = $query->get()
+            ->sortBy(function ($app) {
+                $studentName = $app->group?->student?->full_name ?? '';
+                $subjectName = $app->retakeGroup?->subject_name ?? $app->subject_name ?? '';
+                $semesterName = $app->semester_name ?? $app->retakeGroup?->semester_name ?? '';
+
+                return mb_strtolower($studentName . '|' . $subjectName . '|' . $semesterName);
+            })
+            ->values();
         if ($applications->isEmpty()) {
             abort(404, 'Word uchun ruxsat etilgan talabalar topilmadi');
         }
@@ -554,7 +692,7 @@ class RetakeTestMarkaziController extends Controller
             ->get()
             ->keyBy('application_id');
 
-        $removedCountMap = $this->service->removedAppealCounts($applications);
+        $attemptsMap = $this->buildAttemptsMap($applications);
 
         $spreadsheet = new Spreadsheet();
         $sheet = $spreadsheet->getActiveSheet();
@@ -662,9 +800,9 @@ class RetakeTestMarkaziController extends Controller
                 'passed' => (string) $final['value'],
                 default => '-',
             };
-            $removed = $removedCountMap[$app->id] ?? 0;
-            if ($finalText !== '-' && $removed >= 1) {
-                $finalText .= ' (' . ($removed + 1) . ')';
+            $attempts = $attemptsMap[$app->id] ?? 1;
+            if ($finalText !== '-' && $attempts >= 2) {
+                $finalText .= ' (' . $attempts . ')';
             }
             $sheet->setCellValue("O{$row}", $finalText);
             $sheet->setCellValue("P{$row}", $app->sent_to_test_markazi_at ? 'Yuborilgan' : 'Yuborilmagan');
@@ -709,6 +847,204 @@ class RetakeTestMarkaziController extends Controller
         $writer->save($tempPath);
 
         return response()->download($tempPath, $fileName)->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Joriy filtrlar (fakultet, yo'nalish, kurs, semestr, guruh, fan) bo'yicha
+     * qayta o'qish VEDOMOST(lar)ini yaratadi. Har bir vedomost — bitta
+     * (qayta o'qish guruhi × FAKULTET × YO'NALISH × semestr) kesimi uchun
+     * alohida fayl (bir guruh turli fakultet/yo'nalish talabalarini
+     * birlashtirishi mumkin, ular ajratiladi). Bir nechta fayl bo'lsa — ZIP.
+     */
+    public function generateVedomost(Request $request)
+    {
+        $this->authorize();
+
+        // Yopilish shakli tanlovi. MUHIM: vedomost vaznlari HAR DOIM har
+        // guruhning O'Z assessment_type iga qarab hisoblanadi (defaultWeights).
+        // Bu tanlov faqat qaysi guruhlar KIRISHINI filtrlaydi:
+        //   'all'  → barcha mos guruhlar, har biri o'z shakli bilan (aralashmaydi,
+        //            OSKE+Test guruh OSKE+Test, Test guruh Test bo'lib chiqadi);
+        //   aniq shakl (oske/test/oske_test/sinov) → faqat o'sha shakldagilari.
+        $assessmentType = $request->input('assessment_type');
+        if (!$assessmentType) {
+            return back()->with('error', "Vedomost yaratish uchun «Yopilish shakli»ni tanlang.");
+        }
+
+        $applications = $this->filteredSentApplications($request);
+        if ($assessmentType !== 'all') {
+            $atypes = $assessmentType === 'sinov' ? ['sinov', 'sinov_fan'] : [$assessmentType];
+            $applications = $applications->filter(
+                fn ($a) => in_array($a->retakeGroup?->assessment_type, $atypes, true)
+            );
+        }
+        $applications = $applications->values();
+        if ($applications->isEmpty()) {
+            return back()->with('error', "Tanlangan yopilish shakli / filtrlar bo'yicha qayta o'qish talabalari topilmadi.");
+        }
+
+        $groupsById = RetakeGroup::whereIn('id', $applications->pluck('retake_group_id')->filter()->unique())
+            ->get()->keyBy('id');
+
+        // (guruh × fakultet × yo'nalish × semestr) bo'yicha ajratamiz.
+        $buckets = $applications->groupBy(function ($app) {
+            $st = $app->group?->student;
+            $dep = $st?->department_name ?: '—';
+            $spec = $st?->specialty_name ?: '—';
+            $sem = $app->semester_name ?: ($app->retakeGroup?->semester_name ?? '');
+            return $app->retake_group_id . '||' . $dep . '||' . $spec . '||' . $sem;
+        });
+
+        if ($buckets->count() > 80) {
+            return back()->with('error', "Juda ko'p bo'lim topildi ({$buckets->count()} ta). Iltimos avval yuqoridagi filtrlardan (fakultet / yo'nalish / kurs / semestr / guruh / fan) birortasini tanlab, so'ng vedomost yarating.");
+        }
+
+        $tmpDir = storage_path('app/public/retake/vedomosts');
+        if (!is_dir($tmpDir)) {
+            @mkdir($tmpDir, 0755, true);
+        }
+
+        $files = []; // [unikal absPath, yuklab olish nomi]
+        foreach ($buckets as $key => $apps) {
+            [$rgId, $dep, $spec, $sem] = array_pad(explode('||', $key), 4, '');
+            $group = $groupsById[$rgId] ?? null;
+            if (!$group) {
+                continue;
+            }
+
+            try {
+                $built = $this->service->buildVedomostExcel($group, null, null, $apps->values());
+            } catch (ValidationException $e) {
+                continue;
+            }
+
+            // buildVedomostExcel bir guruh uchun bir xil yo'lga yozadi — keyingi
+            // bo'lim uni qayta yozib yubormasligi uchun darhol unikal nusxaga ko'chiramiz.
+            $uniq = $tmpDir . '/' . uniqid('ved_', true) . '.xlsx';
+            if (!@copy($built['path'], $uniq)) {
+                continue;
+            }
+
+            $files[] = [$uniq, $this->vedomostFileName($dep, $spec, $group->subject_name ?? 'fan', $sem)];
+        }
+
+        if (empty($files)) {
+            return back()->with('error', "Vedomost yaratib bo'lmadi (mos ma'lumot yo'q).");
+        }
+
+        // Bitta fayl — to'g'ridan-to'g'ri, aks holda ZIP.
+        if (count($files) === 1) {
+            return response()->download($files[0][0], $files[0][1])->deleteFileAfterSend(true);
+        }
+
+        $zipName = 'qayta_oqish_vedomostlari_' . now()->format('Ymd_His') . '.zip';
+        $zipPath = $tmpDir . '/' . $zipName;
+
+        $zip = new \ZipArchive();
+        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+            return back()->with('error', "ZIP faylini yaratib bo'lmadi.");
+        }
+        $used = [];
+        foreach ($files as [$abs, $name]) {
+            if (!is_file($abs)) continue;
+            $entry = $name;
+            $i = 1;
+            while (isset($used[$entry])) {
+                $entry = pathinfo($name, PATHINFO_FILENAME) . "_{$i}." . pathinfo($name, PATHINFO_EXTENSION);
+                $i++;
+            }
+            $used[$entry] = true;
+            $zip->addFile($abs, $entry);
+        }
+        $zip->close();
+
+        // Unikal nusxalar endi ZIP ichida — vaqtinchalik fayllarni tozalaymiz.
+        foreach ($files as [$abs, $name]) {
+            @unlink($abs);
+        }
+
+        return response()->download($zipPath, $zipName)->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Vedomost fayl nomi — "Fakultet - Yo'nalish - Fan - Semestr.xlsx".
+     * Fayl tizimi uchun xavfli belgilar tozalanadi, bo'shliqlar saqlanadi.
+     */
+    private function vedomostFileName(string $faculty, string $specialty, string $subject, string $semester = ''): string
+    {
+        $clean = function (string $s): string {
+            $s = preg_replace('/[\/\\\\:*?"<>|]+/u', ' ', $s);
+            $s = preg_replace('/\s+/u', ' ', $s);
+            return trim($s);
+        };
+        $parts = array_filter(
+            [$clean($faculty), $clean($specialty), $clean($subject), $clean($semester)],
+            fn ($p) => $p !== '' && $p !== '—'
+        );
+        $base = implode(' - ', $parts);
+        if ($base === '') {
+            $base = 'vedomost';
+        }
+        return mb_substr($base, 0, 120) . '.xlsx';
+    }
+
+    /**
+     * exportSentStudentsExcel bilan bir xil filtrlar bo'yicha tasdiqlangan
+     * qayta o'qish arizalari (fakultet/yo'nalish/kurs/semestr/guruh/fan +
+     * ism qidiruv + yuborilganlik holati).
+     */
+    private function filteredSentApplications(Request $request)
+    {
+        $studentSearch = trim((string) $request->input('student_search', ''));
+        $sentStatus = (string) $request->input('sent_status', '');
+        $studentFilters = [
+            'education_type' => $request->input('education_type'),
+            'department' => $request->input('department'),
+            'specialty' => $request->input('specialty'),
+            'level_code' => $request->input('level_code'),
+            'semester_code' => $request->input('semester_code'),
+            'group' => $request->input('group'),
+        ];
+        $subjectFilter = $request->input('subject');
+        $hasStudentFilter = collect($studentFilters)->filter(fn ($v) => filled($v))->isNotEmpty();
+
+        $studentSub = function ($sub) use ($studentFilters) {
+            $sub->select('hemis_id')->from('students');
+            if (!empty($studentFilters['education_type'])) $sub->where('education_type_code', $studentFilters['education_type']);
+            if (!empty($studentFilters['department'])) $sub->where('department_id', $studentFilters['department']);
+            if (!empty($studentFilters['specialty'])) $sub->where('specialty_id', $studentFilters['specialty']);
+            if (!empty($studentFilters['level_code'])) $sub->where('level_code', $studentFilters['level_code']);
+            if (!empty($studentFilters['semester_code'])) $sub->where('semester_code', $studentFilters['semester_code']);
+            if (!empty($studentFilters['group'])) $sub->where('group_id', $studentFilters['group']);
+        };
+
+        $query = RetakeApplication::query()
+            ->where('final_status', RetakeApplication::STATUS_APPROVED)
+            ->whereNotNull('retake_group_id')
+            ->with(['group.student', 'retakeGroup']);
+
+        if ($sentStatus === 'sent') {
+            $query->whereNotNull('sent_to_test_markazi_at');
+        } elseif ($sentStatus === 'not_sent') {
+            $query->whereNull('sent_to_test_markazi_at');
+        }
+        if ($studentSearch !== '') {
+            $query->where(function ($q) use ($studentSearch) {
+                $q->where('student_hemis_id', 'like', "%{$studentSearch}%")
+                    ->orWhereHas('group.student', function ($sq) use ($studentSearch) {
+                        $sq->where('full_name', 'like', "%{$studentSearch}%")
+                            ->orWhere('student_id_number', 'like', "%{$studentSearch}%");
+                    });
+            });
+        }
+        if ($subjectFilter) {
+            $query->whereHas('retakeGroup', fn ($q) => $q->where('subject_id', $subjectFilter));
+        }
+        if ($hasStudentFilter) {
+            $query->whereIn('student_hemis_id', $studentSub);
+        }
+
+        return $query->get();
     }
 
     private function authorize(): void

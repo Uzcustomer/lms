@@ -24,6 +24,7 @@
     $extraQueryFields = $extraQueryFields ?? [];
     $hidden = fn ($key) => in_array($key, $hiddenFilters, true);
     $subjectMultiple = $subjectMultiple ?? false;
+    $autoSubmit = $autoSubmit ?? false;
     $selectedSubjects = is_array(request('subject'))
         ? request('subject')
         : (filled(request('subject')) ? [request('subject')] : []);
@@ -236,6 +237,16 @@
         $('#rf_specialty').on('change', function() { if (!initDone) return; rGrp(); });
         $('#rf_level_code').on('change', function() { if (!initDone) return; rSem(); rGrp(); });
         $('#rf_semester_code').on('change', function() { if (!initDone) return; rGrp(); });
+
+        @if($autoSubmit)
+        // Avtosubmit — foydalanuvchi biror filtrni tanlaganda (yoki tozalaganda)
+        // formani darhol yuboramiz. select2:select/select2:clear faqat REAL
+        // foydalanuvchi harakatida ishlaydi (kaskad AJAX .trigger('change')
+        // da emas), shuning uchun cheksiz submit bo'lmaydi.
+        $('.rf-select2').on('select2:select select2:clear', function() {
+            $('#retake-filter-form').submit();
+        });
+        @endif
 
         var loaded = 0;
         function checkInit() { loaded++; if (loaded >= 5) initDone = true; }

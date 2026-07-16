@@ -77,6 +77,10 @@ return [
         'ws_token' => env('MOODLE_WS_TOKEN'),
         'quiz_ws_token' => env('MOODLE_QUIZ_WS_TOKEN'),
         'ws_timeout' => (int) env('MOODLE_WS_TIMEOUT', 30),
+        // "Yangilash" Moodle'dan to'g'ridan-to'g'ri tortganda, mavjud eng katta
+        // attempt_id dan shuncha ORQAGA so'raladi (kech tugagan urinishlarni
+        // ham tutish uchun). Kattaroq = ishonchliroq, lekin sekinroq.
+        'quiz_pull_overlap' => (int) env('MOODLE_QUIZ_PULL_OVERLAP', 5000),
         // Master toggle for the narrow exam time window. When false
         // (default for now), the booking push opens the quiz for the
         // whole exam day instead of only ±N minutes around the

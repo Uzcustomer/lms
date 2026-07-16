@@ -8,7 +8,10 @@ class FaceIdLog extends Model
 {
     protected $fillable = [
         'student_id',
+        'target_student_id',
         'student_id_number',
+        'target_student_id_number',
+        'attempt_type',
         'result',
         'confidence',
         'distance',
@@ -25,6 +28,11 @@ class FaceIdLog extends Model
     public function student()
     {
         return $this->belongsTo(Student::class);
+    }
+
+    public function targetStudent()
+    {
+        return $this->belongsTo(Student::class, 'target_student_id');
     }
 
     public function getResultLabelAttribute(): string

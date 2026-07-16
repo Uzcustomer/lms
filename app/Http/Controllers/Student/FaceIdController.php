@@ -153,6 +153,7 @@ class FaceIdController extends Controller
         }
 
         $commonLog = [
+            'attempt_type' => 'identify',
             'ip_address' => $request->ip(),
             'user_agent' => $request->userAgent(),
         ];
@@ -195,6 +196,8 @@ class FaceIdController extends Controller
 
         $commonLog['student_id'] = $student->id;
         $commonLog['student_id_number'] = $student->student_id_number;
+        $commonLog['target_student_id'] = $student->id;
+        $commonLog['target_student_id_number'] = $student->student_id_number;
 
         if (!FaceIdService::isEnabledForStudent($student)) {
             FaceIdService::logAttempt(array_merge($commonLog, [
@@ -288,6 +291,7 @@ class FaceIdController extends Controller
         RateLimiter::hit($key, 60);
 
         $commonLog = [
+            'attempt_type'      => 'verify',
             'ip_address'        => $request->ip(),
             'user_agent'        => $request->userAgent(),
             'student_id_number' => $idNumber,
@@ -305,6 +309,8 @@ class FaceIdController extends Controller
         }
 
         $commonLog['student_id'] = $student->id;
+        $commonLog['target_student_id'] = $student->id;
+        $commonLog['target_student_id_number'] = $student->student_id_number;
 
         // 2. Face ID yoqilganmi?
         if (!FaceIdService::isEnabledForStudent($student)) {

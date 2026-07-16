@@ -514,8 +514,9 @@ class RetakeApprovalController extends Controller
      */
     public function bulkForceDestroy(Request $request): RedirectResponse
     {
-        if (!RetakeAccess::canOverride(RetakeAccess::currentStaff())) {
-            abort(403, 'Faqat super-admin uchun');
+        $actor = RetakeAccess::currentStaff();
+        if (!$actor || !$actor->hasAnyRole(['superadmin', 'registrator_ofisi'])) {
+            abort(403, 'Faqat super-admin yoki registrator ofisi uchun');
         }
 
         $data = $request->validate([

@@ -12,9 +12,11 @@ use App\Models\VedomostSubmissionLog;
 use App\Services\VedomostMergeService;
 use App\Services\VedomostSubmissionNotifier;
 use App\Services\VedomostSubmissionService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
@@ -203,6 +205,95 @@ class VedomostSubmissionController extends Controller
         return [$query, $educationTypes, $selectedEducationType];
     }
 
+    /**
+     * Qo'lda ochish modali uchun 12-shakl bazalarini qaytaradi.
+     * Form/status filtri qo'llanmaydi — admin har doim asosiy guruh+fanlarni ko'rsin.
+     */
+    private function manualOpenOptions(Request $request, $selectedEducationType): array
+    {
+        $query = DB::table('vedomost_submissions as vs')
+            ->join('groups as g', function ($join) {
+                $join->on('g.group_hemis_id', '=', 'vs.group_hemis_id')
+                    ->where('g.active', true);
+            })
+            ->leftJoin('curricula as c', 'c.curricula_hemis_id', '=', 'vs.curriculum_hemis_id')
+            ->leftJoin('departments as f', 'f.department_hemis_id', '=', 'c.department_hemis_id')
+            ->leftJoin('semesters as s', function ($join) {
+                $join->on('s.curriculum_hemis_id', '=', 'vs.curriculum_hemis_id')
+                    ->on('s.code', '=', 'vs.semester_code');
+            })
+            ->where('vs.form_type', VedomostSubmission::FORM_12)
+            ->whereIn('vs.closing_form', VedomostSubmissionService::RESIT_CLOSING_FORMS);
+
+        if ($selectedEducationType) {
+            $query->where('c.education_type_code', $selectedEducationType);
+        }
+        if ($request->filled('faculty')) {
+            $query->where('f.id', $request->faculty);
+        }
+        if ($request->filled('specialty')) {
+            $query->where('vs.specialty_name', $request->specialty);
+        }
+        if ($request->filled('level_code')) {
+            $query->where('s.level_code', $request->level_code);
+        }
+        if ($request->filled('semester_code')) {
+            $query->where('vs.semester_code', $request->semester_code);
+        }
+        if ($request->filled('subject_name')) {
+            $query->where('vs.subject_name', 'like', '%' . $request->subject_name . '%');
+        }
+        if ($request->filled('closing_form_filter')) {
+            $query->where('vs.closing_form', $request->closing_form_filter);
+        }
+        if ($request->boolean('overdue')) {
+            $query->whereNotNull('vs.deadline')
+                ->whereDate('vs.deadline', '<', now()->toDateString())
+                ->where('vs.status', '!=', VedomostSubmission::STATUS_APPROVED);
+        }
+
+        $rows = $query
+            ->orderBy('vs.group_name')
+            ->orderBy('vs.subject_name')
+            ->get([
+                'vs.group_hemis_id',
+                'vs.group_name',
+                'vs.subject_id',
+                'vs.subject_name',
+                'vs.semester_code',
+                'vs.closing_form',
+                'vs.specialty_name',
+            ]);
+
+        $groups = $rows
+            ->groupBy('group_hemis_id')
+            ->map(function (Collection $items, $groupId) {
+                $first = $items->first();
+
+                return [
+                    'group_hemis_id' => (string) $groupId,
+                    'group_name' => $first->group_name,
+                    'specialty_name' => $first->specialty_name,
+                    'subjects' => $items
+                        ->unique(fn($row) => $row->subject_id . '|' . $row->semester_code)
+                        ->map(fn($row) => [
+                            'subject_id' => (string) $row->subject_id,
+                            'subject_name' => $row->subject_name,
+                            'semester_code' => (string) $row->semester_code,
+                            'closing_form' => $row->closing_form,
+                        ])
+                        ->sortBy('subject_name', SORT_NATURAL | SORT_FLAG_CASE)
+                        ->values()
+                        ->all(),
+                ];
+            })
+            ->sortBy('group_name', SORT_NATURAL | SORT_FLAG_CASE)
+            ->values()
+            ->all();
+
+        return $groups;
+    }
+
     public function index(Request $request)
     {
         $this->checkViewAccess();
@@ -263,6 +354,11 @@ class VedomostSubmissionController extends Controller
 
         $notifyEnabled = VedomostSubmissionNotifier::enabled();
         $canToggleNotify = in_array(session('active_role', ''), self::NOTIFY_TOGGLE_ROLES, true);
+        $canManage = in_array(session('active_role', ''), self::ALLOWED_ROLES, true);
+        $manualOpenGroups = $canManage
+            ? $this->manualOpenOptions($request, $selectedEducationType)
+            : [];
+        $syncProgress = Cache::get('vedomost_submission_sync_progress', ['status' => 'idle']);
 
         return view('admin.vedomost-submission.index', compact(
             'submissions',
@@ -274,7 +370,10 @@ class VedomostSubmissionController extends Controller
             'formLabels',
             'stats',
             'notifyEnabled',
-            'canToggleNotify'
+            'canToggleNotify',
+            'canManage',
+            'manualOpenGroups',
+            'syncProgress'
         ));
     }
 
@@ -398,8 +497,8 @@ class VedomostSubmissionController extends Controller
         $forms = VedomostSubmission::formLabels();
         $formTint = [
             '12' => '#eef2ff', '12q' => '#e0e7ff',
-            '12a' => '#ecfeff', '12aq' => '#fef3c7',
-            '12b' => '#fef2f2', '12bq' => '#fae8ff',
+            '12a' => '#ecfeff', '12aq' => '#fef3c7', '12ag' => '#fde68a',
+            '12b' => '#fef2f2', '12bq' => '#fae8ff', '12bg' => '#fed7aa',
         ];
 
         $sections = [];
@@ -663,11 +762,74 @@ class VedomostSubmissionController extends Controller
     {
         $this->checkAccess();
 
-        $count = $this->service->sync();
+        if (Cache::has('vedomost_submission_sync_lock')) {
+            return redirect()
+                ->route('admin.vedomost-submission.index', $request->query())
+                ->with('error', "Joriy semester bo'yicha yangilash allaqachon ishlamoqda.");
+        }
+
+        Cache::put('vedomost_submission_sync_progress', [
+            'status' => 'queued',
+            'message' => "Joriy semester bo'yicha yangilash navbatga qo'yildi.",
+            'updated_at' => now()->toDateTimeString(),
+        ], now()->addHours(2));
+
+        \App\Jobs\SyncVedomostSubmissionsJob::dispatch();
 
         return redirect()
             ->route('admin.vedomost-submission.index', $request->query())
-            ->with('success', "Joriy semestr bo'yicha {$count} ta vedomost yozuvi yangilandi.");
+            ->with('success', "Joriy semester bo'yicha yangilash fon rejimida boshlandi.");
+    }
+
+    /**
+     * Admin tanlangan guruh+fan uchun 12a/12b ni qo'lda ochadi.
+     */
+    public function manualOpen(Request $request)
+    {
+        $this->checkAccess();
+
+        $data = $request->validate([
+            'group_hemis_id' => 'required',
+            'subject_id' => 'required',
+            'semester_code' => 'required',
+            'form_type' => 'required|in:' . implode(',', [
+                VedomostSubmission::FORM_12A,
+                VedomostSubmission::FORM_12B,
+            ]),
+            'only_paid' => 'nullable|boolean',
+        ], [
+            'group_hemis_id.required' => 'Guruhni tanlang.',
+            'subject_id.required' => 'Fanni tanlang.',
+            'semester_code.required' => 'Semestr aniqlanmadi.',
+            'form_type.required' => 'Shaklni tanlang.',
+        ]);
+
+        $opened = $this->service->manualOpenForGroup(
+            (string) $data['group_hemis_id'],
+            (string) $data['subject_id'],
+            (string) $data['semester_code'],
+            (string) $data['form_type'],
+            $request->boolean('only_paid')
+        );
+
+        $note = $request->boolean('only_paid')
+            ? "Qo'lda ochildi (pullik uchun): " . VedomostSubmission::formLabel($opened->form_type)
+            : "Qo'lda ochildi: " . VedomostSubmission::formLabel($opened->form_type);
+
+        $this->log($opened, 'manual_open', $opened->status, $opened->status, $note);
+
+        return redirect()
+            ->route('admin.vedomost-submission.index', $request->query())
+            ->with('success', $note . '.');
+    }
+
+    public function syncProgress(): JsonResponse
+    {
+        $this->checkViewAccess();
+
+        return response()->json(
+            Cache::get('vedomost_submission_sync_progress', ['status' => 'idle'])
+        );
     }
 
     /**

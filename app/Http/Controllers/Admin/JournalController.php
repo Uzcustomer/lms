@@ -1680,20 +1680,36 @@ class JournalController extends Controller
         $testAttempt3Map = [];
         $sinovJnMap = [];
         try {
-            $isSinovForWeights = ($subject->closing_form ?? null) === 'sinov';
-            $hasOskiForWeights = !($examSchedule && $examSchedule->oski_na);
-            $hasTestForWeights = !($examSchedule && $examSchedule->test_na);
+            $closingFormForWeights = mb_strtolower((string) ($subject->closing_form ?? ''));
+            $isSinovForWeights = $closingFormForWeights === 'sinov';
+
+            // Badge/stage logikasi qaysi imtihon majburiyligini avvalo
+            // curriculum_subjects.closing_form dan olishi kerak. Aks holda
+            // nofaol/eski exam_schedules yozuvi sabab OSKI fan ham imtihonsiz
+            // "1-urinish passed" bo'lib ketishi mumkin.
             if ($isSinovForWeights) {
                 $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30];
-            } elseif ($hasOskiForWeights && $hasTestForWeights) {
+            } elseif ($closingFormForWeights === 'oski_test') {
                 $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15];
-            } elseif ($hasOskiForWeights) {
+            } elseif ($closingFormForWeights === 'oski') {
                 $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 30, 'test' => 0];
-            } elseif ($hasTestForWeights) {
+            } elseif ($closingFormForWeights !== '') {
                 $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30];
             } else {
-                $defaultWeights = ['jn' => 80, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 0];
+                $hasOskiFromSchedule = !($examSchedule && $examSchedule->oski_na);
+                $hasTestFromSchedule = !($examSchedule && $examSchedule->test_na);
+                if ($hasOskiFromSchedule && $hasTestFromSchedule) {
+                    $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15];
+                } elseif ($hasOskiFromSchedule) {
+                    $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 30, 'test' => 0];
+                } elseif ($hasTestFromSchedule) {
+                    $defaultWeights = ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 30];
+                } else {
+                    $defaultWeights = ['jn' => 80, 'mt' => 20, 'on' => 0, 'oski' => 0, 'test' => 0];
+                }
             }
+            $hasOskiForWeights = ($defaultWeights['oski'] ?? 0) > 0;
+            $hasTestForWeights = ($defaultWeights['test'] ?? 0) > 0;
 
             $stageLevelCode = (string) ($semester?->level_code ?? '');
             $hasAttemptColForStage = \Illuminate\Support\Facades\Schema::hasColumn('student_grades', 'attempt');
@@ -2004,17 +2020,17 @@ class JournalController extends Controller
                 $stageInfo = $svc::determineStage($main, $qoshimcha, $a, $aQoshimcha, $b, $bQoshimcha);
                 $stageKey = $stageInfo['stage'];
 
-                // 1-urinish OSKI/Test imtihonlari hali bo'lmaganida (sanalar
-                // o'tib ketmagan) talabani 2-urinish/Pullik deb belgilamaslik.
-                // Imtihon sanasi BUGUN bo'lsa ham hali "tugamagan" hisoblanadi —
-                // faqat sana o'tib ketgandagina (sana < bugun) 2-urinishga
-                // o'tkaziladi. Davomat ≥25% (V=-3) holati esa darhol ko'rsatiladi.
+                // 1-urinish OSKI/Test uchun aniq sana kelajakda turgan bo'lsa,
+                // talabani hozircha 2-urinishga o'tkazmaymiz. Lekin sana umuman
+                // qo'yilmagan bo'lsa, badge'ni kulrang "1-urinish"da abadiy ushlab
+                // turmaymiz — bunday holatda stage determineStage natijasiga ko'ra
+                // 2-urinishga tushishi mumkin.
                 $today = now()->format('Y-m-d');
                 $oskiDone = $hasOskiForWeights
-                    ? ($examSchedule && $examSchedule->oski_date && $examSchedule->oski_date->format('Y-m-d') < $today)
+                    ? (!$examSchedule || !$examSchedule->oski_date || $examSchedule->oski_date->format('Y-m-d') < $today)
                     : true;
                 $testDone = $hasTestForWeights
-                    ? ($examSchedule && $examSchedule->test_date && $examSchedule->test_date->format('Y-m-d') < $today)
+                    ? (!$examSchedule || !$examSchedule->test_date || $examSchedule->test_date->format('Y-m-d') < $today)
                     : true;
                 $oneUrinishEnded = $oskiDone && $testDone;
                 $isDavomatFail = ($main['v'] ?? null) === -3;

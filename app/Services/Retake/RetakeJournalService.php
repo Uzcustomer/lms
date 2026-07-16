@@ -576,6 +576,8 @@ class RetakeJournalService
         ?float $oskeScore,
         ?float $testScore,
         ?Teacher $actor = null,
+        $oskeGradedAt = null,
+        $testGradedAt = null,
     ): RetakeApplication {
         if ($oskeScore !== null && ($oskeScore < 0 || $oskeScore > 100)) {
             throw ValidationException::withMessages(['oske_score' => 'OSKE 0..100']);
@@ -586,6 +588,8 @@ class RetakeJournalService
 
         // "Baho qo'yilgan sana" — faqat qiymat o'zgarganda yangilanadi (o'zgarmasa
         // eski sana saqlanadi, null bo'lsa/o'chirilsa sana ham tozalanadi).
+        // Manba (diagnostika/quiz) sanasi berilsa — o'shani ishlatamiz (imtihon
+        // topshirilgan sana), aks holda hozirgi vaqt.
         $oldOske = $app->oske_score !== null ? (float) $app->oske_score : null;
         $oldTest = $app->test_score !== null ? (float) $app->test_score : null;
 
@@ -595,11 +599,17 @@ class RetakeJournalService
         ];
         if ($oskeScore === null) {
             $update['oske_graded_at'] = null;
+        } elseif ($oskeGradedAt) {
+            // Manba (imtihon) sanasi berilgan — baho o'zgarmagan bo'lsa ham shu
+            // sanaga tenglaymiz (mavjud yozuvlar ham qayta tortishda to'g'rilanadi).
+            $update['oske_graded_at'] = $oskeGradedAt;
         } elseif ($oldOske === null || abs($oldOske - $oskeScore) > 0.001) {
             $update['oske_graded_at'] = now();
         }
         if ($testScore === null) {
             $update['test_graded_at'] = null;
+        } elseif ($testGradedAt) {
+            $update['test_graded_at'] = $testGradedAt;
         } elseif ($oldTest === null || abs($oldTest - $testScore) > 0.001) {
             $update['test_graded_at'] = now();
         }
@@ -692,19 +702,23 @@ class RetakeJournalService
      */
     public function defaultWeights(RetakeGroup $group): array
     {
+        // Vaznlar test-markazi "Yakuniy natija" (testMarkaziFinalResult) bilan
+        // AYNAN bir xil bo'lishi shart:
+        //   JN = 50, MT = 20 (doim);
+        //   OSKE yoki Test yoki Sinov (bittasi) → o'sha nazorat 30;
+        //   OSKE + Test (ikkalasi) → OSKE 15, Test 15.
         switch ($group->assessment_type) {
             case 'oske':
-                return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 60, 'test' => 0];
+                return ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 30, 'test' => 0];
             case 'test':
-                return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 0,  'test' => 60];
+                return ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0,  'test' => 30];
             case 'oske_test':
-                return ['jn' => 30, 'mt' => 10, 'on' => 0, 'oski' => 30, 'test' => 30];
+                return ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 15, 'test' => 15];
             case 'sinov':
             case 'sinov_fan':
-                // Sinov (test) — jurnal/test-markazi standart taqsimoti bilan bir xil.
                 return ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0,  'test' => 30];
             default:
-                return ['jn' => 70, 'mt' => 30, 'on' => 0, 'oski' => 0,  'test' => 0];
+                return ['jn' => 50, 'mt' => 20, 'on' => 0, 'oski' => 0,  'test' => 30];
         }
     }
 
@@ -841,6 +855,111 @@ class RetakeJournalService
     }
 
     /**
+     * Har bir ariza uchun talaba shu fandan NECHA MARTA qayta o'qish test/OSKE
+     * topshirganini (hemis_quiz_results dagi urinishlar soni) qaytaradi.
+     *
+     * Urinish = alohida Moodle quiz urinishi (distinct attempt_id). OSKE+TEST
+     * fanda urinishlar soni = komponentlar ichidagi eng ko'p urinish soni
+     * (ikkitasini qo'shib qo'ymaslik uchun). Sinov fanlarda test bahosi = JN
+     * bo'lgani uchun quizdan urinish sanalmaydi.
+     *
+     * @param  Collection<RetakeApplication>  $applications  (retakeGroup bilan)
+     * @return array<int, int>  application_id => urinishlar soni
+     */
+    public function attemptCounts(Collection $applications): array
+    {
+        $map = [];
+        foreach ($applications as $app) {
+            $map[$app->id] = 0;
+        }
+        if ($applications->isEmpty()) {
+            return $map;
+        }
+
+        $testTypes = ['YN test (eng)', 'YN test (rus)', 'YN test (uzb)'];
+        $oskiTypes = ['OSKI (eng)', 'OSKI (rus)', 'OSKI (uzb)'];
+
+        $hemisIds = $applications->pluck('student_hemis_id')
+            ->filter()->map(fn ($v) => (string) $v)->unique()->values()->all();
+        if (empty($hemisIds)) {
+            return $map;
+        }
+
+        // hemis_quiz_results.student_id = students.student_id_number (Moodle id),
+        // ariza esa student_hemis_id (LMS hemis_id) bilan ishlaydi.
+        $sidToHemis = [];
+        foreach (Student::whereIn('hemis_id', $hemisIds)->get(['hemis_id', 'student_id_number']) as $st) {
+            $sid = (string) $st->student_id_number;
+            if ($sid !== '') {
+                $sidToHemis[$sid] = (string) $st->hemis_id;
+            }
+        }
+        if (empty($sidToHemis)) {
+            return $map;
+        }
+
+        $rows = HemisQuizResult::query()
+            ->where('is_active', 1)
+            ->whereIn('student_id', array_keys($sidToHemis))
+            ->whereIn('quiz_type', array_merge($testTypes, $oskiTypes))
+            ->get(['id', 'student_id', 'quiz_type', 'attempt_name', 'shakl', 'attempt_id', 'fan_id', 'fan_name']);
+
+        // [hemis_id][fan kaliti][kind] => distinct attempt kalitlari to'plami.
+        // Fan id har xil id-makonda bo'lishi mumkin, shuning uchun ham NOM
+        // ('n:'), ham ID ('i:') bo'yicha indekslaymiz (moslikda max olamiz).
+        $sets = [];
+        foreach ($rows as $row) {
+            if (!RetakeSessionCode::isRetakeQuiz($row->attempt_name, $row->shakl)) {
+                continue;
+            }
+            $hid = $sidToHemis[(string) $row->student_id] ?? null;
+            if ($hid === null) {
+                continue;
+            }
+            $kind = in_array($row->quiz_type, $oskiTypes, true) ? 'oske' : 'test';
+            $attKey = $row->attempt_id !== null ? 'a' . $row->attempt_id : 'r' . $row->id;
+
+            $subjNorm = $this->normSubjectName($row->fan_name);
+            if ($subjNorm !== '') {
+                $sets[$hid]['n:' . $subjNorm][$kind][$attKey] = true;
+            }
+            if ($row->fan_id !== null && $row->fan_id !== '') {
+                $sets[$hid]['i:' . $row->fan_id][$kind][$attKey] = true;
+            }
+        }
+
+        foreach ($applications as $app) {
+            $hid = (string) $app->student_hemis_id;
+            $group = $app->retakeGroup;
+            $at = $group?->assessment_type;
+            $isSinov = in_array($at, ['sinov', 'sinov_fan'], true);
+            $needsOske = in_array($at, ['oske', 'oske_test'], true);
+            // Sinov test bahosi = JN — Moodle quizidan urinish sanalmaydi.
+            $needsTest = !$isSinov && in_array($at, ['test', 'oske_test'], true);
+
+            $nameKey = 'n:' . $this->normSubjectName($group?->subject_name ?? $app->subject_name);
+            $idKey = 'i:' . $app->subject_id;
+
+            $countKind = function (string $kind) use ($sets, $hid, $nameKey, $idKey) {
+                $byName = isset($sets[$hid][$nameKey][$kind]) ? count($sets[$hid][$nameKey][$kind]) : 0;
+                $byId = isset($sets[$hid][$idKey][$kind]) ? count($sets[$hid][$idKey][$kind]) : 0;
+                return max($byName, $byId);
+            };
+
+            $attempts = 0;
+            if ($needsOske) {
+                $attempts = max($attempts, $countKind('oske'));
+            }
+            if ($needsTest) {
+                $attempts = max($attempts, $countKind('test'));
+            }
+            $map[$app->id] = $attempts;
+        }
+
+        return $map;
+    }
+
+    /**
      * @param  array{jn:int,mt:int,on:int,oski:int,test:int}|null  $weights
      */
     /**
@@ -860,7 +979,7 @@ class RetakeJournalService
             ->all();
     }
 
-    public function buildVedomostExcel(RetakeGroup $group, ?array $weights = null, ?int $semesterNumber = null): array
+    public function buildVedomostExcel(RetakeGroup $group, ?array $weights = null, ?int $semesterNumber = null, ?Collection $applicationsOverride = null): array
     {
         $templatePath = public_path('templates/yn_qaydnoma (1).xlsx');
         if (!file_exists($templatePath)) {
@@ -869,10 +988,16 @@ class RetakeJournalService
             ]);
         }
 
-        $applications = $this->applications($group);
+        // Chaqiruvchi tayyor (masalan fakultet+yo'nalish bo'yicha ajratilgan)
+        // arizalar to'plamini bersa — o'shani ishlatamiz; aks holda guruhning
+        // barcha tasdiqlangan arizalari.
+        $applications = $applicationsOverride !== null
+            ? $applicationsOverride->values()
+            : $this->applications($group);
 
         // Semestr bo'yicha alohida vedomost — faqat shu semestrdagi arizalar.
-        if ($semesterNumber !== null) {
+        // (applicationsOverride berilganda chaqiruvchi allaqachon filtrlagan.)
+        if ($applicationsOverride === null && $semesterNumber !== null) {
             $applications = $applications->filter(function ($a) use ($semesterNumber) {
                 $num = preg_match('/(\d+)/', (string) $a->semester_name, $m) ? (int) $m[1] : null;
                 return $num === $semesterNumber;
@@ -914,7 +1039,7 @@ class RetakeJournalService
         };
 
         // Ko'pchilik faculty / specialty / kurs / semestr
-        $studentInfo = $applications->map(fn ($a) => $a->group->student ?? null)->filter();
+        $studentInfo = $applications->map(fn ($a) => $a->group?->student)->filter();
         $pickMostCommon = function (Collection $values, string $field): string {
             $names = $values->pluck($field)->filter()->countBy();
             return (string) ($names->sortDesc()->keys()->first() ?? '');
@@ -1030,7 +1155,7 @@ class RetakeJournalService
             $row = $startRow + $idx;
             if ($row > $maxRow) break;
 
-            $student = $app->group->student ?? null;
+            $student = $app->group?->student;
             $hemisId = $app->student_hemis_id;
 
             // Joriy = bitta saqlangan JN bahosi (yagona, kunlik jadval emas)
@@ -1073,8 +1198,19 @@ class RetakeJournalService
                    || ($weightTest > 0 && $testVal < 60)) {
                 $v = 0;
             } else {
-                $v = round($eBall + $hBall + $kBall + $qBall + $tBall, 1);
-                if ($v > 0) $v = (int) floor($v + 0.5);
+                // Har GURUH alohida butun songacha (half-up) yaxlitlanadi:
+                // round(JB+MT+ON) + round(OSKI+Test).
+                $jbMtOnSum = (int) floor($eBall + $hBall + $kBall + 0.5);
+                if ($weightOski > 0 && $weightTest > 0) {
+                    $examSum = (int) floor($qBall + $tBall + 0.5);
+                } elseif ($weightOski > 0) {
+                    $examSum = (int) floor($qBall + 0.5);
+                } elseif ($weightTest > 0) {
+                    $examSum = (int) floor($tBall + 0.5);
+                } else {
+                    $examSum = 0;
+                }
+                $v = $jbMtOnSum + $examSum;
             }
 
             $w = '';
@@ -1119,6 +1255,11 @@ class RetakeJournalService
         $absPath = $tempDir . '/' . $fileName;
 
         $writer = \PhpOffice\PhpSpreadsheet\IOFactory::createWriter($spreadsheet, 'Xlsx');
+        // Template ichidagi ayrim formulalar serverda save paytida barcha sheetlarni
+        // qayta hisoblashga urinadi; ayrim prod shablonlarda bu "worksheet not found"
+        // xatosini berib, aynan ba'zi fanlarda 500 chiqaradi. Excel ochilganda o'zi
+        // qayta hisoblaydi, shu sabab server-side pre-calc'ni o'chiramiz.
+        $writer->setPreCalculateFormulas(false);
         $writer->save($absPath);
         $spreadsheet->disconnectWorksheets();
 
@@ -1168,9 +1309,12 @@ class RetakeJournalService
                 $oskeQuery->where('lesson_date', '>=', $group->oske_date->format('Y-m-d'));
             }
             $oskeMap = $oskeQuery
-                ->select('student_hemis_id', \Illuminate\Support\Facades\DB::raw('ROUND(AVG(grade)) as avg_grade'))
+                ->select('student_hemis_id',
+                    \Illuminate\Support\Facades\DB::raw('ROUND(AVG(grade)) as avg_grade'),
+                    \Illuminate\Support\Facades\DB::raw('MAX(lesson_date) as graded_date'))
                 ->groupBy('student_hemis_id')
-                ->pluck('avg_grade', 'student_hemis_id');
+                ->get()
+                ->keyBy('student_hemis_id');
         }
 
         if ($needsTest) {
@@ -1183,9 +1327,12 @@ class RetakeJournalService
                 $testQuery->where('lesson_date', '>=', $group->test_date->format('Y-m-d'));
             }
             $testMap = $testQuery
-                ->select('student_hemis_id', \Illuminate\Support\Facades\DB::raw('ROUND(AVG(grade)) as avg_grade'))
+                ->select('student_hemis_id',
+                    \Illuminate\Support\Facades\DB::raw('ROUND(AVG(grade)) as avg_grade'),
+                    \Illuminate\Support\Facades\DB::raw('MAX(lesson_date) as graded_date'))
                 ->groupBy('student_hemis_id')
-                ->pluck('avg_grade', 'student_hemis_id');
+                ->get()
+                ->keyBy('student_hemis_id');
         }
 
         $fetchedOske = 0;
@@ -1195,11 +1342,16 @@ class RetakeJournalService
         foreach ($applications as $app) {
             $update = [];
             if ($needsOske) {
-                $score = $oskeMap->get($app->student_hemis_id);
+                $row = $oskeMap->get($app->student_hemis_id);
+                $score = $row?->avg_grade;
                 if ($score !== null) {
                     $update['oske_score'] = $score;
                     $oldOske = $app->oske_score !== null ? (float) $app->oske_score : null;
-                    if ($oldOske === null || abs($oldOske - (float) $score) > 0.001) {
+                    // "Baho qo'yilgan sana" — manba baholarning oxirgi dars (imtihon)
+                    // sanasi, tortilgan vaqt emas. Sana bo'lsa doim shunga tenglaymiz.
+                    if ($row->graded_date) {
+                        $update['oske_graded_at'] = $row->graded_date;
+                    } elseif ($oldOske === null || abs($oldOske - (float) $score) > 0.001) {
                         $update['oske_graded_at'] = now();
                     }
                     $fetchedOske++;
@@ -1208,11 +1360,14 @@ class RetakeJournalService
                 }
             }
             if ($needsTest) {
-                $score = $testMap->get($app->student_hemis_id);
+                $row = $testMap->get($app->student_hemis_id);
+                $score = $row?->avg_grade;
                 if ($score !== null) {
                     $update['test_score'] = $score;
                     $oldTest = $app->test_score !== null ? (float) $app->test_score : null;
-                    if ($oldTest === null || abs($oldTest - (float) $score) > 0.001) {
+                    if ($row->graded_date) {
+                        $update['test_graded_at'] = $row->graded_date;
+                    } elseif ($oldTest === null || abs($oldTest - (float) $score) > 0.001) {
                         $update['test_graded_at'] = now();
                     }
                     $fetchedTest++;
@@ -1376,8 +1531,10 @@ class RetakeJournalService
             }
             // Semestr: `semester` maydoni ko'pincha NULL — nomidan ("N-sem") olamiz.
             $semKey = RetakeSessionCode::semesterNumber($row->semester, $row->attempt_name) ?? 0; // 0 = noma'lum
-            if (!isset($best[$hid][$semKey][$kind]) || $grade > $best[$hid][$semKey][$kind]) {
-                $best[$hid][$semKey][$kind] = $grade;
+            if (!isset($best[$hid][$semKey][$kind]) || $grade > $best[$hid][$semKey][$kind]['grade']) {
+                // Bahoni va shu urinishning topshirilgan sanasini (date_finish)
+                // birga saqlaymiz — "Baho qo'yilgan sana" imtihon sanasiga teng bo'lsin.
+                $best[$hid][$semKey][$kind] = ['grade' => $grade, 'date' => $row->date_finish];
             }
         }
 
@@ -1413,8 +1570,10 @@ class RetakeJournalService
         foreach ($applications as $app) {
             $hid = (string) $app->student_hemis_id;
             $appSem = preg_match('/(\d+)/', (string) $app->semester_name, $am) ? (int) $am[1] : null;
-            $oske = $needsOske ? $pickBest($hid, $appSem, 'oske') : null;
-            $test = $needsTest ? $pickBest($hid, $appSem, 'test') : null;
+            $oskeBest = $needsOske ? $pickBest($hid, $appSem, 'oske') : null;
+            $testBest = $needsTest ? $pickBest($hid, $appSem, 'test') : null;
+            $oske = $oskeBest['grade'] ?? null;
+            $test = $testBest['grade'] ?? null;
 
             $hasUpdate = false;
             if ($needsOske) {
@@ -1443,6 +1602,8 @@ class RetakeJournalService
                     $oske !== null ? round($oske) : ($app->oske_score !== null ? (float) $app->oske_score : null),
                     $test !== null ? round($test) : ($app->test_score !== null ? (float) $app->test_score : null),
                     $actor,
+                    $oskeBest['date'] ?? null,
+                    $testBest['date'] ?? null,
                 );
             }
         }

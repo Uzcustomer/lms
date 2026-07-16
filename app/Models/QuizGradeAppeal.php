@@ -32,11 +32,14 @@ class QuizGradeAppeal extends Model
         'performed_by_id',
         'performed_by_name',
         'performed_by_role',
+        'reversed_at',
+        'reversed_by',
     ];
 
     protected $casts = [
         'old_grade' => 'float',
         'new_grade' => 'float',
+        'reversed_at' => 'datetime',
     ];
 
     public function actionLabel(): string

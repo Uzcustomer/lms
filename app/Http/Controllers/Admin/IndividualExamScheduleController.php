@@ -377,7 +377,12 @@ class IndividualExamScheduleController extends Controller
 
         // Eligibility tekshiruvi — qaytarilgan stage va sabablar
         $elig = $this->computeEligibilityForStudent($hemisId, $student->group_id, collect([
-            (object) ['subject_id' => $subjectId, 'semester_code' => $semCode, 'subject_name' => $subjectName],
+            (object) [
+                'subject_id' => $subjectId,
+                'semester_code' => $semCode,
+                'subject_name' => $subjectName,
+                'closing_form' => $subject?->closing_form,
+            ],
         ]))[$subjectId . '|' . $semCode] ?? null;
 
         $eligOk = $this->isAttemptAllowed($elig, $attempt);
@@ -750,15 +755,8 @@ class IndividualExamScheduleController extends Controller
 
     /**
      * Talabaning har fan uchun eligibility (1/2/3 urinishga huquqi).
-     * Hozircha minimal versiya — student_grades dan attempt 1/2/3 yozuvlari
-     * va V (retake_grade yoki grade) qiymatlari asosida. JN/MT to'liq
-     * hisoblash JournalGradeService orqali kerak — bu kelgusi iteratsiyada
-     * qo'shiladi.
-     *
-     * Qaytarilgan tuzilma har subject uchun:
-     *  - stage: 'in_progress' | 'failed1' | 'failed2' | 'passed' | ...
-     *  - allow_1: bool, allow_2: bool, allow_3: bool
-     *  - reasons: ['1' => 'Sabab', '2' => 'Sabab', '3' => 'Sabab']
+     * 1-urinishda baho 60 dan past bo'lsa yoki sana o'tib baho kelmagan bo'lsa,
+     * keyingi urinish avtomatik ochiladi. Xuddi shu qoida 2→3 uchun ham qo'llanadi.
      */
     private function computeEligibilityForStudent(string $hemisId, $groupId, $subjects): array
     {
@@ -769,59 +767,93 @@ class IndividualExamScheduleController extends Controller
         $subjectIds = $subjects->pluck('subject_id')->unique()->all();
         $semCodes = $subjects->pluck('semester_code')->unique()->all();
 
-        // Talabaning shu fanlardagi baholari
         $grades = DB::table('student_grades')
             ->where('student_hemis_id', $hemisId)
             ->whereIn('subject_id', $subjectIds)
             ->whereIn('semester_code', $semCodes)
-            ->whereIn('training_type_code', [101, 102])
+            ->whereIn('training_type_code', [101, 102, 103])
             ->whereNull('deleted_at')
-            ->select('subject_id', 'semester_code', 'training_type_code',
-                'grade', 'retake_grade',
-                $hasAttemptCol ? 'attempt' : DB::raw('1 as attempt'))
+            ->select(
+                'subject_id',
+                'semester_code',
+                'training_type_code',
+                'grade',
+                'retake_grade',
+                $hasAttemptCol ? 'attempt' : DB::raw('1 as attempt')
+            )
             ->get()
             ->groupBy(fn ($r) => $r->subject_id . '|' . $r->semester_code);
+
+        $scheduleMap = $this->buildScheduleMap($hemisId, $groupId, $subjectIds, $semCodes);
 
         foreach ($subjects as $subject) {
             $key = $subject->subject_id . '|' . $subject->semester_code;
             $subjGrades = $grades->get($key) ?? collect();
+            $schedule = $scheduleMap[$key] ?? null;
+            $closingForm = $subject->closing_form ?? null;
 
-            // Har attempt uchun baholar bor-yo'qligi va V<60 ekanligini aniqlash
-            $failed1 = false; $failed2 = false;
-            $has1 = false; $has2 = false; $has3 = false;
+            $has1 = false;
+            $has2 = false;
+            $has3 = false;
+            $failed1ByGrade = false;
+            $failed2ByGrade = false;
+
             foreach ($subjGrades as $g) {
                 $att = (int) ($g->attempt ?? 1);
                 $val = $g->retake_grade ?? $g->grade;
+
                 if ($att <= 1) {
                     $has1 = true;
-                    if ($val !== null && (float) $val < 60) $failed1 = true;
+                    if ($val !== null && (float) $val < 60) {
+                        $failed1ByGrade = true;
+                    }
                 } elseif ($att === 2) {
                     $has2 = true;
-                    if ($val !== null && (float) $val < 60) $failed2 = true;
+                    if ($val !== null && (float) $val < 60) {
+                        $failed2ByGrade = true;
+                    }
                 } elseif ($att === 3) {
                     $has3 = true;
                 }
             }
 
-            // Eligibility qoidalari (sodda, kengaytirilishi mumkin):
-            //  1-urinish: doim ruxsat (admin xohlasa erta qo'yadi)
-            //  2-urinish: 1-urinishda yiqilgan bo'lsa yoki hali 1 baholari kelmagan bo'lsa, lekin admin ruxsat berishi mumkin
-            //  3-urinish: 2-urinishda yiqilgan bo'lsa
-            $allow1 = true;
-            $allow2 = $failed1; // standart
-            $allow3 = $failed2;
+            $failed1ByDate = !$has1 && $this->hasAttemptDatePassed($schedule, $closingForm, 1);
+            $failed2ByDate = !$has2 && $this->hasAttemptDatePassed($schedule, $closingForm, 2);
 
-            $reasons = [];
-            if (!$failed1 && $has1) {
-                $reasons[2] = '1-urinishni topshirgan (V≥60) — 2-urinishga ehtiyoj yo\'q';
-            } elseif (!$has1) {
-                $reasons[2] = '1-urinish baholari hali kelmagan';
-            }
-            if (!$failed2 && $has2) {
-                $reasons[3] = '2-urinishni topshirgan (V≥60) — 3-urinishga ehtiyoj yo\'q';
-            } elseif (!$has2) {
-                $reasons[3] = '2-urinish baholari hali kelmagan';
-            }
+            $failed1 = $failed1ByGrade || $failed1ByDate;
+            $failed2 = $failed2ByGrade || $failed2ByDate;
+
+            $allow1 = !$has1 && !$failed1;
+            $allow2 = $failed1 && !$has2 && !$failed2;
+            $allow3 = $failed2 && !$has3;
+
+            $reasons = [
+                1 => $allow1
+                    ? "1-urinish ochiq."
+                    : ($failed1ByDate
+                        ? "1-urinish sanasi o'tgan, lekin baho kelmagan."
+                        : ($failed1ByGrade
+                            ? "1-urinish bahosi 60 dan past."
+                            : "1-urinish uchun baho allaqachon mavjud.")),
+                2 => $allow2
+                    ? ($failed1ByDate
+                        ? "1-urinish sanasi o'tib, baho kelmagani uchun 2-urinish ochildi."
+                        : "1-urinish bahosi 60 dan past bo'lgani uchun 2-urinish ochildi.")
+                    : ($has2
+                        ? "2-urinish uchun baho allaqachon mavjud."
+                        : ($failed1
+                            ? "2-urinish hali yopilmagan."
+                            : "1-urinish hali keyingi bosqichga o'tmagan.")),
+                3 => $allow3
+                    ? ($failed2ByDate
+                        ? "2-urinish sanasi o'tib, baho kelmagani uchun 3-urinish ochildi."
+                        : "2-urinish bahosi 60 dan past bo'lgani uchun 3-urinish ochildi.")
+                    : ($has3
+                        ? "3-urinish uchun baho allaqachon mavjud."
+                        : ($failed2
+                            ? "3-urinish hali yopilmagan."
+                            : "2-urinish hali keyingi bosqichga o'tmagan.")),
+            ];
 
             $result[$key] = [
                 'has_attempt_1_grade' => $has1,
@@ -837,6 +869,74 @@ class IndividualExamScheduleController extends Controller
         }
 
         return $result;
+    }
+
+    private function buildScheduleMap(string $hemisId, $groupId, array $subjectIds, array $semCodes): array
+    {
+        $rows = ExamSchedule::query()
+            ->whereIn('subject_id', $subjectIds)
+            ->whereIn('semester_code', $semCodes)
+            ->where(function ($q) use ($groupId, $hemisId) {
+                $q->where(function ($w) use ($groupId) {
+                    $w->where('group_hemis_id', $groupId)
+                      ->whereNull('student_hemis_id');
+                })->orWhere('student_hemis_id', $hemisId);
+            })
+            ->get()
+            ->groupBy(fn ($row) => $row->subject_id . '|' . $row->semester_code);
+
+        $result = [];
+        foreach ($rows as $key => $groupedRows) {
+            $result[$key] = $groupedRows->first(fn ($row) => (string) ($row->student_hemis_id ?? '') === $hemisId)
+                ?: $groupedRows->first();
+        }
+
+        return $result;
+    }
+
+    private function hasAttemptDatePassed($schedule, ?string $closingForm, int $attempt): bool
+    {
+        if (!$schedule) {
+            return false;
+        }
+
+        $cols = match ($attempt) {
+            1 => ['oski' => 'oski_date', 'test' => 'test_date'],
+            2 => ['oski' => 'oski_resit_date', 'test' => 'test_resit_date'],
+            3 => ['oski' => 'oski_resit2_date', 'test' => 'test_resit2_date'],
+            default => null,
+        };
+
+        if (!$cols) {
+            return false;
+        }
+
+        $oskiDate = $schedule->{$cols['oski']} ?? null;
+        $testDate = $schedule->{$cols['test']} ?? null;
+
+        $dates = match ($closingForm) {
+            'oski' => $oskiDate ? [$oskiDate] : [],
+            'test', 'sinov', 'normativ' => $testDate ? [$testDate] : [],
+            'oski_test' => ($oskiDate && $testDate) ? [$oskiDate, $testDate] : [],
+            default => array_values(array_filter([$oskiDate, $testDate])),
+        };
+
+        if (empty($dates)) {
+            return false;
+        }
+
+        $today = \Carbon\Carbon::now('Asia/Tashkent')->endOfDay();
+        foreach ($dates as $date) {
+            $parsed = $date instanceof \Carbon\CarbonInterface
+                ? $date->copy()->endOfDay()
+                : \Carbon\Carbon::parse($date, 'Asia/Tashkent')->endOfDay();
+
+            if ($parsed->gt($today)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function isAttemptAllowed(?array $elig, int $attempt): bool

@@ -136,7 +136,7 @@
         .ms-col-btn:hover { border-color: #2b5ea7; }
         .ms-col-btn.ms-active { border-color: #2563eb; background: #eff6ff; color: #1d4ed8; font-weight: 700; }
         .ms-btn-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .ms-popup { display: none; position: absolute; top: 30px; left: 0; z-index: 200; width: 230px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.16); padding: 8px; }
+        .ms-popup { display: none; position: fixed; z-index: 3000; width: 230px; background: #fff; border: 1px solid #cbd5e1; border-radius: 10px; box-shadow: 0 8px 24px rgba(0,0,0,0.16); padding: 8px; }
         .ms-search { width: 100%; padding: 5px 8px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 11px; outline: none; margin-bottom: 6px; box-sizing: border-box; }
         .ms-search:focus { border-color: #2b5ea7; box-shadow: 0 0 0 2px rgba(43,94,167,0.15); }
         .ms-opts { max-height: 220px; overflow-y: auto; }
@@ -233,11 +233,15 @@
                                 </button>
                             </div>
                         </div>
-                        <div class="filter-item" style="max-width:200px;">
+                        <div class="filter-item" style="max-width:220px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#dc2626;"></span> Dublikatlar</label>
                             <label style="display:inline-flex;align-items:center;gap:8px;height:34px;cursor:pointer;user-select:none;" title="Yoqilganda bir xil natijaning barcha urinishlari ko'rinadi (dedup o'chadi)">
                                 <input type="checkbox" id="show_duplicates" checked onchange="loadTartibgaSol()" style="width:16px;height:16px;cursor:pointer;">
                                 <span style="font-size:12px;font-weight:600;color:#1e293b;white-space:nowrap;">Dublikatlarni ko'rsatish</span>
+                            </label>
+                            <label style="display:inline-flex;align-items:center;gap:8px;height:28px;cursor:pointer;user-select:none;margin-top:2px;" title="Faqat takrorlangan (DUBLIKAT) natijalarni ko'rsatadi">
+                                <input type="checkbox" id="only_duplicates" onchange="onlyDupToggle()" style="width:16px;height:16px;cursor:pointer;">
+                                <span style="font-size:12px;font-weight:700;color:#991b1b;white-space:nowrap;">Faqat dublikatlar</span>
                             </label>
                         </div>
                         <div class="filter-item" style="margin-left:auto;max-width:280px;">
@@ -739,14 +743,24 @@
             document.querySelectorAll('.ms-popup').forEach(function(p) { p.style.display = 'none'; });
             document.querySelectorAll('.adv-filter-popup').forEach(function(p) { p.style.display = 'none'; });
             if (!visible) {
-                popup.style.left = '0';
-                popup.style.right = 'auto';
+                // Popup `position: fixed` — jadval scroll konteyneri (overflow)
+                // uni kesib qo'ymasligi uchun. O'rnini tugmadan hisoblaymiz.
+                var btn = popup.parentElement.querySelector('.ms-col-btn');
+                var brect = btn.getBoundingClientRect();
+                var popW = 230;
+                var left = brect.left;
+                // O'ng chetidan chiqib ketsa — tugmaning o'ng chetiga tekislaymiz
+                if (left + popW > window.innerWidth - 8) {
+                    left = Math.max(8, brect.right - popW);
+                }
+                popup.style.left = left + 'px';
+                popup.style.top = (brect.bottom + 4) + 'px';
                 popup.style.display = 'block';
-                // Ekran o'ng chetidan chiqib ketsa — chapga ochiladi
-                var rect = popup.getBoundingClientRect();
-                if (rect.right > window.innerWidth - 8) {
-                    popup.style.left = 'auto';
-                    popup.style.right = '0';
+                // Pastdan chiqib ketsa — tugmaning tepasiga ochamiz
+                var prect = popup.getBoundingClientRect();
+                if (prect.bottom > window.innerHeight - 8) {
+                    var newTop = brect.top - prect.height - 4;
+                    popup.style.top = Math.max(8, newTop) + 'px';
                 }
             }
         }
@@ -809,6 +823,31 @@
             }
         });
 
+        // Dublikat kaliti — renderTable dagi bilan bir xil (talaba+fan+yn_turi+shakl).
+        function dupKeyOf(r) {
+            return r.student_id + '|' + r.fan_id + '|' + r.yn_turi + '|' + r.shakl;
+        }
+        // allData bo'yicha kalit -> takrorlanish soni.
+        function computeDupCounts() {
+            var dc = {};
+            (allData || []).forEach(function(d) {
+                var k = dupKeyOf(d);
+                dc[k] = (dc[k] || 0) + 1;
+            });
+            return dc;
+        }
+
+        // "Faqat dublikatlar" tugmasi. Dublikatlar hozir ko'rsatilmayotgan bo'lsa
+        // (dedup yoqilgan) — avval ularni yuklab, so'ng filtrlaymiz.
+        function onlyDupToggle() {
+            if ($('#only_duplicates').is(':checked') && !$('#show_duplicates').is(':checked')) {
+                $('#show_duplicates').prop('checked', true);
+                loadTartibgaSol(); // qayta yuklanadi, so'ng applyColumnFilters ishlaydi
+                return;
+            }
+            applyColumnFilters();
+        }
+
         function applyColumnFilters() {
             var filters = {};
             $('input.col-filter-input').each(function() {
@@ -816,7 +855,12 @@
                 if (val) filters[$(this).data('col')] = val;
             });
 
+            var onlyDup = $('#only_duplicates').is(':checked');
+            var dupCounts = onlyDup ? computeDupCounts() : null;
+
             filteredData = allData.filter(function(r) {
+                // Faqat dublikatlar — takrorlanish soni 1 dan katta bo'lganlar.
+                if (onlyDup && !(dupCounts[dupKeyOf(r)] > 1)) return false;
                 for (var col in filters) {
                     var fv = filters[col];
                     var rv = (r[col] || '').toString();
@@ -1230,6 +1274,11 @@
                 success: function(data) {
                     var cls = data.success ? 'diag-success' : 'diag-error';
                     $('#upload-result').html('<div class="diag-msg ' + cls + '">' + esc(data.message) + '</div>').show();
+                    // To'g'ridan-to'g'ri tortish natija keltirgan bo'lsa —
+                    // jadvalni avtomatik yangilaymiz (ikkinchi marta bosish shart emas).
+                    if (data.success && typeof data.imported !== 'undefined') {
+                        loadTartibgaSol();
+                    }
                 },
                 error: function(xhr) {
                     var msg = xhr.responseJSON?.message || 'Server xatosi';

@@ -5518,6 +5518,8 @@ class ReportController extends Controller
         $filters = [
             'only_debtors' => $request->get('only_debtors', $request->get('only_not_applied', '1')) == '1' ? '1' : '0',
             'semester_code' => (string) ($request->get('semester_code') ?? ''),
+            // Academic-record qarzida joriy semestrni ham hisoblash (default: o'chiq).
+            'include_current_semester' => $request->get('include_current_semester', '0') == '1' ? '1' : '0',
             'student_status' => (string) ($request->get('student_status') ?? ''),
             'student_name' => (string) ($request->get('student_name') ?? ''),
             'faculty' => (string) ($request->get('faculty') ?? ''),
@@ -5550,6 +5552,9 @@ class ReportController extends Controller
 
             $onlyDebtors = ($filters['only_debtors'] ?? '1') == '1';
             $semesterFilter = $filters['semester_code'] ?? '';
+            // Toggle: academic_records qarzida joriy semestrni ham tekshirish.
+            // O'chiq (default) — faqat tugallangan (o'tgan) semestrlar.
+            $includeCurrentSemester = ($filters['include_current_semester'] ?? '0') == '1';
 
             $tick(2, 'Talabalar yuklanmoqda...');
 
@@ -5684,7 +5689,8 @@ class ReportController extends Controller
                     if ($semesterFilter !== null && $semesterFilter !== '' && (string) $semCode !== (string) $semesterFilter) {
                         continue;
                     }
-                    if (($semesterFilter === null || $semesterFilter === '') && $studentSemCode && (int) $semCode >= $studentSemCode) {
+                    if (($semesterFilter === null || $semesterFilter === '') && $studentSemCode
+                        && ($includeCurrentSemester ? (int) $semCode > $studentSemCode : (int) $semCode >= $studentSemCode)) {
                         continue;
                     }
                     $curriculumPairs[$currId . '|' . $semCode] = true;
@@ -5869,25 +5875,12 @@ class ReportController extends Controller
                 'none' => "Yakuniy nazorat yo'q",
             ];
 
-            // ── Joriy semestr xavflari — 4≥qarzdorlar hisobotidagi AYNAN bir xil
-            // mantiq (student_grades jurnali: JN/MT/OSKI/Test < 60, sababsiz
-            // davomat ≥ 25%, grafik o'tib ketgan 2/3-urinishlar). Semestr filtri
-            // berilgan bo'lsa faqat joriy semestri filtrga teng talabalar uchun.
-            $tick(55, 'Joriy semestr xavflari hisoblanmoqda...');
-            $riskSemCodeMap = [];
-            foreach ($students as $st) {
-                $sc = $st->semester_code ? (string) $st->semester_code : '';
-                if ($sc === '') {
-                    continue;
-                }
-                if ($semesterFilter !== null && $semesterFilter !== '' && (string) $semesterFilter !== $sc) {
-                    continue;
-                }
-                $riskSemCodeMap[$st->hemis_id] = $sc;
-            }
-            $currentRisksMap = empty($riskSemCodeMap)
-                ? []
-                : $this->getCurrentSemesterRisksForReport(array_keys($riskSemCodeMap), $riskSemCodeMap);
+            // Joriy semestr XAVFLARI (student_grades jurnalidan: JN/MT/OSKE/Test<60,
+            // davomat, grafik) hisobotdan OLIB TASHLANDI. Endi hisobot faqat
+            // academic_records qarzlarini ko'rsatadi; joriy semestr qarzi
+            // include_current_semester toggle orqali asosiy siklda hisoblanadi.
+            // $currentRisksMap bo'sh qoldiriladi — pastdagi xavf-emit sikli no-op.
+            $currentRisksMap = [];
 
             $tick(70, 'Qatorlar shakllantirilmoqda...');
 
@@ -5912,7 +5905,8 @@ class ReportController extends Controller
                     if ($semesterFilter !== null && $semesterFilter !== '' && (string) $semCode !== (string) $semesterFilter) {
                         continue;
                     }
-                    if (($semesterFilter === null || $semesterFilter === '') && $studentSemCode && (int) $semCode >= $studentSemCode) {
+                    if (($semesterFilter === null || $semesterFilter === '') && $studentSemCode
+                        && ($includeCurrentSemester ? (int) $semCode > $studentSemCode : (int) $semCode >= $studentSemCode)) {
                         continue;
                     }
 

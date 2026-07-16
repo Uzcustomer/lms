@@ -5693,7 +5693,11 @@ class ReportController extends Controller
                     if ($semesterFilter !== null && $semesterFilter !== '' && (string) $semCode !== (string) $semesterFilter) {
                         continue;
                     }
-                    if (($semesterFilter === null || $semesterFilter === '') && $studentSemCode
+                    // Joriy semestr faqat include_current_semester yoqilganda
+                    // hisoblanadi; kelasi semestrlar hech qachon. Bu semester_code
+                    // filtri berilganda ham qo'llanadi — aks holda joriy semestrni
+                    // filter qilib tanlaganda toggle o'chiq bo'lsa ham chiqib qolardi.
+                    if ($studentSemCode
                         && ($includeCurrentSemester ? (int) $semCode > $studentSemCode : (int) $semCode >= $studentSemCode)) {
                         continue;
                     }
@@ -5892,7 +5896,11 @@ class ReportController extends Controller
                     if ($semesterFilter !== null && $semesterFilter !== '' && (string) $semCode !== (string) $semesterFilter) {
                         continue;
                     }
-                    if (($semesterFilter === null || $semesterFilter === '') && $studentSemCode
+                    // Joriy semestr faqat include_current_semester yoqilganda
+                    // hisoblanadi; kelasi semestrlar hech qachon. Bu semester_code
+                    // filtri berilganda ham qo'llanadi — aks holda joriy semestrni
+                    // filter qilib tanlaganda toggle o'chiq bo'lsa ham chiqib qolardi.
+                    if ($studentSemCode
                         && ($includeCurrentSemester ? (int) $semCode > $studentSemCode : (int) $semCode >= $studentSemCode)) {
                         continue;
                     }

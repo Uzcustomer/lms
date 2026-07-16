@@ -749,6 +749,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/load-vs-pair', [ReportController::class, 'loadVsPairReport'])->name('reports.load-vs-pair');
         Route::get('/reports/load-vs-pair/data', [ReportController::class, 'loadVsPairReportData'])->name('reports.load-vs-pair.data');
 
+        Route::get('/reports/oqim', [ReportController::class, 'oqimReport'])->name('reports.oqim');
+        Route::get('/reports/oqim/data', [ReportController::class, 'oqimReportData'])->name('reports.oqim.data');
+        Route::get('/reports/oqim/export', [ReportController::class, 'oqimReportExport'])->name('reports.oqim.export');
+
         Route::get('/reports/debtors', [ReportController::class, 'debtorsReport'])->name('reports.debtors');
         Route::get('/reports/debtors/data', [ReportController::class, 'debtorsReportData'])->name('reports.debtors.data');
         Route::post('/reports/debtors/export-academic-records/start', [ReportController::class, 'startAcademicRecordsExport'])->name('reports.debtors.export-academic-records.start');

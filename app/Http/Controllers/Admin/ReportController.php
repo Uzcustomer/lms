@@ -5518,6 +5518,8 @@ class ReportController extends Controller
         $filters = [
             'only_debtors' => $request->get('only_debtors', $request->get('only_not_applied', '1')) == '1' ? '1' : '0',
             'semester_code' => (string) ($request->get('semester_code') ?? ''),
+            // Academic-record qarzida joriy semestrni ham hisoblash (default: o'chiq).
+            'include_current_semester' => $request->get('include_current_semester', '0') == '1' ? '1' : '0',
             'student_status' => (string) ($request->get('student_status') ?? ''),
             'student_name' => (string) ($request->get('student_name') ?? ''),
             'faculty' => (string) ($request->get('faculty') ?? ''),
@@ -5550,6 +5552,9 @@ class ReportController extends Controller
 
             $onlyDebtors = ($filters['only_debtors'] ?? '1') == '1';
             $semesterFilter = $filters['semester_code'] ?? '';
+            // Toggle: academic_records qarzida joriy semestrni ham tekshirish.
+            // O'chiq (default) — faqat tugallangan (o'tgan) semestrlar.
+            $includeCurrentSemester = ($filters['include_current_semester'] ?? '0') == '1';
 
             $tick(2, 'Talabalar yuklanmoqda...');
 
@@ -5688,7 +5693,8 @@ class ReportController extends Controller
                     if ($semesterFilter !== null && $semesterFilter !== '' && (string) $semCode !== (string) $semesterFilter) {
                         continue;
                     }
-                    if (($semesterFilter === null || $semesterFilter === '') && $studentSemCode && (int) $semCode >= $studentSemCode) {
+                    if (($semesterFilter === null || $semesterFilter === '') && $studentSemCode
+                        && ($includeCurrentSemester ? (int) $semCode > $studentSemCode : (int) $semCode >= $studentSemCode)) {
                         continue;
                     }
                     $curriculumPairs[$currId . '|' . $semCode] = true;
@@ -5859,9 +5865,11 @@ class ReportController extends Controller
                 'none' => "Yakuniy nazorat yo'q",
             ];
 
-            // Faqat OLDINGI (tugagan) semestrlar qarzi hisoblanadi — joriy semestr
-            // xavflari (student_grades jurnali) OLIB TASHLANDI: og'ir bo'lib timeout
-            // berardi. Bu hisobot academic_records asosidagi qarzlar bilan cheklanadi.
+            // Joriy semestr XAVFLARI (student_grades jurnali) hisobotdan OLIB
+            // TASHLANDI: og'ir bo'lib timeout berardi. Hisobot faqat
+            // academic_records qarzlari bilan cheklanadi; joriy semestr
+            // academic_records qarzi include_current_semester toggle orqali
+            // asosiy siklda hisoblanadi.
             $tick(60, 'Qatorlar shakllantirilmoqda...');
 
             $data = [];
@@ -5884,7 +5892,8 @@ class ReportController extends Controller
                     if ($semesterFilter !== null && $semesterFilter !== '' && (string) $semCode !== (string) $semesterFilter) {
                         continue;
                     }
-                    if (($semesterFilter === null || $semesterFilter === '') && $studentSemCode && (int) $semCode >= $studentSemCode) {
+                    if (($semesterFilter === null || $semesterFilter === '') && $studentSemCode
+                        && ($includeCurrentSemester ? (int) $semCode > $studentSemCode : (int) $semCode >= $studentSemCode)) {
                         continue;
                     }
 

@@ -99,6 +99,13 @@
                                 <span class="toggle-label">Faqat qarzdorlar</span>
                             </div>
                         </div>
+                        <div class="filter-item" style="min-width: 220px;">
+                            <label class="filter-label">&nbsp;</label>
+                            <div class="toggle-switch" id="include-current-toggle" onclick="this.classList.toggle('active')" title="Yoqilsa joriy semestr academic_records qarzi ham hisoblanadi; o'chirilsa faqat o'tgan semestrlar">
+                                <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                                <span class="toggle-label">Joriy semestrni ham hisoblash</span>
+                            </div>
+                        </div>
                         <div class="filter-item" style="min-width: 130px;">
                             <label class="filter-label">&nbsp;</label>
                             <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1, true)">
@@ -251,6 +258,7 @@
                 student_type: $('#student_type').val() || '',
                 retake_status_filter: $('#retake_status_filter').val() || '',
                 only_debtors: document.getElementById('only-debtors-toggle').classList.contains('active') ? '1' : '0',
+                include_current_semester: document.getElementById('include-current-toggle').classList.contains('active') ? '1' : '0',
                 student_name: $('#student_name').val() || '',
                 per_page: $('#per_page').val() || 50,
                 sort: currentSort,
@@ -269,7 +277,7 @@
 
         function calcSignature(p) {
             return [p.education_type, p.faculty, p.specialty, p.level_code, p.semester_code,
-                    p.group, p.student_status, p.student_type, p.only_debtors, p.student_name].join('|');
+                    p.group, p.student_status, p.student_type, p.only_debtors, p.include_current_semester, p.student_name].join('|');
         }
 
         function stopCalcPolling() {

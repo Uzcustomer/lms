@@ -265,6 +265,7 @@ class VedomostSubmissionController extends Controller
 
         $notifyEnabled = VedomostSubmissionNotifier::enabled();
         $canToggleNotify = in_array(session('active_role', ''), self::NOTIFY_TOGGLE_ROLES, true);
+        $canManage = in_array(session('active_role', ''), self::ALLOWED_ROLES, true);
         $syncProgress = Cache::get('vedomost_submission_sync_progress', ['status' => 'idle']);
 
         return view('admin.vedomost-submission.index', compact(
@@ -278,6 +279,7 @@ class VedomostSubmissionController extends Controller
             'stats',
             'notifyEnabled',
             'canToggleNotify',
+            'canManage',
             'syncProgress'
         ));
     }
@@ -684,6 +686,37 @@ class VedomostSubmissionController extends Controller
         return redirect()
             ->route('admin.vedomost-submission.index', $request->query())
             ->with('success', "Joriy semester bo'yicha yangilash fon rejimida boshlandi.");
+    }
+
+    /**
+     * Admin qo'lda kerakli vedomost shaklini ochadi.
+     */
+    public function manualOpen(Request $request, $id)
+    {
+        $this->checkAccess();
+
+        $request->validate([
+            'form_type' => 'required|string',
+        ], [
+            'form_type.required' => 'Qaysi shaklni ochish kerakligini tanlang.',
+        ]);
+
+        $source = VedomostSubmission::findOrFail($id);
+        $targetForm = (string) $request->form_type;
+        $opened = $this->service->manualOpen($source, $targetForm);
+
+        $this->log(
+            $opened,
+            'manual_open',
+            $opened->status,
+            $opened->status,
+            "Qo'lda ochildi: " . VedomostSubmission::formLabel($targetForm)
+        );
+
+        return back()->with(
+            'success',
+            VedomostSubmission::formLabel($targetForm) . " qo'lda ochildi."
+        );
     }
 
     public function syncProgress(): JsonResponse

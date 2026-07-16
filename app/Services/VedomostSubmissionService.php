@@ -1064,11 +1064,38 @@ class VedomostSubmissionService
 
         $hasAttempt = $this->studentGradeAttemptColumn();
 
-        // unitKey => [student_hemis_id => ['f1' => bool, 'f2' => bool]]
+        // unitKey => [student_hemis_id => ['f1' => bool, 'f2' => bool, 'a1' => bool, 'a2' => bool]]
         $perUnit = [];
         // unitKey => ['h2' => bool, 'h3' => bool] — attempt=2/3 bahosi MAVJUDMI
         // (talaba resitni TOPSHIRGAN — o'tdimi-yiqildimi ahamiyatsiz, varaqda bo'ladi).
         $unitHas = [];
+
+        // Avval birlikdagi barcha talabalarni tayyorlab olamiz. Shunda imtihon bahosi
+        // umuman yo'q bo'lgan talabalar ham "qarzdor" sifatida hisobga olinadi.
+        $students = DB::table('students')
+            ->whereIn('group_id', $groupIds)
+            ->select('hemis_id', 'group_id')
+            ->cursor();
+
+        foreach ($students as $student) {
+            foreach ($subjectKeys as $subjectId) {
+                foreach ($semCodes as $semCode) {
+                    $unitKey = $unitByKey[$student->group_id . '|' . $subjectId . '|' . $semCode] ?? null;
+                    if ($unitKey === null) {
+                        continue;
+                    }
+
+                    if (!isset($perUnit[$unitKey][$student->hemis_id])) {
+                        $perUnit[$unitKey][$student->hemis_id] = [
+                            'f1' => false,
+                            'f2' => false,
+                            'a1' => false,
+                            'a2' => false,
+                        ];
+                    }
+                }
+            }
+        }
 
         $cursor = DB::table('student_grades as sg')
             ->join('students as st', 'st.hemis_id', '=', 'sg.student_hemis_id')
@@ -1097,17 +1124,21 @@ class VedomostSubmissionService
             }
             $sid = $r->student_hemis_id;
             if (!isset($perUnit[$unitKey][$sid])) {
-                $perUnit[$unitKey][$sid] = ['f1' => false, 'f2' => false];
+                $perUnit[$unitKey][$sid] = ['f1' => false, 'f2' => false, 'a1' => false, 'a2' => false];
             }
             $att = (int) ($r->attempt ?? 1);
             $val = $r->retake_grade ?? $r->grade;
             $isAbsent = (($r->reason ?? null) === 'absent') && $val === null;
 
-            if ($att <= 1 && (float) $val < self::PASS_GRADE) {
-                $perUnit[$unitKey][$sid]['f1'] = true;
-            } elseif ($att <= 1 && $isAbsent) {
-                $perUnit[$unitKey][$sid]['f1'] = true;
+            if ($att <= 1) {
+                $perUnit[$unitKey][$sid]['a1'] = true;
+                if ((float) $val < self::PASS_GRADE) {
+                    $perUnit[$unitKey][$sid]['f1'] = true;
+                } elseif ($isAbsent) {
+                    $perUnit[$unitKey][$sid]['f1'] = true;
+                }
             } elseif ($att === 2) {
+                $perUnit[$unitKey][$sid]['a2'] = true;
                 $unitHas[$unitKey]['h2'] = true;
                 if ((float) $val < self::PASS_GRADE) {
                     $perUnit[$unitKey][$sid]['f2'] = true;
@@ -1122,13 +1153,25 @@ class VedomostSubmissionService
         foreach ($perUnit as $unitKey => $students) {
             $f1 = 0;
             $f2 = 0;
-            foreach ($students as $s) {
+            foreach ($students as $sid => $s) {
+                // 1-urinish bahosi yo'q bo'lsa ham qarzdor deb olinadi.
+                if (!$s['a1']) {
+                    $s['f1'] = true;
+                }
+                // 1-bosqich qarzdor bo'lib, 2-urinish bahosi yo'q bo'lsa ham 12b uchun
+                // qarzdor sifatida qoldiriladi.
+                if ($s['f1'] && !$s['a2']) {
+                    $s['f2'] = true;
+                }
+
                 if ($s['f1']) {
                     $f1++;
                 }
                 if ($s['f2']) {
                     $f2++;
                 }
+
+                $perUnit[$unitKey][$sid] = $s;
             }
             // graded — shu birlik bo'yicha kamida bitta bahosi topilgan talabalar
             // soni. graded=0 bo'lsa: baho import qilinmagan yoki subject_id mos emas.

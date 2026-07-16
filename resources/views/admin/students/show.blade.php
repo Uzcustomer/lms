@@ -149,6 +149,103 @@
                                 </div>
 
                               </div>
+
+                              {{-- Akademik hujjatlar: farmoyish + qabul buyrug'i --}}
+                              @if($canUploadFiles)
+                              <div class="mt-6 p-4 rounded-lg" style="background: linear-gradient(135deg, #eff6ff, #f8fafc); border: 1px solid #bfdbfe;">
+                                <h4 class="font-semibold text-base mb-1 border-b pb-2" style="color: #1e40af;">Akademik hujjatlar</h4>
+                                <p style="font-size:12px; color:#64748b; margin:6px 0 14px;">Darslarga qatnashish to'g'risidagi farmoyish va o'qishga qabul qilinganlik to'g'risidagi buyruq.</p>
+
+                                @if(session('success') && session('active_tab') === 'akademik')
+                                    <div style="background:#dcfce7; border:1px solid #86efac; color:#166534; padding:8px 12px; border-radius:8px; font-size:13px; margin-bottom:12px;">{{ session('success') }}</div>
+                                @endif
+                                @if(session('error') && session('active_tab') === 'akademik')
+                                    <div style="background:#fee2e2; border:1px solid #fca5a5; color:#991b1b; padding:8px 12px; border-radius:8px; font-size:13px; margin-bottom:12px;">{{ session('error') }}</div>
+                                @endif
+                                @if($errors->any() && session('active_tab') === 'akademik')
+                                    <div style="background:#fee2e2; border:1px solid #fca5a5; color:#991b1b; padding:8px 12px; border-radius:8px; font-size:13px; margin-bottom:12px;">
+                                        @foreach($errors->all() as $err)<div>{{ $err }}</div>@endforeach
+                                    </div>
+                                @endif
+
+                                <form action="{{ route('admin.students.academic-orders.save', $student) }}" method="POST" enctype="multipart/form-data">
+                                    @csrf
+                                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+                                        {{-- Farmoyish (darslarga qatnashish) --}}
+                                        <div style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:16px;">
+                                            <h5 style="font-size:13px; font-weight:700; color:#1a3268; margin:0 0 12px;">Darslarga qatnashish farmoyishi</h5>
+                                            <div style="margin-bottom:10px;">
+                                                <label class="ao-label">Farmoyish raqami</label>
+                                                <input type="text" name="farmoyish_number" value="{{ old('farmoyish_number', $academicOrder->farmoyish_number ?? '') }}" placeholder="Masalan: 123-F" class="ao-input">
+                                            </div>
+                                            <div style="margin-bottom:10px;">
+                                                <label class="ao-label">Farmoyish sanasi</label>
+                                                <input type="date" name="farmoyish_date" value="{{ old('farmoyish_date', isset($academicOrder->farmoyish_date) && $academicOrder->farmoyish_date ? $academicOrder->farmoyish_date->format('Y-m-d') : '') }}" class="ao-input">
+                                            </div>
+                                            <div>
+                                                <label class="ao-label">Farmoyish fayli (PDF)</label>
+                                                @if(!empty($academicOrder?->farmoyish_file_path))
+                                                    <div class="ao-existing">
+                                                        <a href="{{ route('admin.students.academic-orders.view', [$student, 'farmoyish']) }}" target="_blank" class="ao-view-link">
+                                                            📄 {{ $academicOrder->farmoyish_file_original_name ?: 'Farmoyish.pdf' }}
+                                                        </a>
+                                                        <button type="submit" form="ao-del-farmoyish" onclick="return confirm('Farmoyish faylini o\'chirmoqchimisiz?')" class="ao-del-btn">O'chirish</button>
+                                                    </div>
+                                                @endif
+                                                <input type="file" name="farmoyish_file" accept="application/pdf" class="ao-file">
+                                                <p class="ao-hint">Faqat PDF. Maksimum 20 MB. Yangi fayl yuklansa eskisi almashtiriladi.</p>
+                                            </div>
+                                        </div>
+
+                                        {{-- Qabul buyrug'i (o'qishga qabul) --}}
+                                        <div style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; padding:16px;">
+                                            <h5 style="font-size:13px; font-weight:700; color:#1a3268; margin:0 0 12px;">O'qishga qabul buyrug'i</h5>
+                                            <div style="margin-bottom:10px;">
+                                                <label class="ao-label">Qabul buyrug'i raqami</label>
+                                                <input type="text" name="qabul_number" value="{{ old('qabul_number', $academicOrder->qabul_number ?? '') }}" placeholder="Masalan: 45-Q" class="ao-input">
+                                            </div>
+                                            <div style="margin-bottom:10px;">
+                                                <label class="ao-label">Qabul buyrug'i sanasi</label>
+                                                <input type="date" name="qabul_date" value="{{ old('qabul_date', isset($academicOrder->qabul_date) && $academicOrder->qabul_date ? $academicOrder->qabul_date->format('Y-m-d') : '') }}" class="ao-input">
+                                            </div>
+                                            <div>
+                                                <label class="ao-label">Qabul buyrug'i fayli (PDF)</label>
+                                                @if(!empty($academicOrder?->qabul_file_path))
+                                                    <div class="ao-existing">
+                                                        <a href="{{ route('admin.students.academic-orders.view', [$student, 'qabul']) }}" target="_blank" class="ao-view-link">
+                                                            📄 {{ $academicOrder->qabul_file_original_name ?: 'Qabul_buyrugi.pdf' }}
+                                                        </a>
+                                                        <button type="submit" form="ao-del-qabul" onclick="return confirm('Qabul buyrug\'i faylini o\'chirmoqchimisiz?')" class="ao-del-btn">O'chirish</button>
+                                                    </div>
+                                                @endif
+                                                <input type="file" name="qabul_file" accept="application/pdf" class="ao-file">
+                                                <p class="ao-hint">Faqat PDF. Maksimum 20 MB. Yangi fayl yuklansa eskisi almashtiriladi.</p>
+                                            </div>
+                                        </div>
+
+                                    </div>
+
+                                    <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:10px; align-items:center;">
+                                        @if($academicOrder && $academicOrder->updated_at)
+                                            <span style="font-size:11px; color:#94a3b8;">Oxirgi yangilanish: {{ $academicOrder->updated_at->format('d.m.Y H:i') }}</span>
+                                        @endif
+                                        <button type="submit" style="padding:9px 24px; border:none; border-radius:8px; background:linear-gradient(135deg,#1a3268,#2b5ea7); color:#fff; font-size:13px; font-weight:700; cursor:pointer;">Saqlash</button>
+                                    </div>
+                                </form>
+
+                                {{-- Fayllarni o'chirish uchun alohida formalar (nested form bo'lmasligi uchun tashqarida) --}}
+                                <form id="ao-del-farmoyish" action="{{ route('admin.students.academic-orders.delete-file', [$student, 'farmoyish']) }}" method="POST" style="display:none;">
+                                    @csrf
+                                    @method('DELETE')
+                                </form>
+                                <form id="ao-del-qabul" action="{{ route('admin.students.academic-orders.delete-file', [$student, 'qabul']) }}" method="POST" style="display:none;">
+                                    @csrf
+                                    @method('DELETE')
+                                </form>
+                              </div>
+                              @endif
+
                             </div>
 
                             {{-- TAB 3: TASHKILIY --}}
@@ -395,6 +492,18 @@
     .sp-table td:last-child { padding:6px 8px; color:#0f172a; }
     .sp-table tr:nth-child(even) { background:#f0f4f8; }
     .sp-table tr:hover { background:#e8edf5; }
+
+    /* Akademik hujjatlar (farmoyish + qabul) */
+    .ao-label { font-size:12px; font-weight:600; color:#334155; display:block; margin-bottom:4px; }
+    .ao-input { width:100%; padding:8px 12px; border:1px solid #d1d5db; border-radius:8px; font-size:13px; box-sizing:border-box; }
+    .ao-input:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 3px rgba(43,94,167,.12); }
+    .ao-file { width:100%; padding:6px; border:1px solid #d1d5db; border-radius:8px; font-size:13px; background:#fff; box-sizing:border-box; }
+    .ao-hint { font-size:11px; color:#9ca3af; margin-top:4px; }
+    .ao-existing { display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:8px; padding:6px 10px; background:#f0f9ff; border:1px solid #bae6fd; border-radius:8px; }
+    .ao-view-link { font-size:12px; font-weight:600; color:#0369a1; text-decoration:none; }
+    .ao-view-link:hover { text-decoration:underline; }
+    .ao-del-btn { padding:3px 10px; font-size:11px; font-weight:600; color:#fff; background:#ef4444; border:none; border-radius:6px; cursor:pointer; }
+    .ao-del-btn:hover { background:#dc2626; }
 
     /* Qabul form cards */
     .qabul-form { display:flex; flex-direction:column; gap:10px; }

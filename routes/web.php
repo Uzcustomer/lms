@@ -182,6 +182,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/students/{student}/admission-files', [AdminStudentController::class, 'uploadAdmissionFile'])->name('students.admission-files.upload');
         Route::delete('/students/{student}/admission-files/{file}', [AdminStudentController::class, 'deleteAdmissionFile'])->name('students.admission-files.delete');
         Route::delete('/students/{student}/admission-data/clear', [AdminStudentController::class, 'clearAdmissionData'])->name('students.admission-data.clear');
+        Route::post('/students/{student}/academic-orders', [AdminStudentController::class, 'saveAcademicOrders'])->name('students.academic-orders.save');
+        Route::get('/students/{student}/academic-orders/{type}/view', [AdminStudentController::class, 'viewAcademicOrderFile'])->name('students.academic-orders.view');
+        Route::delete('/students/{student}/academic-orders/{type}/file', [AdminStudentController::class, 'deleteAcademicOrderFile'])->name('students.academic-orders.delete-file');
 
         Route::prefix('qaytnoma')->name('qaytnoma.')->group(function () {
             Route::get('', [QaytnomaController::class, 'index'])->name('index');
@@ -472,6 +475,21 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::get('/{student}/file/{field}', [\App\Http\Controllers\Admin\FirmStudentsController::class, 'showFile'])->name('file');
         });
 
+        // Qabul ko'rsatkichlari (oldingi yillardagi qabul statistikasi)
+        Route::prefix('admission-indicators')->name('admission-indicators.')
+            ->middleware(\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi')
+            ->group(function () {
+                Route::get('/', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'index'])->name('index');
+                Route::get('/create', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'create'])->name('create');
+                Route::post('/', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'store'])->name('store');
+                Route::get('/export', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'export'])->name('export');
+                Route::get('/template', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'template'])->name('template');
+                Route::post('/import', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'import'])->name('import');
+                Route::get('/{admission_indicator}/edit', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'edit'])->name('edit');
+                Route::put('/{admission_indicator}', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'update'])->name('update');
+                Route::delete('/{admission_indicator}', [\App\Http\Controllers\Admin\AdmissionIndicatorController::class, 'destroy'])->name('destroy');
+            });
+
         // Bitiruvchi shartnomalar (registrator ofisi)
         Route::prefix('student-contracts')->name('student-contracts.')->group(function () {
             Route::get('/', [AdminStudentContractController::class, 'index'])->name('index');
@@ -740,6 +758,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::middleware([\Spatie\Permission\Middleware\RoleMiddleware::class . ':superadmin|admin|kichik_admin|registrator_ofisi'])->group(function () {
             Route::get('/reports/retake-not-applied', [ReportController::class, 'retakeNotAppliedReport'])->name('reports.retake-not-applied');
             Route::get('/reports/retake-not-applied/data', [ReportController::class, 'retakeNotAppliedReportData'])->name('reports.retake-not-applied.data');
+            Route::get('/reports/retake-not-applied/sync-progress', [ReportController::class, 'academicRecordsSyncProgress'])->name('reports.retake-not-applied.sync-progress');
+            Route::post('/reports/retake-not-applied/sync', [ReportController::class, 'startAcademicRecordsSync'])->name('reports.retake-not-applied.sync');
+            Route::post('/reports/retake-not-applied/calc/start', [ReportController::class, 'startRetakeNotAppliedCalc'])->name('reports.retake-not-applied.calc-start');
+            Route::get('/reports/retake-not-applied/calc/status', [ReportController::class, 'retakeNotAppliedCalcStatus'])->name('reports.retake-not-applied.calc-status');
         });
 
         Route::get('/reports/student-semester-grades', [ReportController::class, 'studentSemesterGrades'])->name('reports.student-semester-grades');
@@ -903,7 +925,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::post('/update-grade', [QuizResultController::class, 'updateGrade'])->name('update-grade');
             Route::post('/update-fan-id', [QuizResultController::class, 'updateFanId'])->name('update-fan-id');
+            Route::post('/retake-app-subjects', [QuizResultController::class, 'retakeAppSubjects'])->name('retake-app-subjects');
+            Route::post('/reassign-retake-subject', [QuizResultController::class, 'reassignRetakeSubject'])->name('reassign-retake-subject');
             Route::post('/update-shakl', [QuizResultController::class, 'updateShakl'])->name('update-shakl');
+            Route::post('/mark-not-actual', [QuizResultController::class, 'markNotActual'])->name('mark-not-actual');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 
@@ -1101,6 +1126,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
             Route::post('/generate-yn-oldi-word', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'generateYnOldiWord'])->name('generate-yn-oldi-word');
             Route::get('/daily-allowed-students-word', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'generateDailyAllowedStudentsWord'])->name('daily-allowed-students-word');
             Route::get('/students-excel', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'exportSentStudentsExcel'])->name('students-excel');
+            Route::get('/generate-vedomost', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'generateVedomost'])->name('generate-vedomost');
             Route::get('/{groupId}', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'show'])->name('show');
             Route::post('/{groupId}/save-score', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'saveScore'])->name('save-score');
             Route::post('/{groupId}/load-from-diagnostika', [\App\Http\Controllers\Teacher\RetakeTestMarkaziController::class, 'loadFromDiagnostika'])->name('load-from-diagnostika');
@@ -1602,7 +1628,10 @@ Route::prefix('teacher')->name('teacher.')->group(function () {
             Route::post('/trigger-cron', [QuizResultController::class, 'triggerCron'])->name('trigger-cron');
             Route::post('/update-grade', [QuizResultController::class, 'updateGrade'])->name('update-grade');
             Route::post('/update-fan-id', [QuizResultController::class, 'updateFanId'])->name('update-fan-id');
+            Route::post('/retake-app-subjects', [QuizResultController::class, 'retakeAppSubjects'])->name('retake-app-subjects');
+            Route::post('/reassign-retake-subject', [QuizResultController::class, 'reassignRetakeSubject'])->name('reassign-retake-subject');
             Route::post('/update-shakl', [QuizResultController::class, 'updateShakl'])->name('update-shakl');
+            Route::post('/mark-not-actual', [QuizResultController::class, 'markNotActual'])->name('mark-not-actual');
             Route::delete('/{id}', [QuizResultController::class, 'destroy'])->name('destroy');
         });
 

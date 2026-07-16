@@ -688,8 +688,13 @@ class HemisService
     /**
      * HEMIS dan akademik qaydlar ro'yxatini import qilish (bulk upsert)
      */
-    public function importAcademicRecords(?callable $onProgress = null): int
+    public function importAcademicRecords(?callable $onProgress = null, ?callable $onPrepare = null): int
     {
+        // 400k+ yozuvning hemis_updated_at xaritasini xotiraga yuklaymiz — PHP'ning
+        // standart 128M limiti buni ko'tarmaydi (HemisService.php:712 da OOM bilan
+        // o'lardi). Konteynerda 23GB bor, shuning uchun limitni oshiramiz.
+        @ini_set('memory_limit', '2048M');
+
         $page = 1;
         $hasMore = true;
         $totalImported = 0;
@@ -700,18 +705,35 @@ class HemisService
         // hech narsa o'zgarmagan deb hisoblaymiz va upsert qilmaymiz - bu DB
         // yozuvini keskin kamaytiradi (~359k yozuv ko'pincha o'zgarmagan).
         // Chunk bilan yuklaymiz - bir martada barchasini xotiraga olmaslik uchun.
+        // $onPrepare(loaded) — tayyorlanish bosqichi progressi (UI 0% da qotib
+        // qolgandek ko'rinmasligi uchun).
         $existing = [];
+        $preloaded = 0;
         AcademicRecord::query()
             ->select('hemis_id', 'hemis_updated_at')
             ->orderBy('hemis_id')
-            ->chunk(10000, function ($chunk) use (&$existing) {
+            ->chunk(10000, function ($chunk) use (&$existing, &$preloaded, $onPrepare) {
                 foreach ($chunk as $r) {
                     $existing[(int) $r->hemis_id] = $r->hemis_updated_at?->format('Y-m-d H:i:s');
+                }
+                $preloaded += $chunk->count();
+                if ($onPrepare) {
+                    $onPrepare($preloaded);
                 }
             });
 
         while ($hasMore) {
-            $response = $this->fetchAcademicRecords($page);
+            // HEMIS ba'zan vaqtinchalik xato beradi — sahifani 3 martagacha urinamiz.
+            $response = null;
+            for ($attempt = 1; $attempt <= 3; $attempt++) {
+                $response = $this->fetchAcademicRecords($page);
+                if ($response && ($response['success'] ?? false)) {
+                    break;
+                }
+                if ($attempt < 3) {
+                    sleep(2 * $attempt);
+                }
+            }
 
             if ($response && ($response['success'] ?? false)) {
                 $items = $response['data']['items'];
@@ -767,8 +789,10 @@ class HemisService
 
                 $page++;
             } else {
+                // 3 urinishda ham olinmadi — jim "tugadi" deb yolg'on hisobot
+                // bermaslik uchun xato tashlaymiz (job/command "failed" deb belgilaydi).
                 Log::error('Failed to fetch academic records from HEMIS', $response ?? []);
-                break;
+                throw new \RuntimeException("HEMIS academic-record-list so'rovi muvaffaqiyatsiz (sahifa {$page}, 3 urinish)");
             }
         }
 

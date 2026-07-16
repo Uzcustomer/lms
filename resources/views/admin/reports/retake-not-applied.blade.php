@@ -101,12 +101,33 @@
                         </div>
                         <div class="filter-item" style="min-width: 130px;">
                             <label class="filter-label">&nbsp;</label>
-                            <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1)">
+                            <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(1, true)">
                                 <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                 Hisoblash
                             </button>
                         </div>
                     </div>
+                </div>
+
+                <!-- HEMIS sinxronizatsiya paneli -->
+                <div class="sync-bar">
+                    <div class="sync-info">
+                        <svg style="width:16px;height:16px;color:#2b5ea7;flex-shrink:0;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                        <span>Ma'lumotlar HEMIS API'dan olinadi (har kuni <strong>23:00</strong> da avtomatik yangilanadi).</span>
+                        <span class="sync-last">Oxirgi yangilangan: <strong id="last-synced">—</strong></span>
+                    </div>
+                    <button type="button" id="btn-refresh-academic" class="btn-refresh" onclick="startAcademicSync()">
+                        <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                        <span id="btn-refresh-label">HEMIS'dan yangilash</span>
+                    </button>
+                </div>
+                <div id="sync-progress-wrap" style="display:none;">
+                    <div class="sync-progress-head">
+                        <span id="sync-progress-title">Yangilanmoqda...</span>
+                        <span id="sync-progress-pct">0%</span>
+                    </div>
+                    <div class="sync-progress-track"><div id="sync-progress-bar"></div></div>
+                    <div id="sync-progress-detail"></div>
                 </div>
 
                 <!-- Result Area -->
@@ -118,8 +139,12 @@
                     </div>
                     <div id="loading-state" style="display:none;padding:60px 20px;text-align:center;">
                         <div class="spinner"></div>
-                        <p style="color:#2b5ea7;font-size:14px;margin-top:16px;font-weight:600;">Hisoblanmoqda...</p>
-                        <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Iltimos kutib turing</p>
+                        <p id="calc-progress-msg" style="color:#2b5ea7;font-size:14px;margin-top:16px;font-weight:600;">Hisoblanmoqda...</p>
+                        <div id="calc-progress-track" style="display:none;max-width:420px;margin:14px auto 0;background:#e2e8f0;height:10px;border-radius:6px;overflow:hidden;">
+                            <div id="calc-progress-bar" style="height:10px;background:linear-gradient(135deg,#2b5ea7,#3b7ddb);border-radius:6px;width:0%;transition:width .5s;"></div>
+                        </div>
+                        <p id="calc-progress-pct" style="color:#2b5ea7;font-size:13px;font-weight:800;margin-top:6px;"></p>
+                        <p style="color:#94a3b8;font-size:12px;margin-top:4px;">Hisob fon rejimida ishlaydi — sahifadan chiqib ketsangiz ham davom etadi</p>
                     </div>
                     <div id="table-area" style="display:none;">
                         <div style="padding:10px 20px;background:#eff6ff;border-bottom:1px solid #bfdbfe;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
@@ -157,6 +182,7 @@
                                         <th style="text-align:center;">Kredit</th>
                                         <th style="text-align:center;"><a href="#" class="sort-link" data-sort="total_point">Olgan bali <span class="sort-icon">&#9650;&#9660;</span></a></th>
                                         <th style="text-align:center;"><a href="#" class="sort-link" data-sort="grade">Olgan bahosi <span class="sort-icon">&#9650;&#9660;</span></a></th>
+                                        <th style="text-align:center;" title="Semestrni o'zlashtirdimi (HEMIS: kredit yakunlangan holati)">O'zlashtirdi</th>
                                         <th title="Qayta o'qishga ariza berganlik holati">Qayta o'qish holati</th>
                                         <th title="O'qishi holati">O'qish holati</th>
                                         <th style="text-align:center;width:90px;">Batafsil</th>
@@ -232,17 +258,130 @@
             };
         }
 
-        function loadReport(page) {
-            currentPage = page || 1;
-            var params = getFilters();
-            params.page = currentPage;
+        // ── Fon rejimida hisoblash (calc) oqimi ──────────────────────────
+        // "Hisoblash" bosilganda hisob fon jobida boshlanadi, progress polling
+        // bilan ko'rsatiladi; tayyor natija diskda keshlanadi — sahifalash,
+        // saralash va holat filtri qayta hisobsiz (calc_key bilan) ishlaydi.
+        var currentCalcKey = null;
+        var currentCalcSig = null;
+        var calcPollTimer = null;
+        var calcStartedAt = null;
 
+        function calcSignature(p) {
+            return [p.education_type, p.faculty, p.specialty, p.level_code, p.semester_code,
+                    p.group, p.student_status, p.student_type, p.only_debtors, p.student_name].join('|');
+        }
+
+        function stopCalcPolling() {
+            if (calcPollTimer) { clearInterval(calcPollTimer); calcPollTimer = null; }
+        }
+
+        function showLoading(msg) {
             $('#empty-state').hide();
             $('#table-area').hide();
             $('#loading-state').show();
             $('#btn-calculate').prop('disabled', true).css('opacity', '0.6');
+            $('#calc-progress-msg').text(msg || 'Hisoblanmoqda...');
+            $('#calc-progress-track').hide();
+            $('#calc-progress-bar').css('width', '0%');
+            $('#calc-progress-pct').text('');
+        }
 
-            var startTime = performance.now();
+        function hideLoading() {
+            $('#loading-state').hide();
+            $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+        }
+
+        function showLoadError(msg) {
+            stopCalcPolling();
+            hideLoading();
+            $('#empty-state').show().find('p:first').text(msg || "Xatolik yuz berdi. Qayta urinib ko'ring.");
+        }
+
+        function setCalcProgress(pct, msg) {
+            $('#calc-progress-track').show();
+            $('#calc-progress-bar').css('width', Math.min(100, pct || 0) + '%');
+            $('#calc-progress-pct').text((pct || 0) + '%');
+            if (msg) $('#calc-progress-msg').text(msg);
+        }
+
+        function loadReport(page, forceRecalc) {
+            currentPage = page || 1;
+            var params = getFilters();
+            var sig = calcSignature(params);
+
+            // Filtrlar o'zgarmagan va tayyor natija bor — to'g'ridan-to'g'ri sahifani olamiz.
+            if (!forceRecalc && currentCalcKey && currentCalcSig === sig) {
+                fetchReportPage();
+                return;
+            }
+            startCalc(params, sig);
+        }
+
+        function startCalc(params, sig) {
+            stopCalcPolling();
+            currentCalcKey = null;
+            showLoading('Hisob boshlanmoqda...');
+            calcStartedAt = performance.now();
+
+            $.ajax({
+                url: '{{ route('admin.reports.retake-not-applied.calc-start') }}',
+                type: 'POST',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                data: params,
+                success: function (res) {
+                    if (!res || !res.calc_key) {
+                        showLoadError("Hisobni boshlab bo'lmadi. Qayta urinib ko'ring.");
+                        return;
+                    }
+                    pollCalc(res.calc_key, sig);
+                },
+                error: function (xhr) {
+                    var msg = "Hisobni boshlab bo'lmadi.";
+                    if (xhr.responseJSON && xhr.responseJSON.message) msg += ' (' + xhr.responseJSON.message + ')';
+                    else if (xhr.status) msg += ' (HTTP ' + xhr.status + ')';
+                    showLoadError(msg);
+                }
+            });
+        }
+
+        function pollCalc(calcKey, sig) {
+            stopCalcPolling();
+            var polls = 0;
+            var check = function () {
+                if (++polls > 1200) { showLoadError('Hisob juda uzoq davom etdi. Qayta urinib ko\'ring.'); return; }
+                $.get('{{ route('admin.reports.retake-not-applied.calc-status') }}', { calc_key: calcKey }, function (st) {
+                    if (!st) return;
+                    if (st.status === 'done') {
+                        stopCalcPolling();
+                        currentCalcKey = calcKey;
+                        currentCalcSig = sig;
+                        fetchReportPage();
+                        return;
+                    }
+                    if (st.status === 'failed' || st.status === 'error') {
+                        showLoadError(st.message || 'Hisoblashda xatolik yuz berdi.');
+                        return;
+                    }
+                    setCalcProgress(st.percent || 0, st.message || (st.status === 'queued' ? 'Navbatda kutilmoqda...' : 'Hisoblanmoqda...'));
+                }).fail(function (xhr) {
+                    // 403 — kalit boshqa foydalanuvchiga tegishli; qolgan xatolarda polling davom etadi.
+                    if (xhr.status === 403) {
+                        showLoadError('Hisob holatini o\'qib bo\'lmadi (ruxsat xatosi).');
+                    }
+                });
+            };
+            calcPollTimer = setInterval(check, 1500);
+            check();
+        }
+
+        function fetchReportPage() {
+            var params = getFilters();
+            params.page = currentPage;
+            params.calc_key = currentCalcKey;
+
+            showLoading('Natijalar yuklanmoqda...');
+            var startTime = calcStartedAt || performance.now();
 
             $.ajax({
                 url: '{{ route('admin.reports.retake-not-applied.data') }}',
@@ -251,8 +390,8 @@
                 timeout: 120000,
                 success: function(res) {
                     var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
-                    $('#loading-state').hide();
-                    $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+                    calcStartedAt = null;
+                    hideLoading();
 
                     if (!res.data || res.data.length === 0) {
                         $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi");
@@ -269,15 +408,19 @@
                     $('#table-area').show();
                 },
                 error: function(xhr) {
-                    $('#loading-state').hide();
-                    $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+                    // Natija muddati tugagan (410) — avtomatik qayta hisoblaymiz.
+                    if (xhr.status === 410) {
+                        currentCalcKey = null;
+                        loadReport(currentPage, true);
+                        return;
+                    }
                     var msg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
                     if (xhr.responseJSON && xhr.responseJSON.error) {
                         msg += ' (' + xhr.responseJSON.error + ')';
                     } else if (xhr.status) {
                         msg += ' (HTTP ' + xhr.status + ')';
                     }
-                    $('#empty-state').show().find('p:first').text(msg);
+                    showLoadError(msg);
                     console.error('Retake-not-applied report error:', xhr.status, xhr.responseText ? xhr.responseText.substring(0, 500) : '');
                 }
             });
@@ -286,6 +429,10 @@
         function exportRetakeNotAppliedExcel() {
             var params = getFilters();
             params.export = 'excel';
+            // Tayyor hisob natijasi bo'lsa — undan eksport (tez, qayta hisobsiz).
+            if (currentCalcKey && calcSignature(params) === currentCalcSig) {
+                params.calc_key = currentCalcKey;
+            }
             var url = new URL('{{ route('admin.reports.retake-not-applied.data') }}', window.location.origin);
             Object.keys(params).forEach(function(key) {
                 if (params[key] !== null && params[key] !== '') {
@@ -310,14 +457,22 @@
                 "To'lovini qilmagan": 'pill-amber',
                 "To'lov tekshirilmoqda": 'pill-blue',
                 "To'lov tasdiqlandi": 'pill-teal',
-                'Guruhga tasdiqlangan': 'pill-green'
+                'Guruhga tasdiqlangan': 'pill-green',
+                'Joriy semestr': 'pill-blue'
             };
             return '<span class="pill ' + (map[status] || 'pill-gray') + '">' + esc(status) + '</span>';
         }
 
         function studyPill(code, label) {
-            var map = { passed: 'pill-green', failed: 'pill-red', not_examined: 'pill-amber', not_graded: 'pill-gray' };
+            var map = { passed: 'pill-green', failed: 'pill-red', not_examined: 'pill-amber', not_graded: 'pill-gray', current_risk: 'pill-amber' };
             return '<span class="pill ' + (map[code] || 'pill-gray') + '">' + esc(label) + '</span>';
+        }
+
+        function masteredPill(m) {
+            if (m === null || typeof m === 'undefined') return '<span style="color:#94a3b8;">-</span>';
+            return m
+                ? '<span class="pill pill-green">Ha</span>'
+                : '<span class="pill pill-red">Yo\'q</span>';
         }
 
         function fmtCredit(c) {
@@ -349,6 +504,7 @@
                 var gradeStyle = r.is_debt ? 'color:#dc2626;font-weight:800;' : 'color:#15803d;font-weight:800;';
                 var gradeVal = (r.grade === null || typeof r.grade === 'undefined') ? '<span style="color:#94a3b8;">-</span>' : '<span style="' + gradeStyle + '">' + esc(r.grade) + '</span>';
                 html += '<td style="text-align:center;">' + gradeVal + '</td>';
+                html += '<td style="text-align:center;">' + masteredPill(r.mastered) + '</td>';
                 html += '<td>' + retakePill(r.retake_status) + '</td>';
                 html += '<td>' + studyPill(r.study_status_code, r.study_status) + '</td>';
                 html += '<td style="text-align:center;"><button class="btn-detail" onclick="showDetail(' + i + ')">Batafsil</button></td>';
@@ -489,7 +645,146 @@
             $('#pagination-area').html(html);
         }
 
+        // ── HEMIS academic records sinxronizatsiyasi ─────────────────────
+        var academicSyncTimer = null;
+
+        function fmtSyncDate(s) {
+            if (!s) return '—';
+            var m = String(s).replace('T', ' ').split(/[-: ]/);
+            if (m.length < 5) return s;
+            return m[2] + '.' + m[1] + '.' + m[0] + ' ' + m[3] + ':' + m[4];
+        }
+
+        function stopAcademicPolling() {
+            if (academicSyncTimer) { clearInterval(academicSyncTimer); academicSyncTimer = null; }
+        }
+
+        function startAcademicPolling() {
+            if (academicSyncTimer) return;
+            academicSyncTimer = setInterval(pollAcademicSync, 2000);
+        }
+
+        function renderSyncProgress(d) {
+            d = d || {};
+            var wrap = document.getElementById('sync-progress-wrap');
+            var bar = document.getElementById('sync-progress-bar');
+            var pct = document.getElementById('sync-progress-pct');
+            var title = document.getElementById('sync-progress-title');
+            var detail = document.getElementById('sync-progress-detail');
+            var btn = document.getElementById('btn-refresh-academic');
+            var btnLabel = document.getElementById('btn-refresh-label');
+
+            document.getElementById('last-synced').textContent = fmtSyncDate(d.last_synced_at);
+
+            function resetBtn() {
+                btn.disabled = false;
+                btn.classList.remove('is-loading');
+                btnLabel.textContent = "HEMIS'dan yangilash";
+            }
+
+            if (!d.status || d.status === 'idle') {
+                wrap.style.display = 'none';
+                resetBtn();
+                stopAcademicPolling();
+                return;
+            }
+
+            if (d.status === 'done') {
+                wrap.style.display = 'block';
+                bar.style.width = '100%';
+                bar.style.background = '#16a34a';
+                pct.textContent = '100%';
+                pct.style.color = '#16a34a';
+                title.textContent = 'Yangilash tugadi';
+                detail.textContent = "✅ Yangi/o'zgargan: " + (d.imported || 0) + " ta. Vaqt: " + (d.duration || '?') + " daqiqa";
+                resetBtn();
+                stopAcademicPolling();
+                setTimeout(function () { wrap.style.display = 'none'; }, 8000);
+                return;
+            }
+
+            if (d.status === 'failed') {
+                wrap.style.display = 'block';
+                bar.style.width = '100%';
+                bar.style.background = '#dc2626';
+                pct.textContent = '—';
+                pct.style.color = '#dc2626';
+                title.textContent = 'Xatolik';
+                detail.textContent = '❌ ' + (d.message || "Import xato bilan to'xtadi. Qayta urinib ko'ring.");
+                resetBtn();
+                stopAcademicPolling();
+                return;
+            }
+
+            // running / queued
+            wrap.style.display = 'block';
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+            btnLabel.textContent = 'Yangilanmoqda...';
+            var p = d.percent || 0;
+            bar.style.width = p + '%';
+            bar.style.background = '#2b5ea7';
+            pct.style.color = '#2b5ea7';
+            if (d.status === 'queued') {
+                pct.textContent = '…';
+                title.textContent = 'Navbatda';
+                detail.textContent = 'Import navbatda kutilmoqda...';
+            } else if (d.stage === 'prepare' || !d.pages) {
+                // Tayyorlanish bosqichi — mavjud yozuvlar (~359k) o'qilmoqda,
+                // foiz hali yo'q; qotib qolmaganini ko'rsatish uchun sanani chiqaramiz.
+                pct.textContent = '…';
+                title.textContent = 'Tayyorlanmoqda';
+                detail.textContent = 'Mavjud yozuvlar bilan solishtirilmoqda: ' + (d.loaded || 0).toLocaleString() + " ta o'qildi...";
+            } else {
+                pct.textContent = p + '%';
+                title.textContent = 'Yangilanmoqda';
+                detail.textContent = "Sahifa: " + d.page + "/" + d.pages + "  |  Yangi/o'zgargan: " + (d.imported || 0) + " ta";
+            }
+            startAcademicPolling();
+        }
+
+        function pollAcademicSync() {
+            $.get('{{ route('admin.reports.retake-not-applied.sync-progress') }}', function (d) {
+                renderSyncProgress(d);
+            }).fail(function () { stopAcademicPolling(); });
+        }
+
+        function startAcademicSync() {
+            var btn = document.getElementById('btn-refresh-academic');
+            if (btn.disabled) return;
+            if (!confirm("HEMIS'dan talaba baholari (academic records) yangilansinmi?\n359k+ yozuv — bir necha daqiqa olishi mumkin.")) return;
+            btn.disabled = true;
+            btn.classList.add('is-loading');
+            document.getElementById('btn-refresh-label').textContent = 'Boshlanmoqda...';
+            $.ajax({
+                url: '{{ route('admin.reports.retake-not-applied.sync') }}',
+                type: 'POST',
+                headers: { 'X-CSRF-TOKEN': '{{ csrf_token() }}' },
+                success: function () {
+                    document.getElementById('sync-progress-wrap').style.display = 'block';
+                    startAcademicPolling();
+                    pollAcademicSync();
+                },
+                error: function (xhr) {
+                    var msg = (xhr.responseJSON && xhr.responseJSON.message) ? xhr.responseJSON.message : "Yangilashni boshlab bo'lmadi.";
+                    alert(msg);
+                    if (xhr.status === 409) {
+                        // Boshqa foydalanuvchi import boshlagan — jarayonni kuzatamiz.
+                        document.getElementById('sync-progress-wrap').style.display = 'block';
+                        startAcademicPolling();
+                        pollAcademicSync();
+                    } else {
+                        btn.disabled = false;
+                        btn.classList.remove('is-loading');
+                        document.getElementById('btn-refresh-label').textContent = "HEMIS'dan yangilash";
+                    }
+                }
+            });
+        }
+
         $(document).ready(function() {
+            pollAcademicSync();
+
             $(document).on('click', '.sort-link', function(e) {
                 e.preventDefault();
                 var col = $(this).data('sort');
@@ -541,6 +836,22 @@
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); box-shadow: 0 4px 12px rgba(43,94,167,0.4); transform: translateY(-1px); }
+
+        .sync-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; padding: 10px 20px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; }
+        .sync-info { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 12.5px; color: #475569; }
+        .sync-info strong { color: #1e293b; font-weight: 700; }
+        .sync-last { padding-left: 10px; margin-left: 4px; border-left: 1px solid #cbd5e1; }
+        .btn-refresh { display: inline-flex; align-items: center; gap: 7px; padding: 7px 16px; background: #fff; color: #2b5ea7; border: 1px solid #2b5ea7; border-radius: 8px; font-size: 12.5px; font-weight: 700; cursor: pointer; transition: all 0.15s; white-space: nowrap; }
+        .btn-refresh:hover:not(:disabled) { background: #2b5ea7; color: #fff; }
+        .btn-refresh:disabled { opacity: 0.6; cursor: not-allowed; }
+        .btn-refresh.is-loading svg { animation: spin 0.9s linear infinite; }
+        #sync-progress-wrap { padding: 12px 20px; background: #eff6ff; border-bottom: 1px solid #bfdbfe; }
+        .sync-progress-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        #sync-progress-title { font-size: 13px; font-weight: 700; color: #2b5ea7; }
+        #sync-progress-pct { font-size: 13px; font-weight: 800; color: #2b5ea7; }
+        .sync-progress-track { background: #dbeafe; border-radius: 6px; height: 10px; overflow: hidden; }
+        #sync-progress-bar { height: 10px; background: #2b5ea7; border-radius: 6px; width: 0%; transition: width 0.4s; }
+        #sync-progress-detail { font-size: 12px; color: #64748b; margin-top: 6px; }
 
         .spinner { width: 40px; height: 40px; margin: 0 auto; border: 4px solid #e2e8f0; border-top-color: #2b5ea7; border-radius: 50%; animation: spin 0.8s linear infinite; }
         @keyframes spin { to { transform: rotate(360deg); } }

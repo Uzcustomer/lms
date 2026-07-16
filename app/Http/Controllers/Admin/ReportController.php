@@ -5168,6 +5168,62 @@ class ReportController extends Controller
     }
 
     /**
+     * Academic records (HEMIS) importi holati — "Qarzdorlar" sahifasidagi
+     * qo'lda yangilash tugmasi va progress paneli uchun. Import jarayoni
+     * ImportAcademicRecordsJob orqali fon rejimida ketadi; bu yerdan faqat
+     * kesh o'qiladi (behuda qayta yangilamaslik uchun oxirgi yangilangan vaqt ham).
+     */
+    public function academicRecordsSyncProgress(): \Illuminate\Http\JsonResponse
+    {
+        $progress = \Illuminate\Support\Facades\Cache::get('academic_import_progress') ?: ['status' => 'idle'];
+
+        // Oxirgi yangilangan vaqt: aniq qiymat — import tugaganda yozilgan kesh.
+        // Hali bironta import tugamagan bo'lsa (kesh bo'sh), academic_records
+        // jadvalidagi eng so'nggi yozuv vaqtiga (MAX(updated_at)) qaytamiz.
+        $lastSynced = \Illuminate\Support\Facades\Cache::get('academic_records_last_synced_at')
+            ?? \Illuminate\Support\Facades\Cache::remember(
+                'academic_records_last_synced_fallback',
+                120,
+                fn () => DB::table('academic_records')->max('updated_at')
+            );
+        $progress['last_synced_at'] = $lastSynced;
+
+        return response()->json($progress);
+    }
+
+    /**
+     * Academic records (HEMIS) importini qo'lda ishga tushirish (fon rejimida).
+     */
+    public function startAcademicRecordsSync(): \Illuminate\Http\JsonResponse
+    {
+        if (\Illuminate\Support\Facades\Cache::get('academic_import_lock')) {
+            return response()->json([
+                'status' => 'locked',
+                'message' => 'Import allaqachon ketayapti. Tugashini kuting.',
+            ], 409);
+        }
+
+        \Illuminate\Support\Facades\Cache::put('academic_import_progress', [
+            'status' => 'queued',
+            'percent' => 0,
+            'started_at' => now()->toDateTimeString(),
+        ], 3600);
+
+        try {
+            $userName = optional(auth()->user())->name ?? 'Foydalanuvchi';
+            \App\Services\ActivityLogService::log('import', 'academic_record', 'Qarzdorlar sahifasidan academic_records sinxronizatsiyasi boshlandi');
+            app(\App\Services\TelegramService::class)->notify("👤 {$userName} tomonidan Qarzdorlar sahifasidan academic_records sinxronizatsiyasi boshlandi");
+        } catch (\Throwable $e) {
+            // Log/telegram xatosi importni to'xtatmasin.
+            \Log::warning('startAcademicRecordsSync notify failed: ' . $e->getMessage());
+        }
+
+        \App\Jobs\ImportAcademicRecordsJob::dispatch();
+
+        return response()->json(['status' => 'queued']);
+    }
+
+    /**
      * AJAX: Qarzdorlar — talabalarning academic_records yozuvlari (har fan alohida qator).
      *
      * Har bir qator = bitta academic_records yozuvi. "Faqat qarzdorlar" toggle yoqilganda
@@ -5436,21 +5492,66 @@ class ReportController extends Controller
         }
     }
 
-    private function retakeNotAppliedReportDataCurriculumBased(Request $request)
+    /**
+     * calc_key prefiksi uchun foydalanuvchi identifikatori — admin (web) yoki
+     * teacher guard. Boshqa foydalanuvchining hisob natijasini o'qishni bloklaydi.
+     */
+    private function retakeNotAppliedCalcUserToken(): string
     {
-        $dekanFacultyId = get_dekan_faculty_id();
-        if ($dekanFacultyId && !$request->filled('faculty')) {
-            $request->merge(['faculty' => $dekanFacultyId]);
+        if (auth()->check()) {
+            return 'u' . auth()->id();
+        }
+        if (auth('teacher')->check()) {
+            return 't' . auth('teacher')->id();
+        }
+        return 'g0';
+    }
+
+    /**
+     * Hisobot filtrlari (Request → massiv). Sessiyaga bog'liq kontekst (dekan
+     * fakulteti chaqiruvchi tomonda request'ga merge qilinadi, nazoratchi
+     * guruhlari shu yerda) request vaqtida hal qilinadi — massiv fon jobiga
+     * o'zgarishsiz uzatiladi.
+     */
+    private function buildRetakeNotAppliedFilters(Request $request): array
+    {
+        $filters = [
+            'only_debtors' => $request->get('only_debtors', $request->get('only_not_applied', '1')) == '1' ? '1' : '0',
+            'semester_code' => (string) ($request->get('semester_code') ?? ''),
+            'student_status' => (string) ($request->get('student_status') ?? ''),
+            'student_name' => (string) ($request->get('student_name') ?? ''),
+            'faculty' => (string) ($request->get('faculty') ?? ''),
+            'specialty' => (string) ($request->get('specialty') ?? ''),
+            'level_code' => (string) ($request->get('level_code') ?? ''),
+            'group' => (string) ($request->get('group') ?? ''),
+            'education_type' => (string) ($request->get('education_type') ?? ''),
+            'student_type' => (string) ($request->get('student_type') ?? ''),
+        ];
+
+        if (is_active_nazoratchi()) {
+            $filters['nazoratchi_group_ids'] = get_nazoratchi_group_hemis_ids();
         }
 
-        try {
-            ini_set('memory_limit', '512M');
-            set_time_limit(120);
+        return $filters;
+    }
 
-            $onlyDebtors = $request->get('only_debtors', $request->get('only_not_applied', '1')) == '1';
-            $semesterFilter = $request->get('semester_code');
-            $retakeStatusFilter = (string) $request->get('retake_status_filter', '');
-            $perPage = max(1, (int) $request->get('per_page', 50));
+    /**
+     * Hisobot qatorlarini to'liq (sahifalanmagan) hisoblaydi. Request/sessiyaga
+     * bog'liq emas — fon jobidan (ComputeRetakeNotAppliedReportJob) ham, sinxron
+     * yo'ldan ham chaqiriladi. $progress(percent, message) — jarayon holati.
+     */
+    public function computeRetakeNotAppliedRows(array $filters, ?callable $progress = null): array
+    {
+            $tick = static function (float $percent, string $message) use ($progress) {
+                if ($progress) {
+                    $progress(min(99, round($percent, 1)), $message);
+                }
+            };
+
+            $onlyDebtors = ($filters['only_debtors'] ?? '1') == '1';
+            $semesterFilter = $filters['semester_code'] ?? '';
+
+            $tick(2, 'Talabalar yuklanmoqda...');
 
             $studentQuery = DB::table('students as s')
                 ->whereNotNull('s.curriculum_id')
@@ -5461,80 +5562,88 @@ class ReportController extends Controller
                     's.department_name',
                     's.specialty_name',
                     's.level_name',
+                    's.level_code',
                     's.semester_name',
                     's.semester_code',
                     's.group_name',
                     's.group_id',
                     's.curriculum_id',
-                    's.student_type_code'
+                    's.student_type_code',
+                    's.student_type_name'
                 );
 
-            if ($request->filled('student_status')) {
-                $studentQuery->where('s.student_status_code', $request->student_status);
+            if (!empty($filters['student_status'])) {
+                $studentQuery->where('s.student_status_code', $filters['student_status']);
             }
-            if ($request->filled('student_name')) {
-                $studentQuery->where('s.full_name', 'like', '%' . $request->student_name . '%');
+            if (!empty($filters['student_name'])) {
+                $studentQuery->where('s.full_name', 'like', '%' . $filters['student_name'] . '%');
             }
-            if ($request->filled('faculty')) {
-                $faculty = Department::find($request->faculty);
+            if (!empty($filters['faculty'])) {
+                $faculty = Department::find($filters['faculty']);
                 if ($faculty) {
                     $studentQuery->where('s.department_id', $faculty->department_hemis_id);
                 }
             }
-            if ($request->filled('specialty')) {
-                $studentQuery->where('s.specialty_id', $request->specialty);
+            if (!empty($filters['specialty'])) {
+                $studentQuery->where('s.specialty_id', $filters['specialty']);
             }
-            if ($request->filled('level_code')) {
-                $studentQuery->where('s.level_code', $request->level_code);
+            if (!empty($filters['level_code'])) {
+                $studentQuery->where('s.level_code', $filters['level_code']);
             }
-            if ($request->filled('group')) {
-                $group = \App\Models\Group::find($request->group);
+            if (!empty($filters['group'])) {
+                $group = \App\Models\Group::find($filters['group']);
                 if ($group) {
                     $studentQuery->where('s.group_id', $group->group_hemis_id);
                 }
             }
-            if ($request->filled('education_type')) {
-                $studentQuery->where('s.education_type_code', $request->education_type);
+            if (!empty($filters['education_type'])) {
+                $studentQuery->where('s.education_type_code', $filters['education_type']);
             }
-            if ($request->filled('student_type')) {
-                $studentQuery->where('s.student_type_code', $request->student_type);
+            if (!empty($filters['student_type'])) {
+                $studentQuery->where('s.student_type_code', $filters['student_type']);
             }
 
-            if (is_active_nazoratchi()) {
-                $nazoratchiHemisIds = get_nazoratchi_group_hemis_ids();
-                if (empty($nazoratchiHemisIds)) {
-                    return response()->json(['data' => [], 'total' => 0, 'per_page' => 50, 'current_page' => 1, 'last_page' => 1]);
+            // Nazoratchi cheklovi — sessiya emas, request vaqtida hal qilinib massivda keladi.
+            if (array_key_exists('nazoratchi_group_ids', $filters)) {
+                if (empty($filters['nazoratchi_group_ids'])) {
+                    return [];
                 }
-                $studentQuery->whereIn('s.group_id', $nazoratchiHemisIds);
+                $studentQuery->whereIn('s.group_id', $filters['nazoratchi_group_ids']);
             }
 
             $students = $studentQuery->get();
             if ($students->isEmpty()) {
-                return response()->json(['data' => [], 'total' => 0, 'per_page' => $perPage, 'current_page' => 1, 'last_page' => 1]);
+                return [];
             }
 
+            $tick(8, 'Academic records yuklanmoqda...');
+
             $studentHemisIds = $students->pluck('hemis_id')->values()->all();
-            $arRows = collect();
+            // Oddiy massiv — Collection::merge har chunkda butun massivni nusxalab
+            // katta to'plamda (butun universitet) xotira sakrashiga olib keladi.
+            $arRows = [];
             foreach (array_chunk($studentHemisIds, 1000) as $chunk) {
-                $arRows = $arRows->merge(
-                    DB::table('academic_records')
-                        ->whereIn('student_id', $chunk)
-                        ->select(
-                            'student_id',
-                            'subject_id',
-                            'subject_name',
-                            'semester_id',
-                            'semester_name',
-                            'curriculum_id',
-                            'credit',
-                            'total_acload',
-                            'total_point',
-                            'grade',
-                            'retraining_status',
-                            'finish_credit_status'
-                        )
-                        ->get()
-                );
+                $chunkRows = DB::table('academic_records')
+                    ->whereIn('student_id', $chunk)
+                    ->select(
+                        'student_id',
+                        'subject_id',
+                        'subject_name',
+                        'semester_id',
+                        'semester_name',
+                        'curriculum_id',
+                        'credit',
+                        'total_acload',
+                        'total_point',
+                        'grade',
+                        'retraining_status',
+                        'finish_credit_status'
+                    )
+                    ->get();
+                foreach ($chunkRows as $arRow) {
+                    $arRows[] = $arRow;
+                }
+                unset($chunkRows);
             }
 
             $studentMap = $students->keyBy('hemis_id');
@@ -5587,8 +5696,10 @@ class ReportController extends Controller
             }
 
             if (empty($curriculumPairs)) {
-                return response()->json(['data' => [], 'total' => 0, 'per_page' => $perPage, 'current_page' => 1, 'last_page' => 1]);
+                return [];
             }
+
+            $tick(30, "O'quv reja fanlari yuklanmoqda...");
 
             $allCurriculumIds = collect(array_keys($curriculumPairs))
                 ->map(fn ($k) => explode('|', $k)[0])
@@ -5654,6 +5765,8 @@ class ReportController extends Controller
                 }
             }
 
+            $tick(45, "Qayta o'qish arizalari yuklanmoqda...");
+
             $retakeApps = \App\Models\RetakeApplication::query()
                 ->whereIn('student_hemis_id', $studentHemisIds)
                 ->whereIn('final_status', [
@@ -5685,6 +5798,31 @@ class ReportController extends Controller
                 : \App\Models\RetakeApplicationGroup::whereIn('id', $retakeGroupIds)
                     ->get(['id', 'payment_uploaded_at', 'payment_verification_status'])
                     ->keyBy('id');
+
+            // Test markazi guruhlari (RetakeGroup) — yopilish shakli (assessment_type)
+            // va yakuniy natija (xulosa) hisoblash uchun retake_group_id bo'yicha.
+            $retakeGroupModelIds = $retakeApps->pluck('retake_group_id')->filter()->unique()->values()->all();
+            $retakeGroupsById = empty($retakeGroupModelIds)
+                ? collect()
+                : \App\Models\RetakeGroup::whereIn('id', $retakeGroupModelIds)
+                    ->get(['id', 'assessment_type'])
+                    ->keyBy('id');
+
+            $retakeJournalService = app(\App\Services\Retake\RetakeJournalService::class);
+
+            // Appelyatsiyada o'chirilgan test baholari soni — "o'qish holati"da
+            // urinishlar sonini "(N)" ko'rinishida ko'rsatish uchun (test markazi
+            // jurnali bilan bir xil: urinishlar jami = o'chirilgan + 1).
+            $removedCountMap = $retakeJournalService->removedAppealCounts($retakeApps);
+
+            // Test markazi yopilish shakli (assessment_type) → yorliq.
+            $assessmentTypeLabels = [
+                'oske' => 'OSKE',
+                'test' => 'Test',
+                'oske_test' => 'OSKE + Test',
+                'sinov' => 'Sinov',
+                'sinov_fan' => 'Sinov',
+            ];
 
             $mustaqilMap = empty($retakeApps->pluck('id')->all())
                 ? collect()
@@ -5721,8 +5859,26 @@ class ReportController extends Controller
                 'none' => "Yakuniy nazorat yo'q",
             ];
 
+            // Faqat OLDINGI (tugagan) semestrlar qarzi hisoblanadi — joriy semestr
+            // xavflari (student_grades jurnali) OLIB TASHLANDI: og'ir bo'lib timeout
+            // berardi. Bu hisobot academic_records asosidagi qarzlar bilan cheklanadi.
+            $tick(60, 'Qatorlar shakllantirilmoqda...');
+
             $data = [];
+            $processedStudents = 0;
+            $totalStudents = max(1, $students->count());
             foreach ($students as $st) {
+                $processedStudents++;
+                if ($processedStudents % 500 === 0) {
+                    $tick(60 + 37 * $processedStudents / $totalStudents, "Qatorlar shakllantirilmoqda: {$processedStudents}/{$totalStudents} talaba...");
+                }
+
+                // Akademik mobillik: boshqa OTMdan kelgan talaba — bizda YOZUVI
+                // BO'LMAGAN oldingi (o'quv yili/semestr) fanlari qarz emas, ularni
+                // o'z OTMiga borib yopadi. Bizda mavjud yozuv (masalan yiqilgan)
+                // esa qarzligicha qoladi.
+                $isMobility = str_contains(mb_strtolower((string) ($st->student_type_name ?? '')), 'mobil');
+
                 $studentSemCode = $st->semester_code ? (int) $st->semester_code : null;
                 foreach ($studentSemCurr[$st->hemis_id] ?? [] as $semCode => $currId) {
                     if ($semesterFilter !== null && $semesterFilter !== '' && (string) $semCode !== (string) $semesterFilter) {
@@ -5751,7 +5907,19 @@ class ReportController extends Controller
                             ? $this->academicRecordStudyStatus($matchedAr)
                             : ['code' => 'not_graded', 'label' => "Yozuv yo'q"];
 
-                        if ($onlyDebtors && $matchedAr) {
+                        // Qarz aniqlash (academicRecordStudyStatus bilan izchil):
+                        //  - Yozuv bor: "passed" bo'lmasa qarz (baho < 3 — jumladan 1 —, yiqilgan,
+                        //    baholanmagan). Kredit olingan (finish_credit_status) yoki baho >= 3 /
+                        //    matnli baho bo'lsa "passed" — qarz emas.
+                        //  - Yozuv yo'q: faqat talabaning JORIY curriculumi uchun qarz. Tiklangan
+                        //    talabalarda eski/boshqa curriculum semestri tanlangan bo'lsa, undagi
+                        //    "yozuv yo'q" fanlar false qarz bo'lib chiqmasligi uchun qarz sanalmaydi
+                        //    (eski curriculumda faqat haqiqiy yiqilgan yozuv qarz bo'ladi).
+                        $isCurrentCurriculum = (string) $currId === (string) ($st->curriculum_id ?? '');
+                        $isDebt = $matchedAr
+                            ? ($study['code'] ?? '') !== 'passed'
+                            : ($isCurrentCurriculum && !$isMobility);
+                        if ($onlyDebtors && !$isDebt) {
                             continue;
                         }
 
@@ -5794,6 +5962,40 @@ class ReportController extends Controller
                             }
                         }
 
+                        $retakeStatus = $retakeMap[$retakeKey] ?? 'Ariza bermagan';
+                        $retakeGroupModel = ($retakeApp && $retakeApp->retake_group_id)
+                            ? $retakeGroupsById->get($retakeApp->retake_group_id)
+                            : null;
+
+                        // Yopilish shakli: qayta o'qishga "Guruhga tasdiqlangan" bo'lsa,
+                        // o'quv reja fanidagi shakl o'rniga test markazi guruhining
+                        // yopilish shakli (assessment_type) ko'rsatiladi.
+                        $closingForm = $sub->closing_form ? ($cfLabels[$sub->closing_form] ?? $sub->closing_form) : '-';
+                        if ($retakeStatus === 'Guruhga tasdiqlangan' && $retakeGroupModel && $retakeGroupModel->assessment_type) {
+                            $closingForm = $assessmentTypeLabels[$retakeGroupModel->assessment_type]
+                                ?? $retakeGroupModel->assessment_type;
+                        }
+
+                        // O'qish holati: test markazi guruhi mavjud bo'lsa, jurnal yakuniy
+                        // natijasining xulosasi (yiqildi / imtihonga kelmagan / o'qituvchi
+                        // bahosini qo'ymagan / o'zlashtirdi) ko'rsatiladi. Aks holda academic
+                        // records asosidagi holat qoladi.
+                        $displayStudy = $study;
+                        if ($retakeGroupModel && $retakeGroupModel->assessment_type) {
+                            $at = $retakeGroupModel->assessment_type;
+                            $isSinov = in_array($at, ['sinov', 'sinov_fan'], true);
+                            $effTest = $isSinov ? $retakeApp->joriy_score : $retakeApp->test_score;
+                            $final = $retakeJournalService->testMarkaziFinalResult(
+                                $retakeApp->joriy_score,
+                                $mustaqil?->grade,
+                                $retakeApp->oske_score,
+                                $effTest,
+                                $at,
+                                $st->level_code ?? null,
+                            );
+                            $displayStudy = $this->testMarkaziStudyStatus($final, $study, $removedCountMap[$retakeApp->id] ?? 0);
+                        }
+
                         $data[] = [
                             'hemis_id' => $st->hemis_id,
                             'full_name' => $st->full_name ?? '-',
@@ -5803,17 +6005,18 @@ class ReportController extends Controller
                             'level_name' => $st->level_name ?? '-',
                             'group_name' => $st->group_name ?? '-',
                             'subject_name' => $effectiveSubjectName ?? '-',
-                            'closing_form' => $sub->closing_form ? ($cfLabels[$sub->closing_form] ?? $sub->closing_form) : '-',
+                            'closing_form' => $closingForm,
                             'semester_code' => $sub->semester_code,
                             'semester_name' => $sub->semester_name ?: ($sub->semester_code ? $sub->semester_code . '-semestr' : '-'),
                             'total_acload' => $matchedAr->total_acload ?? $sub->total_acload,
                             'credit' => $matchedAr->credit ?? $sub->credit,
                             'total_point' => ($matchedAr && $matchedAr->total_point !== '' ? $matchedAr->total_point : null),
                             'grade' => ($matchedAr && $matchedAr->grade !== '' ? $matchedAr->grade : null),
-                            'retake_status' => $retakeMap[$retakeKey] ?? 'Ariza bermagan',
-                            'study_status' => $study['label'],
-                            'study_status_code' => $study['code'],
-                            'is_debt' => $matchedAr === null,
+                            'mastered' => $matchedAr ? (bool) ($matchedAr->finish_credit_status ?? false) : null,
+                            'retake_status' => $retakeStatus,
+                            'study_status' => $displayStudy['label'],
+                            'study_status_code' => $displayStudy['code'],
+                            'is_debt' => $isDebt,
                             'score_details' => $scoreDetails,
                             'has_score_details' => !empty($scoreDetails),
                         ];
@@ -5821,6 +6024,18 @@ class ReportController extends Controller
                 }
             }
 
+            $tick(99, 'Yakunlanmoqda...');
+
+            return $data;
+    }
+
+    /**
+     * AJAX ma'lumot endpointi — calc_key berilsa fon jobi natijasidan o'qiydi,
+     * bo'lmasa sinxron hisoblaydi; so'ng holat filtri, saralash, Excel eksport
+     * va sahifalash qo'llanadi.
+     */
+    private function retakeNotAppliedRespond(Request $request, array $data, string $retakeStatusFilter, int $perPage)
+    {
             if ($retakeStatusFilter !== '') {
                 $data = array_values(array_filter($data, function ($row) use ($retakeStatusFilter) {
                     $status = (string) ($row['retake_status'] ?? '');
@@ -5903,6 +6118,7 @@ class ReportController extends Controller
                                 'OSKI',
                                 'TEST',
                                 "Olgan bahosi",
+                                "O'zlashtirdi",
                                 "Qayta o'qish holati",
                                 "O'qish holati",
                             ];
@@ -5945,10 +6161,101 @@ class ReportController extends Controller
                 'current_page' => $page,
                 'last_page' => (int) ceil($total / $perPage),
             ]);
+    }
+
+    private function retakeNotAppliedReportDataCurriculumBased(Request $request)
+    {
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyId]);
+        }
+
+        try {
+            ini_set('memory_limit', '512M');
+            set_time_limit(300);
+
+            $retakeStatusFilter = (string) $request->get('retake_status_filter', '');
+            $perPage = max(1, (int) $request->get('per_page', 50));
+
+            if ($request->filled('calc_key')) {
+                // Fon jobi hisoblagan tayyor natija — sahifalash/saralash/Excel tez.
+                $calcKey = (string) $request->get('calc_key');
+                if (!str_starts_with($calcKey, 'retake_na_calc_' . $this->retakeNotAppliedCalcUserToken() . '_')) {
+                    return response()->json(['error' => 'Hisob kaliti mos emas'], 403);
+                }
+                $data = \App\Jobs\ComputeRetakeNotAppliedReportJob::loadRows($calcKey);
+                if ($data === null) {
+                    return response()->json(['error' => 'calc_expired'], 410);
+                }
+            } else {
+                // Sinxron yo'l (eski xatti-harakat) — calc_key siz so'rovlar uchun.
+                $data = $this->computeRetakeNotAppliedRows($this->buildRetakeNotAppliedFilters($request));
+            }
+
+            return $this->retakeNotAppliedRespond($request, $data, $retakeStatusFilter, $perPage);
         } catch (\Throwable $e) {
             \Log::error('Retake-not-applied report error: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return response()->json(['error' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Hisobotni fon rejimida hisoblashni boshlash. calc_key qaytadi — holat
+     * calc-status orqali polling qilinadi, tayyor bo'lgach data endpointi
+     * calc_key bilan chaqiriladi (sahifalash/saralash qayta hisobsiz).
+     */
+    public function startRetakeNotAppliedCalc(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $dekanFacultyId = get_dekan_faculty_id();
+        if ($dekanFacultyId && !$request->filled('faculty')) {
+            $request->merge(['faculty' => $dekanFacultyId]);
+        }
+
+        $filters = $this->buildRetakeNotAppliedFilters($request);
+        $calcKey = 'retake_na_calc_' . $this->retakeNotAppliedCalcUserToken() . '_' . md5(json_encode($filters));
+
+        $existing = \Illuminate\Support\Facades\Cache::get($calcKey);
+        if ($existing && in_array($existing['status'] ?? '', ['queued', 'running'], true)) {
+            // Xuddi shu filtrlar bilan hisob allaqachon ketmoqda — davom etamiz.
+            return response()->json(['calc_key' => $calcKey] + $existing);
+        }
+
+        // Bir xil filtrlar bilan avvalgi run natijasini o'chiramiz — aks holda
+        // status endpointi yangi hisob tugamasidan "tayyor" (eski natija) deb
+        // ko'rsatib qo'yishi mumkin.
+        \App\Jobs\ComputeRetakeNotAppliedReportJob::clearResult($calcKey);
+
+        \Illuminate\Support\Facades\Cache::put($calcKey, [
+            'status' => 'queued',
+            'percent' => 0,
+            'message' => "Navbatga qo'shildi...",
+            'updated_at' => now()->toDateTimeString(),
+        ], 1800);
+
+        \App\Jobs\ComputeRetakeNotAppliedReportJob::dispatch($filters, $calcKey);
+
+        return response()->json(['calc_key' => $calcKey, 'status' => 'queued']);
+    }
+
+    public function retakeNotAppliedCalcStatus(Request $request): \Illuminate\Http\JsonResponse
+    {
+        $calcKey = (string) $request->get('calc_key', '');
+        if (!str_starts_with($calcKey, 'retake_na_calc_' . $this->retakeNotAppliedCalcUserToken() . '_')) {
+            return response()->json(['status' => 'error', 'message' => 'Hisob kaliti mos emas'], 403);
+        }
+
+        // Natija fayli diskda bo'lsa — job tugagan (kesh 'failed'/yo'q bo'lsa ham,
+        // masalan retry_after tufayli dublikat urinish). Haqiqiy natijaga ishonamiz.
+        if (\App\Jobs\ComputeRetakeNotAppliedReportJob::hasResult($calcKey)) {
+            return response()->json(['status' => 'done', 'percent' => 100]);
+        }
+
+        $state = \Illuminate\Support\Facades\Cache::get($calcKey);
+        if (!$state) {
+            return response()->json(['status' => 'error', 'message' => 'Hisob topilmadi yoki muddati tugagan']);
+        }
+
+        return response()->json($state);
     }
 
     private function mapRetakeNotAppliedExportRows(array $rows): array
@@ -5973,6 +6280,9 @@ class ReportController extends Controller
                 $scores->get('OSKI')['score'] ?? '',
                 $scores->get('TEST')['score'] ?? '',
                 $row['grade'] ?? '',
+                array_key_exists('mastered', $row) && $row['mastered'] !== null
+                    ? ($row['mastered'] ? 'Ha' : "Yo'q")
+                    : '-',
                 $row['retake_status'] ?? '',
                 $row['study_status'] ?? '',
             ];
@@ -6013,6 +6323,37 @@ class ReportController extends Controller
 
         // Baho bor (numerik < 3), kredit olinmagan → yiqilgan.
         return ['code' => 'failed', 'label' => 'Yiqilgan'];
+    }
+
+    /**
+     * Test markazi jurnalining yakuniy natijasini ("o'qish holati" ustuni uchun)
+     * pill kodi + yorlig'iga aylantiradi. Natija yo'q holatlarda academic records
+     * asosidagi holatga ($fallback) qaytadi.
+     *
+     * $removed — appelyatsiyada o'chirilgan (oldingi) test baholari soni; urinishlar
+     * jami = $removed + 1. Faqat qayta topshirganda (>= 2) "(N)" suffiks qo'shiladi
+     * (test markazi jurnalidagi logika bilan bir xil).
+     *
+     * @param  array{status:string, value:?int, baho:string}  $final
+     * @param  array{code:string, label:string}  $fallback
+     * @return array{code:string, label:string}
+     */
+    private function testMarkaziStudyStatus(array $final, array $fallback, int $removed = 0): array
+    {
+        $suffix = $removed >= 1 ? ' (' . ($removed + 1) . ')' : '';
+
+        return match ($final['status'] ?? '') {
+            'passed' => [
+                'code' => 'passed',
+                'label' => "O'zlashtirdi"
+                    . (isset($final['value']) && $final['value'] !== null ? ": {$final['value']}" : '')
+                    . $suffix,
+            ],
+            'failed' => ['code' => 'failed', 'label' => 'Yiqildi' . $suffix],
+            'absent' => ['code' => 'not_examined', 'label' => 'Imtihonga kelmagan' . $suffix],
+            'no_teacher_grade' => ['code' => 'not_graded', 'label' => "O'qituvchi bahosini qo'ymagan" . $suffix],
+            default => $fallback,
+        };
     }
 
     /**
@@ -10511,7 +10852,12 @@ class ReportController extends Controller
             }
 
             if (!empty($reasons)) {
-                $risks[$hemisId][] = ['subject_name' => $subjectName, 'reasons' => $reasons];
+                $risks[$hemisId][] = [
+                    'subject_id' => $subjectId,
+                    'semester_code' => $semCode,
+                    'subject_name' => $subjectName,
+                    'reasons' => $reasons,
+                ];
             }
         }
 
@@ -10529,14 +10875,14 @@ class ReportController extends Controller
                 if (isset($sinovGradeMap[$key])) {
                     if ($sinovGradeMap[$key] < 60) {
                         $nm = $schedSubjectName[$sid] ?? 'Fan';
-                        $risks[$hid][] = ['subject_name' => $nm, 'reasons' => ['1-urinish: V<60']];
+                        $risks[$hid][] = ['subject_id' => $sid, 'semester_code' => $sem, 'subject_name' => $nm, 'reasons' => ['1-urinish: V<60']];
                     }
                     continue;
                 }
                 $noShowLabel = $computeNoShow($hid, $sid, $sem);
                 if ($noShowLabel !== null) {
                     $nm = $schedSubjectName[$sid] ?? 'Fan';
-                    $risks[$hid][] = ['subject_name' => $nm, 'reasons' => [$noShowLabel]];
+                    $risks[$hid][] = ['subject_id' => $sid, 'semester_code' => $sem, 'subject_name' => $nm, 'reasons' => [$noShowLabel]];
                 }
             }
         }

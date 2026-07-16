@@ -218,10 +218,13 @@ class DashboardController extends Controller
 
     public function academicRecordsProgress(): \Illuminate\Http\JsonResponse
     {
-        $progress = \Illuminate\Support\Facades\Cache::get('academic_import_progress');
-        if (!$progress) {
-            return response()->json(['status' => 'idle']);
-        }
+        $progress = \Illuminate\Support\Facades\Cache::get('academic_import_progress') ?: ['status' => 'idle'];
+        $progress['last_synced_at'] = \Illuminate\Support\Facades\Cache::get('academic_records_last_synced_at')
+            ?? \Illuminate\Support\Facades\Cache::remember(
+                'academic_records_last_synced_fallback',
+                120,
+                fn () => \Illuminate\Support\Facades\DB::table('academic_records')->max('updated_at')
+            );
         return response()->json($progress);
     }
 

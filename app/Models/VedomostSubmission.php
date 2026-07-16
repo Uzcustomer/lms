@@ -94,6 +94,7 @@ class VedomostSubmission extends Model
         'prorektor_notified_at',
         'warning_stage',
         'warned_at',
+        'manual_opened_at',
     ];
 
     protected $casts = [
@@ -106,6 +107,7 @@ class VedomostSubmission extends Model
         'ai_result' => 'array',
         'prorektor_notified_at' => 'datetime',
         'warned_at' => 'datetime',
+        'manual_opened_at' => 'datetime',
     ];
 
     public function curriculumSubject()

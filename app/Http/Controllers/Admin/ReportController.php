@@ -11059,4 +11059,495 @@ class ReportController extends Controller
                 : '❌ SINXRONLASH: Bu fanlar HEMIS dan academic_records ga umuman kelmagan.',
         ], 200, [], JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT);
     }
+
+    /* =========================================================================
+     |  OQIM (talabalarni oqim va guruhlarga taqsimlash) hisoboti
+     |  Fakultet -> yo'nalish -> kurs -> oqim -> guruh kesimida talaba soni.
+     |  "Guruh" (to'liq), "A.B" (2 ga bo'lib), "A.B.C" (3 ga bo'lib) variantlari.
+     * ======================================================================= */
+
+    /**
+     * Oqim hisoboti sahifasi — faqat filtrlar ko'rsatiladi.
+     */
+    public function oqimReport(Request $request)
+    {
+        $dekanFacultyId = get_dekan_faculty_id();
+
+        $educationTypes = Curriculum::select('education_type_code', 'education_type_name')
+            ->whereNotNull('education_type_code')
+            ->groupBy('education_type_code', 'education_type_name')
+            ->get();
+
+        $selectedEducationType = $request->get('education_type');
+        if (!$request->has('education_type')) {
+            $selectedEducationType = $educationTypes
+                ->first(fn($type) => str_contains(mb_strtolower($type->education_type_name ?? ''), 'bakalavr'))
+                ?->education_type_code;
+        }
+
+        $facultyQuery = Department::where('structure_type_code', 11)
+            ->where('active', true)
+            ->orderBy('name');
+
+        if ($dekanFacultyId) {
+            $facultyQuery->where('id', $dekanFacultyId);
+        }
+
+        $faculties = $facultyQuery->get();
+
+        return view('admin.reports.oqim', compact(
+            'educationTypes',
+            'selectedEducationType',
+            'faculties',
+            'dekanFacultyId'
+        ));
+    }
+
+    /**
+     * AJAX: oqim hisoboti ma'lumotlari (JSON).
+     */
+    public function oqimReportData(Request $request)
+    {
+        try {
+            ini_set('memory_limit', '512M');
+            set_time_limit(120);
+
+            $report = $this->buildOqimReport($request);
+            return response()->json($report);
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Oqim hisobotini Excel (.xlsx) ko'rinishida yuklab olish.
+     * Har bir variant (guruh / a.b / a.b.c) alohida varaqda emas — tanlangan variant.
+     */
+    public function oqimReportExport(Request $request)
+    {
+        ini_set('memory_limit', '512M');
+        set_time_limit(180);
+
+        $report = $this->buildOqimReport($request);
+
+        $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
+        $spreadsheet->removeSheetByIndex(0);
+
+        // Agar "barcha variantlar" tanlangan bo'lsa — har biri alohida varaqda
+        $variants = $report['variants']; // [1=>'Guruh', 2=>'A.B', ...]
+        foreach ($variants as $vNum => $vTitle) {
+            $blocks = $report['byVariant'][$vNum];
+            $sheet = $spreadsheet->createSheet();
+            $sheet->setTitle($vTitle);
+            $this->fillOqimSheet($sheet, $blocks, $report['header']);
+        }
+
+        $spreadsheet->setActiveSheetIndex(0);
+
+        $fileName = 'Oqim_' . date('Y-m-d_H-i') . '.xlsx';
+        $temp = tempnam(sys_get_temp_dir(), 'oqim_');
+        $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
+        $writer->save($temp);
+        $spreadsheet->disconnectWorksheets();
+
+        return response()->download($temp, $fileName, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Oqim hisobotini qurish — filtrlar bo'yicha talabalarni fakultet/yo'nalish/kurs/oqim/guruh
+     * kesimida hisoblab, tanlangan variant(lar) bo'yicha tuzilma qaytaradi.
+     */
+    private function buildOqimReport(Request $request): array
+    {
+        $dekanFacultyId = get_dekan_faculty_id();
+
+        // ---- Talabalarni guruh kesimida sanaymiz ----
+        $q = DB::table('students as s')
+            ->join('departments as d', 's.department_id', '=', 'd.department_hemis_id')
+            ->where('d.structure_type_code', 11)
+            ->where('d.active', true)
+            ->where('s.student_status_code', 11) // faqat faol (o'qiyotgan) talabalar
+            ->whereNotNull('s.group_id')
+            ->select(
+                's.department_id', 's.department_name',
+                's.specialty_id', 's.specialty_name',
+                's.level_code', 's.level_name',
+                's.group_id', 's.group_name',
+                DB::raw('COUNT(*) as cnt')
+            )
+            ->groupBy(
+                's.department_id', 's.department_name',
+                's.specialty_id', 's.specialty_name',
+                's.level_code', 's.level_name',
+                's.group_id', 's.group_name'
+            );
+
+        if ($dekanFacultyId) {
+            $faculty = Department::find($dekanFacultyId);
+            if ($faculty) {
+                $q->where('s.department_id', $faculty->department_hemis_id);
+            }
+        } elseif ($request->filled('faculty')) {
+            $faculty = Department::find($request->faculty);
+            if ($faculty) {
+                $q->where('s.department_id', $faculty->department_hemis_id);
+            }
+        }
+
+        if ($request->filled('education_type')) {
+            $q->where('s.education_type_code', $request->education_type);
+        }
+
+        $rows = $q->get();
+
+        // Guruhlarning ta'lim tili (rus/ingliz oqimlarini alohida ajratish uchun)
+        $langMap = DB::table('groups')
+            ->whereNotNull('group_hemis_id')
+            ->pluck('education_lang_name', 'group_hemis_id');
+
+        // ---- Tuzilmaga yig'amiz: fakultet+yo'nalish -> kurs -> guruhlar ----
+        $blocks = [];
+        foreach ($rows as $r) {
+            $blockKey = $r->department_id . '|' . $r->specialty_id;
+            if (!isset($blocks[$blockKey])) {
+                $blocks[$blockKey] = [
+                    'department_name' => $r->department_name,
+                    'specialty_name'  => $r->specialty_name,
+                    'title'           => $this->oqimBlockTitle($r->department_name, $r->specialty_name),
+                    'courses'         => [],
+                ];
+            }
+            $lvlKey = (string) $r->level_code;
+            if (!isset($blocks[$blockKey]['courses'][$lvlKey])) {
+                $blocks[$blockKey]['courses'][$lvlKey] = [
+                    'level_code' => $r->level_code,
+                    'level_name' => $r->level_name ?: ($r->level_code . '-kurs'),
+                    'groups'     => [],
+                ];
+            }
+            $blocks[$blockKey]['courses'][$lvlKey]['groups'][] = [
+                'group_id' => $r->group_id,
+                'name'     => $r->group_name,
+                'count'    => (int) $r->cnt,
+                'lang'     => $this->oqimLangKey($langMap[$r->group_id] ?? null, $r->group_name),
+            ];
+        }
+
+        // Bloklarni fakultet + yo'nalish nomi bo'yicha tartiblaymiz
+        uasort($blocks, function ($a, $b) {
+            return [$a['department_name'], $a['specialty_name']] <=> [$b['department_name'], $b['specialty_name']];
+        });
+
+        $oqimSize = (int) $request->get('oqim_size', 2);
+        if ($oqimSize < 1) { $oqimSize = 2; }
+
+        // Tanlangan variant(lar): 1=Guruh, 2=A.B, 3=A.B.C
+        $variantParam = $request->get('variant', '1');
+        if ($variantParam === 'all') {
+            $variants = [1 => 'Guruh', 2 => 'Guruh A.B', 3 => 'Guruh A.B C'];
+        } else {
+            $v = max(1, min(3, (int) $variantParam));
+            $names = [1 => 'Guruh', 2 => 'Guruh A.B', 3 => 'Guruh A.B C'];
+            $variants = [$v => $names[$v]];
+        }
+
+        // Har bir variant uchun oqimlarni quramiz
+        $byVariant = [];
+        foreach ($variants as $vNum => $vTitle) {
+            $byVariant[$vNum] = $this->buildOqimBlocksForVariant($blocks, $oqimSize, $vNum);
+        }
+
+        $header = [
+            "Toshkent davlat tibbiyot universiteti Termiz filiali fakultetlar, yo'nalishlar va kurslar kesimi bo'yicha talabalarning oqim va guruhlarga taqsimlanish tartibi",
+            "Kurslar va yo'nalishlar kesimida guruhlar va ulardagi talabalar soni (" . now()->format('d.m.Y') . " holati)",
+        ];
+
+        // JSON uchun asosiy (birinchi) variantni ham qulay ko'rinishda beramiz
+        $firstVariant = array_key_first($byVariant);
+
+        return [
+            'header'    => $header,
+            'variants'  => $variants,
+            'byVariant' => $byVariant,
+            'blocks'    => $byVariant[$firstVariant],
+            'generated_at' => now()->format('d.m.Y H:i'),
+        ];
+    }
+
+    /**
+     * Bitta variant uchun barcha bloklarning oqim tuzilmasini quradi.
+     */
+    private function buildOqimBlocksForVariant(array $blocks, int $oqimSize, int $variant): array
+    {
+        $result = [];
+        foreach ($blocks as $block) {
+            $courses = [];
+            // kurslarni level_code bo'yicha tartiblaymiz
+            $courseList = $block['courses'];
+            uasort($courseList, fn($a, $b) => $this->oqimNatCmp((string) $a['level_code'], (string) $b['level_code']));
+
+            foreach ($courseList as $course) {
+                $oqims = $this->buildOqims($course['groups'], $oqimSize);
+                $total = 0;
+                $displayOqims = [];
+                foreach ($oqims as $idx => $oq) {
+                    $rowsOut = [];
+                    foreach ($oq as $g) {
+                        $total += $g['count'];
+                        foreach ($this->splitIntoSubgroups($g['name'], $g['count'], $variant) as $sub) {
+                            $rowsOut[] = $sub;
+                        }
+                    }
+                    $displayOqims[] = [
+                        'label' => ($idx + 1) . '-oqim',
+                        'rows'  => $rowsOut,
+                    ];
+                }
+                $courses[] = [
+                    'level_name' => $course['level_name'],
+                    'oqims'      => $displayOqims,
+                    'total'      => $total,
+                ];
+            }
+
+            $result[] = [
+                'title'   => $block['title'],
+                'courses' => $courses,
+            ];
+        }
+        return $result;
+    }
+
+    /**
+     * Guruhlarni oqimlarga taqsimlaydi.
+     * Qoida: guruhlar raqami bo'yicha tartiblanadi; o'zbek (asosiy) guruhlar
+     * $oqimSize tadan oqimlarga bo'linadi; rus/ingliz kabi boshqa tildagi guruhlar
+     * har bir til bo'yicha bitta oqimga birlashtiriladi. Oqimlar eng kichik
+     * guruh raqami bo'yicha tartiblanadi.
+     */
+    private function buildOqims(array $groups, int $oqimSize): array
+    {
+        if (empty($groups)) {
+            return [];
+        }
+
+        // Barcha guruhlarni nomi bo'yicha tabiiy tartiblaymiz va tartib indeksini eslab qolamiz
+        usort($groups, fn($a, $b) => $this->oqimNatCmp($a['name'], $b['name']));
+        foreach ($groups as $i => &$g) {
+            $g['_order'] = $i;
+        }
+        unset($g);
+
+        // Til bo'yicha ajratamiz
+        $uz = [];
+        $others = []; // langKey => [groups]
+        foreach ($groups as $g) {
+            if ($g['lang'] === 'uz') {
+                $uz[] = $g;
+            } else {
+                $others[$g['lang']][] = $g;
+            }
+        }
+
+        $chunks = [];
+        // O'zbek guruhlar: $oqimSize tadan
+        foreach (array_chunk($uz, max(1, $oqimSize)) as $c) {
+            $chunks[] = $c;
+        }
+        // Boshqa tillar: har biri bitta oqim
+        foreach ($others as $c) {
+            $chunks[] = $c;
+        }
+
+        // Oqimlarni eng kichik guruh tartibi bo'yicha saralaymiz
+        usort($chunks, function ($a, $b) {
+            $minA = min(array_map(fn($x) => $x['_order'], $a));
+            $minB = min(array_map(fn($x) => $x['_order'], $b));
+            return $minA <=> $minB;
+        });
+
+        return $chunks;
+    }
+
+    /**
+     * Guruhni kichik guruhlarga (a/b/c) bo'ladi. $variant: 1 = bo'linmaydi,
+     * 2 = a,b; 3 = a,b,c. Talaba soni imkon qadar teng taqsimlanadi, 0 bo'lganlari
+     * tashlab yuboriladi.
+     */
+    private function splitIntoSubgroups(string $name, int $count, int $variant): array
+    {
+        if ($variant <= 1) {
+            return [['name' => $name, 'count' => $count]];
+        }
+
+        $parts = min($variant, max(1, $count)); // talaba soni bo'lakdan kam bo'lsa kamaytiramiz
+        $base = intdiv($count, $parts);
+        $rem = $count % $parts;
+        $letters = ['a', 'b', 'c', 'd', 'e'];
+
+        $out = [];
+        for ($i = 0; $i < $parts; $i++) {
+            $c = $base + ($i < $rem ? 1 : 0);
+            if ($c <= 0) { continue; }
+            $out[] = ['name' => $name . ($letters[$i] ?? ($i + 1)), 'count' => $c];
+        }
+        if (empty($out)) {
+            $out[] = ['name' => $name . 'a', 'count' => $count];
+        }
+        return $out;
+    }
+
+    /**
+     * Guruh nomidan yoki ta'lim tili nomidan til kalitini aniqlaydi.
+     */
+    private function oqimLangKey(?string $langName, string $groupName): string
+    {
+        $s = mb_strtolower(trim(($langName ?? '') . ' ' . $groupName));
+        if (str_contains($s, 'рус') || str_contains($s, 'rus') || str_contains($s, 'russ') || str_contains($s, '(rus')) {
+            return 'rus';
+        }
+        if (str_contains($s, 'ingl') || str_contains($s, 'engl') || str_contains($s, 'англ') || str_contains($s, '(ing')) {
+            return 'ing';
+        }
+        return 'uz';
+    }
+
+    /**
+     * Fakultet + yo'nalish sarlavhasini shakllantiradi.
+     */
+    private function oqimBlockTitle(?string $department, ?string $specialty): string
+    {
+        $department = trim((string) $department);
+        $specialty = trim((string) $specialty);
+        if ($specialty === '') {
+            return $department;
+        }
+        $spec = $specialty;
+        if (!preg_match("/yo'nalish/ui", $spec) && !preg_match('/yўnalish/ui', $spec)) {
+            $spec .= " yo'nalishi";
+        }
+        return $department === '' ? $spec : ($department . ': ' . $spec);
+    }
+
+    /**
+     * Tabiiy (natural) taqqoslash — "d1/d26-2" < "d1/d26-10".
+     */
+    private function oqimNatCmp(string $a, string $b): int
+    {
+        return strnatcasecmp($a, $b);
+    }
+
+    /**
+     * Bitta variant bloklarini Excel varaqasiga yozadi (yuklangan namunadagi ko'rinishda).
+     * Har bir kurs 3 ustundan iborat: oqim | guruh | talaba soni. Kurslar yonma-yon.
+     */
+    private function fillOqimSheet($sheet, array $blocks, array $header): void
+    {
+        $B = \PhpOffice\PhpSpreadsheet\Style\Border::BORDER_THIN;
+        $center = \PhpOffice\PhpSpreadsheet\Style\Alignment::HORIZONTAL_CENTER;
+        $vcenter = \PhpOffice\PhpSpreadsheet\Style\Alignment::VERTICAL_CENTER;
+
+        $maxCols = 18; // 6 kurs * 3 ustun
+        $lastColLetter = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($maxCols);
+
+        // Sarlavha
+        $sheet->setCellValue('A1', $header[0] ?? '');
+        $sheet->mergeCells("A1:{$lastColLetter}1");
+        $sheet->getStyle('A1')->getFont()->setBold(true)->setSize(12);
+        $sheet->getStyle('A1')->getAlignment()->setHorizontal($center)->setVertical($vcenter)->setWrapText(true);
+        $sheet->getRowDimension(1)->setRowHeight(40);
+
+        $sheet->setCellValue('A2', $header[1] ?? '');
+        $sheet->mergeCells("A2:{$lastColLetter}2");
+        $sheet->getStyle('A2')->getFont()->setBold(true)->setSize(10);
+        $sheet->getStyle('A2')->getAlignment()->setHorizontal($center)->setVertical($vcenter)->setWrapText(true);
+
+        $row = 4;
+        foreach ($blocks as $block) {
+            // Blok sarlavhasi (fakultet + yo'nalish)
+            $sheet->setCellValue([1, $row], $block['title']);
+            $sheet->mergeCells([1, $row, $maxCols, $row]);
+            $sheet->getStyle([1, $row])->getFont()->setBold(true)->setSize(11);
+            $sheet->getStyle([1, $row])->getFill()
+                ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                ->getStartColor()->setRGB('E8EDF5');
+            $sheet->getStyle([1, $row])->getAlignment()->setVertical($vcenter);
+            $row++;
+
+            $courses = $block['courses'];
+            $headerRow = $row;      // kurs nomlari
+            $dataStartRow = $row + 1;
+
+            // Har bir kurs uchun ustun bloklari
+            $colBase = 1;
+            $blockBottomRow = $dataStartRow; // eng uzun kurs qayerda tugashini kuzatamiz
+            foreach ($courses as $course) {
+                // Kurs sarlavhasi (3 ustunni birlashtiramiz)
+                $sheet->setCellValue([$colBase, $headerRow], $course['level_name']);
+                $sheet->mergeCells([$colBase, $headerRow, $colBase + 2, $headerRow]);
+                $sheet->getStyle([$colBase, $headerRow])->getFont()->setBold(true);
+                $sheet->getStyle([$colBase, $headerRow])->getAlignment()->setHorizontal($center)->setVertical($vcenter);
+                $sheet->getStyle([$colBase, $headerRow])->getFill()
+                    ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                    ->getStartColor()->setRGB('DBE4EF');
+
+                $cur = $dataStartRow;
+                foreach ($course['oqims'] as $oqim) {
+                    $oqimTop = $cur;
+                    foreach ($oqim['rows'] as $gr) {
+                        $sheet->setCellValue([$colBase + 1, $cur], $gr['name']);
+                        $sheet->setCellValue([$colBase + 2, $cur], $gr['count']);
+                        $sheet->getStyle([$colBase + 2, $cur])->getAlignment()->setHorizontal($center);
+                        $cur++;
+                    }
+                    $oqimBottom = $cur - 1;
+                    if ($oqimBottom >= $oqimTop) {
+                        // Oqim yorlig'ini birinchi ustunga, guruhlar sonicha birlashtirib yozamiz
+                        $sheet->setCellValue([$colBase, $oqimTop], $oqim['label']);
+                        if ($oqimBottom > $oqimTop) {
+                            $sheet->mergeCells([$colBase, $oqimTop, $colBase, $oqimBottom]);
+                        }
+                        $sheet->getStyle([$colBase, $oqimTop])->getAlignment()->setHorizontal($center)->setVertical($vcenter);
+                        $sheet->getStyle([$colBase, $oqimTop])->getFont()->setBold(true);
+                    }
+                }
+
+                // Jami (kurs bo'yicha talaba soni)
+                $sheet->setCellValue([$colBase, $cur], 'Jami');
+                $sheet->mergeCells([$colBase, $cur, $colBase + 1, $cur]);
+                $sheet->setCellValue([$colBase + 2, $cur], $course['total']);
+                $sheet->getStyle([$colBase, $cur, $colBase + 2, $cur])->getFont()->setBold(true);
+                $sheet->getStyle([$colBase, $cur])->getAlignment()->setHorizontal($center);
+                $sheet->getStyle([$colBase + 2, $cur])->getAlignment()->setHorizontal($center);
+                $sheet->getStyle([$colBase, $cur, $colBase + 2, $cur])->getFill()
+                    ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
+                    ->getStartColor()->setRGB('F1F5F9');
+
+                $courseBottom = $cur;
+                if ($courseBottom > $blockBottomRow) {
+                    $blockBottomRow = $courseBottom;
+                }
+                $colBase += 3;
+            }
+
+            // Ramka: kurs sarlavhasidan blok oxirigacha
+            $usedCols = max(3, ($colBase - 1));
+            $lastCL = \PhpOffice\PhpSpreadsheet\Cell\Coordinate::stringFromColumnIndex($usedCols);
+            $sheet->getStyle("A{$headerRow}:{$lastCL}{$blockBottomRow}")
+                ->getBorders()->getAllBorders()->setBorderStyle($B);
+
+            $row = $blockBottomRow + 2; // bloklar orasida bo'sh qator
+        }
+
+        // Ustun kengliklari: har kurs uchun oqim(6) guruh(16) son(8)
+        for ($c = 1; $c <= $maxCols; $c += 3) {
+            $sheet->getColumnDimensionByColumn($c)->setWidth(7);
+            $sheet->getColumnDimensionByColumn($c + 1)->setWidth(16);
+            $sheet->getColumnDimensionByColumn($c + 2)->setWidth(7);
+        }
+    }
 }

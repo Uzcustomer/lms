@@ -278,6 +278,25 @@
                                     <td>
                                         <a href="{{ route('admin.vedomost-submission.show', $v->id) }}"
                                            style="color:#1a3268;font-weight:600;text-decoration:none;white-space:nowrap;">Batafsil →</a>
+                                        @if(!empty($canManage))
+                                            @php $manualForms = \App\Models\VedomostSubmission::manualOpenableForms($v->closing_form ?? null); @endphp
+                                            <form method="POST"
+                                                  action="{{ route('admin.vedomost-submission.manual-open', $v->id) }}"
+                                                  onsubmit="return confirm('Shu vedomost uchun tanlangan shaklni qo\\'lda ochaylikmi?');"
+                                                  style="margin-top:8px;display:flex;flex-direction:column;gap:6px;min-width:160px;">
+                                                @csrf
+                                                <select name="form_type"
+                                                        style="height:34px;border:1px solid #cbd5e1;border-radius:8px;padding:0 10px;font-size:12px;color:#1e293b;background:#fff;">
+                                                    @foreach($manualForms as $manualKey => $manualLabel)
+                                                        <option value="{{ $manualKey }}" {{ ($v->form_type ?? '12') === $manualKey ? 'selected' : '' }}>{{ $manualLabel }}</option>
+                                                    @endforeach
+                                                </select>
+                                                <button type="submit"
+                                                        style="background:#2563eb;color:#fff;border:none;border-radius:8px;height:34px;padding:0 12px;cursor:pointer;font-size:12px;font-weight:600;">
+                                                    Qo'lda ochish
+                                                </button>
+                                            </form>
+                                        @endif
                                     </td>
                                 </tr>
                             @empty

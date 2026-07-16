@@ -788,8 +788,13 @@ class IndividualExamScheduleController extends Controller
                 (string) $subject->semester_code
             );
 
+            if (!$stagePayload) {
+                $result[$key] = $this->defaultEligibility();
+                continue;
+            }
+
             $scenarios = $stagePayload['studentScenarios'][$hemisId] ?? null;
-            if (!$stagePayload || !$scenarios) {
+            if (!$scenarios) {
                 $result[$key] = $this->defaultEligibility();
                 continue;
             }

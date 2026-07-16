@@ -838,7 +838,7 @@ class IndividualExamScheduleController extends Controller
                 2 => $allow2
                     ? ($failed1ByDate
                         ? '1-urinish sanasi o'tib, baho kelmagani uchun 2-urinish ochildi.'
-                        : '1-urinish bahosi 60 dan past bo'lgani uchun 2-urinish ochildi.')
+                        : "1-urinish bahosi 60 dan past bo'lgani uchun 2-urinish ochildi.")
                     : ($has2
                         ? '2-urinish uchun baho allaqachon mavjud.'
                         : ($failed1
@@ -847,7 +847,7 @@ class IndividualExamScheduleController extends Controller
                 3 => $allow3
                     ? ($failed2ByDate
                         ? '2-urinish sanasi o'tib, baho kelmagani uchun 3-urinish ochildi.'
-                        : '2-urinish bahosi 60 dan past bo'lgani uchun 3-urinish ochildi.')
+                        : "2-urinish bahosi 60 dan past bo'lgani uchun 3-urinish ochildi.")
                     : ($has3
                         ? '3-urinish uchun baho allaqachon mavjud.'
                         : ($failed2

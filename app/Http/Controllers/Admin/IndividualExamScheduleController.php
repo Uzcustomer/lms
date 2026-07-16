@@ -820,25 +820,25 @@ class IndividualExamScheduleController extends Controller
             $failed1ByDate = !$has1 && $this->hasAttemptDatePassed($schedule, $closingForm, 1);
             $failed2ByDate = !$has2 && $this->hasAttemptDatePassed($schedule, $closingForm, 2);
 
-            $failed1 = $failed1ByGrade || $failed1ByDate;
+            $failed1 = $has1 || $failed1ByDate;
             $failed2 = $failed2ByGrade || $failed2ByDate;
 
-            $allow1 = !$has1 && !$failed1;
+            $allow1 = !$has1 && !$failed1ByDate;
             $allow2 = $failed1 && !$has2 && !$failed2;
             $allow3 = $failed2 && !$has3;
 
             $reasons = [
                 1 => $allow1
                     ? '1-urinish ochiq.'
-                    : ($failed1ByDate
-                        ? '1-urinish sanasi o'tgan, lekin baho kelmagan.'
-                        : ($failed1ByGrade
-                            ? '1-urinish bahosi 60 dan past.'
-                            : '1-urinish uchun baho allaqachon mavjud.')),
+                    : ($has1
+                        ? '1-urinish uchun baho allaqachon mavjud.'
+                        : '1-urinish sanasi o'tgan, lekin baho kelmagan.'),
                 2 => $allow2
                     ? ($failed1ByDate
                         ? '1-urinish sanasi o'tib, baho kelmagani uchun 2-urinish ochildi.'
-                        : "1-urinish bahosi 60 dan past bo'lgani uchun 2-urinish ochildi.")
+                        : ($failed1ByGrade
+                            ? "1-urinish bahosi 60 dan past bo'lgani uchun 2-urinish ochildi."
+                            : "1-urinish bahosi mavjud bo'lgani uchun 2-urinish ochildi."))
                     : ($has2
                         ? '2-urinish uchun baho allaqachon mavjud.'
                         : ($failed1

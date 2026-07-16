@@ -9,6 +9,8 @@ use App\Models\IndividualScheduleAudit;
 use App\Models\Semester;
 use App\Models\Student;
 use App\Services\ExamDateRoleService;
+use App\Services\YnAttemptStatusService;
+use App\Services\YnStageService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -155,10 +157,10 @@ class IndividualExamScheduleController extends Controller
             $existingScheduleRows->all()
         )));
 
-        // curriculum_subjects'dan joriy semestr fanlari (asosiy ro'yxat)
+        // curriculum_subjects'dan joriy semestr fanlari (asosiy ro'yxat).
+        // Inactive fanlar ham olinadi, lekin active yozuv mavjud bo'lsa o'shani ustun qo'yamiz.
         $subjectsQuery = DB::table('curriculum_subjects')
-            ->where('curricula_hemis_id', $group->curriculum_hemis_id)
-            ->where('is_active', true);
+            ->where('curricula_hemis_id', $group->curriculum_hemis_id);
         if (!empty($semCodes) || !empty($extraSubjectIds)) {
             $subjectsQuery->where(function ($q) use ($semCodes, $extraSubjectIds, $extraSemCodes) {
                 if (!empty($semCodes)) {
@@ -173,22 +175,33 @@ class IndividualExamScheduleController extends Controller
             });
         }
         $subjects = $subjectsQuery
-            ->select('subject_id', 'subject_name', 'semester_code', 'closing_form', 'curriculum_subject_hemis_id')
+            ->select('subject_id', 'subject_name', 'semester_code', 'closing_form', 'curriculum_subject_hemis_id', 'is_active')
+            ->orderByDesc('is_active')
             ->orderBy('semester_code')
             ->orderBy('subject_name')
-            ->get();
+            ->get()
+            ->groupBy(fn ($s) => $s->subject_id . '|' . $s->semester_code)
+            ->map(fn ($rows) => $rows->first())
+            ->values();
 
         // curriculum_subjects'da yo'q lekin exam_schedules'da bor fanlarni
         // ham qo'shamiz (HEMIS rejasidan tushib qolgan eski fanlar uchun)
         $subjectsByKey = $subjects->keyBy(fn ($s) => $s->subject_id . '|' . $s->semester_code);
         foreach ($extraSubjectKeys as $key => $row) {
             if (!isset($subjectsByKey[$key])) {
+                $fallbackSubject = DB::table('curriculum_subjects')
+                    ->where('curricula_hemis_id', $group->curriculum_hemis_id)
+                    ->where('subject_id', $row->subject_id)
+                    ->where('semester_code', $row->semester_code)
+                    ->orderByDesc('is_active')
+                    ->first();
+
                 $subjectsByKey[$key] = (object) [
                     'subject_id' => $row->subject_id,
-                    'subject_name' => $row->subject_name ?: $row->subject_id,
+                    'subject_name' => $row->subject_name ?: ($fallbackSubject->subject_name ?? $row->subject_id),
                     'semester_code' => $row->semester_code,
-                    'closing_form' => null,
-                    'curriculum_subject_hemis_id' => null,
+                    'closing_form' => $fallbackSubject->closing_form ?? null,
+                    'curriculum_subject_hemis_id' => $fallbackSubject->curriculum_subject_hemis_id ?? null,
                 ];
             }
         }
@@ -377,7 +390,12 @@ class IndividualExamScheduleController extends Controller
 
         // Eligibility tekshiruvi — qaytarilgan stage va sabablar
         $elig = $this->computeEligibilityForStudent($hemisId, $student->group_id, collect([
-            (object) ['subject_id' => $subjectId, 'semester_code' => $semCode, 'subject_name' => $subjectName],
+            (object) [
+                'subject_id' => $subjectId,
+                'semester_code' => $semCode,
+                'subject_name' => $subjectName,
+                'closing_form' => $subject?->closing_form,
+            ],
         ]))[$subjectId . '|' . $semCode] ?? null;
 
         $eligOk = $this->isAttemptAllowed($elig, $attempt);
@@ -750,80 +768,110 @@ class IndividualExamScheduleController extends Controller
 
     /**
      * Talabaning har fan uchun eligibility (1/2/3 urinishga huquqi).
-     * Hozircha minimal versiya — student_grades dan attempt 1/2/3 yozuvlari
-     * va V (retake_grade yoki grade) qiymatlari asosida. JN/MT to'liq
-     * hisoblash JournalGradeService orqali kerak — bu kelgusi iteratsiyada
-     * qo'shiladi.
-     *
-     * Qaytarilgan tuzilma har subject uchun:
-     *  - stage: 'in_progress' | 'failed1' | 'failed2' | 'passed' | ...
-     *  - allow_1: bool, allow_2: bool, allow_3: bool
-     *  - reasons: ['1' => 'Sabab', '2' => 'Sabab', '3' => 'Sabab']
+     * Individual exam schedule sahifasi uchun badge va ruxsatlar markaziy
+     * YN stage hisobi bilan bir xil manbadan olinadi.
      */
     private function computeEligibilityForStudent(string $hemisId, $groupId, $subjects): array
     {
         $result = [];
         if ($subjects->isEmpty()) return $result;
 
-        $hasAttemptCol = Schema::hasColumn('student_grades', 'attempt');
-        $subjectIds = $subjects->pluck('subject_id')->unique()->all();
-        $semCodes = $subjects->pluck('semester_code')->unique()->all();
-
-        // Talabaning shu fanlardagi baholari
-        $grades = DB::table('student_grades')
-            ->where('student_hemis_id', $hemisId)
-            ->whereIn('subject_id', $subjectIds)
-            ->whereIn('semester_code', $semCodes)
-            ->whereIn('training_type_code', [101, 102])
-            ->whereNull('deleted_at')
-            ->select('subject_id', 'semester_code', 'training_type_code',
-                'grade', 'retake_grade',
-                $hasAttemptCol ? 'attempt' : DB::raw('1 as attempt'))
-            ->get()
-            ->groupBy(fn ($r) => $r->subject_id . '|' . $r->semester_code);
+        $stageService = app(YnStageService::class);
 
         foreach ($subjects as $subject) {
             $key = $subject->subject_id . '|' . $subject->semester_code;
-            $subjGrades = $grades->get($key) ?? collect();
+            $closingForm = $subject->closing_form ?? null;
 
-            // Har attempt uchun baholar bor-yo'qligi va V<60 ekanligini aniqlash
-            $failed1 = false; $failed2 = false;
-            $has1 = false; $has2 = false; $has3 = false;
-            foreach ($subjGrades as $g) {
-                $att = (int) ($g->attempt ?? 1);
-                $val = $g->retake_grade ?? $g->grade;
-                if ($att <= 1) {
-                    $has1 = true;
-                    if ($val !== null && (float) $val < 60) $failed1 = true;
-                } elseif ($att === 2) {
-                    $has2 = true;
-                    if ($val !== null && (float) $val < 60) $failed2 = true;
-                } elseif ($att === 3) {
-                    $has3 = true;
-                }
+            $stagePayload = $stageService->computeForGroupSubject(
+                (string) $groupId,
+                (string) $subject->subject_id,
+                (string) $subject->semester_code
+            );
+
+            $scenarios = $stagePayload['studentScenarios'][$hemisId] ?? null;
+            if (!$stagePayload || !$scenarios) {
+                $result[$key] = $this->defaultEligibility();
+                continue;
             }
 
-            // Eligibility qoidalari (sodda, kengaytirilishi mumkin):
-            //  1-urinish: doim ruxsat (admin xohlasa erta qo'yadi)
-            //  2-urinish: 1-urinishda yiqilgan bo'lsa yoki hali 1 baholari kelmagan bo'lsa, lekin admin ruxsat berishi mumkin
-            //  3-urinish: 2-urinishda yiqilgan bo'lsa
-            $allow1 = true;
-            $allow2 = $failed1; // standart
-            $allow3 = $failed2;
+            $main = $scenarios['main'] ?? ['v' => '', 'jn' => 0, 'mt' => 0, 'oski' => null, 'test' => null];
+            $qoshimcha = $scenarios['qoshimcha'] ?? null;
+            $a = $scenarios['a'] ?? null;
+            $aQoshimcha = $scenarios['aQoshimcha'] ?? null;
+            $b = $scenarios['b'] ?? null;
+            $bQoshimcha = $scenarios['bQoshimcha'] ?? null;
 
-            $reasons = [];
-            if (!$failed1 && $has1) {
-                $reasons[2] = '1-urinishni topshirgan (V≥60) — 2-urinishga ehtiyoj yo\'q';
-            } elseif (!$has1) {
-                $reasons[2] = '1-urinish baholari hali kelmagan';
-            }
-            if (!$failed2 && $has2) {
-                $reasons[3] = '2-urinishni topshirgan (V≥60) — 3-urinishga ehtiyoj yo\'q';
-            } elseif (!$has2) {
-                $reasons[3] = '2-urinish baholari hali kelmagan';
-            }
+            $stageInfo = YnAttemptStatusService::determineStage($main, $qoshimcha, $a, $aQoshimcha, $b, $bQoshimcha);
+            $stage = $stageInfo['stage'];
+            $stageLabel = YnAttemptStatusService::stageLabel($stage);
+
+            $has1 = $this->scenarioHasExamGrade($main, $closingForm)
+                || $this->scenarioHasExamGrade($qoshimcha, $closingForm);
+            $has2 = $this->scenarioHasExamGrade($a, $closingForm)
+                || $this->scenarioHasExamGrade($aQoshimcha, $closingForm);
+            $has3 = $this->scenarioHasExamGrade($b, $closingForm)
+                || $this->scenarioHasExamGrade($bQoshimcha, $closingForm);
+
+            $firstFailedStages = [
+                YnAttemptStatusService::STAGE_IN_12A,
+                YnAttemptStatusService::STAGE_IN_12A_PULLIK,
+                YnAttemptStatusService::STAGE_12A_PASSED,
+                YnAttemptStatusService::STAGE_12A_QOSHIMCHA_PASSED,
+                YnAttemptStatusService::STAGE_IN_12B,
+                YnAttemptStatusService::STAGE_IN_12B_PULLIK,
+                YnAttemptStatusService::STAGE_12B_PASSED,
+                YnAttemptStatusService::STAGE_12B_QOSHIMCHA_PASSED,
+                YnAttemptStatusService::STAGE_FAILED_PULLIK,
+            ];
+            $secondFailedStages = [
+                YnAttemptStatusService::STAGE_IN_12B,
+                YnAttemptStatusService::STAGE_IN_12B_PULLIK,
+                YnAttemptStatusService::STAGE_12B_PASSED,
+                YnAttemptStatusService::STAGE_12B_QOSHIMCHA_PASSED,
+                YnAttemptStatusService::STAGE_FAILED_PULLIK,
+            ];
+            $pullikStages = [
+                YnAttemptStatusService::STAGE_IN_12A_PULLIK,
+                YnAttemptStatusService::STAGE_IN_12B_PULLIK,
+                YnAttemptStatusService::STAGE_FAILED_PULLIK,
+            ];
+
+            $failed1 = $has1 && in_array($stage, $firstFailedStages, true);
+            $failed2 = $has2 && in_array($stage, $secondFailedStages, true);
+            $isPullik = in_array($stage, $pullikStages, true);
+
+            $allow1 = !$has1;
+            $allow2 = $failed1 && !$has2 && !$isPullik;
+            $allow3 = $failed2 && !$has3 && !$isPullik;
+
+            $reasons = [
+                1 => $has1 ? '1-urinish uchun yakuniy baho mavjud.' : '1-urinish hali yopilmagan.',
+                2 => $allow2
+                    ? '1-urinishdan o\'tmagan — 2-urinish ochiq.'
+                    : ($isPullik
+                        ? $stageInfo['reason']
+                        : ($has2
+                            ? '2-urinish uchun yakuniy baho mavjud.'
+                            : ($has1
+                                ? '2-urinishga ehtiyoj yo\'q.'
+                                : '1-urinish hali yopilmagan.'))),
+                3 => $allow3
+                    ? '2-urinishdan o\'tmagan — 3-urinish ochiq.'
+                    : ($isPullik
+                        ? $stageInfo['reason']
+                        : ($has3
+                            ? '3-urinish uchun yakuniy baho mavjud.'
+                            : ($has2
+                                ? '3-urinishga ehtiyoj yo\'q.'
+                                : '2-urinish hali yopilmagan.'))),
+            ];
 
             $result[$key] = [
+                'stage' => $stage,
+                'stage_label' => $stageLabel['label'] ?? $stage,
+                'stage_short' => $stageLabel['short'] ?? $stage,
+                'stage_reason' => $stageInfo['reason'] ?? null,
+                'active_attempt' => $this->resolveActiveAttempt($stage, $has1, $has2, $has3),
                 'has_attempt_1_grade' => $has1,
                 'has_attempt_2_grade' => $has2,
                 'has_attempt_3_grade' => $has3,
@@ -837,6 +885,81 @@ class IndividualExamScheduleController extends Controller
         }
 
         return $result;
+    }
+
+    private function scenarioHasExamGrade(?array $scenario, ?string $closingForm): bool
+    {
+        if (!$scenario) {
+            return false;
+        }
+
+        $hasOski = array_key_exists('oski', $scenario) && $scenario['oski'] !== null;
+        $hasTest = array_key_exists('test', $scenario) && $scenario['test'] !== null;
+
+        return match ($closingForm) {
+            'oski' => $hasOski,
+            'oski_test' => $hasOski && $hasTest,
+            'test', 'sinov', 'normativ' => $hasTest,
+            default => $hasOski || $hasTest,
+        };
+    }
+
+    private function resolveActiveAttempt(string $stage, bool $has1, bool $has2, bool $has3): int
+    {
+        if (!$has1) {
+            return 1;
+        }
+
+        if (in_array($stage, [
+            YnAttemptStatusService::STAGE_IN_12B,
+            YnAttemptStatusService::STAGE_IN_12B_PULLIK,
+        ], true) && !$has3) {
+            return 3;
+        }
+
+        if (in_array($stage, [
+            YnAttemptStatusService::STAGE_IN_12A,
+            YnAttemptStatusService::STAGE_IN_12A_PULLIK,
+        ], true) && !$has2) {
+            return 2;
+        }
+
+        if ($has3) {
+            return 3;
+        }
+
+        if ($has2) {
+            return 2;
+        }
+
+        return 1;
+    }
+
+    private function defaultEligibility(): array
+    {
+        $stage = YnAttemptStatusService::STAGE_IN_PROGRESS;
+        $label = YnAttemptStatusService::stageLabel($stage);
+
+        return [
+            'stage' => $stage,
+            'stage_label' => $label['label'] ?? $stage,
+            'stage_short' => $label['short'] ?? $stage,
+            'stage_reason' => 'Fan bo\'yicha YN stage topilmadi.',
+            'active_attempt' => 1,
+            'has_attempt_1_grade' => false,
+            'has_attempt_2_grade' => false,
+            'has_attempt_3_grade' => false,
+            'failed_attempt_1' => false,
+            'failed_attempt_2' => false,
+            'allow_1' => true,
+            'allow_2' => false,
+            'allow_3' => false,
+            'reasons' => [
+                1 => '1-urinish hali yopilmagan.',
+                2 => '1-urinish hali yopilmagan.',
+                3 => '2-urinish hali yopilmagan.',
+            ],
+        ];
     }
 
     private function isAttemptAllowed(?array $elig, int $attempt): bool

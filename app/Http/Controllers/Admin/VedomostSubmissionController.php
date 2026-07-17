@@ -207,9 +207,9 @@ class VedomostSubmissionController extends Controller
 
     /**
      * Qo'lda ochish modali uchun 12-shakl bazalarini qaytaradi.
-     * Form/status filtri qo'llanmaydi — admin har doim asosiy guruh+fanlarni ko'rsin.
+     * Sahifadagi filtrlar bilan cheklanmaydi — admin har doim barcha mos guruh+fanlarni ko'rsin.
      */
-    private function manualOpenOptions(Request $request, $selectedEducationType): array
+    private function manualOpenOptions(): array
     {
         $query = DB::table('vedomost_submissions as vs')
             ->join('groups as g', function ($join) {
@@ -225,33 +225,6 @@ class VedomostSubmissionController extends Controller
             ->where('vs.form_type', VedomostSubmission::FORM_12)
             ->whereIn('vs.closing_form', VedomostSubmissionService::RESIT_CLOSING_FORMS);
 
-        if ($selectedEducationType) {
-            $query->where('c.education_type_code', $selectedEducationType);
-        }
-        if ($request->filled('faculty')) {
-            $query->where('f.id', $request->faculty);
-        }
-        if ($request->filled('specialty')) {
-            $query->where('vs.specialty_name', $request->specialty);
-        }
-        if ($request->filled('level_code')) {
-            $query->where('s.level_code', $request->level_code);
-        }
-        if ($request->filled('semester_code')) {
-            $query->where('vs.semester_code', $request->semester_code);
-        }
-        if ($request->filled('subject_name')) {
-            $query->where('vs.subject_name', 'like', '%' . $request->subject_name . '%');
-        }
-        if ($request->filled('closing_form_filter')) {
-            $query->where('vs.closing_form', $request->closing_form_filter);
-        }
-        if ($request->boolean('overdue')) {
-            $query->whereNotNull('vs.deadline')
-                ->whereDate('vs.deadline', '<', now()->toDateString())
-                ->where('vs.status', '!=', VedomostSubmission::STATUS_APPROVED);
-        }
-
         $rows = $query
             ->orderBy('vs.group_name')
             ->orderBy('vs.subject_name')
@@ -261,6 +234,7 @@ class VedomostSubmissionController extends Controller
                 'vs.subject_id',
                 'vs.subject_name',
                 'vs.semester_code',
+                's.name as semester_name',
                 'vs.closing_form',
                 'vs.specialty_name',
             ]);
@@ -280,6 +254,7 @@ class VedomostSubmissionController extends Controller
                             'subject_id' => (string) $row->subject_id,
                             'subject_name' => $row->subject_name,
                             'semester_code' => (string) $row->semester_code,
+                            'semester_name' => $row->semester_name ?: ($row->semester_code ? ($row->semester_code . '-semestr') : null),
                             'closing_form' => $row->closing_form,
                         ])
                         ->sortBy('subject_name', SORT_NATURAL | SORT_FLAG_CASE)
@@ -356,7 +331,7 @@ class VedomostSubmissionController extends Controller
         $canToggleNotify = in_array(session('active_role', ''), self::NOTIFY_TOGGLE_ROLES, true);
         $canManage = in_array(session('active_role', ''), self::ALLOWED_ROLES, true);
         $manualOpenGroups = $canManage
-            ? $this->manualOpenOptions($request, $selectedEducationType)
+            ? $this->manualOpenOptions()
             : [];
         $syncProgress = Cache::get('vedomost_submission_sync_progress', ['status' => 'idle']);
 

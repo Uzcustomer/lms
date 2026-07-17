@@ -504,6 +504,13 @@
                     option.textContent = group.group_name + (group.specialty_name ? ' — ' + group.specialty_name : '');
                     manualOpenGroup.appendChild(option);
                 });
+
+                $(manualOpenGroup).select2({
+                    dropdownParent: $('#manual-open-modal'),
+                    theme: 'classic',
+                    width: '100%',
+                    placeholder: 'Guruhni typing qilib qidiring'
+                });
             }
 
             function fillManualSubjects(groupId) {
@@ -526,8 +533,9 @@
                 selectedGroup.subjects.forEach(function (subject) {
                     const option = document.createElement('option');
                     option.value = subject.subject_id;
-                    option.textContent = subject.subject_name + ' (semestr ' + subject.semester_code + ')';
+                    option.textContent = subject.subject_name + ' (' + (subject.semester_name || (subject.semester_code + '-semestr')) + ')';
                     option.dataset.semesterCode = subject.semester_code;
+                    option.dataset.semesterName = subject.semester_name || '';
                     option.dataset.closingForm = subject.closing_form;
                     manualOpenSubject.appendChild(option);
                 });
@@ -540,11 +548,12 @@
 
                 const selected = manualOpenSubject.options[manualOpenSubject.selectedIndex];
                 const semesterCode = selected ? (selected.dataset.semesterCode || '') : '';
+                const semesterName = selected ? (selected.dataset.semesterName || '') : '';
                 const closingForm = selected ? (selected.dataset.closingForm || '') : '';
 
                 manualOpenSemester.value = semesterCode;
                 manualOpenMeta.textContent = semesterCode
-                    ? 'Semestr: ' + semesterCode + (closingForm ? ' | Yopilish shakli: ' + closingForm : '')
+                    ? 'Semestr: ' + (semesterName || semesterCode) + (closingForm ? ' | Yopilish shakli: ' + closingForm : '')
                     : '';
             }
 

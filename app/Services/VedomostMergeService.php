@@ -87,7 +87,8 @@ class VedomostMergeService
     public function mergeKey(object $row): string
     {
         $formType = $row->form_type ?? VedomostSubmission::FORM_12;
-        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true);
+        $isManual = !empty($row->manual_opened_at ?? null);
+        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true) && !$isManual;
 
         return implode('|', [
             $formType,
@@ -134,7 +135,8 @@ class VedomostMergeService
             ->first();
 
         $formType = $rep->form_type ?? VedomostSubmission::FORM_12;
-        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true);
+        $isManual = !empty($rep->manual_opened_at ?? null);
+        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true) && !$isManual;
 
         $subgroups = $group->pluck('group_name')->filter()->unique()->sort()->values();
 

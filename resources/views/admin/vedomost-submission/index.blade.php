@@ -505,6 +505,9 @@
                     manualOpenGroup.appendChild(option);
                 });
 
+                if ($(manualOpenGroup).hasClass('select2-hidden-accessible')) {
+                    $(manualOpenGroup).select2('destroy');
+                }
                 $(manualOpenGroup).select2({
                     dropdownParent: $('#manual-open-modal'),
                     theme: 'classic',
@@ -594,12 +597,12 @@
                 });
             }
             if (manualOpenGroup) {
-                manualOpenGroup.addEventListener('change', function () {
-                    fillManualSubjects(this.value);
+                $(manualOpenGroup).on('change select2:select', function () {
+                    fillManualSubjects($(this).val());
                 });
             }
             if (manualOpenSubject) {
-                manualOpenSubject.addEventListener('change', syncManualMeta);
+                $(manualOpenSubject).on('change', syncManualMeta);
             }
         });
     </script>
@@ -624,5 +627,27 @@
         .vd-table tbody tr:hover { background: #f8fafc; }
         .vd-person { cursor: help; }
         .vd-merge { display:inline-block; margin-left:6px; background:#eef2ff; color:#4338ca; font-size:10px; font-weight:700; padding:1px 7px; border-radius:999px; cursor:help; white-space:nowrap; }
+
+        #manual-open-modal .select2-container--classic .select2-selection--single {
+            height: 42px;
+            border: 1px solid #cbd5e1;
+            border-radius: 10px;
+            background: #fff;
+            box-shadow: none;
+        }
+        #manual-open-modal .select2-container--classic .select2-selection--single .select2-selection__rendered {
+            line-height: 40px;
+            padding-left: 12px;
+            padding-right: 34px;
+            color: #0f172a;
+            font-size: 14px;
+        }
+        #manual-open-modal .select2-container--classic .select2-selection--single .select2-selection__arrow {
+            height: 40px;
+            right: 8px;
+        }
+        #manual-open-modal .select2-container {
+            width: 100% !important;
+        }
     </style>
 </x-app-layout>

@@ -11315,6 +11315,13 @@ class ReportController extends Controller
         // JSON uchun asosiy (birinchi) variantni ham qulay ko'rinishda beramiz
         $firstVariant = array_key_first($byVariant);
 
+        // Optimizatsiya bosilganda — nima o'zgarishi haqida reja (dialog uchun)
+        $plan = null;
+        if ($params['optimize']) {
+            $planVariant = ($variantParam === 'all') ? 'auto' : array_key_first($variants);
+            $plan = $this->computeOptimizationPlan($blocks, $params, $planVariant);
+        }
+
         return [
             'header'    => $header,
             'variants'  => $variants,
@@ -11322,7 +11329,82 @@ class ReportController extends Controller
             'blocks'    => $byVariant[$firstVariant],
             'params'    => $params,
             'optimize'  => $params['optimize'],
+            'plan'      => $plan,
             'generated_at' => now()->format('d.m.Y H:i'),
+        ];
+    }
+
+    /**
+     * Optimizatsiya rejasi: joriy holat (HEMISdagi kichik guruhlar) bilan me'yor
+     * bo'yicha optimal holatni solishtiradi va nima o'zgarishi kerakligini tushuntiradi
+     * — qaysi guruhchani bekor qilib, talabalarni qayerga qo'shish, natijada nechta
+     * guruhcha kamayishi.
+     */
+    private function computeOptimizationPlan(array $blocks, array $params, string $variant): array
+    {
+        $curParams = ['optimize' => false] + $params;
+        $optParams = ['optimize' => true] + $params;
+
+        $curSub = 0;
+        $optSub = 0;
+        $oqimCount = 0;
+        $moves = [];
+
+        foreach ($blocks as $block) {
+            foreach ($block['courses'] as $course) {
+                $bases = $this->aggregateBaseGroups($course['groups']);
+                $levelNum = $this->oqimLevelNumber($course['level_name'], (string) $course['level_code']);
+                $oqimCount += count($this->packOqims($bases, $params['oqim_max'], $params['oqim_tol']));
+
+                foreach ($bases as $bg) {
+                    $eff = $variant === 'auto' ? ($levelNum >= 4 ? 'abc' : 'ab') : $variant;
+                    if ($eff === 'full') {
+                        $curSub++;
+                        $optSub++;
+                        continue;
+                    }
+
+                    $cur = $this->oqimSubgroupRows($bg, $variant, $curParams, $levelNum);
+                    $opt = $this->oqimSubgroupRows($bg, $variant, $optParams, $levelNum);
+                    $curSub += count($cur);
+                    $optSub += count($opt);
+
+                    $curCounts = array_map(fn($r) => $r['count'], $cur);
+                    $optCounts = array_map(fn($r) => $r['count'], $opt);
+
+                    if (count($opt) < count($cur)) {
+                        $letters = ['a', 'b', 'c', 'd', 'e', 'f'];
+                        $removed = [];
+                        for ($i = count($opt); $i < count($cur); $i++) {
+                            $removed[] = strtoupper($letters[$i] ?? (string) ($i + 1));
+                        }
+                        $moves[] = [
+                            'type'       => 'reduce',
+                            'block'      => $block['title'],
+                            'course'     => $course['level_name'],
+                            'base'       => $bg['base'],
+                            'lang'       => $bg['lang_label'],
+                            'total'      => $bg['total'],
+                            'cur_n'      => count($cur),
+                            'opt_n'      => count($opt),
+                            'cur_counts' => array_values($curCounts),
+                            'opt_counts' => array_values($optCounts),
+                            'removed'    => $removed,
+                        ];
+                    }
+                }
+            }
+        }
+
+        // Eng ko'p guruhcha kamaytiradiganlar birinchi
+        usort($moves, fn($a, $b) => ($b['cur_n'] - $b['opt_n']) <=> ($a['cur_n'] - $a['opt_n']));
+
+        return [
+            'cur_subgroups' => $curSub,
+            'opt_subgroups' => $optSub,
+            'reduce'        => $curSub - $optSub,
+            'oqim_count'    => $oqimCount,
+            'moves'         => $moves,
         ];
     }
 
@@ -11365,14 +11447,17 @@ class ReportController extends Controller
                 $displayOqims = [];
                 foreach ($oqims as $idx => $oq) {
                     $rowsOut = [];
+                    $oqimTotal = 0;
                     foreach ($oq as $bg) {
                         $total += $bg['total'];
+                        $oqimTotal += $bg['total'];
                         foreach ($this->oqimSubgroupRows($bg, $variant, $params, $levelNum) as $sub) {
                             $rowsOut[] = $sub;
                         }
                     }
                     $displayOqims[] = [
                         'label' => ($idx + 1) . '-oqim',
+                        'total' => $oqimTotal,
                         'rows'  => $rowsOut,
                     ];
                 }
@@ -11700,12 +11785,15 @@ class ReportController extends Controller
                     }
                     $oqimBottom = $cur - 1;
                     if ($oqimBottom >= $oqimTop) {
-                        // Oqim yorlig'ini birinchi ustunga, guruhlar sonicha birlashtirib yozamiz
-                        $sheet->setCellValue([$colBase, $oqimTop], $oqim['label']);
+                        // Oqim yorlig'ini birinchi ustunga, guruhlar sonicha birlashtirib yozamiz.
+                        // Yorliq ostida oqimdagi jami talaba soni ko'rsatiladi.
+                        $label = $oqim['label'] . "\n(" . ($oqim['total'] ?? 0) . " ta)";
+                        $sheet->setCellValue([$colBase, $oqimTop], $label);
                         if ($oqimBottom > $oqimTop) {
                             $sheet->mergeCells([$colBase, $oqimTop, $colBase, $oqimBottom]);
                         }
-                        $sheet->getStyle([$colBase, $oqimTop])->getAlignment()->setHorizontal($center)->setVertical($vcenter);
+                        $sheet->getStyle([$colBase, $oqimTop])->getAlignment()
+                            ->setHorizontal($center)->setVertical($vcenter)->setWrapText(true);
                         $sheet->getStyle([$colBase, $oqimTop])->getFont()->setBold(true);
                     }
                 }
@@ -11739,7 +11827,7 @@ class ReportController extends Controller
 
         // Ustun kengliklari: har kurs uchun oqim(6) guruh(16) son(8)
         for ($c = 1; $c <= $maxCols; $c += 3) {
-            $sheet->getColumnDimensionByColumn($c)->setWidth(7);
+            $sheet->getColumnDimensionByColumn($c)->setWidth(9);
             $sheet->getColumnDimensionByColumn($c + 1)->setWidth(16);
             $sheet->getColumnDimensionByColumn($c + 2)->setWidth(7);
         }

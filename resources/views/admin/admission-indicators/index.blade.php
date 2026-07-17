@@ -198,30 +198,30 @@
             <div class="overflow-x-auto">
                 <form id="admissionTableFiltersForm" method="GET" action="{{ route('admin.admission-indicators.index') }}"></form>
                 <table class="min-w-full text-[13px]">
-                    <thead class="bg-gradient-to-r from-sky-50 via-white to-emerald-50 text-slate-700">
+                    <thead class="text-slate-700">
                         <tr>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">T/r</th>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">Talaba ID</th>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">To'liq ismi</th>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">Yil</th>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">Ta'lim turi</th>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">Imtiyoz toifasi</th>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">To'lov shakli</th>
-                            <th class="px-4 py-3 text-right text-[12px] font-semibold whitespace-nowrap">To'plagan bali</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">T/r</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">Talaba ID</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">To'liq ismi</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">Yil</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">Ta'lim turi</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">Imtiyoz toifasi</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">To'lov shakli</th>
+                            <th class="px-4 py-3 text-right text-[12px] font-semibold whitespace-nowrap bg-slate-100">To'plagan bali</th>
                         </tr>
-                        <tr class="bg-white border-t border-sky-100">
-                            <th class="px-3 py-2"></th>
-                            <th class="px-3 py-2">
+                        <tr class="border-t border-sky-100">
+                            <th class="px-3 py-2 bg-slate-50"></th>
+                            <th class="px-3 py-2 bg-slate-50">
                                 <input type="text" name="student_id" value="{{ request('student_id') }}" placeholder="Talaba ID"
                                        form="admissionTableFiltersForm"
                                        class="w-full rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             </th>
-                            <th class="px-3 py-2">
+                            <th class="px-3 py-2 bg-slate-50">
                                 <input type="text" name="full_name" value="{{ request('full_name') }}" placeholder="F.I.SH"
                                        form="admissionTableFiltersForm"
                                        class="w-full min-w-[180px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             </th>
-                            <th class="px-3 py-2">
+                            <th class="px-3 py-2 bg-slate-50">
                                 <select name="qabul_yili" form="admissionTableFiltersForm" class="w-full min-w-[74px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($years as $year)
@@ -229,7 +229,7 @@
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-3 py-2">
+                            <th class="px-3 py-2 bg-slate-50">
                                 <select name="talim_turi" form="admissionTableFiltersForm" class="w-full min-w-[108px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($talimTurlari as $t)
@@ -237,7 +237,7 @@
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-3 py-2">
+                            <th class="px-3 py-2 bg-slate-50">
                                 <select name="imtiyoz_toifasi" form="admissionTableFiltersForm" class="w-full min-w-[220px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($imtiyozToifalari as $toifa)
@@ -245,7 +245,7 @@
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-3 py-2">
+                            <th class="px-3 py-2 bg-slate-50">
                                 <select name="tolov_shakli" form="admissionTableFiltersForm" class="w-full min-w-[122px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($tolovShakllari as $t)
@@ -253,7 +253,7 @@
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-3 py-2">
+                            <th class="px-3 py-2 bg-slate-50">
                                 <div class="flex items-center justify-end gap-2">
                                     <button type="submit" form="admissionTableFiltersForm" class="px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-white"
                                             style="background-color:#2563eb;box-shadow:0 4px 10px rgba(37,99,235,0.16);">OK</button>
@@ -266,7 +266,7 @@
                     </thead>
                     <tbody class="divide-y divide-sky-100">
                         @forelse($indicators as $item)
-                            <tr class="{{ $loop->odd ? 'bg-slate-50/70' : 'bg-white' }} hover:bg-sky-50 transition-colors duration-150">
+                            <tr class="{{ $loop->odd ? 'bg-slate-50' : 'bg-white' }} hover:bg-sky-50 transition-colors duration-150">
                                 <td class="px-4 py-3 font-semibold text-slate-700 align-top">{{ $indicators->firstItem() ? $indicators->firstItem() + $loop->index : $loop->iteration }}</td>
                                 <td class="px-4 py-3 font-medium text-slate-800 align-top whitespace-nowrap">{{ $item->student_id ?? '—' }}</td>
                                 <td class="px-4 py-3 min-w-[220px] align-top">

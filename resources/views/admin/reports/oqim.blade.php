@@ -248,35 +248,40 @@
             $('#total-badge').text('Jami talaba: ' + grand + ' ta · ' + variantLabel.split('(')[0].trim());
         }
 
+        function statBox(cur, opt, label) {
+            var reduce = (cur || 0) - (opt || 0);
+            var cls = reduce > 0 ? 'ok' : 'neutral';
+            return '<div class="opt-stat ' + cls + '">'
+                 + '<div class="opt-stat-num">' + (cur || 0) + ' → ' + (opt || 0) + '</div>'
+                 + '<div class="opt-stat-lbl">' + label + (reduce > 0 ? ' <b>(−' + reduce + ')</b>' : '') + '</div></div>';
+        }
+
         function showOptDialog(plan) {
             var s = '';
-            var reduce = plan.reduce || 0;
-            s += '<div class="opt-stat ' + (reduce > 0 ? 'ok' : 'neutral') + '">';
-            s += '<div class="opt-stat-num">' + (plan.cur_subgroups || 0) + ' → ' + (plan.opt_subgroups || 0) + '</div>';
-            s += '<div class="opt-stat-lbl">Guruhchalar soni' + (reduce > 0 ? ' (−' + reduce + ' ta)' : '') + '</div></div>';
-            s += '<div class="opt-stat neutral"><div class="opt-stat-num">' + (plan.oqim_count || 0) + '</div>';
-            s += '<div class="opt-stat-lbl">Oqimlar soni (til + me\'yor bo\'yicha)</div></div>';
+            s += statBox(plan.cur_base, plan.opt_base, 'Akademik guruhlar');
+            s += statBox(plan.cur_subgroups, plan.opt_subgroups, 'Kichik guruhchalar');
+            s += statBox(plan.cur_oqim, plan.opt_oqim, 'Oqimlar');
             $('#opt-summary').html(s);
 
             var moves = plan.moves || [];
             var m = '';
             if (!moves.length) {
-                m = '<div class="opt-empty">✓ Joriy taqsimot allaqachon me\'yorga mos — guruhchalarni kamaytirish imkoni topilmadi. '
-                  + 'Oqimlarni kamaytirish uchun oqim me\'yorini oshiring.</div>';
+                m = '<div class="opt-empty">✓ Joriy taqsimot allaqachon me\'yorga mos — birlashtiriladigan (kam to\'lgan) guruhlar topilmadi.<br>'
+                  + '<span style="font-weight:500;font-size:12.5px;color:#64748b;">Ko\'proq birlashtirish uchun me\'yor (max) yoki tolerantlik (±) ni oshiring.</span></div>';
             } else {
-                m += '<div class="opt-moves-title">Tavsiya etilgan o\'zgarishlar (' + moves.length + ' ta guruh):</div>';
+                m += '<div class="opt-moves-title">Birlashtirish tavsiyalari (' + moves.length + ' ta joyda guruh kamaytiriladi):</div>';
                 for (var i = 0; i < moves.length; i++) {
                     var mv = moves[i];
                     m += '<div class="opt-move">';
-                    m += '<div class="opt-move-h"><span class="opt-move-base">' + esc(mv.base) + ' (' + esc(mv.lang) + ')</span>'
-                       + '<span class="opt-move-meta">' + esc(mv.course) + ' · ' + esc(mv.block) + ' · jami ' + mv.total + ' ta</span></div>';
+                    m += '<div class="opt-move-h"><span class="opt-move-base">' + esc(mv.course) + ' · ' + esc(mv.lang) + ' til</span>'
+                       + '<span class="opt-move-meta">' + esc(mv.block) + '</span></div>';
                     m += '<div class="opt-move-b">';
-                    m += '<span class="opt-badge cur">Hozir: ' + mv.cur_n + ' guruhcha [' + mv.cur_counts.join(', ') + ']</span>';
+                    m += '<span class="opt-badge cur">Hozir: ' + mv.from + ' guruh</span>';
                     m += '<span class="opt-arrow">→</span>';
-                    m += '<span class="opt-badge opt">Bo\'lsin: ' + mv.opt_n + ' guruhcha [' + mv.opt_counts.join(', ') + ']</span>';
+                    m += '<span class="opt-badge opt">Bo\'lsin: ' + mv.to + ' guruh (' + esc(mv.sub) + ')</span>';
                     m += '</div>';
-                    m += '<div class="opt-move-note">« ' + mv.removed.join(', ') + " » guruhcha(lar)ni bekor qilib, talabalarini qolgan "
-                       + mv.opt_n + ' guruhchaga teng taqsimlang.</div>';
+                    m += '<div class="opt-move-note"><b>« ' + mv.dropped.join(', ') + ' »</b> guruh(lar)ni bekor qilib, talabalarini '
+                       + '<b>' + mv.kept.join(', ') + '</b> guruhlariga taqsimlang (har biri ≈ [' + mv.sizes.join(', ') + '] talaba).</div>';
                     m += '</div>';
                 }
             }
@@ -352,7 +357,7 @@
         .opt-x { background:rgba(255,255,255,0.2); border:none; color:#fff; width:30px; height:30px; border-radius:8px; font-size:20px; line-height:1; cursor:pointer; flex-shrink:0; }
         .opt-x:hover { background:rgba(255,255,255,0.35); }
         .opt-summary { display:flex; gap:12px; padding:16px 20px; flex-wrap:wrap; border-bottom:1px solid #f1f5f9; }
-        .opt-stat { flex:1; min-width:200px; border-radius:10px; padding:12px 16px; border:1px solid #e2e8f0; }
+        .opt-stat { flex:1; min-width:150px; border-radius:10px; padding:12px 14px; border:1px solid #e2e8f0; }
         .opt-stat.ok { background:#f0fdf4; border-color:#bbf7d0; }
         .opt-stat.neutral { background:#f8fafc; }
         .opt-stat-num { font-size:22px; font-weight:800; color:#0f172a; }

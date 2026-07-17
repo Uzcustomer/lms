@@ -11175,6 +11175,134 @@ class ReportController extends Controller
     }
 
     /**
+     * Guruh tuzatishlari (override) sahifasi: aralash tilli / muammoli guruhlar
+     * ro'yxati va joriy qo'lda tuzatishlar. HEMIS to'g'rilanmaguncha ishlatiladi.
+     */
+    public function oqimOverrides(Request $request)
+    {
+        $mixed     = $this->detectMixedLanguageGroups();
+        $overrides = \App\Models\GroupOverride::orderBy('group_name')->get();
+
+        return view('admin.reports.oqim-overrides', compact('mixed', 'overrides'));
+    }
+
+    /**
+     * Bitta guruh uchun qo'lda tuzatishni saqlaydi (til yoki hisobdan chiqarish).
+     */
+    public function oqimOverrideSave(Request $request)
+    {
+        $data = $request->validate([
+            'group_hemis_id' => 'required|integer',
+            'group_name'     => 'nullable|string',
+            'lang'           => 'nullable|in:uz,rus,ing',
+            'excluded'       => 'nullable|boolean',
+            'note'           => 'nullable|string|max:255',
+        ]);
+
+        $excluded = (bool) ($data['excluded'] ?? false);
+        $lang     = $data['lang'] ?? null;
+
+        // Agar hech qanday tuzatish qolmasa — yozuvni o'chiramiz
+        if (!$excluded && empty($lang)) {
+            \App\Models\GroupOverride::where('group_hemis_id', $data['group_hemis_id'])->delete();
+            return response()->json(['ok' => true, 'removed' => true]);
+        }
+
+        \App\Models\GroupOverride::updateOrCreate(
+            ['group_hemis_id' => $data['group_hemis_id']],
+            [
+                'group_name' => $data['group_name'] ?? null,
+                'lang'       => $lang,
+                'excluded'   => $excluded,
+                'note'       => $data['note'] ?? null,
+                'updated_by' => optional($request->user())->id,
+            ]
+        );
+
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Guruh tuzatishini o'chiradi (HEMISdagi holatga qaytaradi).
+     */
+    public function oqimOverrideDelete(Request $request)
+    {
+        $request->validate(['group_hemis_id' => 'required|integer']);
+        \App\Models\GroupOverride::where('group_hemis_id', $request->group_hemis_id)->delete();
+        return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Aralash tilli guruhlarni aniqlaydi: bir xil "katta guruh" (a/b/c birlashtirilgan)
+     * ichida bir nechta til bo'lsa — muammoli. Qo'lда tuzatishlar allaqachon qo'llangan holда.
+     */
+    private function detectMixedLanguageGroups(): array
+    {
+        $rows = DB::table('students as s')
+            ->join('departments as d', 's.department_id', '=', 'd.department_hemis_id')
+            ->join('groups as g', 'g.group_hemis_id', '=', 's.group_id')
+            ->where('d.structure_type_code', 11)
+            ->where('d.active', true)
+            ->where('g.active', true)
+            ->where('s.student_status_code', 11)
+            ->whereNotNull('s.group_id')
+            ->select(
+                's.department_name', 's.level_name',
+                's.group_id', 's.group_name', 'g.education_lang_name',
+                DB::raw('COUNT(*) as cnt')
+            )
+            ->groupBy('s.department_name', 's.level_name', 's.group_id', 's.group_name', 'g.education_lang_name')
+            ->get();
+
+        // Qo'lda tuzatishlarni qo'llaymiz
+        $overrides = \App\Models\GroupOverride::all()->keyBy('group_hemis_id');
+
+        $groups = [];
+        foreach ($rows as $r) {
+            $ov = $overrides[$r->group_id] ?? null;
+            if ($ov && $ov->excluded) {
+                continue;
+            }
+            $nameNoLang = $this->oqimStripLang($r->group_name);
+            [$base] = $this->oqimSplitBase($nameNoLang);
+            $lang = ($ov && $ov->lang) ? $ov->lang : $this->oqimLangKey($r->education_lang_name, $r->group_name);
+
+            $key = mb_strtolower(trim($r->department_name)) . '|' . mb_strtolower(trim($r->level_name)) . '|' . $base;
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'department_name' => $r->department_name,
+                    'level_name'      => $r->level_name,
+                    'base'            => $base,
+                    'langs'           => [],
+                    'members'         => [],
+                ];
+            }
+            $groups[$key]['langs'][$lang] = true;
+            $groups[$key]['members'][] = [
+                'group_id'   => (int) $r->group_id,
+                'group_name' => $nameNoLang,
+                'hemis_lang' => $r->education_lang_name,
+                'lang'       => $lang,
+                'count'      => (int) $r->cnt,
+                'overridden' => (bool) ($ov && ($ov->lang || $ov->excluded)),
+            ];
+        }
+
+        // Faqat bir nechta tilли (muammoli) guruhlar
+        $mixed = [];
+        foreach ($groups as $gr) {
+            if (count($gr['langs']) > 1) {
+                usort($gr['members'], fn($a, $b) => strcmp($a['group_name'], $b['group_name']));
+                $gr['langs'] = array_keys($gr['langs']);
+                $mixed[] = $gr;
+            }
+        }
+        usort($mixed, fn($a, $b) => [$a['department_name'], $a['level_name'], $a['base']] <=> [$b['department_name'], $b['level_name'], $b['base']]);
+
+        return $mixed;
+    }
+
+    /**
      * Oqim hisobotini qurish — filtrlar bo'yicha talabalarni fakultet/yo'nalish/kurs/oqim/guruh
      * kesimida hisoblab, tanlangan variant(lar) bo'yicha tuzilma qaytaradi.
      */
@@ -11226,9 +11354,26 @@ class ReportController extends Controller
             ->whereNotNull('group_hemis_id')
             ->pluck('education_lang_name', 'group_hemis_id');
 
+        // ---- Qo'lda tuzatishlar (override): HEMIS xato bo'lsa til/exclude ----
+        $overrides = DB::table('group_overrides')->get();
+        $overrideLang = [];   // group_hemis_id => 'uz'|'rus'|'ing'
+        $excludedIds = [];    // hisobga olinmaydigan guruhlar
+        foreach ($overrides as $ov) {
+            if ($ov->excluded) {
+                $excludedIds[(int) $ov->group_hemis_id] = true;
+            }
+            if (!empty($ov->lang)) {
+                $overrideLang[(int) $ov->group_hemis_id] = $ov->lang;
+            }
+        }
+
         // ---- Tuzilmaga yig'amiz: fakultet+yo'nalish -> kurs -> guruhlar ----
         $blocks = [];
         foreach ($rows as $r) {
+            // Hisobdan chiqarilgan (xato biriktirilgan) guruhlarni tashlab yuboramiz
+            if (isset($excludedIds[(int) $r->group_id])) {
+                continue;
+            }
             // Blok kaliti — fakultet + yo'nalish NOMI bo'yicha (HEMIS ID emas), aks holda
             // bir xil yo'nalishning turli qabul yillari (turli specialty_id/o'quv reja)
             // alohida bloklarga bo'linib ketadi (masalan 1-kurs alohida chiqadi).
@@ -11254,14 +11399,18 @@ class ReportController extends Controller
             $nameNoLang = $this->oqimStripLang($r->group_name);
             // Nomdan asosiy guruh nomi (masalan d2/d25-01) va kichik guruh harfini (a/b/c) ajratamiz.
             [$base, $letter] = $this->oqimSplitBase($nameNoLang);
+            // Til: avval qo'lda tuzatish (override), bo'lmasa HEMISdagi
+            $lang = $overrideLang[(int) $r->group_id]
+                ?? $this->oqimLangKey($langName, $r->group_name);
+            $langLabelMap = ['uz' => "o'z", 'rus' => 'rus', 'ing' => 'ing'];
             $blocks[$blockKey]['courses'][$lvlKey]['groups'][] = [
                 'group_id'   => $r->group_id,
                 'name'       => $nameNoLang,
                 'base'       => $base,
                 'letter'     => $letter,
                 'count'      => (int) $r->cnt,
-                'lang'       => $this->oqimLangKey($langName, $r->group_name),
-                'lang_label' => $this->oqimLangLabel($langName, $r->group_name),
+                'lang'       => $lang,
+                'lang_label' => $langLabelMap[$lang] ?? "o'z",
             ];
         }
 
@@ -11508,7 +11657,11 @@ class ReportController extends Controller
                 ];
             }
             $bases[$key]['total'] += $g['count'];
-            $bases[$key]['members'][] = ['letter' => $g['letter'], 'count' => $g['count']];
+            $bases[$key]['members'][] = [
+                'letter' => $g['letter'],
+                'count'  => $g['count'],
+                'name'   => $g['name'], // HEMISdagi haqiqiy nom (til belgisisiz)
+            ];
         }
         return array_values($bases);
     }
@@ -11653,8 +11806,10 @@ class ReportController extends Controller
     }
 
     /**
-     * JORIY holat uchun kichik guruh qatorlari: HEMISdagi haqiqiy kichik guruhlar
-     * (agar soni qoidaga mos bo'lsa), aks holda qoida bo'yicha teng bo'linadi.
+     * JORIY holat uchun kichik guruh qatorlari: HEMISdagi HAQIQIY guruhlarni
+     * aynan o'zidek ko'rsatadi (real nom va real son) — hech qachon qayta bo'lmaydi.
+     * Shu sabab bir kodли, lekin har xil tildagi guruhlar (masalan d2/21-01a (rus)
+     * va d2/21-01с (o'z)) o'z nomi bilan alohida chiqadi, soxta nom to'qnashuvi bo'lmaydi.
      */
     private function oqimJoriyRows(array $b, int $subCount, string $eff, string $suffix): array
     {
@@ -11663,19 +11818,15 @@ class ReportController extends Controller
         }
 
         $members = $b['members'] ?? [];
-        usort($members, fn($x, $y) => strcmp((string) $x['letter'], (string) $y['letter']));
-        $withLetters = array_values(array_filter($members, fn($m) => $m['letter'] !== ''));
+        usort($members, fn($x, $y) => strcmp((string) ($x['name'] ?? $x['letter']), (string) ($y['name'] ?? $y['letter'])));
 
-        if (count($withLetters) === $subCount) {
-            $out = [];
-            foreach ($withLetters as $m) {
-                $out[] = ['name' => $b['base'] . $m['letter'] . $suffix, 'count' => (int) $m['count']];
-            }
-            return $out;
+        $out = [];
+        foreach ($members as $m) {
+            // HEMISdagi haqiqiy nomni ishlatamiz; bo'lmasa base + harf
+            $name = $m['name'] ?? ($b['base'] . $m['letter']);
+            $out[] = ['name' => $name . $suffix, 'count' => (int) $m['count']];
         }
-
-        // HEMISdagi bo'linish qoidaga mos emas — qoida bo'yicha teng bo'lamiz
-        return $this->oqimFixedSubgroups($b['base'], $b['total'], $subCount, $suffix);
+        return $out;
     }
 
     /**

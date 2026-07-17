@@ -107,8 +107,8 @@
             </form>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 8px;margin-bottom:14px;">
-            <div style="min-height:92px;border-radius:14px;border:1px solid #b8d9e6;background:#a8d3e6;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 8px;margin-top:12px;margin-bottom:14px;">
+            <div style="min-height:92px;border-radius:14px;border:1px solid #b8d9e6;background:#a8d3e6;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
                 <div>
                     <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#18334a;">Qatorlar</div>
                     <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#16324f;">{{ number_format($summary['qatorlar']) }}</div>
@@ -118,7 +118,7 @@
                 </div>
             </div>
 
-            <div style="min-height:92px;border-radius:14px;border:1px solid #f3e7a4;background:#fbf8c8;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;">
+            <div style="min-height:92px;border-radius:14px;border:1px solid #f3e7a4;background:#fbf8c8;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
                 <div>
                     <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#1f8b55;">Jami qabul</div>
                     <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#0f9f67;">{{ number_format((int) $summary['jami_qabul']) }}</div>
@@ -128,7 +128,7 @@
                 </div>
             </div>
 
-            <div style="min-height:92px;border-radius:14px;border:1px solid #b3d3aa;background:#9bc595;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;">
+            <div style="min-height:92px;border-radius:14px;border:1px solid #b3d3aa;background:#9bc595;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
                 <div style="min-width:0;">
                     <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#203725;">Eng yuqori ball</div>
                     <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#203725;">
@@ -143,7 +143,7 @@
                 </div>
             </div>
 
-            <div style="min-height:92px;border-radius:14px;border:1px solid #e4c1cb;background:#deb9c5;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;">
+            <div style="min-height:92px;border-radius:14px;border:1px solid #e4c1cb;background:#deb9c5;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
                 <div style="min-width:0;">
                     <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#d05c1f;">Eng past grant ball</div>
                     <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#20324d;">

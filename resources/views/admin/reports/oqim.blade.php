@@ -87,13 +87,9 @@
                         <div class="filter-item" style="min-width: 420px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
-                                <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(false)" title="Joriy holat (HEMISdagidek)">
+                                <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport()" title="Joriy holat va optimizatsiya taklifini hisoblash">
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                     Hisoblash
-                                </button>
-                                <button type="button" id="btn-optimize" class="btn-opt" onclick="loadReport(true)" title="Me'yorlar bo'yicha qayta tashkillashtirish">
-                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
-                                    Optimizatsiya
                                 </button>
                                 <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
                                     <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -108,29 +104,10 @@
                     </div>
                     <p style="margin:2px 2px 0;font-size:11.5px;color:#64748b;">
                         Faqat faol (o'qiyotgan) talabalar hisobga olinadi. <b>Oqim</b> — ma'ruzaga birga boradigan guruhlar
-                        (til bo'yicha alohida, talaba soni oqim me'yoridan oshmaydi). <b>Hisoblash</b> — joriy holat (HEMISdagi kichik guruhlar);
-                        <b>Optimizatsiya</b> — kichik guruhlarni me'yor bo'yicha qayta hisoblab, ortiqcha guruhlarni qisqartiradi.
+                        (til bo'yicha alohida, talaba soni oqim me'yoridan oshmaydi). <b>Joriy holat</b> — HEMISdagidek;
+                        <b>Optimizatsiya</b> — kam to'lgan guruhlarni birlashtirib, ortiqcha guruhlarni qisqartirish taklifi.
                         Har xil tildagi guruhlar bir oqim/guruhga qo'shilmaydi.
                     </p>
-                </div>
-
-                <!-- Optimizatsiya rejasi dialogi -->
-                <div id="opt-overlay" onclick="if(event.target===this)closeOptDialog()">
-                    <div id="opt-dialog">
-                        <div class="opt-head">
-                            <div>
-                                <div class="opt-title">Optimizatsiya rejasi</div>
-                                <div class="opt-sub">Guruhlar va oqimlarni kamaytirish uchun quyidagi o'zgarishlar tavsiya etiladi</div>
-                            </div>
-                            <button type="button" class="opt-x" onclick="closeOptDialog()">&times;</button>
-                        </div>
-                        <div id="opt-summary" class="opt-summary"></div>
-                        <div id="opt-moves" class="opt-moves"></div>
-                        <div class="opt-foot">
-                            <span style="font-size:11.5px;color:#94a3b8;">Talabalar taxminan teng taqsimlangan holda ko'rsatiladi.</span>
-                            <button type="button" class="btn-calc" onclick="closeOptDialog()">Yopish</button>
-                        </div>
-                    </div>
                 </div>
 
                 <!-- Result Area -->
@@ -146,11 +123,27 @@
                         <p style="color:#2b5ea7;font-size:14px;margin-top:16px;font-weight:600;">Hisoblanmoqda...</p>
                     </div>
                     <div id="table-area" style="display:none;">
-                        <div style="padding:10px 20px;background:#eff6ff;border-bottom:1px solid #bfdbfe;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
-                            <span id="total-badge" class="badge" style="background:#2b5ea7;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
-                            <span id="time-badge" style="font-size:12px;color:#64748b;"></span>
+                        <div style="padding:8px 20px 0;background:#f8fafc;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                            <button type="button" class="oq-tab active" data-tab="joriy" onclick="switchTab('joriy')">Joriy holat</button>
+                            <button type="button" class="oq-tab" data-tab="opt" onclick="switchTab('opt')">
+                                Optimizatsiya <span id="opt-tab-badge" class="opt-tab-badge" style="display:none;"></span>
+                            </button>
+                            <span id="time-badge" style="font-size:12px;color:#94a3b8;margin-left:auto;"></span>
                         </div>
-                        <div id="report-body" style="padding:16px 20px;max-height:calc(100vh - 300px);overflow:auto;"></div>
+
+                        <!-- JORIY tab -->
+                        <div id="tab-joriy">
+                            <div style="padding:8px 20px;background:#eff6ff;border-bottom:1px solid #bfdbfe;">
+                                <span id="total-badge" class="badge" style="background:#2b5ea7;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
+                            </div>
+                            <div id="report-body" style="padding:16px 20px;max-height:calc(100vh - 340px);overflow:auto;"></div>
+                        </div>
+
+                        <!-- OPTIMIZATSIYA tab (solishtirma) -->
+                        <div id="tab-opt" style="display:none;">
+                            <div id="opt-summary" class="opt-summary"></div>
+                            <div id="opt-compare" style="padding:4px 20px 16px;max-height:calc(100vh - 360px);overflow:auto;"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -164,9 +157,9 @@
     <script>
         function esc(s) { return $('<span>').text(s === null || s === undefined ? '' : s).html(); }
 
-        var lastOptimize = false;
+        var activeTab = 'joriy';
 
-        function getFilters() {
+        function getFilters(optimize) {
             var dekanFaculty = document.getElementById('dekan_faculty_id');
             return {
                 education_type: $('#education_type').val() || '',
@@ -179,50 +172,54 @@
                 ab_tol: $('#ab_tol').val() || 0,
                 abc_max: $('#abc_max').val() || 10,
                 abc_tol: $('#abc_tol').val() || 0,
-                optimize: lastOptimize ? 1 : 0,
+                optimize: optimize ? 1 : 0,
             };
         }
 
-        function loadReport(optimize) {
-            lastOptimize = !!optimize;
-            var params = getFilters();
+        function switchTab(tab) {
+            activeTab = tab;
+            $('.oq-tab').removeClass('active');
+            $('.oq-tab[data-tab="' + tab + '"]').addClass('active');
+            $('#tab-joriy').toggle(tab === 'joriy');
+            $('#tab-opt').toggle(tab === 'opt');
+        }
+
+        function loadReport() {
+            var url = '{{ route("admin.reports.oqim.data") }}';
             $('#empty-state').hide();
             $('#table-area').hide();
             $('#loading-state').show();
-            $('#btn-calculate, #btn-optimize').prop('disabled', true).css('opacity', '0.6');
+            $('#btn-calculate').prop('disabled', true).css('opacity', '0.6');
             $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
 
             var startTime = performance.now();
-            $.ajax({
-                url: '{{ route("admin.reports.oqim.data") }}',
-                type: 'GET',
-                data: params,
-                timeout: 120000,
-                success: function(res) {
-                    var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
-                    $('#loading-state').hide();
-                    $('#btn-calculate, #btn-optimize').prop('disabled', false).css('opacity', '1');
+            // Ikkala holatni parallel yuklaymiz: joriy va optimizatsiya
+            $.when(
+                $.get(url, getFilters(false)),
+                $.get(url, getFilters(true))
+            ).done(function(r0, r1) {
+                var joriy = r0[0], opt = r1[0];
+                var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
+                $('#loading-state').hide();
+                $('#btn-calculate').prop('disabled', false).css('opacity', '1');
 
-                    var blocks = res.blocks || [];
-                    if (!blocks.length) {
-                        $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi. Filtrlarni o'zgartirib ko'ring.");
-                        return;
-                    }
-                    renderReport(res);
-                    var modeLabel = res.optimize ? 'Optimizatsiya' : 'Joriy holat';
-                    $('#time-badge').text(modeLabel + ' · ' + elapsed + ' soniyada hisoblandi · ' + esc(res.generated_at));
-                    if (res.optimize && res.plan) showOptDialog(res.plan);
-                    $('#table-area').show();
-                    $('#btn-excel').prop('disabled', false).css('opacity', '1');
-                },
-                error: function(xhr) {
-                    $('#loading-state').hide();
-                    $('#btn-calculate, #btn-optimize').prop('disabled', false).css('opacity', '1');
-                    var msg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
-                    if (xhr.responseJSON && xhr.responseJSON.error) msg += ' (' + xhr.responseJSON.error + ')';
-                    else if (xhr.status) msg += ' (HTTP ' + xhr.status + ')';
-                    $('#empty-state').show().find('p:first').text(msg);
+                if (!joriy.blocks || !joriy.blocks.length) {
+                    $('#empty-state').show().find('p:first').text("Ma'lumot topilmadi. Filtrlarni o'zgartirib ko'ring.");
+                    return;
                 }
+                renderReport(joriy);
+                renderComparison(opt.plan);
+                $('#time-badge').text(elapsed + ' soniyada hisoblandi · ' + esc(joriy.generated_at));
+                switchTab('joriy');
+                $('#table-area').show();
+                $('#btn-excel').prop('disabled', false).css('opacity', '1');
+            }).fail(function(xhr) {
+                $('#loading-state').hide();
+                $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+                var msg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
+                if (xhr.responseJSON && xhr.responseJSON.error) msg += ' (' + xhr.responseJSON.error + ')';
+                else if (xhr.status) msg += ' (HTTP ' + xhr.status + ')';
+                $('#empty-state').show().find('p:first').text(msg);
             });
         }
 
@@ -269,7 +266,8 @@
                  + '<div class="opt-stat-lbl">' + label + (reduce > 0 ? ' <b>(−' + reduce + ')</b>' : '') + '</div></div>';
         }
 
-        function showOptDialog(plan) {
+        function renderComparison(plan) {
+            plan = plan || {};
             var s = '';
             s += statBox(plan.cur_base, plan.opt_base, 'Akademik guruhlar');
             s += statBox(plan.cur_subgroups, plan.opt_subgroups, 'Kichik guruhchalar');
@@ -277,36 +275,60 @@
             $('#opt-summary').html(s);
 
             var moves = plan.moves || [];
+            var reduce = plan.base_reduce || 0;
+            $('#opt-tab-badge').toggle(reduce > 0).text(reduce > 0 ? '−' + reduce : '');
+
             var m = '';
             if (!moves.length) {
                 m = '<div class="opt-empty">✓ Joriy taqsimot allaqachon me\'yorga mos — birlashtiriladigan (kam to\'lgan) guruhlar topilmadi.<br>'
                   + '<span style="font-weight:500;font-size:12.5px;color:#64748b;">Ko\'proq birlashtirish uchun me\'yor (max) yoki tolerantlik (±) ni oshiring.</span></div>';
             } else {
-                m += '<div class="opt-moves-title">Birlashtirish tavsiyalari (' + moves.length + ' ta joyda guruh kamaytiriladi):</div>';
+                m += '<div class="opt-moves-title">Solishtirma — ' + moves.length + ' ta joyda guruh kamaytiriladi (qizil = o\'chiriladi):</div>';
                 for (var i = 0; i < moves.length; i++) {
                     var mv = moves[i];
-                    m += '<div class="opt-move">';
-                    m += '<div class="opt-move-h"><span class="opt-move-base">' + esc(mv.course) + ' · ' + esc(mv.lang) + ' til</span>'
-                       + '<span class="opt-move-meta">' + esc(mv.block) + '</span></div>';
-                    m += '<div class="opt-move-b">';
-                    m += '<span class="opt-badge cur">Hozir: ' + mv.from + ' guruh</span>';
-                    m += '<span class="opt-arrow">→</span>';
-                    m += '<span class="opt-badge opt">Bo\'lsin: ' + mv.to + ' guruh (' + esc(mv.sub) + ')</span>';
-                    m += '</div>';
-                    m += '<div class="opt-move-note"><b>« ' + mv.dropped.join(', ') + ' »</b> guruh(lar)ni bekor qilib, talabalarini '
-                       + '<b>' + mv.kept.join(', ') + '</b> guruhlariga taqsimlang (har biri ≈ [' + mv.sizes.join(', ') + '] talaba).</div>';
+                    var dropped = {};
+                    (mv.dropped || []).forEach(function(d){ dropped[d] = true; });
+
+                    m += '<div class="cmp-card">';
+                    m += '<div class="cmp-head"><span class="cmp-title">' + esc(mv.course) + ' · ' + esc(mv.lang) + ' til</span>'
+                       + '<span class="cmp-meta">' + esc(mv.block) + '</span>'
+                       + '<span class="cmp-count">' + mv.from + ' → ' + mv.to + ' guruh (' + esc(mv.sub) + ')</span></div>';
+
+                    m += '<table class="cmp-table"><thead><tr>'
+                       + '<th>Joriy versiya (' + mv.from + ')</th><th style="width:36px;"></th><th>Yangi versiya (' + mv.to + ')</th>'
+                       + '</tr></thead><tbody>';
+
+                    var cur = mv.cur_groups || [], nw = mv.new_groups || [];
+                    var rows = Math.max(cur.length, nw.length);
+                    for (var r = 0; r < rows; r++) {
+                        m += '<tr>';
+                        // Joriy
+                        if (r < cur.length) {
+                            var isDrop = dropped[cur[r].name];
+                            m += '<td class="cmp-cell ' + (isDrop ? 'cmp-drop' : '') + '">'
+                               + esc(cur[r].name) + ' <span class="cmp-num">' + esc(cur[r].total) + ' ta</span>'
+                               + (isDrop ? ' <span class="cmp-x">o\'chiriladi</span>' : '') + '</td>';
+                        } else { m += '<td></td>'; }
+                        // Strelka (faqat birinchi qatorda)
+                        m += '<td class="cmp-arrow">' + (r === 0 ? '→' : '') + '</td>';
+                        // Yangi
+                        if (r < nw.length) {
+                            m += '<td class="cmp-cell cmp-new">' + esc(nw[r].name)
+                               + ' <span class="cmp-num">' + esc(nw[r].total) + ' ta</span></td>';
+                        } else { m += '<td></td>'; }
+                        m += '</tr>';
+                    }
+                    m += '</tbody></table>';
+                    m += '<div class="cmp-note">« <b>' + (mv.dropped||[]).join(', ') + '</b> » o\'chirilib, talabalar qolgan guruhlarga teng taqsimlanadi.</div>';
                     m += '</div>';
                 }
             }
-            $('#opt-moves').html(m);
-            $('#opt-overlay').css('display', 'flex');
+            $('#opt-compare').html(m);
         }
 
-        function closeOptDialog() { $('#opt-overlay').hide(); }
-
         function downloadExcel() {
-            var params = getFilters();
-            // Excel har doim barcha variantlarni chiqarishi uchun tanlanganini yuboramiz
+            // Faol vkladka bo'yicha (joriy yoki optimizatsiya) Excelга yuklaymiz
+            var params = getFilters(activeTab === 'opt');
             var query = $.param(params);
             window.location.href = '{{ route("admin.reports.oqim.export") }}?' + query;
         }
@@ -371,6 +393,29 @@
         .opt-sub { font-size:12px; opacity:0.9; margin-top:2px; }
         .opt-x { background:rgba(255,255,255,0.2); border:none; color:#fff; width:30px; height:30px; border-radius:8px; font-size:20px; line-height:1; cursor:pointer; flex-shrink:0; }
         .opt-x:hover { background:rgba(255,255,255,0.35); }
+        .oq-tab { padding:8px 16px; border:none; background:transparent; border-bottom:3px solid transparent; font-size:13px; font-weight:700; color:#64748b; cursor:pointer; margin-bottom:-1px; display:inline-flex; align-items:center; gap:6px; }
+        .oq-tab:hover { color:#2b5ea7; }
+        .oq-tab.active { color:#2b5ea7; border-bottom-color:#2b5ea7; }
+        .opt-tab-badge { background:#16a34a; color:#fff; font-size:10.5px; font-weight:800; padding:1px 7px; border-radius:999px; }
+
+        .cmp-card { border:1px solid #e2e8f0; border-radius:10px; margin-bottom:12px; overflow:hidden; }
+        .cmp-head { display:flex; align-items:baseline; gap:12px; flex-wrap:wrap; padding:8px 12px; background:#f8fafc; border-bottom:1px solid #e2e8f0; }
+        .cmp-title { font-size:14px; font-weight:800; color:#7c3aed; }
+        .cmp-meta { font-size:11px; color:#94a3b8; }
+        .cmp-count { margin-left:auto; font-size:12px; font-weight:800; color:#16a34a; }
+        .cmp-table { width:100%; border-collapse:collapse; font-size:13px; }
+        .cmp-table th { text-align:left; padding:6px 12px; font-size:11px; text-transform:uppercase; font-weight:700; color:#64748b; background:#fff; border-bottom:1px solid #f1f5f9; }
+        .cmp-table td { padding:5px 12px; border-bottom:1px solid #f8fafc; vertical-align:middle; }
+        .cmp-cell { font-weight:700; color:#0f172a; }
+        .cmp-num { font-weight:600; color:#64748b; font-size:12px; }
+        .cmp-drop { color:#dc2626; text-decoration:line-through; background:#fef2f2; border-radius:6px; }
+        .cmp-drop .cmp-num { color:#dc2626; }
+        .cmp-x { text-decoration:none; font-size:10.5px; font-weight:800; color:#fff; background:#dc2626; padding:1px 7px; border-radius:999px; margin-left:4px; }
+        .cmp-new { color:#166534; }
+        .cmp-new .cmp-num { color:#16a34a; }
+        .cmp-arrow { text-align:center; color:#94a3b8; font-weight:800; }
+        .cmp-note { padding:7px 12px; font-size:12px; color:#475569; background:#fffbeb; border-top:1px solid #fde68a; }
+
         .opt-summary { display:flex; gap:12px; padding:16px 20px; flex-wrap:wrap; border-bottom:1px solid #f1f5f9; }
         .opt-stat { flex:1; min-width:150px; border-radius:10px; padding:12px 14px; border:1px solid #e2e8f0; }
         .opt-stat.ok { background:#f0fdf4; border-color:#bbf7d0; }

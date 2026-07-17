@@ -11547,16 +11547,32 @@ class ReportController extends Controller
                     $optN = min($N, max(1, (int) ceil($T / $cap)));
                     if ($optN < $N) {
                         $names = array_map(fn($x) => $x['base'], $list);
+                        $per = array_values($this->oqimDistribute($T, $optN));
+                        $keptNames = array_values(array_slice($names, 0, $optN));
+
+                        // Joriy guruhlar (nom + jami)
+                        $curGroups = [];
+                        foreach ($list as $x) {
+                            $curGroups[] = ['name' => $x['base'], 'total' => $x['total']];
+                        }
+                        // Yangi (taklif) guruhlar — saqlanadiganlar, qayta taqsimlangan son bilan
+                        $newGroups = [];
+                        foreach ($keptNames as $i => $nm) {
+                            $newGroups[] = ['name' => $nm, 'total' => $per[$i] ?? 0];
+                        }
+
                         $moves[] = [
-                            'block'   => $block['title'],
-                            'course'  => $course['level_name'],
-                            'lang'    => $list[0]['lang_label'],
-                            'from'    => $N,
-                            'to'      => $optN,
-                            'kept'    => array_values(array_slice($names, 0, $optN)),
-                            'dropped' => array_values(array_slice($names, $optN)),
-                            'sizes'   => array_values($this->oqimDistribute($T, $optN)),
-                            'sub'     => $eff === 'full' ? 'to\'liq' : ($eff === 'abc' ? 'a,b,c' : 'a,b'),
+                            'block'      => $block['title'],
+                            'course'     => $course['level_name'],
+                            'lang'       => $list[0]['lang_label'],
+                            'from'       => $N,
+                            'to'         => $optN,
+                            'kept'       => $keptNames,
+                            'dropped'    => array_values(array_slice($names, $optN)),
+                            'sizes'      => $per,
+                            'cur_groups' => $curGroups,
+                            'new_groups' => $newGroups,
+                            'sub'        => $eff === 'full' ? 'to\'liq' : ($eff === 'abc' ? 'a,b,c' : 'a,b'),
                         ];
                     }
                 }

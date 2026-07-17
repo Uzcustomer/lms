@@ -23,7 +23,7 @@
                                 @endforeach
                             </select>
                         </div>
-                        <div class="filter-item" style="flex: 1; min-width: 220px;">
+                        <div class="filter-item" style="flex: 1 1 260px; min-width: 240px; max-width: 460px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#10b981;"></span> Fakultet</label>
                             <select id="faculty" class="select2" style="width: 100%;" {{ isset($dekanFacultyId) && $dekanFacultyId ? 'disabled' : '' }}>
                                 @if(isset($dekanFacultyId) && $dekanFacultyId)
@@ -258,7 +258,8 @@
         .norm-inputs { display:flex; gap:8px; }
         .norm-inputs > div { display:flex; align-items:center; gap:4px; }
         .norm-inputs label { font-size:11px; font-weight:700; color:#64748b; }
-        .norm-in { width:52px; height:28px; border:1px solid #cbd5e1; border-radius:6px; text-align:center; font-size:12.5px; font-weight:600; color:#1e293b; }
+        .norm-in { width:60px; height:28px; padding:0 4px; border:1px solid #cbd5e1; border-radius:6px; text-align:center; font-size:12.5px; font-weight:600; color:#1e293b; -moz-appearance:textfield; }
+        .norm-in::-webkit-outer-spin-button, .norm-in::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
         .norm-in:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 2px rgba(43,94,167,0.12); }
         .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
         .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); transform: translateY(-1px); }

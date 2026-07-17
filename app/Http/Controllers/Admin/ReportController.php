@@ -11695,13 +11695,33 @@ class ReportController extends Controller
 
     /**
      * Asosiy guruh nomini (masalan "d2/d25-01") va kichik guruh harfini (a/b/c) ajratadi.
+     * Kichik guruh harfi ba'zan xato bilan kirill ko'rinishida yozilgan bo'lishi mumkin
+     * (masalan lotin "c" o'rniga kirill "с") — ularni ham tanib, lotinga keltiramiz,
+     * aks holda bitta guruh ikki marta bo'linib, guruhlar soni sun'iy ko'payadi.
      */
     private function oqimSplitBase(string $nameNoLang): array
     {
-        if (preg_match('/^(.*?\d)\s*\(?([a-eA-E])\)?$/u', $nameNoLang, $m)) {
-            return [rtrim($m[1]), mb_strtolower($m[2])];
+        // Lotin a-e va ularning kirill ko'rinishdoshlari (а, е, с, о, р, х)
+        if (preg_match('/^(.*?\d)\s*\(?([a-eA-EаАеЕсСоОрРхХ])\)?$/u', $nameNoLang, $m)) {
+            return [rtrim($m[1]), $this->oqimNormalizeLetter($m[2])];
         }
         return [$nameNoLang, ''];
+    }
+
+    /**
+     * Kichik guruh harfini standart lotin harfiga keltiradi (kirill ko'rinishdoshlarni ham).
+     */
+    private function oqimNormalizeLetter(string $ch): string
+    {
+        $map = [
+            'а' => 'a', 'А' => 'a', // kirill a
+            'е' => 'e', 'Е' => 'e', // kirill e
+            'с' => 'c', 'С' => 'c', // kirill s (lotin c ko'rinishi)
+            'о' => 'o', 'О' => 'o',
+            'р' => 'p', 'Р' => 'p',
+            'х' => 'x', 'Х' => 'x',
+        ];
+        return mb_strtolower($map[$ch] ?? $ch);
     }
 
     /**

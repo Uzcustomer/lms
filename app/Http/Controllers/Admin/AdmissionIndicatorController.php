@@ -157,13 +157,13 @@ class AdmissionIndicatorController extends Controller
             ->orderBy('full_name')
             ->first(['full_name', 'toplagan_bali', 'qabul_yili']);
 
-        $lowestGrantScore = (clone $summaryQuery)
+        $topContractScore = (clone $summaryQuery)
             ->whereNotNull('toplagan_bali')
             ->where(function ($query) {
-                $query->where('tolov_shakli', 'Davlat granti')
-                    ->orWhere('tolov_shakli', 'davlat granti');
+                $query->where('tolov_shakli', 'To\'lov-shartnoma')
+                    ->orWhere('tolov_shakli', 'to\'lov-shartnoma');
             })
-            ->orderBy('toplagan_bali')
+            ->orderByDesc('toplagan_bali')
             ->orderBy('full_name')
             ->first(['full_name', 'toplagan_bali', 'qabul_yili']);
 
@@ -209,7 +209,7 @@ class AdmissionIndicatorController extends Controller
             'jami_qabul' => (clone $summaryQuery)->sum('qabul_soni'),
             'qatorlar' => (clone $summaryQuery)->count(),
             'top_scorer' => $topScorer,
-            'lowest_grant_scorer' => $lowestGrantScore,
+            'top_contract_scorer' => $topContractScore,
         ];
 
         return view('admin.admission-indicators.index', [

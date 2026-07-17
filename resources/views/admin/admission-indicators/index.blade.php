@@ -13,17 +13,17 @@
                 </a>
                 <button type="button" onclick="openAdmissionImportModal()"
                         class="inline-flex items-center gap-1 px-3 py-2 text-white text-sm font-medium rounded-lg"
-                        style="background-color:#2563eb;border:1px solid #2563eb;box-shadow:0 1px 2px rgba(37,99,235,0.25);">
+                        style="background-color:#2563eb;border:1px solid #1d4ed8;box-shadow:0 1px 2px rgba(37,99,235,0.25);">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
                     Excel yuklash
                 </button>
                 <a href="{{ route('admin.admission-indicators.template') }}"
-                   class="inline-flex items-center gap-1 px-3 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg">
+                   class="inline-flex items-center gap-1 px-3 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-gray-700 text-sm font-medium rounded-lg">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Namuna shablon
                 </a>
                 <a href="{{ route('admin.admission-indicators.export', request()->query()) }}"
-                   class="inline-flex items-center gap-1 px-3 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 text-sm font-medium rounded-lg">
+                   class="inline-flex items-center gap-1 px-3 py-2 bg-white border border-slate-300 hover:bg-slate-50 text-gray-700 text-sm font-medium rounded-lg">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     Eksport
                 </a>
@@ -33,53 +33,53 @@
 
     <div class="w-full">
         @if(session('success'))
-            <div class="bg-green-100 border border-green-400 text-green-800 px-4 py-3 rounded mb-4">{{ session('success') }}</div>
+            <div class="bg-green-100 border border-green-400 text-green-800 px-3 py-2 rounded mb-3 text-sm">{{ session('success') }}</div>
         @endif
         @if(session('warning'))
-            <div class="bg-amber-100 border border-amber-400 text-amber-800 px-4 py-3 rounded mb-4">{{ session('warning') }}</div>
+            <div class="bg-amber-100 border border-amber-400 text-amber-800 px-3 py-2 rounded mb-3 text-sm">{{ session('warning') }}</div>
         @endif
         @if(session('error'))
-            <div class="bg-red-100 border border-red-400 text-red-800 px-4 py-3 rounded mb-4">{{ session('error') }}</div>
+            <div class="bg-red-100 border border-red-400 text-red-800 px-3 py-2 rounded mb-3 text-sm">{{ session('error') }}</div>
         @endif
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-4">
-            <div class="rounded-xl border border-slate-200 bg-white p-4">
-                <div class="text-xs uppercase font-semibold text-slate-500">Qatorlar (filtr bo'yicha)</div>
-                <div class="mt-1 text-2xl font-bold text-slate-800">{{ number_format($summary['qatorlar']) }}</div>
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
+            <div class="rounded-2xl border border-sky-200 bg-gradient-to-br from-white to-sky-50 p-3 shadow-sm">
+                <div class="text-[11px] uppercase font-semibold tracking-wide text-slate-500">Qatorlar (filtr bo'yicha)</div>
+                <div class="mt-1 text-xl font-bold text-slate-800">{{ number_format($summary['qatorlar']) }}</div>
             </div>
-            <div class="rounded-xl border border-slate-200 bg-white p-4">
-                <div class="text-xs uppercase font-semibold text-slate-500">Jami reja</div>
-                <div class="mt-1 text-2xl font-bold text-slate-800">{{ number_format((int) $summary['jami_reja']) }}</div>
+            <div class="rounded-2xl border border-amber-200 bg-gradient-to-br from-white to-amber-50 p-3 shadow-sm">
+                <div class="text-[11px] uppercase font-semibold tracking-wide text-slate-500">Jami reja</div>
+                <div class="mt-1 text-xl font-bold text-slate-800">{{ number_format((int) $summary['jami_reja']) }}</div>
             </div>
-            <div class="rounded-xl border border-slate-200 bg-white p-4">
-                <div class="text-xs uppercase font-semibold text-slate-500">Jami qabul</div>
-                <div class="mt-1 text-2xl font-bold text-emerald-700">{{ number_format((int) $summary['jami_qabul']) }}</div>
+            <div class="rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50 p-3 shadow-sm">
+                <div class="text-[11px] uppercase font-semibold tracking-wide text-slate-500">Jami qabul</div>
+                <div class="mt-1 text-xl font-bold text-emerald-700">{{ number_format((int) $summary['jami_qabul']) }}</div>
             </div>
         </div>
 
-        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm mb-4 overflow-hidden">
-            <form method="GET" action="{{ route('admin.admission-indicators.index') }}" class="p-5">
-                <div class="mb-4 flex items-center justify-between gap-3 flex-wrap">
+        <div class="bg-white rounded-3xl border border-sky-100 shadow-sm mb-3 overflow-hidden">
+            <form method="GET" action="{{ route('admin.admission-indicators.index') }}" class="p-4">
+                <div class="mb-3 flex items-center justify-between gap-2 flex-wrap">
                     <div>
-                        <h3 class="text-base font-semibold text-slate-800">Filtrlar</h3>
-                        <p class="text-sm text-slate-500">Qabul yozuvlarini kerakli parametrlar bo'yicha saralang.</p>
+                        <h3 class="text-sm font-semibold text-slate-800">Filtrlar</h3>
+                        <p class="text-xs text-slate-500">Qabul yozuvlarini kerakli parametrlar bo'yicha saralang.</p>
                     </div>
-                    <div class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600">
+                    <div class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700">
                         <span>Natija:</span>
                         <span class="text-slate-900">{{ number_format($summary['qatorlar']) }} ta</span>
                     </div>
                 </div>
 
-                <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;">
+                <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
                     <div style="flex:1 1 100%;min-width:280px;">
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qidiruv</label>
+                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Qidiruv</label>
                         <input type="text" name="search" value="{{ request('search') }}" placeholder="Talaba ID, JSHSHIR, F.I.SH, mutaxassislik..."
-                               class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                               class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                     </div>
 
-                    <div style="flex:1 1 calc(50% - 7px);min-width:220px;">
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qabul yili</label>
-                        <select name="qabul_yili" class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                    <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
+                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Qabul yili</label>
+                        <select name="qabul_yili" class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($years as $year)
                                 <option value="{{ $year }}" @selected((string) request('qabul_yili') === (string) $year)>{{ $year }}</option>
@@ -87,9 +87,9 @@
                         </select>
                     </div>
 
-                    <div style="flex:1 1 calc(50% - 7px);min-width:220px;">
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Ta'lim turi</label>
-                        <select name="talim_turi" class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                    <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
+                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Ta'lim turi</label>
+                        <select name="talim_turi" class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($talimTurlari as $t)
                                 <option value="{{ $t }}" @selected(request('talim_turi') === $t)>{{ $t }}</option>
@@ -97,9 +97,9 @@
                         </select>
                     </div>
 
-                    <div style="flex:1 1 calc(50% - 7px);min-width:220px;">
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Ta'lim shakli</label>
-                        <select name="talim_shakli" class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                    <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
+                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Ta'lim shakli</label>
+                        <select name="talim_shakli" class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($talimShakllari as $t)
                                 <option value="{{ $t }}" @selected(request('talim_shakli') === $t)>{{ $t }}</option>
@@ -107,9 +107,9 @@
                         </select>
                     </div>
 
-                    <div style="flex:1 1 calc(50% - 7px);min-width:220px;">
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">To'lov shakli</label>
-                        <select name="tolov_shakli" class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                    <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
+                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">To'lov shakli</label>
+                        <select name="tolov_shakli" class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($tolovShakllari as $t)
                                 <option value="{{ $t }}" @selected(request('tolov_shakli') === $t)>{{ $t }}</option>
@@ -117,9 +117,9 @@
                         </select>
                     </div>
 
-                    <div style="flex:1 1 calc(50% - 7px);min-width:220px;">
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Fakultet</label>
-                        <select name="fakultet" class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                    <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
+                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Fakultet</label>
+                        <select name="fakultet" class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($fakultetlar as $fakultet)
                                 <option value="{{ $fakultet }}" @selected(request('fakultet') === $fakultet)>{{ $fakultet }}</option>
@@ -127,9 +127,9 @@
                         </select>
                     </div>
 
-                    <div style="flex:1 1 calc(50% - 7px);min-width:220px;">
-                        <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Talaba toifasi</label>
-                        <select name="talaba_toifasi" class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                    <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
+                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Talaba toifasi</label>
+                        <select name="talaba_toifasi" class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($talabaToifalari as $toifa)
                                 <option value="{{ $toifa }}" @selected(request('talaba_toifasi') === $toifa)>{{ $toifa }}</option>
@@ -137,107 +137,107 @@
                         </select>
                     </div>
 
-                    <div style="display:flex;align-items:center;gap:10px;flex:1 1 100%;padding-top:4px;">
+                    <div style="display:flex;align-items:center;gap:8px;flex:1 1 100%;padding-top:2px;">
                         <button type="submit"
-                                class="px-5 py-2.5 text-white text-sm font-medium rounded-xl"
-                                style="background-color:#2563eb;border:1px solid #2563eb;box-shadow:0 8px 20px rgba(37,99,235,0.18);">Filtrlash</button>
+                                class="px-4 py-2 text-white text-sm font-medium rounded-xl"
+                                style="background-color:#2563eb;border:1px solid #1d4ed8;box-shadow:0 6px 14px rgba(37,99,235,0.18);">Filtrlash</button>
                         <a href="{{ route('admin.admission-indicators.index') }}"
-                           class="px-5 py-2.5 text-sm font-medium rounded-xl"
-                           style="background-color:#f8fafc;border:1px solid #cbd5e1;color:#334155;">Tozalash</a>
+                           class="px-4 py-2 text-sm font-medium rounded-xl"
+                           style="background-color:#fff7ed;border:1px solid #fdba74;color:#9a3412;">Tozalash</a>
                     </div>
                 </div>
             </form>
         </div>
 
-        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-white rounded-3xl border border-sky-100 shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
                 <form id="admissionTableFiltersForm" method="GET" action="{{ route('admin.admission-indicators.index') }}"></form>
-                <table class="min-w-full text-sm">
-                    <thead class="bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700">
+                <table class="min-w-full text-[13px]">
+                    <thead class="bg-gradient-to-r from-sky-50 via-white to-emerald-50 text-slate-700">
                         <tr>
-                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">T/r</th>
-                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">Talaba ID</th>
-                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">To'liq ismi</th>
-                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">Yil</th>
-                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">Ta'lim turi</th>
-                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">Imtiyoz toifasi</th>
-                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">To'lov shakli</th>
-                            <th class="px-5 py-4 text-right font-semibold whitespace-nowrap">To'plagan bali</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">T/r</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">Talaba ID</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">To'liq ismi</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">Yil</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">Ta'lim turi</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">Imtiyoz toifasi</th>
+                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap">To'lov shakli</th>
+                            <th class="px-4 py-3 text-right text-[12px] font-semibold whitespace-nowrap">To'plagan bali</th>
                         </tr>
-                        <tr class="bg-white border-t border-slate-200">
-                            <th class="px-4 py-3"></th>
-                            <th class="px-4 py-3">
+                        <tr class="bg-white border-t border-sky-100">
+                            <th class="px-3 py-2"></th>
+                            <th class="px-3 py-2">
                                 <input type="text" name="student_id" value="{{ request('student_id') }}" placeholder="Talaba ID"
                                        form="admissionTableFiltersForm"
-                                       class="w-full rounded-xl border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                                       class="w-full rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             </th>
-                            <th class="px-4 py-3">
+                            <th class="px-3 py-2">
                                 <input type="text" name="full_name" value="{{ request('full_name') }}" placeholder="F.I.SH"
                                        form="admissionTableFiltersForm"
-                                       class="w-full min-w-[220px] rounded-xl border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                                       class="w-full min-w-[180px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             </th>
-                            <th class="px-4 py-3">
-                                <select name="qabul_yili" form="admissionTableFiltersForm" class="w-full min-w-[100px] rounded-xl border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th class="px-3 py-2">
+                                <select name="qabul_yili" form="admissionTableFiltersForm" class="w-full min-w-[74px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($years as $year)
                                         <option value="{{ $year }}" @selected((string) request('qabul_yili') === (string) $year)>{{ $year }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-4 py-3">
-                                <select name="talim_turi" form="admissionTableFiltersForm" class="w-full min-w-[120px] rounded-xl border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th class="px-3 py-2">
+                                <select name="talim_turi" form="admissionTableFiltersForm" class="w-full min-w-[108px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($talimTurlari as $t)
                                         <option value="{{ $t }}" @selected(request('talim_turi') === $t)>{{ $t }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-4 py-3">
-                                <select name="imtiyoz_toifasi" form="admissionTableFiltersForm" class="w-full min-w-[260px] rounded-xl border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th class="px-3 py-2">
+                                <select name="imtiyoz_toifasi" form="admissionTableFiltersForm" class="w-full min-w-[220px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($imtiyozToifalari as $toifa)
                                         <option value="{{ $toifa }}" @selected(request('imtiyoz_toifasi') === $toifa)>{{ $toifa }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-4 py-3">
-                                <select name="tolov_shakli" form="admissionTableFiltersForm" class="w-full min-w-[140px] rounded-xl border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th class="px-3 py-2">
+                                <select name="tolov_shakli" form="admissionTableFiltersForm" class="w-full min-w-[122px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($tolovShakllari as $t)
                                         <option value="{{ $t }}" @selected(request('tolov_shakli') === $t)>{{ $t }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-4 py-3">
+                            <th class="px-3 py-2">
                                 <div class="flex items-center justify-end gap-2">
-                                    <button type="submit" form="admissionTableFiltersForm" class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-white"
-                                            style="background-color:#2563eb;box-shadow:0 6px 16px rgba(37,99,235,0.18);">OK</button>
+                                    <button type="submit" form="admissionTableFiltersForm" class="px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-white"
+                                            style="background-color:#2563eb;box-shadow:0 4px 10px rgba(37,99,235,0.16);">OK</button>
                                     <a href="{{ route('admin.admission-indicators.index') }}"
-                                       class="px-2.5 py-1.5 rounded-lg text-xs font-medium"
-                                       style="background-color:#f1f5f9;border:1px solid #cbd5e1;color:#334155;">X</a>
+                                       class="px-2.5 py-1.5 rounded-lg text-[12px] font-medium"
+                                       style="background-color:#fff7ed;border:1px solid #fdba74;color:#9a3412;">X</a>
                                 </div>
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-slate-200">
+                    <tbody class="divide-y divide-sky-100">
                         @forelse($indicators as $item)
-                            <tr class="{{ $loop->odd ? 'bg-slate-50' : 'bg-white' }} hover:bg-sky-50 transition-colors duration-150">
-                                <td class="px-5 py-4 font-semibold text-slate-700 align-top">{{ $indicators->firstItem() ? $indicators->firstItem() + $loop->index : $loop->iteration }}</td>
-                                <td class="px-5 py-4 font-medium text-slate-800 align-top whitespace-nowrap">{{ $item->student_id ?? '—' }}</td>
-                                <td class="px-5 py-4 min-w-[240px] align-top">
-                                    <div class="font-semibold text-slate-800 leading-6">{{ $item->full_name ?: '—' }}</div>
+                            <tr class="{{ $loop->odd ? 'bg-slate-50/70' : 'bg-white' }} hover:bg-sky-50 transition-colors duration-150">
+                                <td class="px-4 py-3 font-semibold text-slate-700 align-top">{{ $indicators->firstItem() ? $indicators->firstItem() + $loop->index : $loop->iteration }}</td>
+                                <td class="px-4 py-3 font-medium text-slate-800 align-top whitespace-nowrap">{{ $item->student_id ?? '—' }}</td>
+                                <td class="px-4 py-3 min-w-[220px] align-top">
+                                    <div class="font-semibold text-slate-800 leading-5">{{ $item->full_name ?: '—' }}</div>
                                 </td>
-                                <td class="px-5 py-4 font-semibold text-slate-800 align-top whitespace-nowrap">{{ $item->qabul_yili }}</td>
-                                <td class="px-5 py-4 align-top whitespace-nowrap">{{ $item->talim_turi ?: '—' }}</td>
-                                <td class="px-5 py-4 align-top min-w-[360px]">
-                                    <div class="leading-6 text-slate-700">{{ $item->imtiyoz_toifasi ?: '—' }}</div>
+                                <td class="px-4 py-3 font-semibold text-slate-800 align-top whitespace-nowrap">{{ $item->qabul_yili }}</td>
+                                <td class="px-4 py-3 align-top whitespace-nowrap">{{ $item->talim_turi ?: '—' }}</td>
+                                <td class="px-4 py-3 align-top min-w-[300px]">
+                                    <div class="leading-5 text-slate-700">{{ $item->imtiyoz_toifasi ?: '—' }}</div>
                                 </td>
-                                <td class="px-5 py-4 align-top">{{ $item->tolov_shakli ?: '—' }}</td>
-                                <td class="px-5 py-4 text-right font-semibold text-sky-700 align-top whitespace-nowrap">{{ $item->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $item->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}</td>
+                                <td class="px-4 py-3 align-top">{{ $item->tolov_shakli ?: '—' }}</td>
+                                <td class="px-4 py-3 text-right font-semibold text-sky-700 align-top whitespace-nowrap">{{ $item->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $item->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="px-3 py-10 text-center text-slate-400">
+                                <td colspan="8" class="px-3 py-8 text-center text-sm text-slate-400">
                                     Ma'lumot topilmadi. "Yangi qo'shish" yoki "Excel yuklash" orqali qo'shing.
                                 </td>
                             </tr>
@@ -247,7 +247,7 @@
             </div>
         </div>
 
-        <div class="mt-4">
+        <div class="mt-3">
             {{ $indicators->links() }}
         </div>
     </div>

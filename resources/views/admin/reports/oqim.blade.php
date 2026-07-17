@@ -44,37 +44,61 @@
                         <div class="filter-item" style="min-width: 180px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Variant (bo'linish)</label>
                             <select id="variant" class="select2" style="width: 100%;">
-                                <option value="1" selected>Guruh (to'liq)</option>
-                                <option value="2">A.B (2 ga bo'lib)</option>
-                                <option value="3">A.B.C (3 ga bo'lib)</option>
+                                <option value="auto" selected>Avtomatik (1-3 kurs a,b · 4+ a,b,c)</option>
+                                <option value="full">Guruh (to'liq)</option>
+                                <option value="ab">a,b guruhchalar</option>
+                                <option value="abc">a,b,c guruhchalar</option>
                                 <option value="all">Barcha variantlar (Excel)</option>
                             </select>
                         </div>
-                        <div class="filter-item" style="min-width: 150px;">
-                            <label class="filter-label"><span class="fl-dot" style="background:#06b6d4;"></span> Oqimdagi guruh</label>
-                            <select id="oqim_size" class="select2" style="width: 100%;">
-                                @foreach([2, 3, 4] as $sz)
-                                    <option value="{{ $sz }}" {{ $sz == 2 ? 'selected' : '' }}>{{ $sz }} ta guruh</option>
-                                @endforeach
-                            </select>
+                    </div>
+
+                    <!-- Me'yorlar (chegaralar) -->
+                    <div class="filter-row" style="align-items:flex-end;">
+                        <div class="norm-group">
+                            <span class="norm-title">Oqim me'yori</span>
+                            <div class="norm-inputs">
+                                <div><label>max</label><input type="number" id="oqim_max" class="norm-in" value="100" min="1"></div>
+                                <div><label>±</label><input type="number" id="oqim_tol" class="norm-in" value="0" min="0"></div>
+                            </div>
                         </div>
-                        <div class="filter-item" style="min-width: 300px;">
+                        <div class="norm-group">
+                            <span class="norm-title">a,b guruhcha</span>
+                            <div class="norm-inputs">
+                                <div><label>max</label><input type="number" id="ab_max" class="norm-in" value="15" min="1"></div>
+                                <div><label>±</label><input type="number" id="ab_tol" class="norm-in" value="0" min="0"></div>
+                            </div>
+                        </div>
+                        <div class="norm-group">
+                            <span class="norm-title">a,b,c guruhcha</span>
+                            <div class="norm-inputs">
+                                <div><label>max</label><input type="number" id="abc_max" class="norm-in" value="10" min="1"></div>
+                                <div><label>±</label><input type="number" id="abc_tol" class="norm-in" value="0" min="0"></div>
+                            </div>
+                        </div>
+                        <div class="filter-item" style="min-width: 420px;">
                             <label class="filter-label">&nbsp;</label>
                             <div style="display:flex;gap:8px;">
-                                <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport()">
+                                <button type="button" id="btn-calculate" class="btn-calc" onclick="loadReport(false)" title="Joriy holat (HEMISdagidek)">
                                     <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
                                     Hisoblash
                                 </button>
+                                <button type="button" id="btn-optimize" class="btn-opt" onclick="loadReport(true)" title="Me'yorlar bo'yicha qayta tashkillashtirish">
+                                    <svg style="width:16px;height:16px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/></svg>
+                                    Optimizatsiya
+                                </button>
                                 <button type="button" id="btn-excel" class="btn-excel" onclick="downloadExcel()" disabled>
                                     <svg style="width:15px;height:15px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                                    Excel yuklash
+                                    Excel
                                 </button>
                             </div>
                         </div>
                     </div>
                     <p style="margin:2px 2px 0;font-size:11.5px;color:#64748b;">
-                        Faqat faol (o'qiyotgan) talabalar hisobga olinadi. Oqimlar avtomatik shakllantiriladi:
-                        guruhlar raqami bo'yicha har <span id="hint-size">2</span> ta guruh bitta oqim, rus/ingliz guruhlari alohida oqimga birlashadi.
+                        Faqat faol (o'qiyotgan) talabalar hisobga olinadi. <b>Oqim</b> — ma'ruzaga birga boradigan guruhlar
+                        (til bo'yicha alohida, talaba soni oqim me'yoridan oshmaydi). <b>Hisoblash</b> — joriy holat (HEMISdagi kichik guruhlar);
+                        <b>Optimizatsiya</b> — kichik guruhlarni me'yor bo'yicha qayta hisoblab, ortiqcha guruhlarni qisqartiradi.
+                        Har xil tildagi guruhlar bir oqim/guruhga qo'shilmaydi.
                     </p>
                 </div>
 
@@ -109,22 +133,31 @@
     <script>
         function esc(s) { return $('<span>').text(s === null || s === undefined ? '' : s).html(); }
 
+        var lastOptimize = false;
+
         function getFilters() {
             var dekanFaculty = document.getElementById('dekan_faculty_id');
             return {
                 education_type: $('#education_type').val() || '',
                 faculty: dekanFaculty ? dekanFaculty.value : ($('#faculty').val() || ''),
-                variant: $('#variant').val() || '1',
-                oqim_size: $('#oqim_size').val() || 2,
+                variant: $('#variant').val() || 'auto',
+                oqim_max: $('#oqim_max').val() || 100,
+                oqim_tol: $('#oqim_tol').val() || 0,
+                ab_max: $('#ab_max').val() || 15,
+                ab_tol: $('#ab_tol').val() || 0,
+                abc_max: $('#abc_max').val() || 10,
+                abc_tol: $('#abc_tol').val() || 0,
+                optimize: lastOptimize ? 1 : 0,
             };
         }
 
-        function loadReport() {
+        function loadReport(optimize) {
+            lastOptimize = !!optimize;
             var params = getFilters();
             $('#empty-state').hide();
             $('#table-area').hide();
             $('#loading-state').show();
-            $('#btn-calculate').prop('disabled', true).css('opacity', '0.6');
+            $('#btn-calculate, #btn-optimize').prop('disabled', true).css('opacity', '0.6');
             $('#btn-excel').prop('disabled', true).css('opacity', '0.5');
 
             var startTime = performance.now();
@@ -136,7 +169,7 @@
                 success: function(res) {
                     var elapsed = ((performance.now() - startTime) / 1000).toFixed(1);
                     $('#loading-state').hide();
-                    $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+                    $('#btn-calculate, #btn-optimize').prop('disabled', false).css('opacity', '1');
 
                     var blocks = res.blocks || [];
                     if (!blocks.length) {
@@ -144,13 +177,14 @@
                         return;
                     }
                     renderReport(res);
-                    $('#time-badge').text(elapsed + ' soniyada hisoblandi · ' + esc(res.generated_at));
+                    var modeLabel = res.optimize ? 'Optimizatsiya' : 'Joriy holat';
+                    $('#time-badge').text(modeLabel + ' · ' + elapsed + ' soniyada hisoblandi · ' + esc(res.generated_at));
                     $('#table-area').show();
                     $('#btn-excel').prop('disabled', false).css('opacity', '1');
                 },
                 error: function(xhr) {
                     $('#loading-state').hide();
-                    $('#btn-calculate').prop('disabled', false).css('opacity', '1');
+                    $('#btn-calculate, #btn-optimize').prop('disabled', false).css('opacity', '1');
                     var msg = "Xatolik yuz berdi. Qayta urinib ko'ring.";
                     if (xhr.responseJSON && xhr.responseJSON.error) msg += ' (' + xhr.responseJSON.error + ')';
                     else if (xhr.status) msg += ' (HTTP ' + xhr.status + ')';
@@ -191,7 +225,7 @@
             }
             $('#report-body').html(html);
             var variantLabel = $('#variant option:selected').text();
-            $('#total-badge').text('Jami talaba: ' + grand + ' ta · ' + variantLabel);
+            $('#total-badge').text('Jami talaba: ' + grand + ' ta · ' + variantLabel.split('(')[0].trim());
         }
 
         function downloadExcel() {
@@ -205,7 +239,6 @@
             $('.select2').each(function() {
                 $(this).select2({ theme: 'classic', width: '100%', placeholder: $(this).find('option:first').text() });
             });
-            $('#oqim_size').on('change', function() { $('#hint-size').text($(this).val()); });
         });
     </script>
 
@@ -217,6 +250,16 @@
 
         .btn-calc { display: inline-flex; align-items: center; gap: 8px; padding: 8px 20px; background: linear-gradient(135deg, #2b5ea7, #3b7ddb); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(43,94,167,0.3); height: 36px; }
         .btn-calc:hover { background: linear-gradient(135deg, #1e4b8a, #2b5ea7); transform: translateY(-1px); }
+        .btn-opt { display: inline-flex; align-items: center; gap: 8px; padding: 8px 18px; background: linear-gradient(135deg, #7c3aed, #a855f7); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(124,58,237,0.3); height: 36px; }
+        .btn-opt:hover { background: linear-gradient(135deg, #6d28d9, #7c3aed); transform: translateY(-1px); }
+
+        .norm-group { background:#fff; border:1px solid #cbd5e1; border-radius:8px; padding:5px 10px 6px; }
+        .norm-title { display:block; font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:0.03em; color:#475569; margin-bottom:3px; }
+        .norm-inputs { display:flex; gap:8px; }
+        .norm-inputs > div { display:flex; align-items:center; gap:4px; }
+        .norm-inputs label { font-size:11px; font-weight:700; color:#64748b; }
+        .norm-in { width:52px; height:28px; border:1px solid #cbd5e1; border-radius:6px; text-align:center; font-size:12.5px; font-weight:600; color:#1e293b; }
+        .norm-in:focus { outline:none; border-color:#2b5ea7; box-shadow:0 0 0 2px rgba(43,94,167,0.12); }
         .btn-excel { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; background: linear-gradient(135deg, #16a34a, #22c55e); color: #fff; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; box-shadow: 0 2px 8px rgba(22,163,74,0.3); height: 36px; }
         .btn-excel:hover:not(:disabled) { background: linear-gradient(135deg, #15803d, #16a34a); transform: translateY(-1px); }
         .btn-excel:disabled { cursor: not-allowed; opacity: 0.5; }

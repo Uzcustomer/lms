@@ -11229,7 +11229,10 @@ class ReportController extends Controller
         // ---- Tuzilmaga yig'amiz: fakultet+yo'nalish -> kurs -> guruhlar ----
         $blocks = [];
         foreach ($rows as $r) {
-            $blockKey = $r->department_id . '|' . $r->specialty_id;
+            // Blok kaliti — fakultet + yo'nalish NOMI bo'yicha (HEMIS ID emas), aks holda
+            // bir xil yo'nalishning turli qabul yillari (turli specialty_id/o'quv reja)
+            // alohida bloklarga bo'linib ketadi (masalan 1-kurs alohida chiqadi).
+            $blockKey = mb_strtolower(trim((string) $r->department_name)) . '|' . mb_strtolower(trim((string) $r->specialty_name));
             if (!isset($blocks[$blockKey])) {
                 $blocks[$blockKey] = [
                     'department_name' => $r->department_name,

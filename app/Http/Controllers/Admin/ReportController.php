@@ -11491,7 +11491,11 @@ class ReportController extends Controller
                 ];
             }
             $bases[$key]['total'] += $g['count'];
-            $bases[$key]['members'][] = ['letter' => $g['letter'], 'count' => $g['count']];
+            $bases[$key]['members'][] = [
+                'letter' => $g['letter'],
+                'count'  => $g['count'],
+                'name'   => $g['name'], // HEMISdagi haqiqiy nom (til belgisisiz)
+            ];
         }
         return array_values($bases);
     }
@@ -11636,8 +11640,10 @@ class ReportController extends Controller
     }
 
     /**
-     * JORIY holat uchun kichik guruh qatorlari: HEMISdagi haqiqiy kichik guruhlar
-     * (agar soni qoidaga mos bo'lsa), aks holda qoida bo'yicha teng bo'linadi.
+     * JORIY holat uchun kichik guruh qatorlari: HEMISdagi HAQIQIY guruhlarni
+     * aynan o'zidek ko'rsatadi (real nom va real son) — hech qachon qayta bo'lmaydi.
+     * Shu sabab bir kodли, lekin har xil tildagi guruhlar (masalan d2/21-01a (rus)
+     * va d2/21-01с (o'z)) o'z nomi bilan alohida chiqadi, soxta nom to'qnashuvi bo'lmaydi.
      */
     private function oqimJoriyRows(array $b, int $subCount, string $eff, string $suffix): array
     {
@@ -11646,19 +11652,15 @@ class ReportController extends Controller
         }
 
         $members = $b['members'] ?? [];
-        usort($members, fn($x, $y) => strcmp((string) $x['letter'], (string) $y['letter']));
-        $withLetters = array_values(array_filter($members, fn($m) => $m['letter'] !== ''));
+        usort($members, fn($x, $y) => strcmp((string) ($x['name'] ?? $x['letter']), (string) ($y['name'] ?? $y['letter'])));
 
-        if (count($withLetters) === $subCount) {
-            $out = [];
-            foreach ($withLetters as $m) {
-                $out[] = ['name' => $b['base'] . $m['letter'] . $suffix, 'count' => (int) $m['count']];
-            }
-            return $out;
+        $out = [];
+        foreach ($members as $m) {
+            // HEMISdagi haqiqiy nomni ishlatamiz; bo'lmasa base + harf
+            $name = $m['name'] ?? ($b['base'] . $m['letter']);
+            $out[] = ['name' => $name . $suffix, 'count' => (int) $m['count']];
         }
-
-        // HEMISdagi bo'linish qoidaga mos emas — qoida bo'yicha teng bo'lamiz
-        return $this->oqimFixedSubgroups($b['base'], $b['total'], $subCount, $suffix);
+        return $out;
     }
 
     /**

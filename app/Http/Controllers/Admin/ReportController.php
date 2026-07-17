@@ -11232,11 +11232,15 @@ class ReportController extends Controller
                     'groups'     => [],
                 ];
             }
+            $langName = $langMap[$r->group_id] ?? null;
             $blocks[$blockKey]['courses'][$lvlKey]['groups'][] = [
-                'group_id' => $r->group_id,
-                'name'     => $r->group_name,
-                'count'    => (int) $r->cnt,
-                'lang'     => $this->oqimLangKey($langMap[$r->group_id] ?? null, $r->group_name),
+                'group_id'   => $r->group_id,
+                // Nomdagi eski til yorlig'ini ("(rus)", "(ang)"...) olib tashlaymiz —
+                // pastda standart yorliq bir xil ko'rinishda qayta qo'yiladi.
+                'name'       => $this->oqimStripLang($r->group_name),
+                'count'      => (int) $r->cnt,
+                'lang'       => $this->oqimLangKey($langName, $r->group_name),
+                'lang_label' => $this->oqimLangLabel($langName, $r->group_name),
             ];
         }
 
@@ -11301,7 +11305,7 @@ class ReportController extends Controller
                     $rowsOut = [];
                     foreach ($oq as $g) {
                         $total += $g['count'];
-                        foreach ($this->splitIntoSubgroups($g['name'], $g['count'], $variant) as $sub) {
+                        foreach ($this->splitIntoSubgroups($g['name'], $g['count'], $variant, $g['lang_label'] ?? '') as $sub) {
                             $rowsOut[] = $sub;
                         }
                     }
@@ -11381,10 +11385,12 @@ class ReportController extends Controller
      * 2 = a,b; 3 = a,b,c. Talaba soni imkon qadar teng taqsimlanadi, 0 bo'lganlari
      * tashlab yuboriladi.
      */
-    private function splitIntoSubgroups(string $name, int $count, int $variant): array
+    private function splitIntoSubgroups(string $name, int $count, int $variant, string $langLabel = ''): array
     {
+        $suffix = $langLabel !== '' ? ' (' . $langLabel . ')' : '';
+
         if ($variant <= 1) {
-            return [['name' => $name, 'count' => $count]];
+            return [['name' => $name . $suffix, 'count' => $count]];
         }
 
         $parts = min($variant, max(1, $count)); // talaba soni bo'lakdan kam bo'lsa kamaytiramiz
@@ -11396,10 +11402,10 @@ class ReportController extends Controller
         for ($i = 0; $i < $parts; $i++) {
             $c = $base + ($i < $rem ? 1 : 0);
             if ($c <= 0) { continue; }
-            $out[] = ['name' => $name . ($letters[$i] ?? ($i + 1)), 'count' => $c];
+            $out[] = ['name' => $name . ($letters[$i] ?? ($i + 1)) . $suffix, 'count' => $c];
         }
         if (empty($out)) {
-            $out[] = ['name' => $name . 'a', 'count' => $count];
+            $out[] = ['name' => $name . 'a' . $suffix, 'count' => $count];
         }
         return $out;
     }
@@ -11413,10 +11419,36 @@ class ReportController extends Controller
         if (str_contains($s, 'рус') || str_contains($s, 'rus') || str_contains($s, 'russ') || str_contains($s, '(rus')) {
             return 'rus';
         }
-        if (str_contains($s, 'ingl') || str_contains($s, 'engl') || str_contains($s, 'англ') || str_contains($s, '(ing')) {
+        if (str_contains($s, 'ingl') || str_contains($s, 'engl') || str_contains($s, 'англ')
+            || str_contains($s, '(ing') || str_contains($s, '(ang') || str_contains($s, 'angl')) {
             return 'ing';
         }
         return 'uz';
+    }
+
+    /**
+     * Guruh nomidagi oxirgi til qavsini ("(rus)", "(ang)", "(o'z)"...) olib tashlaydi.
+     */
+    private function oqimStripLang(string $name): string
+    {
+        $clean = preg_replace(
+            "/\\s*\\((?:rus|ru|рус|russ|ing|eng|engl|ang|angl|англ|o['’‘]?z|oz|uz|ўз|узб)[^)]*\\)\\s*$/ui",
+            '',
+            $name
+        );
+        return trim($clean === null ? $name : $clean);
+    }
+
+    /**
+     * Guruh yonida ko'rsatiladigan qisqa til yorlig'i: o'z / rus / ing.
+     */
+    private function oqimLangLabel(?string $langName, string $groupName): string
+    {
+        return match ($this->oqimLangKey($langName, $groupName)) {
+            'rus' => 'rus',
+            'ing' => 'ing',
+            default => "o'z",
+        };
     }
 
     /**

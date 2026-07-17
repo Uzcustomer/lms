@@ -211,7 +211,7 @@
                         var oq = course.oqims[o];
                         for (var r = 0; r < oq.rows.length; r++) {
                             html += '<tr>';
-                            if (r === 0) html += '<td class="oq-label" rowspan="' + oq.rows.length + '">' + esc(oq.label) + '</td>';
+                            if (r === 0) html += '<td class="oq-label" rowspan="' + oq.rows.length + '">' + esc(oq.label) + '<span class="oq-sum">' + esc(oq.total) + ' ta</span></td>';
                             html += '<td class="oq-grp">' + esc(oq.rows[r].name) + '</td>';
                             html += '<td class="oq-cnt">' + esc(oq.rows[r].count) + '</td>';
                             html += '</tr>';
@@ -280,6 +280,7 @@
         .oqim-table th { background: linear-gradient(135deg, #dbe4ef, #cbd7e8); color: #1e3a5f; font-weight: 700; padding: 6px 8px; text-align: center; border: 1px solid #b8c6dc; font-size: 12px; }
         .oqim-table td { border: 1px solid #e2e8f0; padding: 4px 8px; }
         .oq-label { text-align: center; font-weight: 700; color: #2b5ea7; background: #f0f6ff; white-space: nowrap; }
+        .oq-sum { display: block; margin-top: 2px; font-size: 10.5px; font-weight: 700; color: #16a34a; }
         .oq-grp { color: #0f172a; white-space: nowrap; }
         .oq-cnt { text-align: center; font-weight: 600; color: #334155; width: 40px; }
         .oq-total td { background: #f1f5f9; font-weight: 800; color: #0f172a; text-align: center; }

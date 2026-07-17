@@ -11348,14 +11348,17 @@ class ReportController extends Controller
                 $displayOqims = [];
                 foreach ($oqims as $idx => $oq) {
                     $rowsOut = [];
+                    $oqimTotal = 0;
                     foreach ($oq as $bg) {
                         $total += $bg['total'];
+                        $oqimTotal += $bg['total'];
                         foreach ($this->oqimSubgroupRows($bg, $variant, $params, $levelNum) as $sub) {
                             $rowsOut[] = $sub;
                         }
                     }
                     $displayOqims[] = [
                         'label' => ($idx + 1) . '-oqim',
+                        'total' => $oqimTotal,
                         'rows'  => $rowsOut,
                     ];
                 }
@@ -11683,12 +11686,15 @@ class ReportController extends Controller
                     }
                     $oqimBottom = $cur - 1;
                     if ($oqimBottom >= $oqimTop) {
-                        // Oqim yorlig'ini birinchi ustunga, guruhlar sonicha birlashtirib yozamiz
-                        $sheet->setCellValue([$colBase, $oqimTop], $oqim['label']);
+                        // Oqim yorlig'ini birinchi ustunga, guruhlar sonicha birlashtirib yozamiz.
+                        // Yorliq ostida oqimdagi jami talaba soni ko'rsatiladi.
+                        $label = $oqim['label'] . "\n(" . ($oqim['total'] ?? 0) . " ta)";
+                        $sheet->setCellValue([$colBase, $oqimTop], $label);
                         if ($oqimBottom > $oqimTop) {
                             $sheet->mergeCells([$colBase, $oqimTop, $colBase, $oqimBottom]);
                         }
-                        $sheet->getStyle([$colBase, $oqimTop])->getAlignment()->setHorizontal($center)->setVertical($vcenter);
+                        $sheet->getStyle([$colBase, $oqimTop])->getAlignment()
+                            ->setHorizontal($center)->setVertical($vcenter)->setWrapText(true);
                         $sheet->getStyle([$colBase, $oqimTop])->getFont()->setBold(true);
                     }
                 }
@@ -11722,7 +11728,7 @@ class ReportController extends Controller
 
         // Ustun kengliklari: har kurs uchun oqim(6) guruh(16) son(8)
         for ($c = 1; $c <= $maxCols; $c += 3) {
-            $sheet->getColumnDimensionByColumn($c)->setWidth(7);
+            $sheet->getColumnDimensionByColumn($c)->setWidth(9);
             $sheet->getColumnDimensionByColumn($c + 1)->setWidth(16);
             $sheet->getColumnDimensionByColumn($c + 2)->setWidth(7);
         }

@@ -42,21 +42,6 @@
             <div class="bg-red-100 border border-red-400 text-red-800 px-3 py-2 rounded mb-3 text-sm">{{ session('error') }}</div>
         @endif
 
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-3">
-            <div class="rounded-2xl border border-sky-200 bg-gradient-to-br from-white to-sky-50 p-3 shadow-sm">
-                <div class="text-[11px] uppercase font-semibold tracking-wide text-slate-500">Qatorlar (filtr bo'yicha)</div>
-                <div class="mt-1 text-xl font-bold text-slate-800">{{ number_format($summary['qatorlar']) }}</div>
-            </div>
-            <div class="rounded-2xl border border-amber-200 bg-gradient-to-br from-white to-amber-50 p-3 shadow-sm">
-                <div class="text-[11px] uppercase font-semibold tracking-wide text-slate-500">Jami reja</div>
-                <div class="mt-1 text-xl font-bold text-slate-800">{{ number_format((int) $summary['jami_reja']) }}</div>
-            </div>
-            <div class="rounded-2xl border border-emerald-200 bg-gradient-to-br from-white to-emerald-50 p-3 shadow-sm">
-                <div class="text-[11px] uppercase font-semibold tracking-wide text-slate-500">Jami qabul</div>
-                <div class="mt-1 text-xl font-bold text-emerald-700">{{ number_format((int) $summary['jami_qabul']) }}</div>
-            </div>
-        </div>
-
         <div class="bg-white rounded-3xl border border-sky-100 shadow-sm mb-3 overflow-hidden">
             <form method="GET" action="{{ route('admin.admission-indicators.index') }}" class="p-4">
                 <div class="mb-3 flex items-center justify-between gap-2 flex-wrap">
@@ -147,6 +132,66 @@
                     </div>
                 </div>
             </form>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2 mb-3">
+            <div class="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-3 shadow-sm">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <div class="text-[11px] uppercase font-semibold tracking-wide text-sky-700">Qatorlar</div>
+                        <div class="mt-1 text-xl font-bold text-slate-800">{{ number_format($summary['qatorlar']) }}</div>
+                    </div>
+                    <div class="rounded-xl bg-sky-100 p-2 text-sky-700">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"/></svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-3 shadow-sm">
+                <div class="flex items-start justify-between gap-2">
+                    <div>
+                        <div class="text-[11px] uppercase font-semibold tracking-wide text-emerald-700">Jami qabul</div>
+                        <div class="mt-1 text-xl font-bold text-emerald-700">{{ number_format((int) $summary['jami_qabul']) }}</div>
+                    </div>
+                    <div class="rounded-xl bg-emerald-100 p-2 text-emerald-700">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white p-3 shadow-sm">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="text-[11px] uppercase font-semibold tracking-wide text-violet-700">Eng yuqori ball</div>
+                        <div class="mt-1 text-lg font-bold text-slate-800">
+                            {{ $summary['top_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['top_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
+                        </div>
+                        <div class="mt-1 truncate text-[12px] font-medium text-slate-700" title="{{ $summary['top_scorer']?->full_name }}">
+                            {{ $summary['top_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
+                        </div>
+                    </div>
+                    <div class="rounded-xl bg-violet-100 p-2 text-violet-700">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l2.4 4.86L20 8.64l-4 3.9.94 5.46L12 15.77 7.06 18l.94-5.46-4-3.9 5.6-.78L12 3z"/></svg>
+                    </div>
+                </div>
+            </div>
+
+            <div class="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-3 shadow-sm">
+                <div class="flex items-start justify-between gap-2">
+                    <div class="min-w-0">
+                        <div class="text-[11px] uppercase font-semibold tracking-wide text-amber-700">Eng past grant ball</div>
+                        <div class="mt-1 text-lg font-bold text-slate-800">
+                            {{ $summary['lowest_grant_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['lowest_grant_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
+                        </div>
+                        <div class="mt-1 truncate text-[12px] font-medium text-slate-700" title="{{ $summary['lowest_grant_scorer']?->full_name }}">
+                            {{ $summary['lowest_grant_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
+                        </div>
+                    </div>
+                    <div class="rounded-xl bg-amber-100 p-2 text-amber-700">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="bg-white rounded-3xl border border-sky-100 shadow-sm overflow-hidden">

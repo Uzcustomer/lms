@@ -150,6 +150,23 @@ class AdmissionIndicatorController extends Controller
                 ->with('error', 'Iltimos, avval migratsiyani bajaring: php artisan migrate');
         }
 
+        $summaryQuery = $this->filteredQuery($request);
+        $topScorer = (clone $summaryQuery)
+            ->whereNotNull('toplagan_bali')
+            ->orderByDesc('toplagan_bali')
+            ->orderBy('full_name')
+            ->first(['full_name', 'toplagan_bali', 'qabul_yili']);
+
+        $lowestGrantScore = (clone $summaryQuery)
+            ->whereNotNull('toplagan_bali')
+            ->where(function ($query) {
+                $query->where('tolov_shakli', 'Davlat granti')
+                    ->orWhere('tolov_shakli', 'davlat granti');
+            })
+            ->orderBy('toplagan_bali')
+            ->orderBy('full_name')
+            ->first(['full_name', 'toplagan_bali', 'qabul_yili']);
+
         $indicators = $this->filteredQueryWithScoreStats($request)
             ->orderByDesc('qabul_yili')
             ->orderBy('talim_turi')
@@ -189,9 +206,10 @@ class AdmissionIndicatorController extends Controller
             ->pluck('imtiyoz_toifasi');
 
         $summary = [
-            'jami_reja' => $this->filteredQuery($request)->sum('reja'),
-            'jami_qabul' => $this->filteredQuery($request)->sum('qabul_soni'),
-            'qatorlar' => $this->filteredQuery($request)->count(),
+            'jami_qabul' => (clone $summaryQuery)->sum('qabul_soni'),
+            'qatorlar' => (clone $summaryQuery)->count(),
+            'top_scorer' => $topScorer,
+            'lowest_grant_scorer' => $lowestGrantScore,
         ];
 
         return view('admin.admission-indicators.index', [

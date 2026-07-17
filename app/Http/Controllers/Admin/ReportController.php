@@ -11250,11 +11250,15 @@ class ReportController extends Controller
                 ];
             }
             $langName = $langMap[$r->group_id] ?? null;
+            // Nomdagi eski til yorlig'ini ("(rus)","(ang)"...) olib tashlaymiz.
+            $nameNoLang = $this->oqimStripLang($r->group_name);
+            // Nomdan asosiy guruh nomi (masalan d2/d25-01) va kichik guruh harfini (a/b/c) ajratamiz.
+            [$base, $letter] = $this->oqimSplitBase($nameNoLang);
             $blocks[$blockKey]['courses'][$lvlKey]['groups'][] = [
                 'group_id'   => $r->group_id,
-                // Nomdagi eski til yorlig'ini ("(rus)", "(ang)"...) olib tashlaymiz —
-                // pastda standart yorliq bir xil ko'rinishda qayta qo'yiladi.
-                'name'       => $this->oqimStripLang($r->group_name),
+                'name'       => $nameNoLang,
+                'base'       => $base,
+                'letter'     => $letter,
                 'count'      => (int) $r->cnt,
                 'lang'       => $this->oqimLangKey($langName, $r->group_name),
                 'lang_label' => $this->oqimLangLabel($langName, $r->group_name),
@@ -11266,23 +11270,41 @@ class ReportController extends Controller
             return [$a['department_name'], $a['specialty_name']] <=> [$b['department_name'], $b['specialty_name']];
         });
 
-        $oqimSize = (int) $request->get('oqim_size', 2);
-        if ($oqimSize < 1) { $oqimSize = 2; }
+        // ---- Me'yorlar (chegaralar) — qo'lda beriladi, tolerantlik (+/-) bilan ----
+        $params = [
+            'optimize' => $request->boolean('optimize'),
+            'oqim_max' => max(1, (int) $request->get('oqim_max', 100)),
+            'oqim_tol' => max(0, (int) $request->get('oqim_tol', 0)),
+            'ab_max'   => max(1, (int) $request->get('ab_max', 15)),
+            'ab_tol'   => max(0, (int) $request->get('ab_tol', 0)),
+            'abc_max'  => max(1, (int) $request->get('abc_max', 10)),
+            'abc_tol'  => max(0, (int) $request->get('abc_tol', 0)),
+        ];
 
-        // Tanlangan variant(lar): 1=Guruh, 2=A.B, 3=A.B.C
-        $variantParam = $request->get('variant', '1');
+        // Tanlangan variant(lar). full=to'liq guruh, ab=a,b guruhcha, abc=a,b,c guruhcha,
+        // auto=kursga qarab (1-3 kurs -> a,b, 4+ kurs -> a,b,c).
+        $variantNames = [
+            'full' => 'Guruh (to\'liq)',
+            'ab'   => 'a,b guruhchalar',
+            'abc'  => 'a,b,c guruhchalar',
+            'auto' => 'Avtomatik (kursga qarab)',
+        ];
+        $variantParam = (string) $request->get('variant', 'auto');
         if ($variantParam === 'all') {
-            $variants = [1 => 'Guruh', 2 => 'Guruh A.B', 3 => 'Guruh A.B C'];
+            $variants = [
+                'full' => $variantNames['full'],
+                'ab'   => $variantNames['ab'],
+                'abc'  => $variantNames['abc'],
+            ];
         } else {
-            $v = max(1, min(3, (int) $variantParam));
-            $names = [1 => 'Guruh', 2 => 'Guruh A.B', 3 => 'Guruh A.B C'];
-            $variants = [$v => $names[$v]];
+            $key = $this->oqimNormalizeVariant($variantParam);
+            $variants = [$key => $variantNames[$key]];
         }
 
         // Har bir variant uchun oqimlarni quramiz
         $byVariant = [];
-        foreach ($variants as $vNum => $vTitle) {
-            $byVariant[$vNum] = $this->buildOqimBlocksForVariant($blocks, $oqimSize, $vNum);
+        foreach ($variants as $vKey => $vTitle) {
+            $byVariant[$vKey] = $this->buildOqimBlocksForVariant($blocks, $params, $vKey);
         }
 
         $header = [
@@ -11298,31 +11320,54 @@ class ReportController extends Controller
             'variants'  => $variants,
             'byVariant' => $byVariant,
             'blocks'    => $byVariant[$firstVariant],
+            'params'    => $params,
+            'optimize'  => $params['optimize'],
             'generated_at' => now()->format('d.m.Y H:i'),
         ];
     }
 
     /**
-     * Bitta variant uchun barcha bloklarning oqim tuzilmasini quradi.
+     * Variant kalitini normallashtiradi (eski raqamli qiymatlarni ham qabul qiladi).
      */
-    private function buildOqimBlocksForVariant(array $blocks, int $oqimSize, int $variant): array
+    private function oqimNormalizeVariant(string $v): string
+    {
+        return match ($v) {
+            '1', 'full' => 'full',
+            '2', 'ab'   => 'ab',
+            '3', 'abc'  => 'abc',
+            default     => 'auto',
+        };
+    }
+
+    /**
+     * Bitta variant uchun barcha bloklarning oqim tuzilmasini quradi.
+     * $params — me'yorlar (oqim_max, ab_max, abc_max + tolerantlik) va optimize bayrog'i.
+     */
+    private function buildOqimBlocksForVariant(array $blocks, array $params, string $variant): array
     {
         $result = [];
         foreach ($blocks as $block) {
             $courses = [];
-            // kurslarni level_code bo'yicha tartiblaymiz
             $courseList = $block['courses'];
             uasort($courseList, fn($a, $b) => $this->oqimNatCmp((string) $a['level_code'], (string) $b['level_code']));
 
             foreach ($courseList as $course) {
-                $oqims = $this->buildOqims($course['groups'], $oqimSize);
+                // 1) HEMIS guruhlarini asosiy guruhlarga (base) yig'amiz — kichik guruhlarni birlashtiramiz.
+                $bases = $this->aggregateBaseGroups($course['groups']);
+
+                // 2) Kurs raqamini aniqlaymiz (auto variant uchun).
+                $levelNum = $this->oqimLevelNumber($course['level_name'], (string) $course['level_code']);
+
+                // 3) Oqimlarga taqsimlaymiz — til bo'yicha ajratib, talaba soni bo'yicha (oqim_max) qadoqlab.
+                $oqims = $this->packOqims($bases, $params['oqim_max'], $params['oqim_tol']);
+
                 $total = 0;
                 $displayOqims = [];
                 foreach ($oqims as $idx => $oq) {
                     $rowsOut = [];
-                    foreach ($oq as $g) {
-                        $total += $g['count'];
-                        foreach ($this->splitIntoSubgroups($g['name'], $g['count'], $variant, $g['lang_label'] ?? '') as $sub) {
+                    foreach ($oq as $bg) {
+                        $total += $bg['total'];
+                        foreach ($this->oqimSubgroupRows($bg, $variant, $params, $levelNum) as $sub) {
                             $rowsOut[] = $sub;
                         }
                     }
@@ -11347,47 +11392,75 @@ class ReportController extends Controller
     }
 
     /**
-     * Guruhlarni oqimlarga taqsimlaydi.
-     * Qoida: guruhlar raqami bo'yicha tartiblanadi; o'zbek (asosiy) guruhlar
-     * $oqimSize tadan oqimlarga bo'linadi; rus/ingliz kabi boshqa tildagi guruhlar
-     * har bir til bo'yicha bitta oqimga birlashtiriladi. Oqimlar eng kichik
-     * guruh raqami bo'yicha tartiblanadi.
+     * HEMIS guruhlarini asosiy guruhlarga (base) yig'adi. Har bir asosiy guruh —
+     * bitta tildagi bitta akademik guruh (masalan d2/d25-01), uning ichida kichik
+     * guruhlar (a/b/c) a'zo sifatida saqlanadi. Har xil til hech qachon birlashmaydi.
      */
-    private function buildOqims(array $groups, int $oqimSize): array
+    private function aggregateBaseGroups(array $groups): array
     {
-        if (empty($groups)) {
+        $bases = [];
+        foreach ($groups as $g) {
+            $key = $g['base'] . '|' . $g['lang'];
+            if (!isset($bases[$key])) {
+                $bases[$key] = [
+                    'base'       => $g['base'],
+                    'lang'       => $g['lang'],
+                    'lang_label' => $g['lang_label'],
+                    'total'      => 0,
+                    'members'    => [],
+                ];
+            }
+            $bases[$key]['total'] += $g['count'];
+            $bases[$key]['members'][] = ['letter' => $g['letter'], 'count' => $g['count']];
+        }
+        return array_values($bases);
+    }
+
+    /**
+     * Asosiy guruhlarni oqimlarga taqsimlaydi.
+     * Qoida: har xil tildagi guruhlar hech qachon bitta oqimga tushmaydi; guruhlar
+     * raqami bo'yicha tartiblanadi va talaba soni bo'yicha (oqim_max + tolerantlik)
+     * ochko'zlik bilan qadoqlanadi (bitta oqim ~ ma'ruzaga birga boradigan guruhlar).
+     */
+    private function packOqims(array $bases, int $oqimMax, int $oqimTol): array
+    {
+        if (empty($bases)) {
             return [];
         }
 
-        // Barcha guruhlarni nomi bo'yicha tabiiy tartiblaymiz va tartib indeksini eslab qolamiz
-        usort($groups, fn($a, $b) => $this->oqimNatCmp($a['name'], $b['name']));
-        foreach ($groups as $i => &$g) {
-            $g['_order'] = $i;
+        usort($bases, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
+        foreach ($bases as $i => &$b) {
+            $b['_order'] = $i;
         }
-        unset($g);
+        unset($b);
 
-        // Til bo'yicha ajratamiz
-        $uz = [];
-        $others = []; // langKey => [groups]
-        foreach ($groups as $g) {
-            if ($g['lang'] === 'uz') {
-                $uz[] = $g;
-            } else {
-                $others[$g['lang']][] = $g;
+        // Til bo'yicha ajratamiz — har xil til bir oqimda bo'lmasin
+        $byLang = [];
+        foreach ($bases as $b) {
+            $byLang[$b['lang']][] = $b;
+        }
+
+        $limit = $oqimMax + max(0, $oqimTol);
+        $chunks = [];
+        foreach ($byLang as $list) {
+            usort($list, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
+            $cur = [];
+            $sum = 0;
+            foreach ($list as $b) {
+                if (!empty($cur) && ($sum + $b['total']) > $limit) {
+                    $chunks[] = $cur;
+                    $cur = [];
+                    $sum = 0;
+                }
+                $cur[] = $b;
+                $sum += $b['total'];
+            }
+            if (!empty($cur)) {
+                $chunks[] = $cur;
             }
         }
 
-        $chunks = [];
-        // O'zbek guruhlar: $oqimSize tadan
-        foreach (array_chunk($uz, max(1, $oqimSize)) as $c) {
-            $chunks[] = $c;
-        }
-        // Boshqa tillar: har biri bitta oqim
-        foreach ($others as $c) {
-            $chunks[] = $c;
-        }
-
-        // Oqimlarni eng kichik guruh tartibi bo'yicha saralaymiz
+        // Oqimlarni eng kichik guruh tartibi bo'yicha raqamlaymiz
         usort($chunks, function ($a, $b) {
             $minA = min(array_map(fn($x) => $x['_order'], $a));
             $minB = min(array_map(fn($x) => $x['_order'], $b));
@@ -11398,33 +11471,102 @@ class ReportController extends Controller
     }
 
     /**
-     * Guruhni kichik guruhlarga (a/b/c) bo'ladi. $variant: 1 = bo'linmaydi,
-     * 2 = a,b; 3 = a,b,c. Talaba soni imkon qadar teng taqsimlanadi, 0 bo'lganlari
-     * tashlab yuboriladi.
+     * Bitta asosiy guruh uchun ko'rsatiladigan qatorlarni qaytaradi.
+     * variant: full = to'liq guruh (bo'linmaydi), ab = a,b guruhcha, abc = a,b,c guruhcha,
+     * auto = kursga qarab (1-3 kurs -> a,b, 4+ kurs -> a,b,c).
+     * optimize=false (joriy holat): HEMISdagi haqiqiy kichik guruhlar ko'rsatiladi.
+     * optimize=true: kichik guruhlar me'yorga (ab_max / abc_max) qarab qaytadan hisoblanadi.
      */
-    private function splitIntoSubgroups(string $name, int $count, int $variant, string $langLabel = ''): array
+    private function oqimSubgroupRows(array $bg, string $variant, array $params, int $levelNum): array
     {
-        $suffix = $langLabel !== '' ? ' (' . $langLabel . ')' : '';
+        $suffix = $bg['lang_label'] !== '' ? ' (' . $bg['lang_label'] . ')' : '';
 
-        if ($variant <= 1) {
-            return [['name' => $name . $suffix, 'count' => $count]];
+        // auto: kursga qarab bo'linish turini tanlaymiz
+        $eff = $variant;
+        if ($eff === 'auto') {
+            $eff = $levelNum >= 4 ? 'abc' : 'ab';
         }
 
-        $parts = min($variant, max(1, $count)); // talaba soni bo'lakdan kam bo'lsa kamaytiramiz
-        $base = intdiv($count, $parts);
-        $rem = $count % $parts;
-        $letters = ['a', 'b', 'c', 'd', 'e'];
+        if ($eff === 'full') {
+            return [['name' => $bg['base'] . $suffix, 'count' => $bg['total']]];
+        }
+
+        [$max, $tol] = $eff === 'abc'
+            ? [$params['abc_max'], $params['abc_tol']]
+            : [$params['ab_max'], $params['ab_tol']];
+
+        // OPTIMIZATSIYA: kichik guruhlar sonini me'yordan kelib chiqib qayta hisoblaymiz
+        if (!empty($params['optimize'])) {
+            return $this->oqimComputeSubgroups($bg['base'], $bg['total'], $max, $tol, $suffix);
+        }
+
+        // JORIY HOLAT: HEMISdagi haqiqiy kichik guruhlar
+        $members = $bg['members'];
+        usort($members, fn($a, $b) => strcmp((string) $a['letter'], (string) $b['letter']));
+        $hasLetters = count(array_filter($members, fn($m) => $m['letter'] !== '')) > 0;
+
+        if (!$hasLetters) {
+            // HEMISda kichik guruhga bo'linmagan — me'yor bo'yicha bo'lib ko'rsatamiz
+            return $this->oqimComputeSubgroups($bg['base'], $bg['total'], $max, $tol, $suffix);
+        }
 
         $out = [];
-        for ($i = 0; $i < $parts; $i++) {
-            $c = $base + ($i < $rem ? 1 : 0);
-            if ($c <= 0) { continue; }
-            $out[] = ['name' => $name . ($letters[$i] ?? ($i + 1)) . $suffix, 'count' => $c];
-        }
-        if (empty($out)) {
-            $out[] = ['name' => $name . 'a' . $suffix, 'count' => $count];
+        foreach ($members as $m) {
+            $out[] = ['name' => $bg['base'] . $m['letter'] . $suffix, 'count' => (int) $m['count']];
         }
         return $out;
+    }
+
+    /**
+     * Talaba sonini me'yorga (max + tolerantlik) qarab kichik guruhlarga bo'ladi va
+     * imkon qadar teng taqsimlaydi. Qaytadi: [['name'=>..., 'count'=>...], ...].
+     */
+    private function oqimComputeSubgroups(string $base, int $total, int $max, int $tol, string $suffix): array
+    {
+        $per = max(1, $max + max(0, $tol));
+        $n = max(1, (int) ceil($total / $per));
+
+        $q = intdiv($total, $n);
+        $rem = $total % $n;
+        $letters = ['a', 'b', 'c', 'd', 'e', 'f'];
+
+        $out = [];
+        for ($i = 0; $i < $n; $i++) {
+            $c = $q + ($i < $rem ? 1 : 0);
+            if ($c <= 0) { continue; }
+            $out[] = ['name' => $base . ($letters[$i] ?? ($i + 1)) . $suffix, 'count' => $c];
+        }
+        if (empty($out)) {
+            $out[] = ['name' => $base . 'a' . $suffix, 'count' => $total];
+        }
+        return $out;
+    }
+
+    /**
+     * Asosiy guruh nomini (masalan "d2/d25-01") va kichik guruh harfini (a/b/c) ajratadi.
+     */
+    private function oqimSplitBase(string $nameNoLang): array
+    {
+        if (preg_match('/^(.*?\d)\s*\(?([a-eA-E])\)?$/u', $nameNoLang, $m)) {
+            return [rtrim($m[1]), mb_strtolower($m[2])];
+        }
+        return [$nameNoLang, ''];
+    }
+
+    /**
+     * Kurs nomidan yoki kodidan kurs raqamini ajratadi ("2-kurs" -> 2).
+     */
+    private function oqimLevelNumber(?string $levelName, string $levelCode): int
+    {
+        if ($levelName && preg_match('/(\d+)/', $levelName, $m)) {
+            return (int) $m[1];
+        }
+        if (preg_match('/(\d+)/', $levelCode, $m)) {
+            // level_code ba'zan 11,12.. ko'rinishida — oxirgi raqamni kurs deb olamiz
+            $n = (int) $m[1];
+            return $n > 6 ? ($n % 10) : $n;
+        }
+        return 0;
     }
 
     /**

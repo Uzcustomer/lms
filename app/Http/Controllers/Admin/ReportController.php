@@ -11318,7 +11318,8 @@ class ReportController extends Controller
         // Optimizatsiya bosilganda — nima o'zgarishi haqida reja (dialog uchun)
         $plan = null;
         if ($params['optimize']) {
-            $planVariant = ($variantParam === 'all') ? 'auto' : array_key_first($variants);
+            // Reja ko'rsatilayotgan variant bilan bir xil bo'lsin (birinchi variant)
+            $planVariant = array_key_first($variants);
             $plan = $this->computeOptimizationPlan($blocks, $params, $planVariant);
         }
 
@@ -11335,75 +11336,82 @@ class ReportController extends Controller
     }
 
     /**
-     * Optimizatsiya rejasi: joriy holat (HEMISdagi kichik guruhlar) bilan me'yor
-     * bo'yicha optimal holatni solishtiradi va nima o'zgarishi kerakligini tushuntiradi
-     * — qaysi guruhchani bekor qilib, talabalarni qayerga qo'shish, natijada nechta
-     * guruhcha kamayishi.
+     * Optimizatsiya rejasi: joriy holatni me'yor bo'yicha optimal holat bilan
+     * solishtiradi. Optimizatsiya kam to'lgan akademik guruhlarni birlashtirib,
+     * guruhlar (va shu bilan kichik guruhlar hamda oqimlar) sonini kamaytiradi.
+     * Kichik guruhlar soni kursga qarab qat'iy (1-3 a,b; 4-6 a,b,c) — o'zgarmaydi.
      */
     private function computeOptimizationPlan(array $blocks, array $params, string $variant): array
     {
         $curParams = ['optimize' => false] + $params;
         $optParams = ['optimize' => true] + $params;
 
-        $curSub = 0;
-        $optSub = 0;
-        $oqimCount = 0;
+        $curBase = 0; $optBase = 0;
+        $curSub = 0;  $optSub = 0;
+        $curOqim = 0; $optOqim = 0;
         $moves = [];
 
         foreach ($blocks as $block) {
             foreach ($block['courses'] as $course) {
                 $bases = $this->aggregateBaseGroups($course['groups']);
+                if (empty($bases)) {
+                    continue;
+                }
                 $levelNum = $this->oqimLevelNumber($course['level_name'], (string) $course['level_code']);
-                $oqimCount += count($this->packOqims($bases, $params['oqim_max'], $params['oqim_tol']));
+                [$subCount, $subMax, $subTol, $eff] = $this->oqimSubRule($variant, $levelNum, $params);
+                $cap = max(1, $subCount * ($subMax + max(0, $subTol)));
 
-                foreach ($bases as $bg) {
-                    $eff = $variant === 'auto' ? ($levelNum >= 4 ? 'abc' : 'ab') : $variant;
-                    if ($eff === 'full') {
-                        $curSub++;
-                        $optSub++;
-                        continue;
-                    }
+                $curB = $this->oqimCourseBases($bases, $curParams, $variant, $levelNum);
+                $optB = $this->oqimCourseBases($bases, $optParams, $variant, $levelNum);
 
-                    $cur = $this->oqimSubgroupRows($bg, $variant, $curParams, $levelNum);
-                    $opt = $this->oqimSubgroupRows($bg, $variant, $optParams, $levelNum);
-                    $curSub += count($cur);
-                    $optSub += count($opt);
+                $curBase += count($curB);
+                $optBase += count($optB);
+                foreach ($curB as $b) { $curSub += count($b['rows']); }
+                foreach ($optB as $b) { $optSub += count($b['rows']); }
+                $curOqim += count($this->packOqims($curB, $params['oqim_max'], $params['oqim_tol']));
+                $optOqim += count($this->packOqims($optB, $params['oqim_max'], $params['oqim_tol']));
 
-                    $curCounts = array_map(fn($r) => $r['count'], $cur);
-                    $optCounts = array_map(fn($r) => $r['count'], $opt);
-
-                    if (count($opt) < count($cur)) {
-                        $letters = ['a', 'b', 'c', 'd', 'e', 'f'];
-                        $removed = [];
-                        for ($i = count($opt); $i < count($cur); $i++) {
-                            $removed[] = strtoupper($letters[$i] ?? (string) ($i + 1));
-                        }
+                // Til bo'yicha birlashtirish tavsiyalari
+                $byLang = [];
+                foreach ($bases as $b) {
+                    $byLang[$b['lang']][] = $b;
+                }
+                foreach ($byLang as $list) {
+                    usort($list, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
+                    $N = count($list);
+                    $T = array_sum(array_map(fn($x) => $x['total'], $list));
+                    $optN = min($N, max(1, (int) ceil($T / $cap)));
+                    if ($optN < $N) {
+                        $names = array_map(fn($x) => $x['base'], $list);
                         $moves[] = [
-                            'type'       => 'reduce',
-                            'block'      => $block['title'],
-                            'course'     => $course['level_name'],
-                            'base'       => $bg['base'],
-                            'lang'       => $bg['lang_label'],
-                            'total'      => $bg['total'],
-                            'cur_n'      => count($cur),
-                            'opt_n'      => count($opt),
-                            'cur_counts' => array_values($curCounts),
-                            'opt_counts' => array_values($optCounts),
-                            'removed'    => $removed,
+                            'block'   => $block['title'],
+                            'course'  => $course['level_name'],
+                            'lang'    => $list[0]['lang_label'],
+                            'from'    => $N,
+                            'to'      => $optN,
+                            'kept'    => array_values(array_slice($names, 0, $optN)),
+                            'dropped' => array_values(array_slice($names, $optN)),
+                            'sizes'   => array_values($this->oqimDistribute($T, $optN)),
+                            'sub'     => $eff === 'full' ? 'to\'liq' : ($eff === 'abc' ? 'a,b,c' : 'a,b'),
                         ];
                     }
                 }
             }
         }
 
-        // Eng ko'p guruhcha kamaytiradiganlar birinchi
-        usort($moves, fn($a, $b) => ($b['cur_n'] - $b['opt_n']) <=> ($a['cur_n'] - $a['opt_n']));
+        // Eng ko'p guruh kamaytiradiganlar birinchi
+        usort($moves, fn($a, $b) => ($b['from'] - $b['to']) <=> ($a['from'] - $a['to']));
 
         return [
+            'cur_base'      => $curBase,
+            'opt_base'      => $optBase,
+            'base_reduce'   => $curBase - $optBase,
             'cur_subgroups' => $curSub,
             'opt_subgroups' => $optSub,
             'reduce'        => $curSub - $optSub,
-            'oqim_count'    => $oqimCount,
+            'cur_oqim'      => $curOqim,
+            'opt_oqim'      => $optOqim,
+            'oqim_reduce'   => $curOqim - $optOqim,
             'moves'         => $moves,
         ];
     }
@@ -11434,14 +11442,18 @@ class ReportController extends Controller
             uasort($courseList, fn($a, $b) => $this->oqimNatCmp((string) $a['level_code'], (string) $b['level_code']));
 
             foreach ($courseList as $course) {
-                // 1) HEMIS guruhlarini asosiy guruhlarga (base) yig'amiz — kichik guruhlarni birlashtiramiz.
+                // 1) HEMIS guruhlarini asosiy guruhlarga (base) yig'amiz.
                 $bases = $this->aggregateBaseGroups($course['groups']);
 
-                // 2) Kurs raqamini aniqlaymiz (auto variant uchun).
+                // 2) Kurs raqami (auto variant va a,b / a,b,c qoidasi uchun).
                 $levelNum = $this->oqimLevelNumber($course['level_name'], (string) $course['level_code']);
 
-                // 3) Oqimlarga taqsimlaymiz — til bo'yicha ajratib, talaba soni bo'yicha (oqim_max) qadoqlab.
-                $oqims = $this->packOqims($bases, $params['oqim_max'], $params['oqim_tol']);
+                // 3) Asosiy guruhlarni tayyorlaymiz: joriy holat yoki optimizatsiya (kam to'lgan
+                //    guruhlarni birlashtirish). Kichik guruhlar soni kursga qarab qat'iy (a,b yoki a,b,c).
+                $finalBases = $this->oqimCourseBases($bases, $params, $variant, $levelNum);
+
+                // 4) Oqimlarga taqsimlaymiz — til bo'yicha ajratib, talaba soni bo'yicha (oqim_max) qadoqlab.
+                $oqims = $this->packOqims($finalBases, $params['oqim_max'], $params['oqim_tol']);
 
                 $total = 0;
                 $displayOqims = [];
@@ -11451,7 +11463,7 @@ class ReportController extends Controller
                     foreach ($oq as $bg) {
                         $total += $bg['total'];
                         $oqimTotal += $bg['total'];
-                        foreach ($this->oqimSubgroupRows($bg, $variant, $params, $levelNum) as $sub) {
+                        foreach ($bg['rows'] as $sub) {
                             $rowsOut[] = $sub;
                         }
                     }
@@ -11556,75 +11568,146 @@ class ReportController extends Controller
     }
 
     /**
-     * Bitta asosiy guruh uchun ko'rsatiladigan qatorlarni qaytaradi.
-     * variant: full = to'liq guruh (bo'linmaydi), ab = a,b guruhcha, abc = a,b,c guruhcha,
-     * auto = kursga qarab (1-3 kurs -> a,b, 4+ kurs -> a,b,c).
-     * optimize=false (joriy holat): HEMISdagi haqiqiy kichik guruhlar ko'rsatiladi.
-     * optimize=true: kichik guruhlar me'yorga (ab_max / abc_max) qarab qaytadan hisoblanadi.
+     * Kursning kichik guruh qoidasini qaytaradi: [subCount, subMax, subTol].
+     * Qoida: 1-3 kurs -> a,b (2 ta, tibbiy-biologik); 4-6 kurs -> a,b,c (3 ta, klinik).
+     * variant qo'lda tanlansa (full/ab/abc) o'sha ustun bo'ladi.
      */
-    private function oqimSubgroupRows(array $bg, string $variant, array $params, int $levelNum): array
+    private function oqimSubRule(string $variant, int $levelNum, array $params): array
     {
-        $suffix = $bg['lang_label'] !== '' ? ' (' . $bg['lang_label'] . ')' : '';
-
-        // auto: kursga qarab bo'linish turini tanlaymiz
         $eff = $variant;
         if ($eff === 'auto') {
             $eff = $levelNum >= 4 ? 'abc' : 'ab';
         }
-
         if ($eff === 'full') {
-            return [['name' => $bg['base'] . $suffix, 'count' => $bg['total']]];
+            // to'liq guruh — bo'linmaydi; birlashtirish sig'imi standart guruh (~2*ab_max)
+            return [1, 2 * $params['ab_max'], 0, 'full'];
+        }
+        if ($eff === 'abc') {
+            return [3, $params['abc_max'], $params['abc_tol'], 'abc'];
+        }
+        return [2, $params['ab_max'], $params['ab_tol'], 'ab'];
+    }
+
+    /**
+     * Kurs bo'yicha asosiy guruhlar ro'yxatini tayyorlaydi (har biriga tayyor kichik
+     * guruh qatorlari — 'rows' — biriktirilgan holda).
+     *
+     * - Kichik guruhlar soni kursga qarab QAT'IY: 1-3 kurs a,b; 4-6 kurs a,b,c
+     *   (majburiy — optimizatsiya buni o'zgartirmaydi).
+     * - JORIY holat: HEMISdagi haqiqiy guruhlar.
+     * - OPTIMIZATSIYA: bir tildagi kam to'lgan guruhlar birlashtirilib, guruhlar soni
+     *   kamaytiriladi (har bir guruh ~ sig'imgacha to'ldiriladi). Guruh soni HECH QACHON
+     *   ko'paymaydi.
+     */
+    private function oqimCourseBases(array $bases, array $params, string $variant, int $levelNum): array
+    {
+        if (empty($bases)) {
+            return [];
         }
 
-        [$max, $tol] = $eff === 'abc'
-            ? [$params['abc_max'], $params['abc_tol']]
-            : [$params['ab_max'], $params['ab_tol']];
+        [$subCount, $subMax, $subTol, $eff] = $this->oqimSubRule($variant, $levelNum, $params);
+        $capacity = max(1, $subCount * ($subMax + max(0, $subTol)));
 
-        // OPTIMIZATSIYA: kichik guruhlar sonini me'yordan kelib chiqib qayta hisoblaymiz
-        if (!empty($params['optimize'])) {
-            return $this->oqimComputeSubgroups($bg['base'], $bg['total'], $max, $tol, $suffix);
-        }
-
-        // JORIY HOLAT: HEMISdagi haqiqiy kichik guruhlar
-        $members = $bg['members'];
-        usort($members, fn($a, $b) => strcmp((string) $a['letter'], (string) $b['letter']));
-        $hasLetters = count(array_filter($members, fn($m) => $m['letter'] !== '')) > 0;
-
-        if (!$hasLetters) {
-            // HEMISda kichik guruhga bo'linmagan — me'yor bo'yicha bo'lib ko'rsatamiz
-            return $this->oqimComputeSubgroups($bg['base'], $bg['total'], $max, $tol, $suffix);
+        // Til bo'yicha ajratamiz (har xil til aralashmaydi)
+        $byLang = [];
+        foreach ($bases as $b) {
+            $byLang[$b['lang']][] = $b;
         }
 
         $out = [];
-        foreach ($members as $m) {
-            $out[] = ['name' => $bg['base'] . $m['letter'] . $suffix, 'count' => (int) $m['count']];
+        foreach ($byLang as $list) {
+            usort($list, fn($a, $b) => $this->oqimNatCmp($a['base'], $b['base']));
+            $langLabel = $list[0]['lang_label'];
+            $suffix = $langLabel !== '' ? ' (' . $langLabel . ')' : '';
+
+            if (!empty($params['optimize'])) {
+                // Birlashtirish: minimal guruhlar soni = ceil(T / sig'im), lekin joriydan ko'p emas
+                $T = array_sum(array_map(fn($x) => $x['total'], $list));
+                $optN = max(1, (int) ceil($T / $capacity));
+                $optN = min($optN, count($list));
+                $names = array_map(fn($x) => $x['base'], array_slice($list, 0, $optN));
+                $per = $this->oqimDistribute($T, $optN);
+                foreach ($per as $i => $t) {
+                    $bname = $names[$i] ?? ($list[0]['base'] . '-' . ($i + 1));
+                    $out[] = [
+                        'base'       => $bname,
+                        'lang'       => $list[0]['lang'],
+                        'lang_label' => $langLabel,
+                        'total'      => $t,
+                        'rows'       => $this->oqimFixedSubgroups($bname, $t, $subCount, $suffix),
+                    ];
+                }
+            } else {
+                foreach ($list as $b) {
+                    $out[] = [
+                        'base'       => $b['base'],
+                        'lang'       => $b['lang'],
+                        'lang_label' => $langLabel,
+                        'total'      => $b['total'],
+                        'rows'       => $this->oqimJoriyRows($b, $subCount, $eff, $suffix),
+                    ];
+                }
+            }
         }
         return $out;
     }
 
     /**
-     * Talaba sonini me'yorga (max + tolerantlik) qarab kichik guruhlarga bo'ladi va
-     * imkon qadar teng taqsimlaydi. Qaytadi: [['name'=>..., 'count'=>...], ...].
+     * JORIY holat uchun kichik guruh qatorlari: HEMISdagi haqiqiy kichik guruhlar
+     * (agar soni qoidaga mos bo'lsa), aks holda qoida bo'yicha teng bo'linadi.
      */
-    private function oqimComputeSubgroups(string $base, int $total, int $max, int $tol, string $suffix): array
+    private function oqimJoriyRows(array $b, int $subCount, string $eff, string $suffix): array
     {
-        $per = max(1, $max + max(0, $tol));
-        $n = max(1, (int) ceil($total / $per));
+        if ($eff === 'full') {
+            return [['name' => $b['base'] . $suffix, 'count' => $b['total']]];
+        }
 
+        $members = $b['members'] ?? [];
+        usort($members, fn($x, $y) => strcmp((string) $x['letter'], (string) $y['letter']));
+        $withLetters = array_values(array_filter($members, fn($m) => $m['letter'] !== ''));
+
+        if (count($withLetters) === $subCount) {
+            $out = [];
+            foreach ($withLetters as $m) {
+                $out[] = ['name' => $b['base'] . $m['letter'] . $suffix, 'count' => (int) $m['count']];
+            }
+            return $out;
+        }
+
+        // HEMISdagi bo'linish qoidaga mos emas — qoida bo'yicha teng bo'lamiz
+        return $this->oqimFixedSubgroups($b['base'], $b['total'], $subCount, $suffix);
+    }
+
+    /**
+     * Talabani QAT'IY sondagi ($n) kichik guruhga imkon qadar teng bo'ladi.
+     */
+    private function oqimFixedSubgroups(string $base, int $total, int $n, string $suffix): array
+    {
+        $parts = $this->oqimDistribute($total, $n);
+        $letters = ['a', 'b', 'c', 'd', 'e', 'f'];
+        $out = [];
+        foreach ($parts as $i => $c) {
+            $out[] = ['name' => $base . ($letters[$i] ?? ($i + 1)) . $suffix, 'count' => $c];
+        }
+        return $out;
+    }
+
+    /**
+     * Sonni $n bo'lakka imkon qadar teng bo'ladi (0 bo'lganlari tashlanadi).
+     */
+    private function oqimDistribute(int $total, int $n): array
+    {
+        $n = max(1, $n);
         $q = intdiv($total, $n);
         $rem = $total % $n;
-        $letters = ['a', 'b', 'c', 'd', 'e', 'f'];
-
         $out = [];
         for ($i = 0; $i < $n; $i++) {
             $c = $q + ($i < $rem ? 1 : 0);
-            if ($c <= 0) { continue; }
-            $out[] = ['name' => $base . ($letters[$i] ?? ($i + 1)) . $suffix, 'count' => $c];
+            if ($c > 0) {
+                $out[] = $c;
+            }
         }
-        if (empty($out)) {
-            $out[] = ['name' => $base . 'a' . $suffix, 'count' => $total];
-        }
-        return $out;
+        return $out ?: [0];
     }
 
     /**

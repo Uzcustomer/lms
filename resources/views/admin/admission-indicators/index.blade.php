@@ -42,29 +42,12 @@
             <div class="bg-red-100 border border-red-400 text-red-800 px-3 py-2 rounded mb-3 text-sm">{{ session('error') }}</div>
         @endif
 
-        <div class="bg-white rounded-3xl border border-sky-100 shadow-sm mb-3 overflow-hidden">
+        <div class="bg-white rounded-sm border border-slate-200 shadow-sm mb-4 overflow-hidden">
             <form method="GET" action="{{ route('admin.admission-indicators.index') }}" class="p-4">
-                <div class="mb-3 flex items-center justify-between gap-2 flex-wrap">
-                    <div>
-                        <h3 class="text-sm font-semibold text-slate-800">Filtrlar</h3>
-                        <p class="text-xs text-slate-500">Qabul yozuvlarini kerakli parametrlar bo'yicha saralang.</p>
-                    </div>
-                    <div class="inline-flex items-center gap-2 rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-[11px] font-medium text-sky-700">
-                        <span>Natija:</span>
-                        <span class="text-slate-900">{{ number_format($summary['qatorlar']) }} ta</span>
-                    </div>
-                </div>
-
                 <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
-                    <div style="flex:1 1 100%;min-width:280px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Qidiruv</label>
-                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Talaba ID, JSHSHIR, F.I.SH, mutaxassislik..."
-                               class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
-                    </div>
-
                     <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Qabul yili</label>
-                        <select name="qabul_yili" class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                        <label class="block text-[11px] font-semibold uppercase text-slate-700 mb-1">Qabul yili</label>
+                        <select name="qabul_yili" class="w-full rounded-2xl border-slate-400 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($years as $year)
                                 <option value="{{ $year }}" @selected((string) request('qabul_yili') === (string) $year)>{{ $year }}</option>
@@ -73,8 +56,8 @@
                     </div>
 
                     <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Ta'lim turi</label>
-                        <select name="talim_turi" class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                        <label class="block text-[11px] font-semibold uppercase text-slate-700 mb-1">Ta'lim turi</label>
+                        <select name="talim_turi" class="w-full rounded-2xl border-slate-400 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($talimTurlari as $t)
                                 <option value="{{ $t }}" @selected(request('talim_turi') === $t)>{{ $t }}</option>
@@ -83,8 +66,8 @@
                     </div>
 
                     <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Ta'lim shakli</label>
-                        <select name="talim_shakli" class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                        <label class="block text-[11px] font-semibold uppercase text-slate-700 mb-1">Ta'lim shakli</label>
+                        <select name="talim_shakli" class="w-full rounded-2xl border-slate-400 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($talimShakllari as $t)
                                 <option value="{{ $t }}" @selected(request('talim_shakli') === $t)>{{ $t }}</option>
@@ -93,8 +76,8 @@
                     </div>
 
                     <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">To'lov shakli</label>
-                        <select name="tolov_shakli" class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                        <label class="block text-[11px] font-semibold uppercase text-slate-700 mb-1">To'lov shakli</label>
+                        <select name="tolov_shakli" class="w-full rounded-2xl border-slate-400 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($tolovShakllari as $t)
                                 <option value="{{ $t }}" @selected(request('tolov_shakli') === $t)>{{ $t }}</option>
@@ -103,8 +86,8 @@
                     </div>
 
                     <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Fakultet</label>
-                        <select name="fakultet" class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                        <label class="block text-[11px] font-semibold uppercase text-slate-700 mb-1">Fakultet</label>
+                        <select name="fakultet" class="w-full rounded-2xl border-slate-400 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($fakultetlar as $fakultet)
                                 <option value="{{ $fakultet }}" @selected(request('fakultet') === $fakultet)>{{ $fakultet }}</option>
@@ -113,8 +96,8 @@
                     </div>
 
                     <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-500 mb-1">Talaba toifasi</label>
-                        <select name="talaba_toifasi" class="w-full rounded-xl border-sky-200 bg-sky-50/40 px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                        <label class="block text-[11px] font-semibold uppercase text-slate-700 mb-1">Talaba toifasi</label>
+                        <select name="talaba_toifasi" class="w-full rounded-2xl border-slate-400 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($talabaToifalari as $toifa)
                                 <option value="{{ $toifa }}" @selected(request('talaba_toifasi') === $toifa)>{{ $toifa }}</option>
@@ -135,60 +118,60 @@
         </div>
 
         <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2 mb-3">
-            <div class="rounded-2xl border border-sky-200 bg-gradient-to-br from-sky-50 to-white p-3 shadow-sm">
+            <div class="rounded-2xl border border-cyan-200 bg-[#a8d3e6] p-4 shadow-sm">
                 <div class="flex items-start justify-between gap-2">
                     <div>
-                        <div class="text-[11px] uppercase font-semibold tracking-wide text-sky-700">Qatorlar</div>
-                        <div class="mt-1 text-xl font-bold text-slate-800">{{ number_format($summary['qatorlar']) }}</div>
+                        <div class="text-[11px] uppercase font-semibold tracking-wide text-slate-800">Qatorlar</div>
+                        <div class="mt-1 text-[36px] leading-none font-bold text-slate-800">{{ number_format($summary['qatorlar']) }}</div>
                     </div>
-                    <div class="rounded-xl bg-sky-100 p-2 text-sky-700">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"/></svg>
+                    <div class="flex h-[50px] w-[50px] items-center justify-center rounded-2xl text-slate-800">
+                        <svg class="w-[50px] h-[50px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 6h16M4 12h16M4 18h10"/></svg>
                     </div>
                 </div>
             </div>
 
-            <div class="rounded-2xl border border-emerald-200 bg-gradient-to-br from-emerald-50 to-white p-3 shadow-sm">
+            <div class="rounded-2xl border border-yellow-200 bg-[#fbf8c8] p-4 shadow-sm">
                 <div class="flex items-start justify-between gap-2">
                     <div>
                         <div class="text-[11px] uppercase font-semibold tracking-wide text-emerald-700">Jami qabul</div>
-                        <div class="mt-1 text-xl font-bold text-emerald-700">{{ number_format((int) $summary['jami_qabul']) }}</div>
+                        <div class="mt-1 text-[36px] leading-none font-bold text-emerald-700">{{ number_format((int) $summary['jami_qabul']) }}</div>
                     </div>
-                    <div class="rounded-xl bg-emerald-100 p-2 text-emerald-700">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                    <div class="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
+                        <svg class="w-[24px] h-[24px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                     </div>
                 </div>
             </div>
 
-            <div class="rounded-2xl border border-violet-200 bg-gradient-to-br from-violet-50 to-white p-3 shadow-sm">
+            <div class="rounded-2xl border border-green-200 bg-[#9bc595] p-4 shadow-sm">
                 <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0">
-                        <div class="text-[11px] uppercase font-semibold tracking-wide text-violet-700">Eng yuqori ball</div>
-                        <div class="mt-1 text-lg font-bold text-slate-800">
+                        <div class="text-[11px] uppercase font-semibold tracking-wide text-slate-800">Eng yuqori ball</div>
+                        <div class="mt-1 text-[36px] leading-none font-bold text-slate-800">
                             {{ $summary['top_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['top_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
                         </div>
                         <div class="mt-1 truncate text-[12px] font-medium text-slate-700" title="{{ $summary['top_scorer']?->full_name }}">
                             {{ $summary['top_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
                         </div>
                     </div>
-                    <div class="rounded-xl bg-violet-100 p-2 text-violet-700">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 3l2.4 4.86L20 8.64l-4 3.9.94 5.46L12 15.77 7.06 18l.94-5.46-4-3.9 5.6-.78L12 3z"/></svg>
+                    <div class="flex h-[50px] w-[50px] items-center justify-center text-slate-800">
+                        <svg class="w-[50px] h-[50px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3l2.4 4.86L20 8.64l-4 3.9.94 5.46L12 15.77 7.06 18l.94-5.46-4-3.9 5.6-.78L12 3z"/></svg>
                     </div>
                 </div>
             </div>
 
-            <div class="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-3 shadow-sm">
+            <div class="rounded-2xl border border-pink-200 bg-[#deb9c5] p-4 shadow-sm">
                 <div class="flex items-start justify-between gap-2">
                     <div class="min-w-0">
-                        <div class="text-[11px] uppercase font-semibold tracking-wide text-amber-700">Eng past grant ball</div>
-                        <div class="mt-1 text-lg font-bold text-slate-800">
+                        <div class="text-[11px] uppercase font-semibold tracking-wide text-orange-700">Eng past grant ball</div>
+                        <div class="mt-1 text-[36px] leading-none font-bold text-slate-800">
                             {{ $summary['lowest_grant_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['lowest_grant_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
                         </div>
                         <div class="mt-1 truncate text-[12px] font-medium text-slate-700" title="{{ $summary['lowest_grant_scorer']?->full_name }}">
                             {{ $summary['lowest_grant_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
                         </div>
                     </div>
-                    <div class="rounded-xl bg-amber-100 p-2 text-amber-700">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <div class="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-amber-50 text-orange-500">
+                        <svg class="w-[24px] h-[24px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                     </div>
                 </div>
             </div>
@@ -200,60 +183,60 @@
                 <table class="min-w-full text-[13px]">
                     <thead class="text-slate-700">
                         <tr>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">T/r</th>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">Talaba ID</th>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">To'liq ismi</th>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">Yil</th>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">Ta'lim turi</th>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">Imtiyoz toifasi</th>
-                            <th class="px-4 py-3 text-left text-[12px] font-semibold whitespace-nowrap bg-slate-100">To'lov shakli</th>
-                            <th class="px-4 py-3 text-right text-[12px] font-semibold whitespace-nowrap bg-slate-100">To'plagan bali</th>
+                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">T/r</th>
+                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">Talaba ID</th>
+                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">To'liq ismi</th>
+                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">Yil</th>
+                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">Ta'lim turi</th>
+                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">Imtiyoz toifasi</th>
+                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">To'lov shakli</th>
+                            <th class="px-4 py-4 text-right text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">To'plagan bali</th>
                         </tr>
                         <tr class="border-t border-sky-100">
-                            <th class="px-3 py-2 bg-slate-50"></th>
-                            <th class="px-3 py-2 bg-slate-50">
+                            <th class="px-3 py-2 bg-blue-50"></th>
+                            <th class="px-3 py-2 bg-blue-50">
                                 <input type="text" name="student_id" value="{{ request('student_id') }}" placeholder="Talaba ID"
                                        form="admissionTableFiltersForm"
-                                       class="w-full rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                                       class="w-full rounded-md border-slate-400 bg-white px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             </th>
-                            <th class="px-3 py-2 bg-slate-50">
+                            <th class="px-3 py-2 bg-blue-50">
                                 <input type="text" name="full_name" value="{{ request('full_name') }}" placeholder="F.I.SH"
                                        form="admissionTableFiltersForm"
-                                       class="w-full min-w-[180px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                                       class="w-full min-w-[180px] rounded-md border-slate-400 bg-white px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             </th>
-                            <th class="px-3 py-2 bg-slate-50">
-                                <select name="qabul_yili" form="admissionTableFiltersForm" class="w-full min-w-[74px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th class="px-3 py-2 bg-blue-50">
+                                <select name="qabul_yili" form="admissionTableFiltersForm" class="w-full min-w-[74px] rounded-md border-slate-400 bg-white px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($years as $year)
                                         <option value="{{ $year }}" @selected((string) request('qabul_yili') === (string) $year)>{{ $year }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-3 py-2 bg-slate-50">
-                                <select name="talim_turi" form="admissionTableFiltersForm" class="w-full min-w-[108px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th class="px-3 py-2 bg-blue-50">
+                                <select name="talim_turi" form="admissionTableFiltersForm" class="w-full min-w-[108px] rounded-md border-slate-400 bg-white px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($talimTurlari as $t)
                                         <option value="{{ $t }}" @selected(request('talim_turi') === $t)>{{ $t }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-3 py-2 bg-slate-50">
-                                <select name="imtiyoz_toifasi" form="admissionTableFiltersForm" class="w-full min-w-[220px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th class="px-3 py-2 bg-blue-50">
+                                <select name="imtiyoz_toifasi" form="admissionTableFiltersForm" class="w-full min-w-[220px] rounded-md border-slate-400 bg-white px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($imtiyozToifalari as $toifa)
                                         <option value="{{ $toifa }}" @selected(request('imtiyoz_toifasi') === $toifa)>{{ $toifa }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-3 py-2 bg-slate-50">
-                                <select name="tolov_shakli" form="admissionTableFiltersForm" class="w-full min-w-[122px] rounded-lg border-sky-200 bg-sky-50/40 px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th class="px-3 py-2 bg-blue-50">
+                                <select name="tolov_shakli" form="admissionTableFiltersForm" class="w-full min-w-[122px] rounded-md border-slate-400 bg-white px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($tolovShakllari as $t)
                                         <option value="{{ $t }}" @selected(request('tolov_shakli') === $t)>{{ $t }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-3 py-2 bg-slate-50">
+                            <th class="px-3 py-2 bg-blue-50">
                                 <div class="flex items-center justify-end gap-2">
                                     <button type="submit" form="admissionTableFiltersForm" class="px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-white"
                                             style="background-color:#2563eb;box-shadow:0 4px 10px rgba(37,99,235,0.16);">OK</button>

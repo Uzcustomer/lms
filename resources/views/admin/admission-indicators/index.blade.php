@@ -42,232 +42,203 @@
             <div class="bg-red-100 border border-red-400 text-red-800 px-3 py-2 rounded mb-3 text-sm">{{ session('error') }}</div>
         @endif
 
-        <div class="bg-white rounded-sm border border-slate-200 shadow-sm mb-4 overflow-hidden">
-            <form method="GET" action="{{ route('admin.admission-indicators.index') }}" class="p-4">
-                <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;">
-                    <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-700 mb-1">Qabul yili</label>
-                        <select name="qabul_yili" class="w-full rounded-2xl border-slate-400 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+        <div style="background:#fff;border:1px solid #d7dde7;border-radius:3px;box-shadow:0 2px 10px rgba(15,23,42,0.06);padding:12px 14px 14px;margin-bottom:14px;">
+            <form method="GET" action="{{ route('admin.admission-indicators.index') }}">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;align-items:end;">
+                    <div>
+                        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;color:#1e293b;margin:0 0 4px;">Qabul yili</label>
+                        <select name="qabul_yili" style="width:100%;height:36px;border:1px solid #94a3b8;border-radius:12px;background:#fff;padding:0 14px;font-size:13px;color:#0f172a;">
                             <option value="">Barchasi</option>
                             @foreach($years as $year)
                                 <option value="{{ $year }}" @selected((string) request('qabul_yili') === (string) $year)>{{ $year }}</option>
                             @endforeach
                         </select>
                     </div>
-
-                    <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-700 mb-1">Ta'lim turi</label>
-                        <select name="talim_turi" class="w-full rounded-2xl border-slate-400 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                    <div>
+                        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;color:#1e293b;margin:0 0 4px;">Ta'lim turi</label>
+                        <select name="talim_turi" style="width:100%;height:36px;border:1px solid #94a3b8;border-radius:12px;background:#fff;padding:0 14px;font-size:13px;color:#0f172a;">
                             <option value="">Barchasi</option>
                             @foreach($talimTurlari as $t)
                                 <option value="{{ $t }}" @selected(request('talim_turi') === $t)>{{ $t }}</option>
                             @endforeach
                         </select>
                     </div>
-
-                    <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-700 mb-1">Ta'lim shakli</label>
-                        <select name="talim_shakli" class="w-full rounded-2xl border-slate-400 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                    <div>
+                        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;color:#1e293b;margin:0 0 4px;">Ta'lim shakli</label>
+                        <select name="talim_shakli" style="width:100%;height:36px;border:1px solid #94a3b8;border-radius:12px;background:#fff;padding:0 14px;font-size:13px;color:#0f172a;">
                             <option value="">Barchasi</option>
                             @foreach($talimShakllari as $t)
                                 <option value="{{ $t }}" @selected(request('talim_shakli') === $t)>{{ $t }}</option>
                             @endforeach
                         </select>
                     </div>
-
-                    <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-700 mb-1">To'lov shakli</label>
-                        <select name="tolov_shakli" class="w-full rounded-2xl border-slate-400 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                    <div>
+                        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;color:#1e293b;margin:0 0 4px;">To'lov shakli</label>
+                        <select name="tolov_shakli" style="width:100%;height:36px;border:1px solid #94a3b8;border-radius:12px;background:#fff;padding:0 14px;font-size:13px;color:#0f172a;">
                             <option value="">Barchasi</option>
                             @foreach($tolovShakllari as $t)
                                 <option value="{{ $t }}" @selected(request('tolov_shakli') === $t)>{{ $t }}</option>
                             @endforeach
                         </select>
                     </div>
-
-                    <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-700 mb-1">Fakultet</label>
-                        <select name="fakultet" class="w-full rounded-2xl border-slate-400 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                    <div>
+                        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;color:#1e293b;margin:0 0 4px;">Fakultet</label>
+                        <select name="fakultet" style="width:100%;height:36px;border:1px solid #94a3b8;border-radius:12px;background:#fff;padding:0 14px;font-size:13px;color:#0f172a;">
                             <option value="">Barchasi</option>
                             @foreach($fakultetlar as $fakultet)
                                 <option value="{{ $fakultet }}" @selected(request('fakultet') === $fakultet)>{{ $fakultet }}</option>
                             @endforeach
                         </select>
                     </div>
-
-                    <div style="flex:1 1 calc(50% - 5px);min-width:200px;">
-                        <label class="block text-[11px] font-semibold uppercase text-slate-700 mb-1">Talaba toifasi</label>
-                        <select name="talaba_toifasi" class="w-full rounded-2xl border-slate-400 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                    <div>
+                        <label style="display:block;font-size:10px;font-weight:700;text-transform:uppercase;color:#1e293b;margin:0 0 4px;">Talaba toifasi</label>
+                        <select name="talaba_toifasi" style="width:100%;height:36px;border:1px solid #94a3b8;border-radius:12px;background:#fff;padding:0 14px;font-size:13px;color:#0f172a;">
                             <option value="">Barchasi</option>
                             @foreach($talabaToifalari as $toifa)
                                 <option value="{{ $toifa }}" @selected(request('talaba_toifasi') === $toifa)>{{ $toifa }}</option>
                             @endforeach
                         </select>
                     </div>
-
-                    <div style="display:flex;align-items:center;gap:8px;flex:1 1 100%;padding-top:2px;">
-                        <button type="submit"
-                                class="px-4 py-2 text-white text-sm font-medium rounded-xl"
-                                style="background-color:#2563eb;border:1px solid #1d4ed8;box-shadow:0 6px 14px rgba(37,99,235,0.18);">Filtrlash</button>
-                        <a href="{{ route('admin.admission-indicators.index') }}"
-                           class="px-4 py-2 text-sm font-medium rounded-xl"
-                           style="background-color:#fff7ed;border:1px solid #fdba74;color:#9a3412;">Tozalash</a>
-                    </div>
+                </div>
+                <div style="display:flex;gap:8px;margin-top:12px;">
+                    <button type="submit" style="height:34px;padding:0 22px;border-radius:10px;border:1px solid #1d4ed8;background:#2563eb;color:#fff;font-size:13px;font-weight:600;box-shadow:0 6px 14px rgba(37,99,235,0.18);">Filtrlash</button>
+                    <a href="{{ route('admin.admission-indicators.index') }}" style="display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 22px;border-radius:10px;border:1px solid #fb923c;background:#fff7ed;color:#c2410c;font-size:13px;font-weight:500;">Tozalash</a>
                 </div>
             </form>
         </div>
 
-        <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-2 mb-3">
-            <div class="rounded-2xl border border-cyan-200 bg-[#a8d3e6] p-4 shadow-sm">
-                <div class="flex items-start justify-between gap-2">
-                    <div>
-                        <div class="text-[11px] uppercase font-semibold tracking-wide text-slate-800">Qatorlar</div>
-                        <div class="mt-1 text-[36px] leading-none font-bold text-slate-800">{{ number_format($summary['qatorlar']) }}</div>
-                    </div>
-                    <div class="flex h-[50px] w-[50px] items-center justify-center rounded-2xl text-slate-800">
-                        <svg class="w-[50px] h-[50px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 6h16M4 12h16M4 18h10"/></svg>
-                    </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 8px;margin-bottom:14px;">
+            <div style="min-height:92px;border-radius:14px;border:1px solid #b8d9e6;background:#a8d3e6;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;">
+                <div>
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#18334a;">Qatorlar</div>
+                    <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#16324f;">{{ number_format($summary['qatorlar']) }}</div>
+                </div>
+                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;color:#203040;">
+                    <svg style="width:50px;height:50px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 6h16M4 12h16M4 18h10"/></svg>
                 </div>
             </div>
 
-            <div class="rounded-2xl border border-yellow-200 bg-[#fbf8c8] p-4 shadow-sm">
-                <div class="flex items-start justify-between gap-2">
-                    <div>
-                        <div class="text-[11px] uppercase font-semibold tracking-wide text-emerald-700">Jami qabul</div>
-                        <div class="mt-1 text-[36px] leading-none font-bold text-emerald-700">{{ number_format((int) $summary['jami_qabul']) }}</div>
-                    </div>
-                    <div class="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-emerald-100 text-emerald-700">
-                        <svg class="w-[24px] h-[24px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                    </div>
+            <div style="min-height:92px;border-radius:14px;border:1px solid #f3e7a4;background:#fbf8c8;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;">
+                <div>
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#1f8b55;">Jami qabul</div>
+                    <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#0f9f67;">{{ number_format((int) $summary['jami_qabul']) }}</div>
+                </div>
+                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:9999px;background:#d5f5de;color:#10b981;">
+                    <svg style="width:24px;height:24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
                 </div>
             </div>
 
-            <div class="rounded-2xl border border-green-200 bg-[#9bc595] p-4 shadow-sm">
-                <div class="flex items-start justify-between gap-2">
-                    <div class="min-w-0">
-                        <div class="text-[11px] uppercase font-semibold tracking-wide text-slate-800">Eng yuqori ball</div>
-                        <div class="mt-1 text-[36px] leading-none font-bold text-slate-800">
-                            {{ $summary['top_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['top_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
-                        </div>
-                        <div class="mt-1 truncate text-[12px] font-medium text-slate-700" title="{{ $summary['top_scorer']?->full_name }}">
-                            {{ $summary['top_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
-                        </div>
+            <div style="min-height:92px;border-radius:14px;border:1px solid #b3d3aa;background:#9bc595;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;">
+                <div style="min-width:0;">
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#203725;">Eng yuqori ball</div>
+                    <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#203725;">
+                        {{ $summary['top_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['top_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
                     </div>
-                    <div class="flex h-[50px] w-[50px] items-center justify-center text-slate-800">
-                        <svg class="w-[50px] h-[50px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3l2.4 4.86L20 8.64l-4 3.9.94 5.46L12 15.77 7.06 18l.94-5.46-4-3.9 5.6-.78L12 3z"/></svg>
+                    <div style="margin-top:8px;font-size:11px;font-weight:500;color:#34495e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ $summary['top_scorer']?->full_name }}">
+                        {{ $summary['top_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
                     </div>
+                </div>
+                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;color:#203725;">
+                    <svg style="width:50px;height:50px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3l2.4 4.86L20 8.64l-4 3.9.94 5.46L12 15.77 7.06 18l.94-5.46-4-3.9 5.6-.78L12 3z"/></svg>
                 </div>
             </div>
 
-            <div class="rounded-2xl border border-pink-200 bg-[#deb9c5] p-4 shadow-sm">
-                <div class="flex items-start justify-between gap-2">
-                    <div class="min-w-0">
-                        <div class="text-[11px] uppercase font-semibold tracking-wide text-orange-700">Eng past grant ball</div>
-                        <div class="mt-1 text-[36px] leading-none font-bold text-slate-800">
-                            {{ $summary['lowest_grant_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['lowest_grant_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
-                        </div>
-                        <div class="mt-1 truncate text-[12px] font-medium text-slate-700" title="{{ $summary['lowest_grant_scorer']?->full_name }}">
-                            {{ $summary['lowest_grant_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
-                        </div>
+            <div style="min-height:92px;border-radius:14px;border:1px solid #e4c1cb;background:#deb9c5;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:flex-start;justify-content:space-between;">
+                <div style="min-width:0;">
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#d05c1f;">Eng past grant ball</div>
+                    <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#20324d;">
+                        {{ $summary['lowest_grant_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['lowest_grant_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
                     </div>
-                    <div class="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-amber-50 text-orange-500">
-                        <svg class="w-[24px] h-[24px]" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    <div style="margin-top:8px;font-size:11px;font-weight:500;color:#34495e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ $summary['lowest_grant_scorer']?->full_name }}">
+                        {{ $summary['lowest_grant_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
                     </div>
+                </div>
+                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:9999px;background:#fff4cf;color:#f59e0b;">
+                    <svg style="width:24px;height:24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
                 </div>
             </div>
         </div>
 
-        <div class="bg-white rounded-3xl border border-sky-100 shadow-sm overflow-hidden">
-            <div class="overflow-x-auto">
+        <div style="background:#fff;border:1px solid #d6dde8;border-radius:3px;box-shadow:0 2px 10px rgba(15,23,42,0.06);overflow:hidden;">
+            <div style="overflow-x:auto;">
                 <form id="admissionTableFiltersForm" method="GET" action="{{ route('admin.admission-indicators.index') }}"></form>
-                <table class="min-w-full text-[13px]">
-                    <thead class="text-slate-700">
+                <table style="min-width:100%;border-collapse:separate;border-spacing:0;font-size:13px;">
+                    <thead>
                         <tr>
-                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">T/r</th>
-                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">Talaba ID</th>
-                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">To'liq ismi</th>
-                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">Yil</th>
-                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">Ta'lim turi</th>
-                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">Imtiyoz toifasi</th>
-                            <th class="px-4 py-4 text-left text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">To'lov shakli</th>
-                            <th class="px-4 py-4 text-right text-[12px] font-semibold whitespace-nowrap bg-green-700 text-white">To'plagan bali</th>
+                            <th style="background:#2f8f3f;color:#fff;font-size:11px;font-weight:700;padding:14px 12px;text-align:left;">T/r</th>
+                            <th style="background:#2f8f3f;color:#fff;font-size:11px;font-weight:700;padding:14px 12px;text-align:left;">Talaba ID</th>
+                            <th style="background:#2f8f3f;color:#fff;font-size:11px;font-weight:700;padding:14px 12px;text-align:left;">To'liq ismi</th>
+                            <th style="background:#2f8f3f;color:#fff;font-size:11px;font-weight:700;padding:14px 12px;text-align:left;">Yil</th>
+                            <th style="background:#2f8f3f;color:#fff;font-size:11px;font-weight:700;padding:14px 12px;text-align:left;">Ta'lim turi</th>
+                            <th style="background:#2f8f3f;color:#fff;font-size:11px;font-weight:700;padding:14px 12px;text-align:left;">Imtiyoz toifasi</th>
+                            <th style="background:#2f8f3f;color:#fff;font-size:11px;font-weight:700;padding:14px 12px;text-align:left;">To'lov shakli</th>
+                            <th style="background:#2f8f3f;color:#fff;font-size:11px;font-weight:700;padding:14px 12px;text-align:right;">To'plagan bali</th>
                         </tr>
-                        <tr class="border-t border-sky-100">
-                            <th class="px-3 py-2 bg-blue-50"></th>
-                            <th class="px-3 py-2 bg-blue-50">
-                                <input type="text" name="student_id" value="{{ request('student_id') }}" placeholder="Talaba ID"
-                                       form="admissionTableFiltersForm"
-                                       class="w-full rounded-md border-slate-400 bg-white px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                        <tr>
+                            <th style="background:#dce9f9;padding:12px 10px;"></th>
+                            <th style="background:#dce9f9;padding:12px 10px;">
+                                <input type="text" name="student_id" value="{{ request('student_id') }}" placeholder="Talaba ID" form="admissionTableFiltersForm"
+                                       style="width:100%;height:34px;border:1px solid #94a3b8;border-radius:4px;background:#fff;padding:0 10px;font-size:12px;">
                             </th>
-                            <th class="px-3 py-2 bg-blue-50">
-                                <input type="text" name="full_name" value="{{ request('full_name') }}" placeholder="F.I.SH"
-                                       form="admissionTableFiltersForm"
-                                       class="w-full min-w-[180px] rounded-md border-slate-400 bg-white px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th style="background:#dce9f9;padding:12px 10px;">
+                                <input type="text" name="full_name" value="{{ request('full_name') }}" placeholder="F.I.SH" form="admissionTableFiltersForm"
+                                       style="width:100%;min-width:120px;height:34px;border:1px solid #94a3b8;border-radius:4px;background:#fff;padding:0 10px;font-size:12px;">
                             </th>
-                            <th class="px-3 py-2 bg-blue-50">
-                                <select name="qabul_yili" form="admissionTableFiltersForm" class="w-full min-w-[74px] rounded-md border-slate-400 bg-white px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th style="background:#dce9f9;padding:12px 10px;">
+                                <select name="qabul_yili" form="admissionTableFiltersForm" style="width:100%;min-width:64px;height:34px;border:1px solid #94a3b8;border-radius:4px;background:#fff;padding:0 10px;font-size:12px;">
                                     <option value="">Barchasi</option>
                                     @foreach($years as $year)
                                         <option value="{{ $year }}" @selected((string) request('qabul_yili') === (string) $year)>{{ $year }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-3 py-2 bg-blue-50">
-                                <select name="talim_turi" form="admissionTableFiltersForm" class="w-full min-w-[108px] rounded-md border-slate-400 bg-white px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th style="background:#dce9f9;padding:12px 10px;">
+                                <select name="talim_turi" form="admissionTableFiltersForm" style="width:100%;min-width:78px;height:34px;border:1px solid #94a3b8;border-radius:4px;background:#fff;padding:0 10px;font-size:12px;">
                                     <option value="">Barchasi</option>
                                     @foreach($talimTurlari as $t)
                                         <option value="{{ $t }}" @selected(request('talim_turi') === $t)>{{ $t }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-3 py-2 bg-blue-50">
-                                <select name="imtiyoz_toifasi" form="admissionTableFiltersForm" class="w-full min-w-[220px] rounded-md border-slate-400 bg-white px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th style="background:#dce9f9;padding:12px 10px;">
+                                <select name="imtiyoz_toifasi" form="admissionTableFiltersForm" style="width:100%;min-width:184px;height:34px;border:1px solid #94a3b8;border-radius:4px;background:#fff;padding:0 10px;font-size:12px;">
                                     <option value="">Barchasi</option>
                                     @foreach($imtiyozToifalari as $toifa)
                                         <option value="{{ $toifa }}" @selected(request('imtiyoz_toifasi') === $toifa)>{{ $toifa }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-3 py-2 bg-blue-50">
-                                <select name="tolov_shakli" form="admissionTableFiltersForm" class="w-full min-w-[122px] rounded-md border-slate-400 bg-white px-2.5 py-1.5 text-[12px] focus:border-sky-500 focus:bg-white focus:ring-sky-500">
+                            <th style="background:#dce9f9;padding:12px 10px;">
+                                <select name="tolov_shakli" form="admissionTableFiltersForm" style="width:100%;min-width:84px;height:34px;border:1px solid #94a3b8;border-radius:4px;background:#fff;padding:0 10px;font-size:12px;">
                                     <option value="">Barchasi</option>
                                     @foreach($tolovShakllari as $t)
                                         <option value="{{ $t }}" @selected(request('tolov_shakli') === $t)>{{ $t }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-3 py-2 bg-blue-50">
-                                <div class="flex items-center justify-end gap-2">
-                                    <button type="submit" form="admissionTableFiltersForm" class="px-2.5 py-1.5 rounded-lg text-[12px] font-medium text-white"
-                                            style="background-color:#2563eb;box-shadow:0 4px 10px rgba(37,99,235,0.16);">OK</button>
-                                    <a href="{{ route('admin.admission-indicators.index') }}"
-                                       class="px-2.5 py-1.5 rounded-lg text-[12px] font-medium"
-                                       style="background-color:#fff7ed;border:1px solid #fdba74;color:#9a3412;">X</a>
+                            <th style="background:#dce9f9;padding:12px 10px;">
+                                <div style="display:flex;align-items:center;justify-content:flex-end;gap:8px;">
+                                    <button type="submit" form="admissionTableFiltersForm" style="height:28px;padding:0 10px;border-radius:6px;border:1px solid #2563eb;background:#2563eb;color:#fff;font-size:11px;font-weight:600;">OK</button>
+                                    <a href="{{ route('admin.admission-indicators.index') }}" style="display:inline-flex;align-items:center;justify-content:center;height:28px;padding:0 10px;border-radius:6px;border:1px solid #fb923c;background:#fff7ed;color:#c2410c;font-size:11px;font-weight:500;">X</a>
                                 </div>
                             </th>
                         </tr>
                     </thead>
-                    <tbody class="divide-y divide-sky-100">
+                    <tbody>
                         @forelse($indicators as $item)
-                            <tr class="{{ $loop->odd ? 'bg-slate-50' : 'bg-white' }} hover:bg-sky-50 transition-colors duration-150">
-                                <td class="px-4 py-3 font-semibold text-slate-700 align-top">{{ $indicators->firstItem() ? $indicators->firstItem() + $loop->index : $loop->iteration }}</td>
-                                <td class="px-4 py-3 font-medium text-slate-800 align-top whitespace-nowrap">{{ $item->student_id ?? '—' }}</td>
-                                <td class="px-4 py-3 min-w-[220px] align-top">
-                                    <div class="font-semibold text-slate-800 leading-5">{{ $item->full_name ?: '—' }}</div>
-                                </td>
-                                <td class="px-4 py-3 font-semibold text-slate-800 align-top whitespace-nowrap">{{ $item->qabul_yili }}</td>
-                                <td class="px-4 py-3 align-top whitespace-nowrap">{{ $item->talim_turi ?: '—' }}</td>
-                                <td class="px-4 py-3 align-top min-w-[300px]">
-                                    <div class="leading-5 text-slate-700">{{ $item->imtiyoz_toifasi ?: '—' }}</div>
-                                </td>
-                                <td class="px-4 py-3 align-top">{{ $item->tolov_shakli ?: '—' }}</td>
-                                <td class="px-4 py-3 text-right font-semibold text-sky-700 align-top whitespace-nowrap">{{ $item->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $item->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}</td>
+                            <tr style="background:{{ $loop->odd ? '#dce9f9' : '#ffffff' }};">
+                                <td style="padding:12px 12px;border-bottom:1px solid #d9e2ec;color:#0f172a;vertical-align:top;">{{ $indicators->firstItem() ? $indicators->firstItem() + $loop->index : $loop->iteration }}</td>
+                                <td style="padding:12px 12px;border-bottom:1px solid #d9e2ec;color:#0f172a;vertical-align:top;white-space:nowrap;">{{ $item->student_id ?? '—' }}</td>
+                                <td style="padding:12px 12px;border-bottom:1px solid #d9e2ec;color:#0f172a;vertical-align:top;min-width:180px;line-height:1.55;font-weight:500;">{{ $item->full_name ?: '—' }}</td>
+                                <td style="padding:12px 12px;border-bottom:1px solid #d9e2ec;color:#0f172a;vertical-align:top;white-space:nowrap;">{{ $item->qabul_yili }}</td>
+                                <td style="padding:12px 12px;border-bottom:1px solid #d9e2ec;color:#0f172a;vertical-align:top;white-space:nowrap;">{{ $item->talim_turi ?: '—' }}</td>
+                                <td style="padding:12px 12px;border-bottom:1px solid #d9e2ec;color:#334155;vertical-align:top;min-width:180px;line-height:1.55;">{{ $item->imtiyoz_toifasi ?: '—' }}</td>
+                                <td style="padding:12px 12px;border-bottom:1px solid #d9e2ec;color:#0f172a;vertical-align:top;line-height:1.55;">{{ $item->tolov_shakli ?: '—' }}</td>
+                                <td style="padding:12px 12px;border-bottom:1px solid #d9e2ec;color:#0f172a;vertical-align:top;white-space:nowrap;text-align:right;font-weight:600;">{{ $item->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $item->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="8" class="px-3 py-8 text-center text-sm text-slate-400">
-                                    Ma'lumot topilmadi. "Yangi qo'shish" yoki "Excel yuklash" orqali qo'shing.
-                                </td>
+                                <td colspan="8" style="padding:30px 12px;text-align:center;color:#94a3b8;">Ma'lumot topilmadi. "Yangi qo'shish" yoki "Excel yuklash" orqali qo'shing.</td>
                             </tr>
                         @endforelse
                     </tbody>

@@ -3,7 +3,7 @@
         <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
             <div>
                 <h2 class="text-xl font-semibold leading-tight text-gray-800">Qabul ko'rsatkichlari</h2>
-                <p class="text-sm text-gray-500 mt-1">Oldingi yillardagi qabul statistikasi — hisobotlar uchun</p>
+                <p class="text-sm text-gray-500 mt-1">Oldingi yillardagi qabul statistikasi - hisobotlar uchun</p>
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                 <a href="{{ route('admin.admission-indicators.create') }}"
@@ -57,18 +57,29 @@
             </div>
         </div>
 
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm mb-4">
-            <form method="GET" action="{{ route('admin.admission-indicators.index') }}" class="p-4">
-                <div style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;">
+        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm mb-4 overflow-hidden">
+            <form method="GET" action="{{ route('admin.admission-indicators.index') }}" class="p-5">
+                <div class="mb-4 flex items-center justify-between gap-3 flex-wrap">
+                    <div>
+                        <h3 class="text-base font-semibold text-slate-800">Filtrlar</h3>
+                        <p class="text-sm text-slate-500">Qabul yozuvlarini kerakli parametrlar bo'yicha saralang.</p>
+                    </div>
+                    <div class="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-600">
+                        <span>Natija:</span>
+                        <span class="text-slate-900">{{ number_format($summary['qatorlar']) }} ta</span>
+                    </div>
+                </div>
+
+                <div style="display:flex;flex-wrap:wrap;gap:14px;align-items:flex-end;">
                     <div style="flex:1 1 100%;min-width:280px;">
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qidiruv</label>
                         <input type="text" name="search" value="{{ request('search') }}" placeholder="Talaba ID, JSHSHIR, F.I.SH, mutaxassislik..."
-                               class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                               class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                     </div>
 
-                    <div style="flex:1 1 calc(50% - 6px);min-width:220px;">
+                    <div style="flex:1 1 calc(50% - 7px);min-width:220px;">
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Qabul yili</label>
-                        <select name="qabul_yili" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                        <select name="qabul_yili" class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($years as $year)
                                 <option value="{{ $year }}" @selected((string) request('qabul_yili') === (string) $year)>{{ $year }}</option>
@@ -76,9 +87,9 @@
                         </select>
                     </div>
 
-                    <div style="flex:1 1 calc(50% - 6px);min-width:220px;">
+                    <div style="flex:1 1 calc(50% - 7px);min-width:220px;">
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Ta'lim turi</label>
-                        <select name="talim_turi" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                        <select name="talim_turi" class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($talimTurlari as $t)
                                 <option value="{{ $t }}" @selected(request('talim_turi') === $t)>{{ $t }}</option>
@@ -86,9 +97,9 @@
                         </select>
                     </div>
 
-                    <div style="flex:1 1 calc(50% - 6px);min-width:220px;">
+                    <div style="flex:1 1 calc(50% - 7px);min-width:220px;">
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Ta'lim shakli</label>
-                        <select name="talim_shakli" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                        <select name="talim_shakli" class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($talimShakllari as $t)
                                 <option value="{{ $t }}" @selected(request('talim_shakli') === $t)>{{ $t }}</option>
@@ -96,9 +107,9 @@
                         </select>
                     </div>
 
-                    <div style="flex:1 1 calc(50% - 6px);min-width:220px;">
+                    <div style="flex:1 1 calc(50% - 7px);min-width:220px;">
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">To'lov shakli</label>
-                        <select name="tolov_shakli" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                        <select name="tolov_shakli" class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($tolovShakllari as $t)
                                 <option value="{{ $t }}" @selected(request('tolov_shakli') === $t)>{{ $t }}</option>
@@ -106,9 +117,9 @@
                         </select>
                     </div>
 
-                    <div style="flex:1 1 calc(50% - 6px);min-width:220px;">
+                    <div style="flex:1 1 calc(50% - 7px);min-width:220px;">
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Fakultet</label>
-                        <select name="fakultet" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                        <select name="fakultet" class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($fakultetlar as $fakultet)
                                 <option value="{{ $fakultet }}" @selected(request('fakultet') === $fakultet)>{{ $fakultet }}</option>
@@ -116,9 +127,9 @@
                         </select>
                     </div>
 
-                    <div style="flex:1 1 calc(50% - 6px);min-width:220px;">
+                    <div style="flex:1 1 calc(50% - 7px);min-width:220px;">
                         <label class="block text-xs font-semibold uppercase text-slate-500 mb-1">Talaba toifasi</label>
-                        <select name="talaba_toifasi" class="w-full rounded-xl border-slate-300 focus:border-sky-500 focus:ring-sky-500">
+                        <select name="talaba_toifasi" class="w-full rounded-2xl border-slate-200 bg-slate-50 px-4 py-3 focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             <option value="">Barchasi</option>
                             @foreach($talabaToifalari as $toifa)
                                 <option value="{{ $toifa }}" @selected(request('talaba_toifasi') === $toifa)>{{ $toifa }}</option>
@@ -128,92 +139,79 @@
 
                     <div style="display:flex;align-items:center;gap:10px;flex:1 1 100%;padding-top:4px;">
                         <button type="submit"
-                                class="px-4 py-2 text-white text-sm font-medium rounded-lg"
-                                style="background-color:#2563eb;border:1px solid #2563eb;box-shadow:0 1px 2px rgba(37,99,235,0.25);">Filtrlash</button>
+                                class="px-5 py-2.5 text-white text-sm font-medium rounded-xl"
+                                style="background-color:#2563eb;border:1px solid #2563eb;box-shadow:0 8px 20px rgba(37,99,235,0.18);">Filtrlash</button>
                         <a href="{{ route('admin.admission-indicators.index') }}"
-                           class="px-4 py-2 text-sm font-medium rounded-lg"
-                           style="background-color:#f1f5f9;border:1px solid #cbd5e1;color:#334155;">Tozalash</a>
+                           class="px-5 py-2.5 text-sm font-medium rounded-xl"
+                           style="background-color:#f8fafc;border:1px solid #cbd5e1;color:#334155;">Tozalash</a>
                     </div>
                 </div>
             </form>
         </div>
 
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+        <div class="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
                 <form id="admissionTableFiltersForm" method="GET" action="{{ route('admin.admission-indicators.index') }}"></form>
                 <table class="min-w-full text-sm">
-                    <thead class="bg-slate-100 text-slate-700">
+                    <thead class="bg-gradient-to-r from-slate-50 to-slate-100 text-slate-700">
                         <tr>
-                            <th class="px-3 py-3 text-left font-semibold">T/r</th>
-                            <th class="px-3 py-3 text-left font-semibold">Talaba ID</th>
-                            <th class="px-3 py-3 text-left font-semibold">To'liq ismi</th>
-                            <th class="px-3 py-3 text-left font-semibold">Yil</th>
-                            <th class="px-3 py-3 text-left font-semibold">Ta'lim turi</th>
-                            <th class="px-3 py-3 text-left font-semibold">Imtiyoz toifasi</th>
-                            <th class="px-3 py-3 text-left font-semibold">To'lov shakli</th>
-                            <th class="px-3 py-3 text-right font-semibold">Kvota</th>
-                            <th class="px-3 py-3 text-right font-semibold">Reja</th>
-                            <th class="px-3 py-3 text-right font-semibold">Qabul</th>
-                            <th class="px-3 py-3 text-right font-semibold">To'plagan bali</th>
-                            <th class="px-3 py-3 text-right font-semibold">Eng past ball</th>
-                            <th class="px-3 py-3 text-right font-semibold">Eng baland ball</th>
-                            <th class="px-3 py-3 text-left font-semibold">Izoh</th>
-                            <th class="px-3 py-3 text-center font-semibold">Amallar</th>
+                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">T/r</th>
+                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">Talaba ID</th>
+                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">To'liq ismi</th>
+                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">Yil</th>
+                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">Ta'lim turi</th>
+                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">Imtiyoz toifasi</th>
+                            <th class="px-5 py-4 text-left font-semibold whitespace-nowrap">To'lov shakli</th>
+                            <th class="px-5 py-4 text-right font-semibold whitespace-nowrap">To'plagan bali</th>
                         </tr>
                         <tr class="bg-white border-t border-slate-200">
-                            <th class="px-2 py-2"></th>
-                            <th class="px-2 py-2">
+                            <th class="px-4 py-3"></th>
+                            <th class="px-4 py-3">
                                 <input type="text" name="student_id" value="{{ request('student_id') }}" placeholder="Talaba ID"
                                        form="admissionTableFiltersForm"
-                                       class="w-full rounded-lg border-slate-300 text-xs focus:border-sky-500 focus:ring-sky-500">
+                                       class="w-full rounded-xl border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             </th>
-                            <th class="px-2 py-2">
+                            <th class="px-4 py-3">
                                 <input type="text" name="full_name" value="{{ request('full_name') }}" placeholder="F.I.SH"
                                        form="admissionTableFiltersForm"
-                                       class="w-full rounded-lg border-slate-300 text-xs focus:border-sky-500 focus:ring-sky-500 min-w-[180px]">
+                                       class="w-full min-w-[220px] rounded-xl border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                             </th>
-                            <th class="px-2 py-2">
-                                <select name="qabul_yili" form="admissionTableFiltersForm" class="w-full rounded-lg border-slate-300 text-xs focus:border-sky-500 focus:ring-sky-500 min-w-[90px]">
+                            <th class="px-4 py-3">
+                                <select name="qabul_yili" form="admissionTableFiltersForm" class="w-full min-w-[100px] rounded-xl border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($years as $year)
                                         <option value="{{ $year }}" @selected((string) request('qabul_yili') === (string) $year)>{{ $year }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-2 py-2">
-                                <select name="talim_turi" form="admissionTableFiltersForm" class="w-full rounded-lg border-slate-300 text-xs focus:border-sky-500 focus:ring-sky-500 min-w-[120px]">
+                            <th class="px-4 py-3">
+                                <select name="talim_turi" form="admissionTableFiltersForm" class="w-full min-w-[120px] rounded-xl border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($talimTurlari as $t)
                                         <option value="{{ $t }}" @selected(request('talim_turi') === $t)>{{ $t }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-2 py-2">
-                                <select name="imtiyoz_toifasi" form="admissionTableFiltersForm" class="w-full rounded-lg border-slate-300 text-xs focus:border-sky-500 focus:ring-sky-500 min-w-[140px]">
+                            <th class="px-4 py-3">
+                                <select name="imtiyoz_toifasi" form="admissionTableFiltersForm" class="w-full min-w-[260px] rounded-xl border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($imtiyozToifalari as $toifa)
                                         <option value="{{ $toifa }}" @selected(request('imtiyoz_toifasi') === $toifa)>{{ $toifa }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-2 py-2">
-                                <select name="tolov_shakli" form="admissionTableFiltersForm" class="w-full rounded-lg border-slate-300 text-xs focus:border-sky-500 focus:ring-sky-500 min-w-[130px]">
+                            <th class="px-4 py-3">
+                                <select name="tolov_shakli" form="admissionTableFiltersForm" class="w-full min-w-[140px] rounded-xl border-slate-200 bg-slate-50 px-3 py-2 text-xs focus:border-sky-500 focus:bg-white focus:ring-sky-500">
                                     <option value="">Barchasi</option>
                                     @foreach($tolovShakllari as $t)
                                         <option value="{{ $t }}" @selected(request('tolov_shakli') === $t)>{{ $t }}</option>
                                     @endforeach
                                 </select>
                             </th>
-                            <th class="px-2 py-2"></th>
-                            <th class="px-2 py-2"></th>
-                            <th class="px-2 py-2"></th>
-                            <th class="px-2 py-2"></th>
-                            <th class="px-2 py-2"></th>
-                            <th class="px-2 py-2"></th>
-                            <th class="px-2 py-2">
-                                <div class="flex items-center justify-center gap-1">
+                            <th class="px-4 py-3">
+                                <div class="flex items-center justify-end gap-2">
                                     <button type="submit" form="admissionTableFiltersForm" class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-white"
-                                            style="background-color:#2563eb;">OK</button>
+                                            style="background-color:#2563eb;box-shadow:0 6px 16px rgba(37,99,235,0.18);">OK</button>
                                     <a href="{{ route('admin.admission-indicators.index') }}"
                                        class="px-2.5 py-1.5 rounded-lg text-xs font-medium"
                                        style="background-color:#f1f5f9;border:1px solid #cbd5e1;color:#334155;">X</a>
@@ -224,42 +222,22 @@
                     <tbody class="divide-y divide-slate-200">
                         @forelse($indicators as $item)
                             <tr class="{{ $loop->odd ? 'bg-slate-50' : 'bg-white' }} hover:bg-sky-50 transition-colors duration-150">
-                                <td class="px-3 py-3 font-semibold text-slate-700">{{ $indicators->firstItem() ? $indicators->firstItem() + $loop->index : $loop->iteration }}</td>
-                                <td class="px-3 py-3 font-medium text-slate-800">{{ $item->student_id ?? '—' }}</td>
-                                <td class="px-3 py-3 min-w-[220px]">
-                                    <div class="font-medium text-slate-800">{{ $item->full_name ?: '—' }}</div>
+                                <td class="px-5 py-4 font-semibold text-slate-700 align-top">{{ $indicators->firstItem() ? $indicators->firstItem() + $loop->index : $loop->iteration }}</td>
+                                <td class="px-5 py-4 font-medium text-slate-800 align-top whitespace-nowrap">{{ $item->student_id ?? '—' }}</td>
+                                <td class="px-5 py-4 min-w-[240px] align-top">
+                                    <div class="font-semibold text-slate-800 leading-6">{{ $item->full_name ?: '—' }}</div>
                                 </td>
-                                <td class="px-3 py-3 font-semibold text-slate-800">{{ $item->qabul_yili }}</td>
-                                <td class="px-3 py-3">{{ $item->talim_turi ?: '—' }}</td>
-                                <td class="px-3 py-3">{{ $item->imtiyoz_toifasi ?: '—' }}</td>
-                                <td class="px-3 py-3">{{ $item->tolov_shakli ?: '—' }}</td>
-                                <td class="px-3 py-3 text-right">{{ $item->kvota !== null ? number_format($item->kvota) : '—' }}</td>
-                                <td class="px-3 py-3 text-right">{{ $item->reja !== null ? number_format($item->reja) : '—' }}</td>
-                                <td class="px-3 py-3 text-right font-medium text-emerald-700">{{ $item->qabul_soni !== null ? number_format($item->qabul_soni) : '—' }}</td>
-                                <td class="px-3 py-3 text-right font-medium text-sky-700">{{ $item->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $item->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}</td>
-                                <td class="px-3 py-3 text-right">{{ $item->min_ball !== null ? rtrim(rtrim(number_format((float) $item->min_ball, 1, '.', ''), '0'), '.') : '—' }}</td>
-                                <td class="px-3 py-3 text-right font-medium text-violet-700">{{ $item->max_toplagan_bali !== null ? rtrim(rtrim(number_format((float) $item->max_toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}</td>
-                                <td class="px-3 py-3 text-slate-500 max-w-xs truncate" title="{{ $item->izoh }}">{{ $item->izoh ?: '—' }}</td>
-                                <td class="px-3 py-3">
-                                    <div class="flex items-center justify-center gap-1">
-                                        <a href="{{ route('admin.admission-indicators.edit', $item) }}"
-                                           class="p-1.5 text-sky-600 hover:bg-sky-100 rounded" title="Tahrirlash">
-                                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/></svg>
-                                        </a>
-                                        <form method="POST" action="{{ route('admin.admission-indicators.destroy', $item) }}"
-                                              onsubmit="return confirm('Ushbu qatorni o‘chirishni tasdiqlaysizmi?')">
-                                            @csrf
-                                            @method('DELETE')
-                                            <button type="submit" class="p-1.5 text-rose-600 hover:bg-rose-100 rounded" title="O'chirish">
-                                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg>
-                                            </button>
-                                        </form>
-                                    </div>
+                                <td class="px-5 py-4 font-semibold text-slate-800 align-top whitespace-nowrap">{{ $item->qabul_yili }}</td>
+                                <td class="px-5 py-4 align-top whitespace-nowrap">{{ $item->talim_turi ?: '—' }}</td>
+                                <td class="px-5 py-4 align-top min-w-[360px]">
+                                    <div class="leading-6 text-slate-700">{{ $item->imtiyoz_toifasi ?: '—' }}</div>
                                 </td>
+                                <td class="px-5 py-4 align-top">{{ $item->tolov_shakli ?: '—' }}</td>
+                                <td class="px-5 py-4 text-right font-semibold text-sky-700 align-top whitespace-nowrap">{{ $item->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $item->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}</td>
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="15" class="px-3 py-10 text-center text-slate-400">
+                                <td colspan="8" class="px-3 py-10 text-center text-slate-400">
                                     Ma'lumot topilmadi. "Yangi qo'shish" yoki "Excel yuklash" orqali qo'shing.
                                 </td>
                             </tr>

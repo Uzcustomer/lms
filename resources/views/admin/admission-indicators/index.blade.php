@@ -140,6 +140,7 @@
 
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div class="overflow-x-auto">
+                <form id="admissionTableFiltersForm" method="GET" action="{{ route('admin.admission-indicators.index') }}"></form>
                 <table class="min-w-full text-sm">
                     <thead class="bg-slate-100 text-slate-700">
                         <tr>
@@ -148,6 +149,7 @@
                             <th class="px-3 py-3 text-left font-semibold">To'liq ismi</th>
                             <th class="px-3 py-3 text-left font-semibold">Yil</th>
                             <th class="px-3 py-3 text-left font-semibold">Ta'lim turi</th>
+                            <th class="px-3 py-3 text-left font-semibold">Imtiyoz toifasi</th>
                             <th class="px-3 py-3 text-left font-semibold">To'lov shakli</th>
                             <th class="px-3 py-3 text-right font-semibold">Kvota</th>
                             <th class="px-3 py-3 text-right font-semibold">Reja</th>
@@ -157,6 +159,66 @@
                             <th class="px-3 py-3 text-right font-semibold">Eng baland ball</th>
                             <th class="px-3 py-3 text-left font-semibold">Izoh</th>
                             <th class="px-3 py-3 text-center font-semibold">Amallar</th>
+                        </tr>
+                        <tr class="bg-white border-t border-slate-200">
+                            <th class="px-2 py-2"></th>
+                            <th class="px-2 py-2">
+                                <input type="text" name="student_id" value="{{ request('student_id') }}" placeholder="Talaba ID"
+                                       form="admissionTableFiltersForm"
+                                       class="w-full rounded-lg border-slate-300 text-xs focus:border-sky-500 focus:ring-sky-500">
+                            </th>
+                            <th class="px-2 py-2">
+                                <input type="text" name="full_name" value="{{ request('full_name') }}" placeholder="F.I.SH"
+                                       form="admissionTableFiltersForm"
+                                       class="w-full rounded-lg border-slate-300 text-xs focus:border-sky-500 focus:ring-sky-500 min-w-[180px]">
+                            </th>
+                            <th class="px-2 py-2">
+                                <select name="qabul_yili" form="admissionTableFiltersForm" class="w-full rounded-lg border-slate-300 text-xs focus:border-sky-500 focus:ring-sky-500 min-w-[90px]">
+                                    <option value="">Barchasi</option>
+                                    @foreach($years as $year)
+                                        <option value="{{ $year }}" @selected((string) request('qabul_yili') === (string) $year)>{{ $year }}</option>
+                                    @endforeach
+                                </select>
+                            </th>
+                            <th class="px-2 py-2">
+                                <select name="talim_turi" form="admissionTableFiltersForm" class="w-full rounded-lg border-slate-300 text-xs focus:border-sky-500 focus:ring-sky-500 min-w-[120px]">
+                                    <option value="">Barchasi</option>
+                                    @foreach($talimTurlari as $t)
+                                        <option value="{{ $t }}" @selected(request('talim_turi') === $t)>{{ $t }}</option>
+                                    @endforeach
+                                </select>
+                            </th>
+                            <th class="px-2 py-2">
+                                <select name="imtiyoz_toifasi" form="admissionTableFiltersForm" class="w-full rounded-lg border-slate-300 text-xs focus:border-sky-500 focus:ring-sky-500 min-w-[140px]">
+                                    <option value="">Barchasi</option>
+                                    @foreach($imtiyozToifalari as $toifa)
+                                        <option value="{{ $toifa }}" @selected(request('imtiyoz_toifasi') === $toifa)>{{ $toifa }}</option>
+                                    @endforeach
+                                </select>
+                            </th>
+                            <th class="px-2 py-2">
+                                <select name="tolov_shakli" form="admissionTableFiltersForm" class="w-full rounded-lg border-slate-300 text-xs focus:border-sky-500 focus:ring-sky-500 min-w-[130px]">
+                                    <option value="">Barchasi</option>
+                                    @foreach($tolovShakllari as $t)
+                                        <option value="{{ $t }}" @selected(request('tolov_shakli') === $t)>{{ $t }}</option>
+                                    @endforeach
+                                </select>
+                            </th>
+                            <th class="px-2 py-2"></th>
+                            <th class="px-2 py-2"></th>
+                            <th class="px-2 py-2"></th>
+                            <th class="px-2 py-2"></th>
+                            <th class="px-2 py-2"></th>
+                            <th class="px-2 py-2"></th>
+                            <th class="px-2 py-2">
+                                <div class="flex items-center justify-center gap-1">
+                                    <button type="submit" form="admissionTableFiltersForm" class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-white"
+                                            style="background-color:#2563eb;">OK</button>
+                                    <a href="{{ route('admin.admission-indicators.index') }}"
+                                       class="px-2.5 py-1.5 rounded-lg text-xs font-medium"
+                                       style="background-color:#f1f5f9;border:1px solid #cbd5e1;color:#334155;">X</a>
+                                </div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-200">
@@ -169,6 +231,7 @@
                                 </td>
                                 <td class="px-3 py-3 font-semibold text-slate-800">{{ $item->qabul_yili }}</td>
                                 <td class="px-3 py-3">{{ $item->talim_turi ?: '—' }}</td>
+                                <td class="px-3 py-3">{{ $item->imtiyoz_toifasi ?: '—' }}</td>
                                 <td class="px-3 py-3">{{ $item->tolov_shakli ?: '—' }}</td>
                                 <td class="px-3 py-3 text-right">{{ $item->kvota !== null ? number_format($item->kvota) : '—' }}</td>
                                 <td class="px-3 py-3 text-right">{{ $item->reja !== null ? number_format($item->reja) : '—' }}</td>
@@ -196,7 +259,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="14" class="px-3 py-10 text-center text-slate-400">
+                                <td colspan="15" class="px-3 py-10 text-center text-slate-400">
                                     Ma'lumot topilmadi. "Yangi qo'shish" yoki "Excel yuklash" orqali qo'shing.
                                 </td>
                             </tr>

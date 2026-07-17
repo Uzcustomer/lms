@@ -101,6 +101,15 @@ class AdmissionIndicatorController extends Controller
         if ($request->filled('talaba_toifasi')) {
             $this->applyNormalizedExactFilter($query, 'talaba_toifasi', $request->talaba_toifasi);
         }
+        if ($request->filled('imtiyoz_toifasi')) {
+            $this->applyNormalizedExactFilter($query, 'imtiyoz_toifasi', $request->imtiyoz_toifasi);
+        }
+        if ($request->filled('student_id')) {
+            $query->where('student_id', 'like', '%' . trim((string) $request->student_id) . '%');
+        }
+        if ($request->filled('full_name')) {
+            $query->where('full_name', 'like', '%' . trim((string) $request->full_name) . '%');
+        }
         if ($request->filled('search')) {
             $s = trim($request->search);
             $query->where(function ($q) use ($s) {
@@ -171,6 +180,14 @@ class AdmissionIndicatorController extends Controller
             ->orderBy('talaba_toifasi')
             ->pluck('talaba_toifasi');
 
+        $imtiyozToifalari = AdmissionIndicator::query()
+            ->whereNotNull('imtiyoz_toifasi')
+            ->where('imtiyoz_toifasi', '<>', '')
+            ->select('imtiyoz_toifasi')
+            ->distinct()
+            ->orderBy('imtiyoz_toifasi')
+            ->pluck('imtiyoz_toifasi');
+
         $summary = [
             'jami_reja' => $this->filteredQuery($request)->sum('reja'),
             'jami_qabul' => $this->filteredQuery($request)->sum('qabul_soni'),
@@ -186,6 +203,7 @@ class AdmissionIndicatorController extends Controller
             'tolovShakllari' => AdmissionIndicator::TOLOV_SHAKLLARI,
             'fakultetlar' => $fakultetlar,
             'talabaToifalari' => $talabaToifalari,
+            'imtiyozToifalari' => $imtiyozToifalari,
         ]);
     }
 
@@ -360,6 +378,7 @@ class AdmissionIndicatorController extends Controller
             'tolov_shakli',
             'fakultet',
             'talaba_toifasi',
+            'imtiyoz_toifasi',
         ];
 
         if (!in_array($column, $allowedColumns, true)) {

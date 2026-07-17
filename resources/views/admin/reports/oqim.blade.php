@@ -41,6 +41,14 @@
                                 <input type="hidden" id="dekan_faculty_id" value="{{ $dekanFacultyId }}">
                             @endif
                         </div>
+                        <div class="filter-item" style="min-width: 160px;">
+                            <label class="filter-label"><span class="fl-dot" style="background:#f97316;"></span> Ta'lim</label>
+                            <select id="talim" class="select2" style="width: 100%;">
+                                <option value="all" selected>Barchasi</option>
+                                <option value="oddiy">Kunduzgi (oddiy)</option>
+                                <option value="qoshma">Qo'shma ta'lim</option>
+                            </select>
+                        </div>
                         <div class="filter-item" style="min-width: 180px;">
                             <label class="filter-label"><span class="fl-dot" style="background:#8b5cf6;"></span> Variant (bo'linish)</label>
                             <select id="variant" class="select2" style="width: 100%;">
@@ -163,6 +171,7 @@
             return {
                 education_type: $('#education_type').val() || '',
                 faculty: dekanFaculty ? dekanFaculty.value : ($('#faculty').val() || ''),
+                talim: $('#talim').val() || 'all',
                 variant: $('#variant').val() || 'auto',
                 oqim_max: $('#oqim_max').val() || 100,
                 oqim_tol: $('#oqim_tol').val() || 0,

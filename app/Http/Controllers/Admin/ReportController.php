@@ -11367,6 +11367,25 @@ class ReportController extends Controller
             }
         }
 
+        // ---- Ta'lim turi (guruh bo'yicha): Qo'shma ta'lim vs Oddiy (kunduzgi) ----
+        // Guruh Qo'shma deb hisoblanadi, agar undagi talabalarning ko'pchiligi
+        // student_type = "Qo'shma" bo'lsa. Qo'shma va oddiy guruhlar aralashmasin.
+        $trackRows = DB::table('students')
+            ->where('student_status_code', 11)
+            ->whereNotNull('group_id')
+            ->selectRaw('group_id, COUNT(*) as tot, SUM(student_type_name = ?) as q', ['Qo\'shma'])
+            ->groupBy('group_id')
+            ->get();
+        $trackMap = [];
+        foreach ($trackRows as $tr) {
+            $trackMap[(int) $tr->group_id] = ((int) $tr->q * 2 > (int) $tr->tot) ? 'qoshma' : 'oddiy';
+        }
+        // Filter: barchasi / oddiy (kunduzgi) / qoshma
+        $talimFilter = $request->get('talim', 'all');
+        if (!in_array($talimFilter, ['all', 'oddiy', 'qoshma'], true)) {
+            $talimFilter = 'all';
+        }
+
         // ---- Tuzilmaga yig'amiz: fakultet+yo'nalish -> kurs -> guruhlar ----
         $blocks = [];
         foreach ($rows as $r) {
@@ -11374,15 +11393,27 @@ class ReportController extends Controller
             if (isset($excludedIds[(int) $r->group_id])) {
                 continue;
             }
-            // Blok kaliti — fakultet + yo'nalish NOMI bo'yicha (HEMIS ID emas), aks holda
-            // bir xil yo'nalishning turli qabul yillari (turli specialty_id/o'quv reja)
-            // alohida bloklarga bo'linib ketadi (masalan 1-kurs alohida chiqadi).
-            $blockKey = mb_strtolower(trim((string) $r->department_name)) . '|' . mb_strtolower(trim((string) $r->specialty_name));
+
+            // Guruh turi (qo'shma / oddiy) va filter
+            $track = $trackMap[(int) $r->group_id] ?? 'oddiy';
+            if ($talimFilter !== 'all' && $track !== $talimFilter) {
+                continue;
+            }
+
+            // Blok kaliti — fakultet + yo'nalish NOMI + ta'lim turi bo'yicha. Qo'shma va oddiy
+            // ta'lim hech qachon bitta blok/oqimга aralashmaydi.
+            $blockKey = mb_strtolower(trim((string) $r->department_name)) . '|'
+                . mb_strtolower(trim((string) $r->specialty_name)) . '|' . $track;
             if (!isset($blocks[$blockKey])) {
+                $title = $this->oqimBlockTitle($r->department_name, $r->specialty_name);
+                if ($track === 'qoshma') {
+                    $title .= " — Qo'shma ta'lim";
+                }
                 $blocks[$blockKey] = [
                     'department_name' => $r->department_name,
                     'specialty_name'  => $r->specialty_name,
-                    'title'           => $this->oqimBlockTitle($r->department_name, $r->specialty_name),
+                    'track'           => $track,
+                    'title'           => $title,
                     'courses'         => [],
                 ];
             }
@@ -11414,9 +11445,10 @@ class ReportController extends Controller
             ];
         }
 
-        // Bloklarni fakultet + yo'nalish nomi bo'yicha tartiblaymiz
+        // Bloklarni fakultet + yo'nalish + ta'lim turi bo'yicha tartiblaymiz (oddiy oldin, qo'shma keyin)
         uasort($blocks, function ($a, $b) {
-            return [$a['department_name'], $a['specialty_name']] <=> [$b['department_name'], $b['specialty_name']];
+            return [$a['department_name'], $a['specialty_name'], $a['track']]
+                <=> [$b['department_name'], $b['specialty_name'], $b['track']];
         });
 
         // ---- Me'yorlar (chegaralar) — qo'lda beriladi, tolerantlik (+/-) bilan ----

@@ -252,7 +252,7 @@
                                     </div>
                                     <div>
                                         <label style="display:block;font-size:12px;font-weight:700;color:#334155;margin-bottom:6px;">Shakl</label>
-                                        <select name="form_type" required
+                                        <select id="manual-open-form-type" name="form_type" required
                                                 style="width:100%;height:42px;border:1px solid #cbd5e1;border-radius:10px;padding:0 12px;background:#fff;color:#0f172a;">
                                             <option value="{{ \App\Models\VedomostSubmission::FORM_12A }}">12a-shakl</option>
                                             <option value="{{ \App\Models\VedomostSubmission::FORM_12B }}">12b-shakl</option>
@@ -379,6 +379,7 @@
             const manualOpenSubject = document.getElementById('manual-open-subject');
             const manualOpenSemester = document.getElementById('manual-open-semester');
             const manualOpenMeta = document.getElementById('manual-open-meta');
+            const manualOpenFormType = document.getElementById('manual-open-form-type');
             let syncPollTimer = null;
             let lastStatus = initialProgress && initialProgress.status ? initialProgress.status : 'idle';
 
@@ -560,11 +561,27 @@
                     : '';
             }
 
+            function resetManualModal() {
+                if (!manualOpenGroup || !manualOpenSubject) {
+                    return;
+                }
+
+                $(manualOpenGroup).val('').trigger('change');
+                manualOpenSubject.innerHTML = '<option value="">Avval guruhni tanlang</option>';
+                manualOpenSubject.value = '';
+                if (manualOpenFormType) {
+                    manualOpenFormType.value = '{{ \App\Models\VedomostSubmission::FORM_12A }}';
+                }
+                manualOpenSemester.value = '';
+                manualOpenMeta.textContent = '';
+            }
+
             function openManualModal() {
                 if (!manualOpenModal) {
                     return;
                 }
 
+                resetManualModal();
                 manualOpenModal.style.display = 'flex';
                 document.body.style.overflow = 'hidden';
             }

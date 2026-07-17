@@ -102,6 +102,25 @@
                     </p>
                 </div>
 
+                <!-- Optimizatsiya rejasi dialogi -->
+                <div id="opt-overlay" onclick="if(event.target===this)closeOptDialog()">
+                    <div id="opt-dialog">
+                        <div class="opt-head">
+                            <div>
+                                <div class="opt-title">Optimizatsiya rejasi</div>
+                                <div class="opt-sub">Guruhlar va oqimlarni kamaytirish uchun quyidagi o'zgarishlar tavsiya etiladi</div>
+                            </div>
+                            <button type="button" class="opt-x" onclick="closeOptDialog()">&times;</button>
+                        </div>
+                        <div id="opt-summary" class="opt-summary"></div>
+                        <div id="opt-moves" class="opt-moves"></div>
+                        <div class="opt-foot">
+                            <span style="font-size:11.5px;color:#94a3b8;">Talabalar taxminan teng taqsimlangan holda ko'rsatiladi.</span>
+                            <button type="button" class="btn-calc" onclick="closeOptDialog()">Yopish</button>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Result Area -->
                 <div id="result-area">
                     <div id="empty-state" style="padding: 60px 20px; text-align: center;">
@@ -179,6 +198,7 @@
                     renderReport(res);
                     var modeLabel = res.optimize ? 'Optimizatsiya' : 'Joriy holat';
                     $('#time-badge').text(modeLabel + ' · ' + elapsed + ' soniyada hisoblandi · ' + esc(res.generated_at));
+                    if (res.optimize && res.plan) showOptDialog(res.plan);
                     $('#table-area').show();
                     $('#btn-excel').prop('disabled', false).css('opacity', '1');
                 },
@@ -227,6 +247,44 @@
             var variantLabel = $('#variant option:selected').text();
             $('#total-badge').text('Jami talaba: ' + grand + ' ta · ' + variantLabel.split('(')[0].trim());
         }
+
+        function showOptDialog(plan) {
+            var s = '';
+            var reduce = plan.reduce || 0;
+            s += '<div class="opt-stat ' + (reduce > 0 ? 'ok' : 'neutral') + '">';
+            s += '<div class="opt-stat-num">' + (plan.cur_subgroups || 0) + ' → ' + (plan.opt_subgroups || 0) + '</div>';
+            s += '<div class="opt-stat-lbl">Guruhchalar soni' + (reduce > 0 ? ' (−' + reduce + ' ta)' : '') + '</div></div>';
+            s += '<div class="opt-stat neutral"><div class="opt-stat-num">' + (plan.oqim_count || 0) + '</div>';
+            s += '<div class="opt-stat-lbl">Oqimlar soni (til + me\'yor bo\'yicha)</div></div>';
+            $('#opt-summary').html(s);
+
+            var moves = plan.moves || [];
+            var m = '';
+            if (!moves.length) {
+                m = '<div class="opt-empty">✓ Joriy taqsimot allaqachon me\'yorga mos — guruhchalarni kamaytirish imkoni topilmadi. '
+                  + 'Oqimlarni kamaytirish uchun oqim me\'yorini oshiring.</div>';
+            } else {
+                m += '<div class="opt-moves-title">Tavsiya etilgan o\'zgarishlar (' + moves.length + ' ta guruh):</div>';
+                for (var i = 0; i < moves.length; i++) {
+                    var mv = moves[i];
+                    m += '<div class="opt-move">';
+                    m += '<div class="opt-move-h"><span class="opt-move-base">' + esc(mv.base) + ' (' + esc(mv.lang) + ')</span>'
+                       + '<span class="opt-move-meta">' + esc(mv.course) + ' · ' + esc(mv.block) + ' · jami ' + mv.total + ' ta</span></div>';
+                    m += '<div class="opt-move-b">';
+                    m += '<span class="opt-badge cur">Hozir: ' + mv.cur_n + ' guruhcha [' + mv.cur_counts.join(', ') + ']</span>';
+                    m += '<span class="opt-arrow">→</span>';
+                    m += '<span class="opt-badge opt">Bo\'lsin: ' + mv.opt_n + ' guruhcha [' + mv.opt_counts.join(', ') + ']</span>';
+                    m += '</div>';
+                    m += '<div class="opt-move-note">« ' + mv.removed.join(', ') + " » guruhcha(lar)ni bekor qilib, talabalarini qolgan "
+                       + mv.opt_n + ' guruhchaga teng taqsimlang.</div>';
+                    m += '</div>';
+                }
+            }
+            $('#opt-moves').html(m);
+            $('#opt-overlay').css('display', 'flex');
+        }
+
+        function closeOptDialog() { $('#opt-overlay').hide(); }
 
         function downloadExcel() {
             var params = getFilters();
@@ -285,5 +343,34 @@
         .oq-cnt { text-align: center; font-weight: 600; color: #334155; width: 40px; }
         .oq-total td { background: #f1f5f9; font-weight: 800; color: #0f172a; text-align: center; }
         .badge { display: inline-block; font-weight: 600; }
+
+        #opt-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:1000; align-items:center; justify-content:center; padding:20px; }
+        #opt-dialog { background:#fff; border-radius:14px; width:100%; max-width:760px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 24px 60px rgba(0,0,0,0.35); overflow:hidden; }
+        .opt-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; padding:16px 20px; background:linear-gradient(135deg,#7c3aed,#a855f7); color:#fff; }
+        .opt-title { font-size:17px; font-weight:800; }
+        .opt-sub { font-size:12px; opacity:0.9; margin-top:2px; }
+        .opt-x { background:rgba(255,255,255,0.2); border:none; color:#fff; width:30px; height:30px; border-radius:8px; font-size:20px; line-height:1; cursor:pointer; flex-shrink:0; }
+        .opt-x:hover { background:rgba(255,255,255,0.35); }
+        .opt-summary { display:flex; gap:12px; padding:16px 20px; flex-wrap:wrap; border-bottom:1px solid #f1f5f9; }
+        .opt-stat { flex:1; min-width:200px; border-radius:10px; padding:12px 16px; border:1px solid #e2e8f0; }
+        .opt-stat.ok { background:#f0fdf4; border-color:#bbf7d0; }
+        .opt-stat.neutral { background:#f8fafc; }
+        .opt-stat-num { font-size:22px; font-weight:800; color:#0f172a; }
+        .opt-stat.ok .opt-stat-num { color:#16a34a; }
+        .opt-stat-lbl { font-size:12px; color:#64748b; font-weight:600; margin-top:2px; }
+        .opt-moves { padding:12px 20px; overflow-y:auto; }
+        .opt-moves-title { font-size:13px; font-weight:800; color:#334155; margin-bottom:10px; }
+        .opt-empty { padding:24px; text-align:center; color:#475569; font-size:13.5px; font-weight:600; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; }
+        .opt-move { border:1px solid #e2e8f0; border-radius:10px; padding:10px 12px; margin-bottom:8px; }
+        .opt-move-h { display:flex; align-items:baseline; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+        .opt-move-base { font-size:14px; font-weight:800; color:#7c3aed; }
+        .opt-move-meta { font-size:11px; color:#94a3b8; }
+        .opt-move-b { display:flex; align-items:center; gap:8px; margin-top:6px; flex-wrap:wrap; }
+        .opt-badge { font-size:12px; font-weight:700; padding:3px 10px; border-radius:6px; }
+        .opt-badge.cur { background:#fef2f2; color:#dc2626; border:1px solid #fecaca; }
+        .opt-badge.opt { background:#f0fdf4; color:#16a34a; border:1px solid #bbf7d0; }
+        .opt-arrow { color:#94a3b8; font-weight:800; }
+        .opt-move-note { font-size:12px; color:#475569; margin-top:6px; line-height:1.45; }
+        .opt-foot { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 20px; border-top:1px solid #f1f5f9; background:#fbfdff; }
     </style>
 </x-app-layout>

@@ -259,7 +259,8 @@ class VedomostMergeService
     public function siblingsOf(VedomostSubmission $v): Collection
     {
         $formType = $v->form_type ?? VedomostSubmission::FORM_12;
-        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true);
+        $isManual = $v->manual_opened_at !== null;
+        $isCombined = in_array($formType, VedomostSubmission::COMBINED_FORMS, true) && !$isManual;
 
         $query = VedomostSubmission::query()
             // Faqat FAOL guruhlar — index ro'yxati bilan mos bo'lishi uchun.
@@ -278,6 +279,10 @@ class VedomostMergeService
         }
 
         // 12a/12b — har fakultet alohida varaq: bir xil reja (fakultet) doirasida.
+        if ($isManual) {
+            return $query->whereKey($v->id)->get();
+        }
+
         if ($isCombined) {
             $query->where('curriculum_hemis_id', $v->curriculum_hemis_id);
         }

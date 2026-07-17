@@ -42,6 +42,58 @@
             <div class="bg-red-100 border border-red-400 text-red-800 px-3 py-2 rounded mb-3 text-sm">{{ session('error') }}</div>
         @endif
 
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 8px;margin-top:12px;margin-bottom:14px;">
+            <div style="min-height:92px;border-radius:14px;border:1px solid #b8d9e6;background:#a8d3e6;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+                <div>
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#18334a;">Qatorlar</div>
+                    <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#16324f;">{{ number_format($summary['qatorlar']) }}</div>
+                </div>
+                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;color:#203040;">
+                    <svg style="width:50px;height:50px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 6h16M4 12h16M4 18h10"/></svg>
+                </div>
+            </div>
+
+            <div style="min-height:92px;border-radius:14px;border:1px solid #f3e7a4;background:#fbf8c8;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+                <div>
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#1f8b55;">Jami qabul</div>
+                    <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#0f9f67;">{{ number_format((int) $summary['jami_qabul']) }}</div>
+                </div>
+                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:9999px;background:#d5f5de;color:#10b981;">
+                    <svg style="width:24px;height:24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                </div>
+            </div>
+
+            <div style="min-height:92px;border-radius:14px;border:1px solid #b3d3aa;background:#9bc595;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+                <div style="min-width:0;">
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#203725;">Eng yuqori ball</div>
+                    <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#203725;">
+                        {{ $summary['top_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['top_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
+                    </div>
+                    <div style="margin-top:8px;font-size:11px;font-weight:500;color:#34495e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ $summary['top_scorer']?->full_name }}">
+                        {{ $summary['top_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
+                    </div>
+                </div>
+                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;color:#203725;">
+                    <svg style="width:50px;height:50px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3l2.4 4.86L20 8.64l-4 3.9.94 5.46L12 15.77 7.06 18l.94-5.46-4-3.9 5.6-.78L12 3z"/></svg>
+                </div>
+            </div>
+
+            <div style="min-height:92px;border-radius:14px;border:1px solid #e4c1cb;background:#deb9c5;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
+                <div style="min-width:0;">
+                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#d05c1f;">Eng past grant ball</div>
+                    <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#20324d;">
+                        {{ $summary['lowest_grant_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['lowest_grant_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
+                    </div>
+                    <div style="margin-top:8px;font-size:11px;font-weight:500;color:#34495e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ $summary['lowest_grant_scorer']?->full_name }}">
+                        {{ $summary['lowest_grant_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
+                    </div>
+                </div>
+                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:9999px;background:#fff4cf;color:#f59e0b;">
+                    <svg style="width:24px;height:24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                </div>
+            </div>
+        </div>
+
         <div style="background:#fff;border:1px solid #d7dde7;border-radius:3px;box-shadow:0 2px 10px rgba(15,23,42,0.06);padding:12px 14px 14px;margin-bottom:14px;">
             <form method="GET" action="{{ route('admin.admission-indicators.index') }}">
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;align-items:end;">
@@ -105,58 +157,6 @@
                     <a href="{{ route('admin.admission-indicators.index') }}" style="display:inline-flex;align-items:center;justify-content:center;height:34px;padding:0 22px;border-radius:10px;border:1px solid #fb923c;background:#fff7ed;color:#c2410c;font-size:13px;font-weight:500;">Tozalash</a>
                 </div>
             </form>
-        </div>
-
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 8px;margin-top:12px;margin-bottom:14px;">
-            <div style="min-height:92px;border-radius:14px;border:1px solid #b8d9e6;background:#a8d3e6;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
-                <div>
-                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#18334a;">Qatorlar</div>
-                    <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#16324f;">{{ number_format($summary['qatorlar']) }}</div>
-                </div>
-                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;color:#203040;">
-                    <svg style="width:50px;height:50px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M4 6h16M4 12h16M4 18h10"/></svg>
-                </div>
-            </div>
-
-            <div style="min-height:92px;border-radius:14px;border:1px solid #f3e7a4;background:#fbf8c8;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
-                <div>
-                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#1f8b55;">Jami qabul</div>
-                    <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#0f9f67;">{{ number_format((int) $summary['jami_qabul']) }}</div>
-                </div>
-                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:9999px;background:#d5f5de;color:#10b981;">
-                    <svg style="width:24px;height:24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
-                </div>
-            </div>
-
-            <div style="min-height:92px;border-radius:14px;border:1px solid #b3d3aa;background:#9bc595;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
-                <div style="min-width:0;">
-                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#203725;">Eng yuqori ball</div>
-                    <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#203725;">
-                        {{ $summary['top_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['top_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
-                    </div>
-                    <div style="margin-top:8px;font-size:11px;font-weight:500;color:#34495e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ $summary['top_scorer']?->full_name }}">
-                        {{ $summary['top_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
-                    </div>
-                </div>
-                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;color:#203725;">
-                    <svg style="width:50px;height:50px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" d="M12 3l2.4 4.86L20 8.64l-4 3.9.94 5.46L12 15.77 7.06 18l.94-5.46-4-3.9 5.6-.78L12 3z"/></svg>
-                </div>
-            </div>
-
-            <div style="min-height:92px;border-radius:14px;border:1px solid #e4c1cb;background:#deb9c5;box-shadow:0 2px 8px rgba(15,23,42,0.05);padding:14px 18px;display:flex;align-items:center;justify-content:space-between;">
-                <div style="min-width:0;">
-                    <div style="font-size:10px;font-weight:700;text-transform:uppercase;color:#d05c1f;">Eng past grant ball</div>
-                    <div style="margin-top:6px;font-size:33px;line-height:1;font-weight:700;color:#20324d;">
-                        {{ $summary['lowest_grant_scorer']?->toplagan_bali !== null ? rtrim(rtrim(number_format((float) $summary['lowest_grant_scorer']->toplagan_bali, 2, '.', ''), '0'), '.') : '—' }}
-                    </div>
-                    <div style="margin-top:8px;font-size:11px;font-weight:500;color:#34495e;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;" title="{{ $summary['lowest_grant_scorer']?->full_name }}">
-                        {{ $summary['lowest_grant_scorer']?->full_name ?: 'Ma\'lumot yo\'q' }}
-                    </div>
-                </div>
-                <div style="width:50px;height:50px;display:flex;align-items:center;justify-content:center;border-radius:9999px;background:#fff4cf;color:#f59e0b;">
-                    <svg style="width:24px;height:24px;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                </div>
-            </div>
         </div>
 
         <div style="background:#fff;border:1px solid #d6dde8;border-radius:3px;box-shadow:0 2px 10px rgba(15,23,42,0.06);overflow:hidden;">

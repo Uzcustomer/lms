@@ -227,7 +227,7 @@ class StudentApiController extends Controller
                 ->whereIn('student_id', $admissionStudentIds)
                 ->orderByDesc('qabul_yili')
                 ->orderByDesc('id')
-                ->first(['qabul_yili', 'toplagan_bali']);
+                ->first(['qabul_yili', 'otish_bali']);
         }
 
 
@@ -266,9 +266,9 @@ class StudentApiController extends Controller
                 'payment_form_code' => $student->payment_form_code,
                 'payment_form_name' => $student->payment_form_name,
                 'is_graduate' => $student->is_graduate,
-            ],
                 'admission_year' => $admissionInfo?->qabul_yili,
-                'admission_score' => $admissionInfo?->toplagan_bali,
+                'admission_score' => $admissionInfo?->otish_bali,
+            ],
         ]);
     }
 

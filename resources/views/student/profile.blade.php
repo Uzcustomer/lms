@@ -11,7 +11,7 @@
                 <div class="p-4 bg-white border-b border-gray-200">
                     <div class="flex flex-col md:flex-row">
                         <div class="md:w-1/4 pr-4 flex flex-col items-center">
-                            <img src="{{ $profileData['image'] }}" alt="{{ $profileData['full_name'] }}" class="w-44 h-44 object-cover rounded-full shadow-md mb-3">
+                            <img src="{{ $profileData['image'] }}" alt="{{ $profileData['full_name'] }}" class="object-cover rounded-full shadow-md mb-3" style="width:200px;height:200px;">
                             <h3 class="text-[14px] font-bold text-center mb-1">{{ $profileData['full_name'] }}</h3>
                             <p class="text-[14px] text-gray-600 text-center">{{ $profileData['student_id_number'] }}</p>
                         </div>

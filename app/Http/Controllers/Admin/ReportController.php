@@ -11390,7 +11390,11 @@ class ReportController extends Controller
             $talimFilter = 'all';
         }
 
-        // Bir xil yo'nalishli fakultetlarni birlashtirish (masalan 1-son va 2-son davolash)
+        // Fakultetlararo optimizatsiya: bir xil yo'nalishli fakultetlar (masalan 1-son va
+        // 2-son davolash) guruhlarini BIRGA optimallashtirish uchun pool qilinadi — bu kam
+        // to'lgan guruhlarni fakultetlararo birlashtirib, oqim/guruhlarni butun qiladi.
+        // Fakultetlarning o'zi saqlanadi: bu bayroq FAQAT optimizatsiya so'rovida yuboriladi,
+        // "joriy (tasdiqlangan) holat"ga hech qachon ta'sir qilmaydi.
         $mergeFaculties = $request->boolean('merge_faculties');
 
         // ---- Tuzilmaga yig'amiz: fakultet+yo'nalish -> kurs -> guruhlar ----
@@ -11407,8 +11411,9 @@ class ReportController extends Controller
                 continue;
             }
 
-            // Fakultet nomi — "fakultetlarni birlashtirish" yoqilgan bo'lsa "N-son" prefiksi
-            // olib tashlanadi, shunda 1-son va 2-son davolash bitta blokka jamlanadi.
+            // Fakultet nomi — fakultetlararo optimizatsiya yoqilgan bo'lsa "N-son" prefiksi
+            // olib tashlanadi, shunda 1-son va 2-son davolash guruhlari bitta pool ostida
+            // birga optimallashtiriladi (guruhlar fakultetlararo taqsimlanadi).
             $deptForBlock = $mergeFaculties
                 ? $this->oqimMergeDeptName($r->department_name)
                 : $r->department_name;
@@ -11427,9 +11432,12 @@ class ReportController extends Controller
                     'specialty_name'  => $r->specialty_name,
                     'track'           => $track,
                     'title'           => $title,
+                    'orig_depts'      => [], // pool ostidagi haqiqiy fakultetlar (nomi bo'yicha)
                     'courses'         => [],
                 ];
             }
+            // Pool ostiga tushgan haqiqiy fakultetlarni belgilaymiz (sarlavhada ko'rsatish uchun)
+            $blocks[$blockKey]['orig_depts'][trim((string) $r->department_name)] = true;
             $lvlKey = (string) $r->level_code;
             if (!isset($blocks[$blockKey]['courses'][$lvlKey])) {
                 $blocks[$blockKey]['courses'][$lvlKey] = [
@@ -11456,6 +11464,19 @@ class ReportController extends Controller
                 'lang'       => $lang,
                 'lang_label' => $langLabelMap[$lang] ?? "o'z",
             ];
+        }
+
+        // Birdan ortiq haqiqiy fakultet birga optimallashtirilgan bo'lsa — sarlavhada
+        // buni ochiq ko'rsatamiz (fakultetlar saqlanadi, guruhlar fakultetlararo taqsimlangan).
+        if ($mergeFaculties) {
+            foreach ($blocks as &$blk) {
+                $origs = array_keys($blk['orig_depts'] ?? []);
+                if (count($origs) > 1) {
+                    sort($origs, SORT_NATURAL | SORT_FLAG_CASE);
+                    $blk['title'] .= ' · fakultetlararo (' . implode(' + ', $origs) . ')';
+                }
+            }
+            unset($blk);
         }
 
         // Bloklarni fakultet + yo'nalish + ta'lim turi bo'yicha tartiblaymiz (oddiy oldin, qo'shma keyin)

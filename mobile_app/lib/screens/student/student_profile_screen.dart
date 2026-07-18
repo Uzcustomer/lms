@@ -208,6 +208,8 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
                       _buildTelegramCard(context, profile),
                       const SizedBox(height: 14),
                       _buildPersonalInfo(context, profile),
+                      const SizedBox(height: 14),
+                      _buildAdmissionInfo(context, profile),
                     ],
                   ),
                 );
@@ -752,7 +754,6 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
   // ── Personal info ────────────────────────────────────
   Widget _buildPersonalInfo(BuildContext context, Map<String, dynamic> profile) {
     final l = AppLocalizations.of(context);
-    final ink = ClinicTheme.inkOf(context);
     final gender = profile['gender'];
     final province = profile['province_name']?.toString();
     final district = profile['district_name']?.toString();
@@ -790,6 +791,78 @@ class _StudentProfileScreenState extends State<StudentProfileScreen> {
           padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
           child: Text(
             l.personalInfo.toUpperCase(),
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.6,
+              color: ClinicTheme.mutedOf(context),
+            ),
+          ),
+        ),
+        _card(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          child: Column(children: rows),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildAdmissionInfo(BuildContext context, Map<String, dynamic> profile) {
+    final l = AppLocalizations.of(context);
+    final admissionYear = profile['admission_year']?.toString() ?? '';
+    final admissionScoreRaw = profile['admission_score'];
+    var admissionScore = '';
+
+    if (admissionScoreRaw != null) {
+      final parsed = double.tryParse(admissionScoreRaw.toString());
+      if (parsed != null) {
+        admissionScore = parsed % 1 == 0
+            ? parsed.toInt().toString()
+            : parsed.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '').replaceFirst(RegExp(r'\.$'), '');
+      } else {
+        admissionScore = admissionScoreRaw.toString();
+      }
+    }
+
+    final rows = <Widget>[];
+    void add(String label, String value) {
+      if (value.isEmpty) return;
+      if (rows.isNotEmpty) {
+        rows.add(Divider(height: 1, color: ClinicTheme.dividerOf(context)));
+      }
+      rows.add(_infoRow(label, value));
+    }
+
+    add(
+      l.pick(
+        uz: 'Qabul yili',
+        ru: 'Год поступления',
+        en: 'Admission year',
+      ),
+      admissionYear,
+    );
+    add(
+      l.pick(
+        uz: 'To‘plagan bali',
+        ru: 'Набранный балл',
+        en: 'Admission score',
+      ),
+      admissionScore,
+    );
+
+    if (rows.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(2, 0, 2, 10),
+          child: Text(
+            l.pick(
+              uz: "QABUL MA'LUMOTLARI",
+              ru: 'ДАННЫЕ О ПОСТУПЛЕНИИ',
+              en: 'ADMISSION INFO',
+            ),
             style: TextStyle(
               fontSize: 11,
               fontWeight: FontWeight.w800,

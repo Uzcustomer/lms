@@ -218,8 +218,13 @@ class StudentApiController extends Controller
                 : $currentYear - $enterYear;
         }
         if (Schema::hasTable('admission_indicators')) {
+            $admissionStudentIds = array_values(array_unique(array_filter([
+                $student->student_id_number,
+                $student->id,
+            ], fn ($value) => filled($value))));
+
             $admissionInfo = AdmissionIndicator::query()
-                ->where('student_id', $student->id)
+                ->whereIn('student_id', $admissionStudentIds)
                 ->orderByDesc('qabul_yili')
                 ->orderByDesc('id')
                 ->first(['qabul_yili', 'toplagan_bali']);

@@ -11112,12 +11112,41 @@ class ReportController extends Controller
 
         $faculties = $facultyQuery->get();
 
+        // Optimizatsiyadan keyingi holatni tasdiqlash/tahrirlash huquqi — registrator ofisi
+        // (va adminlar). Faqat shu rollar "Tasdiqlash" va "Qo'lda tahrirlash" ni ko'radi.
+        $user = auth()->user();
+        $canApprove = $user && $user->hasAnyRole(['superadmin', 'admin', 'registrator_ofisi']);
+
         return view('admin.reports.oqim', compact(
             'educationTypes',
             'selectedEducationType',
             'faculties',
-            'dekanFacultyId'
+            'dekanFacultyId',
+            'canApprove'
         ));
+    }
+
+    /**
+     * Filtr kontekstini bir xil aniqlaydigan barqaror kalit — snapshot (tasdiqlangan
+     * holat) shu kalit bo'yicha saqlanadi/topiladi. optimize kiritilmaydi (snapshot
+     * doim "optimizatsiyadan keyingi holat" uchun).
+     */
+    private function oqimContextKey(Request $request): string
+    {
+        $ctx = [
+            'education_type'  => (string) $request->get('education_type', ''),
+            'faculty'         => (string) ($request->get('faculty', '') ?: (get_dekan_faculty_id() ?: '')),
+            'talim'           => (string) $request->get('talim', 'all'),
+            'variant'         => (string) $request->get('variant', 'auto'),
+            'oqim_max'        => (int) $request->get('oqim_max', 100),
+            'oqim_tol'        => (int) $request->get('oqim_tol', 0),
+            'ab_max'          => (int) $request->get('ab_max', 15),
+            'ab_tol'          => (int) $request->get('ab_tol', 0),
+            'abc_max'         => (int) $request->get('abc_max', 10),
+            'abc_tol'         => (int) $request->get('abc_tol', 0),
+            'merge_faculties' => (int) $request->boolean('merge_faculties'),
+        ];
+        return hash('sha256', json_encode($ctx));
     }
 
     /**
@@ -11130,12 +11159,101 @@ class ReportController extends Controller
             set_time_limit(120);
 
             $report = $this->buildOqimReport($request);
+
+            // Optimizatsiyadan keyingi holat uchun saqlangan/tasdiqlangan snapshotni beramiz.
+            $report['context_key'] = $this->oqimContextKey($request);
+            $report['snapshot'] = null;
+            try {
+                $snap = \App\Models\OqimSnapshot::where('context_key', $report['context_key'])->first();
+                if ($snap) {
+                    $report['snapshot'] = [
+                        'status'      => $snap->status,
+                        'approved_at' => optional($snap->approved_at)->format('d.m.Y H:i'),
+                        'approver'    => $snap->approved_by ? optional(\App\Models\User::find($snap->approved_by))->name : null,
+                        'note'        => $snap->note,
+                        'has_data'    => !empty($snap->data),
+                        'updated_at'  => optional($snap->updated_at)->format('d.m.Y H:i'),
+                    ];
+                }
+            } catch (\Throwable $e) {
+                // Jadval hali migratsiya qilinmagan bo'lishi mumkin — hisobotni buzmaymiz.
+            }
+
             return response()->json($report);
         } catch (\Throwable $e) {
             return response()->json([
                 'error' => $e->getMessage(),
             ], 500);
         }
+    }
+
+    /**
+     * AJAX: saqlangan (tasdiqlangan/qoralama) optimizatsiyadan keyingi holatni beradi —
+     * "Saqlangan holatni yuklash" tugmasi uchun.
+     */
+    public function oqimSnapshotShow(Request $request)
+    {
+        $snap = \App\Models\OqimSnapshot::where('context_key', $this->oqimContextKey($request))->first();
+        if (!$snap) {
+            return response()->json(['found' => false]);
+        }
+        return response()->json([
+            'found'  => true,
+            'status' => $snap->status,
+            'data'   => $snap->data,
+        ]);
+    }
+
+    /**
+     * AJAX: optimizatsiyadan keyingi holatni qo'lda tahrirlab saqlash yoki TASDIQLASH.
+     * action=approve — faqat registrator ofisi / admin (tasdiqlaydi); aks holda qoralama.
+     */
+    public function oqimSnapshotSave(Request $request)
+    {
+        $user = auth()->user();
+        $canApprove = $user && $user->hasAnyRole(['superadmin', 'admin', 'registrator_ofisi']);
+        if (!$canApprove) {
+            return response()->json(['ok' => false, 'error' => 'Ruxsat yo\'q'], 403);
+        }
+
+        $data = $request->validate([
+            'context'  => 'required|array',
+            'data'     => 'required|array',
+            'action'   => 'required|in:draft,approve,unapprove',
+            'note'     => 'nullable|string|max:500',
+        ]);
+
+        $key = $this->oqimContextKey($request->merge($data['context']));
+
+        $snap = \App\Models\OqimSnapshot::firstOrNew(['context_key' => $key]);
+        $snap->context = $data['context'];
+        if ($data['action'] !== 'unapprove') {
+            $snap->data = $data['data'];
+        }
+        $snap->note = $data['note'] ?? $snap->note;
+        if (!$snap->exists) {
+            $snap->created_by = $user->id;
+        }
+
+        if ($data['action'] === 'approve') {
+            $snap->status = 'approved';
+            $snap->approved_by = $user->id;
+            $snap->approved_at = now();
+        } elseif ($data['action'] === 'unapprove') {
+            $snap->status = 'draft';
+            $snap->approved_by = null;
+            $snap->approved_at = null;
+        } else {
+            $snap->status = 'draft';
+        }
+        $snap->save();
+
+        return response()->json([
+            'ok'          => true,
+            'status'      => $snap->status,
+            'approved_at' => optional($snap->approved_at)->format('d.m.Y H:i'),
+            'approver'    => $snap->approved_by ? optional($user)->name : null,
+        ]);
     }
 
     /**

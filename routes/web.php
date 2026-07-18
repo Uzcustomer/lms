@@ -755,6 +755,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/reports/oqim/overrides', [ReportController::class, 'oqimOverrides'])->name('reports.oqim.overrides');
         Route::post('/reports/oqim/overrides/save', [ReportController::class, 'oqimOverrideSave'])->name('reports.oqim.overrides.save');
         Route::post('/reports/oqim/overrides/delete', [ReportController::class, 'oqimOverrideDelete'])->name('reports.oqim.overrides.delete');
+        Route::get('/reports/oqim/snapshot', [ReportController::class, 'oqimSnapshotShow'])->name('reports.oqim.snapshot.show');
+        Route::post('/reports/oqim/snapshot/save', [ReportController::class, 'oqimSnapshotSave'])->name('reports.oqim.snapshot.save');
 
         Route::get('/reports/debtors', [ReportController::class, 'debtorsReport'])->name('reports.debtors');
         Route::get('/reports/debtors/data', [ReportController::class, 'debtorsReportData'])->name('reports.debtors.data');

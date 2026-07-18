@@ -160,9 +160,20 @@
                             <div style="padding:8px 20px;background:#f0fdf4;border-bottom:1px solid #bbf7d0;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
                                 <span id="after-total-badge" class="badge" style="background:#16a34a;color:#fff;padding:6px 14px;font-size:13px;border-radius:8px;"></span>
                                 <span id="after-merge-note" style="display:none;font-size:12px;font-weight:600;color:#166534;">Fakultetlar alohida — kam to'lgan oqimlar qo'shni fakultet oqimiga ko'chirildi (mehmon guruhlar belgilangan).</span>
-                                <span style="font-size:11.5px;color:#94a3b8;margin-left:auto;">Bu holat — tasdiqlangach joriy holatga aylanadi.</span>
+                                <span id="snap-badge" style="display:none;font-size:12px;font-weight:700;padding:4px 12px;border-radius:999px;"></span>
                             </div>
-                            <div id="opt-body" style="padding:16px 20px;max-height:calc(100vh - 380px);overflow:auto;"></div>
+                            <div id="after-actions" style="display:none;padding:8px 20px;background:#fbfdff;border-bottom:1px solid #e2e8f0;align-items:center;gap:8px;flex-wrap:wrap;">
+                                <button type="button" id="btn-edit" class="af-btn af-edit" onclick="toggleEdit()">✎ Qo'lda tahrirlash</button>
+                                <button type="button" id="btn-load-snap" class="af-btn af-load" style="display:none;" onclick="loadSnapshot()">↺ Saqlangan holatni yuklash</button>
+                                <span id="edit-hint" style="display:none;font-size:11.5px;color:#64748b;">Talaba sonini o'zgartiring — jami avtomatik yangilanadi. Bir guruhdan kamaytirib, boshqasiga qo'shing.</span>
+                                <span style="margin-left:auto;display:inline-flex;gap:8px;">
+                                    <button type="button" id="btn-save-draft" class="af-btn af-draft" onclick="saveSnapshot('draft')">💾 Qoralama saqlash</button>
+                                    <button type="button" id="btn-approve" class="af-btn af-approve" onclick="saveSnapshot('approve')">✓ Tasdiqlash</button>
+                                    <button type="button" id="btn-unapprove" class="af-btn af-unapprove" style="display:none;" onclick="saveSnapshot('unapprove')">Tasdiqni bekor qilish</button>
+                                </span>
+                                <span id="snap-status" style="font-size:12px;font-weight:700;"></span>
+                            </div>
+                            <div id="opt-body" style="padding:16px 20px;max-height:calc(100vh - 420px);overflow:auto;"></div>
                         </div>
                     </div>
                 </div>
@@ -178,6 +189,12 @@
         function esc(s) { return $('<span>').text(s === null || s === undefined ? '' : s).html(); }
 
         var activeTab = 'joriy';
+        var CAN_APPROVE = {{ ($canApprove ?? false) ? 'true' : 'false' }};
+        var SNAP_SAVE_URL = '{{ route("admin.reports.oqim.snapshot.save") }}';
+        var SNAP_SHOW_URL = '{{ route("admin.reports.oqim.snapshot.show") }}';
+        var CSRF = '{{ csrf_token() }}';
+        var afterState = [];   // optimizatsiyadan keyingi holat (tahrirlanadigan) — saqlash uchun
+        var editMode = false;
 
         function getFilters(optimize) {
             var dekanFaculty = document.getElementById('dekan_faculty_id');
@@ -252,8 +269,9 @@
         }
 
         // Bloklar layoutini chizadi (joriy va optimizatsiyalangan holat uchun umumiy).
+        // editable=true bo'lsa talaba soni katakchalari tahrirlanadigan (input) bo'ladi.
         // Talabalarning umumiy sonini qaytaradi.
-        function renderBlocks(blocks, bodySel) {
+        function renderBlocks(blocks, bodySel, editable) {
             blocks = blocks || [];
             var grand = 0;
             var html = '<div class="lang-legend">Til: <span class="ll lang-uz">o\'z</span> <span class="ll lang-rus">rus</span> <span class="ll lang-ing">ing</span></div>';
@@ -274,14 +292,18 @@
                             var first = (r === 0), last = (r === oq.rows.length - 1);
                             var row = oq.rows[r];
                             html += '<tr class="' + lc + (first ? ' oq-first' : '') + (last ? ' oq-last' : '') + (row.visitor ? ' oq-visitor' : '') + '">';
-                            if (first) html += '<td class="oq-label" rowspan="' + oq.rows.length + '">' + esc(oq.label) + '<span class="oq-sum">' + esc(oq.total) + ' ta</span>' + (oq.has_visitor ? '<span class="oq-mix">fakultetlararo</span>' : '') + '</td>';
+                            if (first) html += '<td class="oq-label" rowspan="' + oq.rows.length + '">' + esc(oq.label) + '<span class="oq-sum" data-oqt="' + b + '-' + c + '-' + o + '">' + esc(oq.total) + ' ta</span>' + (oq.has_visitor ? '<span class="oq-mix">fakultetlararo</span>' : '') + '</td>';
                             html += '<td class="oq-grp">' + esc(row.name)
                                  + (row.visitor ? ' <span class="oq-from">← ' + esc(row.from) + '</span>' : '') + '</td>';
-                            html += '<td class="oq-cnt">' + esc(row.count) + '</td>';
+                            if (editable) {
+                                html += '<td class="oq-cnt"><input class="cnt-in" type="number" min="0" value="' + esc(row.count) + '" data-b="' + b + '" data-c="' + c + '" data-o="' + o + '" data-r="' + r + '"></td>';
+                            } else {
+                                html += '<td class="oq-cnt">' + esc(row.count) + '</td>';
+                            }
                             html += '</tr>';
                         }
                     }
-                    html += '<tr class="oq-total"><td colspan="2">Jami</td><td class="oq-cnt">' + esc(course.total) + '</td></tr>';
+                    html += '<tr class="oq-total"><td colspan="2">Jami</td><td class="oq-cnt oq-crt" data-crt="' + b + '-' + c + '">' + esc(course.total) + '</td></tr>';
                     html += '</tbody></table>';
                     html += '</div>';
                 }
@@ -292,19 +314,115 @@
         }
 
         function renderReport(res) {
-            var grand = renderBlocks(res.blocks, '#report-body');
+            var grand = renderBlocks(res.blocks, '#report-body', false);
             var variantLabel = $('#variant option:selected').text();
             $('#total-badge').text('Jami talaba: ' + grand + ' ta · ' + variantLabel.split('(')[0].trim());
         }
 
-        // Optimizatsiyadan keyingi holat — to'liq layout (joriy kabi, lekin kam to'lgan guruhlar
-        // birlashtirilgan; fakultetlararo yoqilgan bo'lsa kam to'lgan oqimlar qo'shni fakultetga ko'chirilgan).
+        function afterVariantLabel() {
+            return $('#variant option:selected').text().split('(')[0].trim();
+        }
+
+        function renderAfterBody() {
+            var grand = renderBlocks(afterState, '#opt-body', editMode);
+            $('#after-total-badge').text('Jami talaba: ' + grand + ' ta · ' + afterVariantLabel());
+        }
+
+        // Optimizatsiyadan keyingi holat — to'liq layout. Tahrirlash/tasdiqlash bloklari.
         function renderOptimized(res) {
-            var grand = renderBlocks(res.blocks, '#opt-body');
-            var variantLabel = $('#variant option:selected').text();
-            $('#after-total-badge').text('Jami talaba: ' + grand + ' ta · ' + variantLabel.split('(')[0].trim());
+            afterState = res.blocks || [];
+            editMode = false;
+            renderAfterBody();
             var hasX = res.plan && res.plan.xmoves && res.plan.xmoves.length;
             $('#after-merge-note').toggle(!!($('#merge_faculties').is(':checked') && hasX));
+
+            // Tasdiqlash/tahrirlash paneli — faqat ruxsatli rollar uchun
+            $('#after-actions').css('display', CAN_APPROVE ? 'flex' : 'none');
+            $('#btn-edit').text('✎ Qo\'lda tahrirlash').removeClass('on');
+            $('#edit-hint').hide();
+            $('#snap-status').text('');
+
+            // Saqlangan/tasdiqlangan holat belgisi
+            var snap = res.snapshot;
+            var $b = $('#snap-badge');
+            if (snap) {
+                if (snap.status === 'approved') {
+                    $b.css({display:'inline-block', background:'#dcfce7', color:'#166534', border:'1px solid #86efac'})
+                      .text('✓ Tasdiqlangan' + (snap.approved_at ? ' · ' + snap.approver + ' · ' + snap.approved_at : ''));
+                    $('#btn-unapprove').show();
+                } else {
+                    $b.css({display:'inline-block', background:'#fef9c3', color:'#854d0e', border:'1px solid #fde68a'})
+                      .text('Qoralama saqlangan · ' + (snap.updated_at || ''));
+                    $('#btn-unapprove').hide();
+                }
+                $('#btn-load-snap').toggle(!!snap.has_data);
+            } else {
+                $b.hide();
+                $('#btn-load-snap').hide();
+                $('#btn-unapprove').hide();
+            }
+        }
+
+        function toggleEdit() {
+            editMode = !editMode;
+            $('#btn-edit').toggleClass('on', editMode).text(editMode ? '✎ Tahrirlash yoqilgan' : '✎ Qo\'lda tahrirlash');
+            $('#edit-hint').toggle(editMode);
+            renderAfterBody();
+        }
+
+        // Talaba sonini tahrirlaganda — jami (oqim/kurs/umumiy) avtomatik yangilanadi.
+        $(document).on('input', '#opt-body .cnt-in', function() {
+            var b = +$(this).data('b'), c = +$(this).data('c'), o = +$(this).data('o'), r = +$(this).data('r');
+            var v = parseInt(this.value, 10); if (isNaN(v) || v < 0) v = 0;
+            afterState[b].courses[c].oqims[o].rows[r].count = v;
+            var ot = afterState[b].courses[c].oqims[o].rows.reduce(function(s, x){ return s + (+x.count || 0); }, 0);
+            afterState[b].courses[c].oqims[o].total = ot;
+            $('#opt-body .oq-sum[data-oqt="' + b + '-' + c + '-' + o + '"]').text(ot + ' ta');
+            var ct = afterState[b].courses[c].oqims.reduce(function(s, q){ return s + (+q.total || 0); }, 0);
+            afterState[b].courses[c].total = ct;
+            $('#opt-body .oq-crt[data-crt="' + b + '-' + c + '"]').text(ct);
+            var grand = 0;
+            for (var i = 0; i < afterState.length; i++) for (var j = 0; j < afterState[i].courses.length; j++) grand += (+afterState[i].courses[j].total || 0);
+            $('#after-total-badge').text('Jami talaba: ' + grand + ' ta · ' + afterVariantLabel());
+        });
+
+        function saveSnapshot(action) {
+            var $status = $('#snap-status');
+            $status.css('color', '#94a3b8').text('saqlanmoqda...');
+            $.ajax({
+                url: SNAP_SAVE_URL, method: 'POST',
+                headers: { 'X-CSRF-TOKEN': CSRF },
+                contentType: 'application/json',
+                data: JSON.stringify({ action: action, context: getFilters(true), data: afterState, note: '' })
+            }).done(function(res) {
+                $status.css('color', '#16a34a').text('✓ ' + (action === 'approve' ? 'Tasdiqlandi' : (action === 'unapprove' ? 'Tasdiq bekor qilindi' : 'Saqlandi')));
+                var $b = $('#snap-badge');
+                if (res.status === 'approved') {
+                    $b.css({display:'inline-block', background:'#dcfce7', color:'#166534', border:'1px solid #86efac'})
+                      .text('✓ Tasdiqlangan' + (res.approved_at ? ' · ' + (res.approver || '') + ' · ' + res.approved_at : ''));
+                    $('#btn-unapprove').show();
+                    $('#btn-load-snap').show();
+                } else {
+                    $b.css({display:'inline-block', background:'#fef9c3', color:'#854d0e', border:'1px solid #fde68a'})
+                      .text('Qoralama saqlangan');
+                    $('#btn-unapprove').hide();
+                    $('#btn-load-snap').show();
+                }
+            }).fail(function(xhr) {
+                var msg = (xhr.responseJSON && xhr.responseJSON.error) ? xhr.responseJSON.error : 'Xatolik';
+                $status.css('color', '#dc2626').text(msg);
+            });
+        }
+
+        function loadSnapshot() {
+            $.get(SNAP_SHOW_URL, getFilters(true)).done(function(res) {
+                if (res && res.found && res.data) {
+                    afterState = res.data;
+                    editMode = false;
+                    renderAfterBody();
+                    $('#snap-status').css('color', '#2b5ea7').text('Saqlangan holat yuklandi');
+                }
+            });
         }
 
         function statBox(cur, opt, label) {
@@ -496,6 +614,19 @@
         .oq-from { display:inline-block; font-size:10px; font-weight:800; color:#c2410c; background:#ffedd5; border-radius:999px; padding:0 7px; margin-left:4px; }
         .oq-mix { display:block; margin-top:2px; font-size:9.5px; font-weight:800; color:#c2410c; }
         .xmove-body { padding:8px 12px; font-size:13px; color:#334155; line-height:1.5; background:#fffbeb; }
+
+        /* Tasdiqlash / qo'lda tahrirlash paneli */
+        .af-btn { display:inline-flex; align-items:center; gap:5px; padding:6px 13px; border-radius:8px; font-size:12.5px; font-weight:700; cursor:pointer; border:1px solid transparent; }
+        .af-edit { background:#eef2ff; color:#4338ca; border-color:#c7d2fe; }
+        .af-edit.on { background:#4338ca; color:#fff; }
+        .af-load { background:#fff; color:#0369a1; border-color:#bae6fd; }
+        .af-draft { background:#fff; color:#334155; border-color:#cbd5e1; }
+        .af-approve { background:linear-gradient(135deg,#16a34a,#22c55e); color:#fff; }
+        .af-approve:hover { background:linear-gradient(135deg,#15803d,#16a34a); }
+        .af-unapprove { background:#fff; color:#dc2626; border-color:#fecaca; }
+        .cnt-in { width:52px; height:26px; padding:0 4px; border:1px solid #cbd5e1; border-radius:6px; text-align:center; font-size:12.5px; font-weight:700; color:#0f172a; -moz-appearance:textfield; }
+        .cnt-in::-webkit-outer-spin-button, .cnt-in::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+        .cnt-in:focus { outline:none; border-color:#4338ca; box-shadow:0 0 0 2px rgba(67,56,202,0.15); }
 
         #opt-overlay { display:none; position:fixed; inset:0; background:rgba(15,23,42,0.55); z-index:1000; align-items:center; justify-content:center; padding:20px; }
         #opt-dialog { background:#fff; border-radius:14px; width:100%; max-width:760px; max-height:88vh; display:flex; flex-direction:column; box-shadow:0 24px 60px rgba(0,0,0,0.35); overflow:hidden; }

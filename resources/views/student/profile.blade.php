@@ -115,6 +115,16 @@
                                 </div>
                             </div>
                             <div class="mt-6 bg-gray-50 p-4 rounded-lg">
+                                <h4 class="font-semibold text-lg mb-3 text-gray-700">{{ __("Qabul ma'lumotlari") }}</h4>
+                                <ul class="space-y-2">
+                                    <li><span class="font-medium">{{ __("O'quv shakli:") }}</span> {{ $profileData['study_form_name'] ?: '—' }}</li>
+                                    <li>
+                                        <span class="font-medium">{{ __("Olgan bali:") }}</span>
+                                        {{ $profileData['admission_score'] !== null ? rtrim(rtrim(number_format((float) $profileData['admission_score'], 2, '.', ''), '0'), '.') : '—' }}
+                                    </li>
+                                </ul>
+                            </div>
+                            <div class="mt-6 bg-gray-50 p-4 rounded-lg">
                                 <h4 class="font-semibold text-lg mb-3 text-gray-700">{{ __('Manzil') }}</h4>
                                 <ul class="space-y-2">
                                     <li><span class="font-medium">{{ __("To'liq manzil:") }}</span> {{ $profileData['address'] }}</li>
